@@ -32,6 +32,7 @@ export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) 
               <th className="text-right px-3 py-2 font-semibold text-slate-700">CPP</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">OAS</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Guaranteed Income Supplement (tax-free, single-pensioner approximation)">GIS</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Defined-benefit / bridge pension income (taxable)">Pension</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Ending Balance</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">RRSP</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">RRIF</th>
@@ -83,6 +84,9 @@ export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) 
                   </td>
                   <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
                     {formatCurrency(row.gisIncome)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
+                    {formatCurrency(row.pensionIncome)}
                   </td>
                   <td className={`px-3 py-1.5 text-right font-mono font-semibold ${isRetirement ? 'text-blue-700' : 'text-slate-900'}`}>
                     {formatCurrency(row.endingBalance)}

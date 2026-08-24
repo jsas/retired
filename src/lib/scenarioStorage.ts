@@ -42,6 +42,15 @@ function migrateRecord(inputs: Record<string, unknown>): RetirementInputs {
     migrated.cppAdjustedAmount = true;
   }
 
+  // Pensions added later — back-fill an empty list for pre-existing scenarios.
+  if (!Array.isArray(migrated.pensions)) {
+    migrated.pensions = [];
+  }
+  const sp = migrated.spouse as Record<string, unknown> | undefined;
+  if (sp && typeof sp === 'object' && !Array.isArray(sp.pensions)) {
+    sp.pensions = [];
+  }
+
   return migrated as unknown as RetirementInputs;
 }
 

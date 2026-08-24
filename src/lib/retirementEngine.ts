@@ -46,6 +46,9 @@ export interface RetirementInputs {
   // Optional spouse: a second, independent plan whose results are combined
   // with the primary's for household totals.
   spouse?: SpouseInputs;
+  // DB / bridge pensions: taxable income stacked with CPP/OAS. Bridge benefits
+  // have endAge set; lifetime pensions leave it null.
+  pensions?: Pension[];
 }
 
 export interface SpouseInputs {
@@ -65,6 +68,7 @@ export interface SpouseInputs {
   oasYearsInCanada: number;
   desiredSpending: number; // the spouse's own after-tax income goal (today's $)
   withdrawalOrder?: WithdrawalAccount[];
+  pensions?: Pension[]; // the spouse's own DB / bridge pensions
 }
 
 export interface CashEvent {
@@ -74,6 +78,15 @@ export interface CashEvent {
   amount: number; // always positive; direction decides the sign
   direction: 'in' | 'out';
   account?: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; // inflows only; default taxable
+}
+
+export interface Pension {
+  id: string;
+  label: string;
+  annualAmount: number;   // $/yr at startAge, in today's dollars
+  startAge: number;
+  endAge: number | null;  // null = lifetime; set = bridge/temporary (pays through endAge)
+  indexedToCpi: boolean;  // grow with CPI (when indexTaxTables is on) vs flat nominal
 }
 
 export interface SpendingBand {
@@ -108,6 +121,7 @@ export interface YearlyBreakdown {
   cppIncome: number;
   oasIncome: number;
   gisIncome: number;
+  pensionIncome: number; // DB / bridge pension gross income this year (taxable)
 }
 
 export interface RetirementResults {
@@ -161,13 +175,16 @@ export function calculateRetirement(
     oasStartAge,
     oasYearsInCanada,
     successFactor,
-    withdrawalOrder
+    withdrawalOrder,
+    pensions
   } = inputs;
 
   const order: WithdrawalAccount[] =
     Array.isArray(withdrawalOrder) && withdrawalOrder.length > 0
       ? withdrawalOrder
       : ['tfsa', 'taxable', 'rrsp'];
+
+  const pensionList: Pension[] = Array.isArray(pensions) ? pensions : [];
 
   const cushionRate = config.engine.cashCushionRate;
   const rrifAge = config.engine.rrifConversionAge;
@@ -179,7 +196,13 @@ export function calculateRetirement(
   // against today's (unindexed) tax tables.
   const inflation = Math.max(0, config.engine.inflationRate ?? 0);
   const indexTables = config.engine.indexTaxTables === true;
+  // Spending inflation is a separate switch from tax/benefit indexation: a plan
+  // can hold spending flat in today's dollars while still indexing the tax
+  // system (or vice versa). Default on so pre-toggle plans are unchanged.
+  const indexSpending = config.engine.indexSpending !== false;
   const factorAt = (age: number) => Math.pow(1 + inflation, Math.max(0, age - currentAge));
+  // The CPI multiplier applied to the spending target; 1 when indexSpending is off.
+  const spendingFactorAt = (age: number) => (indexSpending ? factorAt(age) : 1);
 
   // Spending phases: fraction of desired spending at each age (default 1).
   const bands = Array.isArray(inputs.spendingBands) ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge) : [];
@@ -265,7 +288,8 @@ export function calculateRetirement(
       cashCushionBalance: cashCushion,
       cppIncome: 0,
       oasIncome: 0,
-      gisIncome: 0
+      gisIncome: 0,
+      pensionIncome: 0
     });
 
     accountBreakdown.push({
@@ -305,8 +329,9 @@ export function calculateRetirement(
       else { taxable += ev.amount; taxableAcb += ev.amount; }
     }
 
-    // This year's spending target: today's dollars, inflated to this year.
-    const yearSpending = desiredSpending * factorAt(age) * spendingPctAt(age) + eventOutAt(age);
+    // This year's spending target: today's dollars, inflated to this year when
+    // indexSpending is on (otherwise held flat in today's dollars).
+    const yearSpending = desiredSpending * spendingFactorAt(age) * spendingPctAt(age) + eventOutAt(age);
 
     // Gross benefit income (taxable). OAS amounts come from the (possibly
     // indexed) config; CPP is inflated manually when indexation is on.
@@ -320,7 +345,18 @@ export function calculateRetirement(
       ? cppMonthlyAtStart * 12 * (indexTables ? factorAt(age) : 1)
       : 0;
     const oasGross = oasStartAge != null ? oasAnnualGross(age, oasStartAge, oasYearsInCanada, yearConfig) : 0;
-    const otherGross = cppGross + oasGross;
+
+    // DB / bridge pensions: taxable income stacked with CPP/OAS. A pension is
+    // active from startAge through endAge (null = lifetime). Indexed pensions
+    // grow with CPI when table indexation is on; non-indexed stay flat nominal.
+    let pensionGross = 0;
+    for (const p of pensionList) {
+      if (age < p.startAge) continue;
+      if (p.endAge != null && age > p.endAge) continue;
+      pensionGross += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+
+    const otherGross = cppGross + oasGross + pensionGross;
 
     // After-tax value of the benefits on their own.
     const netBenefits = calculateTax(otherGross, provinceCode, yearConfig).takeHome;
@@ -355,13 +391,13 @@ export function calculateRetirement(
     // any RRIF minimum). Additional registered draws are taxed on top of it.
     const stackedGross = () => otherGross + registeredGross;
 
-    // GIS: tax-free, based on income EXCLUDING OAS (CPP + registered draws +
-    // taxable gains). Computed after the mandatory RRIF minimum so the
+    // GIS: tax-free, based on income EXCLUDING OAS (CPP + pensions + registered
+    // draws + taxable gains). Computed after the mandatory RRIF minimum so the
     // minimum's effect on the GIS is captured; discretionary draws below
     // further reduce it (not iterated — the reduction lands next year in
     // practice via Service Canada's quarterly recalc).
     const gisGross = oasGross > 0
-      ? gisAnnual(cppGross + registeredGross, yearConfig)
+      ? gisAnnual(cppGross + pensionGross + registeredGross, yearConfig)
       : 0;
     remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - gisGross);
 
@@ -484,7 +520,8 @@ export function calculateRetirement(
       cashCushionBalance: cashCushion,
       cppIncome: cppGross,
       oasIncome: oasGross,
-      gisIncome: gisGross
+      gisIncome: gisGross,
+      pensionIncome: pensionGross
     });
 
     accountBreakdown.push({
@@ -526,10 +563,10 @@ export function calculateRetirement(
         : cppMonthlyAmount * cppAdjustmentMultiplier(cppStartAge, config) * 12
       : 0;
   // Spending in retirement-year dollars, so the 25× rule compares like with
-  // like when inflation is on.
+  // like when spending inflation is on.
   const netSpendingNeed = Math.max(
     0,
-    desiredSpending * factorAt(retirementAge) - effectiveOas - cppGrossRetirement,
+    desiredSpending * spendingFactorAt(retirementAge) - effectiveOas - cppGrossRetirement,
   );
 
   let status: 'ON_TRACK' | 'SHORTFALL' = 'ON_TRACK';
@@ -542,7 +579,7 @@ export function calculateRetirement(
   }
 
   const withdrawalRate = totalStartingRetirement > 0
-    ? (desiredSpending * factorAt(retirementAge)) / totalStartingRetirement
+    ? (desiredSpending * spendingFactorAt(retirementAge)) / totalStartingRetirement
     : 0;
 
   const primary: RetirementResults = {
@@ -584,7 +621,8 @@ export function calculateRetirement(
       desiredSpending: sp.desiredSpending,
       successFactor,
       withdrawalOrder: sp.withdrawalOrder ?? order,
-      spouse: undefined
+      spouse: undefined,
+      pensions: sp.pensions
     }, config, options);
     primary.spouse = spouseResults;
     if (spouseResults.status === 'SHORTFALL') primary.status = 'SHORTFALL';

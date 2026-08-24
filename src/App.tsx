@@ -22,6 +22,7 @@ import { PrintOptionsCard } from './components/PrintOptionsCard';
 import { DonateCard } from './components/DonateCard';
 import { loadPrintOptions, savePrintOptions, type PrintOptions } from './lib/printOptions';
 import type { MonteCarloResults } from './lib/monteCarlo';
+import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 type View = 'projection' | 'settings' | 'help';
@@ -210,16 +211,12 @@ function App() {
   useEffect(() => {
     if (!printOptions.includeMonteCarlo) { setPrintMc(null); setPrintMcPending(false); return; }
     setPrintMcPending(true);
-    const worker = new Worker(new URL('./workers/monteCarlo.worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = (event: MessageEvent<{ ok: true; results: MonteCarloResults } | { ok: false; error: string }>) => {
-      if (event.data.ok) setPrintMc(event.data.results);
-      else console.warn('Print Monte Carlo failed:', event.data.error);
-      setPrintMcPending(false);
-      worker.terminate();
-    };
-    worker.onerror = () => { setPrintMcPending(false); worker.terminate(); };
-    worker.postMessage({ inputs, config, runs: 500, volatility: inputs.returnVolatility });
-    return () => worker.terminate();
+    const cancel = runMonteCarloAuto(
+      { inputs, config, runs: 500, volatility: inputs.returnVolatility },
+      (res) => { setPrintMc(res); setPrintMcPending(false); },
+      (msg) => { console.warn('Print Monte Carlo failed:', msg); setPrintMcPending(false); },
+    );
+    return cancel;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printOptions.includeMonteCarlo, inputs, config]);
 
@@ -300,7 +297,7 @@ function App() {
   }, [inputs, config]);
 
   const handleExportCSV = () => {
-    const headers = ['Age', 'Starting Balance', 'Contributions', 'Market Gains', 'Spending Target', 'Withdrawals', 'Income Tax', 'Tax Burden', 'CPP', 'OAS', 'GIS', 'Ending Balance', 'RRSP', 'RRIF', 'TFSA', 'Taxable', 'Cash Cushion'];
+    const headers = ['Age', 'Starting Balance', 'Contributions', 'Market Gains', 'Spending Target', 'Withdrawals', 'Income Tax', 'Tax Burden', 'CPP', 'OAS', 'GIS', 'Pension', 'Ending Balance', 'RRSP', 'RRIF', 'TFSA', 'Taxable', 'Cash Cushion'];
     const csvContent = [
       headers.join(','),
       ...results.yearlyBreakdown.map(row =>
@@ -316,6 +313,7 @@ function App() {
           row.cppIncome,
           row.oasIncome,
           row.gisIncome,
+          row.pensionIncome,
           row.endingBalance,
           row.rrspBalance,
           row.rrifBalance,

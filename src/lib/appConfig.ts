@@ -37,7 +37,8 @@ export interface CppConfig {
 export interface EngineConfig {
   cashCushionRate: number;   // annual growth rate of the cash cushion
   rrifConversionAge: number; // age at which RRSP converts to RRIF
-  inflationRate: number;     // annual CPI — spending is entered in today's dollars and inflated per year
+  inflationRate: number;     // annual CPI — the rate behind both toggles below
+  indexSpending: boolean;    // inflate the spending target each year by CPI (off = flat in today's dollars)
   indexTaxTables: boolean;   // also inflate tax brackets, exemptions, OAS amounts/threshold and CPP each year
   capitalGainsInclusion: number; // fraction of a capital gain included in taxable income (0.5)
   taxableAcbRatio: number;   // ACB as a fraction of the initial taxable balance (1 = all principal)
@@ -121,6 +122,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     cashCushionRate: 0.005,
     rrifConversionAge: 71,
     inflationRate: 0.02,
+    indexSpending: true,
     indexTaxTables: false,
     capitalGainsInclusion: 0.5,
     taxableAcbRatio: 1
@@ -182,6 +184,7 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   // Inflation fields were added after earlier config schemas — back-fill
   // defaults for configs saved before they existed.
   if (typeof e.inflationRate !== 'number') e.inflationRate = DEFAULT_APP_CONFIG.engine.inflationRate;
+  if (typeof e.indexSpending !== 'boolean') e.indexSpending = DEFAULT_APP_CONFIG.engine.indexSpending;
   if (typeof e.indexTaxTables !== 'boolean') e.indexTaxTables = DEFAULT_APP_CONFIG.engine.indexTaxTables;
   // Capital-gains fields were added later — back-fill defaults.
   if (typeof e.capitalGainsInclusion !== 'number') e.capitalGainsInclusion = DEFAULT_APP_CONFIG.engine.capitalGainsInclusion;

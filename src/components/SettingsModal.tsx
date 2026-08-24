@@ -332,6 +332,22 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
                 <input
                   type="checkbox"
+                  checked={draft.engine.indexSpending}
+                  onChange={e => update(c => { c.engine.indexSpending = e.target.checked; })}
+                  className="mt-0.5"
+                />
+                <span>
+                  Grow spending with inflation each year
+                  <span className="block text-[11px] text-slate-500 mt-0.5">
+                    On: the Spending Target column rises with CPI — a $60k lifestyle entered today needs
+                    ~$89k of income 20 years out at 2%. Off: the target stays flat in today's dollars
+                    (a level-spending / real-terms plan).
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
                   checked={draft.engine.indexTaxTables}
                   onChange={e => update(c => { c.engine.indexTaxTables = e.target.checked; })}
                   className="mt-0.5"
@@ -345,6 +361,12 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   </span>
                 </span>
               </label>
+              <p className="text-[11px] text-slate-500 leading-snug border-t border-slate-200 pt-2">
+                These two toggles are independent. <strong>Grow spending</strong> controls whether your
+                spending target inflates; <strong>Index tax tables</strong> controls whether the tax system
+                and benefits inflate. The CPI rate above drives both. For a fully "today's dollars"
+                (real-terms) plan, turn spending growth off; for nominal, leave it on.
+              </p>
             </div>
           )}
         </div>

@@ -97,7 +97,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Desired Spending ($)',
-        body: <P>The after-tax income you want each retirement year, in today's dollars — the base the phases scale. With a non-zero inflation rate the engine inflates it each year from your current age, so the table's Spending Target column shows the nominal dollars needed that year. The engine grosses up registered withdrawals so that benefits + portfolio income, after tax, equal that target.</P>
+        body: <P>The after-tax income you want each retirement year, in today's dollars — the base the phases scale. When Settings → Engine → "Grow spending with inflation" is on, the engine inflates it by CPI each year from your current age, so the table's Spending Target column shows the nominal dollars needed that year; when off, the target stays flat in today's dollars. The engine grosses up registered withdrawals so that benefits + portfolio income, after tax, equal that target.</P>
       },
       {
         term: 'Go-go / slow-go / no-go (spending phases)',
@@ -114,6 +114,16 @@ const SECTIONS: HelpSection[] = [
       {
         term: 'Years in Canada',
         body: <P>Post-age-18 residency. Full OAS needs 40 years; fewer years scale the pension proportionally. Under 10 years pays nothing.</P>
+      },
+      {
+        term: 'Pensions (defined-benefit / bridge)',
+        body: (
+          <>
+            <P>The Pensions section models employer <strong>defined-benefit</strong> income: a fixed $/yr starting at the age you choose, taxed as ordinary income and stacked with CPP/OAS — so it directly shrinks how much the portfolio must supply. Tick <em>indexed</em> if the pension grows with CPI (many DB plans do, fully or partially); leave it unticked for a flat nominal pension.</P>
+            <P>Set an <strong>end age</strong> for a <strong>bridge / temporary</strong> benefit (e.g. $12k/yr from 60–65 that stops when CPP begins); leave it blank for a lifetime pension. Pension income counts toward the GIS and OAS clawbacks, exactly like CPP does. The spouse plan has its own pension list.</P>
+            <P>A <strong>DC / LIRA</strong> lump sum is not entered here — it's already modelled by your RRSP/RRIF balance (it converts to a RRIF and is drawn down like registered savings).</P>
+          </>
+        )
       },
       {
         term: 'One-time inflow (house sale, inheritance…)',
@@ -245,8 +255,10 @@ const SECTIONS: HelpSection[] = [
         term: 'Inflation',
         body: (
           <>
-            <P>Settings → Engine has an inflation (CPI) rate, default 2%. Spending is entered in today's dollars and inflated each year from your current age — a $60k lifestyle needs ~$89k of nominal income 20 years from now at 2%.</P>
-            <P>The optional "Index tax tables, OAS and CPP to inflation" toggle also inflates tax brackets, basic personal amounts, the OAS clawback threshold and benefit amounts each year, mirroring CRA's real-world indexation. With the toggle <em>on</em>, results are effectively in today's purchasing power (everything inflates together). With it <em>off</em>, you see nominal dollars taxed against today's frozen tables — a more conservative projection, since real bracket creep works in the retiree's favour.</P>
+            <P>Settings → Engine has an inflation (CPI) rate, default 2%, plus two independent switches it drives:</P>
+            <P><strong>Grow spending with inflation</strong> (on by default): your spending is entered in today's dollars and inflated by CPI each year from your current age — a $60k lifestyle needs ~$89k of nominal income 20 years from now at 2%. Turn it <em>off</em> for a level, real-terms plan where the Spending Target column stays flat in today's dollars.</P>
+            <P><strong>Index tax tables, OAS and CPP to inflation</strong>: also inflates tax brackets, basic personal amounts, the OAS clawback threshold and benefit amounts each year, mirroring CRA's real-world indexation. With this <em>on</em> (and spending growth on), results are effectively in today's purchasing power. With it <em>off</em>, you see nominal dollars taxed against today's frozen tables — a more conservative projection, since real bracket creep works in the retiree's favour.</P>
+            <P>The two switches are separate so you can, for example, hold spending flat while still indexing the tax system, or grow nominal spending against frozen tax tables.</P>
           </>
         )
       },

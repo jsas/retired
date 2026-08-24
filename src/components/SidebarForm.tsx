@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users } from 'lucide-react';
-import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand } from '../lib/retirementEngine';
+import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark } from 'lucide-react';
+import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
 
@@ -25,6 +25,80 @@ const formatMoney = (v: number) =>
 
 let eventSeq = 0;
 const newEventId = () => `ev-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
+const newPensionId = () => `pen-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
+
+// Reusable DB/bridge-pension list editor (primary plan and spouse plan both
+// render one). Compact card per pension: label, $/yr, start/end ages, indexed.
+function PensionList({ pensions, onChange }: { pensions: Pension[]; onChange: (next: Pension[]) => void }) {
+  const update = (i: number, patch: Partial<Pension>) =>
+    onChange(pensions.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  return (
+    <div className="space-y-1.5">
+      {pensions.map((p, i) => (
+        <div key={p.id} className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={p.label}
+              placeholder="Label (e.g. Employer DB)"
+              onChange={(e) => update(i, { label: e.target.value })}
+              className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <button
+              onClick={() => onChange(pensions.filter((_, j) => j !== i))}
+              className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+              title="Remove pension"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              value={p.annualAmount}
+              title="Annual amount ($/yr, today's dollars)"
+              onChange={(e) => update(i, { annualAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+              className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">$/yr</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              value={p.startAge}
+              title="Start age"
+              onChange={(e) => update(i, { startAge: parseInt(e.target.value) || p.startAge })}
+              className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">to</span>
+            <input
+              type="number"
+              value={p.endAge ?? ''}
+              placeholder="life"
+              title="End age (blank = lifetime; set for a bridge/temporary pension)"
+              onChange={(e) => update(i, { endAge: e.target.value ? parseInt(e.target.value) : null })}
+              className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <label className="flex items-center gap-1 text-[10px] text-neutral-400 cursor-pointer ml-auto" title="Grow with CPI (when table indexation is on)">
+              <input
+                type="checkbox"
+                checked={p.indexedToCpi}
+                onChange={(e) => update(i, { indexedToCpi: e.target.checked })}
+              />
+              indexed
+            </label>
+          </div>
+        </div>
+      ))}
+      <button
+        onClick={() => onChange([...pensions, { id: newPensionId(), label: 'Pension', annualAmount: 12000, startAge: 60, endAge: null, indexedToCpi: true }])}
+        className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
+      >
+        <Plus size={12} /> Add pension
+      </button>
+    </div>
+  );
+}
 
 // GCP-console style collapsible section: full-width header row, chevron
 // rotates, content hidden when closed.
@@ -339,6 +413,17 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config }: Sidebar
           </div>
         </CollapsibleSection>
 
+        {/* Pensions */}
+        <CollapsibleSection id="pensions" icon={<Landmark size={14} />} title="Pensions" open={isOpen('pensions')} onToggle={toggleSection}>
+          <PensionList pensions={inputs.pensions ?? []} onChange={(next) => updateField('pensions', next)} />
+          <p className="text-[10px] text-neutral-500 leading-snug">
+            Defined-benefit and bridge pensions: taxable income stacked with CPP/OAS, reducing the
+            portfolio draw. Set an end age for a bridge/temporary pension; leave blank for lifetime.
+            "indexed" grows with CPI when table indexation is on. A DC / LIRA lump sum is already
+            modelled by your RRSP/RRIF balance, not here.
+          </p>
+        </CollapsibleSection>
+
         {/* One-Time Events */}
         <CollapsibleSection id="events" icon={<CalendarClock size={14} />} title="One-Time Events" open={isOpen('events')} onToggle={toggleSection}>
           <div className="space-y-2">
@@ -469,7 +554,10 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config }: Sidebar
             </button>
             <p className="text-[10px] text-neutral-500 leading-snug">
               Go-go / slow-go / no-go: from each age, spending drops to that share of desired
-              spending (still inflation-adjusted). The verdict uses retirement-year spending.
+              spending{config.engine.indexSpending !== false
+                ? ` (then grown ${(config.engine.inflationRate * 100).toFixed(1)}%/yr by CPI — the table's Spending Target shows those future dollars; turn off "Grow spending with inflation" in Settings → Engine for a flat target)`
+                : ' (held flat in today\'s dollars — "Grow spending with inflation" is off in Settings → Engine)'}.
+              The verdict uses retirement-year spending.
             </p>
           </div>
         </CollapsibleSection>
@@ -565,6 +653,10 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config }: Sidebar
                   <input type="number" value={inputs.spouse.oasYearsInCanada}
                     onChange={(e) => updateSpouse({ oasYearsInCanada: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                 </div>
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Spouse pensions</label>
+                <PensionList pensions={inputs.spouse.pensions ?? []} onChange={(next) => updateSpouse({ pensions: next })} />
               </div>
               <p className="text-[10px] text-neutral-500 leading-snug">
                 The spouse runs as an independent plan with the same market assumptions, province and

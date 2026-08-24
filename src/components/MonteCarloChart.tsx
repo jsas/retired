@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dices, X, Loader2 } from 'lucide-react';
 import type { MonteCarloRequest, MonteCarloResults } from '../lib/monteCarlo';
+import { runMonteCarloAuto } from '../lib/runMonteCarlo';
 
 interface MonteCarloChartProps {
   request: MonteCarloRequest;
@@ -28,21 +29,10 @@ export function MonteCarloChart({ request, onClose, retirementAge }: MonteCarloC
   const [hoverAge, setHoverAge] = useState<number | null>(null);
 
   useEffect(() => {
-    const worker = new Worker(new URL('../workers/monteCarlo.worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = (event: MessageEvent<{ ok: true; results: MonteCarloResults } | { ok: false; error: string }>) => {
-      if (event.data.ok) {
-        setResults(event.data.results);
-      } else {
-        setError(event.data.error);
-      }
-      worker.terminate();
-    };
-    worker.onerror = (e) => {
-      setError(e.message || 'Worker failed');
-      worker.terminate();
-    };
-    worker.postMessage(request);
-    return () => worker.terminate();
+    // Worker when available; inline fallback for the single-file build
+    // (file:// can't construct module workers).
+    const cancel = runMonteCarloAuto(request, setResults, setError);
+    return cancel;
   }, [request]);
 
   const chart = useMemo(() => {
