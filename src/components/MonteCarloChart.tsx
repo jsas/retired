@@ -1,0 +1,252 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Dices, X, Loader2 } from 'lucide-react';
+import type { MonteCarloRequest, MonteCarloResults } from '../lib/monteCarlo';
+
+interface MonteCarloChartProps {
+  request: MonteCarloRequest;
+  onClose: () => void;
+  retirementAge: number;
+}
+
+const W = 860;
+const H = 360;
+const PAD = { top: 16, right: 16, bottom: 28, left: 64 };
+
+function formatMoney(v: number): string {
+  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `$${Math.round(v / 1_000)}k`;
+  return `$${Math.round(v)}`;
+}
+
+function formatMoneyFull(v: number): string {
+  return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
+}
+
+export function MonteCarloChart({ request, onClose, retirementAge }: MonteCarloChartProps) {
+  const [results, setResults] = useState<MonteCarloResults | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hoverAge, setHoverAge] = useState<number | null>(null);
+
+  useEffect(() => {
+    const worker = new Worker(new URL('../workers/monteCarlo.worker.ts', import.meta.url), { type: 'module' });
+    worker.onmessage = (event: MessageEvent<{ ok: true; results: MonteCarloResults } | { ok: false; error: string }>) => {
+      if (event.data.ok) {
+        setResults(event.data.results);
+      } else {
+        setError(event.data.error);
+      }
+      worker.terminate();
+    };
+    worker.onerror = (e) => {
+      setError(e.message || 'Worker failed');
+      worker.terminate();
+    };
+    worker.postMessage(request);
+    return () => worker.terminate();
+  }, [request]);
+
+  const chart = useMemo(() => {
+    if (!results) return null;
+    const bands = results.percentileBands;
+    if (bands.length < 2) return null;
+
+    const ages = bands.map(b => b.age);
+    const minAge = ages[0];
+    const maxAge = ages[ages.length - 1];
+    const maxBalance = Math.max(1, ...bands.map(b => b.p90));
+    // Start y at 0 — probability of ruin matters more than headroom.
+    const x = (age: number) => PAD.left + ((age - minAge) / Math.max(1, maxAge - minAge)) * (W - PAD.left - PAD.right);
+    const y = (v: number) => PAD.top + (1 - v / maxBalance) * (H - PAD.top - PAD.bottom);
+
+    const bandPath = (upper: keyof typeof bands[number], lower: keyof typeof bands[number]) => {
+      const top = bands.map((b, i) => `${i === 0 ? 'M' : 'L'}${x(b.age).toFixed(1)},${y(b[upper] as number).toFixed(1)}`).join(' ');
+      const bottom = [...bands].reverse().map(b => `L${x(b.age).toFixed(1)},${y(b[lower] as number).toFixed(1)}`).join(' ');
+      return `${top} ${bottom} Z`;
+    };
+    const linePath = (key: keyof typeof bands[number]) =>
+      bands.map((b, i) => `${i === 0 ? 'M' : 'L'}${x(b.age).toFixed(1)},${y(b[key] as number).toFixed(1)}`).join(' ');
+
+    const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => f * maxBalance);
+    const xTicks: number[] = [];
+    const step = Math.max(1, Math.round((maxAge - minAge) / 12));
+    for (let a = minAge; a <= maxAge; a += step) xTicks.push(a);
+
+    return { bands, x, y, bandPath, linePath, yTicks, xTicks, minAge, maxAge, maxBalance };
+  }, [results]);
+
+  const hoverBand = hoverAge != null && chart
+    ? chart.bands.reduce((best, b) => Math.abs(b.age - hoverAge) < Math.abs(best.age - hoverAge) ? b : best, chart.bands[0])
+    : null;
+
+  const successPct = results ? (results.successRate * 100).toFixed(1) : null;
+  const successColor = results
+    ? results.successRate >= 0.9 ? 'text-emerald-700' : results.successRate >= 0.75 ? 'text-amber-700' : 'text-red-700'
+    : '';
+
+  return (
+    <div className="mt-6 bg-white border border-slate-200 rounded-lg shadow-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+        <div className="flex items-center gap-2">
+          <Dices size={16} className="text-blue-600" />
+          <h3 className="text-sm font-semibold text-slate-900">Monte Carlo Simulation</h3>
+          <span className="text-xs text-slate-500">
+            {request.runs} runs · {(request.volatility * 100).toFixed(1)}% volatility · fat-tailed (Student-t)
+          </span>
+        </div>
+        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="p-4">
+        {!results && !error && (
+          <div className="flex items-center justify-center gap-2 py-16 text-slate-500 text-sm">
+            <Loader2 size={16} className="animate-spin" />
+            Running {request.runs} simulations…
+          </div>
+        )}
+        {error && (
+          <div className="py-8 text-center text-sm text-red-600">Simulation failed: {error}</div>
+        )}
+        {results && chart && (
+          <>
+            {/* Summary cards */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="bg-slate-50 rounded p-3">
+                <div className="text-[11px] text-slate-500 uppercase tracking-wide">Success rate</div>
+                <div className={`text-xl font-bold ${successColor}`}>{successPct}%</div>
+                <div className="text-[11px] text-slate-500">
+                  {results.successCount} of {results.runs} runs funded to age {request.inputs.maxAge}
+                </div>
+              </div>
+              <div className="bg-slate-50 rounded p-3">
+                <div className="text-[11px] text-slate-500 uppercase tracking-wide">Median final balance</div>
+                <div className="text-xl font-bold text-slate-900">{formatMoney(results.medianFinalBalance)}</div>
+                <div className="text-[11px] text-slate-500">portfolio value at age {request.inputs.maxAge}</div>
+              </div>
+              <div className="bg-slate-50 rounded p-3">
+                <div className="text-[11px] text-slate-500 uppercase tracking-wide">Depletion risk</div>
+                <div className="text-xl font-bold text-slate-900">
+                  {((1 - results.successRate) * 100).toFixed(1)}%
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {results.depletionHistogram.length > 0
+                    ? `earliest depletion at age ${results.depletionHistogram[0].age}`
+                    : 'no run depleted'}
+                </div>
+              </div>
+            </div>
+
+            {/* Fan chart */}
+            <div className="relative">
+              <svg
+                viewBox={`0 0 ${W} ${H}`}
+                className="w-full"
+                onMouseMove={e => {
+                  const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+                  const px = ((e.clientX - rect.left) / rect.width) * W;
+                  const age = chart.minAge + ((px - PAD.left) / (W - PAD.left - PAD.right)) * (chart.maxAge - chart.minAge);
+                  setHoverAge(Math.round(Math.min(chart.maxAge, Math.max(chart.minAge, age))));
+                }}
+                onMouseLeave={() => setHoverAge(null)}
+              >
+                {/* Y gridlines + labels */}
+                {chart.yTicks.map((t, i) => (
+                  <g key={i}>
+                    <line x1={PAD.left} x2={W - PAD.right} y1={chart.y(t)} y2={chart.y(t)} stroke="#e2e8f0" strokeWidth="1" />
+                    <text x={PAD.left - 6} y={chart.y(t) + 3} textAnchor="end" fontSize="10" fill="#64748b">
+                      {formatMoney(t)}
+                    </text>
+                  </g>
+                ))}
+                {/* X labels */}
+                {chart.xTicks.map(a => (
+                  <text key={a} x={chart.x(a)} y={H - 8} textAnchor="middle" fontSize="10" fill="#64748b">
+                    {a}
+                  </text>
+                ))}
+
+                {/* Probability bands */}
+                <path d={chart.bandPath('p90', 'p10')} fill="#3b82f6" opacity="0.12" />
+                <path d={chart.bandPath('p75', 'p25')} fill="#3b82f6" opacity="0.22" />
+                <path d={chart.linePath('p50')} fill="none" stroke="#1d4ed8" strokeWidth="2" />
+
+                {/* Retirement marker */}
+                <line
+                  x1={chart.x(retirementAge)} x2={chart.x(retirementAge)}
+                  y1={PAD.top} y2={H - PAD.bottom}
+                  stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3"
+                />
+                <text x={chart.x(retirementAge) + 4} y={PAD.top + 10} fontSize="10" fill="#64748b">
+                  retire
+                </text>
+
+                {/* Hover crosshair */}
+                {hoverBand && (
+                  <line
+                    x1={chart.x(hoverBand.age)} x2={chart.x(hoverBand.age)}
+                    y1={PAD.top} y2={H - PAD.bottom}
+                    stroke="#334155" strokeWidth="1" opacity="0.4"
+                  />
+                )}
+              </svg>
+
+              {/* Hover tooltip */}
+              {hoverBand && (
+                <div className="absolute top-2 right-2 bg-white/95 border border-slate-200 rounded shadow px-3 py-2 text-[11px] font-mono pointer-events-none">
+                  <div className="font-semibold text-slate-900 mb-1">Age {hoverBand.age}</div>
+                  <div className="text-slate-600">90th: {formatMoneyFull(hoverBand.p90)}</div>
+                  <div className="text-slate-600">75th: {formatMoneyFull(hoverBand.p75)}</div>
+                  <div className="text-blue-700 font-semibold">median: {formatMoneyFull(hoverBand.p50)}</div>
+                  <div className="text-slate-600">25th: {formatMoneyFull(hoverBand.p25)}</div>
+                  <div className="text-slate-600">10th: {formatMoneyFull(hoverBand.p10)}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 mt-2 text-[11px] text-slate-600">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm" style={{ background: '#3b82f6', opacity: 0.12 }} /> 10th–90th percentile
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm" style={{ background: '#3b82f6', opacity: 0.3 }} /> 25th–75th percentile
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-4 h-0.5 bg-blue-700 inline-block" /> median
+              </span>
+            </div>
+
+            {/* Depletion histogram */}
+            {results.depletionHistogram.length > 0 && (
+              <div className="mt-4">
+                <div className="text-[11px] text-slate-500 uppercase tracking-wide mb-1.5">
+                  When failed runs ran out of money
+                </div>
+                <div className="flex items-end gap-px h-16">
+                  {results.depletionHistogram.map(({ age, count }) => {
+                    const maxCount = Math.max(...results.depletionHistogram.map(d => d.count));
+                    return (
+                      <div
+                        key={age}
+                        className="flex-1 bg-red-400/80 hover:bg-red-500 rounded-t-sm"
+                        style={{ height: `${Math.max(4, (count / maxCount) * 100)}%` }}
+                        title={`Age ${age}: ${count} run${count === 1 ? '' : 's'} depleted`}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                  <span>{results.depletionHistogram[0].age}</span>
+                  <span>{results.depletionHistogram[results.depletionHistogram.length - 1].age}</span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

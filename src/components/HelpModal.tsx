@@ -1,0 +1,545 @@
+import { useMemo, useState, type ReactNode } from 'react';
+import { Search, X } from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Help content model: every entry is a small tree of {id, title, body} so the
+// search can match on plain text and the page renders as one scrollable doc.
+// ---------------------------------------------------------------------------
+
+interface HelpEntry {
+  /** heading inside a section (null = intro paragraph) */
+  term: string | null;
+  body: ReactNode;
+}
+
+interface HelpSection {
+  id: string;
+  title: string;
+  entries: HelpEntry[];
+}
+
+const P_STYLE = 'text-xs text-slate-600 leading-relaxed mb-1.5';
+const LI_STYLE = 'text-xs text-slate-600 leading-relaxed';
+
+const P = ({ children }: { children: ReactNode }) => <p className={P_STYLE}>{children}</p>;
+
+function ul(items: ReactNode[], ordered = false) {
+  const Tag = ordered ? 'ol' : 'ul';
+  return (
+    <Tag className={`${ordered ? 'list-decimal' : 'list-disc'} pl-5 space-y-1 mb-2`}>
+      {items.map((it, i) => <li key={i} className={LI_STYLE}>{it}</li>)}
+    </Tag>
+  );
+}
+
+const MIT_TEXT = `MIT License
+
+Copyright (c) 2026 RE: tired contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.`;
+
+const SECTIONS: HelpSection[] = [
+  {
+    id: 'help-inputs',
+    title: 'Inputs',
+    entries: [
+      {
+        term: null,
+        body: (
+          <P>
+            Everything in the left sidebar feeds one deterministic projection: from your current age
+            to your retirement age the accounts grow and receive contributions; from retirement to
+            max age the engine draws them down to fund your desired spending.
+          </P>
+        )
+      },
+      {
+        term: 'Current / Retirement / Max Age',
+        body: <P>Accumulation runs from current age until the year before retirement age. Drawdown runs from retirement age through max age. Max age is your planning horizon — the plan must stay funded through it.</P>
+      },
+      {
+        term: 'Province',
+        body: <P>Sets which provincial tax table is stacked on top of the federal one. Tables are editable under Settings.</P>
+      },
+      { term: 'RRSP', body: <P>Pre-tax registered savings. Every dollar withdrawn is taxed as income.</P> },
+      { term: 'TFSA', body: <P>After-tax savings. Withdrawals are completely tax-free.</P> },
+      {
+        term: 'Taxable',
+        body: <P>Non-registered investments. The principal comes out tax-free; the embedded-gain fraction of each withdrawal is taxed at the capital-gains inclusion rate (Settings → Capital Gains sets the starting ACB share).</P>
+      },
+      {
+        term: 'Cash Cushion',
+        body: <P>A low-yield reserve (rate set in Settings → Engine, default 0.5%). Always drawn last, as the final backstop before the plan runs dry.</P>
+      },
+      {
+        term: 'RRSP / TFSA / Non-Registered Contribution ($/yr)',
+        body: <P>Added to each account every year during accumulation, after that year's growth. The engine does not model RRSP tax refunds on contributions or contribution-room limits.</P>
+      },
+      {
+        term: 'Success Factor',
+        body: <P>Safety dial on the 25× rule used by the ON TRACK / SHORTFALL verdict. See the Verdict section.</P>
+      },
+      {
+        term: 'Desired Spending ($)',
+        body: <P>The after-tax income you want each retirement year, in today's dollars — the base the phases scale. With a non-zero inflation rate the engine inflates it each year from your current age, so the table's Spending Target column shows the nominal dollars needed that year. The engine grosses up registered withdrawals so that benefits + portfolio income, after tax, equal that target.</P>
+      },
+      {
+        term: 'Go-go / slow-go / no-go (spending phases)',
+        body: <P>From each "from age", spending drops to the given share of desired spending (still inflation-adjusted). E.g. 100% to 74, 85% from 75, 70% from 85. The verdict's 25× check always uses the retirement-year (highest) spending.</P>
+      },
+      {
+        term: 'CPP Start Age / Monthly at 65 ($)',
+        body: <P>Your expected CPP pension at the standard age of 65. The engine applies the early/deferral adjustment itself: −0.6% per month before 65 (−36% at 60), +0.7% per month after 65 (+42% at 70), shown live next to the field. If the checkbox is ticked, the amount you entered is used verbatim (already adjusted — e.g. from a Service Canada estimate). CPP is taxable income. Scenarios saved before this calculator existed keep the "already adjusted" behaviour.</P>
+      },
+      {
+        term: 'OAS Start Age',
+        body: <P>OAS normally starts at 65; deferring to 70 adds 0.6% per month (+36% at 70) — the engine applies this automatically. At 75 the benefit steps up 10%. OAS is taxable and subject to the clawback (see Tax Model).</P>
+      },
+      {
+        term: 'Years in Canada',
+        body: <P>Post-age-18 residency. Full OAS needs 40 years; fewer years scale the pension proportionally. Under 10 years pays nothing.</P>
+      },
+      {
+        term: 'One-time inflow (house sale, inheritance…)',
+        body: <P>A lump sum landing in the chosen account at the chosen age — taxable, TFSA, RRSP or cash cushion. It appears in that year's balances and grows thereafter.</P>
+      },
+      {
+        term: 'One-time outflow (big purchase, gift…)',
+        body: <P>An extra expense at the chosen age, added on top of that year's spending target (after inflation). The portfolio must fund both.</P>
+      },
+      {
+        term: 'Include spouse',
+        body: <P>Runs a second, independent projection for your partner using their own ages, balances, contributions, CPP/OAS and spending. The two plans are combined into a household verdict: the household is SHORTFALL if either plan runs out, and the metric cards show household wealth at retirement with per-person detail.</P>
+      },
+      {
+        term: 'Spouse approximation',
+        body: <P>Each spouse is taxed independently — pension income splitting, spousal RRSPs and couple-based GIS are not yet modelled, so household tax is slightly overstated for couples with uneven incomes.</P>
+      },
+      {
+        term: 'Expected Return (%)',
+        body: <P>Constant annual return applied to RRSP, TFSA and taxable balances (growth lands after withdrawals each year). The deterministic table uses exactly this rate every year.</P>
+      },
+      {
+        term: 'Volatility (%/yr)',
+        body: <P>Standard deviation of annual returns, used only by Monte Carlo. 0% means "every year equals the expected return" — the Monte Carlo button will ask you to set a value above zero. Equity-heavy portfolios are typically 15–20%.</P>
+      }
+    ]
+  },
+  {
+    id: 'help-verdict',
+    title: 'Verdict & Success Factor',
+    entries: [
+      {
+        term: 'The ON TRACK / SHORTFALL verdict',
+        body: (
+          <>
+            <P>The plan is SHORTFALL if either of these happens:</P>
+            {ul([
+              <><strong>Depletion:</strong> every account (including the cash cushion) reaches $0 before max age.</>,
+              <><strong>Rule-of-thumb check:</strong> at retirement, total net worth is below (desired spending − OAS − CPP) × success factor × 25 — i.e. savings only need to cover the spending that government benefits don't.</>
+            ])}
+          </>
+        )
+      },
+      {
+        term: 'What the Success Factor means',
+        body: (
+          <>
+            <P>The 25× rule of thumb says you can retire when savings reach 25 times annual spending (the flip side of the 4% withdrawal rule). The success factor lets you tighten or loosen that bar:</P>
+            {ul([
+              <><strong>1.0</strong> — the standard bar: 25× your income need.</>,
+              <><strong>0.8</strong> — leaner: 20× (you accept a higher withdrawal rate).</>,
+              <><strong>1.2</strong> — safer: 30× (a ~3.3% withdrawal rate).</>
+            ])}
+          </>
+        )
+      },
+      {
+        term: 'The requirement is net of government benefits',
+        body: <P>The requirement is measured against your income need after CPP and OAS: savings only need to cover the spending that benefits don't.</P>
+      },
+      {
+        term: 'Verdict is a quick screen',
+        body: <P>The year-by-year table and the Monte Carlo success rate are the authoritative answers — a plan can be SHORTFALL by the rule and still never deplete, or vice versa.</P>
+      }
+    ]
+  },
+  {
+    id: 'help-withdrawals',
+    title: 'Withdrawal Mechanics',
+    entries: [
+      {
+        term: 'Each retirement year, in order',
+        body: ul([
+          <>CPP and OAS are paid (taxable income).</>,
+          <>If you are past the RRIF conversion age (default 71), the mandatory RRIF minimum comes out first — it is forced by law, even if you don't need it. After-tax cash beyond your spending need is redeposited into the taxable account.</>,
+          <>The remaining spending need is drawn from accounts in your configured order (TFSA / Taxable / RRSP, draggable in the sidebar).</>,
+          <>The cash cushion is the last resort.</>,
+          <>Whatever remains in each account grows at the expected return.</>
+        ], true)
+      },
+      {
+        term: 'How each account is taxed on withdrawal',
+        body: ul([
+          <><strong>TFSA</strong> — tax-free. $1 withdrawn = $1 of spending.</>,
+          <><strong>Taxable</strong> — the principal (ACB) portion is tax-free; the embedded-gain portion is taxed at the capital-gains inclusion rate. The engine grosses the withdrawal up so the after-tax proceeds cover the need.</>,
+          <><strong>RRSP / RRIF</strong> — fully taxable. The engine grosses the withdrawal up via binary search so that, stacked on top of CPP/OAS and any RRIF minimum, the after-tax proceeds exactly cover the remaining need.</>
+        ])
+      },
+      {
+        term: 'RRIF conversion',
+        body: <P>At the conversion age the entire RRSP becomes a RRIF (if you retire past that age, it converts immediately at retirement). Minimum withdrawals follow the CRA prescribed factors — 5.28% at 71 rising to 20% at 95 — applied to the start-of-year balance. Rates are editable in Settings → RRIF Rates.</P>
+      },
+      {
+        term: 'When the balance goes negative mid-year',
+        body: <P>Growth is applied after withdrawals to whatever remains. In the year the last account is drained, nothing remains to grow — so the balance can dip slightly negative at year-end when the growth rate is high (that year's growth was only ever credited on money that actually stayed invested). Depletion is recorded at that age and the display floors the balance at $0.</P>
+      },
+      {
+        term: 'Withdrawal order matters',
+        body: <P>Spending TFSA first preserves taxed-later RRSP room but lets the RRIF minimum problem grow; spending RRSP first prepays tax at today's (possibly lower) brackets and shrinks future forced minimums. Try both orders and compare the Tax Burden column and the ending balance.</P>
+      }
+    ]
+  },
+  {
+    id: 'help-taxes',
+    title: 'Tax Model',
+    entries: [
+      {
+        term: "What's modelled",
+        body: ul([
+          <>Progressive federal + provincial brackets with each jurisdiction's basic personal amount applied at its lowest rate.</>,
+          <>CPP and OAS as taxable income.</>,
+          <>RRSP/RRIF withdrawals as taxable income, grossed up so after-tax income meets the target.</>,
+          <><strong>OAS clawback:</strong> when total net income (benefits + registered withdrawals) exceeds the threshold (default $95,323), 15% of the excess is recovered, capped at the full OAS. It appears in the Income Tax column.</>,
+          <>RRIF mandatory minimums with after-tax excess redeposited to the taxable account.</>,
+          <><strong>Quebec abatement:</strong> 16.5% of federal tax is refunded to Quebec taxpayers (editable in Settings → Provincial Tax with QC selected).</>,
+          <><strong>Ontario surtax:</strong> 20% on Ontario tax above the first threshold and 56% above the second (2026 thresholds $5,925 / $7,577; editable the same way with ONT selected).</>,
+          <><strong>GIS:</strong> the Guaranteed Income Supplement for a single OAS pensioner — tax-free, reduced 50¢ per dollar of income excluding OAS (CPP, registered draws, taxable gains). It lowers the portfolio's share of the spending target. Approximated annually; Service Canada recalculates quarterly and couple rates differ.</>
+        ])
+      },
+      {
+        term: 'Approximations to be aware of',
+        body: ul([
+          <><strong>Taxable account:</strong> capital gains are modelled with an adjusted cost base (Settings → Capital Gains) — only the embedded-gain fraction of each withdrawal is taxed, at the 50% inclusion rate. The fraction is computed once per withdrawal (it drifts slightly within a year as ACB leaves pro-rata). Dividend gross-up/credits and deemed disposition at death are not modelled.</>,
+          <><strong>Other provinces' surtaxes and credits</strong> (beyond Ontario's, which is modelled) are not included — e.g. BC/NS low-income reductions, dividend credits.</>,
+          <>No RRSP contribution refunds, no contribution-room limits, no pension-income splitting. GIS is modelled for single pensioners only (couple rates and the quarterly recalculation are approximations).</>
+        ])
+      },
+      {
+        term: 'Inflation',
+        body: (
+          <>
+            <P>Settings → Engine has an inflation (CPI) rate, default 2%. Spending is entered in today's dollars and inflated each year from your current age — a $60k lifestyle needs ~$89k of nominal income 20 years from now at 2%.</P>
+            <P>The optional "Index tax tables, OAS and CPP to inflation" toggle also inflates tax brackets, basic personal amounts, the OAS clawback threshold and benefit amounts each year, mirroring CRA's real-world indexation. With the toggle <em>on</em>, results are effectively in today's purchasing power (everything inflates together). With it <em>off</em>, you see nominal dollars taxed against today's frozen tables — a more conservative projection, since real bracket creep works in the retiree's favour.</P>
+          </>
+        )
+      },
+      {
+        term: 'The tables',
+        body: <P>Defaults are 2026 figures (federal 14% bottom rate, brackets indexed 2.0%, Alberta's new 8% bottom bracket). Everything is editable in Settings — update the tables each year when CRA publishes new indexation.</P>
+      }
+    ]
+  },
+  {
+    id: 'help-montecarlo',
+    title: 'Monte Carlo',
+    entries: [
+      {
+        term: 'What it does',
+        body: <P>Runs the full projection 500 times, each with a different randomized sequence of annual returns. Returns follow geometric Brownian motion around your expected return with Student-t shocks (10 degrees of freedom) so crash years are more common than a normal distribution would predict.</P>
+      },
+      {
+        term: 'Reading the chart',
+        body: ul([
+          <>The dark band is the middle 50% of outcomes (p25–p75); the light band is p10–p90.</>,
+          <>The blue line is the median portfolio value at each age.</>,
+          <>Red bars along the bottom show when failed runs ran out of money.</>
+        ])
+      },
+      {
+        term: 'Success rate',
+        body: <P>The share of runs that stayed funded through max age. 90%+ is conventionally "comfortable"; below 75% the plan is fragile. Median final balance tells you the typical legacy; the earliest depletion age tells you how bad the bad cases get.</P>
+      },
+      {
+        term: 'Volatility',
+        body: <P>The width of the fan is driven by Volatility in the sidebar. 0% collapses the simulation to the deterministic answer; 15–20% is a typical equity-heavy portfolio. Returns are not mean-reverting and sequence risk is real: a crash early in retirement hurts far more than one late.</P>
+      }
+    ]
+  },
+  {
+    id: 'help-backtest',
+    title: 'Backtest',
+    entries: [
+      {
+        term: 'What it does',
+        body: <P>Monte Carlo invents random futures; the backtest replays real pasts. It runs the plan against every rolling window of a Canadian real (after-inflation) balanced-portfolio return series from 1970 to today, each window as long as your plan horizon (current age → max age), and reports how often the plan survived.</P>
+      },
+      {
+        term: 'Reading the panel',
+        body: ul([
+          <><strong>Success rate</strong> — share of historical windows that never ran out of money.</>,
+          <><strong>Worst / Best window</strong> — the start year with the smallest / largest ending balance.</>,
+          <>Each bar is one window's ending balance; red bars depleted before max age.</>
+        ])
+      },
+      {
+        term: 'Why it matters',
+        body: <P>Sequence-of-returns risk is the biggest threat to a drawdown plan: retiring into the 1973–74 crash, the 2000–02 dot-com bust or 2008 is far worse than the same average return with the crash at the end. A plan with a high backtest success rate has historically withstood every bad sequence on record.</P>
+      },
+      {
+        term: 'Method & approximations',
+        body: <P>Returns are in real terms, so each window runs with inflation off (spending stays in today's dollars, tax tables frozen). The series is 60% S&P/TSX Composite total return (price + a 3.0% average dividend yield) and 40% Government of Canada long-bond return, both deflated by CPI. Equity and CPI are actual published data (StatCan, S&P/TSX); the bond leg is reconstructed from the benchmark yield series. Spouse plans are tested on the primary's sequence only.</P>
+      }
+    ]
+  },
+  {
+    id: 'help-data',
+    title: 'Scenarios & Data',
+    entries: [
+      {
+        term: 'Scenarios',
+        body: <P>A scenario is one complete set of inputs. The top bar switches between them; Save writes your edits into the active scenario; Scenarios opens the manager to create, rename, duplicate and delete. Reset discards your unsaved edits and reverts the sidebar to the active scenario's last-saved inputs.</P>
+      },
+      {
+        term: 'Where data lives',
+        body: <P>Everything is stored in your browser's localStorage — nothing leaves your machine. Clearing browser data erases your scenarios, so use Export to keep backups.</P>
+      },
+      {
+        term: 'Export / Import',
+        body: <P>Export downloads the entire app database — all scenarios, the active selection, and all engine settings (tax tables, RRIF rates, OAS parameters) — as one JSON file. Import loads such a file, replacing everything after confirmation. Older files are migrated automatically (e.g. a legacy single "annual contribution" becomes a TFSA contribution).</P>
+      },
+      {
+        term: 'Export CSV',
+        body: <P>The link in the breadcrumb row downloads the year-by-year projection table (balances, contributions, gains, withdrawals, tax, benefits) for the active scenario.</P>
+      },
+      {
+        term: 'Share link',
+        body: (
+          <>
+            <P>Opens a card with a link that encodes the active plan's inputs in the URL itself (base64 in the fragment, after the #). Copy it and send it to someone — opening it imports a copy as a new "Shared plan" scenario. Nothing is uploaded to a server, and the fragment never travels with the HTTP request.</P>
+            <P>The link is built from the current host, port and path, so it works for anyone who can reach the same address — a hosted deployment, a LAN IP, or this machine if you're both on it.</P>
+          </>
+        )
+      },
+      {
+        term: 'Print summary / PDF',
+        body: <P>Opens a card where you choose what the printout includes — the base one-page summary (profile, savings, verdict) plus any of: the projection timeline chart, a fresh Monte Carlo fan chart, and a table of major spending milestones (retirement, CPP/OAS start, RRIF conversion, phase changes, one-time events). The Print button then opens the browser's print dialog; choose "Save as PDF" to file or email it. The interactive tables and charts are hidden when printing.</P>
+      }
+    ]
+  },
+  {
+    id: 'help-legal',
+    title: 'License & Legal',
+    entries: [
+      {
+        term: 'Disclaimer — not financial advice',
+        body: (
+          <>
+            <P>
+              RE: tired is an educational and exploratory tool. It produces <strong>estimates</strong> from
+              a simplified model of Canadian tax and benefit rules — it is <strong>not</strong> financial,
+              investment, tax, or legal advice, and it does not consider your complete circumstances.
+            </P>
+            {ul([
+              <>The tax model omits real-world details (dividend credits, pension income splitting, most provincial credits, deemed disposition at death, contribution-room limits — see the Tax Model section).</>,
+              <>Tax figures are 2026 defaults that go stale; benefit rules change by legislation.</>,
+              <>Projections assume constant average returns or stylized randomness; actual markets will not cooperate.</>,
+              <>No warranty is given that any calculation is correct, complete, or suitable for any purpose. Use of this tool is entirely at your own risk.</>
+            ])}
+            <P>Before making retirement, withdrawal, or benefit-timing decisions, verify the numbers and consult a qualified financial planner or tax professional.</P>
+          </>
+        )
+      },
+      {
+        term: 'Credits',
+        body: (
+          <>
+            <P>
+              The drawdown engine at the heart of this app was originally built on{' '}
+              <a
+                href="https://github.com/danielabar/retirement_drawdown_simulator_canada"
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                retirement_drawdown_simulator_canada
+              </a>
+              {' '}by <strong>danielabar</strong> — a Canadian retirement stress-tester modelling RRSP /
+              taxable / TFSA withdrawals with Canadian taxes, CPP/OAS, and RRIF rules. Thank you to the
+              original author for publishing it.
+            </P>
+            <P>
+              Note: the upstream repository did not carry a LICENSE file at the time it was incorporated
+              (checked 2026-08-23). RE: tired's own code is MIT-licensed as described below.
+            </P>
+          </>
+        )
+      },
+      {
+        term: 'MIT License (full text)',
+        body: (
+          <pre className="text-[11px] leading-relaxed text-slate-600 bg-slate-50 border border-slate-200 rounded p-3 whitespace-pre-wrap font-mono">
+            {MIT_TEXT}
+          </pre>
+        )
+      }
+    ]
+  }
+];
+
+// ---------------------------------------------------------------------------
+// Plain-text extraction for search matching.
+// ---------------------------------------------------------------------------
+
+function textOf(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join(' ');
+  if (typeof node === 'object' && 'props' in node) return textOf((node as { props: { children?: ReactNode } }).props.children);
+  return '';
+}
+
+// Highlight every occurrence of `query` inside string children of `node`.
+function highlight(node: ReactNode, query: string): ReactNode {
+  if (!query) return node;
+  if (typeof node === 'string') {
+    const lower = node.toLowerCase();
+    const q = query.toLowerCase();
+    if (!lower.includes(q)) return node;
+    const parts: ReactNode[] = [];
+    let i = 0;
+    let k = 0;
+    while (i < node.length) {
+      const hit = lower.indexOf(q, i);
+      if (hit === -1) { parts.push(node.slice(i)); break; }
+      if (hit > i) parts.push(node.slice(i, hit));
+      parts.push(
+        <mark key={k++} className="bg-yellow-200 text-inherit rounded-sm px-px">
+          {node.slice(hit, hit + q.length)}
+        </mark>
+      );
+      i = hit + q.length;
+    }
+    return <>{parts}</>;
+  }
+  if (Array.isArray(node)) return node.map((n, i) => <span key={i}>{highlight(n, query)}</span>);
+  if (typeof node === 'object' && node != null && 'props' in node) {
+    const el = node as React.ReactElement<{ children?: ReactNode }>;
+    return { ...el, props: { ...el.props, children: highlight(el.props.children, query) } };
+  }
+  return node;
+}
+
+// ---------------------------------------------------------------------------
+// Page: TOC + search + all sections in one scroll.
+// ---------------------------------------------------------------------------
+
+export function HelpModal() {
+  const [query, setQuery] = useState('');
+  const q = query.trim();
+
+  const filtered = useMemo(() => {
+    if (!q) return SECTIONS.map(s => ({ ...s, entries: s.entries }));
+    const lower = q.toLowerCase();
+    return SECTIONS
+      .map(s => ({
+        ...s,
+        entries: s.entries.filter(e =>
+          s.title.toLowerCase().includes(lower) ||
+          (e.term?.toLowerCase().includes(lower) ?? false) ||
+          textOf(e.body).toLowerCase().includes(lower)
+        )
+      }))
+      .filter(s => s.entries.length > 0);
+  }, [q]);
+
+  const matchCount = q ? filtered.reduce((n, s) => n + s.entries.length, 0) : null;
+
+  return (
+    <div className="max-w-3xl">
+      {/* Search */}
+      <div className="relative mb-3">
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search help — try “clawback”, “TFSA”, “share link”…"
+          className="w-full pl-8 pr-8 py-1.5 text-xs border border-neutral-300 rounded focus:outline-none focus:border-blue-500"
+        />
+        {q && (
+          <button
+            onClick={() => setQuery('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700 rounded"
+            title="Clear search"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {/* Table of contents */}
+      <nav className="mb-5 pb-4 border-b border-neutral-200">
+        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+          Contents
+          {matchCount != null && (
+            <span className="ml-2 normal-case font-normal text-slate-400">
+              {matchCount} {matchCount === 1 ? 'topic' : 'topics'} match{matchCount === 1 ? 'es' : ''}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {filtered.map(s => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              {s.title}
+            </a>
+          ))}
+          {filtered.length === 0 && (
+            <span className="text-xs text-slate-500">No matches — try a shorter or different term.</span>
+          )}
+        </div>
+      </nav>
+
+      {/* All sections in one scroll */}
+      <div className="pb-8">
+        {filtered.map(s => (
+          <section key={s.id} id={s.id} className="mb-6 scroll-mt-4">
+            <h2 className="text-sm font-bold text-slate-900 border-b border-neutral-200 pb-1 mb-2">
+              {highlight(s.title, q)}
+            </h2>
+            {s.entries.map((e, i) =>
+              e.term == null ? (
+                <div key={i}>{highlight(e.body, q)}</div>
+              ) : (
+                <div key={i} className="py-1.5 border-b border-neutral-100 last:border-0">
+                  <div className="text-xs font-medium text-slate-800">{highlight(e.term, q)}</div>
+                  <div className="mt-0.5">{highlight(e.body, q)}</div>
+                </div>
+              )
+            )}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}

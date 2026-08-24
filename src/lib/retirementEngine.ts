@@ -1,0 +1,681 @@
+import type { AppConfig } from './appConfig';
+import {
+  calculateTax,
+  findGrossIncomeForTakeHome,
+  calculateRrifMinimum,
+  isRrifMandatory,
+  oasAnnualGross,
+  gisAnnual,
+  indexConfig
+} from './canadianTax';
+
+export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable';
+
+export interface RetirementInputs {
+  currentAge: number;
+  retirementAge: number;
+  maxAge: number;
+  rrspBalance: number;
+  tfsaBalance: number;
+  taxableBalance: number;
+  cashCushionBalance: number;
+  rrspContribution: number;
+  tfsaContribution: number;
+  taxableContribution: number;
+  annualWithdrawal: number;
+  investmentReturn: number;
+  // Annual volatility of returns (standard deviation) — used by Monte Carlo.
+  returnVolatility: number;
+  provinceCode: string;
+  cppStartAge: number | null;
+  cppMonthlyAmount: number; // monthly CPP at age 65 — early/deferral adjustments applied by the engine
+  cppAdjustedAmount: boolean; // true = amount is already adjusted for the start age (legacy behaviour)
+  oasStartAge: number | null;
+  oasYearsInCanada: number;
+  desiredSpending: number;
+  successFactor: number;
+  // Order in which taxable/tfsa/rrsp are drawn down. Cash cushion is always
+  // the last resort. After the RRIF conversion age the 'rrsp' slot draws the RRIF.
+  withdrawalOrder: WithdrawalAccount[];
+  // One-time cash events: inflows land in an account, outflows add to that
+  // year's spending need.
+  events?: CashEvent[];
+  // Spending phases: % of desired spending per age band (go-go / slow-go /
+  // no-go). Empty/absent = 100% at every age.
+  spendingBands?: SpendingBand[];
+  // Optional spouse: a second, independent plan whose results are combined
+  // with the primary's for household totals.
+  spouse?: SpouseInputs;
+}
+
+export interface SpouseInputs {
+  enabled: boolean;
+  currentAge: number;
+  retirementAge: number;
+  rrspBalance: number;
+  tfsaBalance: number;
+  taxableBalance: number;
+  cashCushionBalance: number;
+  rrspContribution: number;
+  tfsaContribution: number;
+  taxableContribution: number;
+  cppStartAge: number | null;
+  cppMonthlyAmount: number; // age-65 amount; adjustment applied
+  oasStartAge: number | null;
+  oasYearsInCanada: number;
+  desiredSpending: number; // the spouse's own after-tax income goal (today's $)
+  withdrawalOrder?: WithdrawalAccount[];
+}
+
+export interface CashEvent {
+  id: string;
+  age: number;
+  label: string;
+  amount: number; // always positive; direction decides the sign
+  direction: 'in' | 'out';
+  account?: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; // inflows only; default taxable
+}
+
+export interface SpendingBand {
+  fromAge: number;      // applies from this age until the next band
+  pctOfBase: number;    // 0..1+ fraction of desiredSpending (e.g. 1, 0.85, 0.7)
+}
+
+export interface AccountBreakdown {
+  age: number;
+  rrspBalance: number;
+  rrifBalance: number;
+  tfsaBalance: number;
+  taxableBalance: number;
+  cashCushionBalance: number;
+}
+
+export interface YearlyBreakdown {
+  age: number;
+  startingBalance: number;
+  contributions: number;
+  marketGains: number;
+  withdrawals: number;
+  incomeTax: number;
+  cumulativeTax: number;
+  spendingTarget: number; // this year's after-tax income goal, in nominal dollars of that year
+  endingBalance: number;
+  rrspBalance: number;
+  rrifBalance: number;
+  tfsaBalance: number;
+  taxableBalance: number;
+  cashCushionBalance: number;
+  cppIncome: number;
+  oasIncome: number;
+  gisIncome: number;
+}
+
+export interface RetirementResults {
+  totalNetWorthAtRetirement: number;
+  depletionAge: number | null;
+  yearlyBreakdown: YearlyBreakdown[];
+  accountBreakdown: AccountBreakdown[];
+  status: 'ON_TRACK' | 'SHORTFALL';
+  withdrawalRate: number;
+  averageReturn: number;
+  retirementAge: number;
+  spouse?: RetirementResults; // present when inputs.spouse.enabled
+}
+
+const MAX_TAX_ITERATIONS = 100;
+const TAX_TOLERANCE = 1.0;
+
+/**
+ * Run the projection. Tax model follows the real Canadian engine:
+ *  - CPP and OAS are taxable income.
+ *  - RRSP/RRIF withdrawals are taxed; the amount withdrawn is grossed up
+ *    (binary search) so total after-tax income hits the spending target.
+ *  - TFSA and taxable-account withdrawals are after-tax money (no tax).
+ *  - RRIF minimums are forced; the after-tax excess over spending is
+ *    redeposited into the taxable account.
+ *  - Withdrawals respect the user-configured account order; the cash
+ *    cushion is always the last resort.
+ */
+export function calculateRetirement(
+  inputs: RetirementInputs,
+  config: AppConfig,
+  options?: { returnSequence?: Record<number, number> }
+): RetirementResults {
+  const {
+    currentAge,
+    retirementAge,
+    maxAge,
+    rrspBalance,
+    tfsaBalance,
+    taxableBalance,
+    cashCushionBalance,
+    rrspContribution,
+    tfsaContribution,
+    taxableContribution,
+    desiredSpending,
+    investmentReturn,
+    provinceCode,
+    cppMonthlyAmount,
+    cppAdjustedAmount,
+    cppStartAge,
+    oasStartAge,
+    oasYearsInCanada,
+    successFactor,
+    withdrawalOrder
+  } = inputs;
+
+  const order: WithdrawalAccount[] =
+    Array.isArray(withdrawalOrder) && withdrawalOrder.length > 0
+      ? withdrawalOrder
+      : ['tfsa', 'taxable', 'rrsp'];
+
+  const cushionRate = config.engine.cashCushionRate;
+  const rrifAge = config.engine.rrifConversionAge;
+
+  // Inflation: spending is entered in today's dollars and inflated each year
+  // from the current age. When indexTaxTables is on, the tax system, OAS and
+  // CPP are inflated by the same factor (mirroring CRA indexation), so the
+  // projection stays in real terms; with it off, numbers are nominal dollars
+  // against today's (unindexed) tax tables.
+  const inflation = Math.max(0, config.engine.inflationRate ?? 0);
+  const indexTables = config.engine.indexTaxTables === true;
+  const factorAt = (age: number) => Math.pow(1 + inflation, Math.max(0, age - currentAge));
+
+  // Spending phases: fraction of desired spending at each age (default 1).
+  const bands = Array.isArray(inputs.spendingBands) ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge) : [];
+  const spendingPctAt = (age: number): number => {
+    let pct = 1;
+    for (const b of bands) {
+      if (age >= b.fromAge) pct = b.pctOfBase;
+      else break;
+    }
+    return pct;
+  };
+
+  // One-time cash events.
+  const events = Array.isArray(inputs.events) ? inputs.events : [];
+  const eventsAt = (age: number) => events.filter(e => e.age === age);
+  const eventOutAt = (age: number) => eventsAt(age).filter(e => e.direction === 'out').reduce((s, e) => s + e.amount, 0);
+  const configCache = new Map<number, AppConfig>();
+  const configAt = (age: number): AppConfig => {
+    if (!indexTables) return config;
+    const f = factorAt(age);
+    if (f === 1) return config;
+    let c = configCache.get(age);
+    if (!c) {
+      c = indexConfig(config, f);
+      configCache.set(age, c);
+    }
+    return c;
+  };
+
+  // Per-age return override (Monte Carlo); falls back to the constant rate.
+  const seq = options?.returnSequence;
+  const rateAt = (age: number) => (seq && typeof seq[age] === 'number' ? seq[age] : investmentReturn);
+
+  const yearlyBreakdown: YearlyBreakdown[] = [];
+  const accountBreakdown: AccountBreakdown[] = [];
+
+  let rrsp = rrspBalance;
+  let rrif = 0;
+  let tfsa = tfsaBalance;
+  let taxable = taxableBalance;
+  let cashCushion = cashCushionBalance;
+  let cumulativeTax = 0;
+
+  // Adjusted cost base of the taxable account: contributions raise it,
+  // growth does not. The embedded-gain fraction of any withdrawal is taxed
+  // at the capital-gains inclusion rate.
+  let taxableAcb = taxableBalance * Math.min(1, Math.max(0, config.engine.taxableAcbRatio));
+  const gainsFraction = () => (taxable > 0 ? Math.max(0, Math.min(1, 1 - taxableAcb / taxable)) : 0);
+  const inclusion = Math.min(1, Math.max(0, config.engine.capitalGainsInclusion));
+
+  const totalBalance = () => rrsp + rrif + tfsa + taxable + cashCushion;
+
+  // ---------------- accumulation phase ----------------
+  for (let age = currentAge; age < retirementAge; age++) {
+    const startingTotal = totalBalance();
+
+    const r = rateAt(age);
+    const rrspGains = rrsp * r;
+    const tfsaGains = tfsa * r;
+    const taxableGains = taxable * r;
+    const cashGains = cashCushion * cushionRate;
+
+    rrsp += rrspGains + rrspContribution;
+    tfsa += tfsaGains + tfsaContribution;
+    taxable += taxableGains + taxableContribution;
+    taxableAcb += taxableContribution;
+    cashCushion += cashGains;
+
+    yearlyBreakdown.push({
+      age,
+      startingBalance: startingTotal,
+      contributions: rrspContribution + tfsaContribution + taxableContribution,
+      marketGains: rrspGains + tfsaGains + taxableGains + cashGains,
+      withdrawals: 0,
+      incomeTax: 0,
+      cumulativeTax,
+      spendingTarget: 0,
+      endingBalance: totalBalance(),
+      rrspBalance: rrsp,
+      rrifBalance: rrif,
+      tfsaBalance: tfsa,
+      taxableBalance: taxable,
+      cashCushionBalance: cashCushion,
+      cppIncome: 0,
+      oasIncome: 0,
+      gisIncome: 0
+    });
+
+    accountBreakdown.push({
+      age,
+      rrspBalance: rrsp,
+      rrifBalance: rrif,
+      tfsaBalance: tfsa,
+      taxableBalance: taxable,
+      cashCushionBalance: cashCushion
+    });
+  }
+
+  // ---------------- decumulation phase ----------------
+  let depletionAge: number | null = null;
+  const totalStartingRetirement = totalBalance();
+  let clawedBack = false; // true once the OAS recovery tax applies in any year
+
+  for (let age = retirementAge; age <= maxAge; age++) {
+    // RRSP converts to RRIF at the configured age. `>=` so a plan that
+    // starts retirement past the conversion age converts immediately
+    // rather than skipping conversion (and RRIF minimums) forever.
+    if (age >= rrifAge && rrsp > 0) {
+      rrif += rrsp;
+      rrsp = 0;
+    }
+
+    const startingTotal = totalBalance();
+    const yearConfig = configAt(age);
+
+    // One-time inflows land at the start of the year (before withdrawals).
+    for (const ev of eventsAt(age)) {
+      if (ev.direction !== 'in') continue;
+      const dest = ev.account ?? 'taxable';
+      if (dest === 'rrsp') rrsp += ev.amount;
+      else if (dest === 'tfsa') tfsa += ev.amount;
+      else if (dest === 'cash') cashCushion += ev.amount;
+      else { taxable += ev.amount; taxableAcb += ev.amount; }
+    }
+
+    // This year's spending target: today's dollars, inflated to this year.
+    const yearSpending = desiredSpending * factorAt(age) * spendingPctAt(age) + eventOutAt(age);
+
+    // Gross benefit income (taxable). OAS amounts come from the (possibly
+    // indexed) config; CPP is inflated manually when indexation is on.
+    // cppMonthlyAmount is the age-65 amount unless cppAdjustedAmount is set —
+    // the engine applies the 0.6%/month early penalty / 0.7%/month deferral
+    // bonus (floored at 60, capped at 70) itself.
+    const cppMonthlyAtStart = cppStartAge != null
+      ? cppMonthlyAmount * (cppAdjustedAmount ? 1 : cppAdjustmentMultiplier(cppStartAge, config))
+      : 0;
+    const cppGross = cppStartAge != null && age >= cppStartAge
+      ? cppMonthlyAtStart * 12 * (indexTables ? factorAt(age) : 1)
+      : 0;
+    const oasGross = oasStartAge != null ? oasAnnualGross(age, oasStartAge, oasYearsInCanada, yearConfig) : 0;
+    const otherGross = cppGross + oasGross;
+
+    // After-tax value of the benefits on their own.
+    const netBenefits = calculateTax(otherGross, provinceCode, yearConfig).takeHome;
+
+    // What the portfolio must supply after tax so total take-home = spending.
+    const neededAfterTax = Math.max(0, yearSpending - netBenefits);
+
+    let actualWithdrawals = 0;  // gross dollars leaving registered accounts + raw dollars elsewhere
+    let registeredGross = 0;    // RRSP/RRIF gross withdrawn this year (taxable)
+    let capitalGains = 0;       // taxable-account gains realized this year (taxed at inclusion rate)
+    let remainingAfterTaxNeed = neededAfterTax;
+
+    // 1. Mandatory RRIF minimum — forced out first. After-tax excess over the
+    //    spending need is redeposited into taxable (still withdrawn & taxed).
+    if (isRrifMandatory(age, config) && rrif > 0) {
+      const minimum = calculateRrifMinimum(age, rrif, config);
+      rrif -= minimum;
+      actualWithdrawals += minimum;
+      registeredGross += minimum;
+
+      const netFromRrif = calculateTax(minimum + otherGross, provinceCode, yearConfig).takeHome - netBenefits;
+
+      const excess = netFromRrif - remainingAfterTaxNeed;
+      if (excess > 0) {
+        taxable += excess;
+        taxableAcb += excess;
+      }
+      remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - netFromRrif);
+    }
+
+    // Gross income already stacking into the brackets this year (benefits +
+    // any RRIF minimum). Additional registered draws are taxed on top of it.
+    const stackedGross = () => otherGross + registeredGross;
+
+    // GIS: tax-free, based on income EXCLUDING OAS (CPP + registered draws +
+    // taxable gains). Computed after the mandatory RRIF minimum so the
+    // minimum's effect on the GIS is captured; discretionary draws below
+    // further reduce it (not iterated — the reduction lands next year in
+    // practice via Service Canada's quarterly recalc).
+    const gisGross = oasGross > 0
+      ? gisAnnual(cppGross + registeredGross, yearConfig)
+      : 0;
+    remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - gisGross);
+
+    // 2. Draw the remaining after-tax need in the configured order.
+    const drawFrom = (account: WithdrawalAccount): void => {
+      if (remainingAfterTaxNeed <= 0) return;
+
+      if (account === 'tfsa') {
+        // After-tax money: $1 withdrawn = $1 of need.
+        const draw = Math.min(tfsa, remainingAfterTaxNeed);
+        tfsa -= draw;
+        actualWithdrawals += draw;
+        remainingAfterTaxNeed -= draw;
+        return;
+      }
+
+      if (account === 'taxable') {
+        // Only the embedded-gain fraction of each withdrawal is taxable
+        // (at the inclusion rate). Gross up so the after-tax proceeds cover
+        // the need; ACB leaves pro-rata with the draw.
+        const f = gainsFraction();
+        const drawGross = grossTaxableWithdrawal(remainingAfterTaxNeed, stackedGross() + capitalGains * inclusion, f, inclusion, provinceCode, yearConfig);
+        const draw = Math.min(taxable, drawGross);
+        taxable -= draw;
+        taxableAcb = Math.max(0, taxableAcb - draw * (1 - f));
+        capitalGains += draw * f;
+        actualWithdrawals += draw;
+        // Credit the draw's after-tax value against the need: draw minus the
+        // incremental tax on its included gain.
+        const base = stackedGross() + capitalGains * inclusion;
+        const netOfDraw = draw
+          - (calculateTax(base, provinceCode, yearConfig).totalTax - calculateTax(base - draw * f * inclusion, provinceCode, yearConfig).totalTax);
+        remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - netOfDraw);
+        return;
+      }
+
+      // 'rrsp' slot — pre-conversion draws RRSP, post-conversion draws RRIF.
+      // Registered money is taxed: gross up so take-home covers the need.
+      const balance = age >= rrifAge ? rrif : rrsp;
+      if (balance <= 0) return;
+
+      const grossNeeded = grossRegisteredWithdrawal(remainingAfterTaxNeed, stackedGross(), provinceCode, yearConfig);
+
+      if (balance >= grossNeeded) {
+        if (age >= rrifAge) rrif -= grossNeeded; else rrsp -= grossNeeded;
+        actualWithdrawals += grossNeeded;
+        registeredGross += grossNeeded;
+        remainingAfterTaxNeed = 0;
+      } else {
+        // Insufficient: drain the account, credit only its after-tax value.
+        const base = stackedGross();
+        const marginalNet = calculateTax(balance + base, provinceCode, yearConfig).takeHome
+          - calculateTax(base, provinceCode, yearConfig).takeHome;
+        if (age >= rrifAge) rrif = 0; else rrsp = 0;
+        actualWithdrawals += balance;
+        registeredGross += balance;
+        remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - marginalNet);
+      }
+    };
+
+    for (const account of order) {
+      drawFrom(account);
+    }
+
+    // 3. Cash cushion — last resort, after-tax money.
+    if (remainingAfterTaxNeed > 0 && cashCushion > 0) {
+      const draw = Math.min(cashCushion, remainingAfterTaxNeed);
+      cashCushion -= draw;
+      actualWithdrawals += draw;
+      remainingAfterTaxNeed -= draw;
+    }
+
+    // Single consistent tax figure: total tax on (benefits + registered
+    // withdrawals) minus tax on benefits alone, plus the OAS recovery tax
+    // (clawback) when total net income crosses the threshold.
+    const totalNetIncome = otherGross + registeredGross + capitalGains * inclusion;
+    const oasClawback = oasGross > 0
+      ? Math.min(oasGross, Math.max(0, totalNetIncome - yearConfig.oas.clawbackThreshold) * yearConfig.oas.clawbackRate)
+      : 0;
+    const incomeTax = calculateTax(totalNetIncome, provinceCode, yearConfig).totalTax
+      - calculateTax(otherGross, provinceCode, yearConfig).totalTax
+      + oasClawback;
+    cumulativeTax += incomeTax;
+    if (oasClawback > 0) clawedBack = true;
+
+    // Apply market growth after withdrawals.
+    const r = rateAt(age);
+    const rrspGains = rrsp * r;
+    const rrifGains = rrif * r;
+    const tfsaGains = tfsa * r;
+    const taxableGains = taxable * r;
+    const cashGains = cashCushion * cushionRate;
+
+    rrsp += rrspGains;
+    rrif += rrifGains;
+    tfsa += tfsaGains;
+    taxable += taxableGains;
+    cashCushion += cashGains;
+
+    const endingTotal = totalBalance();
+
+    if (endingTotal <= 0 && depletionAge === null) {
+      depletionAge = age;
+    }
+
+    yearlyBreakdown.push({
+      age,
+      startingBalance: startingTotal,
+      contributions: 0,
+      marketGains: rrspGains + rrifGains + tfsaGains + taxableGains + cashGains,
+      withdrawals: actualWithdrawals,
+      incomeTax,
+      cumulativeTax,
+      spendingTarget: yearSpending,
+      endingBalance: Math.max(0, endingTotal),
+      rrspBalance: rrsp,
+      rrifBalance: rrif,
+      tfsaBalance: tfsa,
+      taxableBalance: taxable,
+      cashCushionBalance: cashCushion,
+      cppIncome: cppGross,
+      oasIncome: oasGross,
+      gisIncome: gisGross
+    });
+
+    accountBreakdown.push({
+      age,
+      rrspBalance: rrsp,
+      rrifBalance: rrif,
+      tfsaBalance: tfsa,
+      taxableBalance: taxable,
+      cashCushionBalance: cashCushion
+    });
+
+    if (endingTotal <= 0) {
+      break;
+    }
+  }
+
+  const totalNetWorthAtRetirement =
+    yearlyBreakdown.find(y => y.age === retirementAge)?.startingBalance ??
+    totalStartingRetirement;
+
+  // OAS is clawed back at clawbackRate on net income above the threshold,
+  // so when large RRIF/RRSP draws trigger the recovery tax the retiree
+  // never actually receives the full OAS the drawdown math credited.
+  const retConfig = configAt(retirementAge);
+  const oasGrossRetirement =
+    oasStartAge != null && retirementAge >= oasStartAge
+      ? oasAnnualGross(retirementAge, oasStartAge, oasYearsInCanada, retConfig)
+      : 0;
+  const effectiveOas = clawedBack
+    ? Math.max(0, oasGrossRetirement - Math.max(0, totalNetWorthAtRetirement - retConfig.oas.clawbackThreshold) * retConfig.oas.clawbackRate)
+    : oasGrossRetirement;
+  // The 25× rule tests whether savings can fund the spending that government
+  // benefits DON'T cover: OAS (and CPP) reduce the draw on the portfolio, so
+  // the requirement is net-of-benefits, never gross spending plus benefits.
+  const cppGrossRetirement =
+    cppStartAge != null && retirementAge >= cppStartAge
+      ? cppAdjustedAmount
+        ? cppMonthlyAmount * 12
+        : cppMonthlyAmount * cppAdjustmentMultiplier(cppStartAge, config) * 12
+      : 0;
+  // Spending in retirement-year dollars, so the 25× rule compares like with
+  // like when inflation is on.
+  const netSpendingNeed = Math.max(
+    0,
+    desiredSpending * factorAt(retirementAge) - effectiveOas - cppGrossRetirement,
+  );
+
+  let status: 'ON_TRACK' | 'SHORTFALL' = 'ON_TRACK';
+  const lifeExpectancy = maxAge;
+
+  if (depletionAge !== null && depletionAge < lifeExpectancy) {
+    status = 'SHORTFALL';
+  } else if (totalNetWorthAtRetirement < netSpendingNeed * successFactor * 25) {
+    status = 'SHORTFALL';
+  }
+
+  const withdrawalRate = totalStartingRetirement > 0
+    ? (desiredSpending * factorAt(retirementAge)) / totalStartingRetirement
+    : 0;
+
+  const primary: RetirementResults = {
+    totalNetWorthAtRetirement,
+    depletionAge,
+    yearlyBreakdown,
+    accountBreakdown,
+    status,
+    withdrawalRate,
+    averageReturn: investmentReturn,
+    retirementAge
+  };
+
+  // Spouse: an independent plan with its own ages, accounts and benefits,
+  // combined with the primary's for household display. Household SHORTFALL
+  // if either plan fails (income splitting is a future refinement).
+  const sp = inputs.spouse;
+  if (sp?.enabled) {
+    const spouseResults = calculateRetirement({
+      currentAge: sp.currentAge,
+      retirementAge: sp.retirementAge,
+      maxAge,
+      rrspBalance: sp.rrspBalance,
+      tfsaBalance: sp.tfsaBalance,
+      taxableBalance: sp.taxableBalance,
+      cashCushionBalance: sp.cashCushionBalance,
+      rrspContribution: sp.rrspContribution,
+      tfsaContribution: sp.tfsaContribution,
+      taxableContribution: sp.taxableContribution,
+      annualWithdrawal: 0,
+      investmentReturn,
+      returnVolatility: 0,
+      provinceCode,
+      cppStartAge: sp.cppStartAge,
+      cppMonthlyAmount: sp.cppMonthlyAmount,
+      cppAdjustedAmount: false,
+      oasStartAge: sp.oasStartAge,
+      oasYearsInCanada: sp.oasYearsInCanada,
+      desiredSpending: sp.desiredSpending,
+      successFactor,
+      withdrawalOrder: sp.withdrawalOrder ?? order,
+      spouse: undefined
+    }, config, options);
+    primary.spouse = spouseResults;
+    if (spouseResults.status === 'SHORTFALL') primary.status = 'SHORTFALL';
+  }
+
+  return primary;
+}
+
+/**
+ * CPP early/late adjustment: −0.6% per month before 65 (floor −36% at 60),
+ * +0.7% per month after 65 (cap +42% at 70). Rates are configurable in
+ * Settings → CPP.
+ */
+export function cppAdjustmentMultiplier(startAge: number, config: AppConfig): number {
+  const c = config.cpp;
+  const clamped = Math.max(c.earliestAge, Math.min(c.maxDeferralAge, startAge));
+  if (clamped < c.standardAge) {
+    return 1 - (c.standardAge - clamped) * 12 * c.earlyPenaltyPerMonth;
+  }
+  return 1 + (clamped - c.standardAge) * 12 * c.deferralBonusPerMonth;
+}
+
+/**
+ * Gross taxable-account withdrawal whose after-tax value equals
+ * `neededAfterTax`, given that fraction `gainsFrac` of each dollar is a
+ * capital gain taxed at `inclusion`, stacked on `baseGross` of existing
+ * taxable income. With zero embedded gains this is the identity.
+ */
+function grossTaxableWithdrawal(
+  neededAfterTax: number,
+  baseGross: number,
+  gainsFrac: number,
+  inclusion: number,
+  provinceCode: string,
+  config: AppConfig
+): number {
+  if (neededAfterTax <= 0) return 0;
+  const taxableFrac = gainsFrac * inclusion;
+  if (taxableFrac <= 0) return neededAfterTax;
+
+  let lower = neededAfterTax;
+  let upper = neededAfterTax * 2;
+  // After-tax value of the withdrawal = W − incremental tax on the included
+  // gain (a takeHome *difference* would wrongly subtract the whole post-tax
+  // benefit income, not just the tax increment).
+  const net = (w: number) =>
+    w - (calculateTax(baseGross + w * taxableFrac, provinceCode, config).totalTax
+       - calculateTax(baseGross, provinceCode, config).totalTax);
+  while (net(upper) < neededAfterTax) upper *= 1.5;
+  for (let i = 0; i < MAX_TAX_ITERATIONS; i++) {
+    const mid = (lower + upper) / 2;
+    const difference = net(mid) - neededAfterTax;
+    if (Math.abs(difference) <= TAX_TOLERANCE) return mid;
+    if (difference > 0) upper = mid; else lower = mid;
+  }
+  return (lower + upper) / 2;
+}
+
+/**
+ * Gross registered (RRSP/RRIF) withdrawal whose after-tax value, stacked on
+ * top of existing gross benefit income, equals `neededAfterTax`.
+ * Mirrors WithdrawalAmounts#annualRrsp binary search.
+ */
+function grossRegisteredWithdrawal(
+  neededAfterTax: number,
+  otherGross: number,
+  provinceCode: string,
+  config: AppConfig
+): number {
+  if (neededAfterTax <= 0) return 0;
+
+  if (otherGross <= 0) {
+    // No other income: simple reverse-tax.
+    return findGrossIncomeForTakeHome(neededAfterTax, provinceCode, config);
+  }
+
+  // With CPP/OAS stacking into the brackets, binary search on total take-home.
+  const targetTakeHome = neededAfterTax + calculateTax(otherGross, provinceCode, config).takeHome;
+  let lower = 0;
+  let upper = findGrossIncomeForTakeHome(targetTakeHome, provinceCode, config);
+
+  for (let i = 0; i < MAX_TAX_ITERATIONS; i++) {
+    const candidate = (lower + upper) / 2;
+    const totalTakeHome = calculateTax(candidate + otherGross, provinceCode, config).takeHome;
+    const difference = totalTakeHome - targetTakeHome;
+    if (Math.abs(difference) <= TAX_TOLERANCE) return candidate;
+    if (difference > 0) {
+      upper = candidate;
+    } else {
+      lower = candidate;
+    }
+  }
+  return (lower + upper) / 2;
+}
