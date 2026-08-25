@@ -142,12 +142,27 @@ function YearWorksheet({ row, inputs, isCouple }: {
       )}
 
       {/* 8 — tax */}
-      {(row.incomeTax > 0.5 || d.tax.oasClawback > 0.5) && (
+      {(row.incomeTax > 0.5 || d.tax.oasClawback > 0.5 || (row.splitTransferred ?? 0) !== 0) && (
         <Step n={++n} title="Income tax" note="Tax on total income, minus the tax already counted on benefits, plus the OAS recovery tax.">
           <Line label="total net income (benefits + registered + gains×inclusion)" value={c.totalNetIncome} />
           <Line label="tax already counted on benefits alone" value={c.taxOnBenefits} indent />
           {d.tax.oasClawback > 0.5 && <Line label="+ OAS clawback (15¢/$ over the threshold)" value={d.tax.oasClawback} indent />}
+          {(row.splitTransferred ?? 0) !== 0 && (
+            <Line
+              label={(row.splitTransferred ?? 0) > 0
+                ? 'pension income split OUT to spouse (lowers your tax)'
+                : 'pension income split IN from spouse (taxed to you)'}
+              value={Math.abs(row.splitTransferred ?? 0)}
+              indent
+            />
+          )}
           <Eq parts="income tax on this year's withdrawals" result={row.incomeTax} strong />
+          {(row.splitTransferred ?? 0) !== 0 && (
+            <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+              includes the effect of pension-income splitting — tax here can be non-zero even with no
+              withdrawals, because income was transferred {row.splitTransferred! > 0 ? 'to your spouse' : 'to you'}.
+            </div>
+          )}
           <Line label="cumulative tax since retirement" value={row.cumulativeTax} />
         </Step>
       )}

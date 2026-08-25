@@ -404,6 +404,43 @@ describe('reverse mortgage in accumulation', () => {
     expect(y62.detail!.rm!.scheduledDraw).toBeGreaterThan(0);
     expect(y62.cashCushionBalance).toBeGreaterThan(0);
   });
+
+  it('the loan is clamped at the LTV ceiling after interest accrual (no negative equity)', () => {
+    // Regression: once scheduled draws stop, the loan kept compounding at the
+    // full interest rate with no cap — with 6% interest vs 2% appreciation the
+    // balance blew straight past the max-LTV ceiling and net home equity went
+    // deeply negative (−$1.6M on an $800k home in the reported case). The
+    // engine now clamps the loan at homeValue × maxLtv each year after
+    // accrual: the lender's "no negative equity guarantee".
+    const maxLtv = 0.54;
+    const r = calculateRetirement(baseInputs({
+      currentAge: 58, retirementAge: 60, maxAge: 90,
+      // No spending need: the portfolio never depletes and the projection runs
+      // the full horizon, so the compounding-after-draws-stop bug is exercised
+      // for 20+ years past the last scheduled draw.
+      tfsaBalance: 500000, desiredSpending: 0, cashCushionBalance: 0,
+      cppStartAge: null, oasStartAge: null,
+      reverseMortgage: {
+        enabled: true, homeValue: 800000, appreciationRate: 0.02, interestRate: 0.06,
+        maxLtv, drawAmount: 120000, startAge: 60, durationYears: 10, topUp: true,
+      },
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      const loan = y.loanBalance;
+      const home = y.homeValue;
+      if (loan === undefined || home === undefined) continue;
+      // Loan never exceeds the ceiling…
+      expect(loan).toBeLessThanOrEqual(home * maxLtv + 0.01);
+      // …so net equity stays at or above (1 − maxLtv) × home value, and in
+      // particular can never go negative.
+      expect(y.netHomeEquity!).toBeGreaterThanOrEqual(-0.01);
+      expect(y.netHomeEquity!).toBeGreaterThanOrEqual((1 - maxLtv) * home - 0.01);
+    }
+    // And the clamp actually engaged: by age 90 (20 years of 6% interest vs
+    // 2% appreciation after the last draw) the loan must sit AT the ceiling.
+    const y90 = yearAt(r.yearlyBreakdown, 90);
+    expect(closeTo(y90.loanBalance!, y90.homeValue! * maxLtv, 1)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -518,6 +555,65 @@ describe('household & splitting interactions', () => {
       if ((y.splitTransferred ?? 0) !== 0) {
         expect(y.splitEligibleIncome).toBeDefined();
       }
+    }
+  });
+
+  it('a split never transfers more than the income-equalizing amount', () => {
+    // Regression: probing only the 50% max let a near-zero-income spouse be
+    // hit with the full transfer, overshooting equalization and inventing tax
+    // deep in their brackets. The transfer must be capped at (pNet − sNet) / 2.
+    const inputs = baseInputs({
+      currentAge: 72, retirementAge: 72, maxAge: 78,
+      rrspBalance: 1500000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      cppStartAge: null, oasStartAge: null, desiredSpending: 90000,
+      withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+      spouse: {
+        enabled: true, currentAge: 67, retirementAge: 67,
+        rrspBalance: 0, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 10000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    const ageOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
+    const spouseByCal = new Map(r.spouse!.yearlyBreakdown.map(y => [y.age + ageOffset, y]));
+    for (const py of r.yearlyBreakdown) {
+      const t = py.splitTransferred ?? 0;
+      if (t <= 0) continue; // only check primary→spouse transfers here
+      const sy = spouseByCal.get(py.age);
+      if (!sy || py.unsplitNetIncome === undefined || sy.unsplitNetIncome === undefined) continue;
+      const equalize = (py.unsplitNetIncome - sy.unsplitNetIncome) / 2;
+      // Never transfer past the equalization point (within a rounding cent).
+      expect(t).toBeLessThanOrEqual(Math.max(0, equalize) + 0.01);
+    }
+  });
+
+  it('a $0-income spouse is not taxed beyond a correct split amount', () => {
+    // The reported tax on the recipient spouse must equal the actual marginal
+    // tax on the (now correctly-capped) transferred amount — not a mechanical
+    // full-max transfer that ignores equalization.
+    const inputs = baseInputs({
+      currentAge: 72, retirementAge: 72, maxAge: 75,
+      rrspBalance: 1500000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      cppStartAge: null, oasStartAge: null, desiredSpending: 90000,
+      withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+      spouse: {
+        enabled: true, currentAge: 67, retirementAge: 67,
+        rrspBalance: 0, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 10000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    for (const sy of r.spouse!.yearlyBreakdown) {
+      const received = -(sy.splitTransferred ?? 0); // spouse received (− = in)
+      if (received <= 0 || (sy.unsplitNetIncome ?? 0) !== 0) continue;
+      // The spouse's tax should be no more than tax on the transferred amount
+      // as standalone income (it can't exceed what CRA would charge on it).
+      const taxOnTransfer = calculateTax(received, 'ONT', config).totalTax;
+      expect(sy.incomeTax).toBeLessThanOrEqual(taxOnTransfer + 1);
     }
   });
 });

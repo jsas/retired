@@ -49,16 +49,18 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
   const x = (age: number) => PAD.left + ((age - minAge) / span) * (W - PAD.left - PAD.right);
   const ageAtX = (px: number) => minAge + ((px - PAD.left) / (W - PAD.left - PAD.right)) * span;
 
-  // Reverse mortgage: rows carry home equity once it's active. The balance
-  // line (investable accounts) can legitimately fall to $0 while the plan
-  // stays afloat on home equity, so overlay net home equity to show that.
+  // Reverse mortgage: rows carry home equity once it's active. With RM on, the
+  // headline number is TOTAL cash — investable portfolio + net home equity —
+  // since the plan draws on both; the portfolio and equity components show as
+  // secondary lines so the split stays visible.
   const hasRm = rows.some(r => r.netHomeEquity != null);
+  const totalCash = (r: (typeof rows)[number]) => r.startingBalance + (hasRm ? (r.netHomeEquity ?? 0) : 0);
 
   const maxBal = Math.max(
     1,
     ...rows.map(r => r.endingBalance),
     ...rows.map(r => r.startingBalance),
-    ...(hasRm ? rows.map(r => r.netHomeEquity ?? 0) : []),
+    ...(hasRm ? rows.map(totalCash) : []),
   );
   const y = (v: number) => PAD.top + (1 - v / maxBal) * (H - PAD.top - PAD.bottom);
 
@@ -79,6 +81,13 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
     : [];
   const events = Array.isArray(inputs.events) ? inputs.events : [];
 
+  // Main line: total cash (portfolio + net home equity when RM is on).
+  const totalCashPath = useMemo(() =>
+    rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(r.age).toFixed(1)},${y(totalCash(r)).toFixed(1)}`).join(' '),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, hasRm, maxBal, minAge, span]);
+
+  // Portfolio-only component (secondary when RM is on).
   const balancePath = useMemo(() =>
     rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(r.age).toFixed(1)},${y(r.startingBalance).toFixed(1)}`).join(' '),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,13 +203,18 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
           </span>
         </div>
         <div className="flex items-center gap-3 text-[10px] text-slate-500">
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block w-4 h-0.5 bg-blue-700" /> portfolio
+          <span className="inline-flex items-center gap-1" title={hasRm ? 'Total cash: investable portfolio + net home equity. The plan draws on both.' : 'Investable portfolio balance.'}>
+            <span className="inline-block w-4 h-1 bg-blue-700 rounded-sm" /> {hasRm ? 'total cash' : 'portfolio'}
           </span>
           {hasRm && (
-            <span className="inline-flex items-center gap-1" title="Net home equity: home value minus the reverse-mortgage loan. The plan stays afloat on this even after investable accounts reach $0.">
-              <span className="inline-block w-4 h-0 border-t-2 border-dashed border-amber-600" /> net home equity
-            </span>
+            <>
+              <span className="inline-flex items-center gap-1" title="Investable accounts only (a component of total cash).">
+                <span className="inline-block w-4 h-0.5 bg-blue-400" /> portfolio
+              </span>
+              <span className="inline-flex items-center gap-1" title="Net home equity: home value minus the reverse-mortgage loan. The plan stays afloat on this even after investable accounts reach $0.">
+                <span className="inline-block w-4 h-0 border-t-2 border-dashed border-amber-600" /> net home equity
+              </span>
+            </>
           )}
           <span className="inline-flex items-center gap-1">
             <span className="inline-block w-4 h-0.5 bg-emerald-600" /> spend
@@ -225,13 +239,16 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
             <text key={a} x={x(a)} y={H - 6} textAnchor="middle" fontSize="10" fill="#64748b">{a}</text>
           ))}
 
-          {/* Balance line */}
-          <path d={balancePath} fill="none" stroke="#1d4ed8" strokeWidth="2" />
+          {/* Main line: total cash (portfolio + net home equity when RM is on) */}
+          <path d={totalCashPath} fill="none" stroke="#1d4ed8" strokeWidth="2.5" />
 
-          {/* Net home equity (reverse mortgage) — the plan stays afloat on
-              equity even after investable accounts hit $0 */}
           {hasRm && (
-            <path d={equityPath} fill="none" stroke="#d97706" strokeWidth="1.75" strokeDasharray="6 3" />
+            <>
+              {/* Portfolio-only component */}
+              <path d={balancePath} fill="none" stroke="#60a5fa" strokeWidth="1.5" />
+              {/* Net home equity component */}
+              <path d={equityPath} fill="none" stroke="#d97706" strokeWidth="1.5" strokeDasharray="6 3" />
+            </>
           )}
 
           {/* Retirement marker (drag horizontally) */}

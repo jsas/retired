@@ -393,10 +393,10 @@ export function calculateRetirement(
   let homeValue = rmOn ? rm.homeValue : 0;
   let rmLoan = 0;
   // Loan-to-value ceiling (default 0.55, the typical lender cap). The ceiling
-  // caps NEW DRAWS: once the loan reaches maxLtv × current home value, no more
-  // money can be borrowed. Interest keeps accruing on the balance regardless
-  // (as with a real reverse mortgage), so the loan can drift above the cap
-  // after draws have stopped — that's expected, not a leak.
+  // is a HARD limit on the balance: new draws stop once it's reached, and the
+  // balance is clamped to it after each year's interest accrual — modelling the
+  // "no negative equity guarantee" Canadian reverse mortgages carry, so net
+  // equity never falls below (1 − maxLtv) × home value.
   const rmMaxLtv = Math.min(1, Math.max(0, rm?.maxLtv ?? 0.55));
   // Headroom left to borrow this year, given the current home value and loan.
   const rmHeadroom = () => Math.max(0, homeValue * rmMaxLtv - rmLoan);
@@ -406,9 +406,18 @@ export function calculateRetirement(
     if (amt > 0) rmLoan += amt;
     return amt;
   };
-  // Apply one year's interest to the loan. Runs even once the LTV ceiling is
-  // reached — the cap stops new draws, not the compounding of the balance.
-  const rmAccrue = () => { rmLoan *= 1 + Math.max(0, rm?.interestRate ?? 0); };
+  // Apply one year's interest to the loan, then clamp the balance at the LTV
+  // ceiling. A max loan-to-value is a hard limit on what the lender will ever
+  // be owed: without the clamp, a loan near the ceiling with interest above
+  // home appreciation compounds unbounded past it, driving net equity deeply
+  // negative (no lender allows the balance to exceed the agreed share of the
+  // home's value — the "no negative equity guarantee"). Clamping here keeps
+  // net equity ≥ (1 − maxLtv) × home value.
+  const rmAccrue = () => {
+    rmLoan *= 1 + Math.max(0, rm?.interestRate ?? 0);
+    const ceiling = homeValue * rmMaxLtv;
+    if (rmLoan > ceiling) rmLoan = ceiling;
+  };
   // A scheduled draw is due this year (startAge through startAge+duration−1).
   const rmScheduledAt = (age: number): number => {
     if (!rmOn || !(rm.drawAmount! > 0) || rm.startAge == null) return 0;
@@ -1070,18 +1079,32 @@ function applyPensionSplitting(
 
     const baseCombined = burden(pNet, pOas, yearConfig) + burden(sNet, sOas, yearConfig);
 
-    // Candidate transfers: primary → spouse (t > 0) and spouse → primary (t < 0),
-    // each capped at maxRate × the transferor's eligible income and at the
+    // Candidate transfers: primary → spouse (t > 0) and spouse → primary (t < 0).
+    // Each is capped at maxRate × the transferor's eligible income and at the
     // transferor's net income (can't transfer more than you have).
-    // KNOWN LIMITATION: we only probe 0 and the max in each direction, not
-    // partial transfers. Max is always optimal when the whole transfer stays
-    // within flat brackets, but near a bracket boundary a partial transfer can
-    // theoretically edge it out — acceptable for the realistic cases here.
+    //
+    // Two probes per direction:
+    //   • the maximum allowed transfer, and
+    //   • the EQUALIZING transfer — the amount that brings the two net incomes
+    //     level ((pNet − sNet) / 2). CRA splitting can never help past that
+    //     point: transferring more would just move income into the recipient's
+    //     now-equal-or-higher brackets. Without this probe, a near-zero-income
+    //     spouse gets hit with the full 50% max — pushing the transfer deep
+    //     into their brackets and inventing tax on a return that had no income.
     const candidates: number[] = [0];
+    const equalize = (pNet - sNet) / 2; // >0: primary is higher; <0: spouse is higher
     const pMax = Math.min(maxRate * py.splitEligibleIncome, pNet);
     const sMax = Math.min(maxRate * sy.splitEligibleIncome, sNet);
-    if (pMax > 0) candidates.push(pMax);
-    if (sMax > 0) candidates.push(-sMax);
+    if (pMax > 0) {
+      candidates.push(pMax);
+      const eq = Math.min(pMax, Math.max(0, equalize));
+      if (eq > 0 && eq !== pMax) candidates.push(eq);
+    }
+    if (sMax > 0) {
+      candidates.push(-sMax);
+      const eq = Math.min(sMax, Math.max(0, -equalize));
+      if (eq > 0 && eq !== sMax) candidates.push(-eq);
+    }
 
     let bestT = 0;
     let bestCombined = baseCombined;
