@@ -112,13 +112,12 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     fullPensionResidencyYears: 40,
     clawbackRate: 0.15,
     clawbackThreshold: 95323,
-    // GIS 2026 (single, max OAS pensioner): ~$1,105/mo, reduced 50¢/$ of
-    // non-OAS income.
-    gisMaxAnnualSingle: 13260,
-    // Couple (both on full OAS): ~$667/mo per spouse (2026 est., ~60.3% of
-    // the single rate, matching CRA's ratio), reduced 50¢/$ of COMBINED
-    // non-OAS income → phases out around $31,800 household.
-    gisMaxAnnualCouple: 8000,
+    // GIS (single, max OAS pensioner), July–September 2026 quarter:
+    // $1,123.17/mo, reduced 50¢/$ of non-OAS income (cutoff $22,800).
+    gisMaxAnnualSingle: 13478,
+    // Couple (both on full OAS): $676.09/mo per spouse (same quarter),
+    // reduced 50¢/$ of COMBINED non-OAS income (cutoff $30,096 combined).
+    gisMaxAnnualCouple: 8113,
     gisReductionRate: 0.5
   },
   cpp: {
