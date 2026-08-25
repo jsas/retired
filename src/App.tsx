@@ -20,7 +20,12 @@ import { OptimizeCard } from './components/OptimizeCard';
 import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
 import { PrintOptionsCard } from './components/PrintOptionsCard';
 import { DonateCard } from './components/DonateCard';
+import { ExportCard } from './components/ExportCard';
 import { loadPrintOptions, savePrintOptions, type PrintOptions } from './lib/printOptions';
+import {
+  loadProjectionExportOptions, saveProjectionExportOptions, buildExport,
+  type ProjectionExportOptions,
+} from './lib/projectionExport';
 import type { MonteCarloResults } from './lib/monteCarlo';
 import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
@@ -176,6 +181,7 @@ function App() {
   const optimizeCardRef = useRef<HTMLDivElement>(null);
   const printOptionsCardRef = useRef<HTMLDivElement>(null);
   const donateCardRef = useRef<HTMLDivElement>(null);
+  const exportCardRef = useRef<HTMLDivElement>(null);
 
   // Scroll a panel into view when it opens. Runs on every render and scrolls
   // only on the closed → open transition (tracked in prevOpen), so input-driven
@@ -187,6 +193,7 @@ function App() {
       ['optimize', showOptimize, optimizeCardRef],
       ['print', showPrintOptions, printOptionsCardRef],
       ['donate', showDonate, donateCardRef],
+      ['export', showExport, exportCardRef],
     ];
     for (const [key, isOpen, ref] of targets) {
       const was = prevOpen.current[key] ?? false;
@@ -210,6 +217,13 @@ function App() {
   // Print options card visibility (options state itself lives below `inputs`).
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [showDonate, setShowDonate] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [exportOptions, setExportOptions] = useState<ProjectionExportOptions>(loadProjectionExportOptions);
+
+  const updateExportOptions = (opts: ProjectionExportOptions) => {
+    setExportOptions(opts);
+    saveProjectionExportOptions(opts);
+  };
   const scenarioManagerRef = useRef<ScenarioManagerHandle>(null);
   const activeScenario = scenarios.find(s => s.id === activeScenarioId)!;
 
@@ -362,42 +376,13 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputs, config]);
 
-  const handleExportCSV = () => {
-    const hasRm = results.yearlyBreakdown.some(r => r.netHomeEquity !== undefined);
-    const headers = ['Age', 'Starting Balance', 'Contributions', 'Market Gains', 'Spending Target', 'Withdrawals', 'Income Tax', 'Tax Burden', 'CPP', 'OAS', 'GIS', 'Pension', 'Ending Balance', 'RRSP', 'RRIF', 'TFSA', 'Taxable', 'Cash Cushion',
-      ...(hasRm ? ['Home Value', 'RM Loan', 'Home Equity'] : [])];
-    const csvContent = [
-      headers.join(','),
-      ...results.yearlyBreakdown.map(row =>
-        [
-          row.age,
-          row.startingBalance,
-          row.contributions,
-          row.marketGains,
-          row.spendingTarget,
-          row.withdrawals,
-          row.incomeTax,
-          row.cumulativeTax,
-          row.cppIncome,
-          row.oasIncome,
-          row.gisIncome,
-          row.pensionIncome,
-          row.endingBalance,
-          row.rrspBalance,
-          row.rrifBalance,
-          row.tfsaBalance,
-          row.taxableBalance,
-          row.cashCushionBalance,
-          ...(hasRm ? [row.homeValue ?? '', row.loanBalance ?? '', row.netHomeEquity ?? ''] : []),
-        ].join(',')
-      ),
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+  const handleExportProjection = () => {
+    const payload = buildExport(activeScenario.name, inputs, results, config, exportOptions);
+    const blob = new Blob([payload.content], { type: payload.mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `retirement-projection-${activeScenario.name.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `retirement-projection-${activeScenario.name.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.${payload.extension}`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -544,11 +529,17 @@ function App() {
                     <Printer size={13} /> Print summary
                   </button>
                   <button
-                    onClick={handleExportCSV}
+                    onClick={() => setShowExport((s) => {
+                      const next = !s;
+                      if (!next) return false;
+                      // Same behaviour as MC/backtest: scroll even when already open.
+                      requestAnimationFrame(() => exportCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+                      return true;
+                    })}
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Download the year-by-year projection as CSV"
+                    title="Export the year-by-year projection as CSV, JSON or YAML"
                   >
-                    <FileSpreadsheet size={13} /> Export CSV
+                    <FileSpreadsheet size={13} /> Export Projection
                   </button>
                 </div>
               )}
@@ -599,6 +590,19 @@ function App() {
                       onPrint={() => window.print()}
                       mcPending={printMcPending}
                       mcResults={printMc}
+                    />
+                  </div>
+                )}
+
+                {/* Export projection card */}
+                {showExport && (
+                  <div ref={exportCardRef}>
+                    <ExportCard
+                      options={exportOptions}
+                      onChange={updateExportOptions}
+                      onClose={() => setShowExport(false)}
+                      onExport={handleExportProjection}
+                      hasSpouse={!!results.spouse}
                     />
                   </div>
                 )}
