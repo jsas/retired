@@ -9,7 +9,6 @@ TypeScript + Tailwind v4 + Lucide. Everything runs client-side; scenarios live
 in `localStorage`. Deployed to GitHub Pages from `main`.
 
 - Repo: `jsas/retired` · Pages: https://jsas.github.io/retired/
-- Working dir (Windows): `C:\Users\mrsas\Documents\retirement\retirement-web-app\retirement-app`
 - Engine: `src/lib/retirementEngine.ts` · tax/GIS/CPP/OAS: `src/lib/canadianTax.ts`
 
 ## Commands
