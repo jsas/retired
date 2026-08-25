@@ -166,25 +166,48 @@ function YearWorksheet({ row, inputs, isCouple }: {
   );
 }
 
+// One person's worksheet column with a small header (name + own age + year).
+function PersonColumn({ title, row, inputs, isCouple, calendarYear }: {
+  title: string; row: YearlyBreakdown | undefined; inputs: RetirementInputs;
+  isCouple: boolean; calendarYear: number;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between mb-2 px-0.5">
+        <span className="text-xs font-semibold text-slate-700">{title}</span>
+        {row && <span className="text-[11px] text-slate-400">age {row.age} · {calendarYear}</span>}
+      </div>
+      {row ? (
+        <YearWorksheet row={row} inputs={inputs} isCouple={isCouple} />
+      ) : (
+        <p className="text-xs text-slate-500">No projection rows for this person.</p>
+      )}
+    </div>
+  );
+}
+
 export function MathPage({ inputs, results, spouseAgeOffset }: MathPageProps) {
   const spouse = results.spouse;
-  const [person, setPerson] = useState<'you' | 'spouse'>('you');
+  const [view, setView] = useState<'you' | 'spouse' | 'both'>('you');
 
-  const personRows = person === 'you' ? results.yearlyBreakdown : (spouse?.yearlyBreakdown ?? []);
-  // Build the list of selectable ages (this person's own ages).
-  const ages = useMemo(() => personRows.map(r => r.age), [personRows]);
-  const [age, setAge] = useState<number | null>(null);
-  const selAge = age != null && ages.includes(age) ? age : (ages[0] ?? inputs.currentAge);
-  const row = personRows.find(r => r.age === selAge) ?? personRows[0];
-
-  // For households the table aligns spouse rows to the primary axis; here we
-  // show each person at their own age, noting the calendar year.
   const baseYear = new Date().getFullYear();
-  const personCurrentAge = person === 'you' ? inputs.currentAge : (inputs.spouse?.currentAge ?? inputs.currentAge);
-  const calendarYear = row ? baseYear + (row.age - personCurrentAge) : baseYear;
+  const youRows = results.yearlyBreakdown;
+  const spouseRows = spouse?.yearlyBreakdown ?? [];
+
+  // The selectable axis is the CALENDAR YEAR (via the primary's age), so the
+  // same year stays selected when switching person or opening side-by-side.
+  const axisAges = useMemo(() => youRows.map(r => r.age), [youRows]);
+  const [axisAge, setAxisAge] = useState<number | null>(null);
+  const selAxisAge = axisAge != null && axisAges.includes(axisAge) ? axisAge : (axisAges[0] ?? inputs.currentAge);
+  const calendarYear = baseYear + (selAxisAge - inputs.currentAge);
+
+  // Each person's row at this calendar year (spouse is offset by the age gap).
+  const youRow = youRows.find(r => r.age === selAxisAge) ?? youRows[0];
+  const spouseAgeAtYear = selAxisAge - spouseAgeOffset;
+  const spouseRow = spouseRows.find(r => r.age === spouseAgeAtYear);
 
   return (
-    <div className="max-w-3xl">
+    <div className={view === 'both' ? 'max-w-6xl' : 'max-w-3xl'}>
       <div className="flex items-center gap-2 mb-1">
         <Calculator size={18} className="text-blue-600" />
         <h2 className="text-lg font-bold text-slate-900">How the math works</h2>
@@ -198,39 +221,46 @@ export function MathPage({ inputs, results, spouseAgeOffset }: MathPageProps) {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         {spouse && (
           <div className="flex rounded border border-slate-200 overflow-hidden">
-            {(['you', 'spouse'] as const).map(p => (
+            {(['you', 'spouse', 'both'] as const).map(p => (
               <button
                 key={p}
-                onClick={() => { setPerson(p); setAge(null); }}
-                className={`px-3 py-1.5 text-xs font-medium ${person === p ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                onClick={() => setView(p)}
+                className={`px-3 py-1.5 text-xs font-medium ${view === p ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
               >
-                {p === 'you' ? 'You' : 'Spouse'}
+                {p === 'you' ? 'You' : p === 'spouse' ? 'Spouse' : 'Side by side'}
               </button>
             ))}
           </div>
         )}
         <label className="flex items-center gap-2 text-xs text-slate-600">
-          Year (age)
+          Year
           <select
-            value={selAge}
-            onChange={e => setAge(Number(e.target.value))}
+            value={selAxisAge}
+            onChange={e => setAxisAge(Number(e.target.value))}
             className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white cursor-pointer"
           >
-            {ages.map(a => <option key={a} value={a}>{a}</option>)}
+            {axisAges.map(a => (
+              <option key={a} value={a}>
+                {baseYear + (a - inputs.currentAge)} (you {a}{spouse ? ` · spouse ${a - spouseAgeOffset}` : ''})
+              </option>
+            ))}
           </select>
         </label>
-        {row && (
-          <span className="text-[11px] text-slate-400">
-            calendar year {calendarYear}
-            {spouse && spouseAgeOffset !== 0 && ` · spouse is ${Math.abs(spouseAgeOffset)} yr${Math.abs(spouseAgeOffset) === 1 ? '' : 's'} ${spouseAgeOffset > 0 ? 'younger' : 'older'}`}
-          </span>
-        )}
+        <span className="text-[11px] text-slate-400">
+          calendar year {calendarYear}
+          {spouse && spouseAgeOffset !== 0 && ` · spouse is ${Math.abs(spouseAgeOffset)} yr${Math.abs(spouseAgeOffset) === 1 ? '' : 's'} ${spouseAgeOffset > 0 ? 'younger' : 'older'}`}
+        </span>
       </div>
 
-      {row ? (
-        <YearWorksheet row={row} inputs={inputs} isCouple={!!spouse} />
+      {view === 'both' && spouse ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <PersonColumn title="You" row={youRow} inputs={inputs} isCouple calendarYear={calendarYear} />
+          <PersonColumn title="Spouse" row={spouseRow} inputs={inputs} isCouple calendarYear={calendarYear} />
+        </div>
+      ) : view === 'spouse' && spouse ? (
+        <PersonColumn title="Spouse" row={spouseRow} inputs={inputs} isCouple calendarYear={calendarYear} />
       ) : (
-        <p className="text-xs text-slate-500">No projection rows for this person.</p>
+        <PersonColumn title="You" row={youRow} inputs={inputs} isCouple={!!spouse} calendarYear={calendarYear} />
       )}
     </div>
   );

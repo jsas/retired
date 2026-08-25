@@ -212,6 +212,10 @@ const SECTIONS: HelpSection[] = [
       {
         term: 'Withdrawal order matters',
         body: <P>Spending TFSA first preserves taxed-later RRSP room but lets the RRIF minimum problem grow; spending RRSP first prepays tax at today's (possibly lower) brackets and shrinks future forced minimums. Try both orders and compare the Tax Burden column and the ending balance.</P>
+      },
+      {
+        term: 'See every step (the Math page)',
+        body: <P>Want to see exactly how a year arrives at its numbers? Open <strong>Math</strong> from the breadcrumb row (or the calculator icon). Pick any year and it walks the engine's own calculation through step by step — spending target, benefits, the RRIF minimum, GIS, each withdrawal in your order, tax, and the ending balance — using the actual values the engine used, so it always matches the table. For a couple you can view You and Spouse side by side at the same calendar year.</P>
       }
     ]
   },

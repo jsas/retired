@@ -31,6 +31,24 @@ export function BacktestPanel({ result, onClose, onMounted }: BacktestPanelProps
     ...result.windows.map((w) => Math.abs(w.finalBalance)),
   );
 
+  const firstStart = result.windows[0]?.startYear ?? startYear;
+  const lastStart = result.windows[result.windows.length - 1]?.startYear ?? startYear;
+  const spanStart = Math.max(1, lastStart - firstStart);
+  // Bar center for a window as a fraction of the chart width.
+  const pos = (yr: number) => ((yr - firstStart) / spanStart);
+
+  // Major market downturns. A marker sits at the window START whose sequence
+  // opens into that downturn, so only downturns at or before the last start
+  // year get a marker on the start-year axis (later ones still shaped the last
+  // window, just not at a start boundary).
+  const CRISES: { year: number; label: string }[] = [
+    { year: 1973, label: '1973–74 oil shock' },
+    { year: 1981, label: '1981–82 recession' },
+    { year: 2000, label: '2000–02 dot-com' },
+    { year: 2008, label: '2008 GFC' },
+    { year: 2022, label: '2022 rate shock' },
+  ].filter((c) => c.year >= firstStart && c.year <= lastStart);
+
   return (
     <div className="mt-6 bg-white border border-slate-200 rounded">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
@@ -80,31 +98,60 @@ export function BacktestPanel({ result, onClose, onMounted }: BacktestPanelProps
 
         {/* Window bars: height = ending balance, red if depleted */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Ending balance by window start year</div>
-          <div className="flex items-end gap-px h-28">
-            {result.windows.map((w) => {
-              const h = Math.max(2, Math.round((Math.max(0, w.finalBalance) / maxAbs) * 100));
-              return (
-                <div
-                  key={w.startYear}
-                  title={`${w.startYear}: ${w.depleted ? `depleted at ${w.depletionAge}` : formatCurrency(w.finalBalance)}`}
-                  className={`flex-1 rounded-sm ${w.depleted ? 'bg-red-400' : 'bg-blue-400 hover:bg-blue-500'}`}
-                  style={{ height: `${h}%` }}
-                />
-              );
-            })}
+          <div className="flex items-baseline justify-between mb-1.5">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500">Ending balance by window start year</div>
+            <div className="text-[10px] text-slate-400">
+              each {result.windowYears}-yr window · coverage {firstStart}–{lastStart + result.windowYears - 1}
+            </div>
           </div>
+          <div className="relative">
+            {/* Crisis markers: vertical lines at a downturn's start year */}
+            {CRISES.map((c) => (
+              <div
+                key={c.year}
+                className="absolute top-0 bottom-0 w-px bg-slate-300"
+                style={{ left: `${pos(c.year) * 100}%` }}
+                title={c.label}
+              />
+            ))}
+            <div className="flex items-end gap-px h-28">
+              {result.windows.map((w) => {
+                const h = Math.max(2, Math.round((Math.max(0, w.finalBalance) / maxAbs) * 100));
+                return (
+                  <div
+                    key={w.startYear}
+                    title={`${w.startYear}–${w.startYear + result.windowYears - 1}: ${w.depleted ? `depleted at ${w.depletionAge}` : formatCurrency(w.finalBalance)}`}
+                    className={`flex-1 rounded-sm ${w.depleted ? 'bg-red-400' : 'bg-blue-400 hover:bg-blue-500'}`}
+                    style={{ height: `${h}%` }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+          {/* Axis: window start on the left, window END (= data coverage) on the right */}
           <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-            <span>{result.windows[0]?.startYear}</span>
-            <span>{result.windows[result.windows.length - 1]?.startYear}</span>
+            <span>{firstStart} start</span>
+            <span>last window ends {lastStart + result.windowYears - 1}</span>
+          </div>
+          {/* Crisis legend */}
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
+            {CRISES.map((c) => (
+              <span key={c.year} className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                <span className="inline-block w-px h-2.5 bg-slate-300" />
+                {c.label}
+              </span>
+            ))}
           </div>
         </div>
 
         <p className="mt-3 text-[11px] text-slate-500 leading-snug">
-          Each bar replays the plan against one historical sequence of real (after-inflation)
-          returns, with spending held in today's dollars. Red bars ran out of money before max
-          age — a plan that survives the 1973–74, 2000–02 and 2008 sequences is robust to
-          sequence-of-returns risk. 60% S&P/TSX total return + 40% GoC long bond, deflated by CPI.
+          Each bar replays the plan against one {result.windowYears}-year historical sequence of real
+          (after-inflation) returns, with spending held in today's dollars. The left axis is each
+          window's start year; the right shows that the last window ends in {lastStart + result.windowYears - 1},
+          so all {endYear - startYear + 1} years of data are used. Red bars ran out of money before max
+          age — the grey markers line up the windows that opened into the 1973–74, 2000–02 and 2008
+          downturns, so you can see why those sequences hurt. 60% S&P/TSX total return + 40% GoC long
+          bond, deflated by CPI.
         </p>
       </div>
     </div>

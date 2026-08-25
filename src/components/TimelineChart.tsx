@@ -49,7 +49,17 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
   const x = (age: number) => PAD.left + ((age - minAge) / span) * (W - PAD.left - PAD.right);
   const ageAtX = (px: number) => minAge + ((px - PAD.left) / (W - PAD.left - PAD.right)) * span;
 
-  const maxBal = Math.max(1, ...rows.map(r => r.endingBalance), ...rows.map(r => r.startingBalance));
+  // Reverse mortgage: rows carry home equity once it's active. The balance
+  // line (investable accounts) can legitimately fall to $0 while the plan
+  // stays afloat on home equity, so overlay net home equity to show that.
+  const hasRm = rows.some(r => r.netHomeEquity != null);
+
+  const maxBal = Math.max(
+    1,
+    ...rows.map(r => r.endingBalance),
+    ...rows.map(r => r.startingBalance),
+    ...(hasRm ? rows.map(r => r.netHomeEquity ?? 0) : []),
+  );
   const y = (v: number) => PAD.top + (1 - v / maxBal) * (H - PAD.top - PAD.bottom);
 
   // Spending panel geometry (its own scale).
@@ -78,6 +88,13 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
     rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(r.age).toFixed(1)},${ys(r.spendingTarget).toFixed(1)}`).join(' '),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, maxSpend, minAge, span]);
+
+  const equityPath = useMemo(() =>
+    hasRm
+      ? rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(r.age).toFixed(1)},${y(r.netHomeEquity ?? 0).toFixed(1)}`).join(' ')
+      : '',
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, hasRm, maxBal, minAge, span]);
 
   const svgPoint = (e: MouseEvent | React.MouseEvent) => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -176,6 +193,19 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
             — drag the retirement line, spending handles, and event diamonds; edits re-simulate live
           </span>
         </div>
+        <div className="flex items-center gap-3 text-[10px] text-slate-500">
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block w-4 h-0.5 bg-blue-700" /> portfolio
+          </span>
+          {hasRm && (
+            <span className="inline-flex items-center gap-1" title="Net home equity: home value minus the reverse-mortgage loan. The plan stays afloat on this even after investable accounts reach $0.">
+              <span className="inline-block w-4 h-0 border-t-2 border-dashed border-amber-600" /> net home equity
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block w-4 h-0.5 bg-emerald-600" /> spend
+          </span>
+        </div>
       </div>
       <div className="p-2">
         <svg
@@ -197,6 +227,12 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
 
           {/* Balance line */}
           <path d={balancePath} fill="none" stroke="#1d4ed8" strokeWidth="2" />
+
+          {/* Net home equity (reverse mortgage) — the plan stays afloat on
+              equity even after investable accounts hit $0 */}
+          {hasRm && (
+            <path d={equityPath} fill="none" stroke="#d97706" strokeWidth="1.75" strokeDasharray="6 3" />
+          )}
 
           {/* Retirement marker (drag horizontally) */}
           <line
