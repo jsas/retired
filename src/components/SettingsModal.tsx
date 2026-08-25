@@ -335,6 +335,14 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={v => update(c => { c.engine.rrifConversionAge = v; })} />
               <PercentField label="Inflation rate / CPI (%)" value={draft.engine.inflationRate}
                 onChange={v => update(c => { c.engine.inflationRate = v; })} />
+              <PercentField label="Max pension income split (%)" value={draft.engine.pensionSplitMaxRate}
+                onChange={v => update(c => { c.engine.pensionSplitMaxRate = v; })} />
+              <p className="text-[11px] text-slate-500 leading-snug -mt-1">
+                Couples only: up to this share of each spouse's eligible pension income (RRIF/RRSP draws
+                and DB pensions — not CPP/OAS) is reallocated to the lower-taxed spouse to cut household
+                tax. CRA's maximum is 50%; set 0 to disable. Only reported tax changes — GIS and the
+                withdrawal plan are unaffected.
+              </p>
               <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
                 <input
                   type="checkbox"

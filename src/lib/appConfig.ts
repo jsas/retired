@@ -48,6 +48,11 @@ export interface EngineConfig {
   indexTaxTables: boolean;   // also inflate tax brackets, exemptions, OAS amounts/threshold and CPP each year
   capitalGainsInclusion: number; // fraction of a capital gain included in taxable income (0.5)
   taxableAcbRatio: number;   // ACB as a fraction of the initial taxable balance (1 = all principal)
+  // Pension income splitting (couples): up to half of eligible pension income
+  // (RRIF/RRSP draws from the RRIF-conversion age, plus DB/bridge pensions —
+  // NOT CPP or OAS) may be allocated to the lower-taxed spouse. Set 0 to
+  // disable. CRA's maximum is 0.5.
+  pensionSplitMaxRate: number;
 }
 
 export interface AppConfig {
@@ -134,7 +139,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     indexSpending: true,
     indexTaxTables: false,
     capitalGainsInclusion: 0.5,
-    taxableAcbRatio: 1
+    taxableAcbRatio: 1,
+    pensionSplitMaxRate: 0.5
   },
   qcFederalAbatement: 0.165,
   // 2026 Ontario surtax thresholds (2025 values × 1.02 CRA indexation).
@@ -199,6 +205,8 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   // Capital-gains fields were added later — back-fill defaults.
   if (typeof e.capitalGainsInclusion !== 'number') e.capitalGainsInclusion = DEFAULT_APP_CONFIG.engine.capitalGainsInclusion;
   if (typeof e.taxableAcbRatio !== 'number') e.taxableAcbRatio = DEFAULT_APP_CONFIG.engine.taxableAcbRatio;
+  // Pension-splitting was added later — back-fill the CRA maximum.
+  if (typeof e.pensionSplitMaxRate !== 'number') e.pensionSplitMaxRate = DEFAULT_APP_CONFIG.engine.pensionSplitMaxRate;
   // QC abatement / ON surtax were added later — back-fill defaults.
   if (typeof c.qcFederalAbatement !== 'number') (c as AppConfig).qcFederalAbatement = DEFAULT_APP_CONFIG.qcFederalAbatement;
   const os = c.ontarioSurtax as AppConfig['ontarioSurtax'] | undefined;

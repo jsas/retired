@@ -155,6 +155,12 @@ export interface YearlyBreakdown {
   homeValue?: number;
   loanBalance?: number;
   netHomeEquity?: number;
+  // Pension-splitting inputs, captured per-year so the household pass can
+  // recompute tax with a split applied. Undefined for singles.
+  splitEligibleIncome?: number; // RRIF/RRSP draws (from conversion age) + DB pensions — NOT CPP/OAS
+  unsplitNetIncome?: number;    // this person's net income before any split
+  // Set on the year the split changes this person's reported tax.
+  splitTransferred?: number;    // eligible income moved OUT to the spouse (+) or received IN (−)
 }
 
 export interface RetirementResults {
@@ -661,6 +667,13 @@ export function calculateRetirement(
       depletionAge = age;
     }
 
+    // Pension-splitting inputs: eligible income is RRIF/RRSP registered draws
+    // (which only exist from the RRIF-conversion age onward, so age ≥ 65 in
+    // practice) plus DB/bridge pensions. CPP and OAS are NOT eligible. Captured
+    // pre-split; the household pass applies the split to the reported tax.
+    const splitEligibleIncome = registeredGross + pensionGross;
+    const unsplitNetIncome = totalNetIncome;
+
     yearlyBreakdown.push({
       age,
       startingBalance: startingTotal,
@@ -680,6 +693,8 @@ export function calculateRetirement(
       oasIncome: oasGross,
       gisIncome: gisGross,
       pensionIncome: pensionGross,
+      splitEligibleIncome,
+      unsplitNetIncome,
       ...(rmOn ? { homeValue, loanBalance: rmLoan, netHomeEquity: homeValue - rmLoan } : {})
     });
 
@@ -821,9 +836,116 @@ export function calculateHousehold(
     });
     primary.spouse = spouseResults;
     if (spouseResults.status === 'SHORTFALL') primary.status = 'SHORTFALL';
+    applyPensionSplitting(primary, spouseResults, inputs, config, sp.currentAge);
   }
 
   return primary;
+}
+
+/**
+ * Pension income splitting (couples). CRA lets up to pensionSplitMaxRate of
+ * eligible pension income be allocated from the higher-taxed spouse to the
+ * lower-taxed one. This adjusts ONLY the reported tax figures — the drawdown
+ * cash-flow, GIS (assessed on pre-split income) and balances are unchanged,
+ * because each spouse's plan was already computed from their own unsplit
+ * income. For each overlapping year we test allocating in both directions and
+ * keep whichever lowers combined tax (subject to the 50% cap and not driving
+ * the transferor's net income below zero).
+ */
+function applyPensionSplitting(
+  primary: RetirementResults,
+  spouse: RetirementResults,
+  inputs: RetirementInputs,
+  config: AppConfig,
+  spouseCurrentAge: number
+): void {
+  const maxRate = config.engine.pensionSplitMaxRate ?? 0;
+  if (maxRate <= 0) return;
+
+  const indexTables = config.engine.indexTaxTables === true;
+  const inflation = Math.max(0, config.engine.inflationRate ?? 0);
+  // Calendar-year inflation factor: spouse rows are offset in age but share the
+  // same calendar year as the primary row they pair with.
+  const factorAt = (calendarAge: number) => Math.pow(1 + inflation, Math.max(0, calendarAge - inputs.currentAge));
+  const configCache = new Map<number, AppConfig>();
+  const configAt = (calendarAge: number): AppConfig => {
+    if (!indexTables) return config;
+    const f = factorAt(calendarAge);
+    if (f === 1) return config;
+    let c = configCache.get(calendarAge);
+    if (!c) { c = indexConfig(config, f); configCache.set(calendarAge, c); }
+    return c;
+  };
+
+  const province = inputs.provinceCode;
+  // Full-tax on a net income figure (the per-year incomeTax the engine stored
+  // is tax on incremental registered income, so here we recompute from the
+  // person's total net income to apply the split correctly).
+  const fullTax = (net: number, yearConfig: AppConfig) => calculateTax(net, province, yearConfig).totalTax;
+  // OAS clawback for a given net income and OAS receipt.
+  const clawback = (net: number, oas: number, yearConfig: AppConfig) =>
+    oas > 0 ? Math.min(oas, Math.max(0, net - yearConfig.oas.clawbackThreshold) * yearConfig.oas.clawbackRate) : 0;
+
+  // Total (tax + clawback) for one person in a year at a given net income.
+  const burden = (net: number, oas: number, yearConfig: AppConfig) =>
+    fullTax(net, yearConfig) + clawback(net, oas, yearConfig);
+
+  // Match rows by calendar year: the spouse row for the same calendar year has
+  // age = primary age − ageOffset (spouse's own age in that year).
+  const ageOffset = inputs.currentAge - spouseCurrentAge;
+  const spouseRows = new Map(spouse.yearlyBreakdown.map(y => [y.age + ageOffset, y]));
+
+  // Recompute each person's per-year tax with the split, accumulating the
+  // correction onto cumulativeTax from the first changed year onward.
+  for (const py of primary.yearlyBreakdown) {
+    const sy = spouseRows.get(py.age);
+    if (!sy) continue;
+    if (py.splitEligibleIncome === undefined || sy.splitEligibleIncome === undefined) continue;
+
+    const yearConfig = configAt(py.age);
+    const pNet = py.unsplitNetIncome!, sNet = sy.unsplitNetIncome!;
+    const pOas = py.oasIncome, sOas = sy.oasIncome;
+
+    const baseCombined = burden(pNet, pOas, yearConfig) + burden(sNet, sOas, yearConfig);
+
+    // Candidate transfers: primary → spouse (t > 0) and spouse → primary (t < 0),
+    // each capped at maxRate × the transferor's eligible income and at the
+    // transferor's net income (can't transfer more than you have).
+    const candidates: number[] = [0];
+    const pMax = Math.min(maxRate * py.splitEligibleIncome, pNet);
+    const sMax = Math.min(maxRate * sy.splitEligibleIncome, sNet);
+    if (pMax > 0) candidates.push(pMax);
+    if (sMax > 0) candidates.push(-sMax);
+
+    let bestT = 0;
+    let bestCombined = baseCombined;
+    for (const t of candidates) {
+      if (t === 0) continue;
+      const combined = burden(pNet - t, pOas, yearConfig) + burden(sNet + t, sOas, yearConfig);
+      if (combined < bestCombined - 0.01) { bestCombined = combined; bestT = t; }
+    }
+    if (bestT === 0) continue;
+
+    // Re-derive each person's incomeTax under the split so that it stays
+    // comparable to the unsplit figure (tax on registered draws + clawback).
+    // We store the DELTA from the unsplit burden onto incomeTax and mark the
+    // transferred amount for display.
+    const pNewBurden = burden(pNet - bestT, pOas, yearConfig);
+    const sNewBurden = burden(sNet + bestT, sOas, yearConfig);
+    const pOldBurden = burden(pNet, pOas, yearConfig);
+    const sOldBurden = burden(sNet, sOas, yearConfig);
+    py.incomeTax += pNewBurden - pOldBurden;
+    sy.incomeTax += sNewBurden - sOldBurden;
+    py.splitTransferred = bestT;       // + = primary gave to spouse
+    sy.splitTransferred = -bestT;      // spouse's view (received if bestT > 0)
+  }
+
+  // Rebuild cumulativeTax as a running sum so it stays consistent with the
+  // adjusted per-year incomeTax figures.
+  let cum = 0;
+  for (const y of primary.yearlyBreakdown) { cum += y.incomeTax; y.cumulativeTax = cum; }
+  cum = 0;
+  for (const y of spouse.yearlyBreakdown) { cum += y.incomeTax; y.cumulativeTax = cum; }
 }
 
 /**

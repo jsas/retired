@@ -307,3 +307,120 @@ describe('depletion & withdrawal order', () => {
     expect(yearAt(r.yearlyBreakdown, 66).incomeTax).toBeGreaterThan(0);
   });
 });
+
+describe('pension income splitting', () => {
+  // High-income primary (RRSP-funded) with a zero-income spouse: the classic
+  // case where splitting cuts household tax.
+  const unevenCouple = () => baseInputs({
+    rrspBalance: 800000, tfsaBalance: 0, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+    desiredSpending: 60000,
+    cppStartAge: null, oasStartAge: null, cppMonthlyAmount: 0,
+    spouse: {
+      enabled: true, currentAge: 65, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 30000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+      desiredSpending: 10000, pensions: [],
+    },
+  });
+
+  const householdTax = (r: ReturnType<typeof calculateHousehold>) =>
+    r.yearlyBreakdown.reduce((s, y) => s + y.incomeTax, 0) +
+    (r.spouse?.yearlyBreakdown.reduce((s, y) => s + y.incomeTax, 0) ?? 0);
+
+  it('reduces combined household tax when incomes are uneven', () => {
+    const inputs = unevenCouple();
+    const withSplit = calculateHousehold(inputs, config);
+    const cfgNo = testConfig();
+    cfgNo.engine.pensionSplitMaxRate = 0;
+    const noSplit = calculateHousehold(inputs, cfgNo);
+    expect(householdTax(withSplit)).toBeLessThan(householdTax(noSplit) - 1);
+  });
+
+  it('moves income out of the higher earner (splitTransferred > 0 on primary)', () => {
+    const r = calculateHousehold(unevenCouple(), config);
+    const moved = r.yearlyBreakdown.filter(y => (y.splitTransferred ?? 0) > 0);
+    expect(moved.length).toBeGreaterThan(0);
+    // spouse sees the mirror-image (received) amounts
+    const received = r.spouse!.yearlyBreakdown.filter(y => (y.splitTransferred ?? 0) < 0);
+    expect(received.length).toBeGreaterThan(0);
+  });
+
+  it('never transfers more than the max rate of eligible income', () => {
+    const cfg = testConfig();
+    cfg.engine.pensionSplitMaxRate = 0.5;
+    const r = calculateHousehold(unevenCouple(), cfg);
+    for (const y of r.yearlyBreakdown) {
+      const t = y.splitTransferred ?? 0;
+      if (t > 0) {
+        expect(t).toBeLessThanOrEqual(0.5 * (y.splitEligibleIncome ?? 0) + 0.01);
+      }
+    }
+  });
+
+  it('is a no-op when disabled (rate 0)', () => {
+    const cfg = testConfig();
+    cfg.engine.pensionSplitMaxRate = 0;
+    const r = calculateHousehold(unevenCouple(), cfg);
+    expect(r.yearlyBreakdown.every(y => (y.splitTransferred ?? 0) === 0)).toBe(true);
+    expect(r.spouse!.yearlyBreakdown.every(y => (y.splitTransferred ?? 0) === 0)).toBe(true);
+  });
+
+  it('is a no-op when both spouses have identical income', () => {
+    const even = baseInputs({
+      rrspBalance: 300000, tfsaBalance: 0, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+      desiredSpending: 40000, cppStartAge: null, oasStartAge: null,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 300000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 40000, pensions: [],
+      },
+    });
+    const r = calculateHousehold(even, config);
+    // symmetric incomes: any transfer just moves tax around, so none is chosen
+    const anyMoved = r.yearlyBreakdown.some(y => (y.splitTransferred ?? 0) !== 0) ||
+      r.spouse!.yearlyBreakdown.some(y => (y.splitTransferred ?? 0) !== 0);
+    expect(anyMoved).toBe(false);
+  });
+
+  it('leaves GIS untouched (assessed on pre-split income)', () => {
+    const inputs = baseInputs({
+      tfsaBalance: 0, rrspBalance: 500000, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+      cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 30000,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 5000, pensions: [],
+      },
+    });
+    const withSplit = calculateHousehold(inputs, config);
+    const cfgNo = testConfig();
+    cfgNo.engine.pensionSplitMaxRate = 0;
+    const noSplit = calculateHousehold(inputs, cfgNo);
+    const gis = (r: ReturnType<typeof calculateHousehold>) =>
+      r.yearlyBreakdown.reduce((s, y) => s + (y.gisIncome ?? 0), 0);
+    expect(closeTo(gis(withSplit), gis(noSplit), 0.01)).toBe(true);
+  });
+
+  it('does not touch a single-person plan', () => {
+    const r = calculateRetirement(baseInputs({
+      rrspBalance: 400000, tfsaBalance: 0, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+      cppStartAge: null, oasStartAge: null,
+    }), config);
+    expect(r.yearlyBreakdown.every(y => y.splitTransferred === undefined)).toBe(true);
+  });
+
+  it('keeps cumulativeTax consistent with the adjusted per-year tax', () => {
+    const r = calculateHousehold(unevenCouple(), config);
+    let cum = 0;
+    for (const y of r.yearlyBreakdown) {
+      cum += y.incomeTax;
+      expect(closeTo(y.cumulativeTax, cum, 0.01)).toBe(true);
+    }
+  });
+});

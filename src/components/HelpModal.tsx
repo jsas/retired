@@ -143,7 +143,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Spouse approximation',
-        body: <P>Each spouse is taxed independently — pension income splitting and spousal RRSPs are not yet modelled, so household tax is slightly overstated for couples with uneven incomes. Couple-based GIS <em>is</em> modelled (combined non-OAS income, couple rate when both receive OAS).</P>
+        body: <P>Each spouse is drawn down independently; pension income splitting <em>is</em> modelled — up to 50% of eligible pension income (RRIF/RRSP draws and DB pensions, not CPP/OAS) is reallocated to the lower-taxed spouse each year to minimize household tax (affects reported tax only, not GIS or withdrawals). Spousal RRSPs are not modelled. Couple-based GIS <em>is</em> modelled (combined non-OAS income, couple rate when both receive OAS).</P>
       },
       {
         term: 'Expected Return (%)',
@@ -252,7 +252,7 @@ const SECTIONS: HelpSection[] = [
         body: ul([
           <><strong>Taxable account:</strong> capital gains are modelled with an adjusted cost base (Settings → Capital Gains) — only the embedded-gain fraction of each withdrawal is taxed, at the 50% inclusion rate. The fraction is computed once per withdrawal (it drifts slightly within a year as ACB leaves pro-rata). Dividend gross-up/credits and deemed disposition at death are not modelled.</>,
           <><strong>Other provinces' surtaxes and credits</strong> (beyond Ontario's, which is modelled) are not included — e.g. BC/NS low-income reductions, dividend credits.</>,
-          <>No RRSP contribution refunds, no contribution-room limits, no pension-income splitting. GIS is modelled for singles and couples (combined-income assessment); the quarterly Service Canada recalculation is approximated annually.</>
+          <>No RRSP contribution refunds and no contribution-room limits. Pension-income splitting is modelled for couples (reported tax only; the optimal transfer direction and amount is chosen per year). GIS is modelled for singles and couples (combined-income assessment); the quarterly Service Canada recalculation is approximated annually.</>
         ])
       },
       {
@@ -373,7 +373,7 @@ const SECTIONS: HelpSection[] = [
               investment, tax, or legal advice, and it does not consider your complete circumstances.
             </P>
             {ul([
-              <>The tax model omits real-world details (dividend credits, pension income splitting, most provincial credits, deemed disposition at death, contribution-room limits — see the Tax Model section).</>,
+              <>The tax model omits real-world details (dividend credits, most provincial credits, deemed disposition at death, contribution-room limits — see the Tax Model section).</>,
               <>Tax figures are 2026 defaults that go stale; benefit rules change by legislation.</>,
               <>Projections assume constant average returns or stylized randomness; actual markets will not cooperate.</>,
               <>No warranty is given that any calculation is correct, complete, or suitable for any purpose. Use of this tool is entirely at your own risk.</>

@@ -701,8 +701,9 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               </div>
               <p className="text-[10px] text-neutral-500 leading-snug">
                 The spouse runs as an independent plan with the same market assumptions, province and
-                max age; household totals are the two plans summed. Pension income splitting is not
-                yet modelled.
+                max age; household totals are the two plans summed. Pension income splitting (up to
+                50% of eligible pension income to the lower-taxed spouse) is applied to the reported
+                household tax — see Settings → Engine.
               </p>
             </div>
           )}
