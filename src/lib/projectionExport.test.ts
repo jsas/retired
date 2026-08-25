@@ -198,6 +198,14 @@ describe('YAML serializer', () => {
     expect(yaml).toContain('d: "has: colon"');
   });
 
+  it('escapes backslashes and quotes in keys and string values', () => {
+    // A backslash before the closing quote would otherwise escape it and
+    // break the scalar out of its string (CodeQL js/incomplete-sanitization).
+    const yaml = toYaml({ 'back\\slash': 1, 'say "hi"': 'C:\\path\\to' });
+    expect(yaml).toContain('"back\\\\slash": 1');
+    expect(yaml).toContain('"say \\"hi\\"": "C:\\\\path\\\\to"');
+  });
+
   it('produces a YAML export for a real projection', () => {
     const { results, inputs } = rich();
     const payload = buildExport('p', inputs, results, config, { ...opts, format: 'yaml' });

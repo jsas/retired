@@ -360,7 +360,9 @@ export function toYaml(value: unknown, indent = 0): string {
     const entries = Object.entries(value as Record<string, unknown>);
     if (entries.length === 0) return `${pad}{}`;
     return entries.map(([k, v]) => {
-      const key = /^[A-Za-z0-9_]+$/.test(k) ? k : `"${k.replace(/"/g, '\\"')}"`;
+      // Quote non-plain keys, escaping backslashes first (order matters —
+      // same double-quoted YAML string rules as yamlScalar).
+      const key = /^[A-Za-z0-9_]+$/.test(k) ? k : `"${k.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
       if (Array.isArray(v)) {
         if (v.length === 0) return `${pad}${key}: []`;
         return `${pad}${key}:\n${toYaml(v, indent + 1)}`;
