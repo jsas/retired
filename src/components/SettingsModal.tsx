@@ -62,7 +62,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   };
 
   return (
-    <div className="max-w-3xl">
+    <div>
         {/* Section tabs */}
         <div className="flex gap-1 border-b border-neutral-200 mb-4">
           {SECTIONS.map(s => (

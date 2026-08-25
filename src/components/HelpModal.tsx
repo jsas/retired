@@ -484,7 +484,7 @@ export function HelpModal() {
   const matchCount = q ? filtered.reduce((n, s) => n + s.entries.length, 0) : null;
 
   return (
-    <div className="max-w-3xl">
+    <div>
       {/* Search */}
       <div className="relative mb-3">
         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
