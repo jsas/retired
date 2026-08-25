@@ -112,6 +112,8 @@ git push origin v0.1.0
 - Inflation indexation is approximate for all benefits and tax brackets
 - No support for US cross-border or non-resident scenarios
 
+See [ROADMAP.md](ROADMAP.md) for planned improvements and explicit non-goals.
+
 ## Acknowledgements
 
 The drawdown engine was originally built on
