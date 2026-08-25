@@ -395,6 +395,7 @@ function App() {
         scenarioName={activeScenario.name}
         inputs={inputs}
         results={results}
+        householdBreakdown={householdBreakdown}
         options={printOptions}
         mcResults={printMc}
         rrifConversionAge={config.engine.rrifConversionAge}

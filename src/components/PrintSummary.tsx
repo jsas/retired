@@ -36,26 +36,33 @@ const TL_W = 700;
 const TL_H = 170;
 const TL_PAD = { top: 10, right: 10, bottom: 20, left: 52 };
 
-// Static (print-only) rendering of the projection timeline: total balance by
-// age with a retirement-age marker. Drawn from yearlyBreakdown, so it matches
-// the on-screen chart without its drag handles.
-function TimelinePrintChart({ inputs, results }: {
+// Static (print-only) rendering of the projection timeline, mirroring the
+// on-screen chart: with a reverse mortgage the headline is TOTAL cash
+// (portfolio + net home equity) and the portfolio/equity components show as
+// secondary lines; without RM it's just the portfolio balance. Uses the
+// household-combined breakdown (same rows as the on-screen TimelineChart).
+function TimelinePrintChart({ inputs, rows }: {
   inputs: RetirementInputs;
-  results: RetirementResults;
+  rows: YearlyBreakdown[];
 }) {
-  const rows = results.yearlyBreakdown;
   if (rows.length < 2) return null;
-  const spouse = results.spouse;
   const minAge = rows[0].age;
   const maxAge = rows[rows.length - 1].age;
   const span = Math.max(1, maxAge - minAge);
-  const total = rows.map((r, i) => r.endingBalance + (spouse?.yearlyBreakdown[i]?.endingBalance ?? 0));
-  const maxBal = Math.max(1, ...total);
+
+  const hasRm = rows.some(r => r.netHomeEquity != null);
+  const portfolio = rows.map(r => r.startingBalance);
+  const equity = rows.map(r => (hasRm ? (r.netHomeEquity ?? 0) : 0));
+  const totalCash = rows.map((r, i) => r.startingBalance + equity[i]);
+  const headline = hasRm ? totalCash : portfolio;
+  const maxBal = Math.max(1, ...headline, ...portfolio, ...(hasRm ? equity : []));
 
   const x = (age: number) => TL_PAD.left + ((age - minAge) / span) * (TL_W - TL_PAD.left - TL_PAD.right);
   const y = (v: number) => TL_PAD.top + (1 - v / maxBal) * (TL_H - TL_PAD.top - TL_PAD.bottom);
-  const line = rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(r.age).toFixed(1)},${y(total[i]).toFixed(1)}`).join(' ');
-  const area = `${line} L${x(maxAge).toFixed(1)},${y(0).toFixed(1)} L${x(minAge).toFixed(1)},${y(0).toFixed(1)} Z`;
+  const pathOf = (vals: number[]) =>
+    rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(r.age).toFixed(1)},${y(vals[i]).toFixed(1)}`).join(' ');
+  const headlinePath = pathOf(headline);
+  const area = `${headlinePath} L${x(maxAge).toFixed(1)},${y(0).toFixed(1)} L${x(minAge).toFixed(1)},${y(0).toFixed(1)} Z`;
 
   const yTicks = [0, 0.5, 1].map(f => f * maxBal);
   const xStep = Math.max(1, Math.round(span / 10));
@@ -63,27 +70,40 @@ function TimelinePrintChart({ inputs, results }: {
   for (let a = minAge; a <= maxAge; a += xStep) xTicks.push(a);
 
   return (
-    <svg viewBox={`0 0 ${TL_W} ${TL_H}`} style={{ width: '100%', height: 'auto' }}>
-      {yTicks.map((t, i) => (
-        <g key={i}>
-          <line x1={TL_PAD.left} x2={TL_W - TL_PAD.right} y1={y(t)} y2={y(t)} stroke="#e2e8f0" strokeWidth="1" />
-          <text x={TL_PAD.left - 5} y={y(t) + 3} textAnchor="end" fontSize="9" fill="#64748b">{fmtShort(t)}</text>
-        </g>
-      ))}
-      {xTicks.map(a => (
-        <text key={a} x={x(a)} y={TL_H - 6} textAnchor="middle" fontSize="9" fill="#64748b">{a}</text>
-      ))}
-      <path d={area} fill="#3b82f6" opacity="0.12" />
-      <path d={line} fill="none" stroke="#1d4ed8" strokeWidth="1.8" />
-      <line
-        x1={x(inputs.retirementAge)} x2={x(inputs.retirementAge)}
-        y1={TL_PAD.top} y2={TL_H - TL_PAD.bottom}
-        stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3"
-      />
-      <text x={x(inputs.retirementAge) + 4} y={TL_PAD.top + 9} fontSize="9" fill="#64748b">
-        retire {inputs.retirementAge}
-      </text>
-    </svg>
+    <div>
+      <svg viewBox={`0 0 ${TL_W} ${TL_H}`} style={{ width: '100%', height: 'auto' }}>
+        {yTicks.map((t, i) => (
+          <g key={i}>
+            <line x1={TL_PAD.left} x2={TL_W - TL_PAD.right} y1={y(t)} y2={y(t)} stroke="#e2e8f0" strokeWidth="1" />
+            <text x={TL_PAD.left - 5} y={y(t) + 3} textAnchor="end" fontSize="9" fill="#64748b">{fmtShort(t)}</text>
+          </g>
+        ))}
+        {xTicks.map(a => (
+          <text key={a} x={x(a)} y={TL_H - 6} textAnchor="middle" fontSize="9" fill="#64748b">{a}</text>
+        ))}
+        <path d={area} fill="#3b82f6" opacity="0.12" />
+        <path d={headlinePath} fill="none" stroke="#1d4ed8" strokeWidth="2.2" />
+        {hasRm && (
+          <>
+            <path d={pathOf(portfolio)} fill="none" stroke="#60a5fa" strokeWidth="1.2" />
+            <path d={pathOf(equity)} fill="none" stroke="#d97706" strokeWidth="1.2" strokeDasharray="5 3" />
+          </>
+        )}
+        <line
+          x1={x(inputs.retirementAge)} x2={x(inputs.retirementAge)}
+          y1={TL_PAD.top} y2={TL_H - TL_PAD.bottom}
+          stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3"
+        />
+        <text x={x(inputs.retirementAge) + 4} y={TL_PAD.top + 9} fontSize="9" fill="#64748b">
+          retire {inputs.retirementAge}
+        </text>
+      </svg>
+      <div style={{ display: 'flex', gap: '14px', fontSize: '9px', color: '#475569', marginTop: '2px' }}>
+        <span style={{ color: '#1d4ed8' }}>— {hasRm ? 'total cash (portfolio + home equity)' : 'portfolio'}</span>
+        {hasRm && <span style={{ color: '#60a5fa' }}>— portfolio</span>}
+        {hasRm && <span style={{ color: '#d97706' }}>–– net home equity</span>}
+      </div>
+    </div>
   );
 }
 
@@ -275,6 +295,9 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
   if (results.spouse) people.push({ label: 'Spouse', rows: results.spouse.yearlyBreakdown });
 
   const money = (v: number) => fmtShort(v);
+  // RM columns appear only when the feature produced them (matches ScheduleTable).
+  const hasRm = people.some(p => p.rows.some(r => r.netHomeEquity !== undefined));
+  const colSpan = 17 + (hasRm ? 1 : 0);
   return (
     <div style={{ marginTop: '14px' }}>
       <div style={sectionTitle}>Detailed year-by-year</div>
@@ -303,6 +326,7 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
                 <th style={HEAD_CELL}>TFSA</th>
                 <th style={HEAD_CELL}>Taxable</th>
                 <th style={HEAD_CELL}>Cash</th>
+                {hasRm && <th style={HEAD_CELL}>Home eq.</th>}
               </tr>
             </thead>
             <tbody>
@@ -327,10 +351,15 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
                     <td style={CELL}>{money(row.tfsaBalance)}</td>
                     <td style={CELL}>{money(row.taxableBalance)}</td>
                     <td style={CELL}>{money(row.cashCushionBalance)}</td>
+                    {hasRm && (
+                      <td style={{ ...CELL, color: (row.netHomeEquity ?? 0) < 0 ? '#dc2626' : CELL.color }}>
+                        {row.netHomeEquity !== undefined ? money(row.netHomeEquity) : '—'}
+                      </td>
+                    )}
                   </tr>,
                   detail ? (
                     <tr key={`d${i}`} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                      <td colSpan={17} style={{ padding: '0 6px 2px 18px', fontSize: '8.5px', color: '#64748b' }}>
+                      <td colSpan={colSpan} style={{ padding: '0 6px 2px 18px', fontSize: '8.5px', color: '#64748b' }}>
                         {detail}
                       </td>
                     </tr>
@@ -355,10 +384,11 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
 // compact plan summary: inputs, verdict, depletion — plus optional sections
 // chosen in the print-options card (timeline chart, Monte Carlo fan,
 // milestones table).
-export function PrintSummary({ scenarioName, inputs, results, options, mcResults, rrifConversionAge }: {
+export function PrintSummary({ scenarioName, inputs, results, householdBreakdown, options, mcResults, rrifConversionAge }: {
   scenarioName: string;
   inputs: RetirementInputs;
   results: RetirementResults;
+  householdBreakdown: YearlyBreakdown[];
   options: PrintOptions;
   mcResults: MonteCarloResults | null;
   rrifConversionAge: number;
@@ -402,6 +432,9 @@ export function PrintSummary({ scenarioName, inputs, results, options, mcResults
               <Row label="Taxable" value={fmt(inputs.taxableBalance)} />
               <Row label="Cash cushion" value={fmt(inputs.cashCushionBalance)} />
               <Row label="Total" value={fmt(inputs.rrspBalance + inputs.tfsaBalance + inputs.taxableBalance + inputs.cashCushionBalance)} />
+              {inputs.reverseMortgage?.enabled && (
+                <Row label="Home (reverse mtg.)" value={fmt(inputs.reverseMortgage.homeValue)} />
+              )}
             </tbody>
           </table>
         </div>
@@ -422,8 +455,8 @@ export function PrintSummary({ scenarioName, inputs, results, options, mcResults
 
       {options.includeTimeline && (
         <div style={{ marginTop: '14px', breakInside: 'avoid' }}>
-          <div style={sectionTitle}>Projection timeline — household balance by age</div>
-          <TimelinePrintChart inputs={inputs} results={results} />
+          <div style={sectionTitle}>Projection timeline — household portfolio &amp; home equity by age</div>
+          <TimelinePrintChart inputs={inputs} rows={householdBreakdown} />
         </div>
       )}
 
