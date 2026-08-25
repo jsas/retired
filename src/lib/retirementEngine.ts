@@ -50,6 +50,10 @@ export interface RetirementInputs {
   // DB / bridge pensions: taxable income stacked with CPP/OAS. Bridge benefits
   // have endAge set; lifetime pensions leave it null.
   pensions?: Pension[];
+  // Optional reverse mortgage: borrow against home equity via scheduled draws
+  // and/or a last-resort top-up. Proceeds are tax-free (no GIS/clawback impact);
+  // the loan compounds against the home and erodes net equity.
+  reverseMortgage?: ReverseMortgage;
 }
 
 export interface SpouseInputs {
@@ -79,6 +83,25 @@ export interface CashEvent {
   amount: number; // always positive; direction decides the sign
   direction: 'in' | 'out';
   account?: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; // inflows only; default taxable
+  // Recurrence: absent = one-time at `age`. Set endAge to repeat every year
+  // from `age` through endAge inclusive (e.g. "yearly for X years" →
+  // endAge = age + X − 1). Amounts are per-occurrence, in that year's dollars.
+  endAge?: number | null;
+}
+
+export interface ReverseMortgage {
+  enabled: boolean;
+  homeValue: number;          // current market value, today's dollars
+  appreciationRate: number;   // annual home-price growth (e.g. 0.02)
+  interestRate: number;       // annual rate charged on the loan (e.g. 0.065)
+  // Scheduled draws: amount/yr (today's dollars, CPI-indexed like spending)
+  // from startAge for durationYears. Optional — combine with top-up or use alone.
+  drawAmount?: number;
+  startAge?: number;
+  durationYears?: number;
+  // Top-up mode: after every account is drained, borrow just enough each year
+  // to cover the remaining spending need (the true last resort).
+  topUp?: boolean;
 }
 
 export interface Pension {
@@ -123,6 +146,11 @@ export interface YearlyBreakdown {
   oasIncome: number;
   gisIncome: number;
   pensionIncome: number; // DB / bridge pension gross income this year (taxable)
+  // Reverse mortgage (undefined when the feature is off). homeValue appreciates,
+  // loanBalance compounds with interest + draws, netHomeEquity = value − loan.
+  homeValue?: number;
+  loanBalance?: number;
+  netHomeEquity?: number;
 }
 
 export interface RetirementResults {
@@ -233,9 +261,10 @@ export function calculateRetirement(
     return pct;
   };
 
-  // One-time cash events.
+  // Cash events: one-time (age only) or recurring (age..endAge inclusive).
   const events = Array.isArray(inputs.events) ? inputs.events : [];
-  const eventsAt = (age: number) => events.filter(e => e.age === age);
+  const eventsAt = (age: number) => events.filter(e =>
+    e.age === age || (e.endAge != null && age >= e.age && age <= e.endAge));
   const eventOutAt = (age: number) => eventsAt(age).filter(e => e.direction === 'out').reduce((s, e) => s + e.amount, 0);
   const configCache = new Map<number, AppConfig>();
   const configAt = (age: number): AppConfig => {
@@ -288,6 +317,23 @@ export function calculateRetirement(
   let cashCushion = cashCushionBalance;
   let cumulativeTax = 0;
 
+  // Reverse mortgage: the home appreciates while the loan compounds with
+  // interest + draws. Proceeds are tax-free, so draws land in the cash cushion
+  // and never touch taxable income (no GIS/clawback effect). Inert unless enabled.
+  const rm = inputs.reverseMortgage;
+  const rmOn = rm?.enabled === true && (rm.homeValue ?? 0) > 0;
+  let homeValue = rmOn ? rm.homeValue : 0;
+  let rmLoan = 0;
+  // Apply one year's interest to the loan.
+  const rmAccrue = () => { rmLoan *= 1 + Math.max(0, rm?.interestRate ?? 0); };
+  // A scheduled draw is due this year (startAge through startAge+duration−1).
+  const rmScheduledAt = (age: number): number => {
+    if (!rmOn || !(rm.drawAmount! > 0) || rm.startAge == null) return 0;
+    if (age < rm.startAge) return 0;
+    if (rm.durationYears != null && age >= rm.startAge + rm.durationYears) return 0;
+    return rm.drawAmount! * spendingFactorAt(age); // CPI-indexed like spending
+  };
+
   // Adjusted cost base of the taxable account: contributions raise it,
   // growth does not. The embedded-gain fraction of any withdrawal is taxed
   // at the capital-gains inclusion rate.
@@ -313,6 +359,15 @@ export function calculateRetirement(
     taxableAcb += taxableContribution;
     cashCushion += cashGains;
 
+    // Reverse mortgage: appreciate the home, accrue interest, take any
+    // scheduled draw into the cash cushion (rare pre-retirement, but allowed).
+    if (rmOn) {
+      homeValue *= 1 + Math.max(0, rm?.appreciationRate ?? 0);
+      rmAccrue();
+      const draw = rmScheduledAt(age);
+      if (draw > 0) { rmLoan += draw; cashCushion += draw; }
+    }
+
     yearlyBreakdown.push({
       age,
       startingBalance: startingTotal,
@@ -331,7 +386,8 @@ export function calculateRetirement(
       cppIncome: 0,
       oasIncome: 0,
       gisIncome: 0,
-      pensionIncome: 0
+      pensionIncome: 0,
+      ...(rmOn ? { homeValue, loanBalance: rmLoan, netHomeEquity: homeValue - rmLoan } : {})
     });
 
     accountBreakdown.push({
@@ -361,7 +417,16 @@ export function calculateRetirement(
     const startingTotal = totalBalance();
     const yearConfig = configAt(age);
 
-    // One-time inflows land at the start of the year (before withdrawals).
+    // Reverse mortgage: appreciate the home, accrue this year's interest, and
+    // take any scheduled draw into the cash cushion (tax-free proceeds).
+    if (rmOn) {
+      homeValue *= 1 + Math.max(0, rm?.appreciationRate ?? 0);
+      rmAccrue();
+      const draw = rmScheduledAt(age);
+      if (draw > 0) { rmLoan += draw; cashCushion += draw; }
+    }
+
+    // Cash-event inflows land at the start of the year (before withdrawals).
     for (const ev of eventsAt(age)) {
       if (ev.direction !== 'in') continue;
       const dest = ev.account ?? 'taxable';
@@ -526,6 +591,20 @@ export function calculateRetirement(
       remainingAfterTaxNeed -= draw;
     }
 
+    // 4. Reverse-mortgage top-up — the true last resort. Once every account
+    //    is drained, borrow just enough to cover the year's remaining need,
+    //    capped at the remaining home equity (you can't borrow past the home's
+    //    value). Proceeds are tax-free, so $1 borrowed = $1 of need met; the
+    //    loan (already accrued interest above) grows by the draw.
+    if (remainingAfterTaxNeed > 0 && rmOn && rm?.topUp) {
+      const draw = Math.min(remainingAfterTaxNeed, Math.max(0, homeValue - rmLoan));
+      if (draw > 0) {
+        rmLoan += draw;
+        actualWithdrawals += draw;
+        remainingAfterTaxNeed -= draw;
+      }
+    }
+
     // Single consistent tax figure: total tax on (benefits + registered
     // withdrawals) minus tax on benefits alone, plus the OAS recovery tax
     // (clawback) when total net income crosses the threshold.
@@ -555,7 +634,12 @@ export function calculateRetirement(
 
     const endingTotal = totalBalance();
 
-    if (endingTotal <= 0 && depletionAge === null) {
+    // Depletion = investable accounts exhausted AND no remaining way to fund
+    // spending. With a reverse-mortgage top-up, positive net home equity keeps
+    // the plan afloat (it borrows the shortfall), so only count depletion once
+    // that equity is also gone.
+    const rmCanBorrow = rmOn && rm?.topUp && (homeValue - rmLoan) > 0;
+    if (endingTotal <= 0 && !rmCanBorrow && depletionAge === null) {
       depletionAge = age;
     }
 
@@ -577,7 +661,8 @@ export function calculateRetirement(
       cppIncome: cppGross,
       oasIncome: oasGross,
       gisIncome: gisGross,
-      pensionIncome: pensionGross
+      pensionIncome: pensionGross,
+      ...(rmOn ? { homeValue, loanBalance: rmLoan, netHomeEquity: homeValue - rmLoan } : {})
     });
 
     accountBreakdown.push({
@@ -589,7 +674,9 @@ export function calculateRetirement(
       cashCushionBalance: cashCushion
     });
 
-    if (endingTotal <= 0) {
+    // Stop projecting once the money's gone — unless a reverse-mortgage
+    // top-up can still borrow against home equity to keep funding spending.
+    if (endingTotal <= 0 && !rmCanBorrow) {
       break;
     }
   }

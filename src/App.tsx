@@ -298,7 +298,9 @@ function App() {
   }, [inputs, config]);
 
   const handleExportCSV = () => {
-    const headers = ['Age', 'Starting Balance', 'Contributions', 'Market Gains', 'Spending Target', 'Withdrawals', 'Income Tax', 'Tax Burden', 'CPP', 'OAS', 'GIS', 'Pension', 'Ending Balance', 'RRSP', 'RRIF', 'TFSA', 'Taxable', 'Cash Cushion'];
+    const hasRm = results.yearlyBreakdown.some(r => r.netHomeEquity !== undefined);
+    const headers = ['Age', 'Starting Balance', 'Contributions', 'Market Gains', 'Spending Target', 'Withdrawals', 'Income Tax', 'Tax Burden', 'CPP', 'OAS', 'GIS', 'Pension', 'Ending Balance', 'RRSP', 'RRIF', 'TFSA', 'Taxable', 'Cash Cushion',
+      ...(hasRm ? ['Home Value', 'RM Loan', 'Home Equity'] : [])];
     const csvContent = [
       headers.join(','),
       ...results.yearlyBreakdown.map(row =>
@@ -321,6 +323,7 @@ function App() {
           row.tfsaBalance,
           row.taxableBalance,
           row.cashCushionBalance,
+          ...(hasRm ? [row.homeValue ?? '', row.loanBalance ?? '', row.netHomeEquity ?? ''] : []),
         ].join(',')
       ),
     ].join('\n');

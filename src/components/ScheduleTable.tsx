@@ -15,6 +15,8 @@ function formatCurrency(value: number): string {
 }
 
 export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) {
+  // Reverse-mortgage columns appear only when the feature produced them.
+  const hasRm = breakdown.some(r => r.netHomeEquity !== undefined);
   return (
     <div className="bg-white border border-slate-200 rounded overflow-hidden">
       <div className="overflow-x-auto">
@@ -39,6 +41,9 @@ export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) 
               <th className="text-right px-3 py-2 font-semibold text-slate-700">TFSA</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Taxable</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Cash Cushion</th>
+              {hasRm && (
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Home value minus reverse-mortgage loan balance. The loan compounds with interest and draws, eroding equity over time.">Home Equity</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -106,6 +111,12 @@ export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) 
                   <td className="px-3 py-1.5 text-right font-mono text-slate-600">
                     {formatCurrency(row.cashCushionBalance)}
                   </td>
+                  {hasRm && (
+                    <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
+                      title={row.homeValue !== undefined ? `Home ${formatCurrency(row.homeValue)} − loan ${formatCurrency(row.loanBalance ?? 0)}` : undefined}>
+                      {row.netHomeEquity !== undefined ? formatCurrency(row.netHomeEquity) : '—'}
+                    </td>
+                  )}
                 </tr>
               );
             })}

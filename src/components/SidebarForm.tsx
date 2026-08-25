@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, X } from 'lucide-react';
-import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension } from '../lib/retirementEngine';
+import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X } from 'lucide-react';
+import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
 
@@ -165,6 +165,11 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
   const updateSpouse = (patch: Partial<NonNullable<RetirementInputs['spouse']>>) => {
     if (!inputs.spouse) return;
     updateField('spouse', { ...inputs.spouse, ...patch });
+  };
+
+  const updateRm = (patch: Partial<ReverseMortgage>) => {
+    if (!inputs.reverseMortgage) return;
+    updateField('reverseMortgage', { ...inputs.reverseMortgage, ...patch });
   };
 
   // Personal Profile + Account Balances open by default; the rest collapsed.
@@ -436,8 +441,8 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
           </p>
         </CollapsibleSection>
 
-        {/* One-Time Events */}
-        <CollapsibleSection id="events" icon={<CalendarClock size={14} />} title="One-Time Events" open={isOpen('events')} onToggle={toggleSection}>
+        {/* Cash Events (one-time & recurring) */}
+        <CollapsibleSection id="events" icon={<CalendarClock size={14} />} title="Cash Events" open={isOpen('events')} onToggle={toggleSection}>
           <div className="space-y-2">
             {(inputs.events ?? []).map((ev, i) => (
               <div key={ev.id} className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
@@ -468,18 +473,41 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                   </select>
                   <input
                     type="number"
-                    value={ev.age}
-                    title="Age"
-                    onChange={(e) => updateEvent(i, { age: parseInt(e.target.value) || ev.age })}
-                    className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <input
-                    type="number"
                     value={ev.amount}
-                    title="Amount ($)"
+                    title="Amount ($ / occurrence)"
                     onChange={(e) => updateEvent(i, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
                     className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
                   />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={ev.endAge != null ? 'yearly' : 'once'}
+                    onChange={(e) => updateEvent(i, e.target.value === 'yearly' ? { endAge: ev.age } : { endAge: null })}
+                    title="One-time or yearly"
+                    className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="once">Once at</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={ev.age}
+                    title={ev.endAge != null ? 'Start age' : 'Age'}
+                    onChange={(e) => updateEvent(i, { age: parseInt(e.target.value) || ev.age })}
+                    className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                  />
+                  {ev.endAge != null && (
+                    <>
+                      <span className="text-[10px] text-neutral-500">to</span>
+                      <input
+                        type="number"
+                        value={ev.endAge}
+                        title="End age (inclusive)"
+                        onChange={(e) => updateEvent(i, { endAge: Math.max(ev.age, parseInt(e.target.value) || ev.age) })}
+                        className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </>
+                  )}
                 </div>
                 {ev.direction === 'in' && (
                   <select
@@ -503,8 +531,9 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
             </button>
             {(inputs.events ?? []).length > 0 && (
               <p className="text-[10px] text-neutral-500 leading-snug">
-                Inflows land in the chosen account at that age (they do not grow earlier years);
-                outflows add to that year's spending need.
+                Inflows land in the chosen account (they do not grow earlier years); outflows add to
+                that year's spending need. Choose <em>Yearly</em> and set a start–end age range to repeat
+                the same amount each year (e.g. yearly for 5 years → end age = start + 4).
               </p>
             )}
           </div>
@@ -715,6 +744,100 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
           <p className="mt-2 text-[10px] text-neutral-500 leading-snug">
             Cash cushion is always the last resort. RRSP converts to a RRIF at 71 — minimum withdrawals are taken first and count toward spending.
           </p>
+        </CollapsibleSection>
+
+        {/* Reverse Mortgage */}
+        <CollapsibleSection id="rmortgage" icon={<Home size={14} />} title="Reverse Mortgage" open={isOpen('rmortgage')} onToggle={toggleSection}>
+          <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer mb-3">
+            <input
+              type="checkbox"
+              checked={inputs.reverseMortgage?.enabled === true}
+              onChange={(e) => updateField('reverseMortgage', e.target.checked
+                ? {
+                    enabled: true,
+                    homeValue: 800000,
+                    appreciationRate: 0.02,
+                    interestRate: 0.06,
+                    drawAmount: 0,
+                    startAge: inputs.retirementAge,
+                    durationYears: undefined,
+                    topUp: true,
+                  }
+                : undefined)}
+              className="mt-0.5"
+            />
+            <span>Borrow against home equity (proceeds are tax-free)</span>
+          </label>
+          {inputs.reverseMortgage?.enabled && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <label className={LABEL_CLS}>Home value ($)</label>
+                  <input type="number" value={inputs.reverseMortgage.homeValue}
+                    onChange={(e) => updateRm({ homeValue: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Appreciation (%/yr)</label>
+                  <input type="number" step="0.1" value={+(inputs.reverseMortgage.appreciationRate * 100).toFixed(2)}
+                    onChange={(e) => updateRm({ appreciationRate: (parseFloat(e.target.value) || 0) / 100 })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Loan interest (%/yr)</label>
+                  <input type="number" step="0.1" value={+(inputs.reverseMortgage.interestRate * 100).toFixed(2)}
+                    onChange={(e) => updateRm({ interestRate: (parseFloat(e.target.value) || 0) / 100 })} className={INPUT_CLS} />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={inputs.reverseMortgage.topUp === true}
+                  onChange={(e) => updateRm({ topUp: e.target.checked })}
+                  className="mt-0.5"
+                />
+                <span>Top up spending once accounts run out (last resort)</span>
+              </label>
+
+              <div>
+                <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer mb-1.5">
+                  <input
+                    type="checkbox"
+                    checked={(inputs.reverseMortgage.drawAmount ?? 0) > 0}
+                    onChange={(e) => updateRm(e.target.checked
+                      ? { drawAmount: 12000, startAge: inputs.reverseMortgage!.startAge ?? inputs.retirementAge, durationYears: inputs.reverseMortgage!.durationYears ?? 10 }
+                      : { drawAmount: 0 })}
+                    className="mt-0.5"
+                  />
+                  <span>Scheduled draws</span>
+                </label>
+                {(inputs.reverseMortgage.drawAmount ?? 0) > 0 && (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <div>
+                      <label className={LABEL_CLS}>$/yr</label>
+                      <input type="number" value={inputs.reverseMortgage.drawAmount}
+                        onChange={(e) => updateRm({ drawAmount: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>From age</label>
+                      <input type="number" value={inputs.reverseMortgage.startAge ?? inputs.retirementAge}
+                        onChange={(e) => updateRm({ startAge: parseInt(e.target.value) || inputs.retirementAge })} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Years</label>
+                      <input type="number" value={inputs.reverseMortgage.durationYears ?? ''} placeholder="∞"
+                        onChange={(e) => updateRm({ durationYears: e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1) })} className={INPUT_CLS} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-[10px] text-neutral-500 leading-snug">
+                Draws are tax-free and land in the cash cushion (no effect on GIS or the OAS clawback).
+                The loan compounds at the interest rate against the home; net equity = home value − loan,
+                shown in the year-by-year table. Scheduled draws are CPI-indexed like your spending target.
+              </p>
+            </div>
+          )}
         </CollapsibleSection>
 
         {/* Market Hypotheses */}

@@ -126,12 +126,16 @@ const SECTIONS: HelpSection[] = [
         )
       },
       {
-        term: 'One-time inflow (house sale, inheritance…)',
-        body: <P>A lump sum landing in the chosen account at the chosen age — taxable, TFSA, RRSP or cash cushion. It appears in that year's balances and grows thereafter.</P>
+        term: 'Cash inflow (house sale, inheritance…)',
+        body: <P>A lump sum landing in the chosen account at the chosen age — taxable, TFSA, RRSP or cash cushion. It appears in that year's balances and grows thereafter. Switch the event to <em>Yearly</em> and give a start–end age range to repeat the same amount every year (e.g. rental income for a few years).</P>
       },
       {
-        term: 'One-time outflow (big purchase, gift…)',
-        body: <P>An extra expense at the chosen age, added on top of that year's spending target (after inflation). The portfolio must fund both.</P>
+        term: 'Cash outflow (big purchase, gift…)',
+        body: <P>An extra expense at the chosen age, added on top of that year's spending target (after inflation). The portfolio must fund both. Set it to <em>Yearly</em> with an age range to model a recurring cost (e.g. a gift or a car every few years is better as separate one-time events, but a multi-year commitment fits a schedule).</P>
+      },
+      {
+        term: 'Reverse mortgage',
+        body: <P>Borrows against your home equity — proceeds are tax-free, so they don't count as income and don't touch GIS or the OAS clawback. Two ways to draw, alone or together: <strong>scheduled draws</strong> (a set $/yr from an age, CPI-indexed, for a fixed number of years) and <strong>top-up</strong> (once every account is drained, borrow just enough each year to cover spending — the true last resort). The loan compounds at the interest rate against the home, so net equity (home value − loan) erodes over time; it's shown per-year in the table and CSV. The plan is only "depleted" once the accounts <em>and</em> the available home equity are both exhausted.</P>
       },
       {
         term: 'Include spouse',
