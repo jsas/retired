@@ -20,10 +20,10 @@ interface TopHeaderProps {
   onOpenHelp: () => void;
 }
 
-const BTN = 'flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white rounded';
+const BTN = 'flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white rounded cursor-pointer';
 const SEP = 'w-px h-5 bg-neutral-700';
 // Full-width row inside the mobile overflow dropdown.
-const MENU_ITEM = 'w-full flex items-center gap-2.5 px-3 py-2 text-xs text-neutral-200 hover:bg-neutral-800 rounded text-left';
+const MENU_ITEM = 'w-full flex items-center gap-2.5 px-3 py-2 text-xs text-neutral-200 hover:bg-neutral-800 rounded text-left cursor-pointer';
 
 export function TopHeader({
   onToggleSidebar,

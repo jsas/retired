@@ -147,7 +147,7 @@ export function OptimizeCard({ inputs, config, onApply, onClose }: OptimizeCardP
               value={pasteText}
               onChange={e => { setPasteText(e.target.value); setIngest(null); }}
               placeholder='{"cppStartAge":70, "oasStartAge":70, ...}'
-              className="w-full h-40 px-2.5 py-2 bg-white border border-slate-300 rounded text-[10px] font-mono text-slate-700 focus:outline-none focus:border-blue-500"
+              className="w-full h-56 px-2.5 py-2 bg-white border border-slate-300 rounded text-[10px] font-mono text-slate-700 focus:outline-none focus:border-blue-500"
             />
             <div className="mt-2 flex items-center gap-2">
               <button

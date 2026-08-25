@@ -183,8 +183,6 @@ function App() {
   const prevOpen = useRef<Record<string, boolean>>({});
   useEffect(() => {
     const targets: Array<[string, boolean, React.RefObject<HTMLDivElement | null>]> = [
-      ['mc', mcOpen, mcPanelRef],
-      ['backtest', backtestResult != null, backtestPanelRef],
       ['share', showShare, shareCardRef],
       ['optimize', showOptimize, optimizeCardRef],
       ['print', showPrintOptions, printOptionsCardRef],
@@ -620,6 +618,7 @@ function App() {
                       retirementAge={results.retirementAge}
                       onClose={() => setMcOpen(false)}
                       onRefresh={() => setMcRefreshNonce(n => n + 1)}
+                      onMounted={() => mcPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                     />
                   </div>
                 )}
@@ -627,7 +626,11 @@ function App() {
                 {/* Historical backtest */}
                 {backtestResult && (
                   <div ref={backtestPanelRef}>
-                    <BacktestPanel result={backtestResult} onClose={() => setBacktestResult(null)} />
+                    <BacktestPanel
+                      result={backtestResult}
+                      onClose={() => setBacktestResult(null)}
+                      onMounted={() => backtestPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    />
                   </div>
                 )}
               </>

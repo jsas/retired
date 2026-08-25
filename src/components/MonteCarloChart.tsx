@@ -8,6 +8,7 @@ interface MonteCarloChartProps {
   onClose: () => void;
   retirementAge: number;
   onRefresh?: () => void;
+  onMounted?: () => void;
 }
 
 const W = 860;
@@ -24,10 +25,15 @@ function formatMoneyFull(v: number): string {
   return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
 }
 
-export function MonteCarloChart({ request, onClose, retirementAge, onRefresh }: MonteCarloChartProps) {
+export function MonteCarloChart({ request, onClose, retirementAge, onRefresh, onMounted }: MonteCarloChartProps) {
   const [results, setResults] = useState<MonteCarloResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoverAge, setHoverAge] = useState<number | null>(null);
+
+  // Fires once on mount so the parent can scroll this panel into view — more
+  // reliable than scrolling from the parent, since the panel is guaranteed to
+  // be in the DOM and laid out here.
+  useEffect(() => { onMounted?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Worker when available; inline fallback for the single-file build

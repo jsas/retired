@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X, History } from 'lucide-react';
 import type { BacktestResult } from '../lib/historicalReturns';
 import { HISTORICAL_REAL_RETURNS } from '../lib/historicalReturns';
@@ -13,10 +14,14 @@ function formatCurrency(value: number): string {
 interface BacktestPanelProps {
   result: BacktestResult;
   onClose: () => void;
+  onMounted?: () => void;
 }
 
 // GCP-console style panel: header row, KPI chips, a bar per rolling window.
-export function BacktestPanel({ result, onClose }: BacktestPanelProps) {
+export function BacktestPanel({ result, onClose, onMounted }: BacktestPanelProps) {
+  // Let the parent scroll this panel into view once it's actually in the DOM.
+  useEffect(() => { onMounted?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { startYear, returns } = HISTORICAL_REAL_RETURNS;
   const endYear = startYear + returns.length - 1;
   const pct = Math.round(result.successRate * 100);

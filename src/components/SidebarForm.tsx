@@ -863,7 +863,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <input
                 type="number"
                 step="0.1"
-                value={inputs.investmentReturn * 100}
+                value={+(inputs.investmentReturn * 100).toFixed(4)}
                 onChange={(e) => updateField('investmentReturn', (parseFloat(e.target.value) || 0) / 100)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
               />
@@ -874,7 +874,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                 type="number"
                 step="0.5"
                 min="0"
-                value={(inputs.returnVolatility ?? 0) * 100}
+                value={+((inputs.returnVolatility ?? 0) * 100).toFixed(4)}
                 onChange={(e) => updateField('returnVolatility', (parseFloat(e.target.value) || 0) / 100)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
               />
