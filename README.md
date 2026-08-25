@@ -1,59 +1,57 @@
-# RE: tired
+# RE:tired
 
-A Canadian retirement drawdown planner in a GCP-console-style React UI.
-Model your RRSP / RRIF / TFSA / taxable / cash accounts, CPP / OAS / GIS, and
-defined-benefit & bridge pensions — then stress-test the plan with a Monte Carlo
-simulation and a historical backtest.
+Plan your Canadian retirement in minutes. Model CPP, OAS, GIS, pensions, and tax — then run Monte Carlo simulations and historical backtests — all in your browser, privately.
 
-Everything runs **locally in your browser**. Your scenarios are stored in
-`localStorage` only — nothing is sent to a server.
+Everything runs **locally in your browser**. Your scenarios are stored in `localStorage` only — nothing is sent to a server.
 
-**Live app:** https://jsas.github.io/retired/
+**[Launch the app](https://jsas.github.io/retired/)** | [GitHub](https://github.com/jsas/retired)
+
+## Why RE:tired?
+
+Most Canadian retirement planners live in Excel spreadsheets or cost hundreds. RE:tired is **free, open-source, and runs entirely on your computer** — no servers, no fees, no data harvesting. Whether you're a couple with DB pensions or self-employed with a TFSA, you can stress-test your plan in minutes.
 
 ## What it does
 
-- **Deterministic projection** — year-by-year balances, withdrawals, income tax,
-  cumulative tax burden, CPP / OAS / GIS / pension income, from today to your max age.
-- **Accounts** — RRSP, RRIF (with mandatory minimums + forced conversion age),
-  TFSA, taxable (with ACB and capital-gains inclusion), and a cash cushion.
-- **Government benefits** — CPP (early/deferral adjustments applied automatically),
-  OAS (deferral, age-75 bump, clawback), and GIS (income-tested, tax-free).
-- **Pensions** — defined-benefit and bridge/temporary pensions, per-pension CPI
-  indexing, spouse-aware. Pension income is taxed and claws back GIS/OAS.
-- **Spending** — desired spending in today's dollars, optional go-go / slow-go /
-  no-go phases, one-time inflows (house sale) and outflows (big purchase).
-- **Spouse plan** — a second, independent projection combined into a household verdict.
-- **Monte Carlo** — randomized return/volatility futures with success-rate bands.
-- **Historical backtest** — replays the plan against real Canadian return series
-  since 1970.
-- **Tax model** — 2026 federal + provincial brackets, Ontario surtax, Quebec
-  abatement; optional indexation of brackets/benefits to CPI.
-- **Share** — export/import scenarios as JSON or a shareable link; print a
-  one-page summary.
+### Input your situation
+- **Accounts**: RRSP, RRIF, TFSA, taxable (with ACB), cash cushion
+- **Government benefits**: CPP, OAS, GIS (income-tested and tax-aware)
+- **Pensions**: defined-benefit and bridge/temporary pensions, per-pension CPI indexing
+- **Spending phases**: desired after-tax spending (today's dollars), with optional go-go / slow-go / no-go reductions
+- **Spouse**: model a second, independent projection combined into a household verdict
 
-## Getting started
+### Get instant feedback
+- **Deterministic projection** — year-by-year balances, withdrawals, income tax, CPP / OAS / GIS / pension income from today to your max age
+- **Verdict cards** — wealth at retirement, depletion age, withdrawal rate, and **ON TRACK** / **SHORTFALL** status, updated live as you change inputs
+- **Tax model** — 2026 federal + provincial brackets, Ontario surtax, Quebec abatement; optional indexation to CPI
 
+### Stress-test your plan
+- **Monte Carlo** — randomized return/volatility futures with success-rate bands
+- **Historical backtest** — replay your plan against real Canadian return series since 1970
+- **One-time flows** — house sale (inflow) or major purchase (outflow)
+
+### Share & save
+- Export/import scenarios as JSON
+- Shareable links (no server)
+- Print a one-page summary
+
+## Quick start
+
+### Installation & development
 ```bash
 npm install
 npm run dev
 ```
-
 Visit http://localhost:5173
 
-### A quick first plan
+### Your first plan (< 2 minutes)
+1. **Personal Profile** — age, retirement age, max age, province
+2. **Account Balances** — current balances in each account
+3. **Contribution Rates** — annual additions until retirement
+4. **Government Benefits** — CPP start age & monthly amount; OAS start age & years in Canada
+5. **Pensions** (optional) — add a DB or bridge pension
+6. **Spending Phases** — desired after-tax spending, with optional later-life reductions
 
-1. **Personal Profile** — your current age, retirement age, max age, province.
-2. **Account Balances** — what you have today in each account.
-3. **Contribution Rates** — what you'll add per year until retirement.
-4. **Government Benefits** — CPP monthly amount at 65 + start age; OAS start age
-   and years in Canada.
-5. **Pensions** (optional) — add a DB or bridge pension.
-6. **Spending Phases** — desired after-tax spending (today's dollars), with
-   optional later-life reductions.
-
-The verdict cards update live: wealth at retirement, depletion age, withdrawal
-rate, and an ON TRACK / SHORTFALL status. Run **Monte Carlo** for the success
-probability, or the **backtest** to see how the plan would have fared historically.
+See the verdict cards update live. Run **Monte Carlo** for success probability, or **Backtest** to see how the plan would have fared historically.
 
 ## Build
 
@@ -63,8 +61,7 @@ npm run build:single   # ONE self-contained HTML -> dist-single/  (works from fi
 npm run build:all      # both
 ```
 
-The single-file build inlines every asset (JS, CSS, favicon) into one HTML file
-you can open directly from disk or pass around as an attachment.
+The single-file build inlines every asset (JS, CSS, favicon) into one HTML file you can open directly from disk or pass around as an attachment.
 
 ## Tests
 
@@ -75,19 +72,7 @@ npm test           # run the engine/library test suites once
 npm run test:watch # re-run on change
 ```
 
-Tests live beside the code as `src/**/*.test.ts` and run in Node — they gate the
-CI deploy, so a failing test blocks the site from publishing.
-
-## Releasing
-
-Releases are built by GitHub Actions. Push a version tag and the workflow deploys
-the site to Pages and attaches both build flavours to a GitHub Release:
-
-```bash
-git tag -a v0.1.0 -m "..."
-git push origin main
-git push origin v0.1.0
-```
+Tests live beside the code as `src/**/*.test.ts` and run in Node — they gate the CI deploy, so a failing test blocks the site from publishing.
 
 ## Project structure
 
@@ -110,9 +95,22 @@ git push origin v0.1.0
 └── vite.config.ts                # multi-file (/retired/) vs single-file builds
 ```
 
-## License
+## Releasing
 
-MIT — see [LICENSE](LICENSE).
+Releases are built by GitHub Actions. Push a version tag and the workflow deploys the site to Pages and attaches both build flavours to a GitHub Release:
+
+```bash
+git tag -a v0.1.0 -m "..."
+git push origin main
+git push origin v0.1.0
+```
+
+## Limitations & known issues
+
+- Monte Carlo assumes normal distribution of returns; real markets exhibit fat tails
+- GIS clawback is simplified to federal rules; provincial variations not yet modeled
+- Inflation indexation is approximate for all benefits and tax brackets
+- No support for US cross-border or non-resident scenarios
 
 ## Acknowledgements
 
@@ -124,6 +122,10 @@ no LICENSE file at the time it was incorporated, checked 2026-08-23.)
 
 Built with React 19, Vite, TypeScript, Tailwind CSS, and Lucide icons — largely
 pair-programmed with an AI assistant.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ## Disclaimer
 
