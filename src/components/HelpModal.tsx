@@ -135,7 +135,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Reverse mortgage',
-        body: <P>Borrows against your home equity — proceeds are tax-free, so they don't count as income and don't touch GIS or the OAS clawback. Two ways to draw, alone or together: <strong>scheduled draws</strong> (a set $/yr from an age, CPI-indexed, for a fixed number of years) and <strong>top-up</strong> (once every account is drained, borrow just enough each year to cover spending — the true last resort). The loan compounds at the interest rate against the home, so net equity (home value − loan) erodes over time; it's shown per-year in the table and CSV. The plan is only "depleted" once the accounts <em>and</em> the available home equity are both exhausted.</P>
+        body: <P>Borrows against your home equity — proceeds are tax-free, so they don't count as income and don't touch GIS or the OAS clawback. Two ways to draw, alone or together: <strong>scheduled draws</strong> (a set $/yr from an age, CPI-indexed, for a fixed number of years) and <strong>top-up</strong> (once every account is drained, borrow just enough each year to cover spending — the true last resort). The loan compounds at the interest rate against the home, so net equity (home value − loan) erodes over time; it's shown per-year in the table and CSV. Borrowing stops once the loan hits the <strong>max loan-to-value</strong> ceiling (lenders typically cap near 55%), and the plan is "depleted" once the accounts <em>and</em> that remaining headroom are both exhausted.</P>
       },
       {
         term: 'Include spouse',

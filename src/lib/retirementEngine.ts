@@ -94,6 +94,10 @@ export interface ReverseMortgage {
   homeValue: number;          // current market value, today's dollars
   appreciationRate: number;   // annual home-price growth (e.g. 0.02)
   interestRate: number;       // annual rate charged on the loan (e.g. 0.065)
+  // Loan-to-value ceiling: borrowing (both scheduled draws and top-up) stops
+  // once the loan reaches maxLtv × current home value. Lenders typically cap
+  // reverse mortgages near 0.55. Defaults to 0.55 when omitted.
+  maxLtv?: number;
   // Scheduled draws: amount/yr (today's dollars, CPI-indexed like spending)
   // from startAge for durationYears. Optional — combine with top-up or use alone.
   drawAmount?: number;
@@ -324,7 +328,22 @@ export function calculateRetirement(
   const rmOn = rm?.enabled === true && (rm.homeValue ?? 0) > 0;
   let homeValue = rmOn ? rm.homeValue : 0;
   let rmLoan = 0;
-  // Apply one year's interest to the loan.
+  // Loan-to-value ceiling (default 0.55, the typical lender cap). The ceiling
+  // caps NEW DRAWS: once the loan reaches maxLtv × current home value, no more
+  // money can be borrowed. Interest keeps accruing on the balance regardless
+  // (as with a real reverse mortgage), so the loan can drift above the cap
+  // after draws have stopped — that's expected, not a leak.
+  const rmMaxLtv = Math.min(1, Math.max(0, rm?.maxLtv ?? 0.55));
+  // Headroom left to borrow this year, given the current home value and loan.
+  const rmHeadroom = () => Math.max(0, homeValue * rmMaxLtv - rmLoan);
+  // Take a draw, capped at the LTV headroom. Returns the amount actually drawn.
+  const rmDraw = (want: number): number => {
+    const amt = Math.min(want, rmHeadroom());
+    if (amt > 0) rmLoan += amt;
+    return amt;
+  };
+  // Apply one year's interest to the loan. Runs even once the LTV ceiling is
+  // reached — the cap stops new draws, not the compounding of the balance.
   const rmAccrue = () => { rmLoan *= 1 + Math.max(0, rm?.interestRate ?? 0); };
   // A scheduled draw is due this year (startAge through startAge+duration−1).
   const rmScheduledAt = (age: number): number => {
@@ -361,11 +380,11 @@ export function calculateRetirement(
 
     // Reverse mortgage: appreciate the home, accrue interest, take any
     // scheduled draw into the cash cushion (rare pre-retirement, but allowed).
+    // Draws are capped at the LTV headroom.
     if (rmOn) {
       homeValue *= 1 + Math.max(0, rm?.appreciationRate ?? 0);
       rmAccrue();
-      const draw = rmScheduledAt(age);
-      if (draw > 0) { rmLoan += draw; cashCushion += draw; }
+      cashCushion += rmDraw(rmScheduledAt(age));
     }
 
     yearlyBreakdown.push({
@@ -419,11 +438,11 @@ export function calculateRetirement(
 
     // Reverse mortgage: appreciate the home, accrue this year's interest, and
     // take any scheduled draw into the cash cushion (tax-free proceeds).
+    // Draws are capped at the LTV headroom.
     if (rmOn) {
       homeValue *= 1 + Math.max(0, rm?.appreciationRate ?? 0);
       rmAccrue();
-      const draw = rmScheduledAt(age);
-      if (draw > 0) { rmLoan += draw; cashCushion += draw; }
+      cashCushion += rmDraw(rmScheduledAt(age));
     }
 
     // Cash-event inflows land at the start of the year (before withdrawals).
@@ -593,13 +612,12 @@ export function calculateRetirement(
 
     // 4. Reverse-mortgage top-up — the true last resort. Once every account
     //    is drained, borrow just enough to cover the year's remaining need,
-    //    capped at the remaining home equity (you can't borrow past the home's
-    //    value). Proceeds are tax-free, so $1 borrowed = $1 of need met; the
-    //    loan (already accrued interest above) grows by the draw.
+    //    capped at the LTV headroom (loan ≤ maxLtv × home value). Proceeds are
+    //    tax-free, so $1 borrowed = $1 of need met; the loan (already accrued
+    //    interest above) grows by the draw.
     if (remainingAfterTaxNeed > 0 && rmOn && rm?.topUp) {
-      const draw = Math.min(remainingAfterTaxNeed, Math.max(0, homeValue - rmLoan));
+      const draw = rmDraw(remainingAfterTaxNeed);
       if (draw > 0) {
-        rmLoan += draw;
         actualWithdrawals += draw;
         remainingAfterTaxNeed -= draw;
       }
@@ -635,10 +653,10 @@ export function calculateRetirement(
     const endingTotal = totalBalance();
 
     // Depletion = investable accounts exhausted AND no remaining way to fund
-    // spending. With a reverse-mortgage top-up, positive net home equity keeps
+    // spending. With a reverse-mortgage top-up, remaining LTV headroom keeps
     // the plan afloat (it borrows the shortfall), so only count depletion once
-    // that equity is also gone.
-    const rmCanBorrow = rmOn && rm?.topUp && (homeValue - rmLoan) > 0;
+    // the loan has hit the LTV ceiling too.
+    const rmCanBorrow = rmOn && rm?.topUp && rmHeadroom() > 0;
     if (endingTotal <= 0 && !rmCanBorrow && depletionAge === null) {
       depletionAge = age;
     }

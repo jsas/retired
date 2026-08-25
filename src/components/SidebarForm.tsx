@@ -758,6 +758,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                     homeValue: 800000,
                     appreciationRate: 0.02,
                     interestRate: 0.06,
+                    maxLtv: 0.55,
                     drawAmount: 0,
                     startAge: inputs.retirementAge,
                     durationYears: undefined,
@@ -785,6 +786,11 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                   <label className={LABEL_CLS}>Loan interest (%/yr)</label>
                   <input type="number" step="0.1" value={+(inputs.reverseMortgage.interestRate * 100).toFixed(2)}
                     onChange={(e) => updateRm({ interestRate: (parseFloat(e.target.value) || 0) / 100 })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Max loan-to-value (%)</label>
+                  <input type="number" step="1" min="0" max="100" value={+((inputs.reverseMortgage.maxLtv ?? 0.55) * 100).toFixed(0)}
+                    onChange={(e) => updateRm({ maxLtv: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) / 100 })} className={INPUT_CLS} />
                 </div>
               </div>
 
@@ -834,7 +840,9 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <p className="text-[10px] text-neutral-500 leading-snug">
                 Draws are tax-free and land in the cash cushion (no effect on GIS or the OAS clawback).
                 The loan compounds at the interest rate against the home; net equity = home value − loan,
-                shown in the year-by-year table. Scheduled draws are CPI-indexed like your spending target.
+                shown in the year-by-year table. Borrowing stops once the loan reaches the max
+                loan-to-value ceiling (lenders typically cap near 55%). Scheduled draws are CPI-indexed
+                like your spending target.
               </p>
             </div>
           )}

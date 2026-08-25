@@ -192,30 +192,92 @@ describe('reverse mortgage', () => {
     expect(closeTo(yr(75).netHomeEquity!, yr(75).homeValue! - yr(75).loanBalance!, 0.01)).toBe(true);
   });
 
-  it('top-up covers the shortfall once accounts drain and stays solvent on equity', () => {
+  it('top-up covers the shortfall once accounts drain and stays solvent within the LTV cap', () => {
+    // Home large enough that the 55% LTV cap (=$275k) funds the whole shortfall.
     const r = calculateRetirement(baseInputs({
       tfsaBalance: 30000, cashCushionBalance: 0, desiredSpending: 15000, maxAge: 80,
-      reverseMortgage: { enabled: true, homeValue: 500000, appreciationRate: 0, interestRate: 0.05, topUp: true },
+      reverseMortgage: { enabled: true, homeValue: 800000, appreciationRate: 0, interestRate: 0.05, topUp: true },
     }), config);
-    // Plan runs to maxAge funded by the loan; depletion stays null while equity lasts.
+    // Plan runs to maxAge funded by the loan; depletion stays null while headroom lasts.
     expect(r.depletionAge).toBeNull();
     expect(r.yearlyBreakdown[r.yearlyBreakdown.length - 1].age).toBe(80);
     const loan80 = yearAt(r.yearlyBreakdown, 80).loanBalance!;
     expect(loan80).toBeGreaterThan(0);
-    expect(loan80).toBeLessThan(500000); // still within home value
+    // Loan stays within the LTV ceiling on the (flat) home value.
+    expect(loan80).toBeLessThanOrEqual(800000 * 0.55 + 1e-6);
   });
 
-  it('top-up caps borrowing at the remaining home equity', () => {
+  it('borrowing stops at the LTV ceiling (default 55%), not the full home value', () => {
     const r = calculateRetirement(baseInputs({
       tfsaBalance: 0, cashCushionBalance: 0, desiredSpending: 100000, maxAge: 95,
       reverseMortgage: { enabled: true, homeValue: 200000, appreciationRate: 0, interestRate: 0.05, topUp: true },
     }), config);
-    // Huge spending against a small home → loan can never exceed the home value.
+    // Huge spending against a small home → loan capped at 55% × home value, and
+    // the plan depletes once that headroom is gone (long before loan = value).
     for (const y of r.yearlyBreakdown) {
-      expect(y.loanBalance ?? 0).toBeLessThanOrEqual(200000 + 1e-6);
+      expect(y.loanBalance ?? 0).toBeLessThanOrEqual(200000 * 0.55 + 1e-6);
     }
-    // Once equity is exhausted the plan must report depletion.
     expect(r.depletionAge).not.toBeNull();
+  });
+
+  it('respects a custom maxLtv ceiling', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, cashCushionBalance: 0, desiredSpending: 100000, maxAge: 95,
+      reverseMortgage: { enabled: true, homeValue: 400000, appreciationRate: 0, interestRate: 0.05, maxLtv: 0.25, topUp: true },
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      expect(y.loanBalance ?? 0).toBeLessThanOrEqual(400000 * 0.25 + 1e-6);
+    }
+    expect(r.depletionAge).not.toBeNull();
+  });
+
+  it('a higher LTV ceiling keeps the plan solvent longer', () => {
+    const mk = (maxLtv: number) => calculateRetirement(baseInputs({
+      tfsaBalance: 0, cashCushionBalance: 0, desiredSpending: 60000, maxAge: 95,
+      reverseMortgage: { enabled: true, homeValue: 300000, appreciationRate: 0, interestRate: 0.05, maxLtv, topUp: true },
+    }), config);
+    const low = mk(0.30), high = mk(0.60);
+    // More borrowing headroom → depletion happens later (or not at all).
+    const lowDepleted = low.depletionAge ?? 999;
+    const highDepleted = high.depletionAge ?? 999;
+    expect(highDepleted).toBeGreaterThan(lowDepleted);
+  });
+
+  it('scheduled draws stop at the LTV ceiling; interest may still accrue above it', () => {
+    // No top-up; only scheduled draws, large against a small home. The cap
+    // limits NEW DRAWS to 55% of home value — but interest keeps compounding
+    // the balance, so the loan can exceed the cap once draws have stopped.
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 500000, desiredSpending: 10000, maxAge: 90,
+      reverseMortgage: {
+        enabled: true, homeValue: 100000, appreciationRate: 0, interestRate: 0.06,
+        maxLtv: 0.55, drawAmount: 40000, startAge: 65, durationYears: 20, topUp: false,
+      },
+    }), config);
+    const cap = 100000 * 0.55;
+    // No year may DRAW past the cap: the loan only exceeds it via interest on
+    // an already-at-cap balance. Check no single-year jump is larger than the
+    // year's interest + the remaining headroom to the cap.
+    for (let i = 1; i < r.yearlyBreakdown.length; i++) {
+      const prev = r.yearlyBreakdown[i - 1].loanBalance ?? 0;
+      const cur = r.yearlyBreakdown[i].loanBalance ?? 0;
+      const maxDrawThisYear = Math.max(0, cap - prev * 1.06); // headroom after interest
+      expect(cur).toBeLessThanOrEqual(prev * 1.06 + maxDrawThisYear + 1e-6);
+    }
+    // Draws did happen (loan grew well above zero) and the ceiling engaged.
+    const lastLoan = r.yearlyBreakdown[r.yearlyBreakdown.length - 1].loanBalance!;
+    expect(lastLoan).toBeGreaterThan(0);
+  });
+
+  it('net home equity tracks home value minus loan as the loan compounds', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, cashCushionBalance: 0, desiredSpending: 40000, maxAge: 80,
+      reverseMortgage: { enabled: true, homeValue: 500000, appreciationRate: 0.02, interestRate: 0.06, maxLtv: 0.55, topUp: true },
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      if (y.netHomeEquity === undefined) continue;
+      expect(closeTo(y.netHomeEquity, y.homeValue! - y.loanBalance!, 0.01)).toBe(true);
+    }
   });
 });
 
