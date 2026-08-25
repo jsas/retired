@@ -252,7 +252,7 @@ const SECTIONS: HelpSection[] = [
         body: ul([
           <><strong>Taxable account:</strong> capital gains are modelled with an adjusted cost base (Settings → Capital Gains) — only the embedded-gain fraction of each withdrawal is taxed, at the 50% inclusion rate. The fraction is computed once per withdrawal (it drifts slightly within a year as ACB leaves pro-rata). Dividend gross-up/credits and deemed disposition at death are not modelled.</>,
           <><strong>Other provinces' surtaxes and credits</strong> (beyond Ontario's, which is modelled) are not included — e.g. BC/NS low-income reductions, dividend credits.</>,
-          <>No RRSP contribution refunds and no contribution-room limits. Pension-income splitting is modelled for couples (reported tax only; the optimal transfer direction and amount is chosen per year). GIS is modelled for singles and couples (combined-income assessment); the quarterly Service Canada recalculation is approximated annually.</>
+          <>No RRSP contribution refunds and no contribution-room limits. Pension-income splitting is modelled for couples (reported tax only; the transfer direction is chosen per year and the maximum is applied — a partial transfer near a bracket boundary could in theory do slightly better). GIS is modelled for singles and couples (combined-income assessment); the quarterly Service Canada recalculation is approximated annually.</>
         ])
       },
       {

@@ -911,6 +911,10 @@ function applyPensionSplitting(
     // Candidate transfers: primary → spouse (t > 0) and spouse → primary (t < 0),
     // each capped at maxRate × the transferor's eligible income and at the
     // transferor's net income (can't transfer more than you have).
+    // KNOWN LIMITATION: we only probe 0 and the max in each direction, not
+    // partial transfers. Max is always optimal when the whole transfer stays
+    // within flat brackets, but near a bracket boundary a partial transfer can
+    // theoretically edge it out — acceptable for the realistic cases here.
     const candidates: number[] = [0];
     const pMax = Math.min(maxRate * py.splitEligibleIncome, pNet);
     const sMax = Math.min(maxRate * sy.splitEligibleIncome, sNet);
