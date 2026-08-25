@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, calculateHousehold } from './retirementEngine';
+import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown } from './retirementEngine';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
 const config = testConfig();
@@ -422,5 +422,79 @@ describe('pension income splitting', () => {
       cum += y.incomeTax;
       expect(closeTo(y.cumulativeTax, cum, 0.01)).toBe(true);
     }
+  });
+});
+
+describe('combineHouseholdBreakdown (household display)', () => {
+  const couple = (spouseAge = 65) => baseInputs({
+    rrspBalance: 300000, tfsaBalance: 100000, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+    desiredSpending: 40000, cppStartAge: 65, cppMonthlyAmount: 600, oasStartAge: 65, oasYearsInCanada: 40,
+    spouse: {
+      enabled: true, currentAge: spouseAge, retirementAge: 65,
+      rrspBalance: 200000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 25000, pensions: [],
+    },
+  });
+
+  it('returns the primary breakdown unchanged when there is no spouse', () => {
+    const r = calculateRetirement(baseInputs(), config);
+    expect(combineHouseholdBreakdown(r, baseInputs())).toBe(r.yearlyBreakdown);
+  });
+
+  it('sums balances and income across both spouses for same-age couples', () => {
+    const inputs = couple(65);
+    const r = calculateHousehold(inputs, config);
+    const combined = combineHouseholdBreakdown(r, inputs);
+    const age = 70;
+    const p = yearAt(r.yearlyBreakdown, age);
+    const s = yearAt(r.spouse!.yearlyBreakdown, age);
+    const c = yearAt(combined, age);
+    expect(closeTo(c.endingBalance, p.endingBalance + s.endingBalance, 0.01)).toBe(true);
+    expect(closeTo(c.cppIncome, p.cppIncome + s.cppIncome, 0.01)).toBe(true);
+    expect(closeTo(c.incomeTax, p.incomeTax + s.incomeTax, 0.01)).toBe(true);
+    expect(closeTo(c.rrspBalance, p.rrspBalance + s.rrspBalance, 0.01)).toBe(true);
+    expect(closeTo(c.gisIncome, p.gisIncome + s.gisIncome, 0.01)).toBe(true);
+  });
+
+  it('aligns rows by calendar year when spouses differ in age', () => {
+    // spouse is 5 years younger: spouse reaches age X in the calendar year the
+    // primary reaches X+5. The combined row at primary age 70 must include the
+    // spouse's age-65 row.
+    const inputs = couple(60); // spouse currentAge 60, primary 65
+    const r = calculateHousehold(inputs, config);
+    const combined = combineHouseholdBreakdown(r, inputs);
+    const c = yearAt(combined, 70);
+    const spouseAt65 = yearAt(r.spouse!.yearlyBreakdown, 65);
+    const primaryAt70 = yearAt(r.yearlyBreakdown, 70);
+    expect(closeTo(c.endingBalance, primaryAt70.endingBalance + spouseAt65.endingBalance, 0.01)).toBe(true);
+  });
+
+  it('drops splitTransferred (household net is ~0 and would be misleading)', () => {
+    const inputs = baseInputs({
+      rrspBalance: 800000, tfsaBalance: 0, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+      desiredSpending: 60000, cppStartAge: null, oasStartAge: null,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 30000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 10000, pensions: [],
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    const combined = combineHouseholdBreakdown(r, inputs);
+    expect(combined.every(y => y.splitTransferred === undefined)).toBe(true);
+  });
+
+  it('reflects spouse input changes (regression: spouse edits must move the household view)', () => {
+    const poor = calculateHousehold(couple(65), config);
+    const richInputs = couple(65);
+    richInputs.spouse!.rrspBalance = 900000;
+    const rich = calculateHousehold(richInputs, config);
+    const poorEnd = yearAt(combineHouseholdBreakdown(poor, couple(65)), 75).endingBalance;
+    const richEnd = yearAt(combineHouseholdBreakdown(rich, richInputs), 75).endingBalance;
+    expect(richEnd).toBeGreaterThan(poorEnd);
   });
 });

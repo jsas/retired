@@ -843,6 +843,63 @@ export function calculateHousehold(
 }
 
 /**
+ * Household view of the projection for display: both spouses' per-year rows
+ * summed into a single breakdown, aligned to the PRIMARY's age axis (the
+ * chart/table X-axis is the primary's age). The spouse row for the same
+ * calendar year has age = primary age − (primary.currentAge − spouse.currentAge).
+ * Returns the primary's own breakdown unchanged when there is no spouse.
+ *
+ * Monetary flows and balances are summed; the per-account balances are summed
+ * per account; cpp/oas/gis/pension income are summed. splitTransferred is
+ * household net (≈0, since one spouse's out-transfer is the other's receipt)
+ * and is left undefined to avoid implying income vanishes.
+ */
+export function combineHouseholdBreakdown(
+  results: RetirementResults,
+  inputs: RetirementInputs
+): YearlyBreakdown[] {
+  const spouse = results.spouse;
+  if (!spouse) return results.yearlyBreakdown;
+
+  const ageOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
+  const spouseByCalYear = new Map(spouse.yearlyBreakdown.map(y => [y.age + ageOffset, y]));
+
+  return results.yearlyBreakdown.map(py => {
+    const sy = spouseByCalYear.get(py.age);
+    if (!sy) return { ...py, splitTransferred: undefined };
+    const rm = (py.homeValue !== undefined || sy.homeValue !== undefined)
+      ? {
+          homeValue: (py.homeValue ?? 0) + (sy.homeValue ?? 0),
+          loanBalance: (py.loanBalance ?? 0) + (sy.loanBalance ?? 0),
+          netHomeEquity: (py.netHomeEquity ?? 0) + (sy.netHomeEquity ?? 0),
+        }
+      : {};
+    return {
+      age: py.age,
+      startingBalance: py.startingBalance + sy.startingBalance,
+      contributions: py.contributions + sy.contributions,
+      marketGains: py.marketGains + sy.marketGains,
+      withdrawals: py.withdrawals + sy.withdrawals,
+      incomeTax: py.incomeTax + sy.incomeTax,
+      cumulativeTax: py.cumulativeTax + sy.cumulativeTax,
+      spendingTarget: py.spendingTarget + sy.spendingTarget,
+      endingBalance: py.endingBalance + sy.endingBalance,
+      rrspBalance: py.rrspBalance + sy.rrspBalance,
+      rrifBalance: py.rrifBalance + sy.rrifBalance,
+      tfsaBalance: py.tfsaBalance + sy.tfsaBalance,
+      taxableBalance: py.taxableBalance + sy.taxableBalance,
+      cashCushionBalance: py.cashCushionBalance + sy.cashCushionBalance,
+      cppIncome: py.cppIncome + sy.cppIncome,
+      oasIncome: py.oasIncome + sy.oasIncome,
+      gisIncome: py.gisIncome + sy.gisIncome,
+      pensionIncome: py.pensionIncome + sy.pensionIncome,
+      ...rm,
+      splitTransferred: undefined,
+    };
+  });
+}
+
+/**
  * Pension income splitting (couples). CRA lets up to pensionSplitMaxRate of
  * eligible pension income be allocated from the higher-taxed spouse to the
  * lower-taxed one. This adjusts ONLY the reported tax figures — the drawdown

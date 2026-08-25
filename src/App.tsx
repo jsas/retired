@@ -5,7 +5,7 @@ import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager, type ScenarioManagerHandle } from './components/ScenarioManager';
-import { calculateHousehold, type RetirementInputs } from './lib/retirementEngine';
+import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs } from './lib/retirementEngine';
 import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scenarioStorage';
 import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
 import { exportAppDb, parseAppDb, persistAppDb } from './lib/appDb';
@@ -297,6 +297,13 @@ function App() {
     return calculateHousehold(inputs, config);
   }, [inputs, config]);
 
+  // Household breakdown (both spouses summed per calendar year) for the
+  // timeline chart and year-by-year table; singles get the primary plan as-is.
+  const householdBreakdown = useMemo(
+    () => combineHouseholdBreakdown(results, inputs),
+    [results, inputs]
+  );
+
   const handleExportCSV = () => {
     const hasRm = results.yearlyBreakdown.some(r => r.netHomeEquity !== undefined);
     const headers = ['Age', 'Starting Balance', 'Contributions', 'Market Gains', 'Spending Target', 'Withdrawals', 'Income Tax', 'Tax Burden', 'CPP', 'OAS', 'GIS', 'Pension', 'Ending Balance', 'RRSP', 'RRIF', 'TFSA', 'Taxable', 'Cash Cushion',
@@ -527,14 +534,14 @@ function App() {
                   <MetricCards results={results} />
                 </CollapsiblePanel>
 
-                {/* Interactive projection timeline */}
+                {/* Interactive projection timeline (household when a spouse is enabled) */}
                 <CollapsiblePanel id="timeline" title="Projection Timeline">
-                  <TimelineChart inputs={inputs} results={results} config={config} onChange={handleInputsChange} />
+                  <TimelineChart inputs={inputs} results={{ ...results, yearlyBreakdown: householdBreakdown }} config={config} onChange={handleInputsChange} />
                 </CollapsiblePanel>
 
-                {/* Schedule Table */}
+                {/* Schedule Table (household when a spouse is enabled) */}
                 <CollapsiblePanel id="schedule" title="Year-by-Year Projection">
-                  <ScheduleTable breakdown={results.yearlyBreakdown} retirementAge={results.retirementAge} />
+                  <ScheduleTable breakdown={householdBreakdown} retirementAge={results.retirementAge} />
                 </CollapsiblePanel>
 
                 {/* Monte Carlo */}
