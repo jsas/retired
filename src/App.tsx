@@ -171,16 +171,34 @@ function App() {
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const mcPanelRef = useRef<HTMLDivElement>(null);
+  const backtestPanelRef = useRef<HTMLDivElement>(null);
+  const shareCardRef = useRef<HTMLDivElement>(null);
+  const optimizeCardRef = useRef<HTMLDivElement>(null);
+  const printOptionsCardRef = useRef<HTMLDivElement>(null);
+  const donateCardRef = useRef<HTMLDivElement>(null);
 
-  // Bring the Monte Carlo panel into view when it opens — it mounts
-  // below the fold, so without this the run looks like it went nowhere.
-  // (Depends on mcOpen, not mcRequest, so input-driven re-runs don't yank
-  // the page while the user is editing.)
+  // Scroll a panel into view when it opens. Runs on every render and scrolls
+  // only on the closed → open transition (tracked in prevOpen), so input-driven
+  // re-renders and Monte Carlo auto-refreshes don't yank the page while editing.
+  const prevOpen = useRef<Record<string, boolean>>({});
   useEffect(() => {
-    if (mcOpen) {
-      mcPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const targets: Array<[string, boolean, React.RefObject<HTMLDivElement | null>]> = [
+      ['mc', mcOpen, mcPanelRef],
+      ['backtest', backtestResult != null, backtestPanelRef],
+      ['share', showShare, shareCardRef],
+      ['optimize', showOptimize, optimizeCardRef],
+      ['print', showPrintOptions, printOptionsCardRef],
+      ['donate', showDonate, donateCardRef],
+    ];
+    for (const [key, isOpen, ref] of targets) {
+      const was = prevOpen.current[key] ?? false;
+      if (isOpen && !was) {
+        // Defer a frame so the panel has mounted and laid out before scrolling.
+        requestAnimationFrame(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      }
+      prevOpen.current[key] = isOpen;
     }
-  }, [mcOpen]);
+  });
 
   // (Monte Carlo / backtest auto-refresh effects live further down, after
   // `inputs` and `config` are declared.)
@@ -313,16 +331,28 @@ function App() {
   // Keep an open Monte Carlo panel in sync with the plan: rebuild the request
   // when inputs/config change, debounced so dragging a slider doesn't fire a
   // 500-run batch per pixel. MonteCarloChart re-runs whenever request changes.
+  // mcRefreshNonce lets the header's refresh button force an immediate re-run.
+  const [mcRefreshNonce, setMcRefreshNonce] = useState(0);
+  const mcNonceSeen = useRef(0);
   useEffect(() => {
     if (!mcOpen) { setMcRequest(null); return; }
     const vol = inputs.returnVolatility ?? 0;
     if (vol <= 0) { setMcRequest(null); return; }
+    // Build immediately when there's nothing showing yet (first open) or a
+    // fresh manual refresh was requested (nonce consumed once). Debounce only
+    // the input-driven rebuilds so slider drags don't spam 500-run batches.
+    const manualRefresh = mcRefreshNonce !== mcNonceSeen.current;
+    if (mcRequest == null || manualRefresh) {
+      mcNonceSeen.current = mcRefreshNonce;
+      setMcRequest({ inputs, config, runs: 500, volatility: vol });
+      return;
+    }
     const t = setTimeout(() => {
       setMcRequest({ inputs, config, runs: 500, volatility: vol });
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mcOpen, inputs, config]);
+  }, [mcOpen, inputs, config, mcRefreshNonce]);
 
   // Keep an open backtest panel in sync too. It's fast and synchronous, so no
   // debounce needed.
@@ -529,34 +559,42 @@ function App() {
 
                 {/* Share link card */}
                 {showShare && (
-                  <ShareCard url={buildShareUrl(inputs)} onClose={() => setShowShare(false)} />
+                  <div ref={shareCardRef}>
+                    <ShareCard url={buildShareUrl(inputs)} onClose={() => setShowShare(false)} />
+                  </div>
                 )}
 
                 {/* Optimize card */}
                 {showOptimize && (
-                  <OptimizeCard
-                    inputs={inputs}
-                    config={config}
-                    onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
-                    onClose={() => setShowOptimize(false)}
-                  />
+                  <div ref={optimizeCardRef}>
+                    <OptimizeCard
+                      inputs={inputs}
+                      config={config}
+                      onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+                      onClose={() => setShowOptimize(false)}
+                    />
+                  </div>
                 )}
 
                 {/* Donate card */}
                 {showDonate && (
-                  <DonateCard onClose={() => setShowDonate(false)} />
+                  <div ref={donateCardRef}>
+                    <DonateCard onClose={() => setShowDonate(false)} />
+                  </div>
                 )}
 
                 {/* Print options card */}
                 {showPrintOptions && (
-                  <PrintOptionsCard
-                    options={printOptions}
-                    onChange={updatePrintOptions}
-                    onClose={() => setShowPrintOptions(false)}
-                    onPrint={() => window.print()}
-                    mcPending={printMcPending}
-                    mcResults={printMc}
-                  />
+                  <div ref={printOptionsCardRef}>
+                    <PrintOptionsCard
+                      options={printOptions}
+                      onChange={updatePrintOptions}
+                      onClose={() => setShowPrintOptions(false)}
+                      onPrint={() => window.print()}
+                      mcPending={printMcPending}
+                      mcResults={printMc}
+                    />
+                  </div>
                 )}
 
                 {/* KPI Cards */}
@@ -581,13 +619,16 @@ function App() {
                       request={mcRequest}
                       retirementAge={results.retirementAge}
                       onClose={() => setMcOpen(false)}
+                      onRefresh={() => setMcRefreshNonce(n => n + 1)}
                     />
                   </div>
                 )}
 
                 {/* Historical backtest */}
                 {backtestResult && (
-                  <BacktestPanel result={backtestResult} onClose={() => setBacktestResult(null)} />
+                  <div ref={backtestPanelRef}>
+                    <BacktestPanel result={backtestResult} onClose={() => setBacktestResult(null)} />
+                  </div>
                 )}
               </>
             )}

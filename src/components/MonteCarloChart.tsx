@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Dices, X, Loader2 } from 'lucide-react';
+import { Dices, X, Loader2, RefreshCw } from 'lucide-react';
 import type { MonteCarloRequest, MonteCarloResults } from '../lib/monteCarlo';
 import { runMonteCarloAuto } from '../lib/runMonteCarlo';
 
@@ -7,6 +7,7 @@ interface MonteCarloChartProps {
   request: MonteCarloRequest;
   onClose: () => void;
   retirementAge: number;
+  onRefresh?: () => void;
 }
 
 const W = 860;
@@ -23,7 +24,7 @@ function formatMoneyFull(v: number): string {
   return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
 }
 
-export function MonteCarloChart({ request, onClose, retirementAge }: MonteCarloChartProps) {
+export function MonteCarloChart({ request, onClose, retirementAge, onRefresh }: MonteCarloChartProps) {
   const [results, setResults] = useState<MonteCarloResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoverAge, setHoverAge] = useState<number | null>(null);
@@ -84,9 +85,16 @@ export function MonteCarloChart({ request, onClose, retirementAge }: MonteCarloC
             {request.runs} runs · {(request.volatility * 100).toFixed(1)}% volatility · fat-tailed (Student-t)
           </span>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          {onRefresh && (
+            <button onClick={onRefresh} className="p-1 hover:bg-slate-100 rounded" title="Re-run the simulation with the current plan">
+              <RefreshCw size={15} />
+            </button>
+          )}
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Body */}

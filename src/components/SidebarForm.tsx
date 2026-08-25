@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X } from 'lucide-react';
 import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
@@ -170,6 +170,50 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
   const updateRm = (patch: Partial<ReverseMortgage>) => {
     if (!inputs.reverseMortgage) return;
     updateField('reverseMortgage', { ...inputs.reverseMortgage, ...patch });
+  };
+
+  // Stash the last-used spouse / reverse-mortgage values so toggling the
+  // section off and back on restores them instead of resetting to defaults.
+  // (The field is set to `undefined` when off, which would otherwise lose them.)
+  const spouseStash = useRef<NonNullable<RetirementInputs['spouse']> | null>(null);
+  const rmStash = useRef<ReverseMortgage | null>(null);
+
+  const toggleSpouse = (on: boolean) => {
+    if (on) {
+      const base = spouseStash.current ?? {
+        enabled: true as const,
+        currentAge: inputs.currentAge, retirementAge: inputs.retirementAge,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 900,
+        oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 30000,
+      };
+      updateField('spouse', { ...base, enabled: true });
+    } else {
+      if (inputs.spouse) spouseStash.current = inputs.spouse;
+      updateField('spouse', undefined);
+    }
+  };
+
+  const toggleRm = (on: boolean) => {
+    if (on) {
+      const base = rmStash.current ?? {
+        enabled: true as const,
+        homeValue: 800000,
+        appreciationRate: 0.02,
+        interestRate: 0.06,
+        maxLtv: 0.55,
+        drawAmount: 0,
+        startAge: inputs.retirementAge,
+        durationYears: undefined,
+        topUp: true,
+      };
+      updateField('reverseMortgage', { ...base, enabled: true });
+    } else {
+      if (inputs.reverseMortgage) rmStash.current = inputs.reverseMortgage;
+      updateField('reverseMortgage', undefined);
+    }
   };
 
   // Personal Profile + Account Balances open by default; the rest collapsed.
@@ -593,17 +637,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
             <input
               type="checkbox"
               checked={inputs.spouse?.enabled === true}
-              onChange={(e) => updateField('spouse', e.target.checked
-                ? {
-                    enabled: true,
-                    currentAge: inputs.currentAge, retirementAge: inputs.retirementAge,
-                    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
-                    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-                    cppStartAge: 65, cppMonthlyAmount: 900,
-                    oasStartAge: 65, oasYearsInCanada: 40,
-                    desiredSpending: 30000
-                  }
-                : undefined)}
+              onChange={(e) => toggleSpouse(e.target.checked)}
               className="mt-0.5"
             />
             <span>Include spouse (independent plan, combined household view)</span>
@@ -737,19 +771,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
             <input
               type="checkbox"
               checked={inputs.reverseMortgage?.enabled === true}
-              onChange={(e) => updateField('reverseMortgage', e.target.checked
-                ? {
-                    enabled: true,
-                    homeValue: 800000,
-                    appreciationRate: 0.02,
-                    interestRate: 0.06,
-                    maxLtv: 0.55,
-                    drawAmount: 0,
-                    startAge: inputs.retirementAge,
-                    durationYears: undefined,
-                    topUp: true,
-                  }
-                : undefined)}
+              onChange={(e) => toggleRm(e.target.checked)}
               className="mt-0.5"
             />
             <span>Borrow against home equity (proceeds are tax-free)</span>
