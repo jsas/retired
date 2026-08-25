@@ -480,9 +480,10 @@ function App() {
 
         {/* Main Workspace */}
         <div className="flex-1 md:overflow-y-auto">
-          <div className="p-3 md:p-6">
-            {/* Breadcrumbs */}
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
+          {/* Breadcrumb bar: sticky so the breadcrumb and the
+              Optimize/Share/Print/Export links stay reachable while scrolling. */}
+          <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 px-3 md:px-6 py-2.5 mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                 <button
                   onClick={() => setView('projection')}
@@ -544,7 +545,9 @@ function App() {
                 </div>
               )}
             </div>
+          </div>
 
+          <div className="px-3 md:px-6 pb-3 md:pb-6">
             {view === 'projection' && (
               <>
                 {/* Getting-started welcome card. The "show on load" toggle only
