@@ -91,6 +91,7 @@ export function OptimizeCard({ inputs, config, onApply, onClose }: OptimizeCardP
                   <th className="py-1.5 pr-3 font-semibold text-right">Sustainable spending</th>
                   <th className="py-1.5 pr-3 font-semibold text-right">vs current</th>
                   <th className="py-1.5 pr-3 font-semibold text-right">Lifetime tax</th>
+                  <th className="py-1.5 pr-3 font-semibold text-right" title="Cumulative Guaranteed Income Supplement received over the plan — RRSP/RRIF withdrawals and pensions claw it back 50¢/$, TFSA does not.">Lifetime GIS</th>
                   <th className="py-1.5 pr-3 font-semibold text-right">Ending balance</th>
                   <th className="py-1.5 font-semibold text-right">Apply</th>
                 </tr>
@@ -210,6 +211,7 @@ function StrategyRow({ r, isBaseline = false, onApply }: {
         )}
       </td>
       <td className="py-1.5 pr-3 text-right text-slate-700">{fmt(r.lifetimeTax)}</td>
+      <td className="py-1.5 pr-3 text-right text-slate-700">{r.lifetimeGis > 0 ? fmt(r.lifetimeGis) : '—'}</td>
       <td className={`py-1.5 pr-3 text-right ${r.survived ? 'text-slate-700' : 'text-red-600 font-medium'}`}>
         {r.survived ? fmt(r.endingBalance) : `out at ${r.depletionAge}`}
       </td>

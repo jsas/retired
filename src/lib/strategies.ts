@@ -27,6 +27,7 @@ export interface StrategyResult {
   depletionAge: number | null;
   endingBalance: number;
   lifetimeTax: number;
+  lifetimeGis: number; // cumulative GIS received over the plan
   sustainableSpending: number;
   deltaSpending: number; // vs baseline sustainable spending
 }
@@ -126,6 +127,7 @@ function runOne(inputs: RetirementInputs, config: AppConfig, spec: StrategySpec)
   const r: RetirementResults = calculateRetirement(merged, config);
   const last = r.yearlyBreakdown[r.yearlyBreakdown.length - 1];
   const lifetimeTax = r.yearlyBreakdown.reduce((s, y) => s + (y.incomeTax ?? 0), 0);
+  const lifetimeGis = r.yearlyBreakdown.reduce((s, y) => s + (y.gisIncome ?? 0), 0);
   const sustainable = sustainableSpending(merged, config);
   return {
     id: spec.id,
@@ -136,6 +138,7 @@ function runOne(inputs: RetirementInputs, config: AppConfig, spec: StrategySpec)
     depletionAge: r.depletionAge,
     endingBalance: last?.endingBalance ?? 0,
     lifetimeTax,
+    lifetimeGis,
     sustainableSpending: sustainable,
     deltaSpending: 0, // filled by caller
   };
@@ -174,6 +177,12 @@ export function runStrategies(inputs: RetirementInputs, config: AppConfig): Stra
   if (bestTax && bestTax.lifetimeTax < baseline.lifetimeTax - 1000) {
     suggestedActions.push(
       `Lowest-tax option: ${bestTax.name} (about $${Math.round(baseline.lifetimeTax - bestTax.lifetimeTax).toLocaleString()} less lifetime tax).`
+    );
+  }
+  const bestGis = [...strategies].sort((a, b) => b.lifetimeGis - a.lifetimeGis)[0];
+  if (bestGis && bestGis.lifetimeGis > baseline.lifetimeGis + 1000) {
+    suggestedActions.push(
+      `Most GIS preserved: ${bestGis.name} (about $${Math.round(bestGis.lifetimeGis - baseline.lifetimeGis).toLocaleString()} more lifetime GIS).`
     );
   }
 
