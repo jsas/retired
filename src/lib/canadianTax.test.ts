@@ -1,13 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
   calculateTax,
+  findGrossIncomeForTakeHome,
   gisAnnual,
   gisAnnualCouple,
   calculateRrifMinimum,
   isRrifMandatory,
+  oasAnnualGross,
+  oasDeferralMultiplier,
+  indexConfig,
 } from './canadianTax';
 import { cppAdjustmentMultiplier } from './retirementEngine';
-import { testConfig } from '../test/helpers';
+import { testConfig, closeTo } from '../test/helpers';
 
 const config = testConfig();
 const S = config.oas.gisMaxAnnualSingle;   // 13478
@@ -141,5 +145,104 @@ describe('RRIF minimums', () => {
     const min = calculateRrifMinimum(age, balance, config);
     expect(min).toBeGreaterThan(0);
     expect(min).toBeLessThan(balance);
+  });
+
+  it('minimum grows with age (older retirees draw a larger share)', () => {
+    const balance = 100000;
+    const younger = calculateRrifMinimum(72, balance, config);
+    const older = calculateRrifMinimum(85, balance, config);
+    expect(older).toBeGreaterThan(younger);
+  });
+});
+
+describe('findGrossIncomeForTakeHome (reverse-tax solver)', () => {
+  it('round-trips calculateTax across the bracket range', () => {
+    for (const take of [15000, 42000, 80000, 150000]) {
+      const gross = findGrossIncomeForTakeHome(take, 'ONT', config);
+      expect(closeTo(calculateTax(gross, 'ONT', config).takeHome, take, 1)).toBe(true);
+    }
+  });
+
+  it('returns 0 for a 0 target and stays monotonic in the target', () => {
+    expect(findGrossIncomeForTakeHome(0, 'ONT', config)).toBe(0);
+    let prev = -1;
+    for (const take of [10000, 30000, 60000, 120000]) {
+      const g = findGrossIncomeForTakeHome(take, 'ONT', config);
+      expect(g).toBeGreaterThan(prev);
+      prev = g;
+    }
+  });
+
+  it('works in every supported province', () => {
+    for (const code of Object.keys(config.provinces)) {
+      const gross = findGrossIncomeForTakeHome(50000, code, config);
+      expect(Number.isFinite(gross)).toBe(true);
+      expect(closeTo(calculateTax(gross, code, config).takeHome, 50000, 1)).toBe(true);
+    }
+  });
+});
+
+describe('oasDeferralMultiplier', () => {
+  it('is 1.0 at 65 and climbs 0.6%/month to +36% at 70', () => {
+    expect(closeTo(oasDeferralMultiplier(65, config), 1, 9)).toBe(true);
+    expect(closeTo(oasDeferralMultiplier(70, config), 1.36, 6)).toBe(true);
+    // One year of deferral = +7.2%.
+    expect(closeTo(oasDeferralMultiplier(66, config), 1.072, 6)).toBe(true);
+  });
+
+  it('does not reward deferring past 70', () => {
+    expect(closeTo(oasDeferralMultiplier(72, config), 1.36, 6)).toBe(true);
+  });
+});
+
+describe('oasAnnualGross', () => {
+  it('prorates by residency years/40', () => {
+    const full = oasAnnualGross(65, 65, 40, config);
+    expect(closeTo(oasAnnualGross(65, 65, 20, config), full / 2, 1)).toBe(true);
+  });
+
+  it('applies the deferral multiplier to the annual amount', () => {
+    const at65 = oasAnnualGross(70, 65, 40, config);   // started at 65
+    const deferred = oasAnnualGross(70, 70, 40, config); // deferred to 70
+    expect(deferred).toBeGreaterThan(at65);
+  });
+
+  it('is zero before the start age and below the residency floor', () => {
+    expect(oasAnnualGross(64, 65, 40, config)).toBe(0);
+    expect(oasAnnualGross(65, 65, 5, config)).toBe(0);
+  });
+});
+
+describe('indexConfig (full-table scaling)', () => {
+  const F = 1.05;
+  const idx = indexConfig(config, F);
+
+  it('scales federal brackets, rates stay fixed, exemption scales', () => {
+    expect(closeTo(idx.federal.brackets[0], config.federal.brackets[0] * F, 0.01)).toBe(true);
+    expect(idx.federal.rates).toEqual(config.federal.rates); // rates are not indexed
+    expect(closeTo(idx.federal.exemption, config.federal.exemption * F, 0.01)).toBe(true);
+  });
+
+  it('scales every province table', () => {
+    for (const code of Object.keys(config.provinces)) {
+      expect(closeTo(idx.provinces[code].exemption, config.provinces[code].exemption * F, 0.01)).toBe(true);
+      expect(closeTo(idx.provinces[code].brackets[0], config.provinces[code].brackets[0] * F, 0.01)).toBe(true);
+    }
+  });
+
+  it('scales OAS base amounts, clawback threshold and both GIS maxima', () => {
+    expect(closeTo(idx.oas.baseMonthly65to74, config.oas.baseMonthly65to74 * F, 0.01)).toBe(true);
+    expect(closeTo(idx.oas.clawbackThreshold, config.oas.clawbackThreshold * F, 0.01)).toBe(true);
+    expect(closeTo(idx.oas.gisMaxAnnualSingle, config.oas.gisMaxAnnualSingle * F, 0.01)).toBe(true);
+    expect(closeTo(idx.oas.gisMaxAnnualCouple, config.oas.gisMaxAnnualCouple * F, 0.01)).toBe(true);
+  });
+
+  it('scales the Ontario surtax thresholds', () => {
+    expect(closeTo(idx.ontarioSurtax.threshold1, config.ontarioSurtax.threshold1 * F, 0.01)).toBe(true);
+    expect(closeTo(idx.ontarioSurtax.threshold2, config.ontarioSurtax.threshold2 * F, 0.01)).toBe(true);
+  });
+
+  it('factor of 1 returns the config unchanged (no-op)', () => {
+    expect(indexConfig(config, 1)).toBe(config);
   });
 });
