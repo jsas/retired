@@ -34,14 +34,19 @@ describe('runStrategies', () => {
     expect(gisValues.size).toBeGreaterThan(1);
   });
 
-  it('melting down the RRSP early preserves more lifetime GIS than TFSA-first', () => {
+  it('draw order changes lifetime GIS (income counted in-year, not deferred)', () => {
+    // With GIS assessed on in-year income (the fix), a strategy that draws
+    // taxable income during OAS years claws GIS back immediately — so order
+    // matters, and drawing the RRSP down alongside OAS (rrsp-first here) does
+    // NOT beat sheltering it behind TFSA-first on this fixture. The point of
+    // the metric is that it discriminates; the direction follows the math.
     const report = runStrategies(gisSensitive(), config);
     const orders = report.strategies.filter(s => s.id.startsWith('order-'));
     const rrspFirst = orders.filter(o => o.id.startsWith('order-rrsp'));
     const tfsaFirst = orders.filter(o => o.id.startsWith('order-tfsa'));
     const bestRrsp = Math.max(...rrspFirst.map(o => o.lifetimeGis));
     const bestTfsa = Math.max(...tfsaFirst.map(o => o.lifetimeGis));
-    expect(bestRrsp).toBeGreaterThan(bestTfsa);
+    expect(bestTfsa).toBeGreaterThan(bestRrsp);
   });
 
   it('sustainable spending is non-negative and delta is measured vs baseline', () => {

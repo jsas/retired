@@ -575,28 +575,30 @@ export function calculateRetirement(
     // any RRIF minimum). Additional registered draws are taxed on top of it.
     const stackedGross = () => otherGross + registeredGross;
 
-    // GIS: tax-free, based on income EXCLUDING OAS (CPP + pensions + registered
-    // draws + taxable gains). Computed after the mandatory RRIF minimum so the
-    // minimum's effect on the GIS is captured; discretionary draws below
-    // further reduce it (not iterated — the reduction lands next year in
-    // practice via Service Canada's quarterly recalc).
+    // GIS: tax-free, based on income EXCLUDING OAS itself (CPP + pensions +
+    // registered draws + realized capital gains). Computed after the mandatory
+    // RRIF minimum so the minimum's effect is captured. Discretionary draws
+    // below further reduce it: we recompute once after the main draws and
+    // credit back any overestimate, so the year doesn't pay GIS the draw
+    // should have clawed back. (Real life settles this via Service Canada's
+    // quarterly recalc — modelling it in-year keeps the projection honest.)
     // Couple rules apply when a spouse context is present: entitlement is
     // assessed on combined non-OAS income, at the couple rate when both
     // spouses receive OAS, the single rate when only this person does.
-    let gisGross = 0;
-    if (oasGross > 0) {
+    const gisAt = () => {
+      if (oasGross <= 0) return 0;
       if (spouseCtx) {
         const sp = spouseFixedIncomeAt(age);
-        gisGross = gisAnnualCouple(
-          registeredGross,
+        return gisAnnualCouple(
+          registeredGross + capitalGains,
           cppGross + pensionGross + sp.fixed,
           sp.hasOas,
           yearConfig
         );
-      } else {
-        gisGross = gisAnnual(cppGross + pensionGross + registeredGross, yearConfig);
       }
-    }
+      return gisAnnual(cppGross + pensionGross + registeredGross + capitalGains, yearConfig);
+    };
+    let gisGross = gisAt();
     remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - gisGross);
 
     // 2. Draw the remaining after-tax need in the configured order.
@@ -682,6 +684,20 @@ export function calculateRetirement(
         actualWithdrawals += draw;
         wd.rmDraw += draw;
         remainingAfterTaxNeed -= draw;
+      }
+    }
+
+    // Recompute GIS now that the year's discretionary draws (and the capital
+    // gains they realized) are known. If the draws clawed GIS back further
+    // than the initial estimate, the overpayment is returned to the taxable
+    // account (it was borrowed against income that never materialized).
+    {
+      const gisFinal = gisAt();
+      if (gisFinal < gisGross) {
+        const overpaid = gisGross - gisFinal;
+        taxable += overpaid;
+        taxableAcb += overpaid;
+        gisGross = gisFinal;
       }
     }
 

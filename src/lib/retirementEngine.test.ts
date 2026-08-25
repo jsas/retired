@@ -676,3 +676,45 @@ describe('year detail (drill-down)', () => {
     expect(combined.every(y => y.detail === undefined)).toBe(true);
   });
 });
+
+describe('GIS holes (john feedback)', () => {
+  it('indexConfig scales the couple GIS maximum too (not just the single one)', async () => {
+    const { indexConfig } = await import('./canadianTax');
+    const idx = indexConfig(config, 1.02);
+    expect(closeTo(idx.oas.gisMaxAnnualCouple, config.oas.gisMaxAnnualCouple * 1.02, 0.01)).toBe(true);
+  });
+
+  it('realized taxable-account capital gains reduce GIS', () => {
+    // Half the taxable account is embedded gain; drawn first, the realized
+    // gain is income for GIS purposes and must claw it back.
+    const cfg = testConfig();
+    cfg.engine.taxableAcbRatio = 0.5;
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, rrspBalance: 0, cashCushionBalance: 0,
+      taxableBalance: 600000,
+      cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 60000, withdrawalOrder: ['taxable', 'tfsa', 'rrsp'],
+    }), cfg);
+    // With gains counted, GIS drops far below the ~$13.5k max (gain ≈
+    // $19k → 13478 − 19000×0.5 ≈ $4k). Before the fix it paid the full max.
+    const gis65 = yearAt(r.yearlyBreakdown, 65).gisIncome;
+    expect(gis65).toBeGreaterThan(0);
+    expect(gis65).toBeLessThan(6000);
+    // Sanity: a capital gain was actually realized this year.
+    expect(yearAt(r.yearlyBreakdown, 65).detail!.tax.capitalGains).toBeGreaterThan(10000);
+  });
+
+  it('discretionary registered draws in the same year reduce GIS', () => {
+    // RRSP-first draw well past the RRIF minimum: GIS must reflect the draw,
+    // not assume only the minimum counts.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 72, retirementAge: 72, maxAge: 80,
+      rrspBalance: 500000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 80000, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+    }), config);
+    const gis72 = yearAt(r.yearlyBreakdown, 72).gisIncome;
+    // $80k of registered income wipes GIS out entirely (13478 − 80000×0.5 < 0).
+    expect(gis72).toBe(0);
+  });
+});

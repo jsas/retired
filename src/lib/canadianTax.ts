@@ -203,7 +203,8 @@ export function indexConfig(config: AppConfig, factor: number): AppConfig {
       baseMonthly65to74: config.oas.baseMonthly65to74 * factor,
       baseMonthly75plus: config.oas.baseMonthly75plus * factor,
       clawbackThreshold: config.oas.clawbackThreshold * factor,
-      gisMaxAnnualSingle: (config.oas.gisMaxAnnualSingle ?? 0) * factor
+      gisMaxAnnualSingle: (config.oas.gisMaxAnnualSingle ?? 0) * factor,
+      gisMaxAnnualCouple: (config.oas.gisMaxAnnualCouple ?? 0) * factor
     },
     ontarioSurtax: {
       ...config.ontarioSurtax,
