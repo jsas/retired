@@ -1,0 +1,247 @@
+import { describe, it, expect } from 'vitest';
+import { calculateRetirement, calculateHousehold } from './retirementEngine';
+import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
+
+const config = testConfig();
+const INFL = config.engine.inflationRate;
+const indexSpendingOn = config.engine.indexSpending !== false;
+const sf = (age: number, currentAge = 65) =>
+  indexSpendingOn ? Math.pow(1 + INFL, Math.max(0, age - currentAge)) : 1;
+
+describe('accumulation & growth', () => {
+  it('grows balances by the investment return during accumulation', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 60, retirementAge: 65, tfsaBalance: 100000, tfsaContribution: 0,
+    }), config);
+    const first = yearAt(r.yearlyBreakdown, 60);
+    expect(closeTo(first.tfsaBalance, 100000 * 1.05)).toBe(true);
+  });
+
+  it('adds contributions during accumulation and stops at retirement', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 60, retirementAge: 62, tfsaBalance: 0, tfsaContribution: 6000,
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 60).contributions).toBe(6000);
+    expect(yearAt(r.yearlyBreakdown, 61).contributions).toBe(6000);
+    expect(yearAt(r.yearlyBreakdown, 62).contributions).toBe(0);
+  });
+});
+
+describe('spending target & indexSpending', () => {
+  it('inflates the spending target when indexSpending is on', () => {
+    const c = testConfig();
+    c.engine.indexSpending = true;
+    const r = calculateRetirement(baseInputs({ desiredSpending: 30000 }), c);
+    expect(closeTo(yearAt(r.yearlyBreakdown, 70).spendingTarget, 30000 * Math.pow(1 + INFL, 5), 1)).toBe(true);
+  });
+
+  it('holds spending flat in today\'s dollars when indexSpending is off', () => {
+    const c = testConfig();
+    c.engine.indexSpending = false;
+    const r = calculateRetirement(baseInputs({ desiredSpending: 30000 }), c);
+    expect(closeTo(yearAt(r.yearlyBreakdown, 70).spendingTarget, 30000, 1)).toBe(true);
+  });
+});
+
+describe('cash events', () => {
+  it('one-time inflow lands only at its age', () => {
+    const r = calculateRetirement(baseInputs({ events: [
+      { id: 'e1', age: 70, label: 'sale', amount: 50000, direction: 'in', account: 'taxable' },
+    ]}), config);
+    const tx = (a: number) => yearAt(r.yearlyBreakdown, a).taxableBalance;
+    expect(closeTo(tx(70), 50000 * 1.05, 1)).toBe(true);
+    expect(closeTo(tx(71), tx(70) * 1.05, 1)).toBe(true); // growth only, no repeat
+  });
+
+  it('recurring inflow fires every year age..endAge, then stops', () => {
+    const r = calculateRetirement(baseInputs({ events: [
+      { id: 'e1', age: 70, endAge: 72, label: 'rent', amount: 5000, direction: 'in', account: 'taxable' },
+    ]}), config);
+    const tx = (a: number) => yearAt(r.yearlyBreakdown, a).taxableBalance;
+    expect(closeTo(tx(70), 5000 * 1.05, 1)).toBe(true);
+    expect(closeTo(tx(71), (tx(70) + 5000) * 1.05, 1)).toBe(true);
+    expect(closeTo(tx(72), (tx(71) + 5000) * 1.05, 1)).toBe(true);
+    expect(closeTo(tx(73), tx(72) * 1.05, 1)).toBe(true); // no deposit at 73
+  });
+
+  it('recurring outflow adds to each year\'s spending need', () => {
+    const one = calculateRetirement(baseInputs({ events: [
+      { id: 'e1', age: 70, label: 'gift', amount: 8000, direction: 'out' },
+    ]}), config);
+    const rec = calculateRetirement(baseInputs({ events: [
+      { id: 'e1', age: 70, endAge: 71, label: 'gift', amount: 8000, direction: 'out' },
+    ]}), config);
+    const st = (r: typeof one, a: number) => yearAt(r.yearlyBreakdown, a).spendingTarget;
+    expect(closeTo(st(rec, 71) - st(one, 71), 8000, 1)).toBe(true);
+  });
+});
+
+describe('pensions', () => {
+  it('lifetime pension pays every year from startAge', () => {
+    const r = calculateRetirement(baseInputs({
+      cppStartAge: 65, cppMonthlyAmount: 0, oasStartAge: null,
+      pensions: [{ id: 'p1', label: 'DB', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: false }],
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 65).pensionIncome).toBeCloseTo(12000, 6);
+    expect(yearAt(r.yearlyBreakdown, 80).pensionIncome).toBeCloseTo(12000, 6);
+  });
+
+  it('bridge pension stops after endAge', () => {
+    const r = calculateRetirement(baseInputs({
+      pensions: [{ id: 'b', label: 'bridge', annualAmount: 10000, startAge: 65, endAge: 69, indexedToCpi: false }],
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 69).pensionIncome).toBeCloseTo(10000, 6);
+    expect(yearAt(r.yearlyBreakdown, 70).pensionIncome).toBe(0);
+  });
+
+  it('non-indexed pension stays flat; indexed grows with CPI when tables index', () => {
+    const c = testConfig();
+    c.engine.indexTaxTables = true;
+    const r = calculateRetirement(baseInputs({ pensions: [
+      { id: 'f', label: 'flat', annualAmount: 10000, startAge: 65, endAge: null, indexedToCpi: false },
+      { id: 'i', label: 'idx', annualAmount: 10000, startAge: 65, endAge: null, indexedToCpi: true },
+    ]}), c);
+    const total70 = yearAt(r.yearlyBreakdown, 70).pensionIncome;
+    expect(closeTo(total70, 10000 + 10000 * Math.pow(1 + INFL, 5), 1)).toBe(true);
+  });
+});
+
+describe('GIS (single)', () => {
+  it('CPP reduces GIS 50¢/$ — verified against the canada.ca table', () => {
+    // $800/mo CPP = $9,600/yr → GIS = 13478 − 9600×0.5 = 8678
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000,
+    }), config);
+    const gis65 = yearAt(r.yearlyBreakdown, 65).gisIncome;
+    expect(closeTo(gis65, config.oas.gisMaxAnnualSingle - 9600 * 0.5, 1)).toBe(true);
+  });
+
+  it('no OAS → no GIS', () => {
+    const r = calculateRetirement(baseInputs({ oasStartAge: null }), config);
+    expect(r.yearlyBreakdown.every(y => y.gisIncome === 0)).toBe(true);
+  });
+});
+
+describe('couple GIS', () => {
+  const mkCouple = () => baseInputs({
+    tfsaBalance: 0, cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 20000,
+    spouse: {
+      enabled: true, currentAge: 65, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000, pensions: [],
+    },
+  });
+
+  it('assesses each spouse on COMBINED income at the couple rate', () => {
+    const r = calculateHousehold(mkCouple(), config);
+    // combined CPP = 4800+4800 = 9600 → GIS each = 8113 − 9600×0.5 = 3313
+    const expected = config.oas.gisMaxAnnualCouple - 9600 * 0.5;
+    expect(closeTo(yearAt(r.yearlyBreakdown, 65).gisIncome, expected, 1)).toBe(true);
+    expect(closeTo(yearAt(r.spouse!.yearlyBreakdown, 65).gisIncome, expected, 1)).toBe(true);
+  });
+
+  it('couple GIS is below the single-rule amount for the same incomes', () => {
+    const single = calculateRetirement(baseInputs({
+      tfsaBalance: 0, cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
+    }), config);
+    const couple = calculateHousehold(mkCouple(), config);
+    const s = yearAt(single.yearlyBreakdown, 65).gisIncome;
+    const c = yearAt(couple.yearlyBreakdown, 65).gisIncome;
+    expect(c).toBeLessThan(s);
+  });
+
+  it('household is SHORTFALL if the spouse plan fails', () => {
+    const inputs = mkCouple();
+    inputs.spouse!.tfsaBalance = 0;
+    inputs.spouse!.desiredSpending = 90000; // unsustainable
+    inputs.spouse!.rrspBalance = 0;
+    const r = calculateHousehold(inputs, config);
+    // primary is fine (small TFSA + benefits vs modest spend), spouse is not
+    expect(r.status).toBe('SHORTFALL');
+  });
+});
+
+describe('reverse mortgage', () => {
+  const rmBase = () => baseInputs({ tfsaBalance: 500000, desiredSpending: 10000 });
+
+  it('leaves no footprint when disabled', () => {
+    const r = calculateRetirement(rmBase(), config);
+    expect(r.yearlyBreakdown.every(y => y.netHomeEquity === undefined)).toBe(true);
+  });
+
+  it('scheduled draws accrue interest and land tax-free in the cash cushion', () => {
+    const r = calculateRetirement(rmBase(), config);
+    void r;
+    const rr = calculateRetirement(baseInputs({
+      tfsaBalance: 500000, desiredSpending: 10000,
+      reverseMortgage: {
+        enabled: true, homeValue: 800000, appreciationRate: 0.02, interestRate: 0.06,
+        drawAmount: 20000, startAge: 70, durationYears: 3, topUp: false,
+      },
+    }), config);
+    const yr = (a: number) => yearAt(rr.yearlyBreakdown, a);
+    const l70 = yr(70).loanBalance!, l71 = yr(71).loanBalance!, l72 = yr(72).loanBalance!, l73 = yr(73).loanBalance!;
+    expect(closeTo(l70, 20000 * sf(70), 1)).toBe(true);            // accrue-then-draw at 70
+    expect(closeTo(l71, l70 * 1.06 + 20000 * sf(71), 1)).toBe(true);
+    expect(closeTo(l72, l71 * 1.06 + 20000 * sf(72), 1)).toBe(true);
+    expect(closeTo(l73, l72 * 1.06, 1)).toBe(true);                // draws stop, interest continues
+    expect(closeTo(yr(75).netHomeEquity!, yr(75).homeValue! - yr(75).loanBalance!, 0.01)).toBe(true);
+  });
+
+  it('top-up covers the shortfall once accounts drain and stays solvent on equity', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 30000, cashCushionBalance: 0, desiredSpending: 15000, maxAge: 80,
+      reverseMortgage: { enabled: true, homeValue: 500000, appreciationRate: 0, interestRate: 0.05, topUp: true },
+    }), config);
+    // Plan runs to maxAge funded by the loan; depletion stays null while equity lasts.
+    expect(r.depletionAge).toBeNull();
+    expect(r.yearlyBreakdown[r.yearlyBreakdown.length - 1].age).toBe(80);
+    const loan80 = yearAt(r.yearlyBreakdown, 80).loanBalance!;
+    expect(loan80).toBeGreaterThan(0);
+    expect(loan80).toBeLessThan(500000); // still within home value
+  });
+
+  it('top-up caps borrowing at the remaining home equity', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, cashCushionBalance: 0, desiredSpending: 100000, maxAge: 95,
+      reverseMortgage: { enabled: true, homeValue: 200000, appreciationRate: 0, interestRate: 0.05, topUp: true },
+    }), config);
+    // Huge spending against a small home → loan can never exceed the home value.
+    for (const y of r.yearlyBreakdown) {
+      expect(y.loanBalance ?? 0).toBeLessThanOrEqual(200000 + 1e-6);
+    }
+    // Once equity is exhausted the plan must report depletion.
+    expect(r.depletionAge).not.toBeNull();
+  });
+});
+
+describe('depletion & withdrawal order', () => {
+  it('reports depletion when money runs out with no other funding', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 30000, desiredSpending: 50000, maxAge: 90,
+    }), config);
+    expect(r.depletionAge).not.toBeNull();
+    expect(r.status).toBe('SHORTFALL');
+  });
+
+  it('TFSA withdrawals are tax-free (no income tax on the draw)', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 300000, desiredSpending: 30000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
+      cppStartAge: null, oasStartAge: null,
+    }), config);
+    // No benefits, drawing only from TFSA → no taxable income → no tax.
+    expect(yearAt(r.yearlyBreakdown, 66).incomeTax).toBe(0);
+  });
+
+  it('RRSP/RRIF withdrawals are taxed (income tax > 0)', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, rrspBalance: 400000, desiredSpending: 40000, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+      cppStartAge: null, oasStartAge: null,
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 66).incomeTax).toBeGreaterThan(0);
+  });
+});

@@ -66,6 +66,18 @@ npm run build:all      # both
 The single-file build inlines every asset (JS, CSS, favicon) into one HTML file
 you can open directly from disk or pass around as an attachment.
 
+## Tests
+
+The projection engine and tax/GIS logic are covered by [Vitest](https://vitest.dev):
+
+```bash
+npm test           # run the engine/library test suites once
+npm run test:watch # re-run on change
+```
+
+Tests live beside the code as `src/**/*.test.ts` and run in Node — they gate the
+CI deploy, so a failing test blocks the site from publishing.
+
 ## Releasing
 
 Releases are built by GitHub Actions. Push a version tag and the workflow deploys
@@ -90,9 +102,11 @@ git push origin v0.1.0
 │   │   ├── historicalReturns.ts  # backtest return series
 │   │   ├── appConfig.ts          # tax tables + engine config (editable in Settings)
 │   │   └── …                     # scenario storage, share links, agent ingest
+│   ├── lib/*.test.ts             # Vitest suites for the engine, tax/GIS, strategies, storage
+│   ├── test/helpers.ts           # shared fixtures (base inputs, test config)
 │   ├── App.tsx
 │   └── main.tsx
-├── .github/workflows/deploy.yml  # Pages deploy + tagged releases
+├── .github/workflows/deploy.yml  # tests + Pages deploy + tagged releases
 └── vite.config.ts                # multi-file (/retired/) vs single-file builds
 ```
 

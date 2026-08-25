@@ -25,6 +25,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm test             # engine/library tests gate the deploy
       - run: npm run build        # multi-file site -> dist/ (base /retired/)
       - uses: actions/upload-pages-artifact@v3
         with:
