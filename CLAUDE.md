@@ -52,9 +52,10 @@ commits to `main`. Follow this for every non-trivial change:
 Trivial fixes (typos, one-line tweaks) may commit directly to `main` — but
 they still get a line in the log if they consumed a session.
 
-> Note: `gh` CLI is **not installed** in this environment. Create issues and
-> PRs via the GitHub web UI or the API (see COSTS.md for what's tracked), and
-> paste links/numbers back so they can be recorded.
+> Note: `gh` CLI is installed at `/c/Program Files/GitHub CLI/gh.exe` (not on
+> this shell's PATH — `export PATH="$PATH:/c/Program Files/GitHub CLI"`). It
+> needs `gh auth login` once before it can create issues/PRs; until then,
+> create them via the GitHub web UI and record the numbers.
 
 ## Cost tracking
 

@@ -580,6 +580,8 @@ function App() {
                     <OptimizeCard
                       inputs={inputs}
                       config={config}
+                      results={results}
+                      mcResults={printMc}
                       onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
                       onClose={() => setShowOptimize(false)}
                     />
