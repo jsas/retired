@@ -284,11 +284,11 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <PercentField label="Clawback rate (%)" value={draft.oas.clawbackRate}
                 onChange={v => update(c => { c.oas.clawbackRate = v; })} />
               <NumberField label="Clawback income threshold ($/yr)" value={draft.oas.clawbackThreshold}
-                onChange={v => update(c => { c.oas.clawbackThreshold = v; })} />
+                onChange={v => update(c => { c.oas.clawbackThreshold = v; })} step="1000" />
               <NumberField label="GIS max annual — single ($/yr)" value={draft.oas.gisMaxAnnualSingle}
-                onChange={v => update(c => { c.oas.gisMaxAnnualSingle = v; })} />
+                onChange={v => update(c => { c.oas.gisMaxAnnualSingle = v; })} step="1000" />
               <NumberField label="GIS max annual — couple, per spouse ($/yr)" value={draft.oas.gisMaxAnnualCouple}
-                onChange={v => update(c => { c.oas.gisMaxAnnualCouple = v; })} />
+                onChange={v => update(c => { c.oas.gisMaxAnnualCouple = v; })} step="1000" />
               <PercentField label="GIS reduction rate (% per $ of non-OAS income)" value={draft.oas.gisReductionRate}
                 onChange={v => update(c => { c.oas.gisReductionRate = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug">
@@ -483,6 +483,7 @@ function TaxTableEditor({ table, onChange }: {
         <span className="text-xs font-semibold text-slate-700">Basic personal exemption</span>
         <input
           type="number"
+          step="1000"
           value={table.exemption}
           onChange={e => onChange({ ...table, exemption: parseFloat(e.target.value) || 0 })}
           className="w-28 px-2 py-1 text-xs border border-neutral-300 rounded text-right"

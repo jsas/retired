@@ -56,6 +56,7 @@ function PensionList({ pensions, onChange }: { pensions: Pension[]; onChange: (n
           <div className="flex items-center gap-1.5">
             <input
               type="number"
+              step="1000"
               value={p.annualAmount}
               title="Annual amount ($/yr, today's dollars)"
               onChange={(e) => update(i, { annualAmount: Math.max(0, parseInt(e.target.value) || 0) })}
@@ -301,6 +302,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <label className="block text-[11px] text-neutral-500 mb-1">RRSP ($)</label>
               <input
                 type="number"
+                step="1000"
                 value={inputs.rrspBalance}
                 onChange={(e) => updateField('rrspBalance', parseInt(e.target.value) || 0)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
@@ -310,6 +312,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <label className="block text-[11px] text-neutral-500 mb-1">TFSA ($)</label>
               <input
                 type="number"
+                step="1000"
                 value={inputs.tfsaBalance}
                 onChange={(e) => updateField('tfsaBalance', parseInt(e.target.value) || 0)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
@@ -319,6 +322,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <label className="block text-[11px] text-neutral-500 mb-1">Taxable ($)</label>
               <input
                 type="number"
+                step="1000"
                 value={inputs.taxableBalance}
                 onChange={(e) => updateField('taxableBalance', parseInt(e.target.value) || 0)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
@@ -328,6 +332,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <label className="block text-[11px] text-neutral-500 mb-1">Cash Cushion ($)</label>
               <input
                 type="number"
+                step="1000"
                 value={inputs.cashCushionBalance}
                 onChange={(e) => updateField('cashCushionBalance', parseInt(e.target.value) || 0)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
@@ -343,6 +348,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <label className="block text-[11px] text-neutral-500 mb-1">RRSP Contribution ($/yr)</label>
               <input
                 type="number"
+                step="1000"
                 value={inputs.rrspContribution ?? 0}
                 onChange={(e) => updateField('rrspContribution', parseInt(e.target.value) || 0)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
@@ -352,6 +358,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <label className="block text-[11px] text-neutral-500 mb-1">TFSA Contribution ($/yr)</label>
               <input
                 type="number"
+                step="1000"
                 value={inputs.tfsaContribution ?? 0}
                 onChange={(e) => updateField('tfsaContribution', parseInt(e.target.value) || 0)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
@@ -361,6 +368,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <label className="block text-[11px] text-neutral-500 mb-1">Non-Registered Contribution ($/yr)</label>
               <input
                 type="number"
+                step="1000"
                 value={inputs.taxableContribution ?? 0}
                 onChange={(e) => updateField('taxableContribution', parseInt(e.target.value) || 0)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
@@ -501,6 +509,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                   </select>
                   <input
                     type="number"
+                    step="1000"
                     value={ev.amount}
                     title="Amount ($ / occurrence)"
                     onChange={(e) => updateEvent(i, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
@@ -574,6 +583,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <label className={LABEL_CLS}>Desired Spending ($/yr, today's dollars)</label>
               <input
                 type="number"
+                step="1000"
                 value={inputs.desiredSpending}
                 onChange={(e) => updateField('desiredSpending', parseInt(e.target.value) || 0)}
                 className={INPUT_CLS}
@@ -657,39 +667,39 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Spending $</label>
-                  <input type="number" value={inputs.spouse.desiredSpending}
+                  <input type="number" step="1000" value={inputs.spouse.desiredSpending}
                     onChange={(e) => updateSpouse({ desiredSpending: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
                   <label className={LABEL_CLS}>RRSP $</label>
-                  <input type="number" value={inputs.spouse.rrspBalance}
+                  <input type="number" step="1000" value={inputs.spouse.rrspBalance}
                     onChange={(e) => updateSpouse({ rrspBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>TFSA $</label>
-                  <input type="number" value={inputs.spouse.tfsaBalance}
+                  <input type="number" step="1000" value={inputs.spouse.tfsaBalance}
                     onChange={(e) => updateSpouse({ tfsaBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Taxable $</label>
-                  <input type="number" value={inputs.spouse.taxableBalance}
+                  <input type="number" step="1000" value={inputs.spouse.taxableBalance}
                     onChange={(e) => updateSpouse({ taxableBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Cash $</label>
-                  <input type="number" value={inputs.spouse.cashCushionBalance}
+                  <input type="number" step="1000" value={inputs.spouse.cashCushionBalance}
                     onChange={(e) => updateSpouse({ cashCushionBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>RRSP contrib $/yr</label>
-                  <input type="number" value={inputs.spouse.rrspContribution}
+                  <input type="number" step="1000" value={inputs.spouse.rrspContribution}
                     onChange={(e) => updateSpouse({ rrspContribution: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>TFSA contrib $/yr</label>
-                  <input type="number" value={inputs.spouse.tfsaContribution}
+                  <input type="number" step="1000" value={inputs.spouse.tfsaContribution}
                     onChange={(e) => updateSpouse({ tfsaContribution: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                 </div>
                 <div>
@@ -781,7 +791,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
                   <label className={LABEL_CLS}>Home value ($)</label>
-                  <input type="number" value={inputs.reverseMortgage.homeValue}
+                  <input type="number" step="1000" value={inputs.reverseMortgage.homeValue}
                     onChange={(e) => updateRm({ homeValue: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
                 </div>
                 <div>
@@ -827,7 +837,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                   <div className="grid grid-cols-3 gap-1.5">
                     <div>
                       <label className={LABEL_CLS}>$/yr</label>
-                      <input type="number" value={inputs.reverseMortgage.drawAmount}
+                      <input type="number" step="1000" value={inputs.reverseMortgage.drawAmount}
                         onChange={(e) => updateRm({ drawAmount: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
                     </div>
                     <div>
