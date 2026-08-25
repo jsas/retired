@@ -6,12 +6,14 @@ export interface PrintOptions {
   includeTimeline: boolean;
   includeMonteCarlo: boolean;
   includeMilestones: boolean;
+  includeDetailedTable: boolean;
 }
 
 export const DEFAULT_PRINT_OPTIONS: PrintOptions = {
   includeTimeline: false,
   includeMonteCarlo: false,
-  includeMilestones: true
+  includeMilestones: true,
+  includeDetailedTable: false
 };
 
 const PANEL_STATE_KEY = 'wealthconsole_panel_state';
@@ -26,7 +28,8 @@ export function loadPrintOptions(): PrintOptions {
         return {
           includeTimeline: parsed.includeTimeline === true,
           includeMonteCarlo: parsed.includeMonteCarlo === true,
-          includeMilestones: parsed.includeMilestones !== false // default true
+          includeMilestones: parsed.includeMilestones !== false, // default true
+          includeDetailedTable: parsed.includeDetailedTable === true
         };
       }
     }

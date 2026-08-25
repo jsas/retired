@@ -133,6 +133,30 @@ export interface AccountBreakdown {
   cashCushionBalance: number;
 }
 
+/**
+ * Per-year drill-down: where the money actually came from and what happened.
+ * Everything is optional/additive so CSV export, PrintSummary, the household
+ * combiner and pension splitting are unaffected. Amounts are nominal dollars
+ * of that year, matching the rest of the breakdown row.
+ */
+export interface YearDetail {
+  // Withdrawal provenance — gross dollars that LEFT each source this year.
+  // rrifMin is the mandatory RRIF minimum (a subset of registered draws);
+  // rrif/rrsp are discretionary registered draws; rmDraw is reverse-mortgage
+  // borrowing (tax-free). Registered and taxable draws are grossed up for tax.
+  withdraw: { rrifMin: number; rrif: number; rrsp: number; tfsa: number; taxable: number; cash: number; rmDraw: number };
+  // Market growth / interest earned per account this year (before it's added).
+  growth: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number };
+  // Contributions per account (accumulation years only).
+  contrib?: { rrsp: number; tfsa: number; taxable: number };
+  // Tax decomposition for the year's withdrawals.
+  tax: { oasClawback: number; capitalGains: number; registeredGross: number };
+  // Reverse mortgage, when enabled.
+  rm?: { interestAccrued: number; scheduledDraw: number; topUpDraw: number; homeValue: number; loanBalance: number };
+  // Cash events that fired this year (labelled in/out).
+  events: Array<{ label: string; direction: 'in' | 'out'; amount: number }>;
+}
+
 export interface YearlyBreakdown {
   age: number;
   startingBalance: number;
@@ -163,6 +187,9 @@ export interface YearlyBreakdown {
   unsplitNetIncome?: number;    // this person's net income before any split
   // Set on the year the split changes this person's reported tax.
   splitTransferred?: number;    // eligible income moved OUT to the spouse (+) or received IN (−)
+  // Per-year drill-down (provenance, growth, tax, RM, events). Present on
+  // per-person plans; dropped by the household combiner.
+  detail?: YearDetail;
 }
 
 export interface RetirementResults {
@@ -388,10 +415,15 @@ export function calculateRetirement(
     // Reverse mortgage: appreciate the home, accrue interest, take any
     // scheduled draw into the cash cushion (rare pre-retirement, but allowed).
     // Draws are capped at the LTV headroom.
+    let accRmInterest = 0, accRmScheduled = 0;
     if (rmOn) {
       homeValue *= 1 + Math.max(0, rm?.appreciationRate ?? 0);
+      const loanBefore = rmLoan;
       rmAccrue();
-      cashCushion += rmDraw(rmScheduledAt(age));
+      accRmInterest = rmLoan - loanBefore;
+      const sched = rmDraw(rmScheduledAt(age));
+      cashCushion += sched;
+      accRmScheduled = sched;
     }
 
     yearlyBreakdown.push({
@@ -413,6 +445,14 @@ export function calculateRetirement(
       oasIncome: 0,
       gisIncome: 0,
       pensionIncome: 0,
+      detail: {
+        withdraw: { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 },
+        growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
+        contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution },
+        tax: { oasClawback: 0, capitalGains: 0, registeredGross: 0 },
+        ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan } } : {}),
+        events: [],
+      },
       ...(rmOn ? { homeValue, loanBalance: rmLoan, netHomeEquity: homeValue - rmLoan } : {})
     });
 
@@ -445,11 +485,20 @@ export function calculateRetirement(
     // Reverse mortgage: appreciate the home, accrue this year's interest, and
     // take any scheduled draw into the cash cushion (tax-free proceeds).
     // Draws are capped at the LTV headroom.
+    let rmInterest = 0, rmScheduled = 0;
     if (rmOn) {
       homeValue *= 1 + Math.max(0, rm?.appreciationRate ?? 0);
+      const loanBefore = rmLoan;
       rmAccrue();
-      cashCushion += rmDraw(rmScheduledAt(age));
+      rmInterest = rmLoan - loanBefore;
+      const sched = rmDraw(rmScheduledAt(age));
+      cashCushion += sched;
+      rmScheduled = sched;
     }
+
+    // Cash events firing this year (in flows applied below; out flows raise the
+    // spending target). Captured for the year's drill-down.
+    const yearEvents = eventsAt(age).map(ev => ({ label: ev.label, direction: ev.direction, amount: ev.amount }));
 
     // Cash-event inflows land at the start of the year (before withdrawals).
     for (const ev of eventsAt(age)) {
@@ -500,6 +549,8 @@ export function calculateRetirement(
     let registeredGross = 0;    // RRSP/RRIF gross withdrawn this year (taxable)
     let capitalGains = 0;       // taxable-account gains realized this year (taxed at inclusion rate)
     let remainingAfterTaxNeed = neededAfterTax;
+    // Per-source withdrawal provenance for the year's drill-down.
+    const wd = { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 };
 
     // 1. Mandatory RRIF minimum — forced out first. After-tax excess over the
     //    spending need is redeposited into taxable (still withdrawn & taxed).
@@ -508,6 +559,7 @@ export function calculateRetirement(
       rrif -= minimum;
       actualWithdrawals += minimum;
       registeredGross += minimum;
+      wd.rrifMin += minimum;
 
       const netFromRrif = calculateTax(minimum + otherGross, provinceCode, yearConfig).takeHome - netBenefits;
 
@@ -556,6 +608,7 @@ export function calculateRetirement(
         const draw = Math.min(tfsa, remainingAfterTaxNeed);
         tfsa -= draw;
         actualWithdrawals += draw;
+        wd.tfsa += draw;
         remainingAfterTaxNeed -= draw;
         return;
       }
@@ -571,6 +624,7 @@ export function calculateRetirement(
         taxableAcb = Math.max(0, taxableAcb - draw * (1 - f));
         capitalGains += draw * f;
         actualWithdrawals += draw;
+        wd.taxable += draw;
         // Credit the draw's after-tax value against the need: draw minus the
         // incremental tax on its included gain.
         const base = stackedGross() + capitalGains * inclusion;
@@ -588,7 +642,7 @@ export function calculateRetirement(
       const grossNeeded = grossRegisteredWithdrawal(remainingAfterTaxNeed, stackedGross(), provinceCode, yearConfig);
 
       if (balance >= grossNeeded) {
-        if (age >= rrifAge) rrif -= grossNeeded; else rrsp -= grossNeeded;
+        if (age >= rrifAge) { rrif -= grossNeeded; wd.rrif += grossNeeded; } else { rrsp -= grossNeeded; wd.rrsp += grossNeeded; }
         actualWithdrawals += grossNeeded;
         registeredGross += grossNeeded;
         remainingAfterTaxNeed = 0;
@@ -597,7 +651,7 @@ export function calculateRetirement(
         const base = stackedGross();
         const marginalNet = calculateTax(balance + base, provinceCode, yearConfig).takeHome
           - calculateTax(base, provinceCode, yearConfig).takeHome;
-        if (age >= rrifAge) rrif = 0; else rrsp = 0;
+        if (age >= rrifAge) { rrif = 0; wd.rrif += balance; } else { rrsp = 0; wd.rrsp += balance; }
         actualWithdrawals += balance;
         registeredGross += balance;
         remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - marginalNet);
@@ -613,6 +667,7 @@ export function calculateRetirement(
       const draw = Math.min(cashCushion, remainingAfterTaxNeed);
       cashCushion -= draw;
       actualWithdrawals += draw;
+      wd.cash += draw;
       remainingAfterTaxNeed -= draw;
     }
 
@@ -625,6 +680,7 @@ export function calculateRetirement(
       const draw = rmDraw(remainingAfterTaxNeed);
       if (draw > 0) {
         actualWithdrawals += draw;
+        wd.rmDraw += draw;
         remainingAfterTaxNeed -= draw;
       }
     }
@@ -694,6 +750,13 @@ export function calculateRetirement(
       pensionIncome: pensionGross,
       splitEligibleIncome,
       unsplitNetIncome,
+      detail: {
+        withdraw: wd,
+        growth: { rrsp: rrspGains, rrif: rrifGains, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
+        tax: { oasClawback, capitalGains, registeredGross },
+        ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan } } : {}),
+        events: yearEvents,
+      },
       ...(rmOn ? { homeValue, loanBalance: rmLoan, netHomeEquity: homeValue - rmLoan } : {})
     });
 
@@ -835,9 +898,12 @@ export function combineHouseholdBreakdown(
   const ageOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
   const spouseByCalYear = new Map(spouse.yearlyBreakdown.map(y => [y.age + ageOffset, y]));
 
+  // The household view sums flows; per-source drill-down detail doesn't sum
+  // cleanly into one row, so combined rows drop it (detail === undefined). The
+  // table reads per-person detail straight from the primary/spouse plans.
   return results.yearlyBreakdown.map(py => {
     const sy = spouseByCalYear.get(py.age);
-    if (!sy) return { ...py, splitTransferred: undefined };
+    if (!sy) return { ...py, splitTransferred: undefined, detail: undefined };
     const rm = (py.homeValue !== undefined || sy.homeValue !== undefined)
       ? {
           homeValue: (py.homeValue ?? 0) + (sy.homeValue ?? 0),
@@ -866,6 +932,7 @@ export function combineHouseholdBreakdown(
       pensionIncome: py.pensionIncome + sy.pensionIncome,
       ...rm,
       splitTransferred: undefined,
+      detail: undefined,
     };
   });
 }

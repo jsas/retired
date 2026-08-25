@@ -1,8 +1,16 @@
-import type { YearlyBreakdown } from '../lib/retirementEngine';
+import { Fragment, useState } from 'react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
+import type { YearlyBreakdown, YearDetail } from '../lib/retirementEngine';
 
 interface ScheduleTableProps {
   breakdown: YearlyBreakdown[];
   retirementAge: number;
+  // Household mode: the primary person's own rows + the spouse's rows keyed by
+  // the primary's age axis (calendar year), so an expanded year can show both
+  // people's detail. The combined `breakdown` rows themselves carry no detail.
+  primaryBreakdown?: YearlyBreakdown[];
+  spouseBreakdown?: YearlyBreakdown[];
+  spouseAgeOffset?: number; // inputs.currentAge - spouse.currentAge
 }
 
 function formatCurrency(value: number): string {
@@ -14,15 +22,156 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) {
+// A single labelled money line inside the drill-down panel.
+function Line({ label, value, hint, strong, indent }: {
+  label: string; value: number; hint?: string; strong?: boolean; indent?: boolean;
+}) {
+  if (Math.abs(value) < 0.5) return null; // hide zero lines to reduce noise
+  return (
+    <div className={`flex items-baseline justify-between gap-3 ${indent ? 'pl-3' : ''}`}>
+      <span className={`text-[11px] ${strong ? 'font-semibold text-slate-800' : 'text-slate-600'}`} title={hint}>
+        {label}
+      </span>
+      <span className={`text-[11px] font-mono ${strong ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+        {formatCurrency(value)}
+      </span>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-[13rem]">
+      <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">{title}</div>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+// The expanded per-year drill-down: withdrawal provenance, growth, tax, RM,
+// benefits and cash events.
+function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreakdown }) {
+  const w = detail.withdraw;
+  const totalWithdrawn = row.withdrawals;
+  const registeredTotal = w.rrifMin + w.rrif + w.rrsp;
+  const pct = (v: number) => (totalWithdrawn > 0 ? ` ${Math.round((v / totalWithdrawn) * 100)}%` : '');
+  const hasWithdrawals = totalWithdrawn > 0.5;
+  const hasContrib = detail.contrib && (detail.contrib.rrsp + detail.contrib.tfsa + detail.contrib.taxable) > 0.5;
+  const hasBenefits = row.cppIncome + row.oasIncome + row.gisIncome + row.pensionIncome > 0.5;
+  const hasTax = Math.abs(row.incomeTax) > 0.5 || detail.tax.oasClawback > 0.5;
+  const rm = detail.rm;
+
+  return (
+    <div className="flex flex-wrap gap-x-8 gap-y-4 px-2 py-1">
+      {hasWithdrawals && (
+        <Section title={`Where the ${formatCurrency(totalWithdrawn)} came from`}>
+          {w.rrifMin > 0.5 && <Line label={`RRIF minimum${pct(w.rrifMin)}`} value={w.rrifMin} hint="Mandatory RRIF minimum, forced out first. Taxed as income." />}
+          {w.rrif > 0.5 && <Line label={`RRIF draw${pct(w.rrif)}`} value={w.rrif} hint="Discretionary RRIF withdrawal. Taxed as income; grossed up so after-tax covers the need." />}
+          {w.rrsp > 0.5 && <Line label={`RRSP draw${pct(w.rrsp)}`} value={w.rrsp} hint="RRSP withdrawal (before RRIF conversion). Taxed as income; grossed up." />}
+          {w.tfsa > 0.5 && <Line label={`TFSA${pct(w.tfsa)}`} value={w.tfsa} hint="Tax-free: $1 withdrawn = $1 of spending." />}
+          {w.taxable > 0.5 && (
+            <>
+              <Line label={`Taxable${pct(w.taxable)}`} value={w.taxable} hint="Non-registered. Only the embedded-gain fraction is taxed." />
+              {detail.tax.capitalGains > 0.5 && (
+                <Line label="↳ taxable gain portion" value={detail.tax.capitalGains} indent hint="The embedded-gain part of this draw, taxed at the inclusion rate. The rest is return of capital (tax-free)." />
+              )}
+            </>
+          )}
+          {w.cash > 0.5 && <Line label={`Cash cushion${pct(w.cash)}`} value={w.cash} hint="After-tax cash reserve, used as a last resort." />}
+          {w.rmDraw > 0.5 && <Line label={`Reverse mortgage${pct(w.rmDraw)}`} value={w.rmDraw} hint="Tax-free borrowing against home equity; the loan grows by this amount." />}
+          {registeredTotal > 0.5 && (
+            <div className="pt-1 text-[10px] text-slate-400">Registered draws are grossed up for tax.</div>
+          )}
+        </Section>
+      )}
+
+      {hasContrib && (
+        <Section title="Contributions">
+          <Line label="RRSP" value={detail.contrib!.rrsp} />
+          <Line label="TFSA" value={detail.contrib!.tfsa} />
+          <Line label="Taxable" value={detail.contrib!.taxable} />
+        </Section>
+      )}
+
+      <Section title="Growth / interest earned">
+        <Line label="RRSP" value={detail.growth.rrsp} />
+        <Line label="RRIF" value={detail.growth.rrif} />
+        <Line label="TFSA" value={detail.growth.tfsa} />
+        <Line label="Taxable" value={detail.growth.taxable} />
+        <Line label="Cash cushion" value={detail.growth.cash} hint="Cash earns the lower cushion rate." />
+      </Section>
+
+      {hasBenefits && (
+        <Section title="Benefits (gross)">
+          <Line label="CPP" value={row.cppIncome} />
+          <Line label="OAS" value={row.oasIncome} />
+          <Line label="GIS" value={row.gisIncome} hint="Tax-free." />
+          <Line label="Pension" value={row.pensionIncome} />
+        </Section>
+      )}
+
+      {hasTax && (
+        <Section title="Tax on withdrawals">
+          <Line label="Income tax" value={row.incomeTax} strong hint="Tax on registered draws and realized gains beyond the tax on benefits alone, plus OAS clawback." />
+          {detail.tax.oasClawback > 0.5 && <Line label="↳ OAS clawback" value={detail.tax.oasClawback} indent hint="OAS recovery tax: net income above the threshold is clawed back at 15¢/$." />}
+          <Line label="Cumulative tax" value={row.cumulativeTax} hint="Total income tax since retirement." />
+        </Section>
+      )}
+
+      {rm && (
+        <Section title="Reverse mortgage">
+          <Line label="Interest accrued" value={rm.interestAccrued} hint="Compounds onto the loan even after the LTV ceiling stops new draws." />
+          {rm.scheduledDraw > 0.5 && <Line label="Scheduled draw" value={rm.scheduledDraw} hint="Planned draw, CPI-indexed, capped by LTV headroom." />}
+          {rm.topUpDraw > 0.5 && <Line label="Top-up draw" value={rm.topUpDraw} hint="Last-resort borrowing to cover the year's shortfall." />}
+          <Line label="Loan balance" value={rm.loanBalance} strong />
+          <Line label="Home value" value={rm.homeValue} />
+        </Section>
+      )}
+
+      {detail.events.length > 0 && (
+        <Section title="Cash events">
+          {detail.events.map((ev, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-3">
+              <span className="text-[11px] text-slate-600">{ev.label}</span>
+              <span className={`text-[11px] font-mono ${ev.direction === 'in' ? 'text-emerald-700' : 'text-red-700'}`}>
+                {ev.direction === 'in' ? '+' : '−'}{formatCurrency(ev.amount)}
+              </span>
+            </div>
+          ))}
+        </Section>
+      )}
+    </div>
+  );
+}
+
+export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spouseBreakdown, spouseAgeOffset = 0 }: ScheduleTableProps) {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const toggle = (age: number) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(age)) next.delete(age); else next.add(age);
+      return next;
+    });
+
+  // Household mode: look each row's per-person detail up by age (the combined
+  // rows carry no detail — per-source numbers don't sum meaningfully).
+  const household = !!(primaryBreakdown || spouseBreakdown);
+  const primaryByAge = new Map((primaryBreakdown ?? []).map(r => [r.age, r]));
+  const spouseByAge = new Map((spouseBreakdown ?? []).map(r => [r.age + spouseAgeOffset, r]));
+
   // Reverse-mortgage columns appear only when the feature produced them.
   const hasRm = breakdown.some(r => r.netHomeEquity !== undefined);
+  // Number of columns the detail row must span (base 19 + optional RM column).
+  const colCount = 19 + (hasRm ? 1 : 0);
+  const anyDetail = household || breakdown.some(r => r.detail);
+
   return (
     <div className="bg-white border border-slate-200 rounded overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
+              {anyDetail && <th className="w-6 px-1 py-2" title="Expand a year to see where the money came from" />}
               <th className="text-left px-3 py-2 font-semibold text-slate-700">Age</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Starting Balance</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Contributions</th>
@@ -49,84 +198,118 @@ export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) 
           <tbody>
             {breakdown.map((row, index) => {
               const isRetirement = row.age === retirementAge;
+              const isOpen = expanded.has(row.age);
+              const personRows = household
+                ? ([['You', primaryByAge.get(row.age)], ['Spouse', spouseByAge.get(row.age)]] as Array<[string, YearlyBreakdown | undefined]>)
+                    .filter((x): x is [string, YearlyBreakdown] => !!x[1]?.detail)
+                : [];
+              const canExpand = household ? personRows.length > 0 : !!row.detail;
+              const rowBg = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
               return (
-                <tr
-                  key={index}
-                  className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} ${
-                    isRetirement ? 'border-t-2 border-blue-500' : ''
-                  }`}
-                >
-                  <td className={`px-3 py-1.5 ${isRetirement ? 'font-bold text-blue-700' : 'text-slate-900'}`}>
-                    {row.age}
-                    {isRetirement && ' 🎯'}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                    {formatCurrency(row.startingBalance)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                    {formatCurrency(row.contributions)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                    {formatCurrency(row.marketGains)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                    {formatCurrency(row.spendingTarget)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-red-700">
-                    {formatCurrency(row.withdrawals)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-amber-700">
-                    {formatCurrency(row.incomeTax)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-amber-900">
-                    {formatCurrency(row.cumulativeTax)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                    {formatCurrency(row.cppIncome)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                    {formatCurrency(row.oasIncome)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                    {formatCurrency(row.gisIncome)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                    {formatCurrency(row.pensionIncome)}
-                  </td>
-                  <td className={`px-3 py-1.5 text-right font-mono font-semibold ${isRetirement ? 'text-blue-700' : 'text-slate-900'}`}>
-                    {formatCurrency(row.endingBalance)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                    {formatCurrency(row.rrspBalance)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                    {formatCurrency(row.rrifBalance)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                    {formatCurrency(row.tfsaBalance)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                    {formatCurrency(row.taxableBalance)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                    {formatCurrency(row.cashCushionBalance)}
-                  </td>
-                  {hasRm && (
-                    <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
-                      title={row.homeValue !== undefined ? `Home ${formatCurrency(row.homeValue)} − loan ${formatCurrency(row.loanBalance ?? 0)}` : undefined}>
-                      {row.netHomeEquity !== undefined ? formatCurrency(row.netHomeEquity) : '—'}
+                <Fragment key={index}>
+                  <tr
+                    className={`${rowBg} ${isRetirement ? 'border-t-2 border-blue-500' : ''} ${canExpand ? 'cursor-pointer hover:bg-blue-50/40' : ''}`}
+                    onClick={canExpand ? () => toggle(row.age) : undefined}
+                    title={canExpand ? (isOpen ? 'Collapse year detail' : 'Expand year detail') : undefined}
+                  >
+                    {anyDetail && (
+                      <td className="px-1 py-1.5 text-slate-400">
+                        {canExpand && (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
+                      </td>
+                    )}
+                    <td className={`px-3 py-1.5 ${isRetirement ? 'font-bold text-blue-700' : 'text-slate-900'}`}>
+                      {row.age}
+                      {isRetirement && ' 🎯'}
                     </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
+                      {formatCurrency(row.startingBalance)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
+                      {formatCurrency(row.contributions)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
+                      {formatCurrency(row.marketGains)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
+                      {formatCurrency(row.spendingTarget)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-red-700">
+                      {formatCurrency(row.withdrawals)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-amber-700">
+                      {formatCurrency(row.incomeTax)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-amber-900">
+                      {formatCurrency(row.cumulativeTax)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
+                      {formatCurrency(row.cppIncome)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
+                      {formatCurrency(row.oasIncome)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
+                      {formatCurrency(row.gisIncome)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
+                      {formatCurrency(row.pensionIncome)}
+                    </td>
+                    <td className={`px-3 py-1.5 text-right font-mono font-semibold ${isRetirement ? 'text-blue-700' : 'text-slate-900'}`}>
+                      {formatCurrency(row.endingBalance)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+                      {formatCurrency(row.rrspBalance)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+                      {formatCurrency(row.rrifBalance)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+                      {formatCurrency(row.tfsaBalance)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+                      {formatCurrency(row.taxableBalance)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+                      {formatCurrency(row.cashCushionBalance)}
+                    </td>
+                    {hasRm && (
+                      <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
+                        title={row.homeValue !== undefined ? `Home ${formatCurrency(row.homeValue)} − loan ${formatCurrency(row.loanBalance ?? 0)}` : undefined}>
+                        {row.netHomeEquity !== undefined ? formatCurrency(row.netHomeEquity) : '—'}
+                      </td>
+                    )}
+                  </tr>
+                  {isOpen && canExpand && (
+                    <tr className={rowBg}>
+                      <td colSpan={colCount} className="px-3 py-3 border-l-2 border-blue-300 bg-blue-50/30">
+                        {household ? (
+                          <div className="space-y-4">
+                            {personRows.map(([label, personRow]) => (
+                              <div key={label}>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700 mb-1.5">
+                                  {label}{personRow.age !== row.age ? ` (age ${personRow.age})` : ''}
+                                </div>
+                                <YearDetailPanel detail={personRow.detail!} row={personRow} />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <YearDetailPanel detail={row.detail!} row={row} />
+                        )}
+                      </td>
+                    </tr>
                   )}
-                </tr>
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
       <p className="px-3 py-2 text-[10px] text-slate-400 border-t border-slate-100">
-        Amounts are in nominal (future) dollars of each year: the spending target and contributions grow with
-        inflation, while balances, gains and benefits are the actual dollars that year. CPP/OAS are shown at
-        2026 values unless "Index tax tables, OAS and CPP" is on in Settings → Engine.
+        Click a year to expand its inner workings — withdrawal sources, growth, tax, benefits and reverse
+        mortgage. Amounts are in nominal (future) dollars of each year: the spending target and contributions
+        grow with inflation, while balances, gains and benefits are the actual dollars that year. CPP/OAS are
+        shown at 2026 values unless "Index tax tables, OAS and CPP" is on in Settings → Engine.
       </p>
     </div>
   );

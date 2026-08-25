@@ -613,9 +613,16 @@ function App() {
                   <TimelineChart inputs={inputs} results={{ ...results, yearlyBreakdown: householdBreakdown }} config={config} onChange={handleInputsChange} />
                 </CollapsiblePanel>
 
-                {/* Schedule Table (household when a spouse is enabled) */}
+                {/* Schedule Table (household when a spouse is enabled); the drill-down
+                    reads each person's own rows so both spouses' detail is available. */}
                 <CollapsiblePanel id="schedule" title="Year-by-Year Projection">
-                  <ScheduleTable breakdown={householdBreakdown} retirementAge={results.retirementAge} />
+                  <ScheduleTable
+                    breakdown={householdBreakdown}
+                    retirementAge={results.retirementAge}
+                    primaryBreakdown={results.spouse ? results.yearlyBreakdown : undefined}
+                    spouseBreakdown={results.spouse?.yearlyBreakdown}
+                    spouseAgeOffset={inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge)}
+                  />
                 </CollapsiblePanel>
 
                 {/* Monte Carlo */}

@@ -1,4 +1,4 @@
-import { X, Printer, LineChart, Dices, Milestone, Loader2 } from 'lucide-react';
+import { X, Printer, LineChart, Dices, Milestone, Table2, Loader2 } from 'lucide-react';
 import type { PrintOptions } from '../lib/printOptions';
 import type { MonteCarloResults } from '../lib/monteCarlo';
 
@@ -95,6 +95,26 @@ export function PrintOptionsCard({
                 <span className="block text-[11px] text-slate-500 mt-0.5">
                   Retirement, CPP/OAS start, RRIF conversion, spending-phase changes and one-time
                   cash events, in age order.
+                </span>
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={options.includeDetailedTable}
+              onChange={e => set({ includeDetailedTable: e.target.checked })}
+              className="mt-0.5"
+            />
+            <span className="flex items-start gap-1.5">
+              <Table2 size={14} className="text-blue-600 mt-px shrink-0" />
+              <span>
+                <span className="font-medium">Detailed year-by-year table</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">
+                  Every year with balances, withdrawals, tax and benefits — plus the per-year
+                  drill-down (withdrawal sources, growth per account, reverse mortgage, events).
+                  Prints several pages.
                 </span>
               </span>
             </span>

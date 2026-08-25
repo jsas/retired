@@ -1,4 +1,4 @@
-import type { RetirementInputs, RetirementResults } from '../lib/retirementEngine';
+import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '../lib/retirementEngine';
 import type { MonteCarloResults } from '../lib/monteCarlo';
 import type { PrintOptions } from '../lib/printOptions';
 
@@ -214,6 +214,141 @@ function buildMilestones(inputs: RetirementInputs, rrifConversionAge: number): M
   return list.sort((a, b) => a.age - b.age);
 }
 
+// ---------------------------------------------------------- detailed table --
+
+const CELL: React.CSSProperties = {
+  padding: '2px 6px', textAlign: 'right', fontFamily: 'monospace',
+  fontSize: '9.5px', whiteSpace: 'nowrap', color: '#334155'
+};
+const HEAD_CELL: React.CSSProperties = {
+  ...CELL, fontFamily: 'inherit', fontWeight: 700, color: '#475569',
+  borderBottom: '1px solid #cbd5e1', padding: '3px 6px'
+};
+
+// One-line drill-down summary for a year's detail (print can't expand rows, so
+// the same sections render as a compact inline list under the year's row).
+function detailLine(row: YearlyBreakdown): string | null {
+  const d = row.detail;
+  if (!d) return null;
+  const w = d.withdraw;
+  const parts: string[] = [];
+  const src: string[] = [];
+  if (w.rrifMin > 0.5) src.push(`RRIF min ${fmtShort(w.rrifMin)}`);
+  if (w.rrif > 0.5) src.push(`RRIF ${fmtShort(w.rrif)}`);
+  if (w.rrsp > 0.5) src.push(`RRSP ${fmtShort(w.rrsp)}`);
+  if (w.tfsa > 0.5) src.push(`TFSA ${fmtShort(w.tfsa)}`);
+  if (w.taxable > 0.5) {
+    src.push(`taxable ${fmtShort(w.taxable)}${d.tax.capitalGains > 0.5 ? ` (${fmtShort(d.tax.capitalGains)} gain)` : ''}`);
+  }
+  if (w.cash > 0.5) src.push(`cash ${fmtShort(w.cash)}`);
+  if (w.rmDraw > 0.5) src.push(`rev. mortgage ${fmtShort(w.rmDraw)}`);
+  if (src.length > 0) parts.push(`from: ${src.join(' + ')}`);
+
+  const g = d.growth;
+  const growth: string[] = [];
+  if (g.rrsp > 0.5) growth.push(`RRSP ${fmtShort(g.rrsp)}`);
+  if (g.rrif > 0.5) growth.push(`RRIF ${fmtShort(g.rrif)}`);
+  if (g.tfsa > 0.5) growth.push(`TFSA ${fmtShort(g.tfsa)}`);
+  if (g.taxable > 0.5) growth.push(`taxable ${fmtShort(g.taxable)}`);
+  if (g.cash > 0.5) growth.push(`cash ${fmtShort(g.cash)}`);
+  if (growth.length > 0) parts.push(`growth: ${growth.join(', ')}`);
+
+  if (d.tax.oasClawback > 0.5) parts.push(`OAS clawback ${fmtShort(d.tax.oasClawback)}`);
+  if (d.rm) {
+    parts.push(`RM loan ${fmtShort(d.rm.loanBalance)} (interest ${fmtShort(d.rm.interestAccrued)})`);
+  }
+  for (const ev of d.events) {
+    parts.push(`${ev.label} ${ev.direction === 'in' ? '+' : '−'}${fmtShort(ev.amount)}`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+// The full year-by-year table with per-year drill-down lines, for the print
+// option. Renders per person when a spouse is enabled.
+function DetailedTablePrint({ results, spouseAgeOffset }: {
+  results: RetirementResults;
+  spouseAgeOffset: number;
+}) {
+  const people: Array<{ label: string; rows: YearlyBreakdown[] }> = [
+    { label: results.spouse ? 'You' : '', rows: results.yearlyBreakdown },
+  ];
+  if (results.spouse) people.push({ label: 'Spouse', rows: results.spouse.yearlyBreakdown });
+
+  const money = (v: number) => fmtShort(v);
+  return (
+    <div style={{ marginTop: '14px' }}>
+      <div style={sectionTitle}>Detailed year-by-year</div>
+      {people.map(person => (
+        <div key={person.label || 'single'} style={{ marginBottom: '10px' }}>
+          {person.label && (
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#1d4ed8', margin: '6px 0 2px' }}>{person.label}</div>
+          )}
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th style={{ ...HEAD_CELL, textAlign: 'left' }}>Age</th>
+                <th style={HEAD_CELL}>Start</th>
+                <th style={HEAD_CELL}>Contrib.</th>
+                <th style={HEAD_CELL}>Gains</th>
+                <th style={HEAD_CELL}>Target</th>
+                <th style={HEAD_CELL}>Withdrawn</th>
+                <th style={HEAD_CELL}>Tax</th>
+                <th style={HEAD_CELL}>CPP</th>
+                <th style={HEAD_CELL}>OAS</th>
+                <th style={HEAD_CELL}>GIS</th>
+                <th style={HEAD_CELL}>Pension</th>
+                <th style={HEAD_CELL}>End</th>
+                <th style={HEAD_CELL}>RRSP</th>
+                <th style={HEAD_CELL}>RRIF</th>
+                <th style={HEAD_CELL}>TFSA</th>
+                <th style={HEAD_CELL}>Taxable</th>
+                <th style={HEAD_CELL}>Cash</th>
+              </tr>
+            </thead>
+            <tbody>
+              {person.rows.map((row, i) => {
+                const detail = detailLine(row);
+                return [
+                  <tr key={`r${i}`} style={{ borderTop: '1px solid #e2e8f0', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                    <td style={{ ...CELL, textAlign: 'left', fontWeight: 600 }}>{row.age}</td>
+                    <td style={CELL}>{money(row.startingBalance)}</td>
+                    <td style={CELL}>{money(row.contributions)}</td>
+                    <td style={CELL}>{money(row.marketGains)}</td>
+                    <td style={CELL}>{money(row.spendingTarget)}</td>
+                    <td style={CELL}>{money(row.withdrawals)}</td>
+                    <td style={CELL}>{money(row.incomeTax)}</td>
+                    <td style={CELL}>{money(row.cppIncome)}</td>
+                    <td style={CELL}>{money(row.oasIncome)}</td>
+                    <td style={CELL}>{money(row.gisIncome)}</td>
+                    <td style={CELL}>{money(row.pensionIncome)}</td>
+                    <td style={{ ...CELL, fontWeight: 700 }}>{money(row.endingBalance)}</td>
+                    <td style={CELL}>{money(row.rrspBalance)}</td>
+                    <td style={CELL}>{money(row.rrifBalance)}</td>
+                    <td style={CELL}>{money(row.tfsaBalance)}</td>
+                    <td style={CELL}>{money(row.taxableBalance)}</td>
+                    <td style={CELL}>{money(row.cashCushionBalance)}</td>
+                  </tr>,
+                  detail ? (
+                    <tr key={`d${i}`} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                      <td colSpan={17} style={{ padding: '0 6px 2px 18px', fontSize: '8.5px', color: '#64748b' }}>
+                        {detail}
+                      </td>
+                    </tr>
+                  ) : null,
+                ];
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px' }}>
+        Nominal (future) dollars of each year. Spouse years are their own ages
+        {spouseAgeOffset !== 0 ? ` (spouse is ${Math.abs(spouseAgeOffset)} year${Math.abs(spouseAgeOffset) === 1 ? '' : 's'} ${spouseAgeOffset > 0 ? 'younger' : 'older'})` : ''}.
+      </div>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------- main --
 
 // Rendered only when printing (see the `print-only` rule in index.css). A
@@ -228,6 +363,7 @@ export function PrintSummary({ scenarioName, inputs, results, options, mcResults
   mcResults: MonteCarloResults | null;
   rrifConversionAge: number;
 }) {
+  const spouseAgeOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
   const spouse = results.spouse;
   const today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
   const milestones = options.includeMilestones ? buildMilestones(inputs, rrifConversionAge) : [];
@@ -313,6 +449,10 @@ export function PrintSummary({ scenarioName, inputs, results, options, mcResults
             </tbody>
           </table>
         </div>
+      )}
+
+      {options.includeDetailedTable && (
+        <DetailedTablePrint results={results} spouseAgeOffset={spouseAgeOffset} />
       )}
 
       <div style={{ marginTop: '12px', fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>

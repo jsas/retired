@@ -521,3 +521,158 @@ describe('combineHouseholdBreakdown (household display)', () => {
     expect(richEnd).toBeGreaterThan(poorEnd);
   });
 });
+
+describe('year detail (drill-down)', () => {
+  const sumWithdraw = (d: { rrifMin: number; rrif: number; rrsp: number; tfsa: number; taxable: number; cash: number; rmDraw: number }) =>
+    d.rrifMin + d.rrif + d.rrsp + d.tfsa + d.taxable + d.cash + d.rmDraw;
+
+  it('attaches detail to every row; withdraw sources sum to the year\'s withdrawals', () => {
+    const r = calculateRetirement(baseInputs({
+      rrspBalance: 300000, tfsaBalance: 200000, taxableBalance: 100000,
+      cashCushionBalance: 50000, desiredSpending: 40000,
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      expect(y.detail).toBeDefined();
+      expect(closeTo(sumWithdraw(y.detail!.withdraw), y.withdrawals, 0.01)).toBe(true);
+    }
+  });
+
+  it('growth per account sums to marketGains (decumulation and accumulation)', () => {
+    const dec = calculateRetirement(baseInputs({
+      rrspBalance: 100000, tfsaBalance: 100000, taxableBalance: 50000,
+      cashCushionBalance: 20000, desiredSpending: 15000,
+    }), config);
+    for (const y of dec.yearlyBreakdown) {
+      const g = y.detail!.growth;
+      expect(closeTo(g.rrsp + g.rrif + g.tfsa + g.taxable + g.cash, y.marketGains, 0.01)).toBe(true);
+    }
+    const acc = calculateRetirement(baseInputs({
+      currentAge: 60, retirementAge: 63, rrspBalance: 100000, tfsaBalance: 50000,
+      rrspContribution: 5000, tfsaContribution: 2000,
+    }), config);
+    for (const y of acc.yearlyBreakdown) {
+      const g = y.detail!.growth;
+      expect(closeTo(g.rrsp + g.rrif + g.tfsa + g.taxable + g.cash, y.marketGains, 0.01)).toBe(true);
+    }
+  });
+
+  it('separates the mandatory RRIF minimum from discretionary RRIF draws', () => {
+    // Current age past the RRIF conversion age (71): RRSP already converted,
+    // so the minimum is forced out first and any remaining need is a RRIF draw.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 72, retirementAge: 72, maxAge: 80,
+      rrspBalance: 500000, tfsaBalance: 0, taxableBalance: 0,
+      desiredSpending: 60000, // above the RRIF minimum → discretionary RRIF draw too
+    }), config);
+    const y72 = yearAt(r.yearlyBreakdown, 72);
+    expect(y72.detail!.withdraw.rrifMin).toBeGreaterThan(0);
+    expect(y72.detail!.withdraw.rrif).toBeGreaterThan(0);
+    // RRSP untouched (already converted); rrifMin + rrif make up the registered total.
+    expect(y72.detail!.withdraw.rrsp).toBe(0);
+    expect(closeTo(
+      y72.detail!.withdraw.rrifMin + y72.detail!.withdraw.rrif,
+      y72.withdrawals - y72.detail!.withdraw.tfsa - y72.detail!.withdraw.taxable - y72.detail!.withdraw.cash,
+      0.01
+    )).toBe(true);
+  });
+
+  it('respects the withdrawal order: TFSA-first year draws only from TFSA', () => {
+    const r = calculateRetirement(baseInputs({
+      rrspBalance: 300000, tfsaBalance: 500000, taxableBalance: 200000,
+      desiredSpending: 20000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
+    }), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    expect(y65.detail!.withdraw.tfsa).toBeGreaterThan(0);
+    expect(y65.detail!.withdraw.taxable).toBe(0);
+    expect(y65.detail!.withdraw.rrsp).toBe(0);
+    expect(y65.detail!.withdraw.rrif).toBe(0);
+    expect(y65.detail!.withdraw.rrifMin).toBe(0);
+  });
+
+  it('accumulation rows carry per-account contributions that sum to contributions', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 60, retirementAge: 62, rrspContribution: 10000,
+      tfsaContribution: 6000, taxableContribution: 4000,
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      if (y.age >= 62) continue;
+      const c = y.detail!.contrib!;
+      expect(closeTo(c.rrsp + c.tfsa + c.taxable, y.contributions, 0.01)).toBe(true);
+      expect(c.rrsp).toBe(10000);
+      expect(c.tfsa).toBe(6000);
+      expect(c.taxable).toBe(4000);
+    }
+    // Decumulation rows have no contribution block.
+    expect(yearAt(r.yearlyBreakdown, 63).detail!.contrib).toBeUndefined();
+  });
+
+  it('records cash events that fired that year', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 200000, desiredSpending: 10000,
+      events: [{ id: 'ev1', age: 67, label: 'Downsize home', direction: 'in', amount: 150000 }],
+    }), config);
+    const y67 = yearAt(r.yearlyBreakdown, 67);
+    expect(y67.detail!.events).toEqual([{ label: 'Downsize home', direction: 'in', amount: 150000 }]);
+    expect(yearAt(r.yearlyBreakdown, 66).detail!.events).toEqual([]);
+  });
+
+  it('reverse-mortgage detail matches the loan movement (interest + draws)', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 500000, desiredSpending: 10000,
+      reverseMortgage: {
+        enabled: true, homeValue: 800000, appreciationRate: 0.02, interestRate: 0.06,
+        drawAmount: 20000, startAge: 70, durationYears: 3, topUp: false,
+      },
+    }), config);
+    for (let i = 1; i < r.yearlyBreakdown.length; i++) {
+      const prev = r.yearlyBreakdown[i - 1];
+      const cur = r.yearlyBreakdown[i];
+      const rm = cur.detail!.rm!;
+      // Loan movement = interest accrued + money drawn (scheduled + top-up).
+      expect(closeTo(
+        rm.loanBalance - (prev.loanBalance ?? 0),
+        rm.interestAccrued + rm.scheduledDraw + rm.topUpDraw,
+        0.01
+      )).toBe(true);
+      expect(closeTo(rm.homeValue, cur.homeValue!, 0.01)).toBe(true);
+    }
+    // A scheduled-draw year reports the draw in both places (detail + withdraw).
+    const y70 = yearAt(r.yearlyBreakdown, 70);
+    expect(y70.detail!.rm!.scheduledDraw).toBeGreaterThan(0);
+    expect(y70.detail!.rm!.topUpDraw).toBe(0);
+  });
+
+  it('RM top-up draw appears in withdraw.rmDraw and rm.topUpDraw', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 30000, cashCushionBalance: 0, desiredSpending: 15000, maxAge: 80,
+      reverseMortgage: { enabled: true, homeValue: 800000, appreciationRate: 0, interestRate: 0.05, topUp: true },
+    }), config);
+    // Once the TFSA drains, top-up draws cover the shortfall.
+    const topUpYears = r.yearlyBreakdown.filter(y => (y.detail!.rm!.topUpDraw ?? 0) > 0.5);
+    expect(topUpYears.length).toBeGreaterThan(0);
+    for (const y of topUpYears) {
+      expect(closeTo(y.detail!.withdraw.rmDraw, y.detail!.rm!.topUpDraw, 0.01)).toBe(true);
+    }
+  });
+
+  it('combineHouseholdBreakdown drops detail (per-person detail is read from the plans)', () => {
+    const inputs = baseInputs({
+      tfsaBalance: 300000, desiredSpending: 25000,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 200000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0,
+        oasStartAge: null, oasYearsInCanada: 40, desiredSpending: 15000,
+        withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    // Per-person plans keep their detail…
+    expect(r.yearlyBreakdown.every(y => y.detail)).toBe(true);
+    expect(r.spouse!.yearlyBreakdown.every(y => y.detail)).toBe(true);
+    // …but the combined household rows carry none (per-source numbers don't sum).
+    const combined = combineHouseholdBreakdown(r, inputs);
+    expect(combined.every(y => y.detail === undefined)).toBe(true);
+  });
+});
