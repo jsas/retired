@@ -395,6 +395,7 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
 }) {
   const spouseAgeOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
   const spouse = results.spouse;
+  const rmOn = inputs.reverseMortgage?.enabled === true;
   const today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
   const milestones = options.includeMilestones ? buildMilestones(inputs, rrifConversionAge) : [];
 
@@ -432,8 +433,8 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
               <Row label="Taxable" value={fmt(inputs.taxableBalance)} />
               <Row label="Cash cushion" value={fmt(inputs.cashCushionBalance)} />
               <Row label="Total" value={fmt(inputs.rrspBalance + inputs.tfsaBalance + inputs.taxableBalance + inputs.cashCushionBalance)} />
-              {inputs.reverseMortgage?.enabled && (
-                <Row label="Home (reverse mtg.)" value={fmt(inputs.reverseMortgage.homeValue)} />
+              {rmOn && (
+                <Row label="Home (reverse mtg.)" value={fmt(inputs.reverseMortgage!.homeValue)} />
               )}
             </tbody>
           </table>
@@ -455,7 +456,11 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
 
       {options.includeTimeline && (
         <div style={{ marginTop: '14px', breakInside: 'avoid' }}>
-          <div style={sectionTitle}>Projection timeline — household portfolio &amp; home equity by age</div>
+          <div style={sectionTitle}>
+            {rmOn
+              ? 'Projection timeline — household portfolio & home equity by age'
+              : 'Projection timeline — household portfolio by age'}
+          </div>
           <TimelinePrintChart inputs={inputs} rows={householdBreakdown} />
         </div>
       )}
