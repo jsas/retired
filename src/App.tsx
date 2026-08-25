@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { FileSpreadsheet, Share2, Printer, Sparkles } from 'lucide-react';
+import { FileSpreadsheet, Share2, Printer, Sparkles, Calculator } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -30,9 +30,10 @@ import type { MonteCarloResults } from './lib/monteCarlo';
 import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
-type View = 'projection' | 'settings' | 'help';
+type View = 'projection' | 'settings' | 'help' | 'math';
 import { buildShareUrl, consumePlanFromHash } from './lib/shareLink';
 import { PrintSummary } from './components/PrintSummary';
+import { MathPage } from './components/MathPage';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
 // First-run scenarios: three realistic, mutually distinct starting points that
@@ -505,9 +506,17 @@ function App() {
                 )}
                 {view === 'settings' && <span className="text-slate-900">Engine Settings</span>}
                 {view === 'help' && <span className="text-slate-900">Help &amp; Documentation</span>}
+                {view === 'math' && <span className="text-slate-900">How the Math Works</span>}
               </div>
               {view === 'projection' && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  <button
+                    onClick={() => setView('math')}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    title="See how any year's numbers are worked out, step by step"
+                  >
+                    <Calculator size={13} /> Math
+                  </button>
                   <button
                     onClick={() => setShowOptimize((s) => !s)}
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
@@ -664,6 +673,14 @@ function App() {
 
             {view === 'help' && (
               <HelpModal />
+            )}
+
+            {view === 'math' && (
+              <MathPage
+                inputs={inputs}
+                results={results}
+                spouseAgeOffset={inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge)}
+              />
             )}
           </div>
         </div>

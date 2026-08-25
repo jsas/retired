@@ -1,0 +1,237 @@
+import { useMemo, useState } from 'react';
+import { Calculator } from 'lucide-react';
+import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '../lib/retirementEngine';
+
+interface MathPageProps {
+  inputs: RetirementInputs;
+  results: RetirementResults;
+  spouseAgeOffset: number;
+}
+
+function fmt(v: number): string {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency', currency: 'CAD', maximumFractionDigits: 0,
+  }).format(v);
+}
+function fmt2(v: number): string {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency', currency: 'CAD', maximumFractionDigits: 2,
+  }).format(v);
+}
+
+// One numbered step in the worksheet: a label, the formula in words, and the
+// numbers plugged in → the result.
+function Step({ n, title, note, children }: {
+  n: number; title: string; note?: string; children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
+      <div className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center mt-0.5">
+        {n}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold text-slate-800">{title}</div>
+        {note && <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{note}</div>}
+        {children && <div className="mt-1.5">{children}</div>}
+      </div>
+    </div>
+  );
+}
+
+// A labelled equation line: "spending target = $70,000 × 1.102 × 100% = $77,153".
+function Eq({ parts, result, strong }: { parts: string; result: number; strong?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 font-mono text-[11.5px]">
+      <span className="text-slate-600">{parts}</span>
+      <span className={strong ? 'font-bold text-slate-900' : 'text-slate-800'}>{fmt(result)}</span>
+    </div>
+  );
+}
+function Line({ label, value, indent }: { label: string; value: string | number; indent?: boolean }) {
+  return (
+    <div className={`flex items-baseline justify-between gap-3 text-[11.5px] ${indent ? 'pl-3' : ''}`}>
+      <span className="text-slate-600">{label}</span>
+      <span className="font-mono text-slate-800">{typeof value === 'number' ? fmt(value) : value}</span>
+    </div>
+  );
+}
+
+function pct(v: number): string { return `${(v * 100).toFixed(1)}%`; }
+
+// The ordered worksheet for one decumulation year, driven entirely by the
+// engine-emitted calc trace + row fields (so it always equals the table).
+function YearWorksheet({ row, inputs, isCouple }: {
+  row: YearlyBreakdown; inputs: RetirementInputs; isCouple: boolean;
+}) {
+  const d = row.detail;
+  const c = d?.calc;
+  if (!d || !c) {
+    return <p className="text-xs text-slate-500 py-4">No calculation detail for this year (accumulation years only grow and contribute).</p>;
+  }
+  const w = d.withdraw;
+  const order = inputs.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp'];
+  let n = 0;
+
+  return (
+    <div className="bg-white border border-slate-200 rounded px-4 divide-y divide-slate-100">
+      {/* 1 — spending target */}
+      <Step n={++n} title="Spending target" note="Desired spending inflated to this year, scaled by any spending-phase band, plus one-time outflow events.">
+        <Eq parts={`${fmt(inputs.desiredSpending)} base, grown to this year`} result={row.spendingTarget} strong />
+        {d.events.filter(e => e.direction === 'out').map((e, i) => (
+          <Line key={i} label={`+ ${e.label} (one-time expense)`} value={e.amount} indent />
+        ))}
+      </Step>
+
+      {/* 2 — benefits */}
+      <Step n={++n} title="Benefits (taxable income)" note="CPP (age-65 amount × the start-age multiplier), OAS (deferral + residency), and any DB/bridge pension.">
+        <Line label={`CPP — ${fmt2(c.cppMonthlyAtStart)}/mo × 12`} value={row.cppIncome} />
+        <Line label="OAS" value={row.oasIncome} />
+        <Line label="Pension" value={row.pensionIncome} />
+        <Eq parts="gross benefits (otherGross)" result={c.otherGross} strong />
+        <Eq parts="after-tax value (netBenefits)" result={c.netBenefits} />
+        <Eq parts={`portfolio must supply = ${fmt(row.spendingTarget)} − ${fmt(c.netBenefits)}`} result={c.neededAfterTax} strong />
+      </Step>
+
+      {/* 3 — RRIF minimum */}
+      {(w.rrifMin > 0.5 || c.rrifMinNet > 0.5) && (
+        <Step n={++n} title="Mandatory RRIF minimum" note="Forced out first once the RRIF exists; taxed as income. Any after-tax excess over the need is redeposited into taxable.">
+          <Eq parts="RRIF balance × minimum rate" result={w.rrifMin} strong />
+          <Line label="after-tax value" value={c.rrifMinNet} />
+          {c.rrifMinExcess > 0.5 && <Line label="excess redeposited to taxable" value={c.rrifMinExcess} indent />}
+          <Eq parts="remaining need" result={c.needAfterRrifMin} />
+        </Step>
+      )}
+
+      {/* 4 — GIS */}
+      {row.gisIncome > 0.5 && (
+        <Step n={++n} title="GIS (Guaranteed Income Supplement)" note={`Tax-free; reduced 50¢ per dollar of income excluding OAS${isCouple ? ' (combined for couples)' : ''}. Recomputed after the draws so in-year income claws it back.`}>
+          <Eq parts="GIS entitlement (after in-year clawback)" result={row.gisIncome} strong />
+          <Eq parts="remaining need" result={c.needAfterGis} />
+        </Step>
+      )}
+
+      {/* 5 — withdrawals in order */}
+      {row.withdrawals > 0.5 && (
+        <Step n={++n} title="Withdrawals from accounts" note={`Drawn in your configured order (${order.join(' → ')}); registered draws are grossed up so the after-tax amount covers the need.`}>
+          {w.rrsp > 0.5 && <Line label="RRSP (grossed up for tax)" value={w.rrsp} />}
+          {w.rrif > 0.5 && <Line label="RRIF draw (grossed up for tax)" value={w.rrif} />}
+          {w.tfsa > 0.5 && <Line label="TFSA (tax-free, $1 = $1)" value={w.tfsa} />}
+          {w.taxable > 0.5 && (
+            <>
+              <Line label="Taxable (grossed up on the gain fraction)" value={w.taxable} />
+              <Line label={`embedded-gain fraction ${pct(c.gainsFraction)} → gain realized`} value={d.tax.capitalGains} indent />
+            </>
+          )}
+          <Eq parts="total withdrawn" result={row.withdrawals} strong />
+          <Eq parts="remaining need after account draws" result={c.needAfterDraws} />
+        </Step>
+      )}
+
+      {/* 6 — cash cushion */}
+      {w.cash > 0.5 && (
+        <Step n={++n} title="Cash cushion" note="After-tax reserve, used as a last resort.">
+          <Eq parts="cash draw" result={w.cash} strong />
+        </Step>
+      )}
+
+      {/* 7 — RM top-up */}
+      {w.rmDraw > 0.5 && (
+        <Step n={++n} title="Reverse-mortgage top-up" note="Tax-free borrowing against home equity, the true last resort; grows the loan.">
+          <Eq parts="borrowed (capped by LTV headroom)" result={w.rmDraw} strong />
+        </Step>
+      )}
+
+      {/* 8 — tax */}
+      {(row.incomeTax > 0.5 || d.tax.oasClawback > 0.5) && (
+        <Step n={++n} title="Income tax" note="Tax on total income, minus the tax already counted on benefits, plus the OAS recovery tax.">
+          <Line label="total net income (benefits + registered + gains×inclusion)" value={c.totalNetIncome} />
+          <Line label="tax already counted on benefits alone" value={c.taxOnBenefits} indent />
+          {d.tax.oasClawback > 0.5 && <Line label="+ OAS clawback (15¢/$ over the threshold)" value={d.tax.oasClawback} indent />}
+          <Eq parts="income tax on this year's withdrawals" result={row.incomeTax} strong />
+          <Line label="cumulative tax since retirement" value={row.cumulativeTax} />
+        </Step>
+      )}
+
+      {/* 9 — growth & ending */}
+      <Step n={++n} title="Growth & ending balance" note="Market growth applied after withdrawals; balances roll into next year.">
+        <Line label="RRSP growth" value={d.growth.rrsp} />
+        <Line label="RRIF growth" value={d.growth.rrif} />
+        <Line label="TFSA growth" value={d.growth.tfsa} />
+        <Line label="Taxable growth" value={d.growth.taxable} />
+        <Line label="Cash growth (cushion rate)" value={d.growth.cash} />
+        <Eq parts="market gains" result={row.marketGains} strong />
+        <Eq parts="ending balance" result={row.endingBalance} strong />
+      </Step>
+    </div>
+  );
+}
+
+export function MathPage({ inputs, results, spouseAgeOffset }: MathPageProps) {
+  const spouse = results.spouse;
+  const [person, setPerson] = useState<'you' | 'spouse'>('you');
+
+  const personRows = person === 'you' ? results.yearlyBreakdown : (spouse?.yearlyBreakdown ?? []);
+  // Build the list of selectable ages (this person's own ages).
+  const ages = useMemo(() => personRows.map(r => r.age), [personRows]);
+  const [age, setAge] = useState<number | null>(null);
+  const selAge = age != null && ages.includes(age) ? age : (ages[0] ?? inputs.currentAge);
+  const row = personRows.find(r => r.age === selAge) ?? personRows[0];
+
+  // For households the table aligns spouse rows to the primary axis; here we
+  // show each person at their own age, noting the calendar year.
+  const baseYear = new Date().getFullYear();
+  const personCurrentAge = person === 'you' ? inputs.currentAge : (inputs.spouse?.currentAge ?? inputs.currentAge);
+  const calendarYear = row ? baseYear + (row.age - personCurrentAge) : baseYear;
+
+  return (
+    <div className="max-w-3xl">
+      <div className="flex items-center gap-2 mb-1">
+        <Calculator size={18} className="text-blue-600" />
+        <h2 className="text-lg font-bold text-slate-900">How the math works</h2>
+      </div>
+      <p className="text-xs text-slate-500 mb-4 leading-snug">
+        Every number below is the actual value the engine used for that year — pick a year to see
+        it worked through step by step, from the spending target down to the ending balance.
+      </p>
+
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        {spouse && (
+          <div className="flex rounded border border-slate-200 overflow-hidden">
+            {(['you', 'spouse'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => { setPerson(p); setAge(null); }}
+                className={`px-3 py-1.5 text-xs font-medium ${person === p ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                {p === 'you' ? 'You' : 'Spouse'}
+              </button>
+            ))}
+          </div>
+        )}
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          Year (age)
+          <select
+            value={selAge}
+            onChange={e => setAge(Number(e.target.value))}
+            className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white cursor-pointer"
+          >
+            {ages.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </label>
+        {row && (
+          <span className="text-[11px] text-slate-400">
+            calendar year {calendarYear}
+            {spouse && spouseAgeOffset !== 0 && ` · spouse is ${Math.abs(spouseAgeOffset)} yr${Math.abs(spouseAgeOffset) === 1 ? '' : 's'} ${spouseAgeOffset > 0 ? 'younger' : 'older'}`}
+          </span>
+        )}
+      </div>
+
+      {row ? (
+        <YearWorksheet row={row} inputs={inputs} isCouple={!!spouse} />
+      ) : (
+        <p className="text-xs text-slate-500">No projection rows for this person.</p>
+      )}
+    </div>
+  );
+}

@@ -139,6 +139,34 @@ export interface AccountBreakdown {
  * combiner and pension splitting are unaffected. Amounts are nominal dollars
  * of that year, matching the rest of the breakdown row.
  */
+// The pipeline intermediates a decumulation year runs through, captured so the
+// "How the math works" page can show the actual numbers the engine used (not a
+// re-derivation). All optional-sourced values are filled during the run.
+export interface YearCalc {
+  // Benefit stacking: cpp + oas + pension gross, its after-tax value alone,
+  // and what the portfolio must therefore supply after tax.
+  cppMonthlyAtStart: number;   // age-65 CPP amount × the start-age multiplier
+  otherGross: number;          // cpp + oas + pension (taxable benefit income)
+  netBenefits: number;         // after-tax value of otherGross on its own
+  neededAfterTax: number;      // spending target − netBenefits (≥0)
+  // RRIF-minimum pass (0 before the conversion age).
+  rrifMinNet: number;          // after-tax cash the mandatory minimum contributed
+  rrifMinExcess: number;       // excess over need, redeposited into taxable
+  // Remaining after-tax need at each step of the pipeline (the "need ladder").
+  needAfterBenefits: number;   // before any draws (== neededAfterTax)
+  needAfterRrifMin: number;
+  needAfterGis: number;
+  needAfterDraws: number;      // after the ordered account draws
+  needAfterCash: number;
+  needFinal: number;           // residual (0 unless the plan depleted)
+  // Taxable-account state used for the gains gross-up.
+  gainsFraction: number;       // embedded-gain fraction at draw time
+  taxableAcb: number;          // adjusted cost base at year end
+  // Tax decomposition.
+  totalNetIncome: number;      // otherGross + registeredGross + gains×inclusion
+  taxOnBenefits: number;       // tax(otherGross) — subtracted to isolate withdrawal tax
+}
+
 export interface YearDetail {
   // Withdrawal provenance — gross dollars that LEFT each source this year.
   // rrifMin is the mandatory RRIF minimum (a subset of registered draws);
@@ -155,6 +183,8 @@ export interface YearDetail {
   rm?: { interestAccrued: number; scheduledDraw: number; topUpDraw: number; homeValue: number; loanBalance: number };
   // Cash events that fired this year (labelled in/out).
   events: Array<{ label: string; direction: 'in' | 'out'; amount: number }>;
+  // The pipeline intermediates (decumulation years), for the math page.
+  calc?: YearCalc;
 }
 
 export interface YearlyBreakdown {
@@ -551,6 +581,16 @@ export function calculateRetirement(
     let remainingAfterTaxNeed = neededAfterTax;
     // Per-source withdrawal provenance for the year's drill-down.
     const wd = { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 };
+    // Calc trace for the math page: the intermediates a year runs through.
+    const calc: YearCalc = {
+      cppMonthlyAtStart, otherGross, netBenefits, neededAfterTax,
+      rrifMinNet: 0, rrifMinExcess: 0,
+      needAfterBenefits: remainingAfterTaxNeed, needAfterRrifMin: remainingAfterTaxNeed,
+      needAfterGis: remainingAfterTaxNeed, needAfterDraws: remainingAfterTaxNeed,
+      needAfterCash: remainingAfterTaxNeed, needFinal: remainingAfterTaxNeed,
+      gainsFraction: gainsFraction(), taxableAcb,
+      totalNetIncome: otherGross, taxOnBenefits: calculateTax(otherGross, provinceCode, yearConfig).totalTax,
+    };
 
     // 1. Mandatory RRIF minimum — forced out first. After-tax excess over the
     //    spending need is redeposited into taxable (still withdrawn & taxed).
@@ -562,14 +602,17 @@ export function calculateRetirement(
       wd.rrifMin += minimum;
 
       const netFromRrif = calculateTax(minimum + otherGross, provinceCode, yearConfig).takeHome - netBenefits;
+      calc.rrifMinNet = netFromRrif;
 
       const excess = netFromRrif - remainingAfterTaxNeed;
       if (excess > 0) {
         taxable += excess;
         taxableAcb += excess;
       }
+      calc.rrifMinExcess = Math.max(0, excess);
       remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - netFromRrif);
     }
+    calc.needAfterRrifMin = remainingAfterTaxNeed;
 
     // Gross income already stacking into the brackets this year (benefits +
     // any RRIF minimum). Additional registered draws are taxed on top of it.
@@ -600,6 +643,7 @@ export function calculateRetirement(
     };
     let gisGross = gisAt();
     remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - gisGross);
+    calc.needAfterGis = remainingAfterTaxNeed;
 
     // 2. Draw the remaining after-tax need in the configured order.
     const drawFrom = (account: WithdrawalAccount): void => {
@@ -663,6 +707,7 @@ export function calculateRetirement(
     for (const account of order) {
       drawFrom(account);
     }
+    calc.needAfterDraws = remainingAfterTaxNeed;
 
     // 3. Cash cushion — last resort, after-tax money.
     if (remainingAfterTaxNeed > 0 && cashCushion > 0) {
@@ -672,6 +717,7 @@ export function calculateRetirement(
       wd.cash += draw;
       remainingAfterTaxNeed -= draw;
     }
+    calc.needAfterCash = remainingAfterTaxNeed;
 
     // 4. Reverse-mortgage top-up — the true last resort. Once every account
     //    is drained, borrow just enough to cover the year's remaining need,
@@ -686,6 +732,7 @@ export function calculateRetirement(
         remainingAfterTaxNeed -= draw;
       }
     }
+    calc.needFinal = remainingAfterTaxNeed;
 
     // Recompute GIS now that the year's discretionary draws (and the capital
     // gains they realized) are known. If the draws clawed GIS back further
@@ -712,6 +759,9 @@ export function calculateRetirement(
       - calculateTax(otherGross, provinceCode, yearConfig).totalTax
       + oasClawback;
     cumulativeTax += incomeTax;
+    calc.totalNetIncome = totalNetIncome;
+    calc.taxableAcb = taxableAcb;
+    calc.gainsFraction = gainsFraction();
 
     // Apply market growth after withdrawals.
     const r = rateAt(age);
@@ -772,6 +822,7 @@ export function calculateRetirement(
         tax: { oasClawback, capitalGains, registeredGross },
         ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan } } : {}),
         events: yearEvents,
+        calc,
       },
       ...(rmOn ? { homeValue, loanBalance: rmLoan, netHomeEquity: homeValue - rmLoan } : {})
     });
