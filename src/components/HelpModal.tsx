@@ -139,7 +139,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Spouse approximation',
-        body: <P>Each spouse is taxed independently — pension income splitting, spousal RRSPs and couple-based GIS are not yet modelled, so household tax is slightly overstated for couples with uneven incomes.</P>
+        body: <P>Each spouse is taxed independently — pension income splitting and spousal RRSPs are not yet modelled, so household tax is slightly overstated for couples with uneven incomes. Couple-based GIS <em>is</em> modelled (combined non-OAS income, couple rate when both receive OAS).</P>
       },
       {
         term: 'Expected Return (%)',
@@ -240,7 +240,7 @@ const SECTIONS: HelpSection[] = [
           <>RRIF mandatory minimums with after-tax excess redeposited to the taxable account.</>,
           <><strong>Quebec abatement:</strong> 16.5% of federal tax is refunded to Quebec taxpayers (editable in Settings → Provincial Tax with QC selected).</>,
           <><strong>Ontario surtax:</strong> 20% on Ontario tax above the first threshold and 56% above the second (2026 thresholds $5,925 / $7,577; editable the same way with ONT selected).</>,
-          <><strong>GIS:</strong> the Guaranteed Income Supplement for a single OAS pensioner — tax-free, reduced 50¢ per dollar of income excluding OAS (CPP, registered draws, taxable gains). It lowers the portfolio's share of the spending target. Approximated annually; Service Canada recalculates quarterly and couple rates differ.</>
+          <><strong>GIS:</strong> the Guaranteed Income Supplement — tax-free, reduced 50¢ per dollar of income excluding OAS (CPP, registered draws, taxable gains). It lowers the portfolio's share of the spending target. With a spouse enabled, CRA's couple rules apply: each spouse's entitlement is assessed on <em>combined</em> non-OAS income, at the lower couple rate when both receive OAS (single rate when only one does). Approximated annually; Service Canada recalculates quarterly.</>
         ])
       },
       {
@@ -248,7 +248,7 @@ const SECTIONS: HelpSection[] = [
         body: ul([
           <><strong>Taxable account:</strong> capital gains are modelled with an adjusted cost base (Settings → Capital Gains) — only the embedded-gain fraction of each withdrawal is taxed, at the 50% inclusion rate. The fraction is computed once per withdrawal (it drifts slightly within a year as ACB leaves pro-rata). Dividend gross-up/credits and deemed disposition at death are not modelled.</>,
           <><strong>Other provinces' surtaxes and credits</strong> (beyond Ontario's, which is modelled) are not included — e.g. BC/NS low-income reductions, dividend credits.</>,
-          <>No RRSP contribution refunds, no contribution-room limits, no pension-income splitting. GIS is modelled for single pensioners only (couple rates and the quarterly recalculation are approximations).</>
+          <>No RRSP contribution refunds, no contribution-room limits, no pension-income splitting. GIS is modelled for singles and couples (combined-income assessment); the quarterly Service Canada recalculation is approximated annually.</>
         ])
       },
       {

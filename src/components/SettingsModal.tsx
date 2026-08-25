@@ -287,8 +287,14 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={v => update(c => { c.oas.clawbackThreshold = v; })} />
               <NumberField label="GIS max annual — single ($/yr)" value={draft.oas.gisMaxAnnualSingle}
                 onChange={v => update(c => { c.oas.gisMaxAnnualSingle = v; })} />
+              <NumberField label="GIS max annual — couple, per spouse ($/yr)" value={draft.oas.gisMaxAnnualCouple}
+                onChange={v => update(c => { c.oas.gisMaxAnnualCouple = v; })} />
               <PercentField label="GIS reduction rate (% per $ of non-OAS income)" value={draft.oas.gisReductionRate}
                 onChange={v => update(c => { c.oas.gisReductionRate = v; })} />
+              <p className="text-[11px] text-slate-500 leading-snug">
+                With a spouse enabled, each spouse's GIS is assessed on <em>combined</em> non-OAS income at the
+                couple rate when both receive OAS (single rate when only one does) — CRA's couple rules.
+              </p>
             </div>
           )}
 

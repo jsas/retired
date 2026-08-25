@@ -150,6 +150,31 @@ export function gisAnnual(incomeExcludingOas: number, config: AppConfig): number
   return Math.max(0, max - Math.max(0, incomeExcludingOas) * (config.oas.gisReductionRate ?? 0.5));
 }
 
+/**
+ * Annual GIS for one spouse in a couple, per CRA's couple rules. Entitlement
+ * is assessed on COMBINED non-OAS income of both spouses:
+ *  - both spouses on OAS: each gets up to gisMaxAnnualCouple, reduced at
+ *    gisReductionRate per dollar of combined income;
+ *  - only this spouse on OAS (partner under 65 / not yet on OAS): CRA pays up
+ *    to the SINGLE amount, still against combined income.
+ * Approximation: the engine knows only each spouse's CPP + pension income
+ * ahead of time, so combined income = both CPP/pensions + this spouse's
+ * registered draws (the spouse's discretionary draws land next year via
+ * Service Canada's quarterly recalc, mirroring the single-person note above).
+ */
+export function gisAnnualCouple(
+  ownRegisteredIncome: number,
+  combinedFixedIncome: number, // both spouses' CPP + pensions (OAS excluded)
+  partnerHasOas: boolean,
+  config: AppConfig
+): number {
+  const rate = config.oas.gisReductionRate ?? 0.5;
+  const max = (partnerHasOas ? config.oas.gisMaxAnnualCouple : config.oas.gisMaxAnnualSingle) ?? 0;
+  if (max <= 0) return 0;
+  const combined = Math.max(0, combinedFixedIncome + ownRegisteredIncome);
+  return Math.max(0, max - combined * rate);
+}
+
 // ---- Inflation indexing ----------------------------------------------------
 
 /**

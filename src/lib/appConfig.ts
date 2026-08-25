@@ -23,6 +23,12 @@ export interface OasConfig {
   // back at gisReductionRate per dollar of income excluding OAS. Approximated
   // annually (Service Canada recalculates quarterly).
   gisMaxAnnualSingle: number;
+  // Couple (both spouses on full OAS): max annual amount PER SPOUSE, clawed
+  // back at gisReductionRate per dollar of COMBINED income excluding OAS.
+  // Each spouse's entitlement is assessed on household income. (When only one
+  // spouse receives OAS, CRA instead pays that spouse up to the single amount
+  // against combined income — handled by the engine, no extra config.)
+  gisMaxAnnualCouple: number;
   gisReductionRate: number;
 }
 
@@ -109,6 +115,10 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     // GIS 2026 (single, max OAS pensioner): ~$1,105/mo, reduced 50¢/$ of
     // non-OAS income.
     gisMaxAnnualSingle: 13260,
+    // Couple (both on full OAS): ~$667/mo per spouse (2026 est., ~60.3% of
+    // the single rate, matching CRA's ratio), reduced 50¢/$ of COMBINED
+    // non-OAS income → phases out around $31,800 household.
+    gisMaxAnnualCouple: 8000,
     gisReductionRate: 0.5
   },
   cpp: {
@@ -170,6 +180,7 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   if (typeof o.clawbackThreshold !== 'number') o.clawbackThreshold = DEFAULT_APP_CONFIG.oas.clawbackThreshold;
   // GIS fields were added later — back-fill defaults.
   if (typeof o.gisMaxAnnualSingle !== 'number') o.gisMaxAnnualSingle = DEFAULT_APP_CONFIG.oas.gisMaxAnnualSingle;
+  if (typeof o.gisMaxAnnualCouple !== 'number') o.gisMaxAnnualCouple = DEFAULT_APP_CONFIG.oas.gisMaxAnnualCouple;
   if (typeof o.gisReductionRate !== 'number') o.gisReductionRate = DEFAULT_APP_CONFIG.oas.gisReductionRate;
   // CPP adjustment config was added after earlier schemas — back-fill defaults.
   const cpp = c.cpp as Partial<CppConfig> | undefined;

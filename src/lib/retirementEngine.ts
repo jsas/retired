@@ -6,6 +6,7 @@ import {
   isRrifMandatory,
   oasAnnualGross,
   gisAnnual,
+  gisAnnualCouple,
   indexConfig
 } from './canadianTax';
 
@@ -153,7 +154,24 @@ const TAX_TOLERANCE = 1.0;
 export function calculateRetirement(
   inputs: RetirementInputs,
   config: AppConfig,
-  options?: { returnSequence?: Record<number, number> }
+  options?: {
+    returnSequence?: Record<number, number>;
+    // Couple GIS context, set when this person has an enabled spouse: CRA
+    // assesses each spouse's GIS on COMBINED non-OAS income and pays the
+    // (lower) couple rate when both receive OAS, the single rate when only
+    // one does. The engine knows each spouse's CPP/pension income up front,
+    // so the combined base uses those; each spouse's discretionary registered
+    // draws only count toward their own reduction (the partner's land next
+    // year via Service Canada's quarterly recalc).
+    spouseContext?: {
+      cppStartAge: number | null;
+      cppMonthlyAmount: number;
+      oasStartAge: number | null;
+      oasYearsInCanada: number;
+      currentAge: number;
+      pensions?: Pension[];
+    };
+  }
 ): RetirementResults {
   const {
     currentAge,
@@ -230,6 +248,30 @@ export function calculateRetirement(
       configCache.set(age, c);
     }
     return c;
+  };
+
+  // Couple GIS: the spouse's CPP/pension income at a given calendar year
+  // (keyed by this person's age). Same shapes as the primary's own math —
+  // CPP adjusted for start age and CPI, pensions active in their age window.
+  const spouseCtx = options?.spouseContext;
+  const spouseFixedIncomeAt = (age: number): { fixed: number; hasOas: boolean } => {
+    if (!spouseCtx) return { fixed: 0, hasOas: false };
+    const spouseAge = age - (currentAge - spouseCtx.currentAge);
+    let fixed = 0;
+    if (spouseCtx.cppStartAge != null && spouseAge >= spouseCtx.cppStartAge) {
+      fixed += spouseCtx.cppMonthlyAmount
+        * cppAdjustmentMultiplier(spouseCtx.cppStartAge, config)
+        * 12 * (indexTables ? factorAt(age) : 1);
+    }
+    for (const p of spouseCtx.pensions ?? []) {
+      if (spouseAge < p.startAge) continue;
+      if (p.endAge != null && spouseAge > p.endAge) continue;
+      fixed += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+    const hasOas = spouseCtx.oasStartAge != null
+      && spouseAge >= spouseCtx.oasStartAge
+      && oasAnnualGross(spouseAge, spouseCtx.oasStartAge, spouseCtx.oasYearsInCanada, configAt(age)) > 0;
+    return { fixed, hasOas };
   };
 
   // Per-age return override (Monte Carlo); falls back to the constant rate.
@@ -396,9 +438,23 @@ export function calculateRetirement(
     // minimum's effect on the GIS is captured; discretionary draws below
     // further reduce it (not iterated — the reduction lands next year in
     // practice via Service Canada's quarterly recalc).
-    const gisGross = oasGross > 0
-      ? gisAnnual(cppGross + pensionGross + registeredGross, yearConfig)
-      : 0;
+    // Couple rules apply when a spouse context is present: entitlement is
+    // assessed on combined non-OAS income, at the couple rate when both
+    // spouses receive OAS, the single rate when only this person does.
+    let gisGross = 0;
+    if (oasGross > 0) {
+      if (spouseCtx) {
+        const sp = spouseFixedIncomeAt(age);
+        gisGross = gisAnnualCouple(
+          registeredGross,
+          cppGross + pensionGross + sp.fixed,
+          sp.hasOas,
+          yearConfig
+        );
+      } else {
+        gisGross = gisAnnual(cppGross + pensionGross + registeredGross, yearConfig);
+      }
+    }
     remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - gisGross);
 
     // 2. Draw the remaining after-tax need in the configured order.
@@ -593,15 +649,39 @@ export function calculateRetirement(
     retirementAge
   };
 
-  // Spouse: an independent plan with its own ages, accounts and benefits,
-  // combined with the primary's for household display. Household SHORTFALL
-  // if either plan fails (income splitting is a future refinement).
+  return primary;
+}
+
+/**
+ * Top-level entry point. When a spouse is enabled, both plans are computed
+ * with each other's benefit context so GIS is assessed on COMBINED non-OAS
+ * income at the correct (couple vs single) rate — CRA's couple rules.
+ * `calculateRetirement` itself runs one person's plan; this wrapper supplies
+ * the cross-references.
+ */
+export function calculateHousehold(
+  inputs: RetirementInputs,
+  config: AppConfig,
+  options?: { returnSequence?: Record<number, number> }
+): RetirementResults {
   const sp = inputs.spouse;
+  const primary = calculateRetirement(inputs, config, sp?.enabled ? {
+    ...options,
+    spouseContext: {
+      cppStartAge: sp.cppStartAge,
+      cppMonthlyAmount: sp.cppMonthlyAmount,
+      oasStartAge: sp.oasStartAge,
+      oasYearsInCanada: sp.oasYearsInCanada,
+      currentAge: sp.currentAge,
+      pensions: sp.pensions,
+    },
+  } : options);
+
   if (sp?.enabled) {
     const spouseResults = calculateRetirement({
       currentAge: sp.currentAge,
       retirementAge: sp.retirementAge,
-      maxAge,
+      maxAge: inputs.maxAge,
       rrspBalance: sp.rrspBalance,
       tfsaBalance: sp.tfsaBalance,
       taxableBalance: sp.taxableBalance,
@@ -610,20 +690,30 @@ export function calculateRetirement(
       tfsaContribution: sp.tfsaContribution,
       taxableContribution: sp.taxableContribution,
       annualWithdrawal: 0,
-      investmentReturn,
+      investmentReturn: inputs.investmentReturn,
       returnVolatility: 0,
-      provinceCode,
+      provinceCode: inputs.provinceCode,
       cppStartAge: sp.cppStartAge,
       cppMonthlyAmount: sp.cppMonthlyAmount,
       cppAdjustedAmount: false,
       oasStartAge: sp.oasStartAge,
       oasYearsInCanada: sp.oasYearsInCanada,
       desiredSpending: sp.desiredSpending,
-      successFactor,
-      withdrawalOrder: sp.withdrawalOrder ?? order,
+      successFactor: inputs.successFactor,
+      withdrawalOrder: sp.withdrawalOrder ?? inputs.withdrawalOrder,
       spouse: undefined,
       pensions: sp.pensions
-    }, config, options);
+    }, config, {
+      ...options,
+      spouseContext: {
+        cppStartAge: inputs.cppStartAge,
+        cppMonthlyAmount: inputs.cppMonthlyAmount,
+        oasStartAge: inputs.oasStartAge,
+        oasYearsInCanada: inputs.oasYearsInCanada,
+        currentAge: inputs.currentAge,
+        pensions: inputs.pensions,
+      },
+    });
     primary.spouse = spouseResults;
     if (spouseResults.status === 'SHORTFALL') primary.status = 'SHORTFALL';
   }

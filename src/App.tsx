@@ -5,7 +5,7 @@ import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager, type ScenarioManagerHandle } from './components/ScenarioManager';
-import { calculateRetirement, type RetirementInputs } from './lib/retirementEngine';
+import { calculateHousehold, type RetirementInputs } from './lib/retirementEngine';
 import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scenarioStorage';
 import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
 import { exportAppDb, parseAppDb, persistAppDb } from './lib/appDb';
@@ -294,7 +294,7 @@ function App() {
   };
 
   const results = useMemo(() => {
-    return calculateRetirement(inputs, config);
+    return calculateHousehold(inputs, config);
   }, [inputs, config]);
 
   const handleExportCSV = () => {
@@ -374,7 +374,7 @@ function App() {
           // multipliers line up with today's-dollar spending.
           const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
           realConfig.engine.inflationRate = 0;
-          setBacktestResult(runBacktest(inputs, realConfig, calculateRetirement));
+          setBacktestResult(runBacktest(inputs, realConfig, calculateHousehold));
         }}
         onOpenSettings={() => setView('settings')}
         onExportDb={handleExportDb}

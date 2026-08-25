@@ -1,4 +1,4 @@
-import { calculateRetirement, type RetirementInputs } from './retirementEngine';
+import { calculateHousehold, type RetirementInputs } from './retirementEngine';
 import type { AppConfig } from './appConfig';
 
 /**
@@ -95,7 +95,7 @@ export function runMonteCarlo(request: MonteCarloRequest): MonteCarloResults {
 
   for (let run = 0; run < runs; run++) {
     const seq = generateReturnSequence(inputs.currentAge, inputs.maxAge, inputs.investmentReturn, volatility, rng);
-    const result = calculateRetirement(inputs, config, { returnSequence: seq });
+    const result = calculateHousehold(inputs, config, { returnSequence: seq });
 
     const depleted = result.depletionAge !== null;
     if (!depleted) {

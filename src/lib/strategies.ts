@@ -14,7 +14,7 @@
 // Ranked primarily on sustainableSpending (a lifestyle measure), with tax and
 // ending balance shown for context.
 
-import { calculateRetirement } from './retirementEngine';
+import { calculateHousehold } from './retirementEngine';
 import type { RetirementInputs, RetirementResults, WithdrawalAccount } from './retirementEngine';
 import type { AppConfig } from './appConfig';
 
@@ -55,7 +55,7 @@ const orderLabel = (o: WithdrawalAccount[]) =>
 // Binary search on desiredSpending; spending is floored at 0.
 function sustainableSpending(inputs: RetirementInputs, config: AppConfig): number {
   const survives = (spend: number) =>
-    calculateRetirement({ ...inputs, desiredSpending: spend }, config).depletionAge === null;
+    calculateHousehold({ ...inputs, desiredSpending: spend }, config).depletionAge === null;
   if (!survives(0)) return 0; // runs out even at zero spending (huge fixed events)
   let lo = 0, hi = 500000;
   // Expand hi until it fails (caps runaway plans) or we hit an absolute ceiling.
@@ -124,7 +124,7 @@ function buildStrategies(inputs: RetirementInputs): StrategySpec[] {
 
 function runOne(inputs: RetirementInputs, config: AppConfig, spec: StrategySpec): StrategyResult {
   const merged: RetirementInputs = { ...inputs, ...spec.patch };
-  const r: RetirementResults = calculateRetirement(merged, config);
+  const r: RetirementResults = calculateHousehold(merged, config);
   const last = r.yearlyBreakdown[r.yearlyBreakdown.length - 1];
   const lifetimeTax = r.yearlyBreakdown.reduce((s, y) => s + (y.incomeTax ?? 0), 0);
   const lifetimeGis = r.yearlyBreakdown.reduce((s, y) => s + (y.gisIncome ?? 0), 0);
