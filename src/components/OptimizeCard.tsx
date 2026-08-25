@@ -112,7 +112,7 @@ export function OptimizeCard({ inputs, config, onApply, onClose }: OptimizeCardP
       )}
 
       {tab === 'agent' && (
-        <div className="p-4 grid grid-cols-2 gap-4">
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Prompt side */}
           <div>
             <div className="text-xs font-semibold text-slate-800 mb-1.5">1 · Copy the prompt</div>

@@ -241,7 +241,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <p className="text-xs text-slate-600 mb-3">
                 CRA minimum withdrawal rate by age (applied to the RRIF balance each year).
               </p>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {Object.keys(draft.rrifRates)
                   .map(Number)
                   .sort((a, b) => a - b)

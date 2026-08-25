@@ -46,7 +46,7 @@ export function BacktestPanel({ result, onClose }: BacktestPanelProps) {
       </div>
 
       <div className="p-4">
-        <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div className="border border-slate-200 rounded p-3">
             <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Success Rate</div>
             <div className={`text-lg font-semibold ${pct >= 90 ? 'text-emerald-600' : pct >= 70 ? 'text-amber-600' : 'text-red-600'}`}>

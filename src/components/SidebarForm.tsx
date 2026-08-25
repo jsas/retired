@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark } from 'lucide-react';
+import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, X } from 'lucide-react';
 import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
@@ -9,6 +9,7 @@ interface SidebarFormProps {
   onChange: (inputs: RetirementInputs) => void;
   provinceCodes: string[];
   config: AppConfig;
+  onClose?: () => void; // mobile drawer close (hidden on md+)
 }
 
 const ACCOUNT_LABELS: Record<WithdrawalAccount, string> = {
@@ -129,7 +130,7 @@ function CollapsibleSection({ id, icon, title, open, onToggle, children }: {
   );
 }
 
-export function SidebarForm({ inputs, onChange, provinceCodes, config }: SidebarFormProps) {
+export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }: SidebarFormProps) {
   const updateField = <K extends keyof RetirementInputs>(field: K, value: RetirementInputs[K]) => {
     onChange({ ...inputs, [field]: value });
   };
@@ -176,7 +177,18 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config }: Sidebar
   const isOpen = (id: string) => openSections[id] ?? false;
 
   return (
-    <div className="w-80 bg-neutral-900/95 border-r border-neutral-800 overflow-y-auto">
+    <div className="w-80 h-full bg-neutral-900/95 border-r border-neutral-800 overflow-y-auto">
+      {/* Mobile-only drawer header with a close button */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800 md:hidden">
+        <span className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">Inputs</span>
+        <button
+          onClick={onClose}
+          className="p-1 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+          title="Close inputs"
+        >
+          <X size={16} />
+        </button>
+      </div>
       <div className="p-4 space-y-6">
 
         {/* Personal Profile */}

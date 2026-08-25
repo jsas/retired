@@ -168,6 +168,7 @@ function App() {
   const [view, setView] = useState<View>('projection');
   const [mcRequest, setMcRequest] = useState<MonteCarloRequest | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const mcPanelRef = useRef<HTMLDivElement>(null);
 
   // Bring the Monte Carlo panel into view when a new run starts — it mounts
@@ -334,7 +335,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
       {/* Print-only one-page summary (hidden on screen; see index.css) */}
       <PrintSummary
         scenarioName={activeScenario.name}
@@ -347,6 +348,7 @@ function App() {
 
       <div className="no-print flex flex-col flex-1 min-h-0">
       <TopHeader
+        onToggleSidebar={() => setSidebarOpen((s) => !s)}
         scenarios={scenarios}
         activeScenarioId={activeScenarioId}
         onScenarioChange={handleScenarioChange}
@@ -390,21 +392,37 @@ function App() {
         onSelectScenario={handleScenarioChange}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar (always visible, including on Help & Settings pages) */}
-        <SidebarForm
-          inputs={inputs}
-          onChange={handleInputsChange}
-          provinceCodes={Object.keys(config.provinces).sort()}
-          config={config}
-        />
+      <div className="relative flex flex-1 flex-col md:flex-row md:overflow-hidden">
+        {/* Mobile backdrop for the drawer sidebar */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/50 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Sidebar: a slide-in drawer on mobile, a static column on md+ */}
+        <div
+          className={`fixed inset-y-0 left-0 z-40 transform transition-transform duration-200 md:static md:z-auto md:translate-x-0 md:transform-none ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <SidebarForm
+            inputs={inputs}
+            onChange={handleInputsChange}
+            provinceCodes={Object.keys(config.provinces).sort()}
+            config={config}
+            onClose={() => setSidebarOpen(false)}
+          />
+        </div>
 
         {/* Main Workspace */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-6">
+        <div className="flex-1 md:overflow-y-auto">
+          <div className="p-3 md:p-6">
             {/* Breadcrumbs */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                 <button
                   onClick={() => setView('projection')}
                   className={`hover:text-slate-900 hover:underline ${view === 'projection' ? 'text-slate-900 font-medium' : 'text-blue-600'}`}
@@ -427,7 +445,7 @@ function App() {
                 {view === 'help' && <span className="text-slate-900">Help &amp; Documentation</span>}
               </div>
               {view === 'projection' && (
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                   <button
                     onClick={() => setShowOptimize((s) => !s)}
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"

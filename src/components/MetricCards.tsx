@@ -27,7 +27,7 @@ export function MetricCards({ results }: MetricCardsProps) {
   const depletionAges = [results.depletionAge, spouse?.depletionAge].filter((a): a is number => a != null);
 
   return (
-    <div className="grid grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {/* Total Wealth at Retirement */}
       <div className="bg-white border border-slate-200 rounded p-3">
         <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">

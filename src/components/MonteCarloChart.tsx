@@ -103,7 +103,7 @@ export function MonteCarloChart({ request, onClose, retirementAge }: MonteCarloC
         {results && chart && (
           <>
             {/* Summary cards */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
               <div className="bg-slate-50 rounded p-3">
                 <div className="text-[11px] text-slate-500 uppercase tracking-wide">Success rate</div>
                 <div className={`text-xl font-bold ${successColor}`}>{successPct}%</div>
