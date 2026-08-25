@@ -34,7 +34,9 @@ export interface RetirementInputs {
   oasStartAge: number | null;
   oasYearsInCanada: number;
   desiredSpending: number;
-  successFactor: number;
+  // Legacy, no longer used by the verdict (which is depletion-only). Kept
+  // optional so scenarios saved before its removal still parse.
+  successFactor?: number;
   // Order in which taxable/tfsa/rrsp are drawn down. Cash cushion is always
   // the last resort. After the RRIF conversion age the 'rrsp' slot draws the RRIF.
   withdrawalOrder: WithdrawalAccount[];
@@ -230,7 +232,6 @@ export function calculateRetirement(
     cppStartAge,
     oasStartAge,
     oasYearsInCanada,
-    successFactor,
     withdrawalOrder,
     pensions
   } = inputs;
@@ -428,7 +429,6 @@ export function calculateRetirement(
   // ---------------- decumulation phase ----------------
   let depletionAge: number | null = null;
   const totalStartingRetirement = totalBalance();
-  let clawedBack = false; // true once the OAS recovery tax applies in any year
 
   for (let age = retirementAge; age <= maxAge; age++) {
     // RRSP converts to RRIF at the configured age. `>=` so a plan that
@@ -640,7 +640,6 @@ export function calculateRetirement(
       - calculateTax(otherGross, provinceCode, yearConfig).totalTax
       + oasClawback;
     cumulativeTax += incomeTax;
-    if (oasClawback > 0) clawedBack = true;
 
     // Apply market growth after withdrawals.
     const r = rateAt(age);
@@ -718,39 +717,12 @@ export function calculateRetirement(
     yearlyBreakdown.find(y => y.age === retirementAge)?.startingBalance ??
     totalStartingRetirement;
 
-  // OAS is clawed back at clawbackRate on net income above the threshold,
-  // so when large RRIF/RRSP draws trigger the recovery tax the retiree
-  // never actually receives the full OAS the drawdown math credited.
-  const retConfig = configAt(retirementAge);
-  const oasGrossRetirement =
-    oasStartAge != null && retirementAge >= oasStartAge
-      ? oasAnnualGross(retirementAge, oasStartAge, oasYearsInCanada, retConfig)
-      : 0;
-  const effectiveOas = clawedBack
-    ? Math.max(0, oasGrossRetirement - Math.max(0, totalNetWorthAtRetirement - retConfig.oas.clawbackThreshold) * retConfig.oas.clawbackRate)
-    : oasGrossRetirement;
-  // The 25× rule tests whether savings can fund the spending that government
-  // benefits DON'T cover: OAS (and CPP) reduce the draw on the portfolio, so
-  // the requirement is net-of-benefits, never gross spending plus benefits.
-  const cppGrossRetirement =
-    cppStartAge != null && retirementAge >= cppStartAge
-      ? cppAdjustedAmount
-        ? cppMonthlyAmount * 12
-        : cppMonthlyAmount * cppAdjustmentMultiplier(cppStartAge, config) * 12
-      : 0;
-  // Spending in retirement-year dollars, so the 25× rule compares like with
-  // like when spending inflation is on.
-  const netSpendingNeed = Math.max(
-    0,
-    desiredSpending * spendingFactorAt(retirementAge) - effectiveOas - cppGrossRetirement,
-  );
-
+  // The verdict is the simulation itself: the plan is SHORTFALL only if the
+  // money actually runs out before max age. (The old 25× rule-of-thumb check
+  // was dropped — it ignored post-retirement benefits and growth, so it could
+  // contradict the depletion result.)
   let status: 'ON_TRACK' | 'SHORTFALL' = 'ON_TRACK';
-  const lifeExpectancy = maxAge;
-
-  if (depletionAge !== null && depletionAge < lifeExpectancy) {
-    status = 'SHORTFALL';
-  } else if (totalNetWorthAtRetirement < netSpendingNeed * successFactor * 25) {
+  if (depletionAge !== null && depletionAge < maxAge) {
     status = 'SHORTFALL';
   }
 
@@ -819,7 +791,6 @@ export function calculateHousehold(
       oasStartAge: sp.oasStartAge,
       oasYearsInCanada: sp.oasYearsInCanada,
       desiredSpending: sp.desiredSpending,
-      successFactor: inputs.successFactor,
       withdrawalOrder: sp.withdrawalOrder ?? inputs.withdrawalOrder,
       spouse: undefined,
       pensions: sp.pensions

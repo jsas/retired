@@ -154,14 +154,37 @@ describe('couple GIS', () => {
     expect(c).toBeLessThan(s);
   });
 
-  it('household is SHORTFALL if the spouse plan fails', () => {
+  it('household is SHORTFALL if the spouse plan depletes', () => {
     const inputs = mkCouple();
-    inputs.spouse!.tfsaBalance = 0;
-    inputs.spouse!.desiredSpending = 90000; // unsustainable
+    // Force the spouse plan to actually run out of money: high spend, no
+    // savings, and a 0% return so nothing bails it out. Depletion (not the old
+    // 25× heuristic) must drive the household flag now.
+    inputs.investmentReturn = 0;
+    inputs.spouse!.tfsaBalance = 5000;
     inputs.spouse!.rrspBalance = 0;
+    inputs.spouse!.cppMonthlyAmount = 0;
+    inputs.spouse!.oasStartAge = null;
+    inputs.spouse!.desiredSpending = 40000;
     const r = calculateHousehold(inputs, config);
-    // primary is fine (small TFSA + benefits vs modest spend), spouse is not
+    expect(r.spouse!.depletionAge).not.toBeNull();
+    expect(r.spouse!.status).toBe('SHORTFALL');
     expect(r.status).toBe('SHORTFALL');
+  });
+
+  it('a plan the old 25× rule flagged but that never depletes is now ON TRACK', () => {
+    // High return (so the portfolio grows) with benefits starting after
+    // retirement: 25× would flag this at the retirement date, but the
+    // simulation never runs dry — the verdict must follow the simulation.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 51, retirementAge: 55, maxAge: 95,
+      rrspBalance: 1127000, tfsaBalance: 182000, taxableBalance: 685000, cashCushionBalance: 92000,
+      rrspContribution: 33000, tfsaContribution: 7000, taxableContribution: 60000,
+      investmentReturn: 0.08, desiredSpending: 140000,
+      cppStartAge: 60, cppMonthlyAmount: 1500, oasStartAge: 65, oasYearsInCanada: 40,
+      withdrawalOrder: ['rrsp', 'taxable', 'tfsa'],
+    }), config);
+    expect(r.depletionAge).toBeNull();
+    expect(r.status).toBe('ON_TRACK');
   });
 });
 

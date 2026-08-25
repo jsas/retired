@@ -92,16 +92,12 @@ const SECTIONS: HelpSection[] = [
         body: <P>Added to each account every year during accumulation, after that year's growth. The engine does not model RRSP tax refunds on contributions or contribution-room limits.</P>
       },
       {
-        term: 'Success Factor',
-        body: <P>Safety dial on the 25× rule used by the ON TRACK / SHORTFALL verdict. See the Verdict section.</P>
-      },
-      {
         term: 'Desired Spending ($)',
         body: <P>The after-tax income you want each retirement year, in today's dollars — the base the phases scale. When Settings → Engine → "Grow spending with inflation" is on, the engine inflates it by CPI each year from your current age, so the table's Spending Target column shows the nominal dollars needed that year; when off, the target stays flat in today's dollars. The engine grosses up registered withdrawals so that benefits + portfolio income, after tax, equal that target.</P>
       },
       {
         term: 'Go-go / slow-go / no-go (spending phases)',
-        body: <P>From each "from age", spending drops to the given share of desired spending (still inflation-adjusted). E.g. 100% to 74, 85% from 75, 70% from 85. The verdict's 25× check always uses the retirement-year (highest) spending.</P>
+        body: <P>From each "from age", spending drops to the given share of desired spending (still inflation-adjusted). E.g. 100% to 74, 85% from 75, 70% from 85.</P>
       },
       {
         term: 'CPP Start Age / Monthly at 65 ($)',
@@ -157,40 +153,29 @@ const SECTIONS: HelpSection[] = [
   },
   {
     id: 'help-verdict',
-    title: 'Verdict & Success Factor',
+    title: 'Verdict',
     entries: [
       {
         term: 'The ON TRACK / SHORTFALL verdict',
         body: (
           <>
-            <P>The plan is SHORTFALL if either of these happens:</P>
-            {ul([
-              <><strong>Depletion:</strong> every account (including the cash cushion) reaches $0 before max age.</>,
-              <><strong>Rule-of-thumb check:</strong> at retirement, total net worth is below (desired spending − OAS − CPP) × success factor × 25 — i.e. savings only need to cover the spending that government benefits don't.</>
-            ])}
+            <P>The verdict comes straight from the simulation: the plan is <strong>SHORTFALL</strong> if the money runs out (every account, including the cash cushion, reaches $0) before your max age, and <strong>ON TRACK</strong> if it lasts. The Age of Depletion card shows the year it runs out, or "Never".</P>
+            <P>For a couple, the household verdict is the worst of the two plans.</P>
           </>
         )
       },
       {
-        term: 'What the Success Factor means',
+        term: 'How to stress-test it',
         body: (
           <>
-            <P>The 25× rule of thumb says you can retire when savings reach 25 times annual spending (the flip side of the 4% withdrawal rule). The success factor lets you tighten or loosen that bar:</P>
+            <P>The verdict uses your expected return every year. To see how robust the plan really is:</P>
             {ul([
-              <><strong>1.0</strong> — the standard bar: 25× your income need.</>,
-              <><strong>0.8</strong> — leaner: 20× (you accept a higher withdrawal rate).</>,
-              <><strong>1.2</strong> — safer: 30× (a ~3.3% withdrawal rate).</>
+              <><strong>Lower the expected return</strong> (Market Hypotheses) for a pessimistic case.</>,
+              <><strong>Run Monte Carlo</strong> — it randomizes returns around your assumption and reports the share of runs that never deplete; that success rate is the most honest single number.</>,
+              <><strong>Run a Backtest</strong> — replays your plan through actual historical market sequences.</>
             ])}
           </>
         )
-      },
-      {
-        term: 'The requirement is net of government benefits',
-        body: <P>The requirement is measured against your income need after CPP and OAS: savings only need to cover the spending that benefits don't.</P>
-      },
-      {
-        term: 'Verdict is a quick screen',
-        body: <P>The year-by-year table and the Monte Carlo success rate are the authoritative answers — a plan can be SHORTFALL by the rule and still never deplete, or vice versa.</P>
       }
     ]
   },

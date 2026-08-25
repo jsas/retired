@@ -33,7 +33,7 @@ export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) 
               <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Running total of income tax paid since retirement">Tax Burden</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">CPP</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">OAS</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Guaranteed Income Supplement (tax-free, single-pensioner approximation)">GIS</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Guaranteed Income Supplement (tax-free; couples assessed on combined income)">GIS</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Defined-benefit / bridge pension income (taxable)">Pension</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Ending Balance</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">RRSP</th>
@@ -123,6 +123,11 @@ export function ScheduleTable({ breakdown, retirementAge }: ScheduleTableProps) 
           </tbody>
         </table>
       </div>
+      <p className="px-3 py-2 text-[10px] text-slate-400 border-t border-slate-100">
+        Amounts are in nominal (future) dollars of each year: the spending target and contributions grow with
+        inflation, while balances, gains and benefits are the actual dollars that year. CPP/OAS are shown at
+        2026 values unless "Index tax tables, OAS and CPP" is on in Settings → Engine.
+      </p>
     </div>
   );
 }

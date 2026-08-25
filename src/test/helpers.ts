@@ -30,7 +30,6 @@ export function baseInputs(overrides: Partial<RetirementInputs> = {}): Retiremen
     oasStartAge: null,
     oasYearsInCanada: 40,
     desiredSpending: 20000,
-    successFactor: 1,
     withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
     pensions: [],
     ...overrides,

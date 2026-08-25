@@ -58,7 +58,6 @@ const buildDefaultScenarios = (): Scenario[] => [
       oasStartAge: 65,
       oasYearsInCanada: 40,
       desiredSpending: 70000,
-      successFactor: 1.0,
       withdrawalOrder: ['taxable', 'rrsp', 'tfsa'],
       spendingBands: [
         { fromAge: 75, pctOfBase: 0.85 },
@@ -108,7 +107,6 @@ const buildDefaultScenarios = (): Scenario[] => [
       oasStartAge: 65,
       oasYearsInCanada: 40,
       desiredSpending: 52000,
-      successFactor: 1.0,
       withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
       events: [
         { id: 'evt-downsize', age: 68, label: 'Downsize home', amount: 250000, direction: 'in', account: 'taxable' },
@@ -140,7 +138,6 @@ const buildDefaultScenarios = (): Scenario[] => [
       oasStartAge: 65,
       oasYearsInCanada: 35,
       desiredSpending: 36000,
-      successFactor: 0.9,
       withdrawalOrder: ['taxable', 'tfsa', 'rrsp'],
       spendingBands: [
         { fromAge: 70, pctOfBase: 0.9 },
@@ -166,18 +163,27 @@ function App() {
   const [activeScenarioId, setActiveScenarioId] = useState<string>(initialState.activeScenarioId);
   const [config, setConfig] = useState<AppConfig>(loadAppConfig);
   const [view, setView] = useState<View>('projection');
+  // mcOpen tracks panel visibility; mcRequest is the payload MonteCarloChart
+  // re-runs on. Keeping them separate lets an effect refresh mcRequest when
+  // inputs change without re-triggering itself.
+  const [mcOpen, setMcOpen] = useState(false);
   const [mcRequest, setMcRequest] = useState<MonteCarloRequest | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const mcPanelRef = useRef<HTMLDivElement>(null);
 
-  // Bring the Monte Carlo panel into view when a new run starts — it mounts
+  // Bring the Monte Carlo panel into view when it opens — it mounts
   // below the fold, so without this the run looks like it went nowhere.
+  // (Depends on mcOpen, not mcRequest, so input-driven re-runs don't yank
+  // the page while the user is editing.)
   useEffect(() => {
-    if (mcRequest) {
+    if (mcOpen) {
       mcPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [mcRequest]);
+  }, [mcOpen]);
+
+  // (Monte Carlo / backtest auto-refresh effects live further down, after
+  // `inputs` and `config` are declared.)
   const [showShare, setShowShare] = useState(false);
   const [showOptimize, setShowOptimize] = useState(false);
   // Welcome card: visible until dismissed, or always when the General settings
@@ -304,6 +310,30 @@ function App() {
     [results, inputs]
   );
 
+  // Keep an open Monte Carlo panel in sync with the plan: rebuild the request
+  // when inputs/config change, debounced so dragging a slider doesn't fire a
+  // 500-run batch per pixel. MonteCarloChart re-runs whenever request changes.
+  useEffect(() => {
+    if (!mcOpen) { setMcRequest(null); return; }
+    const vol = inputs.returnVolatility ?? 0;
+    if (vol <= 0) { setMcRequest(null); return; }
+    const t = setTimeout(() => {
+      setMcRequest({ inputs, config, runs: 500, volatility: vol });
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mcOpen, inputs, config]);
+
+  // Keep an open backtest panel in sync too. It's fast and synchronous, so no
+  // debounce needed.
+  useEffect(() => {
+    if (!backtestResult) return;
+    const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
+    realConfig.engine.inflationRate = 0;
+    setBacktestResult(runBacktest(inputs, realConfig, calculateHousehold));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputs, config]);
+
   const handleExportCSV = () => {
     const hasRm = results.yearlyBreakdown.some(r => r.netHomeEquity !== undefined);
     const headers = ['Age', 'Starting Balance', 'Contributions', 'Market Gains', 'Spending Target', 'Withdrawals', 'Income Tax', 'Tax Burden', 'CPP', 'OAS', 'GIS', 'Pension', 'Ending Balance', 'RRSP', 'RRIF', 'TFSA', 'Taxable', 'Cash Cushion',
@@ -377,7 +407,7 @@ function App() {
             window.alert('Set a Volatility above 0% (Market Hypotheses in the sidebar) to run Monte Carlo.');
             return;
           }
-          setMcRequest({ inputs, config, runs: 500, volatility: vol });
+          setMcOpen(true); // the sync effect builds the request (and keeps it fresh)
         }}
         onRunBacktest={() => {
           // Real-return series: run with inflation off so historical real
@@ -545,12 +575,12 @@ function App() {
                 </CollapsiblePanel>
 
                 {/* Monte Carlo */}
-                {mcRequest && (
+                {mcOpen && mcRequest && (
                   <div ref={mcPanelRef}>
                     <MonteCarloChart
                       request={mcRequest}
                       retirementAge={results.retirementAge}
-                      onClose={() => setMcRequest(null)}
+                      onClose={() => setMcOpen(false)}
                     />
                   </div>
                 )}

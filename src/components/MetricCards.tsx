@@ -69,8 +69,18 @@ export function MetricCards({ results }: MetricCardsProps) {
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${statusColor} ${statusBg}`}>
           {results.status.replace('_', ' ')}
         </span>
-        {spouse && (
-          <div className="text-[10px] text-slate-500 mt-0.5">household — worst of both plans</div>
+        {spouse ? (
+          <div className="text-[10px] text-slate-500 mt-0.5">
+            {results.status === 'ON_TRACK'
+              ? 'both plans funded to your max age'
+              : 'one or both plans run out of money early'}
+          </div>
+        ) : (
+          <div className="text-[10px] text-slate-500 mt-0.5">
+            {results.status === 'ON_TRACK'
+              ? 'money lasts to your max age'
+              : `runs out at age ${results.depletionAge ?? '—'}`}
+          </div>
         )}
       </div>
     </div>

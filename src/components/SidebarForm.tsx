@@ -322,22 +322,6 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
               />
             </div>
-            <div>
-              <label className="flex items-center gap-1 text-[11px] text-neutral-500 mb-1">
-                Success Factor
-                <span
-                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-neutral-700 text-neutral-300 text-[9px] cursor-help"
-                  title="Safety dial on the 25× rule. The plan is SHORTFALL if net worth at retirement is below (spending + effective OAS) × this factor × 25. 1.0 = standard 25×, 0.8 = leaner 20×, 1.2 = safer 30×."
-                >?</span>
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={inputs.successFactor}
-                onChange={(e) => updateField('successFactor', parseFloat(e.target.value) || 1)}
-                className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
           </div>
         </CollapsibleSection>
 
