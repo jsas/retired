@@ -249,12 +249,11 @@ function App() {
   useEffect(() => {
     if (!printOptions.includeMonteCarlo) { setPrintMc(null); setPrintMcPending(false); return; }
     setPrintMcPending(true);
-    const cancel = runMonteCarloAuto(
+    return runMonteCarloAuto(
       { inputs, config, runs: 500, volatility: inputs.returnVolatility },
       (res) => { setPrintMc(res); setPrintMcPending(false); },
       (msg) => { console.warn('Print Monte Carlo failed:', msg); setPrintMcPending(false); },
     );
-    return cancel;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printOptions.includeMonteCarlo, inputs, config]);
 
@@ -580,6 +579,8 @@ function App() {
                     <OptimizeCard
                       inputs={inputs}
                       config={config}
+                      results={results}
+                      mcResults={printMc}
                       onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
                       onClose={() => setShowOptimize(false)}
                     />

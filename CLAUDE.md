@@ -37,39 +37,15 @@ This project tracks work as **GitHub Issues + pull requests**, not loose
 commits to `main`. Follow this for every non-trivial change:
 
 1. **Issue first.** Each piece of work gets a GitHub Issue describing the
-   problem/request. Note the issue number — it anchors the branch, PR and
-   cost log.
+   problem/request. Note the issue number — it anchors the branch and PR.
 2. **Branch per issue.** Work on a short-lived branch named
    `issue/<n>-<slug>` (e.g. `issue/42-rm-ltv-clamp`). Never push feature work
    straight to `main`.
 3. **PR per branch.** Open a PR titled `<summary> (closes #<n>)` with the
    issue linked so it auto-closes on merge. Squash-merge to keep `main`
-   linear.
-4. **Log cost.** After merge, record the ticket's token usage and spend in
-   `COSTS.md` (see below).
+   linear. Don't merge your own PR without the user's sign-off.
 
-Trivial fixes (typos, one-line tweaks) may commit directly to `main` — but
-they still get a line in the log if they consumed a session.
-
-> Note: `gh` CLI is **not installed** in this environment. Create issues and
-> PRs via the GitHub web UI or the API (see COSTS.md for what's tracked), and
-> paste links/numbers back so they can be recorded.
-
-## Cost tracking
-
-Token usage and dollar spend are tracked **per ticket** in `COSTS.md` at the
-repo root. One row per issue/PR:
-
-| Date | Issue/PR | Summary | Session tokens | Est. cost | Model |
-
-- Session token totals come from the Claude Code session stats (`/cost` or
-  the session-usage readout) at the end of the ticket's work.
-- Record input + output tokens and the estimated dollar cost for the model
-  used. Approximate is fine — the goal is per-ticket visibility, not audit
-  precision.
-- Group multi-session tickets under the same issue number and sum them.
-
-`COSTS.md` is committed to the repo so the spend history travels with the code.
+Trivial fixes (typos, one-line tweaks) may commit directly to `main`.
 
 ## Conventions
 
@@ -98,7 +74,6 @@ repo root. One row per issue/PR:
 │   └── test/helpers.ts  # baseInputs(), testConfig(), yearAt(), closeTo()
 ├── .github/workflows/   # deploy.yml — tests + Pages deploy + tagged releases
 ├── CLAUDE.md            # this file
-├── COSTS.md             # per-ticket token / spend log
 ├── ROADMAP.md           # planned work + non-goals
 └── README.md
 ```
