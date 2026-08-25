@@ -1,94 +1,117 @@
-# WealthConsole - Retirement Planning Dashboard
+# RE: tired
 
-A high-density, professional React web application with GCP-style console UI for retirement planning.
+A Canadian retirement drawdown planner in a GCP-console-style React UI.
+Model your RRSP / RRIF / TFSA / taxable / cash accounts, CPP / OAS / GIS, and
+defined-benefit & bridge pensions — then stress-test the plan with a Monte Carlo
+simulation and a historical backtest.
 
-## Features Completed
+Everything runs **locally in your browser**. Your scenarios are stored in
+`localStorage` only — nothing is sent to a server.
 
-### ✅ Core Functionality
-- **Profile Save/Load**: Full localStorage persistence with save/load/delete capabilities
-- **Export/Import**: JSON export/import for profile backup and sharing
-- **Missing Input Fields**: Added all fields from the Canadian retirement engine:
-  - Multiple accounts: RRSP, TFSA, Taxable, Cash Cushion
-  - Government benefits: CPP, OAS with start ages
-  - Province selection for tax calculations
-  - Max age, success factor, desired spending
+**Live app:** https://jsas.github.io/retired/
 
-### ✅ UI Components
-- **TopHeader**: GCP-style dark navigation with logo, project selector, search
-- **SidebarForm**: Comprehensive form with 4 sections:
-  - Personal Profile (age, retirement age, max age, province)
-  - Account Balances (RRSP, TFSA, Taxable, Cash Cushion)
-  - Contribution Rates (annual contribution, desired spending, success factor)
-  - Government Benefits (CPP/OAS start ages and amounts)
-  - Market Hypotheses (expected return)
-- **MetricCards**: KPI display with Total Wealth, Age of Depletion, Withdrawal Rate, Status
-- **ScheduleTable**: Dense spreadsheet view with account breakdowns
-- **ProfileManager**: Save/load/delete profiles with import/export
+## What it does
 
-### ✅ Engineering
-- **Retirement Engine**: Enhanced with realistic Canadian simulation patterns
-  - Multi-account withdrawal sequencing (TFSA → Taxable → RRSP)
-  - CPP/OAS benefit calculations
-  - Pre-retirement accumulation phase
-  - Retirement decumulation phase
-  - Status determination based on depletion age
+- **Deterministic projection** — year-by-year balances, withdrawals, income tax,
+  cumulative tax burden, CPP / OAS / GIS / pension income, from today to your max age.
+- **Accounts** — RRSP, RRIF (with mandatory minimums + forced conversion age),
+  TFSA, taxable (with ACB and capital-gains inclusion), and a cash cushion.
+- **Government benefits** — CPP (early/deferral adjustments applied automatically),
+  OAS (deferral, age-75 bump, clawback), and GIS (income-tested, tax-free).
+- **Pensions** — defined-benefit and bridge/temporary pensions, per-pension CPI
+  indexing, spouse-aware. Pension income is taxed and claws back GIS/OAS.
+- **Spending** — desired spending in today's dollars, optional go-go / slow-go /
+  no-go phases, one-time inflows (house sale) and outflows (big purchase).
+- **Spouse plan** — a second, independent projection combined into a household verdict.
+- **Monte Carlo** — randomized return/volatility futures with success-rate bands.
+- **Historical backtest** — replays the plan against real Canadian return series
+  since 1970.
+- **Tax model** — 2026 federal + provincial brackets, Ontario surtax, Quebec
+  abatement; optional indexation of brackets/benefits to CPI.
+- **Share** — export/import scenarios as JSON or a shareable link; print a
+  one-page summary.
 
-## Project Structure
-
-```
-retirement-app/
-├── src/
-│   ├── components/
-│   │   ├── TopHeader.tsx
-│   │   ├── SidebarForm.tsx
-│   │   ├── MetricCards.tsx
-│   │   ├── ScheduleTable.tsx
-│   │   └── ProfileManager.tsx
-│   ├── lib/
-│   │   ├── retirementEngine.ts  # 👈 Replace with actual engine
-│   │   └── profileStorage.ts    # LocalStorage persistence
-│   ├── App.tsx
-│   └── main.tsx
-```
-
-## Running the App
+## Getting started
 
 ```bash
-cd retirement-app
 npm install
 npm run dev
 ```
 
 Visit http://localhost:5173
 
-## Next Steps for Production
+### A quick first plan
 
-The app is ready for integration with the actual Canadian retirement engine:
+1. **Personal Profile** — your current age, retirement age, max age, province.
+2. **Account Balances** — what you have today in each account.
+3. **Contribution Rates** — what you'll add per year until retirement.
+4. **Government Benefits** — CPP monthly amount at 65 + start age; OAS start age
+   and years in Canada.
+5. **Pensions** (optional) — add a DB or bridge pension.
+6. **Spending Phases** — desired after-tax spending (today's dollars), with
+   optional later-life reductions.
 
-1. Open `src/lib/retirementEngine.ts`
-2. Replace the mock implementation with your actual library code
-3. The interfaces are already defined to match the AppRunner patterns from `retirement-drawdown-simular-canada`
+The verdict cards update live: wealth at retirement, depletion age, withdrawal
+rate, and an ON TRACK / SHORTFALL status. Run **Monte Carlo** for the success
+probability, or the **backtest** to see how the plan would have fared historically.
 
-Key interfaces:
-- `RetirementInputs`: All input parameters
-- `YearlyBreakdown`: Year-by-year results with account breakdowns
-- `RetirementResults`: Final metrics and status
+## Build
 
-The UI will work seamlessly with your actual engine once the mock is replaced.
+```bash
+npm run build          # multi-file site -> dist/        (GitHub Pages, base /retired/)
+npm run build:single   # ONE self-contained HTML -> dist-single/  (works from file://)
+npm run build:all      # both
+```
+
+The single-file build inlines every asset (JS, CSS, favicon) into one HTML file
+you can open directly from disk or pass around as an attachment.
+
+## Releasing
+
+Releases are built by GitHub Actions. Push a version tag and the workflow deploys
+the site to Pages and attaches both build flavours to a GitHub Release:
+
+```bash
+git tag -a v0.1.0 -m "..."
+git push origin main
+git push origin v0.1.0
+```
+
+## Project structure
+
+```
+├── src/
+│   ├── components/      # TopHeader, SidebarForm, MetricCards, ScheduleTable,
+│   │                    # MonteCarloChart, BacktestPanel, PrintSummary, Help/Settings…
+│   ├── lib/
+│   │   ├── retirementEngine.ts   # the drawdown engine
+│   │   ├── canadianTax.ts        # 2026 federal + provincial tax, CPP/OAS/GIS/RRIF
+│   │   ├── monteCarlo.ts         # Monte Carlo simulation
+│   │   ├── historicalReturns.ts  # backtest return series
+│   │   ├── appConfig.ts          # tax tables + engine config (editable in Settings)
+│   │   └── …                     # scenario storage, share links, agent ingest
+│   ├── App.tsx
+│   └── main.tsx
+├── .github/workflows/deploy.yml  # Pages deploy + tagged releases
+└── vite.config.ts                # multi-file (/retired/) vs single-file builds
+```
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
 
-## Credits
+## Acknowledgements
 
 The drawdown engine was originally built on
 [retirement_drawdown_simulator_canada](https://github.com/danielabar/retirement_drawdown_simulator_canada)
-by **danielabar** — a Canadian retirement stress-tester modelling RRSP / taxable / TFSA withdrawals
-with Canadian taxes, CPP/OAS, and RRIF rules. (The upstream repository carried no LICENSE file at the
-time it was incorporated, checked 2026-08-23.)
+by **danielabar** — a Canadian retirement stress-tester modelling RRSP / taxable / TFSA
+withdrawals with Canadian taxes, CPP/OAS, and RRIF rules. (The upstream repository carried
+no LICENSE file at the time it was incorporated, checked 2026-08-23.)
+
+Built with React 19, Vite, TypeScript, Tailwind CSS, and Lucide icons — largely
+pair-programmed with an AI assistant.
 
 ## Disclaimer
 
-For education and exploration only — estimates only, not financial, tax, or investment advice.
-Consult a qualified professional before acting on any projection.
+For education and exploration only — estimates only, not financial, tax, or
+investment advice. Consult a qualified professional before acting on any projection.
