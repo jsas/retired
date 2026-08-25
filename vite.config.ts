@@ -23,13 +23,13 @@ function pruneToSingleHtml(outDir: string): Plugin {
 // https://vite.dev/config/
 // Two build flavours:
 //  - default: multi-file site for GitHub Pages, served from the project path
-//    (https://jsas.github.io/retirement-web-app/), output in dist/.
+//    (https://jsas.github.io/retired/), output in dist/.
 //  - `--mode singlefile`: ONE self-contained HTML file in dist-single/,
 //    usable from file:// or passed around as an attachment.
 export default defineConfig(({ mode }) => {
   const single = mode === 'singlefile'
   return {
-    base: single ? './' : '/retirement-web-app/',
+    base: single ? './' : '/retired/',
     plugins: [
       react(),
       ...(single ? [viteSingleFile(), pruneToSingleHtml('dist-single')] : []),
