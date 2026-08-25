@@ -435,6 +435,10 @@ function App() {
             window.alert('Set a Volatility above 0% (Market Hypotheses in the sidebar) to run Monte Carlo.');
             return;
           }
+          if (mcOpen) {
+            // Already open: onMounted won't refire, so scroll explicitly.
+            mcPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
           setMcOpen(true); // the sync effect builds the request (and keeps it fresh)
         }}
         onRunBacktest={() => {
@@ -443,6 +447,10 @@ function App() {
           const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
           realConfig.engine.inflationRate = 0;
           setBacktestResult(runBacktest(inputs, realConfig, calculateHousehold));
+          if (backtestResult != null) {
+            // Already open: scroll explicitly since nothing remounts.
+            backtestPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
         }}
         onOpenSettings={() => setView('settings')}
         onExportDb={handleExportDb}
