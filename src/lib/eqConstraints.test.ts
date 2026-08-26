@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   AXES, axisValue, withAxis, deterministicOutcome, pinSatisfied,
   findBoundary, clampToBoundary, slidePoint, isViolation,
-  type EqPin, type SuccessScorer,
+  fullBand, normalizeBand, effectiveRange, clampToBand,
+  type EqPin, type SuccessScorer, type Band,
 } from './eqConstraints';
 import { testConfig, baseInputs } from '../test/helpers';
 import type { RetirementInputs } from './retirementEngine';
@@ -175,5 +176,46 @@ describe('isViolation', () => {
     const depleted = lean();
     expect(isViolation(fundedTo(90), depleted, config)).toBe(true);
     expect(isViolation(fundedTo(90), withAxis(lean(), 'desiredSpending', 5000), config)).toBe(false);
+  });
+});
+
+describe('bands — per-control allowed range', () => {
+  it('fullBand spans the whole axis and is disabled', () => {
+    expect(fullBand('desiredSpending')).toEqual({ min: 0, max: 250000, enabled: false });
+    expect(fullBand('retirementAge')).toEqual({ min: 40, max: 75, enabled: false });
+  });
+
+  it('normalizeBand clamps edges to the axis, orders them, and rounds ages', () => {
+    // out-of-order + out-of-range
+    expect(normalizeBand('desiredSpending', { min: 200000, max: -5000, enabled: true }))
+      .toEqual({ min: 0, max: 200000, enabled: true });
+    // ages snap to integers
+    expect(normalizeBand('retirementAge', { min: 60.6, max: 70.2, enabled: true }))
+      .toEqual({ min: 61, max: 70, enabled: true });
+  });
+
+  it('effectiveRange is the axis range when disabled, the band when enabled', () => {
+    expect(effectiveRange('desiredSpending', undefined)).toEqual({ min: 0, max: 250000 });
+    expect(effectiveRange('desiredSpending', fullBand('desiredSpending'))).toEqual({ min: 0, max: 250000 });
+    const band: Band = { min: 50000, max: 120000, enabled: true };
+    expect(effectiveRange('desiredSpending', band)).toEqual({ min: 50000, max: 120000 });
+  });
+
+  it('clampToBand holds the value inside the band (at-least and at-most)', () => {
+    const band: Band = { min: 60000, max: 120000, enabled: true };
+    // at-most: drag above the ceiling clamps down
+    expect(clampToBand('desiredSpending', band, 200000)).toBe(120000);
+    // at-least: drag below the floor clamps up
+    expect(clampToBand('desiredSpending', band, 10000)).toBe(60000);
+    // inside the band passes through
+    expect(clampToBand('desiredSpending', band, 90000)).toBe(90000);
+    // disabled band falls back to the axis limits
+    expect(clampToBand('desiredSpending', { ...band, enabled: false }, 200000)).toBe(200000);
+  });
+
+  it('clampToBand rounds retirement-age values to integers', () => {
+    const band: Band = { min: 60, max: 70, enabled: true };
+    expect(clampToBand('retirementAge', band, 65.6)).toBe(66);
+    expect(clampToBand('retirementAge', band, 55)).toBe(60);
   });
 });

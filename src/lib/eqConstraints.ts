@@ -77,6 +77,58 @@ export function withAxis(inputs: RetirementInputs, axis: EqAxis, value: number):
 }
 
 // ---------------------------------------------------------------------------
+// Bands — per-control allowed range (the double-slider constraint)
+// ---------------------------------------------------------------------------
+
+/**
+ * A per-control allowed range. The control's value must stay inside [min,max];
+ * the band edges are themselves clamped to the axis's hard limits and ordered
+ * (min ≤ max). This is the "pin each control to at least / at most" model: a
+ * band with min > the axis floor is an "at least" pin, max < the axis ceiling
+ * is an "at most" pin, and both together are a range.
+ */
+export interface Band {
+  min: number;
+  max: number;
+  /** When false the band is ignored (control moves across the whole axis). */
+  enabled: boolean;
+}
+
+/** The full axis range as an (unconstraining) disabled band. */
+export function fullBand(axis: EqAxis): Band {
+  const s = AXES[axis];
+  return { min: s.min, max: s.max, enabled: false };
+}
+
+/** Normalize a band: clamp edges to the axis limits, order them, snap to step. */
+export function normalizeBand(axis: EqAxis, band: Band): Band {
+  const s = AXES[axis];
+  const snap = (v: number) => {
+    const clamped = Math.min(s.max, Math.max(s.min, v));
+    return axis === 'retirementAge' ? Math.round(clamped) : clamped;
+  };
+  let lo = snap(band.min);
+  let hi = snap(band.max);
+  if (lo > hi) [lo, hi] = [hi, lo];
+  return { min: lo, max: hi, enabled: band.enabled };
+}
+
+/** The effective [min,max] a control may take: the band if enabled, else the axis range. */
+export function effectiveRange(axis: EqAxis, band: Band | undefined): { min: number; max: number } {
+  const s = AXES[axis];
+  if (!band || !band.enabled) return { min: s.min, max: s.max };
+  const n = normalizeBand(axis, band);
+  return { min: n.min, max: n.max };
+}
+
+/** Clamp a proposed value into the control's allowed range (band-aware). */
+export function clampToBand(axis: EqAxis, band: Band | undefined, proposed: number): number {
+  const { min, max } = effectiveRange(axis, band);
+  const v = Math.min(max, Math.max(min, proposed));
+  return axis === 'retirementAge' ? Math.round(v) : v;
+}
+
+// ---------------------------------------------------------------------------
 // Pins (outcome constraints)
 // ---------------------------------------------------------------------------
 

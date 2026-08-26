@@ -35,9 +35,9 @@ type View = 'projection' | 'settings' | 'help' | 'math' | 'eq';
 import { buildShareUrl, consumePlanFromHash } from './lib/shareLink';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
-import { EqPage, type EqSolvedState } from './components/EqPage';
+import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
 import { runEqSolverAuto } from './lib/runEqSolver';
-import type { EqPin, PinMode, EqAxis } from './lib/eqConstraints';
+import { fullBand } from './lib/eqConstraints';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
 // First-run scenarios: three realistic, mutually distinct starting points that
@@ -341,40 +341,38 @@ function App() {
     return calculateHousehold(inputs, config);
   }, [inputs, config]);
 
-  // ---- EQ ideation surface state ----
-  const [eqPin, setEqPin] = useState<EqPin>({ kind: 'successRate', value: 0.9, enabled: false });
-  const [eqMode, setEqMode] = useState<PinMode>('hard');
+  // ---- EQ steering surface state ----
+  // Per-control allowed bands (min–max). Disabled = the control roams its full axis.
+  const [eqBands, setEqBands] = useState<Bands>({
+    desiredSpending: fullBand('desiredSpending'),
+    retirementAge: fullBand('retirementAge'),
+    investmentReturn: fullBand('investmentReturn'),
+  });
   const [eqSolved, setEqSolved] = useState<EqSolvedState>({
-    successRate: null, bounds: {}, grid: null, gridSize: 9, solving: false,
+    successRate: null, grid: null, gridSize: 9, solving: false,
   });
 
-  // Re-solve the EQ constraints whenever the plan or the pin changes, debounced
-  // so dragging a fader doesn't fire a 500-run batch per pixel. Runs in a worker.
+  // Re-solve the success-rate readout + pad shading whenever the plan changes,
+  // debounced so dragging a control doesn't fire a 500-run batch per pixel.
   useEffect(() => {
     if (view !== 'eq') return;
     setEqSolved(s => ({ ...s, solving: true }));
     const t = setTimeout(() => {
       const cancel = runEqSolverAuto(
-        {
-          inputs, config, pin: eqPin,
-          boundAxes: ['desiredSpending', 'retirementAge', 'investmentReturn'] as EqAxis[],
-          pad: { x: 'retirementAge', y: 'desiredSpending' },
-        },
+        { inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } },
         (res) => setEqSolved({
           successRate: res.successRate,
-          bounds: res.bounds,
           grid: res.grid,
           gridSize: res.gridMeta?.size ?? 9,
           solving: false,
         }),
         (msg) => { console.warn('EQ solve failed:', msg); setEqSolved(s => ({ ...s, solving: false })); },
       );
-      // store cancel so a re-trigger aborts the in-flight worker
       cancelEqSolveRef.current = cancel;
     }, 250);
     return () => { clearTimeout(t); cancelEqSolveRef.current?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, inputs, config, eqPin]);
+  }, [view, inputs, config]);
 
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
@@ -550,7 +548,7 @@ function App() {
                 {view === 'settings' && <span className="text-slate-900">Engine Settings</span>}
                 {view === 'help' && <span className="text-slate-900">Help &amp; Documentation</span>}
                 {view === 'math' && <span className="text-slate-900">How the Math Works</span>}
-                {view === 'eq' && <span className="text-slate-900">EQ — Steer the Plan</span>}
+                {view === 'eq' && <span className="text-slate-900">Steering</span>}
               </div>
               {view === 'projection' && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -564,9 +562,9 @@ function App() {
                   <button
                     onClick={() => setView('eq')}
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Ideation surface: steer the plan with faders and an XY pad, pin a goal the controls respect"
+                    title="Steer the plan with sliders and a drag pad; limit any control to a range"
                   >
-                    <SlidersHorizontal size={13} /> EQ
+                    <SlidersHorizontal size={13} /> Steering
                   </button>
                   <button
                     onClick={() => setShowOptimize((s) => !s)}
@@ -626,14 +624,14 @@ function App() {
 
                 {/* Share link card */}
                 {showShare && (
-                  <div ref={shareCardRef}>
+                  <div ref={shareCardRef} className="scroll-target">
                     <ShareCard url={buildShareUrl(inputs)} onClose={() => setShowShare(false)} />
                   </div>
                 )}
 
                 {/* Optimize card */}
                 {showOptimize && (
-                  <div ref={optimizeCardRef}>
+                  <div ref={optimizeCardRef} className="scroll-target">
                     <OptimizeCard
                       inputs={inputs}
                       config={config}
@@ -647,7 +645,7 @@ function App() {
 
                 {/* Compare card */}
                 {showCompare && (
-                  <div ref={compareCardRef}>
+                  <div ref={compareCardRef} className="scroll-target">
                     <CompareCard
                       scenarios={scenarios}
                       activeScenarioId={activeScenarioId}
@@ -659,14 +657,14 @@ function App() {
 
                 {/* Donate card */}
                 {showDonate && (
-                  <div ref={donateCardRef}>
+                  <div ref={donateCardRef} className="scroll-target">
                     <DonateCard onClose={() => setShowDonate(false)} />
                   </div>
                 )}
 
                 {/* Print options card */}
                 {showPrintOptions && (
-                  <div ref={printOptionsCardRef}>
+                  <div ref={printOptionsCardRef} className="scroll-target">
                     <PrintOptionsCard
                       options={printOptions}
                       onChange={updatePrintOptions}
@@ -680,7 +678,7 @@ function App() {
 
                 {/* Export projection card */}
                 {showExport && (
-                  <div ref={exportCardRef}>
+                  <div ref={exportCardRef} className="scroll-target">
                     <ExportCard
                       options={exportOptions}
                       onChange={updateExportOptions}
@@ -715,7 +713,7 @@ function App() {
 
                 {/* Monte Carlo */}
                 {mcOpen && mcRequest && (
-                  <div ref={mcPanelRef}>
+                  <div ref={mcPanelRef} className="scroll-target">
                     <MonteCarloChart
                       request={mcRequest}
                       retirementAge={results.retirementAge}
@@ -728,7 +726,7 @@ function App() {
 
                 {/* Historical backtest */}
                 {backtestResult && (
-                  <div ref={backtestPanelRef}>
+                  <div ref={backtestPanelRef} className="scroll-target">
                     <BacktestPanel
                       result={backtestResult}
                       onClose={() => setBacktestResult(null)}
@@ -760,10 +758,8 @@ function App() {
                 inputs={inputs}
                 config={config}
                 onChange={handleInputsChange}
-                pin={eqPin}
-                onPinChange={setEqPin}
-                mode={eqMode}
-                onModeChange={setEqMode}
+                bands={eqBands}
+                onBandsChange={setEqBands}
                 solved={eqSolved}
               />
             )}
