@@ -469,15 +469,56 @@ export function calculateRetirement(
       accRmScheduled = sched;
     }
 
+    // Cash events fire pre-retirement too — a house sale at 51 lands in its
+    // account and then grows; an outflow is funded by drawing down accounts in
+    // the configured withdrawal order. Pre-retirement the engine models no
+    // employment income or tax (consistent with the untaxed growth above), so
+    // these draws are tax-free: they just shrink the balances that compound.
+    const yearEvents = eventsAt(age).map(ev => ({ label: ev.label, direction: ev.direction, amount: ev.amount }));
+    let accumEventOut = 0;
+    for (const ev of eventsAt(age)) {
+      if (ev.direction === 'in') {
+        const dest = ev.account ?? 'taxable';
+        if (dest === 'rrsp') rrsp += ev.amount;
+        else if (dest === 'tfsa') tfsa += ev.amount;
+        else if (dest === 'cash') cashCushion += ev.amount;
+        else { taxable += ev.amount; taxableAcb += ev.amount; }
+      } else {
+        accumEventOut += ev.amount;
+        let remaining = ev.amount;
+        for (const acct of order) {
+          if (remaining <= 0) break;
+          if (acct === 'taxable') {
+            const draw = Math.min(taxable, remaining);
+            // Reduce ACB by the principal portion so the gains fraction stays
+            // correct for later (post-retirement) taxable draws.
+            if (draw > 0) {
+              const f = gainsFraction();
+              taxableAcb = Math.max(0, taxableAcb - draw * (1 - f));
+              taxable -= draw;
+              remaining -= draw;
+            }
+          } else if (acct === 'tfsa') {
+            const draw = Math.min(tfsa, remaining);
+            tfsa -= draw; remaining -= draw;
+          } else if (acct === 'rrsp') {
+            const draw = Math.min(rrsp, remaining);
+            rrsp -= draw; remaining -= draw;
+          }
+        }
+        if (remaining > 0) cashCushion = Math.max(0, cashCushion - remaining);
+      }
+    }
+
     yearlyBreakdown.push({
       age,
       startingBalance: startingTotal,
       contributions: rrspContribution + tfsaContribution + taxableContribution,
       marketGains: rrspGains + tfsaGains + taxableGains + cashGains,
-      withdrawals: 0,
+      withdrawals: accumEventOut,
       incomeTax: 0,
       cumulativeTax,
-      spendingTarget: 0,
+      spendingTarget: accumEventOut,
       endingBalance: totalBalance(),
       rrspBalance: rrsp,
       rrifBalance: rrif,
@@ -494,7 +535,7 @@ export function calculateRetirement(
         contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution },
         tax: { oasClawback: 0, capitalGains: 0, registeredGross: 0 },
         ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan } } : {}),
-        events: [],
+        events: yearEvents,
       },
       ...(rmOn ? { homeValue, loanBalance: rmLoan, netHomeEquity: homeValue - rmLoan } : {})
     });

@@ -74,6 +74,42 @@ describe('cash events', () => {
     const st = (r: typeof one, a: number) => yearAt(r.yearlyBreakdown, a).spendingTarget;
     expect(closeTo(st(rec, 71) - st(one, 71), 8000, 1)).toBe(true);
   });
+
+  it('PRE-RETIREMENT inflow lands at its age and then grows', () => {
+    // House sale at 51, retire at 55: taxable gets +1M at 51, then compounds.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 50, retirementAge: 55, taxableBalance: 0, taxableContribution: 0,
+      events: [{ id: 'sale', age: 51, label: 'House sale', amount: 1000000, direction: 'in', account: 'taxable' }],
+    }), config);
+    const tx = (a: number) => yearAt(r.yearlyBreakdown, a).taxableBalance;
+    expect(tx(50)).toBe(0);
+    expect(closeTo(tx(51), 1000000, 1)).toBe(true);          // landed at 51
+    expect(closeTo(tx(52), 1000000 * 1.05, 1)).toBe(true);    // then grows
+    // Recorded in the pre-retirement year's drill-down.
+    expect(yearAt(r.yearlyBreakdown, 51).detail?.events).toEqual([
+      { label: 'House sale', direction: 'in', amount: 1000000 },
+    ]);
+  });
+
+  it('PRE-RETIREMENT outflow draws down accounts in withdrawal order', () => {
+    // Big expense at 51 while still working, taxable first in the order.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 50, retirementAge: 55,
+      taxableBalance: 200000, taxableContribution: 0,
+      tfsaBalance: 100000, tfsaContribution: 0,
+      rrspBalance: 500000, rrspContribution: 0,
+      withdrawalOrder: ['taxable', 'tfsa', 'rrsp'],
+      events: [{ id: 'reno', age: 51, label: 'Renovation', amount: 250000, direction: 'out' }],
+    }), config);
+    const y51 = yearAt(r.yearlyBreakdown, 51);
+    // Taxable (200k grown to 210k at 51) is emptied first, then the remaining
+    // 40k comes from TFSA (100k grown to 110250); RRSP untouched.
+    expect(y51.taxableBalance).toBe(0);
+    expect(closeTo(y51.tfsaBalance, 100000 * Math.pow(1.05, 2) - (250000 - 200000 * Math.pow(1.05, 2)), 1)).toBe(true);
+    expect(y51.rrspBalance).toBeGreaterThan(0);
+    expect(y51.spendingTarget).toBe(250000);
+    expect(y51.withdrawals).toBe(250000);
+  });
 });
 
 describe('pensions', () => {
