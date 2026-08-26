@@ -10,6 +10,12 @@ interface SidebarFormProps {
   provinceCodes: string[];
   config: AppConfig;
   onClose?: () => void; // mobile drawer close (hidden on md+)
+  // For the spouse adapter: the saved scenarios a spouse can be linked to, the
+  // active plan's own id (to exclude self-references), and any host-wins /
+  // resolution warnings from materializing a linked spouse.
+  scenarios?: Array<{ id: string; name: string }>;
+  activeScenarioId?: string;
+  spouseWarnings?: string[];
 }
 
 const ACCOUNT_LABELS: Record<WithdrawalAccount, string> = {
@@ -131,7 +137,7 @@ function CollapsibleSection({ id, icon, title, open, onToggle, children }: {
   );
 }
 
-export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }: SidebarFormProps) {
+export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, scenarios, activeScenarioId, spouseWarnings }: SidebarFormProps) {
   const updateField = <K extends keyof RetirementInputs>(field: K, value: RetirementInputs[K]) => {
     onChange({ ...inputs, [field]: value });
   };
@@ -202,6 +208,24 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
   const updateSpouse = (patch: Partial<NonNullable<RetirementInputs['spouse']>>) => {
     if (!inputs.spouse) return;
     updateField('spouse', { ...inputs.spouse, ...patch });
+  };
+
+  // ---- spouse adapter (built-in vs linked scenario) ----
+  // The spouse's source: 'builtin' = edited inline here (default); 'scenario'
+  // = the spouse IS another saved plan, referenced by id and materialized into
+  // `spouse` by the app (host wins on shared fields). Choosing a source writes
+  // spouseSource; the actual spouse values for a linked scenario come from the
+  // referenced plan, so the inline editors are hidden in that mode.
+  const spouseSource = inputs.spouseSource ?? { kind: 'builtin' as const };
+  const isLinkedSpouse = spouseSource.kind === 'scenario';
+  // Scenarios this spouse can link to: all saved plans except the active one
+  // (a plan can't be its own spouse).
+  const linkableScenarios = (scenarios ?? []).filter(s => s.id !== activeScenarioId);
+  const setSpouseSourceBuiltin = () => {
+    updateField('spouseSource', { kind: 'builtin' });
+  };
+  const setSpouseSourceScenario = (scenarioId: string) => {
+    updateField('spouseSource', { kind: 'scenario', scenarioId });
   };
 
   const updateRm = (patch: Partial<ReverseMortgage>) => {
@@ -762,6 +786,57 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
           </label>
           {inputs.spouse?.enabled && (
             <div className="space-y-3">
+              {/* Spouse source: built-in (edited inline) vs a link to another
+                  saved plan. The link is the source of truth; its person is
+                  materialized into the spouse plan, host wins on shared fields. */}
+              {linkableScenarios.length > 0 && (
+                <div className="flex rounded border border-neutral-700 overflow-hidden text-[11px]">
+                  <button
+                    onClick={setSpouseSourceBuiltin}
+                    className={`flex-1 px-2 py-1.5 font-medium ${!isLinkedSpouse ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white'}`}
+                  >
+                    Built-in
+                  </button>
+                  <button
+                    onClick={() => setSpouseSourceScenario(linkableScenarios[0]?.id ?? '')}
+                    className={`flex-1 px-2 py-1.5 font-medium ${isLinkedSpouse ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white'}`}
+                    title="Use another saved plan as the spouse"
+                  >
+                    Link a plan
+                  </button>
+                </div>
+              )}
+
+              {isLinkedSpouse ? (
+                <div className="space-y-2">
+                  <div>
+                    <label className={LABEL_CLS}>Spouse is this saved plan</label>
+                    <select
+                      value={spouseSource.kind === 'scenario' ? spouseSource.scenarioId : ''}
+                      onChange={(e) => setSpouseSourceScenario(e.target.value)}
+                      className={INPUT_CLS}
+                    >
+                      {linkableScenarios.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {(spouseWarnings ?? []).length > 0 && (
+                    <div className="px-2 py-1.5 bg-amber-900/30 border border-amber-700/50 rounded space-y-0.5">
+                      {(spouseWarnings ?? []).map((w, i) => (
+                        <p key={i} className="text-[10px] text-amber-300 leading-snug">⚠ {w}</p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-neutral-500 leading-snug">
+                    The linked plan's balances, ages and benefits run as the spouse. Your market
+                    assumptions, province and horizon apply to the household (host wins) — any of the
+                    spouse's own that differ are ignored, as warned above. Edit the linked plan to
+                    change them.
+                  </p>
+                </div>
+              ) : (
+              <>
               <div className="grid grid-cols-3 gap-1.5">
                 <div>
                   <label className={LABEL_CLS}>Age</label>
@@ -841,6 +916,8 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                 50% of eligible pension income to the lower-taxed spouse) is applied to the reported
                 household tax — see Settings → Engine.
               </p>
+              </>
+              )}
             </div>
           )}
         </CollapsibleSection>

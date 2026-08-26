@@ -6,6 +6,7 @@ import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
+import { resolveSpouseSource } from './lib/householdTypes';
 import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scenarioStorage';
 import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
 import { buildAppDb } from './lib/appDb';
@@ -351,16 +352,31 @@ function App() {
     setHasUnsavedChanges(false);
   };
 
+  // Resolve the spouse adapter: when the spouse is a reference to another
+  // scenario, materialize that scenario's person into `spouse` (host wins on
+  // the shared fields) and surface any conflicts as warnings. The engine and
+  // every display consumer always see a concrete SpouseInputs.
+  const spouseResolution = useMemo(
+    () => resolveSpouseSource(inputs, scenarios, activeScenarioId),
+    [inputs, scenarios, activeScenarioId],
+  );
+  const resolvedInputs = useMemo<RetirementInputs>(
+    () => (inputs.spouseSource?.kind === 'scenario'
+      ? { ...inputs, spouse: spouseResolution.spouse }
+      : inputs),
+    [inputs, spouseResolution],
+  );
+
   const results = useMemo(() => {
-    return calculateHousehold(inputs, config);
-  }, [inputs, config]);
+    return calculateHousehold(resolvedInputs, config);
+  }, [resolvedInputs, config]);
 
   // The projection export shows the active plan's own computed numbers. When a
   // spouse is disabled the spouse block lingers in the inputs (for re-enabling),
   // so export against a spouse-stripped copy to keep the file to just "you".
   const exportResults: RetirementResults = useMemo(
-    () => (inputs.spouse?.enabled ? results : calculateHousehold({ ...inputs, spouse: undefined }, config)),
-    [inputs, results, config],
+    () => (resolvedInputs.spouse?.enabled ? results : calculateHousehold({ ...resolvedInputs, spouse: undefined }, config)),
+    [resolvedInputs, results, config],
   );
 
   // ---- EQ steering surface state ----
@@ -458,8 +474,8 @@ function App() {
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
   const householdBreakdown = useMemo(
-    () => combineHouseholdBreakdown(results, inputs),
-    [results, inputs]
+    () => combineHouseholdBreakdown(results, resolvedInputs),
+    [results, resolvedInputs]
   );
 
   // Monte Carlo is its own page now: build the request while the route is
@@ -564,6 +580,9 @@ function App() {
             provinceCodes={Object.keys(config.provinces).sort()}
             config={config}
             onClose={() => setSidebarOpen(false)}
+            scenarios={scenarios}
+            activeScenarioId={activeScenarioId}
+            spouseWarnings={spouseResolution.warnings}
           />
         </div>
 
@@ -691,7 +710,7 @@ function App() {
                     retirementAge={results.retirementAge}
                     primaryBreakdown={results.spouse ? results.yearlyBreakdown : undefined}
                     spouseBreakdown={results.spouse?.yearlyBreakdown}
-                    spouseAgeOffset={inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge)}
+                    spouseAgeOffset={resolvedInputs.currentAge - (resolvedInputs.spouse?.currentAge ?? resolvedInputs.currentAge)}
                   />
                 </CollapsiblePanel>
               </>
@@ -793,7 +812,7 @@ function App() {
               <MathPage
                 inputs={inputs}
                 results={results}
-                spouseAgeOffset={inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge)}
+                spouseAgeOffset={resolvedInputs.currentAge - (resolvedInputs.spouse?.currentAge ?? resolvedInputs.currentAge)}
               />
             )}
 

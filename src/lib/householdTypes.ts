@@ -387,3 +387,91 @@ export function eventEndpoints(ev: CashEvent): { from: TransferEndpoint; to: Tra
     to: external,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Spouse-source resolution (the spouse-adapter the app actually stores)
+// ---------------------------------------------------------------------------
+
+export interface ResolvedSpouse {
+  /** The materialized spouse plan the engine runs (undefined when the link
+   *  can't be resolved — e.g. the referenced scenario was deleted). */
+  spouse?: SpouseInputs;
+  /** Host-wins conflicts + resolution problems, surfaced to the user. */
+  warnings: string[];
+}
+
+/**
+ * Materialize a spouse from its source. A builtin spouse is used as-is. A
+ * scenario spouse is looked up among the saved scenarios and its person half
+ * extracted into the SpouseInputs shape; the HOST's shared household fields
+ * (province, return, horizon) always win over the referenced plan's own, and
+ * each overridden field that differed is reported as a warning so the UI can
+ * show exactly what was ignored.
+ *
+ * Circular references (A's spouse is B while B's spouse is A) and self-
+ * references are guarded by comparing against the host's own scenario id and
+ * the referenced plan's own spouseSource: a detected cycle yields no spouse
+ * and a warning rather than a loop.
+ */
+export function resolveSpouseSource(
+  host: RetirementInputs,
+  scenarios: Array<{ id: string; inputs: RetirementInputs }>,
+  hostScenarioId?: string,
+): ResolvedSpouse {
+  const src = host.spouseSource;
+  if (!src || src.kind === 'builtin') {
+    return { spouse: host.spouse, warnings: [] };
+  }
+
+  const warnings: string[] = [];
+  const targetId = src.scenarioId;
+
+  // Self-reference is the degenerate cycle.
+  if (hostScenarioId != null && targetId === hostScenarioId) {
+    return { warnings: ['A plan cannot be its own spouse — the spouse link was ignored.'] };
+  }
+  const target = scenarios.find(s => s.id === targetId);
+  if (!target) {
+    return { warnings: ['Linked spouse scenario was not found — the spouse link was ignored.'] };
+  }
+  // Direct two-way cycle: the target names this host as ITS spouse.
+  const tSrc = target.inputs.spouseSource;
+  if (tSrc?.kind === 'scenario' && hostScenarioId != null && tSrc.scenarioId === hostScenarioId) {
+    return { warnings: ['Circular spouse reference detected — the spouse link was ignored.'] };
+  }
+
+  // Host wins on the shared household fields; report each that differed.
+  const their = target.inputs;
+  if (their.provinceCode !== host.provinceCode) {
+    warnings.push(`Province: host (${host.provinceCode}) used, spouse's (${their.provinceCode}) ignored.`);
+  }
+  if (their.investmentReturn !== host.investmentReturn) {
+    warnings.push('Investment return: host value used, spouse\'s ignored.');
+  }
+  if (their.maxAge !== host.maxAge) {
+    warnings.push('Horizon (max age): host value used, spouse\'s ignored.');
+  }
+
+  // Materialize the referenced plan's person into the SpouseInputs shape the
+  // engine runs (the shared fields come from the host, so they're not copied).
+  const spouse: SpouseInputs = {
+    enabled: true,
+    currentAge: their.currentAge,
+    retirementAge: their.retirementAge,
+    rrspBalance: their.rrspBalance,
+    tfsaBalance: their.tfsaBalance,
+    taxableBalance: their.taxableBalance,
+    cashCushionBalance: their.cashCushionBalance,
+    rrspContribution: their.rrspContribution,
+    tfsaContribution: their.tfsaContribution,
+    taxableContribution: their.taxableContribution,
+    cppStartAge: their.cppStartAge,
+    cppMonthlyAmount: their.cppMonthlyAmount,
+    oasStartAge: their.oasStartAge,
+    oasYearsInCanada: their.oasYearsInCanada,
+    desiredSpending: their.desiredSpending,
+    withdrawalOrder: their.withdrawalOrder,
+    pensions: their.pensions,
+  };
+  return { spouse, warnings };
+}

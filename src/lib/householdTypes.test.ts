@@ -5,6 +5,7 @@ import {
   legacyToHousehold,
   householdToLegacy,
   resolveHousehold,
+  resolveSpouseSource,
   isTransferEvent,
   eventEndpoints,
   type HouseholdInputs,
@@ -202,5 +203,60 @@ describe('cash-event transfer helpers', () => {
     const { from, to } = eventEndpoints(ev);
     expect(from).toEqual({ kind: 'account', person: 'primary', account: 'rrsp' });
     expect(to).toEqual({ kind: 'account', person: 'spouse', account: 'tfsa' });
+  });
+});
+
+describe('resolveSpouseSource — the spouse adapter the app stores', () => {
+  const scenarios = [
+    { id: 'me', inputs: baseInputs({ provinceCode: 'ONT', investmentReturn: 0.05, maxAge: 90 }) },
+    { id: 'partner', inputs: baseInputs({ provinceCode: 'QC', investmentReturn: 0.08, maxAge: 99, currentAge: 58, desiredSpending: 28000 }) },
+  ];
+
+  it('a builtin source returns the embedded spouse unchanged, no warnings', () => {
+    const host = baseInputs({ spouse: { enabled: true, currentAge: 57, retirementAge: 60, rrspBalance: 1, tfsaBalance: 2, taxableBalance: 3, cashCushionBalance: 4, rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0, cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40, desiredSpending: 25000 } });
+    host.spouseSource = { kind: 'builtin' };
+    const r = resolveSpouseSource(host, scenarios, 'me');
+    expect(r.spouse?.currentAge).toBe(57);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('a scenario source materializes the referenced plan as the spouse', () => {
+    const host = baseInputs({ provinceCode: 'ONT', investmentReturn: 0.05, maxAge: 90 });
+    host.spouseSource = { kind: 'scenario', scenarioId: 'partner' };
+    const r = resolveSpouseSource(host, scenarios, 'me');
+    expect(r.spouse?.currentAge).toBe(58);
+    expect(r.spouse?.desiredSpending).toBe(28000);
+    expect(r.spouse?.enabled).toBe(true);
+    // Host wins on the differing shared fields, each reported.
+    expect(r.warnings.some(w => w.includes('Province'))).toBe(true);
+    expect(r.warnings.some(w => w.includes('Investment return'))).toBe(true);
+    expect(r.warnings.some(w => w.includes('max age'))).toBe(true);
+  });
+
+  it('guards a self-reference', () => {
+    const host = baseInputs();
+    host.spouseSource = { kind: 'scenario', scenarioId: 'me' };
+    const r = resolveSpouseSource(host, scenarios, 'me');
+    expect(r.spouse).toBeUndefined();
+    expect(r.warnings.some(w => w.includes('own spouse'))).toBe(true);
+  });
+
+  it('guards a two-way circular reference', () => {
+    const host = baseInputs();
+    host.spouseSource = { kind: 'scenario', scenarioId: 'partner' };
+    // The partner names this host ('me') as ITS spouse → a cycle.
+    const partnerBack = baseInputs();
+    partnerBack.spouseSource = { kind: 'scenario', scenarioId: 'me' };
+    const r = resolveSpouseSource(host, [{ id: 'partner', inputs: partnerBack }], 'me');
+    expect(r.spouse).toBeUndefined();
+    expect(r.warnings.some(w => w.toLowerCase().includes('circular'))).toBe(true);
+  });
+
+  it('a missing referenced scenario yields no spouse and a warning', () => {
+    const host = baseInputs();
+    host.spouseSource = { kind: 'scenario', scenarioId: 'ghost' };
+    const r = resolveSpouseSource(host, scenarios, 'me');
+    expect(r.spouse).toBeUndefined();
+    expect(r.warnings.some(w => w.includes('not found'))).toBe(true);
   });
 });

@@ -57,6 +57,14 @@ export interface RetirementInputs {
   // Optional spouse: a second, independent plan whose results are combined
   // with the primary's for household totals.
   spouse?: SpouseInputs;
+  // How the spouse plan is supplied. Absent (or kind 'builtin') = the spouse
+  // is embedded directly in `spouse` (today's behaviour). kind 'scenario' =
+  // the spouse IS another saved scenario, referenced by id: the app resolves
+  // that scenario's person into `spouse` (host wins on the shared household
+  // fields, with the conflicts surfaced as warnings), so the engine always
+  // sees a concrete SpouseInputs. The reference is the source of truth;
+  // `spouse` is its materialized view.
+  spouseSource?: SpouseSource;
   // DB / bridge pensions: taxable income stacked with CPP/OAS. Bridge benefits
   // have endAge set; lifetime pensions leave it null.
   pensions?: Pension[];
@@ -65,6 +73,11 @@ export interface RetirementInputs {
   // the loan compounds against the home and erodes net equity.
   reverseMortgage?: ReverseMortgage;
 }
+
+/** Where the spouse's plan comes from (see RetirementInputs.spouseSource). */
+export type SpouseSource =
+  | { kind: 'builtin' }
+  | { kind: 'scenario'; scenarioId: string };
 
 export interface SpouseInputs {
   enabled: boolean;
