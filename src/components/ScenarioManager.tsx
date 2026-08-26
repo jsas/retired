@@ -1,5 +1,5 @@
-import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { Plus, Edit3, Trash2, Save, X, Copy } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit3, Trash2, Save, X, Copy, Check } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 
 interface Scenario {
@@ -12,26 +12,20 @@ interface ScenarioManagerProps {
   scenarios: Scenario[];
   activeScenarioId: string;
   onScenariosChange: (scenarios: Scenario[]) => void;
+  /** Select a scenario and navigate back to the dashboard. */
   onSelectScenario: (id: string) => void;
 }
 
-export interface ScenarioManagerHandle {
-  open: () => void;
-}
-
-export const ScenarioManager = forwardRef<ScenarioManagerHandle, ScenarioManagerProps>(function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, onSelectScenario }, ref) {
-  const [isOpen, setIsOpen] = useState(false);
+// Manage-scenarios page (was a modal). Light-themed to match the other routed
+// pages; selecting a scenario loads it and returns to the projection dashboard.
+export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, onSelectScenario }: ScenarioManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-
-  useImperativeHandle(ref, () => ({ open: () => setIsOpen(true) }));
 
   useEffect(() => {
     if (editingId) {
       const scenario = scenarios.find(s => s.id === editingId);
-      if (scenario) {
-        setEditingName(scenario.name);
-      }
+      if (scenario) setEditingName(scenario.name);
     }
   }, [editingId, scenarios]);
 
@@ -43,14 +37,12 @@ export const ScenarioManager = forwardRef<ScenarioManagerHandle, ScenarioManager
       inputs: JSON.parse(JSON.stringify(activeScenario.inputs))
     };
     onScenariosChange([...scenarios, newScenario]);
-    setIsOpen(false);
     onSelectScenario(newScenario.id);
   };
 
   const handleDuplicate = (id: string) => {
     const scenario = scenarios.find(s => s.id === id);
     if (!scenario) return;
-
     const newScenario: Scenario = {
       id: `scenario-${Date.now()}`,
       name: `${scenario.name} Copy`,
@@ -62,129 +54,105 @@ export const ScenarioManager = forwardRef<ScenarioManagerHandle, ScenarioManager
 
   const handleRename = () => {
     if (!editingId || !editingName.trim()) return;
-
-    const updated = scenarios.map(s =>
-      s.id === editingId ? { ...s, name: editingName } : s
-    );
-    onScenariosChange(updated);
+    onScenariosChange(scenarios.map(s => (s.id === editingId ? { ...s, name: editingName.trim() } : s)));
     setEditingId(null);
     setEditingName('');
   };
 
   const handleDelete = (id: string) => {
     if (scenarios.length <= 1) return;
-
     const updated = scenarios.filter(s => s.id !== id);
     onScenariosChange(updated);
-
-    if (id === activeScenarioId) {
-      onSelectScenario(updated[0].id);
-    }
+    if (id === activeScenarioId) onSelectScenario(updated[0].id);
   };
 
-  if (!isOpen) {
-    return null;
-  }
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-neutral-900 border border-neutral-700 rounded-lg w-96 max-h-[80vh] overflow-hidden">
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">Manage Scenarios</h3>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="text-neutral-500 hover:text-white"
-          >
-            <X size={16} />
-          </button>
+    <div className="max-w-2xl">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Manage Scenarios</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Click a scenario to load it. Duplicate to branch a what-if; rename or delete below.
+          </p>
         </div>
+        <button
+          onClick={handleCreateNew}
+          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white flex items-center gap-1.5"
+        >
+          <Plus size={12} /> New Scenario
+        </button>
+      </div>
 
-        <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
-          {scenarios.map(scenario => (
+      <div className="space-y-2">
+        {scenarios.map(scenario => {
+          const isActive = scenario.id === activeScenarioId;
+          const isEditing = editingId === scenario.id;
+          return (
             <div
               key={scenario.id}
-              className={`relative group flex items-center justify-between p-2.5 rounded ${
-                scenario.id === activeScenarioId
-                  ? 'bg-blue-600/20 border border-blue-600'
-                  : 'bg-neutral-800 hover:bg-neutral-700'
+              className={`flex items-center gap-2 p-3 rounded border bg-white ${
+                isActive ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200'
               }`}
             >
-              <button
-                onClick={() => {
-                  onSelectScenario(scenario.id);
-                  setIsOpen(false);
-                }}
-                className="flex-1 text-left"
-              >
-                <div className="text-xs text-white">{scenario.name}</div>
-                <div className="text-[10px] text-neutral-500">
-                  {scenario.id === activeScenarioId ? 'Active' : 'Inactive'}
-                </div>
-              </button>
-
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                <button
-                  onClick={() => handleDuplicate(scenario.id)}
-                  className="p-1 hover:bg-neutral-600 rounded"
-                  title="Duplicate"
-                >
-                  <Copy size={12} className="text-neutral-400" />
-                </button>
-                <button
-                  onClick={() => setEditingId(scenario.id)}
-                  className="p-1 hover:bg-neutral-600 rounded"
-                  title="Rename"
-                >
-                  <Edit3 size={12} className="text-neutral-400" />
-                </button>
-                <button
-                  onClick={() => handleDelete(scenario.id)}
-                  disabled={scenarios.length <= 1}
-                  className="p-1 hover:bg-neutral-600 rounded disabled:opacity-30"
-                  title="Delete"
-                >
-                  <Trash2 size={12} className="text-neutral-400" />
-                </button>
-              </div>
-
-              {editingId === scenario.id && (
-                <div className="absolute right-4 top-4 bg-neutral-800 border border-neutral-700 rounded p-2 flex items-center gap-2 z-10">
+              {isEditing ? (
+                <div className="flex flex-1 items-center gap-2">
                   <input
                     type="text"
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
-                    className="px-2 py-1 bg-neutral-900 border border-neutral-600 rounded text-xs text-white w-40"
+                    className="flex-1 px-2 py-1 bg-white border border-slate-300 rounded text-sm text-slate-900"
                     autoFocus
-                    onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRename();
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
                   />
-                  <button onClick={handleRename} className="p-1 hover:bg-neutral-700 rounded">
-                    <Save size={12} className="text-emerald-400" />
+                  <button onClick={handleRename} className="p-1.5 hover:bg-slate-100 rounded" title="Save name">
+                    <Save size={14} className="text-emerald-600" />
                   </button>
-                  <button onClick={() => setEditingId(null)} className="p-1 hover:bg-neutral-700 rounded">
-                    <X size={12} className="text-neutral-500" />
+                  <button onClick={() => setEditingId(null)} className="p-1.5 hover:bg-slate-100 rounded" title="Cancel">
+                    <X size={14} className="text-slate-500" />
                   </button>
                 </div>
+              ) : (
+                <>
+                  <button onClick={() => onSelectScenario(scenario.id)} className="flex-1 text-left min-w-0">
+                    <div className="text-sm font-medium text-slate-900 truncate">{scenario.name}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {isActive ? 'Active — currently loaded' : 'Click to load'}
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isActive && <Check size={15} className="text-blue-600 mr-1" />}
+                    <button
+                      onClick={() => handleDuplicate(scenario.id)}
+                      className="p-1.5 hover:bg-slate-100 rounded"
+                      title="Duplicate"
+                    >
+                      <Copy size={14} className="text-slate-500" />
+                    </button>
+                    <button
+                      onClick={() => setEditingId(scenario.id)}
+                      className="p-1.5 hover:bg-slate-100 rounded"
+                      title="Rename"
+                    >
+                      <Edit3 size={14} className="text-slate-500" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(scenario.id)}
+                      disabled={scenarios.length <= 1}
+                      className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-30"
+                      title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete'}
+                    >
+                      <Trash2 size={14} className="text-slate-500" />
+                    </button>
+                  </div>
+                </>
               )}
             </div>
-          ))}
-        </div>
-
-        <div className="p-4 border-t border-neutral-800 flex justify-between">
-          <button
-            onClick={handleCreateNew}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white flex items-center gap-1.5"
-          >
-            <Plus size={12} />
-            New Scenario
-          </button>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-xs text-white"
-          >
-            Close
-          </button>
-        </div>
+          );
+        })}
       </div>
     </div>
   );
-});
+}

@@ -4,7 +4,7 @@ import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
-import { ScenarioManager, type ScenarioManagerHandle } from './components/ScenarioManager';
+import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs } from './lib/retirementEngine';
 import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scenarioStorage';
 import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
@@ -238,7 +238,6 @@ function App() {
     setExportOptions(opts);
     saveProjectionExportOptions(opts);
   };
-  const scenarioManagerRef = useRef<ScenarioManagerHandle>(null);
   const activeScenario = scenarios.find(s => s.id === activeScenarioId)!;
 
   const [inputs, setInputs] = useState<RetirementInputs>(
@@ -516,7 +515,7 @@ function App() {
         onScenarioChange={handleScenarioChange}
         onSave={handleSaveScenario}
         hasUnsavedChanges={hasUnsavedChanges}
-        onManageScenarios={() => scenarioManagerRef.current?.open()}
+        onManageScenarios={() => setView('scenarios')}
         onResetScenario={() => {
           // Revert the sidebar to the current scenario's last-saved inputs
           // (not the built-in program defaults).
@@ -537,15 +536,6 @@ function App() {
         onImportDb={handleImportDb}
         onOpenDonate={() => { setView('projection'); setShowDonate((s) => !s); }}
         onOpenHelp={() => setView('help')}
-      />
-
-      {/* Scenario manager modal (triggered from the top bar) */}
-      <ScenarioManager
-        ref={scenarioManagerRef}
-        scenarios={scenarios}
-        activeScenarioId={activeScenarioId}
-        onScenariosChange={setScenarios}
-        onSelectScenario={handleScenarioChange}
       />
 
       <div className="relative flex flex-1 flex-col md:flex-row md:overflow-hidden">
@@ -608,6 +598,7 @@ function App() {
                 {view === 'backtest' && <span className="text-slate-900">Historical Backtest</span>}
                 {view === 'print' && <span className="text-slate-900">Print Summary</span>}
                 {view === 'export' && <span className="text-slate-900">Export Projection</span>}
+                {view === 'scenarios' && <span className="text-slate-900">Manage Scenarios</span>}
               </div>
               {/* Toolbar — always visible. Every link navigates to its own routed
                   page (Math/Steering/Optimize/Compare/Print/Export) except Share
@@ -769,6 +760,15 @@ function App() {
                 onClose={() => setView('projection')}
                 onExport={handleExportProjection}
                 hasSpouse={!!results.spouse}
+              />
+            )}
+
+            {view === 'scenarios' && (
+              <ScenarioManager
+                scenarios={scenarios}
+                activeScenarioId={activeScenarioId}
+                onScenariosChange={setScenarios}
+                onSelectScenario={(id) => { handleScenarioChange(id); setView('projection'); }}
               />
             )}
 

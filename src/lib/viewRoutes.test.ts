@@ -12,6 +12,7 @@ describe('viewFromHash', () => {
     expect(viewFromHash('#/backtest')).toBe('backtest');
     expect(viewFromHash('#/print')).toBe('print');
     expect(viewFromHash('#/export')).toBe('export');
+    expect(viewFromHash('#/scenarios')).toBe('scenarios');
     expect(viewFromHash('#/help')).toBe('help');
     expect(viewFromHash('#/settings')).toBe('settings');
   });
@@ -43,7 +44,7 @@ describe('hashForView', () => {
   it('round-trips every view', () => {
     const views: View[] = [
       'projection', 'math', 'eq', 'optimize', 'compare', 'montecarlo',
-      'backtest', 'print', 'export', 'help', 'settings',
+      'backtest', 'print', 'export', 'scenarios', 'help', 'settings',
     ];
     for (const v of views) {
       expect(viewFromHash(hashForView(v))).toBe(v);

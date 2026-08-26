@@ -13,7 +13,8 @@ export type View =
   | 'montecarlo'
   | 'backtest'
   | 'print'
-  | 'export';
+  | 'export'
+  | 'scenarios';
 
 export const VIEW_ROUTES: Record<View, string> = {
   projection: 'projection',
@@ -25,6 +26,7 @@ export const VIEW_ROUTES: Record<View, string> = {
   backtest: 'backtest',
   print: 'print',
   export: 'export',
+  scenarios: 'scenarios',
   help: 'help',
   settings: 'settings',
 };
