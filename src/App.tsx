@@ -38,6 +38,7 @@ import { MathPage } from './components/MathPage';
 import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { runEqSolverAuto } from './lib/runEqSolver';
+import { solveEqReadout } from './lib/eqSolver';
 import { renderRange, axisValue, consistentAges } from './lib/eqConstraints';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
@@ -392,9 +393,49 @@ function App() {
     successRate: null, grid: null, gridSize: 9, solving: false,
   });
 
-  // Re-solve the success-rate readout + pad shading whenever the plan changes,
-  // debounced so dragging a control doesn't fire a 500-run batch per pixel. The
-  // grid streams in row-by-row (center-out) so the pad shades in live.
+  // The success-rate GRID is sampled across retirementAge × desiredSpending, so
+  // each grid cell OVERWRITES those two inputs (withAxis) — their current values
+  // don't affect any cell's probability. The grid therefore depends only on the
+  // plan's FINANCIAL inputs (balances, contributions, return, volatility, ages,
+  // CPP/OAS, pensions, spouse, events, maxAge), the config, and the rendered
+  // range (which grows in whole-axis steps when a value crosses the axis max).
+  // This key captures exactly those, omitting the two pad axes, so dragging the
+  // retirement-age / spending VALUE thumbs (or the pad dot) leaves the key — and
+  // the cached grid — unchanged. Only the cheap readout re-runs on those drags.
+  const eqGridKey = useMemo(() => {
+    const { retirementAge: _ra, desiredSpending: _ds, ...financial } = inputs;
+    return JSON.stringify({
+      financial,
+      config,
+      rx: renderRange('retirementAge', axisValue(inputs, 'retirementAge'), inputs),
+      ry: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending'), inputs),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputs, config]);
+
+  // The success-rate READOUT under the dot is one cheap Monte Carlo node on the
+  // main thread. Unlike the grid, it DOES depend on the current point, so it
+  // re-solves on every inputs change (debounced) — including pad-axis drags.
+  useEffect(() => {
+    if (view !== 'eq') return;
+    setEqSolved(s => ({ ...s, solving: true }));
+    const t = setTimeout(() => {
+      try {
+        const successRate = solveEqReadout({ inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } });
+        setEqSolved(s => ({ ...s, successRate, solving: false }));
+      } catch {
+        setEqSolved(s => ({ ...s, solving: false }));
+      }
+    }, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, inputs, config]);
+
+  // Re-solve the success-rate pad shading only when the grid's actual inputs
+  // change (eqGridKey) — NOT on every plan edit. Dragging the retirement-age or
+  // spending value thumbs moves the dot but doesn't change any grid cell, so the
+  // expensive 81-node worker pool is skipped entirely on those drags. The grid
+  // streams in row-by-row (center-out) so the pad shades in live.
   useEffect(() => {
     if (view !== 'eq') return;
     setEqSolved(s => ({ ...s, solving: true }));
@@ -409,12 +450,12 @@ function App() {
             y: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending'), inputs),
           },
         },
-        (res) => setEqSolved({
-          successRate: res.successRate,
+        (res) => setEqSolved(s => ({
+          ...s,
           grid: res.grid,
           gridSize: res.gridMeta?.size ?? 9,
           solving: false,
-        }),
+        })),
         (msg) => { console.warn('EQ solve failed:', msg); setEqSolved(s => ({ ...s, solving: false })); },
         // Stream partial rows: write each finished row's rates into the grid so
         // the gradient fills in live (center-out). Solved rows overwrite.
@@ -429,7 +470,7 @@ function App() {
     }, 250);
     return () => { clearTimeout(t); cancelEqSolveRef.current?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, inputs, config]);
+  }, [view, eqGridKey]);
 
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
@@ -749,7 +790,7 @@ function App() {
 
                 {/* KPI Cards */}
                 <CollapsiblePanel id="summary" title="Projection Summary">
-                  <MetricCards results={results} />
+                  <MetricCards results={results} inputs={inputs} />
                 </CollapsiblePanel>
 
                 {/* Interactive projection timeline (household when a spouse is enabled) */}

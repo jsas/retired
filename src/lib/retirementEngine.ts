@@ -1020,6 +1020,36 @@ export function combineHouseholdBreakdown(
   });
 }
 
+/** The household-level outcome of a plan run: when the COMBINED money runs out. */
+export interface HouseholdOutcome {
+  /** First age the combined household balance is exhausted; null = funded to max age. */
+  depletionAge: number | null;
+  /** Combined household balance at max age (0 once depleted). */
+  endingBalance: number;
+  status: 'ON_TRACK' | 'SHORTFALL';
+}
+
+/**
+ * Household-first verdict. Couples share money: the plan only runs out when the
+ * COMBINED balance (both partners' accounts, summed by combineHouseholdBreakdown)
+ * is exhausted — not when either partner's silo independently hits zero. This is
+ * the verdict the UI shows; the per-person plans remain for tax/GIS/drill-down.
+ *
+ * Depletion = a year where the combined balance is exhausted AND there's still an
+ * unfunded spending gap (shortfall > 0) — i.e. the household genuinely can't cover
+ * that year. A single person reduces to the primary's own result unchanged.
+ */
+export function householdOutcome(results: RetirementResults, inputs: RetirementInputs): HouseholdOutcome {
+  const combined = combineHouseholdBreakdown(results, inputs);
+  const depletedRow = combined.find(y => y.endingBalance <= 0 && (y.shortfall ?? 0) > 0);
+  const depletionAge = depletedRow ? depletedRow.age : null;
+  const last = combined[combined.length - 1];
+  const endingBalance = depletionAge !== null ? 0 : Math.max(0, last?.endingBalance ?? 0);
+  const status: 'ON_TRACK' | 'SHORTFALL' =
+    depletionAge !== null && depletionAge < inputs.maxAge ? 'SHORTFALL' : 'ON_TRACK';
+  return { depletionAge, endingBalance, status };
+}
+
 /**
  * Pension income splitting (couples). CRA lets up to pensionSplitMaxRate of
  * eligible pension income be allocated from the higher-taxed spouse to the

@@ -20,7 +20,7 @@
 // per axis, so the boundary is found by binary search and "slide along the
 // boundary" is well-defined.
 
-import { calculateHousehold, type RetirementInputs } from './retirementEngine';
+import { calculateHousehold, householdOutcome, type RetirementInputs } from './retirementEngine';
 import type { AppConfig } from './appConfig';
 
 // ---------------------------------------------------------------------------
@@ -334,14 +334,11 @@ export interface DeterministicOutcome {
   status: 'ON_TRACK' | 'SHORTFALL';
 }
 
-/** Run the deterministic engine once and reduce to the readout-relevant outcome. */
+/** Run the deterministic engine once and reduce to the readout-relevant outcome.
+ *  Household-first: the verdict reflects when the COMBINED money runs out, so a
+ *  funded partner covering the other's gap reads ON_TRACK, not a spurious
+ *  "Shortfall" from the leaner silo. */
 export function deterministicOutcome(inputs: RetirementInputs, config: AppConfig): DeterministicOutcome {
   const r = calculateHousehold(inputs, config);
-  const last = r.yearlyBreakdown[r.yearlyBreakdown.length - 1];
-  const depleted = r.depletionAge !== null;
-  return {
-    depletionAge: r.depletionAge,
-    endingBalance: depleted ? 0 : Math.max(0, last?.endingBalance ?? 0),
-    status: r.status,
-  };
+  return householdOutcome(r, inputs);
 }

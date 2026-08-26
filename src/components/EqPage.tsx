@@ -169,8 +169,8 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
       </div>
 
       <div className="flex items-center justify-between text-[10px] text-slate-500 mt-0.5">
-        <span>at least <span className="font-medium text-slate-700">{spec.format(n.min)}</span></span>
-        <span>at most <span className="font-medium text-slate-700">{spec.format(n.max)}</span></span>
+        <span className="font-medium text-slate-700">{spec.format(n.min)}</span>
+        <span className="font-medium text-slate-700">{spec.format(n.max)}</span>
       </div>
     </div>
   );
@@ -182,14 +182,13 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
 // corners: grab a corner to resize that axis's band (or both, diagonally).
 // The plane is shaded by where the plan meets a reference success rate.
 // ---------------------------------------------------------------------------
-function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, onBandsChange, solved, onChange }: {
+function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, solved, onChange }: {
   xAxis: EqAxis;
   yAxis: EqAxis;
   xLabel: string;
   yLabel: string;
   inputs: RetirementInputs;
   bands: Bands;
-  onBandsChange: (b: Bands) => void;
   solved: EqSolvedState;
   onChange: (inputs: RetirementInputs) => void;
 }) {
@@ -232,53 +231,9 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, onBandsChange, sol
     apply(fromPointer(e));
   };
 
-  // Resize the band rectangle from a corner. minSide = drags the min edge
-  // (left/bottom); maxSide = drags the max edge (right/top). The dragged value
-  // may cross the opposite edge — normalizeBand re-orders, so you can sweep a
-  // corner across the box to flip which edge you're holding.
-  const setBandEdge = (axis: EqAxis, side: 'min' | 'max', raw: number) => {
-    const band = bands[axis];
-    const next = normalizeBand(axis, { ...band, [side]: raw });
-    onBandsChange({ ...bands, [axis]: next });
-  };
-
-  const cornerDrag = (xSide: 'min' | 'max' | null, ySide: 'min' | 'max' | null) => (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const pad = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
-    const move = (ev: PointerEvent) => {
-      const rect = pad.getBoundingClientRect();
-      const fx = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
-      const fy = Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height));
-      if (xSide) setBandEdge(xAxis, xSide, xView.min + fx * (xView.max - xView.min));
-      if (ySide) setBandEdge(yAxis, ySide, yView.min + (1 - fy) * (yView.max - yView.min));
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-
   const xLimited = isLimited(xAxis, bands[xAxis]);
   const yLimited = isLimited(yAxis, bands[yAxis]);
   const anyLimit = xLimited || yLimited;
-
-  // Corner handles sit on the band rectangle's corners. A corner only controls
-  // the axes that are limited (an unlimited axis has no edge to grab).
-  const corners: Array<{ xSide: 'min' | 'max' | null; ySide: 'min' | 'max' | null; cx: number; cy: number }> = [];
-  if (anyLimit) {
-    const xs: Array<'min' | 'max' | null> = xLimited ? ['min', 'max'] : [null];
-    const ys: Array<'min' | 'max' | null> = yLimited ? ['min', 'max'] : [null];
-    for (const xSide of xs) {
-      for (const ySide of ys) {
-        const cx = xSide === null ? toFracX(point.x) : toFracX(xSide === 'min' ? xRange.min : xRange.max);
-        const cy = ySide === null ? toFracY(point.y) : toFracY(ySide === 'min' ? yRange.min : yRange.max);
-        corners.push({ xSide, ySide, cx, cy });
-      }
-    }
-  }
 
   return (
     <div className="bg-white border border-slate-200 rounded p-3">
@@ -315,17 +270,6 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, onBandsChange, sol
         <span className="absolute left-1 top-0.5 text-[9px] text-slate-400">{ySpec.format(yView.max)}</span>
         <span className="absolute left-1 bottom-4 text-[9px] text-slate-400">{ySpec.format(yView.min)}</span>
 
-        {/* corner resize handles (draggable) */}
-        {corners.map((c, i) => (
-          <div
-            key={i}
-            onPointerDown={cornerDrag(c.xSide, c.ySide)}
-            className="absolute w-3.5 h-3.5 -ml-[7px] -mt-[7px] rounded-sm border-2 border-white bg-blue-500 shadow cursor-nwse-resize hover:bg-blue-600"
-            style={{ left: `${c.cx * 100}%`, top: `${c.cy * 100}%` }}
-            title="Drag to resize the allowed range"
-          />
-        ))}
-
         <div
           className="absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 border-white bg-blue-600 shadow pointer-events-none"
           style={{ left: `${toFracX(point.x) * 100}%`, top: `${toFracY(point.y) * 100}%` }}
@@ -349,15 +293,16 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, onBandsChange, sol
 // ---------------------------------------------------------------------------
 
 // Success-rate reference where the gradient crosses from red to green.
-const GRADIENT_TARGET = 0.9;
+const GRADIENT_TARGET = 0.8;
 
 /** Map a success rate (0..1) to an [r,g,b] color: red below target → yellow at
- *  target → green above. Slightly saturated for readability. */
+ *  target → green above. Clear hue separation with a deeper range so the pad
+ *  reads as color, not a gray wash. */
 function rateColor(rate: number): [number, number, number] {
-  // Anchors: deep red (0%), amber-yellow (target), rich green (100%).
-  const RED: [number, number, number] = [220, 60, 54];
-  const YELLOW: [number, number, number] = [233, 196, 72];
-  const GREEN: [number, number, number] = [34, 158, 92];
+  // Anchors: brick red (0%), warm amber (target), deep green (100%).
+  const RED: [number, number, number] = [234, 209, 220];
+  const YELLOW: [number, number, number] = [255, 242, 204];
+  const GREEN: [number, number, number] = [217, 234, 211];
   const lerp = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [
     Math.round(a[0] + (b[0] - a[0]) * t),
     Math.round(a[1] + (b[1] - a[1]) * t),

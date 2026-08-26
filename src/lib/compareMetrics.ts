@@ -2,7 +2,7 @@
 // engine (with the current config) and extract the four verdict-card numbers,
 // plus a signed diff of each against a chosen baseline. Kept separate from the
 // UI so the verdict-derivation and diff logic is unit-testable.
-import { calculateHousehold, type RetirementResults } from './retirementEngine';
+import { calculateHousehold, householdOutcome, type RetirementResults, type RetirementInputs } from './retirementEngine';
 import type { Scenario } from './scenarioStorage';
 import type { AppConfig } from './appConfig';
 
@@ -40,25 +40,27 @@ export interface ScenarioComparison {
   };
 }
 
-/** Extract the flattened verdict metrics from a computed result. */
-export function metricsFromResults(id: string, name: string, results: RetirementResults): ScenarioMetrics {
+/** Extract the flattened verdict metrics from a computed result. The verdict
+ *  (depletion age + status) is household-first: when the COMBINED money runs
+ *  out, not when either partner's silo does. */
+export function metricsFromResults(id: string, name: string, results: RetirementResults, inputs?: RetirementInputs): ScenarioMetrics {
   const spouse = results.spouse;
-  const depletionAges = [results.depletionAge, spouse?.depletionAge].filter((a): a is number => a != null);
+  const ho = inputs ? householdOutcome(results, inputs) : undefined;
   return {
     id,
     name,
     isCouple: !!spouse,
     householdWorth: results.totalNetWorthAtRetirement + (spouse?.totalNetWorthAtRetirement ?? 0),
-    depletionAge: depletionAges.length > 0 ? Math.min(...depletionAges) : null,
+    depletionAge: ho ? ho.depletionAge : results.depletionAge,
     withdrawalRate: results.withdrawalRate,
-    status: results.status,
+    status: ho ? ho.status : results.status,
   };
 }
 
 /** Run one scenario's inputs through the engine and extract its metrics. */
 export function computeScenarioMetrics(scenario: Scenario, config: AppConfig): ScenarioMetrics {
   const results = calculateHousehold(scenario.inputs, config);
-  return metricsFromResults(scenario.id, scenario.name, results);
+  return metricsFromResults(scenario.id, scenario.name, results, scenario.inputs);
 }
 
 // Display tolerances: below these a diff reads as "no change".

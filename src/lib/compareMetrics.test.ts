@@ -30,7 +30,7 @@ describe('metricsFromResults', () => {
     expect(m.status).toBe(r.status);
   });
 
-  it('sums household worth and takes the earliest depletion across spouses', () => {
+  it('sums household worth and reads depletion household-first (combined money)', () => {
     const inputs = baseInputs({
       tfsaBalance: 400000, desiredSpending: 20000, cppStartAge: null, oasStartAge: null,
       spouse: {
@@ -42,14 +42,15 @@ describe('metricsFromResults', () => {
       },
     });
     const r = calculateHousehold(inputs, config);
-    const m = metricsFromResults('c', 'Couple', r);
+    const m = metricsFromResults('c', 'Couple', r, inputs);
     expect(m.isCouple).toBe(true);
     expect(m.householdWorth).toBeCloseTo(
       r.totalNetWorthAtRetirement + r.spouse!.totalNetWorthAtRetirement, 6,
     );
-    // The spouse (lean) depletes; the household depletion age is the earliest.
-    expect(m.depletionAge).toBe(r.spouse!.depletionAge);
-    expect(m.status).toBe('SHORTFALL');
+    // Household-first: the spouse silo is lean, but the funded primary covers it —
+    // combined money lasts, so no spurious household shortfall.
+    expect(m.depletionAge).toBeNull();
+    expect(m.status).toBe('ON_TRACK');
   });
 
   it('reports depletionAge null when the plan never runs out', () => {

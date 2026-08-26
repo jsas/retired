@@ -102,6 +102,53 @@ describe('deterministicOutcome', () => {
     expect(o.endingBalance).toBeGreaterThan(0);
     expect(o.status).toBe('ON_TRACK');
   });
+
+  it('a funded primary stays ON_TRACK even with an enabled funded spouse', () => {
+    const rich = withAxis(lean(), 'desiredSpending', 5000);
+    rich.spouse = {
+      enabled: true, currentAge: 60, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 300000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+      desiredSpending: 5000,
+    };
+    const o = deterministicOutcome(rich, config);
+    expect(o.status).toBe('ON_TRACK');
+    expect(o.depletionAge).toBeNull();
+    // Household ending balance combines both partners.
+    expect(o.endingBalance).toBeGreaterThan(0);
+  });
+
+  it('a funded primary covering a broke spouse reads ON_TRACK (household-first)', () => {
+    const rich = withAxis(lean(), 'desiredSpending', 5000);
+    rich.spouse = {
+      enabled: true, currentAge: 60, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 20000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+      desiredSpending: 60000, // spouse silo alone would deplete, but the household covers it
+    };
+    const o = deterministicOutcome(rich, config);
+    // Household-first verdict: combined money is ample, so no spurious shortfall.
+    expect(o.status).toBe('ON_TRACK');
+    expect(o.depletionAge).toBeNull();
+    expect(o.endingBalance).toBeGreaterThan(0);
+  });
+
+  it('a household that genuinely cannot cover both reads SHORTFALL', () => {
+    // Both partners lean with high spending → combined money runs out.
+    const broke = lean(); // primary depletes on its own
+    broke.spouse = {
+      enabled: true, currentAge: 60, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 10000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+      desiredSpending: 50000,
+    };
+    const o = deterministicOutcome(broke, config);
+    expect(o.status).toBe('SHORTFALL');
+    expect(o.depletionAge).not.toBeNull();
+  });
 });
 
 describe('bands — per-control crop range (no enable flag)', () => {
