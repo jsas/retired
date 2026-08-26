@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   AXES, axisValue, withAxis, deterministicOutcome,
-  fullBand, normalizeBand, effectiveRange, clampToBand, isLimited, renderRange, bandWithValue,
+  fullBand, normalizeBand, effectiveRange, clampToBand, isLimited, renderRange, bandWithValue, consistentAges,
   type Band,
 } from './eqConstraints';
 import { testConfig, baseInputs } from '../test/helpers';
@@ -212,5 +212,26 @@ describe('bandWithValue — the crop frames the value', () => {
     // Value beyond the axis clamps to the axis max.
     expect(bandWithValue('retirementAge', { min: 49, max: 60 }, 99))
       .toEqual({ min: 49, max: 75 });
+  });
+});
+
+describe('consistentAges — everything follows current age', () => {
+  it('raises retirement age (and max age) when current age passes them', () => {
+    const i = baseInputs({ currentAge: 60, retirementAge: 55, maxAge: 58 });
+    const c = consistentAges(i);
+    expect(c.retirementAge).toBe(60);
+    expect(c.maxAge).toBe(60);
+  });
+
+  it('lowering current age leaves a valid plan untouched', () => {
+    const i = baseInputs({ currentAge: 45, retirementAge: 60, maxAge: 90 });
+    expect(consistentAges(i)).toBe(i); // nothing to fix — same object
+  });
+
+  it('clamps CPP/OAS into their eligible windows', () => {
+    const i = baseInputs({ currentAge: 50, retirementAge: 60, maxAge: 90, cppStartAge: 75, oasStartAge: 55 });
+    const c = consistentAges(i);
+    expect(c.cppStartAge).toBe(70);
+    expect(c.oasStartAge).toBe(65);
   });
 });

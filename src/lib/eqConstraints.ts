@@ -248,6 +248,36 @@ export function bandWithValue(axis: EqAxis, band: Band, value: number): Band {
   return n;
 }
 
+/**
+ * Keep the plan's ages internally consistent when CURRENT AGE changes. The
+ * engine runs an accumulation phase from currentAge → retirementAge, so a
+ * retirement age below the current age is invalid (no saving years). When the
+ * user edits current age, clamp the dependent ages so the plan always makes
+ * sense:
+ *
+ *   retirementAge ≥ currentAge   (can't retire before now)
+ *   maxAge        ≥ retirementAge (the plan must reach at least retirement)
+ *   cppStartAge / oasStartAge     clamped into their eligible windows
+ *
+ * Only out-of-range fields are touched; valid ones pass through unchanged.
+ */
+export function consistentAges<T extends RetirementInputs>(inputs: T): T {
+  const cur = Math.round(inputs.currentAge);
+  const retirementAge = Math.max(cur, Math.round(inputs.retirementAge));
+  const maxAge = Math.max(retirementAge, Math.round(inputs.maxAge));
+  const clampWindow = (v: number | null, lo: number, hi: number) =>
+    v == null ? v : Math.min(hi, Math.max(lo, Math.round(v)));
+  const cppStartAge = clampWindow(inputs.cppStartAge, AXES.cppStartAge.min, AXES.cppStartAge.max);
+  const oasStartAge = clampWindow(inputs.oasStartAge, AXES.oasStartAge.min, AXES.oasStartAge.max);
+  if (
+    retirementAge === inputs.retirementAge && maxAge === inputs.maxAge &&
+    cppStartAge === inputs.cppStartAge && oasStartAge === inputs.oasStartAge
+  ) {
+    return inputs;
+  }
+  return { ...inputs, retirementAge, maxAge, cppStartAge, oasStartAge };
+}
+
 // ---------------------------------------------------------------------------
 // Deterministic outcome (drives the readout cards)
 // ---------------------------------------------------------------------------

@@ -38,7 +38,7 @@ import { MathPage } from './components/MathPage';
 import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { runEqSolverAuto } from './lib/runEqSolver';
-import { renderRange, axisValue } from './lib/eqConstraints';
+import { renderRange, axisValue, consistentAges } from './lib/eqConstraints';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
 // First-run scenarios: three realistic, mutually distinct starting points that
@@ -362,7 +362,9 @@ function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const handleInputsChange = (newInputs: RetirementInputs) => {
-    setInputs(newInputs);
+    // Keep the plan's ages internally consistent: editing current age can
+    // invalidate retirement age (retire before now) etc., so clamp them.
+    setInputs(consistentAges(newInputs));
     setHasUnsavedChanges(true);
   };
 

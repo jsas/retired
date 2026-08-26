@@ -70,8 +70,9 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
   // The value knob moves inside the crop [n.min, n.max].
   const setValue = (raw: number) => onChange(withAxis(inputs, axis, clampToBand(axis, band, raw)));
 
-  // Drag a crop edge. The edge can't cross the opposite edge; if it sweeps past
-  // the current value the value is pulled along (so a fresh crop frames it).
+  // Drag a crop edge. The edge can't cross the opposite edge. The value only
+  // moves when the crop actually EXCLUDES it (the edge swept past it) — it is
+  // NOT dragged along on every edge move, so the knob stays put while you fence.
   // Edges may ride the grown range (past the base axis max) while it's grown.
   const setEdge = (edge: 'min' | 'max', raw: number) => {
     const clamped = Math.min(range.max, Math.max(range.min, raw));
@@ -79,7 +80,9 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
     const bounded = edge === 'min' ? Math.min(snapped, n.max) : Math.max(snapped, n.min);
     const next = normalizeBand(axis, { ...n, [edge]: bounded });
     onBand(next);
-    onChange(withAxis(inputs, axis, clampToBand(axis, next, value)));
+    if (value < next.min || value > next.max) {
+      onChange(withAxis(inputs, axis, clampToBand(axis, next, value)));
+    }
   };
 
   // The value knob is a CUSTOM pointer-dragged control, not a third range
@@ -457,8 +460,15 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
       // crop min back up to the axis min and undo the plan's logical floor
       // (e.g. savings floor = locked RRSP+TFSA, retirement ≥ current age).
       let { min, max } = band;
-      if (value > max) max = Math.min(range.max, Math.max(range.min, INT_AXES.has(axis) ? Math.round(value) : value));
-      else if (value < min) min = Math.min(range.max, Math.max(range.min, INT_AXES.has(axis) ? Math.round(value) : value));
+      const round = (v: number) => INT_AXES.has(axis) ? Math.round(v) : v;
+      const inRange = (v: number) => Math.min(range.max, Math.max(range.min, round(v)));
+      if (value > max) max = inRange(value);
+      else if (value < min) min = inRange(value);
+      // A crop edge left BELOW the rendered floor (e.g. a fraction-persisted
+      // crop saved before the range grew a floor) would render the whole track
+      // selected and mis-frame the value. The value sits at the floor (it did
+      // NOT cross it), so reset that edge up to the floor.
+      if (min < range.min && value <= range.min) min = range.min;
       if (min !== band.min || max !== band.max) {
         next[axis] = { min, max };
         changed = true;
