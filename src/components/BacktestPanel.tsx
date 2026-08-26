@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { X, History } from 'lucide-react';
+import { History } from 'lucide-react';
 import type { BacktestResult } from '../lib/historicalReturns';
 import { HISTORICAL_REAL_RETURNS } from '../lib/historicalReturns';
 
@@ -13,12 +13,11 @@ function formatCurrency(value: number): string {
 
 interface BacktestPanelProps {
   result: BacktestResult;
-  onClose: () => void;
   onMounted?: () => void;
 }
 
-// GCP-console style panel: header row, KPI chips, a bar per rolling window.
-export function BacktestPanel({ result, onClose, onMounted }: BacktestPanelProps) {
+// GCP-console style page: header row, KPI chips, a bar per rolling window.
+export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
   // Let the parent scroll this panel into view once it's actually in the DOM.
   useEffect(() => { onMounted?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -35,25 +34,16 @@ export function BacktestPanel({ result, onClose, onMounted }: BacktestPanelProps
   const lastStart = result.windows[result.windows.length - 1]?.startYear ?? startYear;
 
   return (
-    <div className="mt-6 bg-white border border-slate-200 rounded">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <History size={15} className="text-slate-500" />
-          <h3 className="text-sm font-semibold text-slate-800">Historical Backtest</h3>
-          <span className="text-[11px] text-slate-500">
-            {result.windowCount} rolling {result.windowYears}-yr windows · Canadian real returns {startYear}–{endYear}
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 hover:bg-slate-100 rounded"
-          title="Close backtest"
-        >
-          <X size={15} className="text-slate-500" />
-        </button>
+    <div className="max-w-4xl">
+      <div className="flex items-center gap-2 mb-3">
+        <History size={18} className="text-blue-600" />
+        <h2 className="text-lg font-bold text-slate-900">Historical Backtest</h2>
+        <span className="text-[11px] text-slate-500">
+          {result.windowCount} rolling {result.windowYears}-yr windows · Canadian real returns {startYear}–{endYear}
+        </span>
       </div>
 
-      <div className="p-4">
+      <div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div className="border border-slate-200 rounded p-3">
             <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Success Rate</div>

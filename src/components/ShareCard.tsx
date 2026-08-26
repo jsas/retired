@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import { X, Copy, Check, Share2 } from 'lucide-react';
+import { Copy, Check, Share2 } from 'lucide-react';
 
 interface ShareCardProps {
   url: string;
-  onClose: () => void;
 }
 
-// Closable card showing the shareable link for the active plan. The link
-// encodes the plan's inputs in the URL fragment (no server) and is built from
-// the current origin + path, so it works for anyone who can reach this same
-// host:port/path — a hosted deployment, a LAN IP, or localhost on this machine.
-export function ShareCard({ url, onClose }: ShareCardProps) {
+// Share-link page. The link encodes the plan's inputs in the URL fragment (no
+// server) and is built from the current origin + path, so it works for anyone
+// who can reach this same host:port/path — a hosted deployment, a LAN IP, or
+// localhost on this machine.
+export function ShareCard({ url }: ShareCardProps) {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
@@ -28,18 +27,13 @@ export function ShareCard({ url, onClose }: ShareCardProps) {
   };
 
   return (
-    <div className="mb-4 bg-white border border-slate-200 rounded">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <Share2 size={15} className="text-slate-500" />
-          <h3 className="text-sm font-semibold text-slate-800">Share this plan</h3>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
-          <X size={15} className="text-slate-500" />
-        </button>
+    <div className="max-w-2xl">
+      <div className="flex items-center gap-2 mb-3">
+        <Share2 size={18} className="text-blue-600" />
+        <h2 className="text-lg font-bold text-slate-900">Share this plan</h2>
       </div>
 
-      <div className="p-4">
+      <div>
         <div className="flex items-center gap-2">
           <input
             id="share-url-input"

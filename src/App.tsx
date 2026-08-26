@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { FileSpreadsheet, Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal } from 'lucide-react';
+import { FileSpreadsheet, Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -174,7 +174,13 @@ function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
   const [activeScenarioId, setActiveScenarioId] = useState<string>(initialState.activeScenarioId);
   const [config, setConfig] = useState<AppConfig>(loadAppConfig);
-  const [view, setView] = useState<View>(() => viewFromHash(window.location.hash) ?? 'projection');
+  // Default landing: the Welcome page unless the user checked "don't show this
+  // again" (or General settings forces it on every load); otherwise the
+  // projection dashboard. An explicit hash route always wins.
+  const [view, setView] = useState<View>(() =>
+    viewFromHash(window.location.hash)
+    ?? (config.general.showWelcomeOnLoad || !isWelcomeDismissed() ? 'welcome' : 'projection')
+  );
 
   // Keep the URL hash in sync with the current view (push a history entry per
   // navigation), and follow hash changes so back/forward and pasted links work.
@@ -198,40 +204,10 @@ function App() {
   const [mcRequest, setMcRequest] = useState<MonteCarloRequest | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const shareCardRef = useRef<HTMLDivElement>(null);
-  const donateCardRef = useRef<HTMLDivElement>(null);
   const cancelEqSolveRef = useRef<(() => void) | null>(null);
-
-  // Scroll a dashboard card into view when it opens. Runs on every render and
-  // scrolls only on the closed → open transition (tracked in prevOpen), so
-  // input-driven re-renders don't yank the page while editing. Only the cards
-  // still on the dashboard (share modal, donate) use this; the analysis tools
-  // are routed pages now.
-  const prevOpen = useRef<Record<string, boolean>>({});
-  useEffect(() => {
-    const targets: Array<[string, boolean, React.RefObject<HTMLDivElement | null>]> = [
-      ['share', showShare, shareCardRef],
-      ['donate', showDonate, donateCardRef],
-    ];
-    for (const [key, isOpen, ref] of targets) {
-      const was = prevOpen.current[key] ?? false;
-      if (isOpen && !was) {
-        // Defer a frame so the panel has mounted and laid out before scrolling.
-        requestAnimationFrame(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-      }
-      prevOpen.current[key] = isOpen;
-    }
-  });
 
   // (Monte Carlo / backtest route-sync effects live further down, after
   // `inputs` and `config` are declared.)
-  const [showShare, setShowShare] = useState(false);
-  // Welcome card: visible until dismissed, or always when the General settings
-  // toggle asks for it on every load.
-  const [showWelcome, setShowWelcome] = useState(
-    () => loadAppConfig().general.showWelcomeOnLoad || !isWelcomeDismissed()
-  );
-  const [showDonate, setShowDonate] = useState(false);
   const [exportOptions, setExportOptions] = useState<ProjectionExportOptions>(loadProjectionExportOptions);
 
   const updateExportOptions = (opts: ProjectionExportOptions) => {
@@ -534,7 +510,7 @@ function App() {
         onOpenSettings={() => setView('settings')}
         onExportDb={handleExportDb}
         onImportDb={handleImportDb}
-        onOpenDonate={() => { setView('projection'); setShowDonate((s) => !s); }}
+        onOpenDonate={() => setView('donate')}
         onOpenHelp={() => setView('help')}
       />
 
@@ -599,11 +575,20 @@ function App() {
                 {view === 'print' && <span className="text-slate-900">Print Summary</span>}
                 {view === 'export' && <span className="text-slate-900">Export Projection</span>}
                 {view === 'scenarios' && <span className="text-slate-900">Manage Scenarios</span>}
+                {view === 'share' && <span className="text-slate-900">Share Link</span>}
+                {view === 'donate' && <span className="text-slate-900">Support This App</span>}
+                {view === 'welcome' && <span className="text-slate-900">Welcome</span>}
               </div>
               {/* Toolbar — always visible. Every link navigates to its own routed
-                  page (Math/Steering/Optimize/Compare/Print/Export) except Share
-                  link, which stays a small modal on the dashboard. */}
+                  page; Projection is the home dashboard. */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <button
+                  onClick={() => setView('projection')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="The main projection dashboard: summary, timeline, and year-by-year schedule"
+                >
+                  <LineChart size={13} /> Projection
+                </button>
                 <button
                   onClick={() => setView('math')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
@@ -633,7 +618,7 @@ function App() {
                   <GitCompareArrows size={13} /> Compare
                 </button>
                 <button
-                  onClick={() => setShowShare(true)}
+                  onClick={() => setView('share')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   title="Show a shareable link that encodes this plan's inputs in the URL"
                 >
@@ -660,28 +645,6 @@ function App() {
           <div className="px-3 md:px-6 pb-3 md:pb-6">
             {view === 'projection' && (
               <>
-                {/* Getting-started welcome card. The "show on load" toggle only
-                    seeds the initial state — dismissal hides it for this
-                    session regardless, or it would re-mount instantly. */}
-                {showWelcome && (
-                  <WelcomeCard onDismiss={() => setShowWelcome(false)} />
-                )}
-
-                {/* Share link modal + Donate card stay on the dashboard; the
-                    analysis tools are their own routed pages now. */}
-                {showShare && (
-                  <div ref={shareCardRef} className="scroll-target">
-                    <ShareCard url={buildShareUrl(inputs)} onClose={() => setShowShare(false)} />
-                  </div>
-                )}
-
-                {/* Donate card */}
-                {showDonate && (
-                  <div ref={donateCardRef} className="scroll-target">
-                    <DonateCard onClose={() => setShowDonate(false)} />
-                  </div>
-                )}
-
                 {/* KPI Cards */}
                 <CollapsiblePanel id="summary" title="Projection Summary">
                   <MetricCards results={results} inputs={inputs} />
@@ -713,7 +676,6 @@ function App() {
                 results={results}
                 mcResults={printMc}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
-                onClose={() => setView('projection')}
               />
             )}
 
@@ -722,7 +684,6 @@ function App() {
                 scenarios={scenarios}
                 activeScenarioId={activeScenarioId}
                 config={config}
-                onClose={() => setView('projection')}
               />
             )}
 
@@ -730,7 +691,6 @@ function App() {
               <MonteCarloChart
                 request={mcRequest}
                 retirementAge={results.retirementAge}
-                onClose={() => setView('projection')}
                 onRefresh={() => setMcRefreshNonce(n => n + 1)}
               />
             )}
@@ -738,7 +698,6 @@ function App() {
             {view === 'backtest' && backtestResult && (
               <BacktestPanel
                 result={backtestResult}
-                onClose={() => setView('projection')}
               />
             )}
 
@@ -746,7 +705,6 @@ function App() {
               <PrintOptionsCard
                 options={printOptions}
                 onChange={updatePrintOptions}
-                onClose={() => setView('projection')}
                 onPrint={() => window.print()}
                 mcPending={printMcPending}
                 mcResults={printMc}
@@ -757,9 +715,12 @@ function App() {
               <ExportCard
                 options={exportOptions}
                 onChange={updateExportOptions}
-                onClose={() => setView('projection')}
                 onExport={handleExportProjection}
                 hasSpouse={!!results.spouse}
+                scenarioName={activeScenario.name}
+                inputs={inputs}
+                results={results}
+                config={config}
               />
             )}
 
@@ -770,6 +731,18 @@ function App() {
                 onScenariosChange={setScenarios}
                 onSelectScenario={(id) => { handleScenarioChange(id); setView('projection'); }}
               />
+            )}
+
+            {view === 'share' && (
+              <ShareCard url={buildShareUrl(inputs)} />
+            )}
+
+            {view === 'donate' && (
+              <DonateCard />
+            )}
+
+            {view === 'welcome' && (
+              <WelcomeCard onContinue={() => setView('projection')} />
             )}
 
             {view === 'settings' && (

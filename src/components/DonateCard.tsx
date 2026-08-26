@@ -1,23 +1,17 @@
-import { X, Heart } from 'lucide-react';
+import { Heart } from 'lucide-react';
 
 const DONATE_URL = 'https://github.com/sponsors/jsas';
 
-// Closable card explaining what donations support, opened from the top-bar
-// Donate button. Kept tiny on purpose: one blurb, one button.
-export function DonateCard({ onClose }: { onClose: () => void }) {
+// Donate page (was a closable card): one blurb, one button. Kept tiny on purpose.
+export function DonateCard() {
   return (
-    <div className="mb-4 bg-white border border-slate-200 rounded">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <Heart size={15} className="text-rose-500" />
-          <h3 className="text-sm font-semibold text-slate-800">Support RE: tired</h3>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
-          <X size={15} className="text-slate-500" />
-        </button>
+    <div className="max-w-2xl">
+      <div className="flex items-center gap-2 mb-3">
+        <Heart size={18} className="text-rose-500" />
+        <h2 className="text-lg font-bold text-slate-900">Support RE: tired</h2>
       </div>
 
-      <div className="p-4">
+      <div>
         <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
           RE: tired is a free, open-source side project that runs entirely in your browser — no
           server, no accounts, no data harvesting. It's also largely built by an AI pair-programmer,

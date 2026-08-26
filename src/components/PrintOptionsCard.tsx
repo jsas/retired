@@ -1,11 +1,10 @@
-import { X, Printer, LineChart, Dices, Milestone, Table2, Loader2 } from 'lucide-react';
+import { Printer, LineChart, Dices, Milestone, Table2, Loader2 } from 'lucide-react';
 import type { PrintOptions } from '../lib/printOptions';
 import type { MonteCarloResults } from '../lib/monteCarlo';
 
 interface PrintOptionsCardProps {
   options: PrintOptions;
   onChange: (opts: PrintOptions) => void;
-  onClose: () => void;
   onPrint: () => void;
   /** Non-null while the Monte Carlo worker is running for the print chart. */
   mcPending: boolean;
@@ -13,11 +12,11 @@ interface PrintOptionsCardProps {
   mcResults: MonteCarloResults | null;
 }
 
-// Closable card for choosing what goes into the printed plan summary. The
-// base one-page summary is always included; these toggles add optional
-// sections. Choices are persisted by the caller via savePrintOptions.
+// Print-summary page: choose what goes into the printed plan summary. The base
+// one-page summary is always included; these toggles add optional sections.
+// Choices are persisted by the caller via savePrintOptions.
 export function PrintOptionsCard({
-  options, onChange, onClose, onPrint, mcPending, mcResults
+  options, onChange, onPrint, mcPending, mcResults
 }: PrintOptionsCardProps) {
   const set = (patch: Partial<PrintOptions>) => onChange({ ...options, ...patch });
 
@@ -26,18 +25,13 @@ export function PrintOptionsCard({
   const canPrint = mcReady && !mcPending;
 
   return (
-    <div className="mb-4 bg-white border border-slate-200 rounded">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <Printer size={15} className="text-slate-500" />
-          <h3 className="text-sm font-semibold text-slate-800">Print summary options</h3>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
-          <X size={15} className="text-slate-500" />
-        </button>
+    <div className="max-w-2xl">
+      <div className="flex items-center gap-2 mb-3">
+        <Printer size={18} className="text-blue-600" />
+        <h2 className="text-lg font-bold text-slate-900">Print summary options</h2>
       </div>
 
-      <div className="p-4">
+      <div>
         <p className="text-xs text-slate-600 mb-3 leading-snug">
           The one-page plan summary (profile, savings, verdict) is always included.
           Add any of these sections to the printout:

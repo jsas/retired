@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Dices, X, Loader2, RefreshCw } from 'lucide-react';
+import { Dices, Loader2, RefreshCw } from 'lucide-react';
 import type { MonteCarloRequest, MonteCarloResults } from '../lib/monteCarlo';
 import { runMonteCarloAuto } from '../lib/runMonteCarlo';
 
 interface MonteCarloChartProps {
   request: MonteCarloRequest;
-  onClose: () => void;
   retirementAge: number;
   onRefresh?: () => void;
   onMounted?: () => void;
@@ -25,7 +24,7 @@ function formatMoneyFull(v: number): string {
   return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
 }
 
-export function MonteCarloChart({ request, onClose, retirementAge, onRefresh, onMounted }: MonteCarloChartProps) {
+export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }: MonteCarloChartProps) {
   const [results, setResults] = useState<MonteCarloResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoverAge, setHoverAge] = useState<number | null>(null);
@@ -81,30 +80,27 @@ export function MonteCarloChart({ request, onClose, retirementAge, onRefresh, on
     : '';
 
   return (
-    <div className="mt-6 bg-white border border-slate-200 rounded-lg shadow-sm">
+    <div className="max-w-4xl">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Dices size={16} className="text-blue-600" />
-          <h3 className="text-sm font-semibold text-slate-900">Monte Carlo Simulation</h3>
+          <Dices size={18} className="text-blue-600" />
+          <h2 className="text-lg font-bold text-slate-900">Monte Carlo Simulation</h2>
           <span className="text-xs text-slate-500">
             {request.runs} runs · {(request.volatility * 100).toFixed(1)}% volatility · fat-tailed (Student-t)
           </span>
         </div>
         <div className="flex items-center gap-1">
           {onRefresh && (
-            <button onClick={onRefresh} className="p-1 hover:bg-slate-100 rounded" title="Re-run the simulation with the current plan">
-              <RefreshCw size={15} />
+            <button onClick={onRefresh} className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100" title="Re-run the simulation with the current plan">
+              <RefreshCw size={13} /> Re-run
             </button>
           )}
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
-            <X size={16} />
-          </button>
         </div>
       </div>
 
       {/* Body */}
-      <div className="p-4">
+      <div>
         {!results && !error && (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-500 text-sm">
             <Loader2 size={16} className="animate-spin" />

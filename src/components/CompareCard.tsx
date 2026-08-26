@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { X, GitCompareArrows, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import { GitCompareArrows, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import type { AppConfig } from '../lib/appConfig';
 import type { Scenario } from '../lib/scenarioStorage';
 import { compareScenarios, type MetricDiff, type ScenarioComparison } from '../lib/compareMetrics';
@@ -17,7 +17,6 @@ interface CompareCardProps {
   scenarios: Scenario[];
   activeScenarioId: string;
   config: AppConfig;
-  onClose: () => void;
 }
 
 // A signed delta chip under a metric value: green when the move is an
@@ -93,7 +92,7 @@ function VerdictColumn({ comparison, isBaseline }: { comparison: ScenarioCompari
   );
 }
 
-export function CompareCard({ scenarios, activeScenarioId, config, onClose }: CompareCardProps) {
+export function CompareCard({ scenarios, activeScenarioId, config }: CompareCardProps) {
   // Default to the active scenario, pre-checked as the baseline.
   const [selectedIds, setSelectedIds] = useState<string[]>([activeScenarioId]);
   const [baselineId, setBaselineId] = useState<string>(activeScenarioId);
@@ -126,21 +125,16 @@ export function CompareCard({ scenarios, activeScenarioId, config, onClose }: Co
   const atCap = selectedIds.length >= MAX_COMPARE;
 
   return (
-    <div className="mb-4 bg-white border border-slate-200 rounded">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <GitCompareArrows size={15} className="text-slate-500" />
-          <h3 className="text-sm font-semibold text-slate-800">Compare scenarios</h3>
-          <span className="text-[11px] text-slate-400">
-            verdict cards computed with the current engine settings
-          </span>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
-          <X size={15} className="text-slate-500" />
-        </button>
+    <div className="max-w-4xl">
+      <div className="flex items-center gap-2 mb-3">
+        <GitCompareArrows size={18} className="text-blue-600" />
+        <h2 className="text-lg font-bold text-slate-900">Compare scenarios</h2>
+        <span className="text-[11px] text-slate-400">
+          verdict cards computed with the current engine settings
+        </span>
       </div>
 
-      <div className="p-4">
+      <div>
         {/* Scenario picker */}
         <div className="mb-3">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">

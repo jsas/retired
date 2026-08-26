@@ -1,15 +1,22 @@
-import { X, Download, FileSpreadsheet, FileJson, FileText } from 'lucide-react';
+import { useMemo } from 'react';
+import { Download, FileSpreadsheet, FileJson, FileText } from 'lucide-react';
 import {
-  COLUMN_GROUPS, METADATA_SECTIONS,
+  COLUMN_GROUPS, METADATA_SECTIONS, buildExport,
   type ProjectionExportOptions, type ExportFormat, type Subject, type ColumnGroup, type MetaSection,
 } from '../lib/projectionExport';
+import type { RetirementInputs, RetirementResults } from '../lib/retirementEngine';
+import type { AppConfig } from '../lib/appConfig';
 
 interface ExportCardProps {
   options: ProjectionExportOptions;
   onChange: (opts: ProjectionExportOptions) => void;
-  onClose: () => void;
   onExport: () => void;
   hasSpouse: boolean;
+  /** Plan data for the live preview pane. */
+  scenarioName: string;
+  inputs: RetirementInputs;
+  results: RetirementResults;
+  config: AppConfig;
 }
 
 const FORMATS: Array<{ key: ExportFormat; label: string; icon: typeof FileJson; hint: string }> = [
@@ -18,9 +25,9 @@ const FORMATS: Array<{ key: ExportFormat; label: string; icon: typeof FileJson; 
   { key: 'yaml', label: 'YAML', icon: FileText, hint: 'Same as JSON, human-readable YAML' },
 ];
 
-// Closable card for exporting the year-by-year projection. Mirrors the print
-// options card: toggles persisted by the caller via saveProjectionExportOptions.
-export function ExportCard({ options, onChange, onClose, onExport, hasSpouse }: ExportCardProps) {
+// Export page for the year-by-year projection, with a live preview of the
+// payload. Toggles are persisted by the caller via saveProjectionExportOptions.
+export function ExportCard({ options, onChange, onExport, hasSpouse, scenarioName, inputs, results, config }: ExportCardProps) {
   const set = (patch: Partial<ProjectionExportOptions>) => onChange({ ...options, ...patch });
   const toggleGroup = (g: ColumnGroup) =>
     set({
@@ -38,19 +45,23 @@ export function ExportCard({ options, onChange, onClose, onExport, hasSpouse }: 
   const isCsv = options.format === 'csv';
   const canExport = !isCsv || options.columnGroups.length > 0;
 
+  // Live preview of the exact payload that will be downloaded.
+  const preview = useMemo(
+    () => buildExport(scenarioName, inputs, results, config, options).content,
+    [scenarioName, inputs, results, config, options],
+  );
+  const previewLines = preview.split('\n');
+  const previewShown = previewLines.slice(0, 200).join('\n');
+  const truncated = previewLines.length > 200;
+
   return (
-    <div className="mb-4 bg-white border border-slate-200 rounded">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <Download size={15} className="text-slate-500" />
-          <h3 className="text-sm font-semibold text-slate-800">Export projection</h3>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded" title="Close">
-          <X size={15} className="text-slate-500" />
-        </button>
+    <div className="max-w-4xl">
+      <div className="flex items-center gap-2 mb-3">
+        <Download size={18} className="text-blue-600" />
+        <h2 className="text-lg font-bold text-slate-900">Export projection</h2>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="space-y-4">
         {/* Format */}
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Format</div>
@@ -178,6 +189,17 @@ export function ExportCard({ options, onChange, onClose, onExport, hasSpouse }: 
             )}
           </div>
         )}
+
+        {/* Preview pane — the exact payload that will be downloaded. */}
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            Preview
+          </div>
+          <pre className="max-h-72 overflow-auto rounded border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre">
+            {previewShown}
+            {truncated && `\n… (${previewLines.length - 200} more lines)`}
+          </pre>
+        </div>
 
         <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
           <button

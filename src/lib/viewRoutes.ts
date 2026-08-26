@@ -14,7 +14,10 @@ export type View =
   | 'backtest'
   | 'print'
   | 'export'
-  | 'scenarios';
+  | 'scenarios'
+  | 'share'
+  | 'donate'
+  | 'welcome';
 
 export const VIEW_ROUTES: Record<View, string> = {
   projection: 'projection',
@@ -27,6 +30,9 @@ export const VIEW_ROUTES: Record<View, string> = {
   print: 'print',
   export: 'export',
   scenarios: 'scenarios',
+  share: 'share',
+  donate: 'donate',
+  welcome: 'welcome',
   help: 'help',
   settings: 'settings',
 };
