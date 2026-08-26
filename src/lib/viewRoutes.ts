@@ -15,13 +15,13 @@ export type View =
   | 'print'
   | 'export'
   | 'scenarios'
-  | 'share'
+  | 'sharing'
   | 'donate'
   | 'welcome';
 
 export const VIEW_ROUTES: Record<View, string> = {
   projection: 'projection',
-  math: 'math',
+  math: 'year-math',
   eq: 'steering',
   optimize: 'optimize',
   compare: 'compare',
@@ -30,7 +30,7 @@ export const VIEW_ROUTES: Record<View, string> = {
   print: 'print',
   export: 'export',
   scenarios: 'scenarios',
-  share: 'share',
+  sharing: 'sharing',
   donate: 'donate',
   welcome: 'welcome',
   help: 'help',

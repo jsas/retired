@@ -4,7 +4,7 @@ import { viewFromHash, hashForView, VIEW_ROUTES, type View } from './viewRoutes'
 describe('viewFromHash', () => {
   it('maps each canonical route to its view', () => {
     expect(viewFromHash('#/projection')).toBe('projection');
-    expect(viewFromHash('#/math')).toBe('math');
+    expect(viewFromHash('#/year-math')).toBe('math');
     expect(viewFromHash('#/steering')).toBe('eq');
     expect(viewFromHash('#/optimize')).toBe('optimize');
     expect(viewFromHash('#/compare')).toBe('compare');
@@ -13,7 +13,7 @@ describe('viewFromHash', () => {
     expect(viewFromHash('#/print')).toBe('print');
     expect(viewFromHash('#/export')).toBe('export');
     expect(viewFromHash('#/scenarios')).toBe('scenarios');
-    expect(viewFromHash('#/share')).toBe('share');
+    expect(viewFromHash('#/sharing')).toBe('sharing');
     expect(viewFromHash('#/donate')).toBe('donate');
     expect(viewFromHash('#/welcome')).toBe('welcome');
     expect(viewFromHash('#/help')).toBe('help');
@@ -47,7 +47,7 @@ describe('hashForView', () => {
   it('round-trips every view', () => {
     const views: View[] = [
       'projection', 'math', 'eq', 'optimize', 'compare', 'montecarlo',
-      'backtest', 'print', 'export', 'scenarios', 'share', 'donate',
+      'backtest', 'print', 'export', 'scenarios', 'sharing', 'donate',
       'welcome', 'help', 'settings',
     ];
     for (const v of views) {

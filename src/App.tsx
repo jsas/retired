@@ -1,30 +1,30 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { FileSpreadsheet, Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart } from 'lucide-react';
+import { Database, Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
-import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs } from './lib/retirementEngine';
+import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
 import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scenarioStorage';
 import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
-import { exportAppDb, parseAppDb, persistAppDb } from './lib/appDb';
+import { buildAppDb } from './lib/appDb';
 import { SettingsModal } from './components/SettingsModal';
 import { HelpModal } from './components/HelpModal';
 import { MonteCarloChart } from './components/MonteCarloChart';
 import { TimelineChart } from './components/TimelineChart';
 import { BacktestPanel } from './components/BacktestPanel';
 import { CollapsiblePanel } from './components/CollapsiblePanel';
-import { ShareCard } from './components/ShareCard';
+import { SharingPage, type SharingImportRequest } from './components/SharingPage';
+import { DataPage, type FullBackupSelection, type ProjectionImportRequest } from './components/DataPage';
 import { OptimizeCard } from './components/OptimizeCard';
 import { CompareCard } from './components/CompareCard';
 import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
 import { PrintOptionsCard } from './components/PrintOptionsCard';
 import { DonateCard } from './components/DonateCard';
-import { ExportCard } from './components/ExportCard';
 import { loadPrintOptions, savePrintOptions, type PrintOptions } from './lib/printOptions';
 import {
-  loadProjectionExportOptions, saveProjectionExportOptions, buildExport,
+  loadProjectionExportOptions, saveProjectionExportOptions,
   type ProjectionExportOptions,
 } from './lib/projectionExport';
 import type { MonteCarloResults } from './lib/monteCarlo';
@@ -32,7 +32,7 @@ import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
-import { buildShareUrl, consumePlanFromHash } from './lib/shareLink';
+import { consumePlanFromHash } from './lib/shareLink';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
 import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
@@ -262,34 +262,66 @@ function App() {
     const shared = consumePlanFromHash();
     if (!shared) return;
     const id = `shared-${Date.now().toString(36)}`;
-    const scenario: Scenario = { id, name: 'Shared plan', inputs: shared };
+    const scenario: Scenario = { id, name: shared.name?.trim() || 'Shared plan', inputs: shared.inputs };
     setScenarios((prev) => [...prev, scenario]);
     setActiveScenarioId(id);
-    setInputs(JSON.parse(JSON.stringify(shared)));
+    setInputs(JSON.parse(JSON.stringify(shared.inputs)));
     setHasUnsavedChanges(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleExportDb = () => {
-    exportAppDb(scenarios, activeScenarioId, config);
+  // Add a scenario from elsewhere (a share link's plan, a pasted plan code, or
+  // an imported projection export) and make it active.
+  const importScenario = (name: string, scenarioInputs: RetirementInputs) => {
+    const id = `imported-${Date.now().toString(36)}`;
+    const scenario: Scenario = { id, name: name.trim() || 'Imported plan', inputs: scenarioInputs };
+    setScenarios((prev) => [...prev, scenario]);
+    setActiveScenarioId(id);
+    setInputs(JSON.parse(JSON.stringify(scenarioInputs)));
+    setHasUnsavedChanges(false);
   };
 
-  const handleImportDb = (file: File) => {
-    file.text().then(text => {
-      const result = parseAppDb(text);
-      if (!result.ok) {
-        window.alert(`Import failed: ${result.error}`);
-        return;
-      }
-      if (!window.confirm('Importing will replace ALL scenarios and settings. Continue?')) return;
-      persistAppDb(result.db);
-      setScenarios(result.db.scenarios);
-      setActiveScenarioId(result.db.activeScenarioId);
-      const active = result.db.scenarios.find(s => s.id === result.db.activeScenarioId) ?? result.db.scenarios[0];
-      setInputs(JSON.parse(JSON.stringify(active.inputs)));
-      setConfig(result.db.config);
-      setHasUnsavedChanges(false);
-    });
+  // Full backup: download the chosen scenarios (+ optionally the engine config).
+  const handleExportFull = (scenarioIds: string[], includeConfig: boolean) => {
+    const chosen = scenarios.filter(s => scenarioIds.includes(s.id));
+    const activeId = chosen.some(s => s.id === activeScenarioId) ? activeScenarioId : (chosen[0]?.id ?? activeScenarioId);
+    const db = buildAppDb(chosen, activeId, config);
+    if (!includeConfig) {
+      // Strip the config so the receiver keeps their own engine settings.
+      delete (db as Partial<typeof db>).config;
+    }
+    const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `retirement-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Apply a full-backup import chosen on the Import/Export page.
+  const handleImportFull = (sel: FullBackupSelection) => {
+    const list = sel.scenarios.length > 0 ? sel.scenarios : scenarios;
+    const activeId = list.some(s => s.id === sel.activeScenarioId) ? sel.activeScenarioId : list[0].id;
+    setScenarios(list);
+    setActiveScenarioId(activeId);
+    const active = list.find(s => s.id === activeId) ?? list[0];
+    setInputs(JSON.parse(JSON.stringify(active.inputs)));
+    if (sel.config) setConfig(sel.config);
+    setHasUnsavedChanges(false);
+    setView('projection');
+  };
+
+  // Sharing page: a plan received as a link or pasted code becomes a scenario.
+  const handleSharingImport = (req: SharingImportRequest) => {
+    importScenario(req.name, req.inputs);
+    setView('projection');
+  };
+
+  // Import/Export page: a projection JSON re-imported as a scenario.
+  const handleProjectionImport = (req: ProjectionImportRequest) => {
+    importScenario(req.name, req.inputs);
+    setView('projection');
   };
 
   // Update inputs when scenario changes
@@ -322,6 +354,14 @@ function App() {
   const results = useMemo(() => {
     return calculateHousehold(inputs, config);
   }, [inputs, config]);
+
+  // The projection export shows the active plan's own computed numbers. When a
+  // spouse is disabled the spouse block lingers in the inputs (for re-enabling),
+  // so export against a spouse-stripped copy to keep the file to just "you".
+  const exportResults: RetirementResults = useMemo(
+    () => (inputs.spouse?.enabled ? results : calculateHousehold({ ...inputs, spouse: undefined }, config)),
+    [inputs, results, config],
+  );
 
   // ---- EQ steering surface state ----
   // Per-control allowed bands (min–max). Disabled = the control roams its full axis.
@@ -459,17 +499,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, inputs, config]);
 
-  const handleExportProjection = () => {
-    const payload = buildExport(activeScenario.name, inputs, results, config, exportOptions);
-    const blob = new Blob([payload.content], { type: payload.mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `retirement-projection-${activeScenario.name.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.${payload.extension}`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
       {/* Print-only one-page summary (hidden on screen; see index.css) */}
@@ -508,8 +537,7 @@ function App() {
         }}
         onRunBacktest={() => setView('backtest')}
         onOpenSettings={() => setView('settings')}
-        onExportDb={handleExportDb}
-        onImportDb={handleImportDb}
+        onOpenData={() => setView('export')}
         onOpenDonate={() => setView('donate')}
         onOpenHelp={() => setView('help')}
       />
@@ -566,16 +594,16 @@ function App() {
                 )}
                 {view === 'settings' && <span className="text-slate-900">Engine Settings</span>}
                 {view === 'help' && <span className="text-slate-900">Help &amp; Documentation</span>}
-                {view === 'math' && <span className="text-slate-900">How the Math Works</span>}
+                {view === 'math' && <span className="text-slate-900">Year Math</span>}
                 {view === 'eq' && <span className="text-slate-900">Steering</span>}
                 {view === 'optimize' && <span className="text-slate-900">Optimize</span>}
                 {view === 'compare' && <span className="text-slate-900">Compare Scenarios</span>}
                 {view === 'montecarlo' && <span className="text-slate-900">Monte Carlo</span>}
                 {view === 'backtest' && <span className="text-slate-900">Historical Backtest</span>}
                 {view === 'print' && <span className="text-slate-900">Print Summary</span>}
-                {view === 'export' && <span className="text-slate-900">Export Projection</span>}
+                {view === 'export' && <span className="text-slate-900">Import / Export</span>}
                 {view === 'scenarios' && <span className="text-slate-900">Manage Scenarios</span>}
-                {view === 'share' && <span className="text-slate-900">Share Link</span>}
+                {view === 'sharing' && <span className="text-slate-900">Sharing</span>}
                 {view === 'donate' && <span className="text-slate-900">Support This App</span>}
                 {view === 'welcome' && <span className="text-slate-900">Welcome</span>}
               </div>
@@ -594,7 +622,7 @@ function App() {
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   title="See how any year's numbers are worked out, step by step"
                 >
-                  <Calculator size={13} /> Math
+                  <Calculator size={13} /> Year Math
                 </button>
                 <button
                   onClick={() => setView('eq')}
@@ -618,11 +646,11 @@ function App() {
                   <GitCompareArrows size={13} /> Compare
                 </button>
                 <button
-                  onClick={() => setView('share')}
+                  onClick={() => setView('sharing')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                  title="Show a shareable link that encodes this plan's inputs in the URL"
+                  title="Send this plan as a link or code, or receive one into a new scenario"
                 >
-                  <Share2 size={13} /> Share link
+                  <Share2 size={13} /> Sharing
                 </button>
                 <button
                   onClick={() => setView('print')}
@@ -634,9 +662,9 @@ function App() {
                 <button
                   onClick={() => setView('export')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                  title="Export the year-by-year projection as CSV, JSON or YAML"
+                  title="Export the projection or a full backup; import a backup or projection"
                 >
-                  <FileSpreadsheet size={13} /> Export Projection
+                  <Database size={13} /> Import / Export
                 </button>
               </div>
             </div>
@@ -712,15 +740,19 @@ function App() {
             )}
 
             {view === 'export' && (
-              <ExportCard
-                options={exportOptions}
-                onChange={updateExportOptions}
-                onExport={handleExportProjection}
-                hasSpouse={!!results.spouse}
+              <DataPage
+                exportOptions={exportOptions}
+                onExportOptionsChange={updateExportOptions}
+                hasSpouse={!!exportResults.spouse}
                 scenarioName={activeScenario.name}
                 inputs={inputs}
-                results={results}
+                results={exportResults}
                 config={config}
+                scenarios={scenarios}
+                activeScenarioId={activeScenarioId}
+                onExportFull={handleExportFull}
+                onImportFull={handleImportFull}
+                onImportProjection={handleProjectionImport}
               />
             )}
 
@@ -733,8 +765,12 @@ function App() {
               />
             )}
 
-            {view === 'share' && (
-              <ShareCard url={buildShareUrl(inputs)} />
+            {view === 'sharing' && (
+              <SharingPage
+                inputs={inputs}
+                scenarioName={activeScenario.name}
+                onImport={handleSharingImport}
+              />
             )}
 
             {view === 'donate' && (

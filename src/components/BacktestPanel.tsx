@@ -34,7 +34,7 @@ export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
   const lastStart = result.windows[result.windows.length - 1]?.startYear ?? startYear;
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <div className="flex items-center gap-2 mb-3">
         <History size={18} className="text-blue-600" />
         <h2 className="text-lg font-bold text-slate-900">Historical Backtest</h2>

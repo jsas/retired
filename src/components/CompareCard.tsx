@@ -125,7 +125,7 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
   const atCap = selectedIds.length >= MAX_COMPARE;
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <div className="flex items-center gap-2 mb-3">
         <GitCompareArrows size={18} className="text-blue-600" />
         <h2 className="text-lg font-bold text-slate-900">Compare scenarios</h2>

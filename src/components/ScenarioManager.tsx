@@ -67,7 +67,7 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
   };
 
   return (
-    <div className="max-w-2xl">
+    <div>
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Manage Scenarios</h2>

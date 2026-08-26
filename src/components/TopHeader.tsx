@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Settings, Download, Upload, Save, FolderOpen, RotateCcw, Dices, BookOpen, History, Heart, Menu, MoreVertical } from 'lucide-react';
+import { ChevronDown, Settings, Database, Save, FolderOpen, RotateCcw, Dices, BookOpen, History, Heart, Menu, MoreVertical } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 
 interface TopHeaderProps {
@@ -14,8 +14,7 @@ interface TopHeaderProps {
   onRunMonteCarlo: () => void;
   onRunBacktest: () => void;
   onOpenSettings: () => void;
-  onExportDb: () => void;
-  onImportDb: (file: File) => void;
+  onOpenData: () => void;
   onOpenDonate: () => void;
   onOpenHelp: () => void;
 }
@@ -47,8 +46,7 @@ export function TopHeader({
   onRunMonteCarlo,
   onRunBacktest,
   onOpenSettings,
-  onExportDb,
-  onImportDb,
+  onOpenData,
   onOpenDonate,
   onOpenHelp
 }: TopHeaderProps) {
@@ -73,23 +71,9 @@ export function TopHeader({
         <History size={14} /> Backtest
       </button>
       <div className="my-1 h-px bg-neutral-800" />
-      <button onClick={() => { closeMenu(); onExportDb(); }} className={MENU_ITEM}>
-        <Download size={14} /> Export
+      <button onClick={() => { closeMenu(); onOpenData(); }} className={MENU_ITEM}>
+        <Database size={14} /> Import / Export
       </button>
-      <label className={`${MENU_ITEM} cursor-pointer`}>
-        <Upload size={14} /> Import
-        <input
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={e => {
-            const file = e.target.files?.[0];
-            if (file) onImportDb(file);
-            e.target.value = '';
-            closeMenu();
-          }}
-        />
-      </label>
       <div className="my-1 h-px bg-neutral-800" />
       <button onClick={() => { closeMenu(); onOpenSettings(); }} className={MENU_ITEM}>
         <Settings size={14} /> Settings
@@ -166,22 +150,9 @@ export function TopHeader({
           <History size={14} /> Backtest
         </button>
         <div className="flex-1" />
-        <button onClick={onExportDb} className={BTN} title="Download the entire app database (scenarios + settings) as JSON">
-          <Download size={14} /> Export
+        <button onClick={onOpenData} className={BTN} title="Import / export the projection, a full backup, or re-import a file">
+          <Database size={14} /> Data
         </button>
-        <label className={`${BTN} cursor-pointer`} title="Load an app database JSON file (replaces all scenarios and settings)">
-          <Upload size={14} /> Import
-          <input
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={e => {
-              const file = e.target.files?.[0];
-              if (file) onImportDb(file);
-              e.target.value = '';
-            }}
-          />
-        </label>
         <button onClick={onOpenSettings} className={BTN} title="Open the engine settings page (tax tables, RRIF rates, OAS)">
           <Settings size={14} /> Settings
         </button>

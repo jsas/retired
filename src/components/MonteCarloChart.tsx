@@ -80,7 +80,7 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
     : '';
 
   return (
-    <div className="max-w-4xl">
+    <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">

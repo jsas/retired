@@ -25,7 +25,7 @@ export function PrintOptionsCard({
   const canPrint = mcReady && !mcPending;
 
   return (
-    <div className="max-w-2xl">
+    <div>
       <div className="flex items-center gap-2 mb-3">
         <Printer size={18} className="text-blue-600" />
         <h2 className="text-lg font-bold text-slate-900">Print summary options</h2>

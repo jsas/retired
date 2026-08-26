@@ -415,7 +415,7 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
   }, [inputs, bands, onBandsChange]);
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <div className="flex items-center gap-2 mb-1">
         <Sliders size={18} className="text-blue-600" />
         <h2 className="text-lg font-bold text-slate-900">Steer the plan</h2>

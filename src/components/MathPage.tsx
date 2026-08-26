@@ -239,7 +239,7 @@ export function MathPage({ inputs, results, spouseAgeOffset }: MathPageProps) {
     <div className={view === 'both' ? 'max-w-6xl' : 'max-w-3xl'}>
       <div className="flex items-center gap-2 mb-1">
         <Calculator size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">How the math works</h2>
+        <h2 className="text-lg font-bold text-slate-900">Year math — how a year is worked out</h2>
       </div>
       <p className="text-xs text-slate-500 mb-4 leading-snug">
         Every number below is the actual value the engine used for that year — pick a year to see

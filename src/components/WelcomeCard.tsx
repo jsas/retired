@@ -35,7 +35,7 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
   };
 
   return (
-    <div className="max-w-2xl">
+    <div>
       <div className="mb-4">
         <h2 className="text-lg font-bold text-slate-900">Getting started with RE: tired</h2>
         <p className="text-sm text-slate-600 mt-0.5">

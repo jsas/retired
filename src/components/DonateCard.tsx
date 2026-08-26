@@ -5,7 +5,7 @@ const DONATE_URL = 'https://github.com/sponsors/jsas';
 // Donate page (was a closable card): one blurb, one button. Kept tiny on purpose.
 export function DonateCard() {
   return (
-    <div className="max-w-2xl">
+    <div>
       <div className="flex items-center gap-2 mb-3">
         <Heart size={18} className="text-rose-500" />
         <h2 className="text-lg font-bold text-slate-900">Support RE: tired</h2>
