@@ -89,6 +89,17 @@ export interface CashEvent {
   // from `age` through endAge inclusive (e.g. "yearly for X years" →
   // endAge = age + X − 1). Amounts are per-occurrence, in that year's dollars.
   endAge?: number | null;
+  // Optional explicit transfer endpoints (advanced mode). When set, they make
+  // the event a TRANSFER between two accounts/people rather than a simple
+  // in/out flow: `from` is where the money leaves (an account, or external),
+  // `to` is where it lands (an account, or external = spending). Registered
+  // sources (rrsp) are taxed on withdrawal before the after-tax remainder is
+  // redeposited — the RRSP→TFSA "meltdown". When both are absent the legacy
+  // direction/account semantics apply (see householdTypes.eventEndpoints).
+  // Declared structurally here (not via the householdTypes import) to avoid a
+  // module cycle; householdTypes.TransferEndpoint is the canonical shape.
+  from?: { kind: 'external' } | { kind: 'account'; person: 'primary' | 'spouse'; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash' };
+  to?: { kind: 'external' } | { kind: 'account'; person: 'primary' | 'spouse'; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash' };
 }
 
 export interface ReverseMortgage {
