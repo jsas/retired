@@ -126,6 +126,57 @@ describe('cash events', () => {
         .toBe(yearAt(baseline.yearlyBreakdown, age).taxableBalance);
     }
   });
+
+  it('ACCOUNTING IDENTITY holds through accumulation with events', () => {
+    // ending = starting + contributions + marketGains + eventInflows
+    //          − withdrawals − incomeTax, for EVERY year including the
+    //          pre-retirement years that now carry inflows/outflows and the
+    //          transition into decumulation. Guards the bookkeeping the
+    //          pre-retirement-events change added.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 50, retirementAge: 55, maxAge: 62,
+      rrspBalance: 100000, tfsaBalance: 100000, taxableBalance: 200000, cashCushionBalance: 10000,
+      rrspContribution: 5000, tfsaContribution: 5000, taxableContribution: 5000,
+      events: [
+        { id: 'in', age: 51, label: 'sale', amount: 50000, direction: 'in', account: 'taxable' },
+        { id: 'out', age: 52, label: 'reno', amount: 40000, direction: 'out' },
+      ],
+      withdrawalOrder: ['taxable', 'tfsa', 'rrsp'],
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      const inflow = (y.detail?.events ?? []).filter(e => e.direction === 'in').reduce((s, e) => s + e.amount, 0);
+      const identity = y.startingBalance + y.contributions + y.marketGains + inflow - y.withdrawals - y.incomeTax;
+      expect(closeTo(y.endingBalance, identity, 0.5)).toBe(true);
+    }
+  });
+
+  it('pre-retirement inflow compounds into the retirement nest egg', () => {
+    // A $1 before retirement should be worth (1+r)^years more at retirement —
+    // the whole point of accounting for the event instead of dropping it.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 50, retirementAge: 55, maxAge: 56, taxableBalance: 0, taxableContribution: 0,
+      events: [{ id: 'in', age: 51, label: 'sale', amount: 100000, direction: 'in', account: 'taxable' }],
+    }), config);
+    // Landed at 51, then grows 52,53,54 (3 more years) into the age-55 start.
+    expect(closeTo(yearAt(r.yearlyBreakdown, 54).taxableBalance, 100000 * Math.pow(1.05, 3), 1)).toBe(true);
+    expect(closeTo(r.totalNetWorthAtRetirement, yearAt(r.yearlyBreakdown, 55).startingBalance, 1)).toBe(true);
+  });
+
+  it('an outflow bigger than every balance floors at zero (no NaN / negatives)', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 50, retirementAge: 55, maxAge: 60,
+      rrspBalance: 10000, tfsaBalance: 10000, taxableBalance: 10000, cashCushionBalance: 5000,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      withdrawalOrder: ['taxable', 'tfsa', 'rrsp'],
+      events: [{ id: 'huge', age: 51, label: 'huge', amount: 1000000, direction: 'out' }],
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      for (const b of [y.rrspBalance, y.tfsaBalance, y.taxableBalance, y.cashCushionBalance, y.endingBalance]) {
+        expect(Number.isFinite(b)).toBe(true);
+        expect(b).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
 });
 
 describe('pensions', () => {
