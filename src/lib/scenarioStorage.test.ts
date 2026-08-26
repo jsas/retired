@@ -46,4 +46,22 @@ describe('migrateInputs', () => {
     const m = migrateInputs({});
     expect(m.reverseMortgage).toBeUndefined();
   });
+
+  it('normalizes a missing spouseSource to a builtin adapter', () => {
+    // Scenarios saved before spouse adapters existed have no spouseSource key;
+    // they should become explicit builtin adapters (embedded spouse, edited inline).
+    const m = migrateInputs({ spouse: { enabled: true } });
+    expect(m.spouseSource).toEqual({ kind: 'builtin' });
+  });
+
+  it('keeps a valid scenario spouseSource and drops a malformed one', () => {
+    const linked = migrateInputs({ spouseSource: { kind: 'scenario', scenarioId: 'abc' } });
+    expect(linked.spouseSource).toEqual({ kind: 'scenario', scenarioId: 'abc' });
+
+    const noId = migrateInputs({ spouseSource: { kind: 'scenario' } });
+    expect(noId.spouseSource).toEqual({ kind: 'builtin' });
+
+    const garbage = migrateInputs({ spouseSource: 42 });
+    expect(garbage.spouseSource).toEqual({ kind: 'builtin' });
+  });
 });

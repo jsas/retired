@@ -51,6 +51,19 @@ function migrateRecord(inputs: Record<string, unknown>): RetirementInputs {
     sp.pensions = [];
   }
 
+  // Spouse adapter added later (spouseSource). Absent = the embedded spouse is
+  // edited inline, i.e. a 'builtin' adapter — normalize to that explicitly so
+  // downstream code can rely on the discriminated union. A malformed value is
+  // dropped back to builtin rather than trusted.
+  {
+    const src = migrated.spouseSource as Record<string, unknown> | undefined;
+    const valid = src && typeof src === 'object'
+      && (src.kind === 'builtin' || (src.kind === 'scenario' && typeof src.scenarioId === 'string'));
+    migrated.spouseSource = valid
+      ? (src.kind === 'scenario' ? { kind: 'scenario', scenarioId: src.scenarioId as string } : { kind: 'builtin' })
+      : { kind: 'builtin' };
+  }
+
   return migrated as unknown as RetirementInputs;
 }
 
