@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { FileSpreadsheet, Share2, Printer, Sparkles, Calculator, GitCompareArrows } from 'lucide-react';
+import { FileSpreadsheet, Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -31,10 +31,13 @@ import type { MonteCarloResults } from './lib/monteCarlo';
 import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
-type View = 'projection' | 'settings' | 'help' | 'math';
+type View = 'projection' | 'settings' | 'help' | 'math' | 'eq';
 import { buildShareUrl, consumePlanFromHash } from './lib/shareLink';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
+import { EqPage, type EqSolvedState } from './components/EqPage';
+import { runEqSolverAuto } from './lib/runEqSolver';
+import type { EqPin, PinMode, EqAxis } from './lib/eqConstraints';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
 // First-run scenarios: three realistic, mutually distinct starting points that
@@ -182,6 +185,7 @@ function App() {
   const shareCardRef = useRef<HTMLDivElement>(null);
   const optimizeCardRef = useRef<HTMLDivElement>(null);
   const compareCardRef = useRef<HTMLDivElement>(null);
+  const cancelEqSolveRef = useRef<(() => void) | null>(null);
   const printOptionsCardRef = useRef<HTMLDivElement>(null);
   const donateCardRef = useRef<HTMLDivElement>(null);
   const exportCardRef = useRef<HTMLDivElement>(null);
@@ -336,6 +340,41 @@ function App() {
   const results = useMemo(() => {
     return calculateHousehold(inputs, config);
   }, [inputs, config]);
+
+  // ---- EQ ideation surface state ----
+  const [eqPin, setEqPin] = useState<EqPin>({ kind: 'successRate', value: 0.9, enabled: false });
+  const [eqMode, setEqMode] = useState<PinMode>('hard');
+  const [eqSolved, setEqSolved] = useState<EqSolvedState>({
+    successRate: null, bounds: {}, grid: null, gridSize: 9, solving: false,
+  });
+
+  // Re-solve the EQ constraints whenever the plan or the pin changes, debounced
+  // so dragging a fader doesn't fire a 500-run batch per pixel. Runs in a worker.
+  useEffect(() => {
+    if (view !== 'eq') return;
+    setEqSolved(s => ({ ...s, solving: true }));
+    const t = setTimeout(() => {
+      const cancel = runEqSolverAuto(
+        {
+          inputs, config, pin: eqPin,
+          boundAxes: ['desiredSpending', 'retirementAge', 'investmentReturn'] as EqAxis[],
+          pad: { x: 'retirementAge', y: 'desiredSpending' },
+        },
+        (res) => setEqSolved({
+          successRate: res.successRate,
+          bounds: res.bounds,
+          grid: res.grid,
+          gridSize: res.gridMeta?.size ?? 9,
+          solving: false,
+        }),
+        (msg) => { console.warn('EQ solve failed:', msg); setEqSolved(s => ({ ...s, solving: false })); },
+      );
+      // store cancel so a re-trigger aborts the in-flight worker
+      cancelEqSolveRef.current = cancel;
+    }, 250);
+    return () => { clearTimeout(t); cancelEqSolveRef.current?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, inputs, config, eqPin]);
 
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
@@ -511,6 +550,7 @@ function App() {
                 {view === 'settings' && <span className="text-slate-900">Engine Settings</span>}
                 {view === 'help' && <span className="text-slate-900">Help &amp; Documentation</span>}
                 {view === 'math' && <span className="text-slate-900">How the Math Works</span>}
+                {view === 'eq' && <span className="text-slate-900">EQ — Steer the Plan</span>}
               </div>
               {view === 'projection' && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -520,6 +560,13 @@ function App() {
                     title="See how any year's numbers are worked out, step by step"
                   >
                     <Calculator size={13} /> Math
+                  </button>
+                  <button
+                    onClick={() => setView('eq')}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    title="Ideation surface: steer the plan with faders and an XY pad, pin a goal the controls respect"
+                  >
+                    <SlidersHorizontal size={13} /> EQ
                   </button>
                   <button
                     onClick={() => setShowOptimize((s) => !s)}
@@ -705,6 +752,19 @@ function App() {
                 inputs={inputs}
                 results={results}
                 spouseAgeOffset={inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge)}
+              />
+            )}
+
+            {view === 'eq' && (
+              <EqPage
+                inputs={inputs}
+                config={config}
+                onChange={handleInputsChange}
+                pin={eqPin}
+                onPinChange={setEqPin}
+                mode={eqMode}
+                onModeChange={setEqMode}
+                solved={eqSolved}
               />
             )}
           </div>
