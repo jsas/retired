@@ -35,8 +35,10 @@ import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
 import { buildShareUrl, consumePlanFromHash } from './lib/shareLink';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
-import { EqPage, defaultBands, defaultGoals, type EqSolvedState, type Bands, type EqGoals } from './components/EqPage';
+import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
+import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { runEqSolverAuto } from './lib/runEqSolver';
+import { renderRange, axisValue } from './lib/eqConstraints';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
 // First-run scenarios: three realistic, mutually distinct starting points that
@@ -246,6 +248,23 @@ function App() {
   const [showExport, setShowExport] = useState(false);
   const [exportOptions, setExportOptions] = useState<ProjectionExportOptions>(loadProjectionExportOptions);
 
+  // Two-hop panel nav: open a dashboard panel from anywhere. Switches to the
+  // projection view first (if needed), then opens the panel; the open-transition
+  // scroll effect brings it into view. Export scrolls even when already open.
+  const openPanel = (key: 'share' | 'optimize' | 'compare' | 'print' | 'export') => {
+    if (view !== 'projection') setView('projection');
+    switch (key) {
+      case 'share': setShowShare(true); break;
+      case 'optimize': setShowOptimize(true); break;
+      case 'compare': setShowCompare(true); break;
+      case 'print': setShowPrintOptions(true); break;
+      case 'export':
+        setShowExport(true);
+        requestAnimationFrame(() => exportCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        break;
+    }
+  };
+
   const updateExportOptions = (opts: ProjectionExportOptions) => {
     setExportOptions(opts);
     saveProjectionExportOptions(opts);
@@ -360,8 +379,13 @@ function App() {
 
   // ---- EQ steering surface state ----
   // Per-control allowed bands (min–max). Disabled = the control roams its full axis.
-  const [eqBands, setEqBands] = useState<Bands>(() => defaultBands());
-  const [eqGoals, setEqGoals] = useState<EqGoals>(() => defaultGoals());
+  // EQ steering state (control crops), persisted to localStorage as axis-fraction
+  // scalars (see eqStorage) so they survive axis-range changes; restored on load.
+  const [eqBands, setEqBands] = useState<Bands>(() => loadEqBands());
+
+  useEffect(() => {
+    saveEqBands(eqBands);
+  }, [eqBands]);
   const [eqSolved, setEqSolved] = useState<EqSolvedState>({
     successRate: null, grid: null, gridSize: 9, solving: false,
   });
@@ -375,11 +399,13 @@ function App() {
     const t = setTimeout(() => {
       const cancel = runEqSolverAuto(
         {
-          inputs, config,
-          pad: { x: 'retirementAge', y: 'desiredSpending' },
-          // When a success-rate goal is set, the pad shades against IT (the green
-          // region = "meets my goal"); otherwise the default reference rate.
-          targetRate: eqGoals.successRate.enabled ? eqGoals.successRate.value : undefined,
+          inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' },
+          // Shade the ranges the pad actually renders (grown to fit an
+          // out-of-range point), so the gradient lines up with the dot.
+          ranges: {
+            x: renderRange('retirementAge', axisValue(inputs, 'retirementAge')),
+            y: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending')),
+          },
         },
         (res) => setEqSolved({
           successRate: res.successRate,
@@ -388,11 +414,11 @@ function App() {
           solving: false,
         }),
         (msg) => { console.warn('EQ solve failed:', msg); setEqSolved(s => ({ ...s, solving: false })); },
-        // Stream partial rows: shade each finished row into the grid so the pad
-        // fills in live (center-out). Solved rows overwrite; unsolved keep prior.
+        // Stream partial rows: write each finished row's rates into the grid so
+        // the gradient fills in live (center-out). Solved rows overwrite.
         (prog) => setEqSolved(s => {
           const size = s.gridSize;
-          const grid = s.grid ? [...s.grid] : new Array<boolean>(size * size).fill(false);
+          const grid = s.grid ? [...s.grid] : new Array<number>(size * size).fill(0);
           for (let gx = 0; gx < size; gx++) grid[prog.row * size + gx] = prog.cells[gx];
           return { ...s, grid, solving: true };
         }),
@@ -401,7 +427,7 @@ function App() {
     }, 250);
     return () => { clearTimeout(t); cancelEqSolveRef.current?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, inputs, config, eqGoals.successRate.enabled, eqGoals.successRate.value]);
+  }, [view, inputs, config]);
 
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
@@ -579,65 +605,61 @@ function App() {
                 {view === 'math' && <span className="text-slate-900">How the Math Works</span>}
                 {view === 'eq' && <span className="text-slate-900">Steering</span>}
               </div>
-              {view === 'projection' && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                  <button
-                    onClick={() => setView('math')}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="See how any year's numbers are worked out, step by step"
-                  >
-                    <Calculator size={13} /> Math
-                  </button>
-                  <button
-                    onClick={() => setView('eq')}
-                    className="flex items-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-700 hover:underline"
-                    title="Steer the plan with sliders and a drag pad; limit any control to a range"
-                  >
-                    <SlidersHorizontal size={13} /> Steering
-                  </button>
-                  <button
-                    onClick={() => setShowOptimize((s) => !s)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Explore deterministic strategy variants and AI-suggested inputs"
-                  >
-                    <Sparkles size={13} /> Optimize
-                  </button>
-                  <button
-                    onClick={() => setShowCompare((s) => !s)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Diff 2–3 saved scenarios' verdict cards side by side"
-                  >
-                    <GitCompareArrows size={13} /> Compare
-                  </button>
-                  <button
-                    onClick={() => setShowShare((s) => !s)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Show a shareable link that encodes this plan's inputs in the URL"
-                  >
-                    <Share2 size={13} /> Share link
-                  </button>
-                  <button
-                    onClick={() => setShowPrintOptions((s) => !s)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Choose what goes into the printed plan summary, then print or save as PDF"
-                  >
-                    <Printer size={13} /> Print summary
-                  </button>
-                  <button
-                    onClick={() => setShowExport((s) => {
-                      const next = !s;
-                      if (!next) return false;
-                      // Same behaviour as MC/backtest: scroll even when already open.
-                      requestAnimationFrame(() => exportCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-                      return true;
-                    })}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Export the year-by-year projection as CSV, JSON or YAML"
-                  >
-                    <FileSpreadsheet size={13} /> Export Projection
-                  </button>
-                </div>
-              )}
+              {/* Toolbar — always visible. Page links (Math/Steering) navigate; the
+                  panel links (Optimize/Compare/Share/Print/Export) are two-hop: they
+                  jump to the projection dashboard and open their panel, and the
+                  open-transition effect scrolls it into view. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <button
+                  onClick={() => setView('math')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="See how any year's numbers are worked out, step by step"
+                >
+                  <Calculator size={13} /> Math
+                </button>
+                <button
+                  onClick={() => setView('eq')}
+                  className="flex items-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-700 hover:underline"
+                  title="Steer the plan with sliders and a drag pad; limit any control to a range"
+                >
+                  <SlidersHorizontal size={13} /> Steering
+                </button>
+                <button
+                  onClick={() => openPanel('optimize')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Explore deterministic strategy variants and AI-suggested inputs"
+                >
+                  <Sparkles size={13} /> Optimize
+                </button>
+                <button
+                  onClick={() => openPanel('compare')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Diff 2–3 saved scenarios' verdict cards side by side"
+                >
+                  <GitCompareArrows size={13} /> Compare
+                </button>
+                <button
+                  onClick={() => openPanel('share')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Show a shareable link that encodes this plan's inputs in the URL"
+                >
+                  <Share2 size={13} /> Share link
+                </button>
+                <button
+                  onClick={() => openPanel('print')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Choose what goes into the printed plan summary, then print or save as PDF"
+                >
+                  <Printer size={13} /> Print summary
+                </button>
+                <button
+                  onClick={() => openPanel('export')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Export the year-by-year projection as CSV, JSON or YAML"
+                >
+                  <FileSpreadsheet size={13} /> Export Projection
+                </button>
+              </div>
             </div>
           </div>
 
@@ -789,8 +811,6 @@ function App() {
                 onChange={handleInputsChange}
                 bands={eqBands}
                 onBandsChange={setEqBands}
-                goals={eqGoals}
-                onGoalsChange={setEqGoals}
                 solved={eqSolved}
                 projection={{ results, breakdown: householdBreakdown }}
               />

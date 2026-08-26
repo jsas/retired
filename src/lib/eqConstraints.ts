@@ -100,10 +100,11 @@ export const AXES: Record<EqAxis, AxisSpec> = {
 };
 
 // Axes that hold integer values (snapped in withAxis/normalizeBand/clampToBand).
-const INT_AXES: ReadonlySet<EqAxis> = new Set(['retirementAge', 'maxAge', 'cppStartAge']);
+export const INT_AXES: ReadonlySet<EqAxis> = new Set(['retirementAge', 'maxAge', 'cppStartAge']);
 
 // Derived/virtual axes that don't map 1:1 onto a RetirementInputs field.
-// annualSavings = total pre-retirement contributions across the three accounts.
+// annualSavings = total pre-retirement contributions across the three accounts;
+// writes go to the taxable account only (no contribution limit to collide with).
 const ANNUAL_SAVINGS_FIELDS = ['rrspContribution', 'tfsaContribution', 'taxableContribution'] as const;
 
 /** Read an axis value from inputs. */
@@ -119,16 +120,15 @@ export function axisValue(inputs: RetirementInputs, axis: EqAxis): number {
 export function withAxis(inputs: RetirementInputs, axis: EqAxis, value: number): RetirementInputs {
   const v = INT_AXES.has(axis) ? Math.round(value) : value;
   if (axis === 'annualSavings') {
-    // Scale the three contribution buckets proportionally to hit the new total
-    // (keeping the account mix); if all are zero, put it all in the RRSP.
-    const current = axisValue(inputs, 'annualSavings');
-    if (current <= 0) return { ...inputs, rrspContribution: v };
-    const k = v / current;
+    // Put the whole total in the TAXABLE (non-registered) account: it has no
+    // contribution limit, so the axis can never run into an RRSP/TFSA cap, and
+    // the mapping total↔field stays exact and monotone. Registered plans are
+    // for their own dedicated inputs, not this aggregate slider.
     return {
       ...inputs,
-      rrspContribution: Math.round(inputs.rrspContribution * k),
-      tfsaContribution: Math.round(inputs.tfsaContribution * k),
-      taxableContribution: Math.round(inputs.taxableContribution * k),
+      rrspContribution: 0,
+      tfsaContribution: 0,
+      taxableContribution: Math.round(v),
     };
   }
   if (axis === 'cppStartAge') return { ...inputs, cppStartAge: v };
@@ -136,27 +136,33 @@ export function withAxis(inputs: RetirementInputs, axis: EqAxis, value: number):
 }
 
 // ---------------------------------------------------------------------------
-// Bands — per-control allowed range (the double-slider constraint)
+// Bands — per-control allowed range (the "crop" constraint)
 // ---------------------------------------------------------------------------
 
 /**
- * A per-control allowed range. The control's value must stay inside [min,max];
- * the band edges are themselves clamped to the axis's hard limits and ordered
- * (min ≤ max). This is the "pin each control to at least / at most" model: a
- * band with min > the axis floor is an "at least" pin, max < the axis ceiling
- * is an "at most" pin, and both together are a range.
+ * A per-control allowed range [min,max] — a "crop" of the axis. The control's
+ * value must stay inside; the edges are clamped to the axis's hard limits and
+ * ordered (min ≤ max). There is no enable flag: a crop narrower than the full
+ * axis is active by definition, and a crop spanning the whole axis is the
+ * unconstrained state. That keeps the UI to a single triple-slider (min ·
+ * value · max) with no toggle.
  */
 export interface Band {
   min: number;
   max: number;
-  /** When false the band is ignored (control moves across the whole axis). */
-  enabled: boolean;
 }
 
-/** The full axis range as an (unconstraining) disabled band. */
+/** The full axis range — the unconstrained crop. */
 export function fullBand(axis: EqAxis): Band {
   const s = AXES[axis];
-  return { min: s.min, max: s.max, enabled: false };
+  return { min: s.min, max: s.max };
+}
+
+/** True when the crop is narrower than the whole axis (i.e. actually limiting). */
+export function isLimited(axis: EqAxis, band: Band): boolean {
+  const s = AXES[axis];
+  const n = normalizeBand(axis, band);
+  return n.min > s.min || n.max < s.max;
 }
 
 /** Normalize a band: clamp edges to the axis limits, order them, snap to step. */
@@ -169,13 +175,13 @@ export function normalizeBand(axis: EqAxis, band: Band): Band {
   let lo = snap(band.min);
   let hi = snap(band.max);
   if (lo > hi) [lo, hi] = [hi, lo];
-  return { min: lo, max: hi, enabled: band.enabled };
+  return { min: lo, max: hi };
 }
 
-/** The effective [min,max] a control may take: the band if enabled, else the axis range. */
+/** The effective [min,max] a control may take: the normalized crop. */
 export function effectiveRange(axis: EqAxis, band: Band | undefined): { min: number; max: number } {
   const s = AXES[axis];
-  if (!band || !band.enabled) return { min: s.min, max: s.max };
+  if (!band) return { min: s.min, max: s.max };
   const n = normalizeBand(axis, band);
   return { min: n.min, max: n.max };
 }
@@ -185,6 +191,44 @@ export function clampToBand(axis: EqAxis, band: Band | undefined, proposed: numb
   const { min, max } = effectiveRange(axis, band);
   const v = Math.min(max, Math.max(min, proposed));
   return INT_AXES.has(axis) ? Math.round(v) : v;
+}
+
+/** A concrete [min,max] rendering range for a control (defaults to the axis spec). */
+export interface AxisRange { min: number; max: number }
+
+/**
+ * The range a control should RENDER for a given plan value. Normally the axis's
+ * own range, but when the value exceeds the axis max (e.g. spending typed as
+ * $500k against a $250k axis) the range GROWS in whole-axis steps until it
+ * fits, so the value knob and crop always render in-bounds.
+ *
+ * Crops are stored as axis fractions (eqStorage), so when a range grows, a
+ * saved crop re-scales with it — "the middle 60%" still means the middle 60%
+ * of whatever is shown. That's the elegant property: values are decoupled from
+ * ranges, so ranges are free to adapt.
+ */
+export function renderRange(axis: EqAxis, value: number): AxisRange {
+  const s = AXES[axis];
+  if (value <= s.max) return { min: s.min, max: s.max };
+  const base = s.max - s.min;
+  const multiples = Math.ceil((value - s.max) / base);
+  return { min: s.min, max: s.max + multiples * base };
+}
+
+/**
+ * A crop with its edges EXTENDED to include the given value (no-op when the
+ * value is already inside). The crop is a fence around what you consider
+ * acceptable — so when the plan value moves past an edge (typed elsewhere,
+ * dragged on the timeline, …), the fence moves with it rather than leaving the
+ * value outside its own limits. Extends only toward the value: a value past
+ * `max` raises `max`, a value below `min` lowers `min`; the crop never shrinks
+ * and never inverts.
+ */
+export function bandWithValue(axis: EqAxis, band: Band, value: number): Band {
+  const n = normalizeBand(axis, band);
+  if (value > n.max) return normalizeBand(axis, { min: n.min, max: value });
+  if (value < n.min) return normalizeBand(axis, { min: value, max: n.max });
+  return n;
 }
 
 // ---------------------------------------------------------------------------

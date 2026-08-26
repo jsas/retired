@@ -1,50 +1,48 @@
 // EQ readout solve — the off-main-thread Monte Carlo behind the ideation
-// surface. Controls are constrained by per-control BANDS (handled synchronously
+// surface. Controls are constrained by per-control CROPS (handled synchronously
 // on the main thread — see eqConstraints.clampToBand), so this worker only
-// computes the plan's success-rate READOUT and the XY pad's feasibility
-// shading (the region where the plan meets a reference success rate).
+// computes the plan's success-rate READOUT and the XY pad's success-rate GRID
+// (which the pad renders as a smooth red→green gradient).
 //
 // All rates are scored against ONE seeded batch of futures so the readout and
-// the grid agree and stay stable while the user drags (regenerating futures
-// per candidate would make the rate noisy and the shading jump around).
+// the grid agree and stay stable while the user drags (regenerating futures per
+// candidate would make the rate noisy and the shading jump around).
 //
-// Two optimizations:
-//
-//  1. Monotonic row solve. Along any grid ROW (y-axis held), the success rate
-//     is monotonic in x (retireAge↑ → rate↑), and along any COLUMN it's
-//     monotonic in y (spending↑ → rate↓). So instead of scoring all G×G cells
-//     we binary-search the BOUNDARY column per row (≈log2 G evals/row) and fill
-//     the rest from the known direction. A 9×9 grid needs ~36 sims instead of
-//     81 — and larger grids get cheaper relative to brute force.
-//
-//  2. Center-out streaming. Rows are solved starting at the row nearest the
-//     current point (what the user is looking at) and working outward, and each
-//     finished row is streamed to the UI so the shading fills in live instead
-//     of appearing all at once.
+// The grid holds a success RATE per node (not a boolean) so the UI can
+// interpolate a smooth gradient between sampled points. Rows are scored and
+// streamed CENTER-OUT from the current point (what the user is looking at
+// first), so the gradient fills in live.
 import { generateSequences, simulate } from './monteCarlo';
 import type { RetirementInputs } from './retirementEngine';
 import type { AppConfig } from './appConfig';
 import { AXES, withAxis, axisValue, type EqAxis } from './eqConstraints';
 
-export const EQ_RUNS = 500;
+// 300 trajectories per node keeps a 90% rate within ±3.4% (95% CI) — plenty for
+// shading a 9×9 gradient, and ~40% cheaper per node than 500. The readout uses
+// the same batch so it stays consistent with the shading under the dot.
+export const EQ_RUNS = 300;
 export const EQ_SEED = 0xE0;
 const GRID = 9;
-/** Reference success rate for the pad's feasibility shading. */
-export const GRID_TARGET_RATE = 0.9;
+/** Youngest start age we generate sequences for — covers every grid column. */
+const GRID_MIN_AGE = 40;
 
 export interface EqSolveRequest {
   inputs: RetirementInputs;
   config: AppConfig;
   /** XY pad axes to shade (null = no grid). */
   pad: { x: EqAxis; y: EqAxis } | null;
-  /** Success-rate goal the grid shades against (defaults to GRID_TARGET_RATE). */
-  targetRate?: number;
+  /**
+   * The [min,max] each pad axis is RENDERED over (the axis, grown to fit an
+   * out-of-range point). The grid samples exactly this range so a node lands
+   * under the point it's drawn beneath. Defaults to the full axis when absent.
+   */
+  ranges?: { x: { min: number; max: number }; y: { min: number; max: number } };
 }
 
 export interface EqSolveResult {
   successRate: number;
-  /** Row-major grid, GRID×GRID, bottom-up in y (row 0 = lowest y). */
-  grid: boolean[] | null;
+  /** Row-major success-rate grid, GRID×GRID, bottom-up in y (row 0 = lowest y). */
+  grid: number[] | null;
   gridMeta: { x: EqAxis; y: EqAxis; size: number } | null;
 }
 
@@ -52,62 +50,114 @@ export interface EqSolveResult {
 export interface EqRowProgress {
   /** Grid row index (0 = lowest y). */
   row: number;
-  /** The G boolean cells for this row. */
-  cells: boolean[];
+  /** The G success-rate cells for this row. */
+  cells: number[];
 }
 
-/**
- * Solve one grid ROW: for the row's fixed y, find the boundary column where the
- * success rate crosses GRID_TARGET_RATE, then fill the whole row from the
- * x-axis direction. Returns the G cells (index 0 = lowest x).
- *
- * Monotonicity: rate is non-decreasing in x for an increasingRate x-axis
- * (retirement age), so feasibility is a contiguous suffix [boundary..G-1];
- * for a decreasingRate x-axis it's a prefix [0..boundary]. One binary search
- * per row finds the edge.
- */
-function solveRow(
-  rateOf: (cand: RetirementInputs) => number,
-  inputs: RetirementInputs,
-  xAxis: EqAxis,
-  yAxis: EqAxis,
-  y: number,
-  target: number,
-): boolean[] {
-  const xSpec = AXES[xAxis];
-  const G = GRID;
-  const xAt = (gx: number) => xSpec.min + (xSpec.max - xSpec.min) * (gx / (G - 1));
-  const ok = (gx: number) => rateOf(withAxis(withAxis(inputs, yAxis, y), xAxis, xAt(gx))) >= target;
+/** The shared batch of futures every candidate is scored against. */
+function makeSequences(inputs: RetirementInputs): Record<number, number>[] {
+  return generateSequences(
+    EQ_RUNS, Math.min(inputs.currentAge, GRID_MIN_AGE), inputs.maxAge,
+    inputs.investmentReturn, inputs.returnVolatility, EQ_SEED,
+  );
+}
 
-  const cells = new Array<boolean>(G);
-  if (xSpec.increasingRate) {
-    // Feasible is the RIGHT end. If even the last column fails → whole row infeasible.
-    if (!ok(G - 1)) return cells.fill(false);
-    // If the first column passes → whole row feasible.
-    if (ok(0)) return cells.fill(true);
-    // Binary search the first feasible column.
-    let lo = 0, hi = G - 1; // ok(lo)=false, ok(hi)=true
-    while (hi - lo > 1) {
-      const mid = (lo + hi) >> 1;
-      if (ok(mid)) hi = mid; else lo = mid;
-    }
-    for (let gx = 0; gx < G; gx++) cells[gx] = gx >= hi;
-    return cells;
+/** The center-out row order for a pad (nearest the current y first). */
+function rowOrder(yR: { min: number; max: number }, curY: number, G: number): number[] {
+  const yFrac = (curY - yR.min) / (yR.max - yR.min);
+  const centerRow = Math.round(Math.min(1, Math.max(0, yFrac)) * (G - 1));
+  const order: number[] = [];
+  for (let d = 0; d < G; d++) {
+    const up = centerRow + d;
+    const down = centerRow - d;
+    if (up < G && !order.includes(up)) order.push(up);
+    if (down >= 0 && !order.includes(down)) order.push(down);
   }
-  // Decreasing-rate x-axis: feasible is the LEFT end.
-  if (!ok(0)) return cells.fill(false);
-  if (ok(G - 1)) return cells.fill(true);
-  let lo = 0, hi = G - 1; // ok(lo)=true, ok(hi)=false
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >> 1;
-    if (ok(mid)) lo = mid; else hi = mid;
+  return order;
+}
+
+/** Score one grid row (G nodes across x at grid-row `gy`). */
+function solveRow(
+  inputs: RetirementInputs,
+  x: EqAxis, y: EqAxis,
+  xR: { min: number; max: number }, yR: { min: number; max: number },
+  gy: number, G: number,
+  rateOf: (cand: RetirementInputs) => number,
+): number[] {
+  const yv = yR.min + (yR.max - yR.min) * (gy / (G - 1));
+  const cells = new Array<number>(G);
+  for (let gx = 0; gx < G; gx++) {
+    const xv = xR.min + (xR.max - xR.min) * (gx / (G - 1));
+    cells[gx] = rateOf(withAxis(withAxis(inputs, x, xv), y, yv));
   }
-  for (let gx = 0; gx < G; gx++) cells[gx] = gx <= lo;
   return cells;
 }
 
 /**
- * Full solve: the readout + the (optionally streamed) feasibility grid.
+ * Compute a SUBSET of grid rows (in `order` sequence) — one shard of the full
+ * grid for a parallel worker. Returns only the rows it was asked for; the
+ * caller stitches shards together by row index. The readout (`successRate`) is
+ * left to the coordinator (shard workers return 0 there; only row cells matter).
+ */
+export function solveEqRows(
+  request: EqSolveRequest,
+  order: number[],
+  onRow?: (progress: EqRowProgress) => void,
+): EqSolveResult {
+  const { inputs, config, pad } = request;
+  if (!pad) return { successRate: 0, grid: null, gridMeta: null };
+  const sequences = makeSequences(inputs);
+  const rateOf = (cand: RetirementInputs) => simulate(cand, config, sequences).successRate;
+  const xR = request.ranges?.x ?? { min: AXES[pad.x].min, max: AXES[pad.x].max };
+  const yR = request.ranges?.y ?? { min: AXES[pad.y].min, max: AXES[pad.y].max };
+  const G = GRID;
+  const grid = new Array<number>(G * G).fill(0);
+  for (const gy of order) {
+    const cells = solveRow(inputs, pad.x, pad.y, xR, yR, gy, G, rateOf);
+    for (let gx = 0; gx < G; gx++) grid[gy * G + gx] = cells[gx];
+    onRow?.({ row: gy, cells });
+  }
+  return { successRate: 0, grid, gridMeta: { x: pad.x, y: pad.y, size: G } };
+}
+
+/** The row-shards a parallel pool should run: center-out order round-robined
+ *  across `shards` workers so the region around the point is spread across all
+ *  of them (every worker gets some near rows → near region shades first). */
+export function shardRows(request: EqSolveRequest, shards: number): number[][] {
+  const { pad } = request;
+  if (!pad || shards < 1) return [];
+  const yR = request.ranges?.y ?? { min: AXES[pad.y].min, max: AXES[pad.y].max };
+  const order = rowOrder(yR, axisValue(request.inputs, pad.y), GRID);
+  const out: number[][] = Array.from({ length: Math.min(shards, order.length) }, () => []);
+  order.forEach((gy, i) => out[i % out.length].push(gy));
+  return out;
+}
+
+/** The plan's success-rate readout (scored against the same shared batch). */
+export function solveEqReadout(request: EqSolveRequest): number {
+  const sequences = makeSequences(request.inputs);
+  return simulate(request.inputs, request.config, sequences).successRate;
+}
+
+// ---------------------------------------------------------------------------
+// Parallel pool protocol — a coordinator shards the grid rows across N workers
+// (solveEqRows) and stitches row messages back into a full grid.
+// ---------------------------------------------------------------------------
+
+/** Message a pool worker receives: which rows of which request to compute. */
+export interface EqShardRequest {
+  request: EqSolveRequest;
+  rows: number[];
+}
+
+/** Message a pool worker sends back. */
+export type EqShardResponse =
+  | { type: 'row'; row: number; cells: number[] }
+  | { type: 'done'; ok: true }
+  | { type: 'done'; ok: false; error: string };
+
+/**
+ * Full solve: the readout + the (optionally streamed) success-rate grid.
  * `onRow` is called with each finished row, in center-out order (nearest the
  * current point first), so a caller can render partial progress.
  */
@@ -115,44 +165,21 @@ export function solveEq(
   request: EqSolveRequest,
   onRow?: (progress: EqRowProgress) => void,
 ): EqSolveResult {
-  const { inputs, config, pad, targetRate } = request;
-  const target = targetRate ?? GRID_TARGET_RATE;
+  const { inputs, pad } = request;
 
-  const sequences = generateSequences(
-    EQ_RUNS, inputs.currentAge, inputs.maxAge, inputs.investmentReturn, inputs.returnVolatility, EQ_SEED,
-  );
-  const rateOf = (cand: RetirementInputs) => simulate(cand, config, sequences).successRate;
+  // ONE batch of futures serves the readout AND every grid node (sharing it
+  // keeps them consistent and avoids a second batch). Generated once from the
+  // youngest retirement age on the pad so each candidate simulates only its own
+  // horizon (currentAge → maxAge) — a candidate retiring at 70 runs 20 years,
+  // not 55. That alone cuts most of the per-node cost on long horizons.
+  const successRate = solveEqReadout(request);
 
-  const successRate = rateOf(inputs);
+  if (!pad) return { successRate, grid: null, gridMeta: null };
 
-  let grid: boolean[] | null = null;
-  let gridMeta: EqSolveResult['gridMeta'] = null;
-  if (pad) {
-    const ySpec = AXES[pad.y];
-    const G = GRID;
-    grid = new Array<boolean>(G * G).fill(false);
-
-    // Row order: nearest the current y first, then alternating outward, so the
-    // region around the user's point shades in first.
-    const curY = axisValue(inputs, pad.y);
-    const yFrac = (curY - ySpec.min) / (ySpec.max - ySpec.min);
-    const centerRow = Math.round(yFrac * (G - 1));
-    const order: number[] = [];
-    for (let d = 0; d < G; d++) {
-      const up = centerRow + d;
-      const down = centerRow - d;
-      if (up < G && !order.includes(up)) order.push(up);
-      if (down >= 0 && !order.includes(down)) order.push(down);
-    }
-
-    for (const gy of order) {
-      const y = ySpec.min + (ySpec.max - ySpec.min) * (gy / (G - 1));
-      const cells = solveRow(rateOf, inputs, pad.x, pad.y, y, target);
-      for (let gx = 0; gx < G; gx++) grid[gy * G + gx] = cells[gx];
-      onRow?.({ row: gy, cells });
-    }
-    gridMeta = { x: pad.x, y: pad.y, size: G };
-  }
-
-  return { successRate, grid, gridMeta };
+  // Sample over the RENDERED ranges (grown to fit an out-of-range point), so
+  // the gradient lines up with what's drawn. Default to the full axis.
+  const yR = request.ranges?.y ?? { min: AXES[pad.y].min, max: AXES[pad.y].max };
+  const order = rowOrder(yR, axisValue(inputs, pad.y), GRID);
+  const part = solveEqRows(request, order, onRow);
+  return { successRate, grid: part.grid, gridMeta: part.gridMeta };
 }

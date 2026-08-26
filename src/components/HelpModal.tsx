@@ -318,22 +318,23 @@ const SECTIONS: HelpSection[] = [
         term: 'The drag pad',
         body: (
           <>
-            <P>The square is retirement age (x) × spending (y). Drag the dot to move both at once. The green/red shading shows where the plan meets your success-rate goal — green means that combination hits it.</P>
+            <P>The square is retirement age (x) × spending (y). Drag the dot to move both at once. The red→green gradient shows the plan's success rate at every combination — green means that combination is likely to succeed, red means likely to run short.</P>
             {ul([
-              <>When a slider is limited, its allowed range shows as a rectangle on the pad. <strong>Drag a corner</strong> to resize the range in both axes at once.</>,
+              <>When a slider is cropped, its allowed range shows as a rectangle on the pad. <strong>Drag a corner</strong> to resize the range in both axes at once.</>,
               <>The shading re-computes as you change anything — return, volatility, savings, horizon — streaming in from the region around your current point outward.</>,
             ])}
           </>
         )
       },
       {
-        term: 'Goals',
+        term: 'Crops',
         body: (
           <P>
-            Each readout can carry a goal (the <strong>goal</strong> button): set a floor for money-lasts-to age,
-            success rate, or end balance with the small − / + steppers, and the card turns green when met,
-            red when missed. A success-rate goal also becomes the pad's shading threshold, so the green
-            region is exactly "meets my goal".
+            Each slider is a <strong>crop</strong>: drag the two edge handles to fence in the range you
+            consider acceptable, and the middle knob to move the plan's actual value within that range.
+            The value knob can never leave the crop, so the plan always stays inside your limits. Crops
+            are remembered between visits, stored as fractions of each range so they survive any future
+            range changes.
           </P>
         )
       },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { solveEq, EQ_RUNS, EQ_SEED, GRID_TARGET_RATE } from './eqSolver';
+import { solveEq, solveEqRows, solveEqReadout, shardRows, EQ_RUNS, EQ_SEED } from './eqSolver';
 import { generateSequences, simulate } from './monteCarlo';
 import { AXES, withAxis } from './eqConstraints';
 import { testConfig, baseInputs } from '../test/helpers';
@@ -16,17 +16,18 @@ const plan = () => baseInputs({
 });
 
 describe('solveEq grid', () => {
-  it('produces a G×G grid whose cells match a brute-force per-cell score', () => {
+  it('produces a G×G rate grid whose nodes match a brute-force per-node success rate', () => {
     const inputs = plan();
     const res = solveEq({ inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } });
     expect(res.grid).not.toBeNull();
     const G = res.gridMeta!.size;
     expect(res.grid!.length).toBe(G * G);
 
-    // Brute-force reference: score every cell independently against the SAME
-    // seeded batch and compare. The monotonic row-solve must agree.
+    // Brute-force reference: score every node independently against the SAME
+    // seeded batch (generated from the youngest pad age, exactly as the solver
+    // does) and compare rates exactly.
     const sequences = generateSequences(
-      EQ_RUNS, inputs.currentAge, inputs.maxAge, inputs.investmentReturn, inputs.returnVolatility, EQ_SEED,
+      EQ_RUNS, Math.min(inputs.currentAge, 40), inputs.maxAge, inputs.investmentReturn, inputs.returnVolatility, EQ_SEED,
     );
     const xSpec = AXES.retirementAge;
     const ySpec = AXES.desiredSpending;
@@ -35,7 +36,7 @@ describe('solveEq grid', () => {
       for (let gx = 0; gx < G; gx++) {
         const x = xSpec.min + (xSpec.max - xSpec.min) * (gx / (G - 1));
         const cand = withAxis(withAxis(inputs, 'retirementAge', x), 'desiredSpending', y);
-        const expected = simulate(cand, config, sequences).successRate >= GRID_TARGET_RATE;
+        const expected = simulate(cand, config, sequences).successRate;
         expect(res.grid![gy * G + gx]).toBe(expected);
       }
     }
@@ -69,5 +70,62 @@ describe('solveEq grid', () => {
     expect(res.successRate).toBeLessThanOrEqual(1);
     expect(res.grid).toBeNull();
     expect(res.gridMeta).toBeNull();
+  });
+
+  it('every grid rate is within [0,1]', () => {
+    const res = solveEq({ inputs: plan(), config, pad: { x: 'retirementAge', y: 'desiredSpending' } });
+    for (const r of res.grid!) {
+      expect(r).toBeGreaterThanOrEqual(0);
+      expect(r).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('parallel sharding', () => {
+  const req = () => ({ inputs: plan(), config, pad: { x: 'retirementAge' as const, y: 'desiredSpending' as const } });
+
+  it('shardRows partitions every row exactly once across the shards', () => {
+    const shards = shardRows(req(), 4);
+    expect(shards.length).toBe(4);
+    const all = shards.flat().sort((a, b) => a - b);
+    expect(all).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]); // 9 rows, no dupes/gaps
+  });
+
+  it('shardRows spreads the center-out order across shards (near rows on all workers)', () => {
+    const inputs = withAxis(plan(), 'desiredSpending', 60000);
+    const shards = shardRows({ inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } }, 3);
+    // Round-robin of the center-out order means shard 0 gets the nearest row,
+    // shard 1 the next, etc. — every shard holds some near rows.
+    const G = 9;
+    const centerRow = Math.round(((60000 - 0) / (250000 - 0)) * (G - 1));
+    expect(shards[0][0]).toBe(centerRow);
+    for (const s of shards) expect(s.length).toBeGreaterThan(0);
+  });
+
+  it('shardRows caps the shard count at the row count', () => {
+    expect(shardRows(req(), 99).length).toBe(9);
+    expect(shardRows({ ...req(), pad: null }, 4)).toEqual([]);
+  });
+
+  it('solveEqRows shards stitch back into the same grid as the full solveEq', () => {
+    const inputs = plan();
+    const request = { inputs, config, pad: { x: 'retirementAge' as const, y: 'desiredSpending' as const } };
+    const full = solveEq(request);
+    const shards = shardRows(request, 3);
+    const stitched = new Array<number>(81).fill(0);
+    for (const rows of shards) {
+      const part = solveEqRows(request, rows);
+      for (const gy of rows) {
+        for (let gx = 0; gx < 9; gx++) stitched[gy * 9 + gx] = part.grid![gy * 9 + gx];
+      }
+    }
+    expect(stitched).toEqual(full.grid);
+  });
+
+  it('solveEqReadout matches the full solveEq readout', () => {
+    const inputs = plan();
+    expect(solveEqReadout({ inputs, config, pad: null })).toBe(
+      solveEq({ inputs, config, pad: null }).successRate,
+    );
   });
 });
