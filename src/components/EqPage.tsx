@@ -361,9 +361,9 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, onBandsChange, sol
 }
 
 // ---------------------------------------------------------------------------
-// GoalCard — a readout with an optional goal target. When the goal is enabled
-// the card tints green (met) / red (missed) and shows a small target slider.
-// `alwaysColored` (Status) tints without a toggleable goal.
+// GoalCard — a READOUT (not a knob). It shows a live outcome; an optional goal
+// tints it green (met) / red (missed). The target is edited with small − / +
+// steppers, not a slider, so the card is never confused for an input.
 // ---------------------------------------------------------------------------
 function GoalCard({ label, value, suffix, met, solving, goal, onToggle, onValue, min, max, step, format, alwaysColored }: {
   label: string;
@@ -384,6 +384,12 @@ function GoalCard({ label, value, suffix, met, solving, goal, onToggle, onValue,
     : met ? 'border-emerald-300 bg-emerald-50/40' : 'border-red-300 bg-red-50/40';
   const valueColor = !active ? 'text-slate-900' : met ? 'text-emerald-700' : 'text-red-700';
 
+  const canStep = goal?.enabled && onValue && format && min != null && max != null && step != null;
+  const bump = (dir: 1 | -1) => {
+    if (!goal || !onValue || min == null || max == null || step == null) return;
+    onValue(Math.min(max, Math.max(min, goal.value + dir * step)));
+  };
+
   return (
     <div className={`border rounded px-2.5 py-1.5 ${tint}`}>
       <div className="flex items-center justify-between">
@@ -403,15 +409,20 @@ function GoalCard({ label, value, suffix, met, solving, goal, onToggle, onValue,
         {solving && <Loader2 size={12} className="animate-spin text-blue-500" aria-label="calculating" />}
         {value}{suffix ?? ''}
       </div>
-      {goal?.enabled && onValue && format && min != null && max != null && step != null && (
-        <div className="mt-1">
-          <input
-            type="range" aria-label={`${label} goal`}
-            min={min} max={max} step={step} value={goal.value}
-            onChange={(e) => onValue(Number(e.target.value))}
-            className="w-full accent-blue-600 h-3"
-          />
-          <div className="text-[9px] text-slate-500">at least <span className="font-medium text-slate-700">{format(goal.value)}</span></div>
+      {canStep && (
+        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-500">
+          <span>at least</span>
+          <button
+            type="button" aria-label="lower goal"
+            onClick={() => bump(-1)}
+            className="w-4 h-4 leading-none rounded border border-slate-300 text-slate-500 hover:bg-slate-100"
+          >−</button>
+          <span className="font-medium text-slate-700 tabular-nums">{format(goal.value)}</span>
+          <button
+            type="button" aria-label="raise goal"
+            onClick={() => bump(1)}
+            className="w-4 h-4 leading-none rounded border border-slate-300 text-slate-500 hover:bg-slate-100"
+          >+</button>
         </div>
       )}
     </div>
@@ -484,7 +495,7 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, goals, 
               onToggle={() => onGoalsChange({ ...goals, successRate: { ...goals.successRate, enabled: !goals.successRate.enabled } })}
               onValue={(v) => onGoalsChange({ ...goals, successRate: { value: v, enabled: true } })}
               met={solved.successRate != null && solved.successRate >= goals.successRate.value - 1e-9}
-              min={0.5} max={1} step={0.01}
+              min={0.5} max={1} step={0.05}
               format={(v) => `${Math.round(v * 100)}%`}
             />
             <GoalCard

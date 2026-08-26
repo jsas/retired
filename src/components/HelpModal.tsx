@@ -331,8 +331,9 @@ const SECTIONS: HelpSection[] = [
         body: (
           <P>
             Each readout can carry a goal (the <strong>goal</strong> button): set a floor for money-lasts-to age,
-            success rate, or end balance and the card turns green when met, red when missed. A success-rate
-            goal also becomes the pad's shading threshold, so the green region is exactly "meets my goal".
+            success rate, or end balance with the small − / + steppers, and the card turns green when met,
+            red when missed. A success-rate goal also becomes the pad's shading threshold, so the green
+            region is exactly "meets my goal".
           </P>
         )
       },
