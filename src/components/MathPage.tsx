@@ -141,6 +141,38 @@ function YearWorksheet({ row, inputs, isCouple }: {
         </Step>
       )}
 
+      {/* 7a — transfer events (the RRSP meltdown & friends). Each shows the
+          full path: gross out of the source, the tax on a registered source,
+          and the after-tax net landing in the destination — so a meltdown
+          doesn't look like money vanishing. */}
+      {(c.transfers ?? []).length > 0 && (
+        <Step n={++n} title="Transfers between accounts" note="Deliberate account→account moves (e.g. an RRSP meltdown into the TFSA). A registered source is a taxable withdrawal: only the after-tax remainder is redeposited. TFSA/taxable/cash sources are after-tax money (no tax).">
+          {(c.transfers ?? []).map((t, i) => (
+            <div key={i} className="mb-1.5 last:mb-0">
+              <div className="text-[11.5px] font-semibold text-slate-700">{t.label}: {t.from} → {t.to}</div>
+              <Line label={`gross out of ${t.from}`} value={t.gross} indent />
+              {t.tax > 0.5 && <Line label={`tax on the ${t.from} withdrawal`} value={t.tax} indent />}
+              <Line label={`net redeposited into ${t.to}`} value={t.net} indent />
+            </div>
+          ))}
+        </Step>
+      )}
+
+      {/* 7d — inflows & deposits landing this year (event inflows + the
+          redeposit side of any transfer), so the year's deposits are visible
+          alongside the withdrawals. */}
+      {(d.events.some(e => e.direction === 'in') || (d.deposit && (d.deposit.rrsp + d.deposit.rrif + d.deposit.tfsa + d.deposit.taxable + d.deposit.cash) > 0.5)) && (
+        <Step n={++n} title="Deposits landing this year" note="Money landing in the accounts: one-time inflow events and the redeposited side of any transfer.">
+          {d.events.filter(e => e.direction === 'in').map((e, i) => (
+            <Line key={`ev-${i}`} label={`${e.label}${e.to ? ` → ${e.to}` : ''} (inflow)`} value={e.amount} />
+          ))}
+          {d.deposit && d.deposit.rrsp > 0.5 && <Line label="→ RRSP" value={d.deposit.rrsp} indent />}
+          {d.deposit && d.deposit.tfsa > 0.5 && <Line label="→ TFSA" value={d.deposit.tfsa} indent />}
+          {d.deposit && d.deposit.taxable > 0.5 && <Line label="→ Taxable" value={d.deposit.taxable} indent />}
+          {d.deposit && d.deposit.cash > 0.5 && <Line label="→ Cash cushion" value={d.deposit.cash} indent />}
+        </Step>
+      )}
+
       {/* 7b — unfunded gap once the portfolio is depleted */}
       {(row.shortfall ?? 0) > 0.5 && (
         <Step n={++n} title="Unfunded shortfall" note="The portfolio is depleted — benefits cover only part of this year's spending target, so this much of the goal goes unmet. The gap shrinks as later benefits (pension, CPP, OAS, GIS) begin.">
