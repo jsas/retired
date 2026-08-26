@@ -517,6 +517,9 @@ function App() {
             window.alert('Set a Volatility above 0% (Market Hypotheses in the sidebar) to run Monte Carlo.');
             return;
           }
+          // Two-hop: the MC panel only renders on the projection view, so switch
+          // there first (from Help / settings / anywhere), then open + scroll.
+          if (view !== 'projection') setView('projection');
           if (mcOpen) {
             // Already open: onMounted won't refire, so scroll explicitly.
             mcPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -524,6 +527,8 @@ function App() {
           setMcOpen(true); // the sync effect builds the request (and keeps it fresh)
         }}
         onRunBacktest={() => {
+          // Two-hop: the backtest panel only renders on the projection view.
+          if (view !== 'projection') setView('projection');
           // Real-return series: run with inflation off so historical real
           // multipliers line up with today's-dollar spending.
           const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
