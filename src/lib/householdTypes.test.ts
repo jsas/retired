@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   legacyToPerson,
   legacyToShared,
-  legacySpouseToPerson,
   legacyToHousehold,
   householdToLegacy,
   resolveHousehold,
@@ -43,7 +42,7 @@ describe('legacy ↔ unified converters', () => {
     const legacy = baseInputs({ currentAge: 60, desiredSpending: 40000 });
     const household = legacyToHousehold(legacy);
     expect(household.spouse).toBeUndefined();
-    const back = householdToLegacy({ ...household, warnings: [] });
+    const back = householdToLegacy(resolveHousehold(household));
     expect(back.currentAge).toBe(legacy.currentAge);
     expect(back.desiredSpending).toBe(legacy.desiredSpending);
     expect(back.maxAge).toBe(legacy.maxAge);
