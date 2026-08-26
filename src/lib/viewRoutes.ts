@@ -2,12 +2,29 @@
 // linkable and the browser back/forward buttons navigate the app. Share links
 // (#plan=…) are a different hash namespace and are consumed before routing runs.
 
-export type View = 'projection' | 'settings' | 'help' | 'math' | 'eq';
+export type View =
+  | 'projection'
+  | 'settings'
+  | 'help'
+  | 'math'
+  | 'eq'
+  | 'optimize'
+  | 'compare'
+  | 'montecarlo'
+  | 'backtest'
+  | 'print'
+  | 'export';
 
 export const VIEW_ROUTES: Record<View, string> = {
   projection: 'projection',
   math: 'math',
   eq: 'steering',
+  optimize: 'optimize',
+  compare: 'compare',
+  montecarlo: 'monte-carlo',
+  backtest: 'backtest',
+  print: 'print',
+  export: 'export',
   help: 'help',
   settings: 'settings',
 };

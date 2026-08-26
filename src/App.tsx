@@ -193,35 +193,25 @@ function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
-  // mcOpen tracks panel visibility; mcRequest is the payload MonteCarloChart
-  // re-runs on. Keeping them separate lets an effect refresh mcRequest when
-  // inputs change without re-triggering itself.
-  const [mcOpen, setMcOpen] = useState(false);
+  // mcRequest is the payload MonteCarloChart re-runs on; built while the
+  // montecarlo route is active. backtestResult is built while backtest is.
   const [mcRequest, setMcRequest] = useState<MonteCarloRequest | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const mcPanelRef = useRef<HTMLDivElement>(null);
-  const backtestPanelRef = useRef<HTMLDivElement>(null);
   const shareCardRef = useRef<HTMLDivElement>(null);
-  const optimizeCardRef = useRef<HTMLDivElement>(null);
-  const compareCardRef = useRef<HTMLDivElement>(null);
-  const cancelEqSolveRef = useRef<(() => void) | null>(null);
-  const printOptionsCardRef = useRef<HTMLDivElement>(null);
   const donateCardRef = useRef<HTMLDivElement>(null);
-  const exportCardRef = useRef<HTMLDivElement>(null);
+  const cancelEqSolveRef = useRef<(() => void) | null>(null);
 
-  // Scroll a panel into view when it opens. Runs on every render and scrolls
-  // only on the closed → open transition (tracked in prevOpen), so input-driven
-  // re-renders and Monte Carlo auto-refreshes don't yank the page while editing.
+  // Scroll a dashboard card into view when it opens. Runs on every render and
+  // scrolls only on the closed → open transition (tracked in prevOpen), so
+  // input-driven re-renders don't yank the page while editing. Only the cards
+  // still on the dashboard (share modal, donate) use this; the analysis tools
+  // are routed pages now.
   const prevOpen = useRef<Record<string, boolean>>({});
   useEffect(() => {
     const targets: Array<[string, boolean, React.RefObject<HTMLDivElement | null>]> = [
       ['share', showShare, shareCardRef],
-      ['optimize', showOptimize, optimizeCardRef],
-      ['compare', showCompare, compareCardRef],
-      ['print', showPrintOptions, printOptionsCardRef],
       ['donate', showDonate, donateCardRef],
-      ['export', showExport, exportCardRef],
     ];
     for (const [key, isOpen, ref] of targets) {
       const was = prevOpen.current[key] ?? false;
@@ -233,38 +223,16 @@ function App() {
     }
   });
 
-  // (Monte Carlo / backtest auto-refresh effects live further down, after
+  // (Monte Carlo / backtest route-sync effects live further down, after
   // `inputs` and `config` are declared.)
   const [showShare, setShowShare] = useState(false);
-  const [showOptimize, setShowOptimize] = useState(false);
-  const [showCompare, setShowCompare] = useState(false);
   // Welcome card: visible until dismissed, or always when the General settings
   // toggle asks for it on every load.
   const [showWelcome, setShowWelcome] = useState(
     () => loadAppConfig().general.showWelcomeOnLoad || !isWelcomeDismissed()
   );
-  // Print options card visibility (options state itself lives below `inputs`).
-  const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [showDonate, setShowDonate] = useState(false);
-  const [showExport, setShowExport] = useState(false);
   const [exportOptions, setExportOptions] = useState<ProjectionExportOptions>(loadProjectionExportOptions);
-
-  // Two-hop panel nav: open a dashboard panel from anywhere. Switches to the
-  // projection view first (if needed), then opens the panel; the open-transition
-  // scroll effect brings it into view. Export scrolls even when already open.
-  const openPanel = (key: 'share' | 'optimize' | 'compare' | 'print' | 'export') => {
-    if (view !== 'projection') setView('projection');
-    switch (key) {
-      case 'share': setShowShare(true); break;
-      case 'optimize': setShowOptimize(true); break;
-      case 'compare': setShowCompare(true); break;
-      case 'print': setShowPrintOptions(true); break;
-      case 'export':
-        setShowExport(true);
-        requestAnimationFrame(() => exportCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-        break;
-    }
-  };
 
   const updateExportOptions = (opts: ProjectionExportOptions) => {
     setExportOptions(opts);
@@ -479,17 +447,17 @@ function App() {
     [results, inputs]
   );
 
-  // Keep an open Monte Carlo panel in sync with the plan: rebuild the request
-  // when inputs/config change, debounced so dragging a slider doesn't fire a
-  // 500-run batch per pixel. MonteCarloChart re-runs whenever request changes.
-  // mcRefreshNonce lets the header's refresh button force an immediate re-run.
+  // Monte Carlo is its own page now: build the request while the route is
+  // active, refreshing when inputs/config change (debounced so dragging a
+  // slider doesn't fire a 500-run batch per pixel). MonteCarloChart re-runs
+  // whenever request changes. mcRefreshNonce forces an immediate re-run.
   const [mcRefreshNonce, setMcRefreshNonce] = useState(0);
   const mcNonceSeen = useRef(0);
   useEffect(() => {
-    if (!mcOpen) { setMcRequest(null); return; }
+    if (view !== 'montecarlo') { setMcRequest(null); return; }
     const vol = inputs.returnVolatility ?? 0;
     if (vol <= 0) { setMcRequest(null); return; }
-    // Build immediately when there's nothing showing yet (first open) or a
+    // Build immediately when there's nothing showing yet (first visit) or a
     // fresh manual refresh was requested (nonce consumed once). Debounce only
     // the input-driven rebuilds so slider drags don't spam 500-run batches.
     const manualRefresh = mcRefreshNonce !== mcNonceSeen.current;
@@ -503,17 +471,18 @@ function App() {
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mcOpen, inputs, config, mcRefreshNonce]);
+  }, [view, inputs, config, mcRefreshNonce]);
 
-  // Keep an open backtest panel in sync too. It's fast and synchronous, so no
-  // debounce needed.
+  // Backtest is its own page too. It's fast and synchronous, so recompute on
+  // the route whenever inputs/config change — no debounce needed. Real-return
+  // series: inflation off so historical multipliers match today's-dollar spending.
   useEffect(() => {
-    if (!backtestResult) return;
+    if (view !== 'backtest') { setBacktestResult(null); return; }
     const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
     realConfig.engine.inflationRate = 0;
     setBacktestResult(runBacktest(inputs, realConfig, calculateHousehold));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputs, config]);
+  }, [view, inputs, config]);
 
   const handleExportProjection = () => {
     const payload = buildExport(activeScenario.name, inputs, results, config, exportOptions);
@@ -560,28 +529,9 @@ function App() {
             window.alert('Set a Volatility above 0% (Market Hypotheses in the sidebar) to run Monte Carlo.');
             return;
           }
-          // Two-hop: the MC panel only renders on the projection view, so switch
-          // there first (from Help / settings / anywhere), then open + scroll.
-          if (view !== 'projection') setView('projection');
-          if (mcOpen) {
-            // Already open: onMounted won't refire, so scroll explicitly.
-            mcPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-          setMcOpen(true); // the sync effect builds the request (and keeps it fresh)
+          setView('montecarlo'); // the route's effect builds the request (and keeps it fresh)
         }}
-        onRunBacktest={() => {
-          // Two-hop: the backtest panel only renders on the projection view.
-          if (view !== 'projection') setView('projection');
-          // Real-return series: run with inflation off so historical real
-          // multipliers line up with today's-dollar spending.
-          const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
-          realConfig.engine.inflationRate = 0;
-          setBacktestResult(runBacktest(inputs, realConfig, calculateHousehold));
-          if (backtestResult != null) {
-            // Already open: scroll explicitly since nothing remounts.
-            backtestPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }}
+        onRunBacktest={() => setView('backtest')}
         onOpenSettings={() => setView('settings')}
         onExportDb={handleExportDb}
         onImportDb={handleImportDb}
@@ -652,11 +602,16 @@ function App() {
                 {view === 'help' && <span className="text-slate-900">Help &amp; Documentation</span>}
                 {view === 'math' && <span className="text-slate-900">How the Math Works</span>}
                 {view === 'eq' && <span className="text-slate-900">Steering</span>}
+                {view === 'optimize' && <span className="text-slate-900">Optimize</span>}
+                {view === 'compare' && <span className="text-slate-900">Compare Scenarios</span>}
+                {view === 'montecarlo' && <span className="text-slate-900">Monte Carlo</span>}
+                {view === 'backtest' && <span className="text-slate-900">Historical Backtest</span>}
+                {view === 'print' && <span className="text-slate-900">Print Summary</span>}
+                {view === 'export' && <span className="text-slate-900">Export Projection</span>}
               </div>
-              {/* Toolbar — always visible. Page links (Math/Steering) navigate; the
-                  panel links (Optimize/Compare/Share/Print/Export) are two-hop: they
-                  jump to the projection dashboard and open their panel, and the
-                  open-transition effect scrolls it into view. */}
+              {/* Toolbar — always visible. Every link navigates to its own routed
+                  page (Math/Steering/Optimize/Compare/Print/Export) except Share
+                  link, which stays a small modal on the dashboard. */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 <button
                   onClick={() => setView('math')}
@@ -673,35 +628,35 @@ function App() {
                   <SlidersHorizontal size={13} /> Steering
                 </button>
                 <button
-                  onClick={() => openPanel('optimize')}
+                  onClick={() => setView('optimize')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   title="Explore deterministic strategy variants and AI-suggested inputs"
                 >
                   <Sparkles size={13} /> Optimize
                 </button>
                 <button
-                  onClick={() => openPanel('compare')}
+                  onClick={() => setView('compare')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   title="Diff 2–3 saved scenarios' verdict cards side by side"
                 >
                   <GitCompareArrows size={13} /> Compare
                 </button>
                 <button
-                  onClick={() => openPanel('share')}
+                  onClick={() => setShowShare(true)}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   title="Show a shareable link that encodes this plan's inputs in the URL"
                 >
                   <Share2 size={13} /> Share link
                 </button>
                 <button
-                  onClick={() => openPanel('print')}
+                  onClick={() => setView('print')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   title="Choose what goes into the printed plan summary, then print or save as PDF"
                 >
                   <Printer size={13} /> Print summary
                 </button>
                 <button
-                  onClick={() => openPanel('export')}
+                  onClick={() => setView('export')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   title="Export the year-by-year projection as CSV, JSON or YAML"
                 >
@@ -721,36 +676,11 @@ function App() {
                   <WelcomeCard onDismiss={() => setShowWelcome(false)} />
                 )}
 
-                {/* Share link card */}
+                {/* Share link modal + Donate card stay on the dashboard; the
+                    analysis tools are their own routed pages now. */}
                 {showShare && (
                   <div ref={shareCardRef} className="scroll-target">
                     <ShareCard url={buildShareUrl(inputs)} onClose={() => setShowShare(false)} />
-                  </div>
-                )}
-
-                {/* Optimize card */}
-                {showOptimize && (
-                  <div ref={optimizeCardRef} className="scroll-target">
-                    <OptimizeCard
-                      inputs={inputs}
-                      config={config}
-                      results={results}
-                      mcResults={printMc}
-                      onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
-                      onClose={() => setShowOptimize(false)}
-                    />
-                  </div>
-                )}
-
-                {/* Compare card */}
-                {showCompare && (
-                  <div ref={compareCardRef} className="scroll-target">
-                    <CompareCard
-                      scenarios={scenarios}
-                      activeScenarioId={activeScenarioId}
-                      config={config}
-                      onClose={() => setShowCompare(false)}
-                    />
                   </div>
                 )}
 
@@ -758,33 +688,6 @@ function App() {
                 {showDonate && (
                   <div ref={donateCardRef} className="scroll-target">
                     <DonateCard onClose={() => setShowDonate(false)} />
-                  </div>
-                )}
-
-                {/* Print options card */}
-                {showPrintOptions && (
-                  <div ref={printOptionsCardRef} className="scroll-target">
-                    <PrintOptionsCard
-                      options={printOptions}
-                      onChange={updatePrintOptions}
-                      onClose={() => setShowPrintOptions(false)}
-                      onPrint={() => window.print()}
-                      mcPending={printMcPending}
-                      mcResults={printMc}
-                    />
-                  </div>
-                )}
-
-                {/* Export projection card */}
-                {showExport && (
-                  <div ref={exportCardRef} className="scroll-target">
-                    <ExportCard
-                      options={exportOptions}
-                      onChange={updateExportOptions}
-                      onClose={() => setShowExport(false)}
-                      onExport={handleExportProjection}
-                      hasSpouse={!!results.spouse}
-                    />
                   </div>
                 )}
 
@@ -809,31 +712,64 @@ function App() {
                     spouseAgeOffset={inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge)}
                   />
                 </CollapsiblePanel>
-
-                {/* Monte Carlo */}
-                {mcOpen && mcRequest && (
-                  <div ref={mcPanelRef} className="scroll-target">
-                    <MonteCarloChart
-                      request={mcRequest}
-                      retirementAge={results.retirementAge}
-                      onClose={() => setMcOpen(false)}
-                      onRefresh={() => setMcRefreshNonce(n => n + 1)}
-                      onMounted={() => mcPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                    />
-                  </div>
-                )}
-
-                {/* Historical backtest */}
-                {backtestResult && (
-                  <div ref={backtestPanelRef} className="scroll-target">
-                    <BacktestPanel
-                      result={backtestResult}
-                      onClose={() => setBacktestResult(null)}
-                      onMounted={() => backtestPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                    />
-                  </div>
-                )}
               </>
+            )}
+
+            {view === 'optimize' && (
+              <OptimizeCard
+                inputs={inputs}
+                config={config}
+                results={results}
+                mcResults={printMc}
+                onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+                onClose={() => setView('projection')}
+              />
+            )}
+
+            {view === 'compare' && (
+              <CompareCard
+                scenarios={scenarios}
+                activeScenarioId={activeScenarioId}
+                config={config}
+                onClose={() => setView('projection')}
+              />
+            )}
+
+            {view === 'montecarlo' && mcRequest && (
+              <MonteCarloChart
+                request={mcRequest}
+                retirementAge={results.retirementAge}
+                onClose={() => setView('projection')}
+                onRefresh={() => setMcRefreshNonce(n => n + 1)}
+              />
+            )}
+
+            {view === 'backtest' && backtestResult && (
+              <BacktestPanel
+                result={backtestResult}
+                onClose={() => setView('projection')}
+              />
+            )}
+
+            {view === 'print' && (
+              <PrintOptionsCard
+                options={printOptions}
+                onChange={updatePrintOptions}
+                onClose={() => setView('projection')}
+                onPrint={() => window.print()}
+                mcPending={printMcPending}
+                mcResults={printMc}
+              />
+            )}
+
+            {view === 'export' && (
+              <ExportCard
+                options={exportOptions}
+                onChange={updateExportOptions}
+                onClose={() => setView('projection')}
+                onExport={handleExportProjection}
+                hasSpouse={!!results.spouse}
+              />
             )}
 
             {view === 'settings' && (
