@@ -25,90 +25,94 @@ interface WelcomeCardProps {
   onContinue: () => void;
 }
 
-// Getting-started page. Shown on load unless the user checks "don't show this
-// again" (persisted to the panel-state store); the General settings tab can
-// force it back on at every load.
+// Getting-started page. Open and editorial now that it's a full page: a wide
+// hero, the three steps as an un-boxed feature row, a privacy strip, then the
+// call to action. Shown on load unless the user checks "don't show this again"
+// (persisted to the panel-state store); the General settings tab can force it
+// back on at every load.
 export function WelcomeCard({ onContinue }: WelcomeCardProps) {
   const handleDontShowAgain = () => {
     persistDismissed(true);
     onContinue();
   };
 
+  const steps = [
+    {
+      icon: PanelLeft,
+      title: 'Enter your plan',
+      body: 'Ages, account balances, contributions, CPP/OAS and your desired spending (optionally in phases) go in the sidebar. The projection updates live as you type.',
+    },
+    {
+      icon: LineChart,
+      title: 'Read the results',
+      body: 'The summary, timeline chart and year-by-year schedule each collapse away. Monte Carlo and the historical backtest stress-test the plan against sequence risk.',
+    },
+    {
+      icon: Sparkles,
+      title: 'Improve it',
+      body: 'Optimize ranks CPP/OAS timing and withdrawal-order strategies. Steering lets you drag the plan and watch the success rate move. Help documents every input.',
+    },
+  ];
+
   return (
-    <div>
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-slate-900">Getting started with RE: tired</h2>
-        <p className="text-sm text-slate-600 mt-0.5">
-          A Canadian retirement drawdown planner. Everything runs in your browser.
+    <div className="max-w-3xl py-4 md:py-10">
+      {/* Hero */}
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600 mb-3">
+        Canadian retirement drawdown planner
+      </p>
+      <h2 className="text-2xl md:text-4xl font-bold text-slate-900 leading-tight tracking-tight">
+        Will your money outlast you?
+      </h2>
+      <p className="mt-3 text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl">
+        RE: tired projects your savings year by year through retirement — taxes, CPP, OAS, GIS and
+        all — and tells you the age your money lasts to. Everything runs in your browser; nothing is
+        uploaded.
+      </p>
+
+      {/* Steps — open feature row, no boxes */}
+      <div className="mt-10 md:mt-14 grid gap-x-10 gap-y-8 sm:grid-cols-3">
+        {steps.map((s, i) => (
+          <div key={s.title}>
+            <div className="flex items-center gap-2.5 mb-2">
+              <span className="text-xs font-bold text-slate-300 tabular-nums">{String(i + 1).padStart(2, '0')}</span>
+              <s.icon size={17} className="text-blue-600" />
+              <h3 className="text-sm font-semibold text-slate-900">{s.title}</h3>
+            </div>
+            <p className="text-[13px] text-slate-600 leading-relaxed">{s.body}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Privacy strip — a hairline divider, not a card */}
+      <div className="mt-10 md:mt-14 pt-6 border-t border-slate-200 flex items-start gap-3">
+        <ShieldCheck size={18} className="shrink-0 text-emerald-600 mt-0.5" />
+        <p className="text-[13px] text-slate-600 leading-relaxed">
+          <span className="font-semibold text-slate-800">Your data never leaves this device.</span>{' '}
+          Scenarios, settings and results live only in this browser's local storage. Clearing browser
+          data (or switching device) starts fresh — use the Import / Export page to keep a backup file.
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="flex gap-2 rounded border border-slate-200 bg-white p-3">
-          <PanelLeft size={16} className="shrink-0 text-blue-600 mt-0.5" />
-          <div>
-            <p className="text-xs font-medium text-slate-800">1. Enter your plan</p>
-            <p className="text-[11px] text-slate-600 leading-snug">
-              Use the sidebar: ages, account balances, contributions, CPP/OAS, and your
-              desired spending (optionally in phases). The projection updates live.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2 rounded border border-slate-200 bg-white p-3">
-          <LineChart size={16} className="shrink-0 text-blue-600 mt-0.5" />
-          <div>
-            <p className="text-xs font-medium text-slate-800">2. Read the results</p>
-            <p className="text-[11px] text-slate-600 leading-snug">
-              The summary, timeline chart and year-by-year schedule are each collapsible.
-              Monte Carlo and the historical backtest stress-test the plan.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2 rounded border border-slate-200 bg-white p-3">
-          <Sparkles size={16} className="shrink-0 text-blue-600 mt-0.5" />
-          <div>
-            <p className="text-xs font-medium text-slate-800">3. Improve it</p>
-            <p className="text-[11px] text-slate-600 leading-snug">
-              <span className="font-medium">Optimize</span> ranks CPP/OAS timing and withdrawal-order
-              strategies. The <span className="font-medium">Help</span> page documents every input;
-              scenarios are saved in the sidebar.
-            </p>
-          </div>
-        </div>
+      {/* CTA */}
+      <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <button
+          onClick={onContinue}
+          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+        >
+          Get started <ArrowRight size={16} />
+        </button>
+        <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+          <input type="checkbox" onChange={(e) => { if (e.target.checked) handleDontShowAgain(); }} />
+          Don't show this again
+        </label>
       </div>
 
-      <div className="mt-3 flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50/60 px-4 py-2.5">
-        <ShieldCheck size={14} className="shrink-0 text-emerald-600" />
-        <p className="text-[11px] text-slate-600 leading-snug">
-          <span className="font-medium text-slate-700">Your data never leaves this device.</span>{' '}
-          Scenarios, settings and results are stored only in this browser's local storage — nothing is
-          uploaded or sent to a server. Clearing your browser data (or using another browser/device)
-          means starting fresh, so use the Export page to keep a backup file.
-        </p>
-      </div>
-
-      <p className="mt-3 text-[10px] text-slate-500 leading-snug">
+      <p className="mt-10 text-[11px] text-slate-400 leading-relaxed max-w-2xl">
         For education and exploration only — RE: tired produces simplified estimates from a model of
         Canadian tax and benefit rules, not financial, tax, or investment advice. Real outcomes will
         differ. Consult a qualified financial planner or tax professional before acting on anything
         you see here.
       </p>
-
-      <div className="mt-4 flex items-center gap-3">
-        <button
-          onClick={onContinue}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded hover:bg-blue-700"
-        >
-          Get started <ArrowRight size={15} />
-        </button>
-        <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            onChange={(e) => { if (e.target.checked) handleDontShowAgain(); }}
-          />
-          Don't show this again
-        </label>
-      </div>
     </div>
   );
 }

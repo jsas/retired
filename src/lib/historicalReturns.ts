@@ -48,10 +48,12 @@ export interface BacktestResult {
   windowCount: number;
   successCount: number;
   successRate: number; // 0..1
-  worstWindow: BacktestWindow;
-  bestWindow: BacktestWindow;
+  worstWindow: BacktestWindow | null;
+  bestWindow: BacktestWindow | null;
   medianFinalBalance: number;
   windows: BacktestWindow[];
+  /** True when the requested horizon exceeded the data and was clamped. */
+  truncated: boolean;
 }
 
 // Local structural types so this module doesn't import the engine (avoids a
@@ -91,8 +93,14 @@ export function runBacktest(
   engineRun: EngineRun,
 ): BacktestResult {
   const { startYear, returns } = HISTORICAL_REAL_RETURNS;
-  const horizon = Math.max(1, Math.round(inputs.maxAge - inputs.currentAge));
-  const windowCount = returns.length - horizon + 1;
+  // Clamp the horizon to the data we have: a very low retirement age can push
+  // maxAge−currentAge past the 55-year series, which would otherwise leave
+  // zero rolling windows (and crash the panel on worstWindow/bestWindow).
+  const horizon = Math.min(
+    returns.length,
+    Math.max(1, Math.round(inputs.maxAge - inputs.currentAge)),
+  );
+  const windowCount = Math.max(0, returns.length - horizon + 1);
 
   const windows: BacktestWindow[] = [];
   for (let w = 0; w < windowCount; w++) {
@@ -123,14 +131,16 @@ export function runBacktest(
 
   const sorted = [...windows].sort((a, b) => a.finalBalance - b.finalBalance);
   const successCount = windows.filter((w) => !w.depleted).length;
+  const requestedHorizon = Math.max(1, Math.round(inputs.maxAge - inputs.currentAge));
   return {
     windowYears: horizon,
     windowCount: windows.length,
     successCount,
     successRate: windows.length > 0 ? successCount / windows.length : 0,
-    worstWindow: sorted[0],
-    bestWindow: sorted[sorted.length - 1],
+    worstWindow: sorted[0] ?? null,
+    bestWindow: sorted[sorted.length - 1] ?? null,
     medianFinalBalance: sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)].finalBalance : 0,
     windows,
+    truncated: horizon < requestedHorizon,
   };
 }

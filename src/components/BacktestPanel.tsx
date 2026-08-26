@@ -32,6 +32,7 @@ export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
 
   const firstStart = result.windows[0]?.startYear ?? startYear;
   const lastStart = result.windows[result.windows.length - 1]?.startYear ?? startYear;
+  const { worstWindow, bestWindow } = result;
 
   return (
     <div>
@@ -54,9 +55,9 @@ export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
           </div>
           <div className="border border-slate-200 rounded p-3">
             <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Worst Window</div>
-            <div className="text-lg font-semibold text-slate-900">{result.worstWindow.startYear}</div>
+            <div className="text-lg font-semibold text-slate-900">{worstWindow ? worstWindow.startYear : '—'}</div>
             <div className="text-[10px] text-slate-500 mt-0.5">
-              {result.worstWindow.depleted ? `depleted at ${result.worstWindow.depletionAge}` : `ends ${formatCurrency(result.worstWindow.finalBalance)}`}
+              {worstWindow ? (worstWindow.depleted ? `depleted at ${worstWindow.depletionAge}` : `ends ${formatCurrency(worstWindow.finalBalance)}`) : 'no windows'}
             </div>
           </div>
           <div className="border border-slate-200 rounded p-3">
@@ -66,8 +67,8 @@ export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
           </div>
           <div className="border border-slate-200 rounded p-3">
             <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Best Window</div>
-            <div className="text-lg font-semibold text-slate-900">{result.bestWindow.startYear}</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">ends {formatCurrency(result.bestWindow.finalBalance)}</div>
+            <div className="text-lg font-semibold text-slate-900">{bestWindow ? bestWindow.startYear : '—'}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">{bestWindow ? `ends ${formatCurrency(bestWindow.finalBalance)}` : 'no windows'}</div>
           </div>
         </div>
 
@@ -99,6 +100,13 @@ export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
           </div>
         </div>
 
+        {result.truncated && (
+          <p className="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 leading-snug">
+            Your plan's horizon is longer than the {endYear - startYear + 1}-year historical record,
+            so each window was capped at {result.windowYears} years — the backtest doesn't reach your
+            full horizon. A very early retirement age is the usual cause.
+          </p>
+        )}
         <p className="mt-3 text-[11px] text-slate-500 leading-snug">
           Each bar replays the plan against one {result.windowYears}-year historical sequence of real
           (after-inflation) returns, with spending held in today's dollars. Bars sit at each window's

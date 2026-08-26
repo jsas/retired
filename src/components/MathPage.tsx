@@ -236,7 +236,7 @@ export function MathPage({ inputs, results, spouseAgeOffset }: MathPageProps) {
   const spouseRow = spouseRows.find(r => r.age === spouseAgeAtYear);
 
   return (
-    <div className={view === 'both' ? 'max-w-6xl' : 'max-w-3xl'}>
+    <div>
       <div className="flex items-center gap-2 mb-1">
         <Calculator size={18} className="text-blue-600" />
         <h2 className="text-lg font-bold text-slate-900">Year math — how a year is worked out</h2>
