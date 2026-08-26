@@ -106,6 +106,62 @@ describe('pensions', () => {
   });
 });
 
+describe('projection continues past depletion (issue #5)', () => {
+  // A small portfolio that runs out early, with a pension + CPP/OAS starting
+  // after depletion. Before the fix the loop broke at depletion, so those
+  // benefits never appeared anywhere. Now the projection runs to maxAge and
+  // the benefits accrue into rows once they begin.
+  const depletedInputs = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 80,
+    tfsaBalance: 60000, rrspBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    desiredSpending: 40000,
+    cppStartAge: 70, cppMonthlyAmount: 1000, cppAdjustedAmount: false,
+    oasStartAge: null,
+    pensions: [{ id: 'db', label: 'DB', annualAmount: 8000, startAge: 72, endAge: null, indexedToCpi: false }],
+  });
+
+  it('projects rows through maxAge even after the portfolio is depleted', () => {
+    const r = calculateRetirement(depletedInputs(), config);
+    expect(r.depletionAge).not.toBeNull();
+    expect(r.depletionAge!).toBeLessThan(80);
+    // Rows exist all the way to maxAge (previously they stopped at depletion).
+    expect(r.yearlyBreakdown[r.yearlyBreakdown.length - 1].age).toBe(80);
+    // Balances stay clamped at 0 after depletion — the portfolio funds nothing more.
+    expect(yearAt(r.yearlyBreakdown, 80).endingBalance).toBe(0);
+  });
+
+  it('benefits starting after depletion still appear in later rows', () => {
+    const r = calculateRetirement(depletedInputs(), config);
+    // Pension starts at 72 — after the money is gone — and must show up.
+    expect(yearAt(r.yearlyBreakdown, 72).pensionIncome).toBeCloseTo(8000, 6);
+    // CPP from 70 likewise (grossed up for the 5-year deferral).
+    expect(yearAt(r.yearlyBreakdown, 70).cppIncome).toBeGreaterThan(1000 * 12);
+  });
+
+  it('per-year shortfall is the unfunded gap and shrinks once a late benefit begins', () => {
+    const r = calculateRetirement(depletedInputs(), config);
+    const atDepletion = yearAt(r.yearlyBreakdown, r.depletionAge!);
+    // At depletion the spending target is barely funded → a real shortfall.
+    expect(atDepletion.shortfall!).toBeGreaterThan(0);
+    // The DB pension starts at 72. Comparing the year just before (71) to the
+    // year it starts (72) isolates its effect: with no portfolio left, the new
+    // pension must cut the unfunded gap. (Both years are post-depletion, so the
+    // only change is the pension kicking in.)
+    const before = yearAt(r.yearlyBreakdown, 71);
+    const after = yearAt(r.yearlyBreakdown, 72);
+    expect(before.pensionIncome).toBe(0);
+    expect(after.pensionIncome).toBeCloseTo(8000, 6);
+    expect(after.shortfall!).toBeLessThan(before.shortfall!);
+    // Shortfall never exceeds the year's spending target.
+    expect(after.shortfall!).toBeLessThanOrEqual(after.spendingTarget + 0.01);
+  });
+
+  it('depletion verdict is unchanged: still SHORTFALL when money runs out early', () => {
+    const r = calculateRetirement(depletedInputs(), config);
+    expect(r.status).toBe('SHORTFALL');
+  });
+});
+
 describe('GIS (single)', () => {
   it('CPP reduces GIS 50¢/$ — verified against the canada.ca table', () => {
     // $800/mo CPP = $9,600/yr → GIS = 13478 − 9600×0.5 = 8678

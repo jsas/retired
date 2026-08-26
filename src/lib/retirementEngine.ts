@@ -196,6 +196,10 @@ export interface YearlyBreakdown {
   incomeTax: number;
   cumulativeTax: number;
   spendingTarget: number; // this year's after-tax income goal, in nominal dollars of that year
+  // Unfunded spending gap this year (0 until the portfolio depletes; afterwards
+  // it shrinks as late-starting benefits begin to cover spending). Optional so
+  // older fixtures/types still compile; the engine always sets it.
+  shortfall?: number;
   endingBalance: number;
   rrspBalance: number;
   rrifBalance: number;
@@ -791,7 +795,11 @@ export function calculateRetirement(
     // Depletion = investable accounts exhausted AND no remaining way to fund
     // spending. With a reverse-mortgage top-up, remaining LTV headroom keeps
     // the plan afloat (it borrows the shortfall), so only count depletion once
-    // the loan has hit the LTV ceiling too.
+    // the loan has hit the LTV ceiling too. Recorded, NOT truncated: the loop
+    // keeps projecting to maxAge so benefits that start after the money runs
+    // out (a late pension, CPP, OAS, GIS) still accrue into rows and the year's
+    // unfunded shortfall (calc.needFinal) stays visible. Balances clamp at 0 —
+    // the portfolio can fund nothing further, but income keeps flowing.
     const rmCanBorrow = rmOn && rm?.topUp && rmHeadroom() > 0;
     if (endingTotal <= 0 && !rmCanBorrow && depletionAge === null) {
       depletionAge = age;
@@ -814,11 +822,15 @@ export function calculateRetirement(
       cumulativeTax,
       spendingTarget: yearSpending,
       endingBalance: Math.max(0, endingTotal),
-      rrspBalance: rrsp,
-      rrifBalance: rrif,
-      tfsaBalance: tfsa,
-      taxableBalance: taxable,
-      cashCushionBalance: cashCushion,
+      // The year's unfunded spending gap: what the target couldn't be covered by
+      // benefits + portfolio. Zero until depletion; afterwards it shrinks as
+      // late-starting benefits (pension/CPP/OAS/GIS) begin to cover spending.
+      shortfall: Math.max(0, remainingAfterTaxNeed),
+      rrspBalance: Math.max(0, rrsp),
+      rrifBalance: Math.max(0, rrif),
+      tfsaBalance: Math.max(0, tfsa),
+      taxableBalance: Math.max(0, taxable),
+      cashCushionBalance: Math.max(0, cashCushion),
       cppIncome: cppGross,
       oasIncome: oasGross,
       gisIncome: gisGross,
@@ -838,18 +850,12 @@ export function calculateRetirement(
 
     accountBreakdown.push({
       age,
-      rrspBalance: rrsp,
-      rrifBalance: rrif,
-      tfsaBalance: tfsa,
-      taxableBalance: taxable,
-      cashCushionBalance: cashCushion
+      rrspBalance: Math.max(0, rrsp),
+      rrifBalance: Math.max(0, rrif),
+      tfsaBalance: Math.max(0, tfsa),
+      taxableBalance: Math.max(0, taxable),
+      cashCushionBalance: Math.max(0, cashCushion)
     });
-
-    // Stop projecting once the money's gone — unless a reverse-mortgage
-    // top-up can still borrow against home equity to keep funding spending.
-    if (endingTotal <= 0 && !rmCanBorrow) {
-      break;
-    }
   }
 
   const totalNetWorthAtRetirement =
@@ -996,6 +1002,7 @@ export function combineHouseholdBreakdown(
       incomeTax: py.incomeTax + sy.incomeTax,
       cumulativeTax: py.cumulativeTax + sy.cumulativeTax,
       spendingTarget: py.spendingTarget + sy.spendingTarget,
+      shortfall: (py.shortfall ?? 0) + (sy.shortfall ?? 0),
       endingBalance: py.endingBalance + sy.endingBalance,
       rrspBalance: py.rrspBalance + sy.rrspBalance,
       rrifBalance: py.rrifBalance + sy.rrifBalance,

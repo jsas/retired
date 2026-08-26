@@ -141,6 +141,16 @@ function YearWorksheet({ row, inputs, isCouple }: {
         </Step>
       )}
 
+      {/* 7b — unfunded gap once the portfolio is depleted */}
+      {(row.shortfall ?? 0) > 0.5 && (
+        <Step n={++n} title="Unfunded shortfall" note="The portfolio is depleted — benefits cover only part of this year's spending target, so this much of the goal goes unmet. The gap shrinks as later benefits (pension, CPP, OAS, GIS) begin.">
+          <Eq parts={`spending target ${fmt(row.spendingTarget)} − funded by benefits & portfolio`} result={row.shortfall ?? 0} strong />
+          <div className="text-[10px] text-amber-600 mt-0.5 leading-snug">
+            this year's plan is underfunded — the money ran out before the spending goal was met.
+          </div>
+        </Step>
+      )}
+
       {/* 8 — tax */}
       {(row.incomeTax > 0.5 || d.tax.oasClawback > 0.5 || (row.splitTransferred ?? 0) !== 0) && (
         <Step n={++n} title="Income tax" note="Tax on total income, minus the tax already counted on benefits, plus the OAS recovery tax.">
@@ -195,7 +205,11 @@ function PersonColumn({ title, row, inputs, isCouple, calendarYear }: {
       {row ? (
         <YearWorksheet row={row} inputs={inputs} isCouple={isCouple} />
       ) : (
-        <p className="text-xs text-slate-500">No projection rows for this person.</p>
+        <p className="text-xs text-slate-500">
+          No projection row for this person in the selected calendar year — they're not yet
+          at their starting age then (the projection runs to max age, so post-depletion
+          years still appear, with any unfunded gap shown as a shortfall).
+        </p>
       )}
     </div>
   );
