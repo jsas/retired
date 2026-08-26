@@ -31,13 +31,12 @@ import type { MonteCarloResults } from './lib/monteCarlo';
 import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
-type View = 'projection' | 'settings' | 'help' | 'math' | 'eq';
+import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
 import { buildShareUrl, consumePlanFromHash } from './lib/shareLink';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
-import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
+import { EqPage, defaultBands, defaultGoals, type EqSolvedState, type Bands, type EqGoals } from './components/EqPage';
 import { runEqSolverAuto } from './lib/runEqSolver';
-import { fullBand } from './lib/eqConstraints';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
 // First-run scenarios: three realistic, mutually distinct starting points that
@@ -172,7 +171,25 @@ function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
   const [activeScenarioId, setActiveScenarioId] = useState<string>(initialState.activeScenarioId);
   const [config, setConfig] = useState<AppConfig>(loadAppConfig);
-  const [view, setView] = useState<View>('projection');
+  const [view, setView] = useState<View>(() => viewFromHash(window.location.hash) ?? 'projection');
+
+  // Keep the URL hash in sync with the current view (push a history entry per
+  // navigation), and follow hash changes so back/forward and pasted links work.
+  useEffect(() => {
+    const route = hashForView(view);
+    if (window.location.hash !== route) {
+      window.history.pushState(null, '', window.location.pathname + window.location.search + route);
+    }
+  }, [view]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const v = viewFromHash(window.location.hash);
+      if (v) setView(v);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   // mcOpen tracks panel visibility; mcRequest is the payload MonteCarloChart
   // re-runs on. Keeping them separate lets an effect refresh mcRequest when
   // inputs change without re-triggering itself.
@@ -343,23 +360,27 @@ function App() {
 
   // ---- EQ steering surface state ----
   // Per-control allowed bands (min–max). Disabled = the control roams its full axis.
-  const [eqBands, setEqBands] = useState<Bands>({
-    desiredSpending: fullBand('desiredSpending'),
-    retirementAge: fullBand('retirementAge'),
-    investmentReturn: fullBand('investmentReturn'),
-  });
+  const [eqBands, setEqBands] = useState<Bands>(() => defaultBands());
+  const [eqGoals, setEqGoals] = useState<EqGoals>(() => defaultGoals());
   const [eqSolved, setEqSolved] = useState<EqSolvedState>({
     successRate: null, grid: null, gridSize: 9, solving: false,
   });
 
   // Re-solve the success-rate readout + pad shading whenever the plan changes,
-  // debounced so dragging a control doesn't fire a 500-run batch per pixel.
+  // debounced so dragging a control doesn't fire a 500-run batch per pixel. The
+  // grid streams in row-by-row (center-out) so the pad shades in live.
   useEffect(() => {
     if (view !== 'eq') return;
     setEqSolved(s => ({ ...s, solving: true }));
     const t = setTimeout(() => {
       const cancel = runEqSolverAuto(
-        { inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } },
+        {
+          inputs, config,
+          pad: { x: 'retirementAge', y: 'desiredSpending' },
+          // When a success-rate goal is set, the pad shades against IT (the green
+          // region = "meets my goal"); otherwise the default reference rate.
+          targetRate: eqGoals.successRate.enabled ? eqGoals.successRate.value : undefined,
+        },
         (res) => setEqSolved({
           successRate: res.successRate,
           grid: res.grid,
@@ -367,12 +388,20 @@ function App() {
           solving: false,
         }),
         (msg) => { console.warn('EQ solve failed:', msg); setEqSolved(s => ({ ...s, solving: false })); },
+        // Stream partial rows: shade each finished row into the grid so the pad
+        // fills in live (center-out). Solved rows overwrite; unsolved keep prior.
+        (prog) => setEqSolved(s => {
+          const size = s.gridSize;
+          const grid = s.grid ? [...s.grid] : new Array<boolean>(size * size).fill(false);
+          for (let gx = 0; gx < size; gx++) grid[prog.row * size + gx] = prog.cells[gx];
+          return { ...s, grid, solving: true };
+        }),
       );
       cancelEqSolveRef.current = cancel;
     }, 250);
     return () => { clearTimeout(t); cancelEqSolveRef.current?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, inputs, config]);
+  }, [view, inputs, config, eqGoals.successRate.enabled, eqGoals.successRate.value]);
 
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
@@ -561,7 +590,7 @@ function App() {
                   </button>
                   <button
                     onClick={() => setView('eq')}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    className="flex items-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-700 hover:underline"
                     title="Steer the plan with sliders and a drag pad; limit any control to a range"
                   >
                     <SlidersHorizontal size={13} /> Steering
@@ -760,7 +789,10 @@ function App() {
                 onChange={handleInputsChange}
                 bands={eqBands}
                 onBandsChange={setEqBands}
+                goals={eqGoals}
+                onGoalsChange={setEqGoals}
                 solved={eqSolved}
+                projection={{ results, breakdown: householdBreakdown }}
               />
             )}
           </div>

@@ -34,6 +34,46 @@ describe('axis read/write', () => {
     expect(AXES.desiredSpending.increasingRate).toBe(false);
     expect(AXES.retirementAge.increasingRate).toBe(true);
     expect(AXES.investmentReturn.increasingRate).toBe(true);
+    expect(AXES.maxAge.increasingRate).toBe(false);
+    expect(AXES.annualSavings.increasingRate).toBe(true);
+    expect(AXES.returnVolatility.increasingRate).toBe(false);
+    expect(AXES.cppStartAge.increasingRate).toBe(true);
+  });
+});
+
+describe('derived axes', () => {
+  it('annualSavings reads the total of the three contribution buckets', () => {
+    const i = baseInputs({ rrspContribution: 10000, tfsaContribution: 6000, taxableContribution: 4000 });
+    expect(axisValue(i, 'annualSavings')).toBe(20000);
+  });
+
+  it('annualSavings scales the buckets proportionally, preserving the mix', () => {
+    const i = baseInputs({ rrspContribution: 10000, tfsaContribution: 5000, taxableContribution: 5000 });
+    const next = withAxis(i, 'annualSavings', 40000);
+    expect(axisValue(next, 'annualSavings')).toBe(40000);
+    expect(next.rrspContribution).toBe(20000);
+    expect(next.tfsaContribution).toBe(10000);
+    expect(next.taxableContribution).toBe(10000);
+  });
+
+  it('annualSavings from zero puts everything in the RRSP bucket', () => {
+    const i = baseInputs({ rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0 });
+    const next = withAxis(i, 'annualSavings', 12000);
+    expect(next.rrspContribution).toBe(12000);
+    expect(axisValue(next, 'annualSavings')).toBe(12000);
+  });
+
+  it('cppStartAge reads a null start as the default 65 and writes an integer', () => {
+    const i = baseInputs({ cppStartAge: null });
+    expect(axisValue(i, 'cppStartAge')).toBe(65);
+    expect(axisValue(withAxis(i, 'cppStartAge', 62.6), 'cppStartAge')).toBe(63);
+    expect(withAxis(i, 'cppStartAge', 70).cppStartAge).toBe(70);
+  });
+
+  it('maxAge and other integer axes snap to whole numbers', () => {
+    const i = baseInputs({ maxAge: 95 });
+    expect(axisValue(withAxis(i, 'maxAge', 97.4), 'maxAge')).toBe(97);
+    expect(normalizeBand('maxAge', { min: 80.6, max: 99.2, enabled: true })).toEqual({ min: 81, max: 99, enabled: true });
   });
 });
 

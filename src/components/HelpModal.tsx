@@ -288,6 +288,61 @@ const SECTIONS: HelpSection[] = [
     ]
   },
   {
+    id: 'help-steering',
+    title: 'Steering (the equalizer)',
+    entries: [
+      {
+        term: null,
+        body: (
+          <P>
+            The <strong>Steering</strong> page (gold link in the toolbar) is a goals-level equalizer over your
+            whole plan. Instead of editing fields one at a time, you push sliders and drag a pad while the
+            readouts — status, money-lasts-to, success rate — update live. It writes the same underlying
+            inputs, so everything you do here is reflected in the projection and Monte Carlo views.
+          </P>
+        )
+      },
+      {
+        term: 'The sliders',
+        body: (
+          <>
+            <P>Each slider is a major lever: annual spending, retirement age, expected return, annual savings (total across RRSP/TFSA/taxable), plan-to age, return volatility, and CPP start age.</P>
+            {ul([
+              <><strong>Limit</strong> turns any slider into a range. It starts at the middle of the scale (20% in from each end); drag the two <em>at least / at most</em> thumbs to tighten or widen. The slider's value stays inside its range.</>,
+              <>A range with both edges together is a hard pin — the control won't move.</>,
+            ])}
+          </>
+        )
+      },
+      {
+        term: 'The drag pad',
+        body: (
+          <>
+            <P>The square is retirement age (x) × spending (y). Drag the dot to move both at once. The green/red shading shows where the plan meets your success-rate goal — green means that combination hits it.</P>
+            {ul([
+              <>When a slider is limited, its allowed range shows as a rectangle on the pad. <strong>Drag a corner</strong> to resize the range in both axes at once.</>,
+              <>The shading re-computes as you change anything — return, volatility, savings, horizon — streaming in from the region around your current point outward.</>,
+            ])}
+          </>
+        )
+      },
+      {
+        term: 'Goals',
+        body: (
+          <P>
+            Each readout can carry a goal (the <strong>goal</strong> button): set a floor for money-lasts-to age,
+            success rate, or end balance and the card turns green when met, red when missed. A success-rate
+            goal also becomes the pad's shading threshold, so the green region is exactly "meets my goal".
+          </P>
+        )
+      },
+      {
+        term: 'How the shading is computed',
+        body: <P>The pad runs Monte Carlo against one seeded batch of futures so the shading is stable while you drag. Because each lever moves the success rate in a known direction, the solver binary-searches the boundary row-by-row instead of scoring every cell — so it stays fast and can stream partial results to the screen as they finish.</P>
+      }
+    ]
+  },
+  {
     id: 'help-backtest',
     title: 'Backtest',
     entries: [

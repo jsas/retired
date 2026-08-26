@@ -27,7 +27,14 @@ import type { AppConfig } from './appConfig';
 // Control axes
 // ---------------------------------------------------------------------------
 
-export type EqAxis = 'desiredSpending' | 'retirementAge' | 'investmentReturn';
+export type EqAxis =
+  | 'desiredSpending'
+  | 'retirementAge'
+  | 'investmentReturn'
+  | 'maxAge'
+  | 'annualSavings'
+  | 'returnVolatility'
+  | 'cppStartAge';
 
 export interface AxisSpec {
   key: EqAxis;
@@ -63,16 +70,68 @@ export const AXES: Record<EqAxis, AxisSpec> = {
     increasingRate: true,
     format: (v) => `${(v * 100).toFixed(1)}%`,
   },
+  maxAge: {
+    key: 'maxAge', label: 'Plan to age',
+    min: 70, max: 105, step: 1,
+    increasingRate: false, // a longer horizon = more years to fund = riskier
+    format: (v) => `${Math.round(v)}`,
+  },
+  annualSavings: {
+    key: 'annualSavings', label: 'Annual savings',
+    min: 0, max: 100000, step: 1000,
+    increasingRate: true,
+    format: money,
+  },
+  returnVolatility: {
+    key: 'returnVolatility', label: 'Return volatility',
+    min: 0, max: 0.30, step: 0.005,
+    increasingRate: false, // more volatility = fatter tails = lower success
+    format: (v) => `${(v * 100).toFixed(0)}%`,
+  },
+  cppStartAge: {
+    key: 'cppStartAge', label: 'CPP start age',
+    min: 60, max: 70, step: 1,
+    // More monthly income → better success once it starts, but a later start
+    // also means more bridge years to fund. Treated as rate-increasing: the
+    // 42% deferral boost dominates the extra bridge years in practice.
+    increasingRate: true,
+    format: (v) => `${Math.round(v)}`,
+  },
 };
+
+// Axes that hold integer values (snapped in withAxis/normalizeBand/clampToBand).
+const INT_AXES: ReadonlySet<EqAxis> = new Set(['retirementAge', 'maxAge', 'cppStartAge']);
+
+// Derived/virtual axes that don't map 1:1 onto a RetirementInputs field.
+// annualSavings = total pre-retirement contributions across the three accounts.
+const ANNUAL_SAVINGS_FIELDS = ['rrspContribution', 'tfsaContribution', 'taxableContribution'] as const;
 
 /** Read an axis value from inputs. */
 export function axisValue(inputs: RetirementInputs, axis: EqAxis): number {
+  if (axis === 'annualSavings') {
+    return ANNUAL_SAVINGS_FIELDS.reduce((sum, f) => sum + inputs[f], 0);
+  }
+  if (axis === 'cppStartAge') return inputs.cppStartAge ?? 65;
   return inputs[axis];
 }
 
-/** Return inputs with one axis set (retirementAge is an integer). */
+/** Return inputs with one axis set (integer axes are rounded). */
 export function withAxis(inputs: RetirementInputs, axis: EqAxis, value: number): RetirementInputs {
-  const v = axis === 'retirementAge' ? Math.round(value) : value;
+  const v = INT_AXES.has(axis) ? Math.round(value) : value;
+  if (axis === 'annualSavings') {
+    // Scale the three contribution buckets proportionally to hit the new total
+    // (keeping the account mix); if all are zero, put it all in the RRSP.
+    const current = axisValue(inputs, 'annualSavings');
+    if (current <= 0) return { ...inputs, rrspContribution: v };
+    const k = v / current;
+    return {
+      ...inputs,
+      rrspContribution: Math.round(inputs.rrspContribution * k),
+      tfsaContribution: Math.round(inputs.tfsaContribution * k),
+      taxableContribution: Math.round(inputs.taxableContribution * k),
+    };
+  }
+  if (axis === 'cppStartAge') return { ...inputs, cppStartAge: v };
   return { ...inputs, [axis]: v };
 }
 
@@ -105,7 +164,7 @@ export function normalizeBand(axis: EqAxis, band: Band): Band {
   const s = AXES[axis];
   const snap = (v: number) => {
     const clamped = Math.min(s.max, Math.max(s.min, v));
-    return axis === 'retirementAge' ? Math.round(clamped) : clamped;
+    return INT_AXES.has(axis) ? Math.round(clamped) : clamped;
   };
   let lo = snap(band.min);
   let hi = snap(band.max);
@@ -125,7 +184,7 @@ export function effectiveRange(axis: EqAxis, band: Band | undefined): { min: num
 export function clampToBand(axis: EqAxis, band: Band | undefined, proposed: number): number {
   const { min, max } = effectiveRange(axis, band);
   const v = Math.min(max, Math.max(min, proposed));
-  return axis === 'retirementAge' ? Math.round(v) : v;
+  return INT_AXES.has(axis) ? Math.round(v) : v;
 }
 
 // ---------------------------------------------------------------------------
