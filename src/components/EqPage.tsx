@@ -441,7 +441,7 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
           <XyPad
             xAxis="retirementAge" yAxis="desiredSpending"
             xLabel="Retirement age" yLabel="spending"
-            inputs={inputs} bands={bands} onBandsChange={onBandsChange}
+            inputs={inputs} bands={bands}
             solved={solved} onChange={onChange}
           />
           {/* live outcome readouts — pure readouts, no goals/steppers */}
