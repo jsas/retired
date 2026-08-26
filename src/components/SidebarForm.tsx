@@ -251,7 +251,15 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                 min="18"
                 max="100"
                 value={inputs.currentAge}
-                onChange={(e) => updateField('currentAge', parseInt(e.target.value) || 0)}
+                onChange={(e) => {
+                  const age = parseInt(e.target.value) || 0;
+                  // Clamp any cash events that would fall before the new
+                  // current age — a past event never fires, which silently
+                  // drops its money, so keep them ≥ current age.
+                  const events = (inputs.events ?? []).map(ev =>
+                    ev.age < age ? { ...ev, age, endAge: ev.endAge != null ? Math.max(ev.endAge, age) : ev.endAge } : ev);
+                  onChange({ ...inputs, currentAge: age, events });
+                }}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -529,8 +537,9 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                   <input
                     type="number"
                     value={ev.age}
-                    title={ev.endAge != null ? 'Start age' : 'Age'}
-                    onChange={(e) => updateEvent(i, { age: parseInt(e.target.value) || ev.age })}
+                    min={inputs.currentAge}
+                    title={ev.endAge != null ? `Start age (≥ current age ${inputs.currentAge})` : `Age (≥ current age ${inputs.currentAge})`}
+                    onChange={(e) => updateEvent(i, { age: Math.max(inputs.currentAge, parseInt(e.target.value) || inputs.currentAge) })}
                     className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
                   />
                   {ev.endAge != null && (

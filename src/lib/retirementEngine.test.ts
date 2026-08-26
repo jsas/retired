@@ -110,6 +110,22 @@ describe('cash events', () => {
     expect(y51.spendingTarget).toBe(250000);
     expect(y51.withdrawals).toBe(250000);
   });
+
+  it('drops an event dated before the current age (it is in the model\'s past)', () => {
+    // Current age 55, event at 52: can never fire, and must not silently add
+    // money anywhere — taxable stays exactly on the no-event trajectory.
+    const withEvent = calculateRetirement(baseInputs({
+      currentAge: 55, retirementAge: 58, taxableBalance: 685000, taxableContribution: 0,
+      events: [{ id: 'sale', age: 52, label: 'House sale', amount: 1650000, direction: 'in', account: 'taxable' }],
+    }), config);
+    const baseline = calculateRetirement(baseInputs({
+      currentAge: 55, retirementAge: 58, taxableBalance: 685000, taxableContribution: 0,
+    }), config);
+    for (const age of [55, 56, 57]) {
+      expect(yearAt(withEvent.yearlyBreakdown, age).taxableBalance)
+        .toBe(yearAt(baseline.yearlyBreakdown, age).taxableBalance);
+    }
+  });
 });
 
 describe('pensions', () => {

@@ -334,7 +334,10 @@ export function calculateRetirement(
   };
 
   // Cash events: one-time (age only) or recurring (age..endAge inclusive).
-  const events = Array.isArray(inputs.events) ? inputs.events : [];
+  // Events before the current age are in the model's past — they can't fire,
+  // so drop them defensively (the UI clamps them too, but a saved/imported
+  // scenario may carry one).
+  const events = (Array.isArray(inputs.events) ? inputs.events : []).filter(e => e.age >= currentAge);
   const eventsAt = (age: number) => events.filter(e =>
     e.age === age || (e.endAge != null && age >= e.age && age <= e.endAge));
   const eventOutAt = (age: number) => eventsAt(age).filter(e => e.direction === 'out').reduce((s, e) => s + e.amount, 0);
