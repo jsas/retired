@@ -163,6 +163,42 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
     updateField('events', next);
   };
 
+  // ---- transfer (advanced) event helpers ----
+  // An event is a transfer when it carries explicit from/to endpoints. Simple
+  // events use direction + account; advanced events move money account→account
+  // (the RRSP meltdown) or between spouses. Encode an endpoint as a compact
+  // string for the <select> value: 'external', or 'person:account'.
+  type Endpoint = NonNullable<CashEvent['from']>;
+  const encodeEndpoint = (e: Endpoint): string =>
+    e.kind === 'external' ? 'external' : `${e.person}:${e.account}`;
+  const decodeEndpoint = (s: string): Endpoint =>
+    s === 'external'
+      ? { kind: 'external' }
+      : (() => { const [person, account] = s.split(':'); return { kind: 'account', person: person as 'primary' | 'spouse', account: account as 'rrsp' | 'tfsa' | 'taxable' | 'cash' }; })();
+  const hasSpouse = inputs.spouse?.enabled === true;
+  // The from/to choices available for a transfer. 'from' can be external (a
+  // plain inflow) or one of a person's accounts; 'to' can be external (= the
+  // year's spending) or an account.
+  const endpointOptions = (allowExternal: boolean, externalLabel: string) => (
+    <>
+      {allowExternal && <option value="external">{externalLabel}</option>}
+      <optgroup label="You">
+        <option value="primary:rrsp">RRSP</option>
+        <option value="primary:tfsa">TFSA</option>
+        <option value="primary:taxable">Taxable</option>
+        <option value="primary:cash">Cash cushion</option>
+      </optgroup>
+      {hasSpouse && (
+        <optgroup label="Spouse">
+          <option value="spouse:rrsp">Spouse RRSP</option>
+          <option value="spouse:tfsa">Spouse TFSA</option>
+          <option value="spouse:taxable">Spouse Taxable</option>
+          <option value="spouse:cash">Spouse Cash cushion</option>
+        </optgroup>
+      )}
+    </>
+  );
+
   const updateSpouse = (patch: Partial<NonNullable<RetirementInputs['spouse']>>) => {
     if (!inputs.spouse) return;
     updateField('spouse', { ...inputs.spouse, ...patch });
@@ -555,18 +591,81 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                     </>
                   )}
                 </div>
-                {ev.direction === 'in' && (
-                  <select
-                    value={ev.account ?? 'taxable'}
-                    onChange={(e) => updateEvent(i, { account: e.target.value as CashEvent['account'] })}
-                    className="w-full px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="taxable">→ Taxable account</option>
-                    <option value="tfsa">→ TFSA</option>
-                    <option value="rrsp">→ RRSP</option>
-                    <option value="cash">→ Cash cushion</option>
-                  </select>
-                )}
+                {(() => {
+                  const isTransfer = ev.from != null || ev.to != null;
+                  if (isTransfer) {
+                    // Advanced mode: the event is a transfer between two
+                    // endpoints (external / a person's account). direction is
+                    // derived: external→account = inflow, otherwise out.
+                    const from = ev.from ?? { kind: 'external' as const };
+                    const to = ev.to ?? { kind: 'external' as const };
+                    return (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-neutral-500 w-8 shrink-0">from</span>
+                          <select
+                            value={encodeEndpoint(from)}
+                            onChange={(e) => updateEvent(i, { from: decodeEndpoint(e.target.value) })}
+                            className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                          >
+                            {endpointOptions(true, 'Outside (new money)')}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-neutral-500 w-8 shrink-0">to</span>
+                          <select
+                            value={encodeEndpoint(to)}
+                            onChange={(e) => updateEvent(i, { to: decodeEndpoint(e.target.value) })}
+                            className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                          >
+                            {endpointOptions(true, 'Spending (leaves plan)')}
+                          </select>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 leading-snug">
+                          An RRSP source is taxed on withdrawal; the after-tax remainder is redeposited.
+                        </p>
+                        <button
+                          onClick={() => updateEvent(i, { from: undefined, to: undefined })}
+                          className="text-[10px] text-blue-400 hover:text-blue-300"
+                        >
+                          ← back to simple inflow/outflow
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-1.5">
+                      {ev.direction === 'in' && (
+                        <select
+                          value={ev.account ?? 'taxable'}
+                          onChange={(e) => updateEvent(i, { account: e.target.value as CashEvent['account'] })}
+                          className="w-full px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="taxable">→ Taxable account</option>
+                          <option value="tfsa">→ TFSA</option>
+                          <option value="rrsp">→ RRSP</option>
+                          <option value="cash">→ Cash cushion</option>
+                        </select>
+                      )}
+                      <button
+                        onClick={() => updateEvent(i, {
+                          // Seed a sensible transfer from the current simple
+                          // value so toggling doesn't lose the intent.
+                          from: ev.direction === 'in'
+                            ? { kind: 'external' }
+                            : { kind: 'account', person: 'primary', account: ev.account === 'cash' ? 'cash' : (ev.account ?? 'rrsp') },
+                          to: ev.direction === 'in'
+                            ? { kind: 'account', person: 'primary', account: ev.account ?? 'taxable' }
+                            : { kind: 'external' },
+                        })}
+                        className="text-[10px] text-blue-400 hover:text-blue-300"
+                        title="Move money between accounts or spouses (e.g. an RRSP withdrawal into the TFSA)"
+                      >
+                        advanced: transfer between accounts…
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             ))}
             <button
