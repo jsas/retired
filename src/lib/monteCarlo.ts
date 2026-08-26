@@ -12,6 +12,7 @@ export interface MonteCarloRequest {
   config: AppConfig;
   runs: number;
   volatility: number; // annual standard deviation of returns
+  seed?: number;      // optional: fixed seed for reproducible return sequences
 }
 
 export interface PercentileBand {
@@ -36,6 +37,17 @@ export interface MonteCarloResults {
 
 const DEGREES_OF_FREEDOM = 10;
 const BALANCE_TOLERANCE = 1; // treat dust balances as depleted
+
+/** Deterministic PRNG (mulberry32) so a fixed seed reproduces a run exactly. */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 function randNormal(rng: () => number): number {
   let u1 = 0;
@@ -85,7 +97,9 @@ function percentile(sorted: number[], p: number): number {
 
 export function runMonteCarlo(request: MonteCarloRequest): MonteCarloResults {
   const { inputs, config, runs, volatility } = request;
-  const rng = Math.random;
+  // A fixed seed makes the whole run reproducible (same return sequences in
+  // the same order); omit it for fresh randomness each call.
+  const rng = request.seed !== undefined ? mulberry32(request.seed) : Math.random;
 
   let successCount = 0;
   const finalBalances: number[] = [];
@@ -147,4 +161,56 @@ export function runMonteCarlo(request: MonteCarloRequest): MonteCarloResults {
     meanReturn: inputs.investmentReturn,
     volatility
   };
+}
+
+// ---------------------------------------------------------------------------
+// Shared simulation core (used by the solver to reuse one set of futures).
+// ---------------------------------------------------------------------------
+
+export interface SimulationSummary {
+  runs: number;
+  successCount: number;
+  successRate: number;
+  medianFinalBalance: number;
+}
+
+/** Run the household projection against each pre-generated return sequence. */
+export function simulate(
+  inputs: RetirementInputs,
+  config: AppConfig,
+  sequences: Record<number, number>[],
+): SimulationSummary {
+  let successCount = 0;
+  const finalBalances: number[] = [];
+  for (const seq of sequences) {
+    const result = calculateHousehold(inputs, config, { returnSequence: seq });
+    const depleted = result.depletionAge !== null;
+    if (!depleted) successCount++;
+    const last = result.yearlyBreakdown[result.yearlyBreakdown.length - 1];
+    finalBalances.push(depleted ? 0 : Math.max(0, last?.endingBalance ?? 0));
+  }
+  finalBalances.sort((a, b) => a - b);
+  return {
+    runs: sequences.length,
+    successCount,
+    successRate: sequences.length > 0 ? successCount / sequences.length : 0,
+    medianFinalBalance: percentile(finalBalances, 50),
+  };
+}
+
+/** Pre-generate `runs` return sequences from a seeded RNG (reproducible). */
+export function generateSequences(
+  runs: number,
+  startAge: number,
+  maxAge: number,
+  mean: number,
+  volatility: number,
+  seed: number,
+): Record<number, number>[] {
+  const rng = mulberry32(seed);
+  const out: Record<number, number>[] = [];
+  for (let i = 0; i < runs; i++) {
+    out.push(generateReturnSequence(startAge, maxAge, mean, volatility, rng));
+  }
+  return out;
 }
