@@ -179,6 +179,120 @@ describe('cash events', () => {
   });
 });
 
+describe('transfer events (RRSP meltdown)', () => {
+  const config = testConfig();
+
+  it('moves RRSP → TFSA: gross leaves RRSP, after-tax net lands in TFSA', () => {
+    // Retired, no other income, so the meltdown draw is the only taxable income.
+    // A $50k RRSP→TFSA transfer: RRSP drops by $50k gross; TFSA gains $50k minus
+    // the tax on $50k of income (ONT).
+    const r = calculateRetirement(baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 500000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0, // isolate the transfer: no spending draws
+      events: [{
+        id: 'meltdown', age: 65, label: 'RRSP meltdown', amount: 50000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'rrsp' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), config);
+    const row = yearAt(r.yearlyBreakdown, 65);
+    // The transfer fired and is traced.
+    const tr = row.detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    expect(tr!.gross).toBeCloseTo(50000, 0);
+    expect(tr!.tax).toBeGreaterThan(0);
+    expect(tr!.net).toBeCloseTo(tr!.gross - tr!.tax, 0);
+    // Both ends show in provenance: gross out of RRSP, net into TFSA.
+    expect(row.detail?.withdraw.rrsp).toBeCloseTo(50000, 0);
+    expect(row.detail?.deposit?.tfsa).toBeCloseTo(tr!.net, 0);
+    // The net landed at the start of the year and then grew (5%) with the TFSA.
+    expect(row.tfsaBalance).toBeCloseTo(tr!.net * 1.05, 0);
+  });
+
+  it('a TFSA → taxable transfer is NOT taxed (after-tax money)', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 0, tfsaBalance: 100000, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      events: [{
+        id: 'shift', age: 65, label: 'TFSA to taxable', amount: 40000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'tfsa' },
+        to: { kind: 'account', person: 'primary', account: 'taxable' },
+      }],
+    }), config);
+    const row = yearAt(r.yearlyBreakdown, 65);
+    const tr = row.detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    expect(tr!.tax).toBe(0);
+    expect(tr!.net).toBeCloseTo(40000, 0);
+    // 100k − 40k transfer = 60k, then 5% growth on the year → 63k.
+    expect(row.tfsaBalance).toBeCloseTo(60000 * 1.05, 0);
+    expect(row.detail?.deposit?.taxable).toBeCloseTo(40000, 0);
+  });
+
+  it('transfer tax stacks on benefit income (higher marginal rate)', () => {
+    // Same $50k meltdown, but now CPP/OAS already occupy the low brackets, so
+    // the transfer's tax is HIGHER than the no-income case.
+    const noIncome = calculateRetirement(baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 500000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      events: [{
+        id: 'm', age: 65, label: 'm', amount: 50000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'rrsp' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), config);
+    const withBenefits = calculateRetirement(baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 500000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      cppStartAge: 65, cppMonthlyAmount: 1200, oasStartAge: 65, oasYearsInCanada: 40,
+      events: [{
+        id: 'm', age: 65, label: 'm', amount: 50000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'rrsp' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), config);
+    const taxNo = yearAt(noIncome.yearlyBreakdown, 65).detail?.calc?.transfers?.[0]?.tax ?? 0;
+    const taxWith = yearAt(withBenefits.yearlyBreakdown, 65).detail?.calc?.transfers?.[0]?.tax ?? 0;
+    expect(taxWith).toBeGreaterThan(taxNo);
+  });
+
+  it('a transfer event leaves the accounting identity intact', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 70,
+      rrspBalance: 300000, tfsaBalance: 50000, taxableBalance: 20000, cashCushionBalance: 5000,
+      desiredSpending: 30000,
+      events: [{
+        id: 'm', age: 66, label: 'm', amount: 25000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'rrsp' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      const total = y.rrspBalance + y.rrifBalance + y.tfsaBalance + y.taxableBalance + y.cashCushionBalance;
+      expect(closeTo(y.endingBalance, Math.max(0, total), 1)).toBe(true);
+      expect(Number.isFinite(y.endingBalance)).toBe(true);
+    }
+  });
+
+  it('a plain outflow event still draws in withdrawal order (not treated as transfer)', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 0, tfsaBalance: 80000, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      events: [{ id: 'car', age: 65, label: 'car', amount: 30000, direction: 'out' }],
+    }), config);
+    const row = yearAt(r.yearlyBreakdown, 65);
+    // No transfer trace for a plain outflow.
+    expect(row.detail?.calc?.transfers).toBeUndefined();
+    // 80k − 30k outflow = 50k, then 5% growth → 52.5k.
+    expect(row.tfsaBalance).toBeCloseTo(50000 * 1.05, 0);
+  });
+});
+
 describe('pensions', () => {
   it('lifetime pension pays every year from startAge', () => {
     const r = calculateRetirement(baseInputs({

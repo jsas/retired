@@ -405,7 +405,12 @@ export function calculatePerson(
   const events = (Array.isArray(person.events) ? person.events : []).filter(e => e.age >= currentAge);
   const eventsAt = (age: number) => events.filter(e =>
     e.age === age || (e.endAge != null && age >= e.age && age <= e.endAge));
-  const eventOutAt = (age: number) => eventsAt(age).filter(e => e.direction === 'out').reduce((s, e) => s + e.amount, 0);
+  // Outflows raise the year's spending need — but a TRANSFER event (from/to
+  // set) moves money account→account, so it must NOT be counted as spending
+  // (its source draw is handled by the transfer path, not the spending draws).
+  const eventOutAt = (age: number) => eventsAt(age)
+    .filter(e => e.direction === 'out' && !(e.from || e.to))
+    .reduce((s, e) => s + e.amount, 0);
   const configCache = new Map<number, AppConfig>();
   const configAt = (age: number): AppConfig => {
     if (!indexTables) return config;
