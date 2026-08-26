@@ -14,8 +14,6 @@ have to hold them.
 - **Household tax drill-down on the Math page** — split-transfer flows are
   shown per-person; a combined household worksheet (who transferred what to
   whom, and the net effect) would close the loop.
-- **Scenario comparison** — save 2–3 named scenarios and diff their verdict
-  cards side by side. Storage and JSON export already exist; this is UI.
 - **Preset withdrawal strategies** — one-click orderings ("RRSP meltdown",
   "TFSA last", "proportional") instead of hand-arranging the list.
 
