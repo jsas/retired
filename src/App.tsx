@@ -31,13 +31,15 @@ import type { MonteCarloResults } from './lib/monteCarlo';
 import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
-type View = 'projection' | 'settings' | 'help' | 'math' | 'eq';
+import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
 import { buildShareUrl, consumePlanFromHash } from './lib/shareLink';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
-import { EqPage, type EqSolvedState } from './components/EqPage';
+import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
+import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { runEqSolverAuto } from './lib/runEqSolver';
-import type { EqPin, PinMode, EqAxis } from './lib/eqConstraints';
+import { solveEqReadout } from './lib/eqSolver';
+import { renderRange, axisValue, consistentAges } from './lib/eqConstraints';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
 // First-run scenarios: three realistic, mutually distinct starting points that
@@ -172,7 +174,25 @@ function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
   const [activeScenarioId, setActiveScenarioId] = useState<string>(initialState.activeScenarioId);
   const [config, setConfig] = useState<AppConfig>(loadAppConfig);
-  const [view, setView] = useState<View>('projection');
+  const [view, setView] = useState<View>(() => viewFromHash(window.location.hash) ?? 'projection');
+
+  // Keep the URL hash in sync with the current view (push a history entry per
+  // navigation), and follow hash changes so back/forward and pasted links work.
+  useEffect(() => {
+    const route = hashForView(view);
+    if (window.location.hash !== route) {
+      window.history.pushState(null, '', window.location.pathname + window.location.search + route);
+    }
+  }, [view]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const v = viewFromHash(window.location.hash);
+      if (v) setView(v);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   // mcOpen tracks panel visibility; mcRequest is the payload MonteCarloChart
   // re-runs on. Keeping them separate lets an effect refresh mcRequest when
   // inputs change without re-triggering itself.
@@ -228,6 +248,23 @@ function App() {
   const [showDonate, setShowDonate] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [exportOptions, setExportOptions] = useState<ProjectionExportOptions>(loadProjectionExportOptions);
+
+  // Two-hop panel nav: open a dashboard panel from anywhere. Switches to the
+  // projection view first (if needed), then opens the panel; the open-transition
+  // scroll effect brings it into view. Export scrolls even when already open.
+  const openPanel = (key: 'share' | 'optimize' | 'compare' | 'print' | 'export') => {
+    if (view !== 'projection') setView('projection');
+    switch (key) {
+      case 'share': setShowShare(true); break;
+      case 'optimize': setShowOptimize(true); break;
+      case 'compare': setShowCompare(true); break;
+      case 'print': setShowPrintOptions(true); break;
+      case 'export':
+        setShowExport(true);
+        requestAnimationFrame(() => exportCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        break;
+    }
+  };
 
   const updateExportOptions = (opts: ProjectionExportOptions) => {
     setExportOptions(opts);
@@ -326,7 +363,9 @@ function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const handleInputsChange = (newInputs: RetirementInputs) => {
-    setInputs(newInputs);
+    // Keep the plan's ages internally consistent: editing current age can
+    // invalidate retirement age (retire before now) etc., so clamp them.
+    setInputs(consistentAges(newInputs));
     setHasUnsavedChanges(true);
   };
 
@@ -341,40 +380,97 @@ function App() {
     return calculateHousehold(inputs, config);
   }, [inputs, config]);
 
-  // ---- EQ ideation surface state ----
-  const [eqPin, setEqPin] = useState<EqPin>({ kind: 'successRate', value: 0.9, enabled: false });
-  const [eqMode, setEqMode] = useState<PinMode>('hard');
+  // ---- EQ steering surface state ----
+  // Per-control allowed bands (min–max). Disabled = the control roams its full axis.
+  // EQ steering state (control crops), persisted to localStorage as axis-fraction
+  // scalars (see eqStorage) so they survive axis-range changes; restored on load.
+  const [eqBands, setEqBands] = useState<Bands>(() => loadEqBands());
+
+  useEffect(() => {
+    saveEqBands(eqBands);
+  }, [eqBands]);
   const [eqSolved, setEqSolved] = useState<EqSolvedState>({
-    successRate: null, bounds: {}, grid: null, gridSize: 9, solving: false,
+    successRate: null, grid: null, gridSize: 9, solving: false,
   });
 
-  // Re-solve the EQ constraints whenever the plan or the pin changes, debounced
-  // so dragging a fader doesn't fire a 500-run batch per pixel. Runs in a worker.
+  // The success-rate GRID is sampled across retirementAge × desiredSpending, so
+  // each grid cell OVERWRITES those two inputs (withAxis) — their current values
+  // don't affect any cell's probability. The grid therefore depends only on the
+  // plan's FINANCIAL inputs (balances, contributions, return, volatility, ages,
+  // CPP/OAS, pensions, spouse, events, maxAge), the config, and the rendered
+  // range (which grows in whole-axis steps when a value crosses the axis max).
+  // This key captures exactly those, omitting the two pad axes, so dragging the
+  // retirement-age / spending VALUE thumbs (or the pad dot) leaves the key — and
+  // the cached grid — unchanged. Only the cheap readout re-runs on those drags.
+  const eqGridKey = useMemo(() => {
+    const { retirementAge: _ra, desiredSpending: _ds, ...financial } = inputs;
+    return JSON.stringify({
+      financial,
+      config,
+      rx: renderRange('retirementAge', axisValue(inputs, 'retirementAge'), inputs),
+      ry: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending'), inputs),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputs, config]);
+
+  // The success-rate READOUT under the dot is one cheap Monte Carlo node on the
+  // main thread. Unlike the grid, it DOES depend on the current point, so it
+  // re-solves on every inputs change (debounced) — including pad-axis drags.
+  useEffect(() => {
+    if (view !== 'eq') return;
+    setEqSolved(s => ({ ...s, solving: true }));
+    const t = setTimeout(() => {
+      try {
+        const successRate = solveEqReadout({ inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } });
+        setEqSolved(s => ({ ...s, successRate, solving: false }));
+      } catch {
+        setEqSolved(s => ({ ...s, solving: false }));
+      }
+    }, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, inputs, config]);
+
+  // Re-solve the success-rate pad shading only when the grid's actual inputs
+  // change (eqGridKey) — NOT on every plan edit. Dragging the retirement-age or
+  // spending value thumbs moves the dot but doesn't change any grid cell, so the
+  // expensive 81-node worker pool is skipped entirely on those drags. The grid
+  // streams in row-by-row (center-out) so the pad shades in live.
   useEffect(() => {
     if (view !== 'eq') return;
     setEqSolved(s => ({ ...s, solving: true }));
     const t = setTimeout(() => {
       const cancel = runEqSolverAuto(
         {
-          inputs, config, pin: eqPin,
-          boundAxes: ['desiredSpending', 'retirementAge', 'investmentReturn'] as EqAxis[],
-          pad: { x: 'retirementAge', y: 'desiredSpending' },
+          inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' },
+          // Shade the ranges the pad actually renders (grown to fit an
+          // out-of-range point), so the gradient lines up with the dot.
+          ranges: {
+            x: renderRange('retirementAge', axisValue(inputs, 'retirementAge'), inputs),
+            y: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending'), inputs),
+          },
         },
-        (res) => setEqSolved({
-          successRate: res.successRate,
-          bounds: res.bounds,
+        (res) => setEqSolved(s => ({
+          ...s,
           grid: res.grid,
           gridSize: res.gridMeta?.size ?? 9,
           solving: false,
-        }),
+        })),
         (msg) => { console.warn('EQ solve failed:', msg); setEqSolved(s => ({ ...s, solving: false })); },
+        // Stream partial rows: write each finished row's rates into the grid so
+        // the gradient fills in live (center-out). Solved rows overwrite.
+        (prog) => setEqSolved(s => {
+          const size = s.gridSize;
+          const grid = s.grid ? [...s.grid] : new Array<number>(size * size).fill(0);
+          for (let gx = 0; gx < size; gx++) grid[prog.row * size + gx] = prog.cells[gx];
+          return { ...s, grid, solving: true };
+        }),
       );
-      // store cancel so a re-trigger aborts the in-flight worker
       cancelEqSolveRef.current = cancel;
     }, 250);
     return () => { clearTimeout(t); cancelEqSolveRef.current?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, inputs, config, eqPin]);
+  }, [view, eqGridKey]);
 
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
@@ -464,6 +560,9 @@ function App() {
             window.alert('Set a Volatility above 0% (Market Hypotheses in the sidebar) to run Monte Carlo.');
             return;
           }
+          // Two-hop: the MC panel only renders on the projection view, so switch
+          // there first (from Help / settings / anywhere), then open + scroll.
+          if (view !== 'projection') setView('projection');
           if (mcOpen) {
             // Already open: onMounted won't refire, so scroll explicitly.
             mcPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -471,6 +570,8 @@ function App() {
           setMcOpen(true); // the sync effect builds the request (and keeps it fresh)
         }}
         onRunBacktest={() => {
+          // Two-hop: the backtest panel only renders on the projection view.
+          if (view !== 'projection') setView('projection');
           // Real-return series: run with inflation off so historical real
           // multipliers line up with today's-dollar spending.
           const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
@@ -550,67 +651,63 @@ function App() {
                 {view === 'settings' && <span className="text-slate-900">Engine Settings</span>}
                 {view === 'help' && <span className="text-slate-900">Help &amp; Documentation</span>}
                 {view === 'math' && <span className="text-slate-900">How the Math Works</span>}
-                {view === 'eq' && <span className="text-slate-900">EQ — Steer the Plan</span>}
+                {view === 'eq' && <span className="text-slate-900">Steering</span>}
               </div>
-              {view === 'projection' && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                  <button
-                    onClick={() => setView('math')}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="See how any year's numbers are worked out, step by step"
-                  >
-                    <Calculator size={13} /> Math
-                  </button>
-                  <button
-                    onClick={() => setView('eq')}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Ideation surface: steer the plan with faders and an XY pad, pin a goal the controls respect"
-                  >
-                    <SlidersHorizontal size={13} /> EQ
-                  </button>
-                  <button
-                    onClick={() => setShowOptimize((s) => !s)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Explore deterministic strategy variants and AI-suggested inputs"
-                  >
-                    <Sparkles size={13} /> Optimize
-                  </button>
-                  <button
-                    onClick={() => setShowCompare((s) => !s)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Diff 2–3 saved scenarios' verdict cards side by side"
-                  >
-                    <GitCompareArrows size={13} /> Compare
-                  </button>
-                  <button
-                    onClick={() => setShowShare((s) => !s)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Show a shareable link that encodes this plan's inputs in the URL"
-                  >
-                    <Share2 size={13} /> Share link
-                  </button>
-                  <button
-                    onClick={() => setShowPrintOptions((s) => !s)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Choose what goes into the printed plan summary, then print or save as PDF"
-                  >
-                    <Printer size={13} /> Print summary
-                  </button>
-                  <button
-                    onClick={() => setShowExport((s) => {
-                      const next = !s;
-                      if (!next) return false;
-                      // Same behaviour as MC/backtest: scroll even when already open.
-                      requestAnimationFrame(() => exportCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-                      return true;
-                    })}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                    title="Export the year-by-year projection as CSV, JSON or YAML"
-                  >
-                    <FileSpreadsheet size={13} /> Export Projection
-                  </button>
-                </div>
-              )}
+              {/* Toolbar — always visible. Page links (Math/Steering) navigate; the
+                  panel links (Optimize/Compare/Share/Print/Export) are two-hop: they
+                  jump to the projection dashboard and open their panel, and the
+                  open-transition effect scrolls it into view. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <button
+                  onClick={() => setView('math')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="See how any year's numbers are worked out, step by step"
+                >
+                  <Calculator size={13} /> Math
+                </button>
+                <button
+                  onClick={() => setView('eq')}
+                  className="flex items-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-700 hover:underline"
+                  title="Steer the plan with sliders and a drag pad; limit any control to a range"
+                >
+                  <SlidersHorizontal size={13} /> Steering
+                </button>
+                <button
+                  onClick={() => openPanel('optimize')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Explore deterministic strategy variants and AI-suggested inputs"
+                >
+                  <Sparkles size={13} /> Optimize
+                </button>
+                <button
+                  onClick={() => openPanel('compare')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Diff 2–3 saved scenarios' verdict cards side by side"
+                >
+                  <GitCompareArrows size={13} /> Compare
+                </button>
+                <button
+                  onClick={() => openPanel('share')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Show a shareable link that encodes this plan's inputs in the URL"
+                >
+                  <Share2 size={13} /> Share link
+                </button>
+                <button
+                  onClick={() => openPanel('print')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Choose what goes into the printed plan summary, then print or save as PDF"
+                >
+                  <Printer size={13} /> Print summary
+                </button>
+                <button
+                  onClick={() => openPanel('export')}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Export the year-by-year projection as CSV, JSON or YAML"
+                >
+                  <FileSpreadsheet size={13} /> Export Projection
+                </button>
+              </div>
             </div>
           </div>
 
@@ -626,14 +723,14 @@ function App() {
 
                 {/* Share link card */}
                 {showShare && (
-                  <div ref={shareCardRef}>
+                  <div ref={shareCardRef} className="scroll-target">
                     <ShareCard url={buildShareUrl(inputs)} onClose={() => setShowShare(false)} />
                   </div>
                 )}
 
                 {/* Optimize card */}
                 {showOptimize && (
-                  <div ref={optimizeCardRef}>
+                  <div ref={optimizeCardRef} className="scroll-target">
                     <OptimizeCard
                       inputs={inputs}
                       config={config}
@@ -647,7 +744,7 @@ function App() {
 
                 {/* Compare card */}
                 {showCompare && (
-                  <div ref={compareCardRef}>
+                  <div ref={compareCardRef} className="scroll-target">
                     <CompareCard
                       scenarios={scenarios}
                       activeScenarioId={activeScenarioId}
@@ -659,14 +756,14 @@ function App() {
 
                 {/* Donate card */}
                 {showDonate && (
-                  <div ref={donateCardRef}>
+                  <div ref={donateCardRef} className="scroll-target">
                     <DonateCard onClose={() => setShowDonate(false)} />
                   </div>
                 )}
 
                 {/* Print options card */}
                 {showPrintOptions && (
-                  <div ref={printOptionsCardRef}>
+                  <div ref={printOptionsCardRef} className="scroll-target">
                     <PrintOptionsCard
                       options={printOptions}
                       onChange={updatePrintOptions}
@@ -680,7 +777,7 @@ function App() {
 
                 {/* Export projection card */}
                 {showExport && (
-                  <div ref={exportCardRef}>
+                  <div ref={exportCardRef} className="scroll-target">
                     <ExportCard
                       options={exportOptions}
                       onChange={updateExportOptions}
@@ -693,7 +790,7 @@ function App() {
 
                 {/* KPI Cards */}
                 <CollapsiblePanel id="summary" title="Projection Summary">
-                  <MetricCards results={results} />
+                  <MetricCards results={results} inputs={inputs} />
                 </CollapsiblePanel>
 
                 {/* Interactive projection timeline (household when a spouse is enabled) */}
@@ -715,7 +812,7 @@ function App() {
 
                 {/* Monte Carlo */}
                 {mcOpen && mcRequest && (
-                  <div ref={mcPanelRef}>
+                  <div ref={mcPanelRef} className="scroll-target">
                     <MonteCarloChart
                       request={mcRequest}
                       retirementAge={results.retirementAge}
@@ -728,7 +825,7 @@ function App() {
 
                 {/* Historical backtest */}
                 {backtestResult && (
-                  <div ref={backtestPanelRef}>
+                  <div ref={backtestPanelRef} className="scroll-target">
                     <BacktestPanel
                       result={backtestResult}
                       onClose={() => setBacktestResult(null)}
@@ -760,11 +857,10 @@ function App() {
                 inputs={inputs}
                 config={config}
                 onChange={handleInputsChange}
-                pin={eqPin}
-                onPinChange={setEqPin}
-                mode={eqMode}
-                onModeChange={setEqMode}
+                bands={eqBands}
+                onBandsChange={setEqBands}
                 solved={eqSolved}
+                projection={{ results, breakdown: householdBreakdown }}
               />
             )}
           </div>

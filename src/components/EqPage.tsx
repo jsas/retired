@@ -1,248 +1,389 @@
-// EQ — the ideation equalizer. A meta-level goals surface above the form:
-// steer the plan with faders (1-D) and an XY pad (2-D), pin an outcome
-// constraint, and the other controls respect the pin. HARD pins clamp the
-// control's range / slide the dragged point along the constraint boundary;
-// SOFT pins let you drag anywhere but flag the breach.
+// The steering surface: a goals-level equalizer over the plan. Each control is
+// a double-slider that sets an allowed band (min–max); the control's value
+// thumb stays inside its band. The XY pad lets you drag retirement-age ×
+// spending together, shaded by where the plan meets a reference success rate.
 //
-// All Monte Carlo scoring happens off-thread in the EQ worker (runEqSolver);
-// this component is pure rendering + local drag state. The worker returns the
-// live success rate, the per-axis HARD clamp boundaries, and the XY-pad
-// feasibility grid, all scored against one seeded batch of futures so they
-// agree. Dragging a control only re-derives the deterministic verdict
-// instantly; the worker re-solve is debounced by the caller.
-import { Sliders, Lock, Unlock, Crosshair, AlertTriangle } from 'lucide-react';
-import type { RetirementInputs } from '../lib/retirementEngine';
+// Bands are enforced synchronously (clampToBand). The success-rate readout and
+// the pad's feasibility shading come from the EQ worker (runEqSolver), scored
+// against one seeded batch of futures so they stay stable while dragging.
+import { useEffect, useRef } from 'react';
+import { Sliders, Loader2 } from 'lucide-react';
+import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '../lib/retirementEngine';
+import { TimelineChart } from './TimelineChart';
 import type { AppConfig } from '../lib/appConfig';
 import {
-  AXES, axisValue, withAxis, clampToBoundary, slidePoint, deterministicOutcome,
-  type EqAxis, type EqPin, type PinMode, type PadPoint, type BoundaryResult,
+  AXES, axisValue, withAxis, clampToBand, normalizeBand, effectiveRange, deterministicOutcome, isLimited,
+  renderRange, reconcileControl, INT_AXES,
+  type EqAxis, type Band,
 } from '../lib/eqConstraints';
 
 const fmtMoney = (v: number) =>
   new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
 
-/** The solved constraint state handed down from App (from the EQ worker). */
+/** Readout + shading handed down from App (from the EQ worker). */
 export interface EqSolvedState {
   successRate: number | null;
-  bounds: Partial<Record<EqAxis, BoundaryResult>>;
-  grid: boolean[] | null;
+  /** Row-major success-rate grid (bottom-up in y); null until first solve. */
+  grid: number[] | null;
   gridSize: number;
   solving: boolean;
 }
+
+export type Bands = Record<EqAxis, Band>;
 
 export interface EqPageProps {
   inputs: RetirementInputs;
   config: AppConfig;
   onChange: (inputs: RetirementInputs) => void;
-  pin: EqPin;
-  onPinChange: (p: EqPin) => void;
-  mode: PinMode;
-  onModeChange: (m: PinMode) => void;
+  bands: Bands;
+  onBandsChange: (b: Bands) => void;
   solved: EqSolvedState;
+  /** Live projection to show under the controls as a visual aid (optional). */
+  projection?: { results: RetirementResults; breakdown: YearlyBreakdown[] };
 }
 
 // ---------------------------------------------------------------------------
-// Pin bar — set the success-rate goal and toggle it on/off.
+// RangeFader — a double-slider: two thumbs set the allowed band (min–max), the
+// control's value thumb moves within the band. Toggle the band on/off to pin
+// the control or let it roam the full axis.
 // ---------------------------------------------------------------------------
-function PinBar({ pin, onChange, successRate, solving }: {
-  pin: EqPin; onChange: (p: EqPin) => void; successRate: number | null; solving: boolean;
-}) {
-  return (
-    <div className="bg-white border border-slate-200 rounded p-3 mb-4">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        <div className="flex items-center gap-2">
-          <Crosshair size={14} className="text-blue-600" />
-          <span className="text-xs font-semibold text-slate-800">Pin a goal</span>
-        </div>
-
-        <label className="flex items-center gap-2 text-xs text-slate-600">
-          <input
-            type="checkbox"
-            checked={pin.enabled}
-            onChange={e => onChange({ ...pin, enabled: e.target.checked })}
-            className="accent-blue-600"
-          />
-          Success rate at least
-        </label>
-
-        <div className="flex items-center gap-2 flex-1 min-w-[12rem] max-w-xs">
-          <input
-            type="range" min={50} max={99} step={1}
-            value={Math.round(pin.value * 100)}
-            disabled={!pin.enabled}
-            onChange={e => onChange({ ...pin, value: Math.min(0.99, Math.max(0.5, Number(e.target.value) / 100)) })}
-            className="flex-1 accent-blue-600 disabled:opacity-40"
-          />
-          <span className="text-sm font-semibold text-slate-900 w-12 text-right">
-            {Math.round(pin.value * 100)}%
-          </span>
-        </div>
-
-        <div className="text-[11px] text-slate-500 ml-auto">
-          {pin.enabled
-            ? successRate == null
-              ? (solving ? 'solving…' : '—')
-              : <>current <span className={`font-semibold ${successRate >= pin.value ? 'text-emerald-600' : 'text-red-600'}`}>{(successRate * 100).toFixed(0)}%</span></>
-            : 'pin off — controls move freely'}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Fader — a 1-D ratchet slider for one scalar axis, with hard/soft pin mode.
-// ---------------------------------------------------------------------------
-function Fader({ axis, inputs, config, pin, mode, bound, successRate, onChange }: {
+function RangeFader({ axis, inputs, band, onBand, onChange }: {
   axis: EqAxis;
   inputs: RetirementInputs;
-  config: AppConfig;
-  pin: EqPin;
-  mode: PinMode;
-  bound?: BoundaryResult;
-  successRate: number | null;
+  band: Band;
+  onBand: (b: Band) => void;
   onChange: (inputs: RetirementInputs) => void;
 }) {
   const spec = AXES[axis];
   const value = axisValue(inputs, axis);
+  // Reconcile for DISPLAY so a stale crop (edges outside the track, or framing
+  // out the value) never renders a stuck knob; the page effect persists it back.
+  const rc = reconcileControl(axis, inputs, band);
+  const n = rc.band; // the crop [min,max], edges ordered/clamped/framed
+  const limited = isLimited(axis, n);
 
-  // SOFT violation: the current value breaches the pin. Uses the live success
-  // rate for the successRate pin, the deterministic outcome otherwise.
-  const violated = pin.enabled && mode === 'soft' && successRate != null && successRate < pin.value;
+  // The range actually RENDERED: the axis, floored at the plan's logical min
+  // (retirement ≥ current age, savings ≥ locked RRSP+TFSA) and grown in
+  // whole-axis steps when the value exceeds the axis max.
+  const range = rc.range;
+  const span = range.max - range.min;
 
-  const apply = (raw: number) => {
-    let v = raw;
-    if (pin.enabled && mode === 'hard' && bound) {
-      v = clampToBoundary(axis, raw, bound);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  // The value knob moves inside the crop [n.min, n.max].
+  const setValue = (raw: number) => onChange(withAxis(inputs, axis, clampToBand(axis, band, raw)));
+
+  // Drag a crop edge. The edge can't cross the opposite edge. The value only
+  // moves when the crop actually EXCLUDES it (the edge swept past it) — it is
+  // NOT dragged along on every edge move, so the knob stays put while you fence.
+  // Edges may ride the grown range (past the base axis max) while it's grown.
+  const setEdge = (edge: 'min' | 'max', raw: number) => {
+    const clamped = Math.min(range.max, Math.max(range.min, raw));
+    const snapped = INT_AXES.has(axis) ? Math.round(clamped) : clamped;
+    const bounded = edge === 'min' ? Math.min(snapped, n.max) : Math.max(snapped, n.min);
+    const next = normalizeBand(axis, { ...n, [edge]: bounded });
+    onBand(next);
+    if (value < next.min || value > next.max) {
+      onChange(withAxis(inputs, axis, clampToBand(axis, next, value)));
     }
-    onChange(withAxis(inputs, axis, v));
   };
 
-  // A HARD pin narrows the slider's range so the thumb physically stops. The
-  // range edge includes the current value so the thumb never sits outside its
-  // own track before the worker re-solve catches up.
-  const hard = pin.enabled && mode === 'hard' && bound && bound.kind !== 'unconstrained';
-  const effMin = hard && spec.increasingRate ? Math.min(bound!.value, value) : spec.min;
-  const effMax = hard && !spec.increasingRate ? Math.max(bound!.value, value) : spec.max;
+  // The value knob is a CUSTOM pointer-dragged control, not a third range
+  // input — stacking three native inputs breaks the middle one's hit-area (the
+  // edge inputs paint over it and steal its pointer events). Dragging maps the
+  // pointer's x to an axis value, clamped into the crop.
+  const onValuePointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const track = trackRef.current;
+    if (!track) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const rect = track.getBoundingClientRect();
+      const f = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+      setValue(range.min + f * span);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  // Track fractions for the crop highlight (the selected region between edges).
+  // Clamped into [0,1]: a persisted crop edge past the grown range pins to the
+  // track end rather than rendering out of bounds.
+  const loF = Math.min(1, Math.max(0, (n.min - range.min) / span));
+  const hiF = Math.min(1, Math.max(0, (n.max - range.min) / span));
+  const valF = Math.min(1, Math.max(0, (value - range.min) / span));
 
   return (
-    <div className={`bg-white border rounded p-3 ${violated ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200'}`}>
+    <div className={`bg-white border rounded p-2.5 ${limited ? 'border-blue-300' : 'border-slate-200'}`}>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[11px] font-semibold text-slate-700">{spec.label}</span>
-        <span className={`text-sm font-semibold ${violated ? 'text-red-600' : 'text-slate-900'}`}>{spec.format(value)}</span>
+        <span className="text-sm font-semibold text-slate-900">{spec.format(value)}</span>
       </div>
-      <input
-        type="range" min={effMin} max={effMax} step={spec.step} value={value}
-        onChange={e => apply(Number(e.target.value))}
-        className={`w-full ${violated ? 'accent-red-500' : 'accent-blue-600'}`}
-      />
-      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
-        <span>{spec.format(effMin)}</span>
-        {violated && (
-          <span className="flex items-center gap-0.5 text-red-600 font-medium">
-            <AlertTriangle size={9} /> breaks the pin
-          </span>
-        )}
-        {!violated && hard && bound!.kind === 'bounded' && (
-          <span className="text-slate-400">limit {spec.format(bound!.value)}</span>
-        )}
-        <span>{spec.format(effMax)}</span>
+
+      {/* One track: two native edge thumbs + a custom value knob on top. */}
+      <div ref={trackRef} className="relative h-6">
+        {/* base track */}
+        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 rounded bg-slate-200" />
+        {/* selected crop region */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded bg-blue-200"
+          style={{ left: `${loF * 100}%`, width: `${(hiF - loF) * 100}%` }}
+        />
+        {/* min crop edge (native thumb, small). Rendered over `range` (the same
+            floored/grown range the highlight + value knob use), NOT spec.min/max —
+            otherwise the browser positions the thumb on the raw axis while the
+            highlight positions it on `range`, and the grabbable thumb floats
+            away from the visible edge (the stuck-can't-drag bug). */}
+        <input
+          type="range" aria-label={`${spec.label} minimum`}
+          min={range.min} max={range.max} step={spec.step} value={n.min}
+          onChange={e => setEdge('min', Number(e.target.value))}
+          className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none band-thumb"
+        />
+        {/* max crop edge (native thumb, small) */}
+        <input
+          type="range" aria-label={`${spec.label} maximum`}
+          min={range.min} max={range.max} step={spec.step} value={n.max}
+          onChange={e => setEdge('max', Number(e.target.value))}
+          className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none band-thumb"
+        />
+        {/* value knob — custom drag, rendered above the edges so it's grabbable */}
+        <div
+          role="slider"
+          aria-label={spec.label}
+          aria-valuemin={n.min} aria-valuemax={n.max} aria-valuenow={value}
+          tabIndex={0}
+          onPointerDown={onValuePointer}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); setValue(value - spec.step); }
+            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); setValue(value + spec.step); }
+          }}
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow cursor-grab active:cursor-grabbing touch-none"
+          style={{ left: `${valF * 100}%` }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between text-[10px] text-slate-500 mt-0.5">
+        <span className="font-medium text-slate-700">{spec.format(n.min)}</span>
+        <span className="font-medium text-slate-700">{spec.format(n.max)}</span>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// XY pad — retirement age (x) × annual spending (y). Drag the handle; a HARD
-// pin slides it along the boundary, a SOFT pin flags the breach. The plane is
-// shaded by feasibility from the worker grid.
+// XY pad — drag the handle to move both axes at once; each clamps into its
+// band. When an axis is limited, the allowed rectangle shows with DRAGGABLE
+// corners: grab a corner to resize that axis's band (or both, diagonally).
+// The plane is shaded by where the plan meets a reference success rate.
 // ---------------------------------------------------------------------------
-function XyPad({ inputs, config, pin, mode, solved, onChange }: {
+function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, solved, onChange }: {
+  xAxis: EqAxis;
+  yAxis: EqAxis;
+  xLabel: string;
+  yLabel: string;
   inputs: RetirementInputs;
-  config: AppConfig;
-  pin: EqPin;
-  mode: PinMode;
+  bands: Bands;
   solved: EqSolvedState;
   onChange: (inputs: RetirementInputs) => void;
 }) {
-  const xSpec = AXES.retirementAge;
-  const ySpec = AXES.desiredSpending;
-  const point: PadPoint = { x: inputs.retirementAge, y: inputs.desiredSpending };
+  const xSpec = AXES[xAxis];
+  const ySpec = AXES[yAxis];
   const G = solved.gridSize;
+  const point = { x: axisValue(inputs, xAxis), y: axisValue(inputs, yAxis) };
+  // RENDERED axis ranges grow to fit the point; the crop (allowed rectangle)
+  // frames it too, so both always render in-bounds.
+  const xView = renderRange(xAxis, point.x, inputs);
+  const yView = renderRange(yAxis, point.y, inputs);
+  const xRange = effectiveRange(xAxis, bands[xAxis]);
+  const yRange = effectiveRange(yAxis, bands[yAxis]);
 
-  const violated = pin.enabled && mode === 'soft' && solved.successRate != null && solved.successRate < pin.value;
-
-  const apply = (raw: PadPoint) => {
-    let next = raw;
-    if (pin.enabled && mode === 'hard') {
-      next = slidePoint(
-        raw,
-        'retirementAge',
-        'desiredSpending',
-        () => solved.bounds.retirementAge ?? { value: xSpec.max, kind: 'unconstrained' },
-        () => solved.bounds.desiredSpending ?? { value: ySpec.max, kind: 'unconstrained' },
-      );
-    }
-    onChange(withAxis(withAxis(inputs, 'retirementAge', next.x), 'desiredSpending', next.y));
+  const apply = (raw: { x: number; y: number }) => {
+    const x = clampToBand(xAxis, bands[xAxis], raw.x);
+    const y = clampToBand(yAxis, bands[yAxis], raw.y);
+    onChange(withAxis(withAxis(inputs, xAxis, x), yAxis, y));
   };
 
-  const toFracX = (x: number) => (x - xSpec.min) / (xSpec.max - xSpec.min);
-  const toFracY = (y: number) => 1 - (y - ySpec.min) / (ySpec.max - ySpec.min);
+  // Fractions are clamped into [0,1] — the grown view always contains the point
+  // and the framing crop, but a stale crop edge can't push the rect off-screen.
+  const toFracX = (x: number) => Math.min(1, Math.max(0, (x - xView.min) / (xView.max - xView.min)));
+  const toFracY = (y: number) => Math.min(1, Math.max(0, 1 - (y - yView.min) / (yView.max - yView.min)));
 
-  const onDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.buttons !== 1 && e.type !== 'pointerdown') return;
+  // Pointer position → axis values.
+  const fromPointer = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const fx = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
     const fy = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
-    apply({
-      x: xSpec.min + fx * (xSpec.max - xSpec.min),
-      y: ySpec.min + (1 - fy) * (ySpec.max - ySpec.min),
-    });
+    return {
+      x: xView.min + fx * (xView.max - xView.min),
+      y: yView.min + (1 - fy) * (yView.max - yView.min),
+    };
   };
 
+  // Move the point (background drag).
+  const onDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.buttons !== 1 && e.type !== 'pointerdown') return;
+    apply(fromPointer(e));
+  };
+
+  const xLimited = isLimited(xAxis, bands[xAxis]);
+  const yLimited = isLimited(yAxis, bands[yAxis]);
+  const anyLimit = xLimited || yLimited;
+
   return (
-    <div className={`bg-white border rounded p-3 ${violated ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200'}`}>
+    <div className="bg-white border border-slate-200 rounded p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] font-semibold text-slate-700">Retirement age × spending</span>
-        <span className={`text-xs font-semibold ${violated ? 'text-red-600' : 'text-slate-900'}`}>
-          {Math.round(point.x)} · {fmtMoney(point.y)}
+        <span className="text-[11px] font-semibold text-slate-700">{xLabel} × {yLabel}</span>
+        <span className="text-xs font-semibold text-slate-900">
+          {xSpec.format(point.x)} · {ySpec.format(point.y)}
         </span>
       </div>
 
       <div
-        className="relative w-full h-56 rounded bg-slate-50 border border-slate-200 overflow-hidden cursor-crosshair touch-none select-none"
+        className="relative w-full h-48 rounded bg-slate-50 border border-slate-200 overflow-hidden cursor-crosshair touch-none select-none"
         onPointerDown={onDrag}
         onPointerMove={onDrag}
       >
-        {solved.grid && (
-          <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${G},1fr)`, gridTemplateRows: `repeat(${G},1fr)` }}>
-            {Array.from({ length: G * G }).map((_, i) => {
-              const gx = i % G;
-              const gy = Math.floor(i / G);
-              const cell = solved.grid![(G - 1 - gy) * G + gx]; // grid row 0 = low spend (bottom)
-              return <div key={i} className={cell ? 'bg-emerald-100/50' : 'bg-red-100/40'} />;
-            })}
-          </div>
+        {/* smooth success-rate gradient (bilinear-interpolated between nodes) */}
+        {solved.grid && <GradientCanvas grid={solved.grid} size={G} />}
+
+        {/* allowed rectangle */}
+        {anyLimit && (
+          <div
+            className="absolute border-2 border-blue-400/60 bg-blue-100/10 pointer-events-none"
+            style={{
+              left: `${toFracX(xRange.min) * 100}%`,
+              top: `${toFracY(yRange.max) * 100}%`,
+              width: `${(toFracX(xRange.max) - toFracX(xRange.min)) * 100}%`,
+              height: `${(toFracY(yRange.min) - toFracY(yRange.max)) * 100}%`,
+            }}
+          />
         )}
 
-        <span className="absolute left-1 bottom-0.5 text-[9px] text-slate-400">retire {xSpec.min}</span>
-        <span className="absolute right-1 bottom-0.5 text-[9px] text-slate-400">retire {xSpec.max}</span>
-        <span className="absolute left-1 top-0.5 text-[9px] text-slate-400">{fmtMoney(ySpec.max)}</span>
-        <span className="absolute left-1 bottom-4 text-[9px] text-slate-400">{fmtMoney(ySpec.min)}</span>
+        <span className="absolute left-1 bottom-0.5 text-[9px] text-slate-400">{xSpec.format(xView.min)}</span>
+        <span className="absolute right-1 bottom-0.5 text-[9px] text-slate-400">{xSpec.format(xView.max)}</span>
+        <span className="absolute left-1 top-0.5 text-[9px] text-slate-400">{ySpec.format(yView.max)}</span>
+        <span className="absolute left-1 bottom-4 text-[9px] text-slate-400">{ySpec.format(yView.min)}</span>
 
         <div
-          className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 shadow ${violated ? 'bg-red-500 border-white' : 'bg-blue-600 border-white'}`}
+          className="absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 border-white bg-blue-600 shadow pointer-events-none"
           style={{ left: `${toFracX(point.x) * 100}%`, top: `${toFracY(point.y) * 100}%` }}
         />
-      </div>
 
-      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
-        <span>drag to explore the retire-age × spending trade-off</span>
-        {violated && (
-          <span className="flex items-center gap-0.5 text-red-600 font-medium">
-            <AlertTriangle size={9} /> breaks the pin
-          </span>
+        {/* corner spinner while the grid re-solves */}
+        {solved.solving && (
+          <Loader2 size={14} className="absolute right-1.5 top-1.5 animate-spin text-blue-500" aria-label="recalculating" />
         )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GradientCanvas — renders the success-rate grid as a SMOOTH red→yellow→green
+// gradient. Each pixel bilinearly interpolates the rate of the four surrounding
+// grid nodes, then maps that rate to a color. This is the elegant version of
+// per-cell tinting: continuous instead of blocky, and it tolerates the rare
+// non-monotonic wobble in the grid. One canvas redraw per grid update.
+// ---------------------------------------------------------------------------
+
+// Success-rate reference where the gradient crosses from red to green.
+const GRADIENT_TARGET = 0.8;
+
+/** Map a success rate (0..1) to an [r,g,b] color: red below target → yellow at
+ *  target → green above. Clear hue separation with a deeper range so the pad
+ *  reads as color, not a gray wash. */
+function rateColor(rate: number): [number, number, number] {
+  // Anchors: brick red (0%), warm amber (target), deep green (100%).
+  const RED: [number, number, number] = [234, 209, 220];
+  const YELLOW: [number, number, number] = [255, 242, 204];
+  const GREEN: [number, number, number] = [217, 234, 211];
+  const lerp = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ];
+  if (rate <= GRADIENT_TARGET) {
+    // 0 → target maps red → yellow.
+    const t = Math.min(1, Math.max(0, rate / GRADIENT_TARGET));
+    return lerp(RED, YELLOW, t);
+  }
+  // target → 1 maps yellow → green.
+  const t = Math.min(1, Math.max(0, (rate - GRADIENT_TARGET) / (1 - GRADIENT_TARGET)));
+  return lerp(YELLOW, GREEN, t);
+}
+
+function GradientCanvas({ grid, size }: { grid: number[]; size: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+    const img = ctx.createImageData(W, H);
+    const G = size;
+    // Bilinear sample of the grid at fractional node coords (fx, fy in [0, G-1]).
+    const sample = (fx: number, fy: number) => {
+      const x0 = Math.min(G - 1, Math.max(0, Math.floor(fx)));
+      const y0 = Math.min(G - 1, Math.max(0, Math.floor(fy)));
+      const x1 = Math.min(G - 1, x0 + 1);
+      const y1 = Math.min(G - 1, y0 + 1);
+      const tx = Math.min(1, Math.max(0, fx - x0));
+      const ty = Math.min(1, Math.max(0, fy - y0));
+      const v00 = grid[y0 * G + x0], v10 = grid[y0 * G + x1];
+      const v01 = grid[y1 * G + x0], v11 = grid[y1 * G + x1];
+      const top = v00 + (v10 - v00) * tx;
+      const bot = v01 + (v11 - v01) * tx;
+      return top + (bot - top) * ty;
+    };
+    for (let py = 0; py < H; py++) {
+      // Screen y is top-down; grid row 0 is the LOWEST y (bottom-up). Flip.
+      const fy = (1 - py / (H - 1)) * (G - 1);
+      for (let px = 0; px < W; px++) {
+        const fx = (px / (W - 1)) * (G - 1);
+        const [r, g, b] = rateColor(sample(fx, fy));
+        const i = (py * W + px) * 4;
+        img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b; img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }, [grid, size]);
+
+  return <canvas ref={ref} width={220} height={160} className="absolute inset-0 w-full h-full" aria-hidden />;
+}
+
+// ---------------------------------------------------------------------------
+// ReadoutCard — a pure readout of a live plan outcome (not a knob, no goals).
+// `tone` tints it: good=emerald, warn=amber, bad=red, neutral=plain.
+// ---------------------------------------------------------------------------
+function ReadoutCard({ label, value, tone, solving }: {
+  label: string;
+  value: string;
+  tone: 'good' | 'warn' | 'bad' | 'neutral';
+  solving?: boolean;
+}) {
+  const tint = tone === 'good' ? 'border-emerald-300 bg-emerald-50/40'
+    : tone === 'warn' ? 'border-amber-300 bg-amber-50/40'
+    : tone === 'bad' ? 'border-red-300 bg-red-50/40'
+    : 'border-slate-200 bg-white';
+  const valueColor = tone === 'good' ? 'text-emerald-700'
+    : tone === 'warn' ? 'text-amber-700'
+    : tone === 'bad' ? 'text-red-700'
+    : 'text-slate-900';
+
+  return (
+    <div className={`border rounded px-2.5 py-1.5 ${tint}`}>
+      <div className="text-[9px] uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={`flex items-center gap-1 text-[13px] font-semibold ${valueColor}`}>
+        {solving && <Loader2 size={12} className="animate-spin text-blue-500" aria-label="calculating" />}
+        {value}
       </div>
     </div>
   );
@@ -251,80 +392,85 @@ function XyPad({ inputs, config, pin, mode, solved, onChange }: {
 // ---------------------------------------------------------------------------
 // The page
 // ---------------------------------------------------------------------------
-export function EqPage({ inputs, config, onChange, pin, onPinChange, mode, onModeChange, solved }: EqPageProps) {
+export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved, projection }: EqPageProps) {
+  const o = deterministicOutcome(inputs, config);
+  const setBand = (axis: EqAxis) => (b: Band) => onBandsChange({ ...bands, [axis]: b });
+
+  // RECONCILE every control to a sane state (crop edges inside the rendered
+  // range, value inside its crop) whenever the plan or a crop changes. This
+  // undoes any stale persisted crop — e.g. a min edge clamped up past the knob
+  // that left it unable to drag left. Batched, and only writes when something
+  // actually changed — so no render loop.
+  useEffect(() => {
+    let bandChanged = false;
+    const nextBands = { ...bands };
+    for (const axis of Object.keys(AXES) as EqAxis[]) {
+      const r = reconcileControl(axis, inputs, bands[axis]);
+      if (r.band.min !== bands[axis].min || r.band.max !== bands[axis].max) {
+        nextBands[axis] = r.band;
+        bandChanged = true;
+      }
+    }
+    if (bandChanged) onBandsChange(nextBands);
+  }, [inputs, bands, onBandsChange]);
+
   return (
     <div className="max-w-4xl">
       <div className="flex items-center gap-2 mb-1">
         <Sliders size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">EQ — steer the plan</h2>
-        <span className="text-[10px] uppercase tracking-wider text-slate-400 border border-slate-200 rounded px-1.5 py-0.5">experimental</span>
+        <h2 className="text-lg font-bold text-slate-900">Steer the plan</h2>
       </div>
-      <p className="text-xs text-slate-500 mb-4 leading-snug max-w-2xl">
-        An ideation surface over your plan. Push the faders or drag the pad to explore; the verdict
-        updates live. Pin a success-rate goal and choose whether each control is <strong>hard</strong>
-        (clamped to the goal) or <strong>soft</strong> (free to drag, flagged when it breaks the goal).
+      <p className="text-xs text-slate-500 mb-3 leading-snug max-w-2xl">
+        Push the sliders or drag the pad to explore your plan — the readouts update live.
+        Drag a slider's edges to crop its range (at least / at most) while you adjust the rest.
       </p>
 
-      <PinBar pin={pin} onChange={onPinChange} successRate={solved.successRate} solving={solved.solving} />
-
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-[11px] text-slate-500">Pin mode:</span>
-        <div className="flex rounded border border-slate-200 overflow-hidden">
-          {(['hard', 'soft'] as const).map(m => (
-            <button
-              key={m}
-              onClick={() => onModeChange(m)}
-              className={`flex items-center gap-1 px-3 py-1 text-xs font-medium ${mode === m ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-              title={m === 'hard' ? 'Controls clamp to the pinned goal' : 'Controls move freely; breaches are flagged'}
-            >
-              {m === 'hard' ? <Lock size={11} /> : <Unlock size={11} />}
-              {m === 'hard' ? 'Hard (clamp)' : 'Soft (warn)'}
-            </button>
-          ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start mb-3">
+        {/* sliders flow 1→2→3 columns so more fit above the fold */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <RangeFader axis="desiredSpending" inputs={inputs} band={bands.desiredSpending} onBand={setBand('desiredSpending')} onChange={onChange} />
+          <RangeFader axis="retirementAge" inputs={inputs} band={bands.retirementAge} onBand={setBand('retirementAge')} onChange={onChange} />
+          <RangeFader axis="investmentReturn" inputs={inputs} band={bands.investmentReturn} onBand={setBand('investmentReturn')} onChange={onChange} />
+          <RangeFader axis="annualSavings" inputs={inputs} band={bands.annualSavings} onBand={setBand('annualSavings')} onChange={onChange} />
+          <RangeFader axis="maxAge" inputs={inputs} band={bands.maxAge} onBand={setBand('maxAge')} onChange={onChange} />
+          <RangeFader axis="returnVolatility" inputs={inputs} band={bands.returnVolatility} onBand={setBand('returnVolatility')} onChange={onChange} />
+          <RangeFader axis="cppStartAge" inputs={inputs} band={bands.cppStartAge} onBand={setBand('cppStartAge')} onChange={onChange} />
+          <RangeFader axis="oasStartAge" inputs={inputs} band={bands.oasStartAge} onBand={setBand('oasStartAge')} onChange={onChange} />
         </div>
-        {solved.solving && <span className="text-[11px] text-slate-400">solving the goal…</span>}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start mb-4">
         <div className="space-y-3">
-          <Fader axis="desiredSpending" inputs={inputs} config={config} pin={pin} mode={mode} bound={solved.bounds.desiredSpending} successRate={solved.successRate} onChange={onChange} />
-          <Fader axis="retirementAge" inputs={inputs} config={config} pin={pin} mode={mode} bound={solved.bounds.retirementAge} successRate={solved.successRate} onChange={onChange} />
-          <Fader axis="investmentReturn" inputs={inputs} config={config} pin={pin} mode={mode} bound={solved.bounds.investmentReturn} successRate={solved.successRate} onChange={onChange} />
+          <XyPad
+            xAxis="retirementAge" yAxis="desiredSpending"
+            xLabel="Retirement age" yLabel="spending"
+            inputs={inputs} bands={bands} onBandsChange={onBandsChange}
+            solved={solved} onChange={onChange}
+          />
+          {/* live outcome readouts — pure readouts, no goals/steppers */}
+          <div className="grid grid-cols-2 gap-2">
+            <ReadoutCard label="Status" value={o.status === 'ON_TRACK' ? 'On track' : 'Shortfall'} tone={o.status === 'ON_TRACK' ? 'good' : 'bad'} />
+            <ReadoutCard label="Money lasts to" value={`${o.depletionAge ?? inputs.maxAge}${o.depletionAge === null ? '+' : ''}`} tone={o.depletionAge === null ? 'good' : 'bad'} />
+            <ReadoutCard
+              label="Success rate"
+              value={solved.successRate == null ? '—' : `${(solved.successRate * 100).toFixed(0)}%`}
+              solving={solved.solving}
+              tone={solved.successRate == null ? 'neutral' : solved.successRate >= 0.9 ? 'good' : solved.successRate >= 0.75 ? 'warn' : 'bad'}
+            />
+            <ReadoutCard label="Left at end" value={fmtMoney(o.endingBalance)} tone={o.endingBalance > 0 ? 'good' : 'neutral'} />
+          </div>
         </div>
-        <XyPad inputs={inputs} config={config} pin={pin} mode={mode} solved={solved} onChange={onChange} />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <VerdictCard inputs={inputs} config={config} successRate={solved.successRate} solving={solved.solving} />
-      </div>
+      {/* Live projection under the controls — the visual aid while steering. */}
+      {projection && (
+        <div className="mt-3 bg-white border border-slate-200 rounded p-3">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Projection timeline</div>
+          <TimelineChart
+            inputs={inputs}
+            results={{ ...projection.results, yearlyBreakdown: projection.breakdown }}
+            config={config}
+            onChange={onChange}
+          />
+        </div>
+      )}
     </div>
-  );
-}
-
-// Live verdict readout: deterministic status/depletion (instant) + the
-// worker's success rate.
-function VerdictCard({ inputs, config, successRate, solving }: {
-  inputs: RetirementInputs; config: AppConfig; successRate: number | null; solving: boolean;
-}) {
-  const o = deterministicOutcome(inputs, config);
-  return (
-    <>
-      <div className="bg-white border border-slate-200 rounded p-3">
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Status</div>
-        <div className={`text-sm font-semibold ${o.status === 'ON_TRACK' ? 'text-emerald-600' : 'text-amber-600'}`}>
-          {o.status.replace('_', ' ')}
-        </div>
-      </div>
-      <div className="bg-white border border-slate-200 rounded p-3">
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Money lasts to</div>
-        <div className="text-sm font-semibold text-slate-900">{o.depletionAge ?? `${inputs.maxAge}+`}</div>
-      </div>
-      <div className="bg-white border border-slate-200 rounded p-3">
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Success rate</div>
-        <div className="text-sm font-semibold text-slate-900">
-          {successRate == null ? (solving ? '…' : '—') : `${(successRate * 100).toFixed(0)}%`}
-        </div>
-      </div>
-    </>
   );
 }

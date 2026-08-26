@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown } from './retirementEngine';
+import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome } from './retirementEngine';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
 const config = testConfig();
@@ -575,6 +575,65 @@ describe('combineHouseholdBreakdown (household display)', () => {
     const poorEnd = yearAt(combineHouseholdBreakdown(poor, couple(65)), 75).endingBalance;
     const richEnd = yearAt(combineHouseholdBreakdown(rich, richInputs), 75).endingBalance;
     expect(richEnd).toBeGreaterThan(poorEnd);
+  });
+});
+
+describe('householdOutcome (household-first verdict)', () => {
+  const mkCouple = () => baseInputs({
+    rrspBalance: 300000, tfsaBalance: 100000, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+    desiredSpending: 40000, cppStartAge: 65, cppMonthlyAmount: 600, oasStartAge: 65, oasYearsInCanada: 40,
+    spouse: {
+      enabled: true, currentAge: 65, retirementAge: 65,
+      rrspBalance: 200000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 25000, pensions: [],
+    },
+  });
+
+  it('matches the primary result for a single person', () => {
+    const inputs = baseInputs({ tfsaBalance: 500000, desiredSpending: 20000, cppStartAge: null, oasStartAge: null });
+    const r = calculateHousehold(inputs, config);
+    const ho = householdOutcome(r, inputs);
+    expect(ho.depletionAge).toBe(r.depletionAge);
+    expect(ho.status).toBe(r.status);
+  });
+
+  it('a funded primary covering a broke spouse reads ON_TRACK (no spurious shortfall)', () => {
+    // The screenshot case: huge household, but the spouse silo alone depletes.
+    const inputs = baseInputs({
+      tfsaBalance: 5000000, desiredSpending: 20000, cppStartAge: null, oasStartAge: null,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 60000, pensions: [],
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    // The spouse silo alone depletes...
+    expect(r.spouse!.depletionAge).not.toBeNull();
+    // ...but the household-first verdict follows the COMBINED money, which is ample.
+    const ho = householdOutcome(r, inputs);
+    expect(ho.depletionAge).toBeNull();
+    expect(ho.status).toBe('ON_TRACK');
+    expect(ho.endingBalance).toBeGreaterThan(0);
+  });
+
+  it('a household whose combined money genuinely runs out reads SHORTFALL', () => {
+    const inputs = mkCouple();
+    inputs.investmentReturn = 0; // nothing bails anyone out
+    inputs.rrspBalance = 20000; inputs.tfsaBalance = 5000; inputs.desiredSpending = 60000;
+    inputs.spouse!.rrspBalance = 5000; inputs.spouse!.tfsaBalance = 1000;
+    inputs.spouse!.cppMonthlyAmount = 0; inputs.spouse!.oasStartAge = null;
+    inputs.spouse!.desiredSpending = 50000;
+    inputs.cppStartAge = null; inputs.oasStartAge = null;
+    const r = calculateHousehold(inputs, config);
+    const ho = householdOutcome(r, inputs);
+    expect(ho.depletionAge).not.toBeNull();
+    expect(ho.status).toBe('SHORTFALL');
+    expect(ho.endingBalance).toBe(0);
   });
 });
 

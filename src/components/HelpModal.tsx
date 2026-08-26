@@ -288,6 +288,64 @@ const SECTIONS: HelpSection[] = [
     ]
   },
   {
+    id: 'help-steering',
+    title: 'Steering (the equalizer)',
+    entries: [
+      {
+        term: null,
+        body: (
+          <P>
+            The <strong>Steering</strong> page (gold link in the toolbar) is a goals-level equalizer over your
+            whole plan. Instead of editing fields one at a time, you push sliders and drag a pad while the
+            readouts — status, money-lasts-to, success rate — update live. It writes the same underlying
+            inputs, so everything you do here is reflected in the projection and Monte Carlo views.
+          </P>
+        )
+      },
+      {
+        term: 'The sliders',
+        body: (
+          <>
+            <P>Each slider is a major lever: annual spending, retirement age, expected return, annual savings, plan-to age, return volatility, CPP start age, and OAS start age.</P>
+            {ul([
+              <>Drag the two edge handles to crop a range (<em>at least / at most</em>); the middle knob moves the value inside it. A range with both edges together is a hard pin — the control won't move.</>,
+              <><strong>Annual savings</strong> only moves the taxable account on top of your locked RRSP+TFSA — so it never runs into a contribution limit. Its floor is your current RRSP+TFSA total.</>,
+              <>Ranges adapt to the plan: retirement age starts at your current age, and an axis grows if you set a value past its end.</>,
+            ])}
+          </>
+        )
+      },
+      {
+        term: 'The drag pad',
+        body: (
+          <>
+            <P>The square is retirement age (x) × spending (y). Drag the dot to move both at once. The red→green gradient shows the plan's success rate at every combination — green means that combination is likely to succeed, red means likely to run short.</P>
+            {ul([
+              <>When a slider is cropped, its allowed range shows as a rectangle on the pad. <strong>Drag a corner</strong> to resize the range in both axes at once.</>,
+              <>The shading re-computes as you change anything — return, volatility, savings, horizon — streaming in from the region around your current point outward.</>,
+            ])}
+          </>
+        )
+      },
+      {
+        term: 'Crops',
+        body: (
+          <P>
+            Each slider is a <strong>crop</strong>: drag the two edge handles to fence in the range you
+            consider acceptable, and the middle knob to move the plan's actual value within that range.
+            The value knob can never leave the crop, so the plan always stays inside your limits. Crops
+            are remembered between visits, stored as fractions of each range so they survive any future
+            range changes.
+          </P>
+        )
+      },
+      {
+        term: 'How the shading is computed',
+        body: <P>The pad runs Monte Carlo against one seeded batch of futures so the shading is stable while you drag. Because each lever moves the success rate in a known direction, the solver binary-searches the boundary row-by-row instead of scoring every cell — so it stays fast and can stream partial results to the screen as they finish.</P>
+      }
+    ]
+  },
+  {
     id: 'help-backtest',
     title: 'Backtest',
     entries: [

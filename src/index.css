@@ -28,6 +28,50 @@
   display: none;
 }
 
+/* Scroll targets for the various cards/panels that scrollIntoView on open.
+   The main workspace has a sticky breadcrumb/links bar (~48px tall) pinned to
+   its top, so scrolling a card to block:'start' would slide it underneath the
+   bar. scroll-margin-top lifts the landing point clear of it. */
+.scroll-target {
+  scroll-margin-top: 56px;
+}
+
+/* Double-slider band thumbs (steering surface): two <input type=range> are
+   stacked on one track with pointer-events:none on the track so a drag passes
+   through to the page, then re-enabled on each thumb so the min/max handles
+   stay grabbable. */
+.band-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.25rem;
+  margin: 0;
+}
+.band-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 9999px;
+  background: #2563eb;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  cursor: grab;
+}
+.band-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 9999px;
+  background: #2563eb;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  cursor: grab;
+}
+.band-thumb::-moz-range-track {
+  background: transparent;
+}
+
 @media print {
   .no-print {
     display: none !important;
