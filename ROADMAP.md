@@ -38,8 +38,6 @@ have to hold them.
 - **Estate view** — after-tax value to heirs by account type (RRIF fully
   taxed as income at death, TFSA passes free, taxable with a deemed
   disposition). The tax model already has the pieces.
-- **Solver mode** — invert the verdict: given a target Monte Carlo success
-  rate, solve for the maximum sustainable spending level.
 - **Bucket strategies** — cash/bond/equity buckets with rebalancing rules, as
   an alternative to the single blended return assumption.
 
