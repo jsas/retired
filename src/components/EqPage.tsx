@@ -134,17 +134,21 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
           className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded bg-blue-200"
           style={{ left: `${loF * 100}%`, width: `${(hiF - loF) * 100}%` }}
         />
-        {/* min crop edge (native thumb, small) */}
+        {/* min crop edge (native thumb, small). Rendered over `range` (the same
+            floored/grown range the highlight + value knob use), NOT spec.min/max —
+            otherwise the browser positions the thumb on the raw axis while the
+            highlight positions it on `range`, and the grabbable thumb floats
+            away from the visible edge (the stuck-can't-drag bug). */}
         <input
           type="range" aria-label={`${spec.label} minimum`}
-          min={spec.min} max={spec.max} step={spec.step} value={n.min}
+          min={range.min} max={range.max} step={spec.step} value={n.min}
           onChange={e => setEdge('min', Number(e.target.value))}
           className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none band-thumb"
         />
         {/* max crop edge (native thumb, small) */}
         <input
           type="range" aria-label={`${spec.label} maximum`}
-          min={spec.min} max={spec.max} step={spec.step} value={n.max}
+          min={range.min} max={range.max} step={spec.step} value={n.max}
           onChange={e => setEdge('max', Number(e.target.value))}
           className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none band-thumb"
         />
