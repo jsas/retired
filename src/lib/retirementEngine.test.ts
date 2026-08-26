@@ -293,6 +293,100 @@ describe('transfer events (RRSP meltdown)', () => {
   });
 });
 
+describe('inter-spousal transfers (household conservation)', () => {
+  const config = testConfig();
+
+  // A same-age couple so age translation is 1:1. Primary holds the money and
+  // defines the transfer; spouse starts empty so any spouse balance is proof
+  // the landing was credited.
+  const couple = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 66,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 100000, cashCushionBalance: 0,
+    desiredSpending: 0,
+    spouse: {
+      enabled: true, currentAge: 65, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+      desiredSpending: 0, pensions: [],
+    },
+  });
+
+  it('primary taxable → spouse TFSA: source drops by gross, spouse gains it (untaxed)', () => {
+    const inputs = couple();
+    inputs.events = [{
+      id: 'gift', age: 65, label: 'fund spouse TFSA', amount: 40000, direction: 'out',
+      from: { kind: 'account', person: 'primary', account: 'taxable' },
+      to: { kind: 'account', person: 'spouse', account: 'tfsa' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    const prow = yearAt(r.yearlyBreakdown, 65);
+    const srow = yearAt(r.spouse!.yearlyBreakdown, 65);
+    // Taxable source is taxed on gains only; with ACB = balance there is no
+    // gain yet, so the full 40k crosses as net.
+    const tr = prow.detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    expect(tr!.gross).toBeCloseTo(40000, 0);
+    const net = tr!.net;
+    // Source: 100k − 40k gross = 60k, then 5% growth → 63k.
+    expect(prow.taxableBalance).toBeCloseTo(60000 * 1.05, 0);
+    // The primary run records the outbound landing for the household pass.
+    expect(r.crossDeposits?.[0]?.account).toBe('tfsa');
+    expect(r.crossDeposits?.[0]?.amount).toBeCloseTo(net, 0);
+    // Destination: spouse TFSA received the net at start of year, then grew 5%.
+    expect(srow.detail?.deposit?.tfsa).toBeCloseTo(net, 0);
+    expect(srow.tfsaBalance).toBeCloseTo(net * 1.05, 0);
+    // Household conservation: money neither created nor destroyed by the move.
+    const householdEnd = prow.endingBalance + srow.endingBalance;
+    const start = 100000;
+    const growth = (prow.endingBalance + srow.endingBalance) - (start * 1.05);
+    expect(Number.isFinite(householdEnd)).toBe(true);
+    // Only tax (on the taxable gains portion) can reduce the total below pure growth.
+    expect(householdEnd).toBeLessThanOrEqual(start * 1.05 + 1);
+    expect(growth).toBeGreaterThanOrEqual(-tr!.tax * 1.05 - 1);
+  });
+
+  it('primary RRSP → spouse TFSA: gross taxed once, after-tax net lands with spouse', () => {
+    const inputs = couple();
+    inputs.rrspBalance = 500000;
+    inputs.taxableBalance = 0;
+    inputs.events = [{
+      id: 'melt', age: 65, label: 'meltdown to spouse', amount: 50000, direction: 'out',
+      from: { kind: 'account', person: 'primary', account: 'rrsp' },
+      to: { kind: 'account', person: 'spouse', account: 'tfsa' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    const prow = yearAt(r.yearlyBreakdown, 65);
+    const srow = yearAt(r.spouse!.yearlyBreakdown, 65);
+    const tr = prow.detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    expect(tr!.tax).toBeGreaterThan(0); // RRSP draw is taxable income
+    expect(tr!.net).toBeCloseTo(tr!.gross - tr!.tax, 0);
+    // Source: 500k − 50k gross = 450k, then 5% growth → 472.5k.
+    expect(prow.rrspBalance).toBeCloseTo(450000 * 1.05, 0);
+    // Destination receives the AFTER-TAX net (the draw was taxed once, here).
+    expect(srow.detail?.deposit?.tfsa).toBeCloseTo(tr!.net, 0);
+    expect(srow.tfsaBalance).toBeCloseTo(tr!.net * 1.05, 0);
+  });
+
+  it('age translation: a transfer from an older primary lands in the right spouse year', () => {
+    // Primary 65, spouse 62. Primary transfers at primary-age 66 → calendar year
+    // is spouse-age 63. The spouse deposit must appear on the spouse's age-63 row.
+    const inputs = couple();
+    inputs.spouse!.currentAge = 62;
+    inputs.events = [{
+      id: 'gift', age: 66, label: 'fund spouse TFSA', amount: 30000, direction: 'out',
+      from: { kind: 'account', person: 'primary', account: 'taxable' },
+      to: { kind: 'account', person: 'spouse', account: 'tfsa' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    const net = yearAt(r.yearlyBreakdown, 66).detail?.calc?.transfers?.[0]?.net ?? 0;
+    expect(net).toBeGreaterThan(0);
+    // Spouse receives it at spouse-age 66 − (65 − 62) = 63.
+    expect(yearAt(r.spouse!.yearlyBreakdown, 63).detail?.deposit?.tfsa).toBeCloseTo(net, 0);
+  });
+});
+
 describe('pensions', () => {
   it('lifetime pension pays every year from startAge', () => {
     const r = calculateRetirement(baseInputs({

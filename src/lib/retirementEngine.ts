@@ -288,6 +288,11 @@ export interface RetirementResults {
   averageReturn: number;
   retirementAge: number;
   spouse?: RetirementResults; // present when inputs.spouse.enabled
+  // After-tax amounts this person's transfer events sent to the PARTNER's
+  // accounts (inter-spousal transfers). The household pass injects these into
+  // the partner's run so the transfer is conserved across the household.
+  // Undefined for a standalone single-person run with no cross transfers.
+  crossDeposits?: Array<{ age: number; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; amount: number; label: string }>;
 }
 
 const MAX_TAX_ITERATIONS = 100;
@@ -352,6 +357,12 @@ export function calculatePerson(
       currentAge: number;
       pensions?: Pension[];
     };
+    // After-tax amounts the PARTNER's transfer events sent into THIS person's
+    // accounts (inter-spousal transfers), keyed by THIS person's age. Injected
+    // by the household pass so an inter-spousal transfer is conserved: one
+    // person's cross-deposit is the other's inbound deposit. Landing here is
+    // after-tax money (the source run already taxed the draw).
+    inboundDeposits?: Array<{ age: number; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; amount: number; label: string }>;
   }
 ): RetirementResults {
   const {
@@ -418,6 +429,11 @@ export function calculatePerson(
   const events = (Array.isArray(person.events) ? person.events : []).filter(e => e.age >= currentAge);
   const eventsAt = (age: number) => events.filter(e =>
     e.age === age || (e.endAge != null && age >= e.age && age <= e.endAge));
+
+  // Inbound inter-spousal transfer deposits (from the partner's run), already
+  // translated to THIS person's age axis by the household pass. They land at
+  // the start of the year like an inflow, as after-tax money.
+  const inboundAt = (age: number) => (options?.inboundDeposits ?? []).filter(d => d.age === age);
   // Outflows raise the year's spending need — but a TRANSFER event (from/to
   // set) moves money account→account, so it must NOT be counted as spending
   // (its source draw is handled by the transfer path, not the spending draws).
@@ -568,6 +584,13 @@ export function calculatePerson(
     },
   };
 
+  // Cross-person transfer landings this run produced: money leaving THIS
+  // person's accounts destined for the partner. The household pass injects
+  // these into the partner's run as inflows so an inter-spousal transfer is
+  // conserved across the household (the partner's run can't compute the net
+  // itself — that depends on this person's marginal tax on the draw).
+  const crossDeposits: Array<{ age: number; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; amount: number; label: string }> = [];
+
   /**
    * Execute one transfer event for THIS person. Returns a YearCalc.transfers
    * entry when the event moved money in this run's accounts, else null (a
@@ -617,15 +640,16 @@ export function calculatePerson(
     const net = Math.max(0, gross - tax);
 
     // The destination may be the partner's account. This run only tracks THIS
-    // person's balances; the household pass mirrors the landing into the
-    // partner's plan. Here we record the full path either way so the math page
-    // shows it, but only credit the deposit locally when it's ours.
+    // person's balances; credit the deposit locally when it's ours, else hand
+    // the after-tax net to the household pass to inject into the partner's run.
     if (to.person === selfRef) {
       acct.put(to.account, net);
       if (to.account === 'rrsp') deposit.rrsp += net;
       else if (to.account === 'tfsa') deposit.tfsa += net;
       else if (to.account === 'cash') deposit.cash += net;
       else deposit.taxable += net;
+    } else {
+      crossDeposits.push({ age: ev.age, account: to.account, amount: net, label: ev.label });
     }
 
     const name = (a: string) => a === 'rrsp' ? 'RRSP' : a === 'tfsa' ? 'TFSA' : a === 'taxable' ? 'Taxable' : 'Cash';
@@ -682,6 +706,13 @@ export function calculatePerson(
     // Registered transfer draws stack as income within the year so a second
     // transfer the same year is taxed at the right marginal rate.
     let accumTransferBaseGross = 0;
+    // Inbound inter-spousal transfers land here as after-tax money.
+    for (const d of inboundAt(age)) {
+      if (d.account === 'rrsp') { rrsp += d.amount; accumDeposit.rrsp += d.amount; }
+      else if (d.account === 'tfsa') { tfsa += d.amount; accumDeposit.tfsa += d.amount; }
+      else if (d.account === 'cash') { cashCushion += d.amount; accumDeposit.cash += d.amount; }
+      else { taxable += d.amount; taxableAcb += d.amount; accumDeposit.taxable += d.amount; }
+    }
     const yearEvents = eventsAt(age).map(eventLine);
     let accumEventOut = 0;
     for (const ev of eventsAt(age)) {
@@ -831,6 +862,14 @@ export function calculatePerson(
       else if (dest === 'tfsa') { tfsa += ev.amount; deposit.tfsa += ev.amount; }
       else if (dest === 'cash') { cashCushion += ev.amount; deposit.cash += ev.amount; }
       else { taxable += ev.amount; taxableAcb += ev.amount; deposit.taxable += ev.amount; }
+    }
+    // Inbound inter-spousal transfers (the partner's cross-deposits) land here
+    // as after-tax money, at the start of the year.
+    for (const d of inboundAt(age)) {
+      if (d.account === 'rrsp') { rrsp += d.amount; deposit.rrsp += d.amount; }
+      else if (d.account === 'tfsa') { tfsa += d.amount; deposit.tfsa += d.amount; }
+      else if (d.account === 'cash') { cashCushion += d.amount; deposit.cash += d.amount; }
+      else { taxable += d.amount; taxableAcb += d.amount; deposit.taxable += d.amount; }
     }
 
     // This year's spending target: today's dollars, inflated to this year when
@@ -1190,7 +1229,8 @@ export function calculatePerson(
     status,
     withdrawalRate,
     averageReturn: investmentReturn,
-    retirementAge
+    retirementAge,
+    ...(crossDeposits.length > 0 ? { crossDeposits } : {}),
   };
 
   return primary;
@@ -1230,21 +1270,34 @@ export function calculateHousehold(
   const primaryPerson = legacyToPerson(inputs);
   const sp = inputs.spouse?.enabled ? legacySpouseToPerson(inputs.spouse) : undefined;
 
-  const primary = calculatePerson(primaryPerson, shared, config, sp ? {
+  const primaryCtx = sp ? {
+    cppStartAge: sp.cppStartAge,
+    cppMonthlyAmount: sp.cppMonthlyAmount,
+    oasStartAge: sp.oasStartAge,
+    oasYearsInCanada: sp.oasYearsInCanada,
+    currentAge: sp.currentAge,
+    pensions: sp.pensions,
+  } : undefined;
+
+  const primary = calculatePerson(primaryPerson, shared, config, {
     ...options,
     personRef: 'primary',
-    spouseContext: {
-      cppStartAge: sp.cppStartAge,
-      cppMonthlyAmount: sp.cppMonthlyAmount,
-      oasStartAge: sp.oasStartAge,
-      oasYearsInCanada: sp.oasYearsInCanada,
-      currentAge: sp.currentAge,
-      pensions: sp.pensions,
-    },
-  } : { ...options, personRef: 'primary' });
+    ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
+  });
 
   if (sp) {
-    const spouseResults = calculatePerson(sp, shared, config, {
+    // Age translation for inter-spousal transfers: a cross-deposit stamped at
+    // the SOURCE's age lands in the partner at the same CALENDAR year, which
+    // on the partner's age axis is source-age minus the current-age gap.
+    const translate = (
+      deposits: NonNullable<RetirementResults['crossDeposits']>,
+      fromCurrentAge: number,
+      toCurrentAge: number,
+    ) => deposits.map(d => ({ ...d, age: d.age - (fromCurrentAge - toCurrentAge) }));
+
+    // Run the spouse, injecting any primary→spouse transfer landings (after-tax).
+    const pToS = translate(primary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
+    let spouseResults = calculatePerson(sp, shared, config, {
       ...options,
       personRef: 'spouse',
       spouseContext: {
@@ -1255,10 +1308,43 @@ export function calculateHousehold(
         currentAge: primaryPerson.currentAge,
         pensions: primaryPerson.pensions,
       },
+      ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
     });
-    primary.spouse = spouseResults;
-    if (spouseResults.status === 'SHORTFALL') primary.status = 'SHORTFALL';
-    applyPensionSplitting(primary, spouseResults, inputs, config, sp.currentAge);
+
+    // If the spouse ALSO sent transfers back to the primary, re-run the primary
+    // with those injected (one extra pass; transfers are typically defined on
+    // one person's events, so this converges without ping-pong).
+    const sToP = translate(spouseResults.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge);
+    let finalPrimary = primary;
+    if (sToP.length > 0) {
+      finalPrimary = calculatePerson(primaryPerson, shared, config, {
+        ...options,
+        personRef: 'primary',
+        ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
+        inboundDeposits: sToP,
+      });
+      // The primary's re-run may have changed its own cross-deposits to the
+      // spouse; re-inject and re-run the spouse once more for consistency.
+      const pToS2 = translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
+      spouseResults = calculatePerson(sp, shared, config, {
+        ...options,
+        personRef: 'spouse',
+        spouseContext: {
+          cppStartAge: primaryPerson.cppStartAge,
+          cppMonthlyAmount: primaryPerson.cppMonthlyAmount,
+          oasStartAge: primaryPerson.oasStartAge,
+          oasYearsInCanada: primaryPerson.oasYearsInCanada,
+          currentAge: primaryPerson.currentAge,
+          pensions: primaryPerson.pensions,
+        },
+        ...(pToS2.length > 0 ? { inboundDeposits: pToS2 } : {}),
+      });
+    }
+
+    finalPrimary.spouse = spouseResults;
+    if (spouseResults.status === 'SHORTFALL') finalPrimary.status = 'SHORTFALL';
+    applyPensionSplitting(finalPrimary, spouseResults, inputs, config, sp.currentAge);
+    return finalPrimary;
   }
 
   return primary;
