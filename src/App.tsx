@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { FileSpreadsheet, Share2, Printer, Sparkles, Calculator } from 'lucide-react';
+import { FileSpreadsheet, Share2, Printer, Sparkles, Calculator, GitCompareArrows } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -17,6 +17,7 @@ import { BacktestPanel } from './components/BacktestPanel';
 import { CollapsiblePanel } from './components/CollapsiblePanel';
 import { ShareCard } from './components/ShareCard';
 import { OptimizeCard } from './components/OptimizeCard';
+import { CompareCard } from './components/CompareCard';
 import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
 import { PrintOptionsCard } from './components/PrintOptionsCard';
 import { DonateCard } from './components/DonateCard';
@@ -180,6 +181,7 @@ function App() {
   const backtestPanelRef = useRef<HTMLDivElement>(null);
   const shareCardRef = useRef<HTMLDivElement>(null);
   const optimizeCardRef = useRef<HTMLDivElement>(null);
+  const compareCardRef = useRef<HTMLDivElement>(null);
   const printOptionsCardRef = useRef<HTMLDivElement>(null);
   const donateCardRef = useRef<HTMLDivElement>(null);
   const exportCardRef = useRef<HTMLDivElement>(null);
@@ -192,6 +194,7 @@ function App() {
     const targets: Array<[string, boolean, React.RefObject<HTMLDivElement | null>]> = [
       ['share', showShare, shareCardRef],
       ['optimize', showOptimize, optimizeCardRef],
+      ['compare', showCompare, compareCardRef],
       ['print', showPrintOptions, printOptionsCardRef],
       ['donate', showDonate, donateCardRef],
       ['export', showExport, exportCardRef],
@@ -210,6 +213,7 @@ function App() {
   // `inputs` and `config` are declared.)
   const [showShare, setShowShare] = useState(false);
   const [showOptimize, setShowOptimize] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   // Welcome card: visible until dismissed, or always when the General settings
   // toggle asks for it on every load.
   const [showWelcome, setShowWelcome] = useState(
@@ -525,6 +529,13 @@ function App() {
                     <Sparkles size={13} /> Optimize
                   </button>
                   <button
+                    onClick={() => setShowCompare((s) => !s)}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    title="Diff 2–3 saved scenarios' verdict cards side by side"
+                  >
+                    <GitCompareArrows size={13} /> Compare
+                  </button>
+                  <button
                     onClick={() => setShowShare((s) => !s)}
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                     title="Show a shareable link that encodes this plan's inputs in the URL"
@@ -583,6 +594,18 @@ function App() {
                       mcResults={printMc}
                       onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
                       onClose={() => setShowOptimize(false)}
+                    />
+                  </div>
+                )}
+
+                {/* Compare card */}
+                {showCompare && (
+                  <div ref={compareCardRef}>
+                    <CompareCard
+                      scenarios={scenarios}
+                      activeScenarioId={activeScenarioId}
+                      config={config}
+                      onClose={() => setShowCompare(false)}
                     />
                   </div>
                 )}
