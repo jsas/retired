@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
-import { X, Sparkles, Copy, Check, ClipboardPaste, Lightbulb, ArrowUpRight, ArrowDownRight, CircleHelp } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { X, Sparkles, Copy, Check, ClipboardPaste, Lightbulb, ArrowUpRight, ArrowDownRight, CircleHelp, Crosshair, Loader2 } from 'lucide-react';
 import type { RetirementInputs, RetirementResults } from '../lib/retirementEngine';
 import type { MonteCarloResults } from '../lib/monteCarlo';
 import type { AppConfig } from '../lib/appConfig';
 import { runStrategies, type StrategyReport } from '../lib/strategies';
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
+import { runSpendingSolverAuto } from '../lib/runSpendingSolver';
+import type { SolverResult } from '../lib/spendingSolver';
 
 function fmt(v: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
@@ -22,7 +24,7 @@ interface OptimizeCardProps {
 
 export function OptimizeCard({ inputs, config, results, mcResults, onApply, onClose }: OptimizeCardProps) {
   const report: StrategyReport = useMemo(() => runStrategies(inputs, config), [inputs, config]);
-  const [tab, setTab] = useState<'strategies' | 'agent' | 'qa'>('strategies');
+  const [tab, setTab] = useState<'strategies' | 'solver' | 'agent' | 'qa'>('strategies');
 
   // Agent tab state
   const [promptCopied, setPromptCopied] = useState(false);
@@ -43,6 +45,33 @@ export function OptimizeCard({ inputs, config, results, mcResults, onApply, onCl
     navigator.clipboard.writeText(qaPrompt).then(
       () => { setQaCopied(true); setTimeout(() => setQaCopied(false), 2000); },
       () => window.prompt('Copy this prompt:', qaPrompt),
+    );
+  };
+
+  // Solver tab state
+  const [targetPct, setTargetPct] = useState(90);
+  const [solverBusy, setSolverBusy] = useState(false);
+  const [solverResult, setSolverResult] = useState<SolverResult | null>(null);
+  const [solverError, setSolverError] = useState<string | null>(null);
+  const cancelSolver = useRef<(() => void) | null>(null);
+
+  // Cancel any in-flight solve when the card closes or unmounts.
+  useEffect(() => () => cancelSolver.current?.(), []);
+
+  const runSolver = () => {
+    cancelSolver.current?.();
+    setSolverBusy(true);
+    setSolverError(null);
+    setSolverResult(null);
+    cancelSolver.current = runSpendingSolverAuto(
+      {
+        inputs, config,
+        targetSuccessRate: targetPct / 100,
+        volatility: inputs.returnVolatility,
+        runs: 500,
+      },
+      (res) => { setSolverResult(res); setSolverBusy(false); },
+      (msg) => { setSolverError(msg); setSolverBusy(false); },
     );
   };
 
@@ -73,13 +102,13 @@ export function OptimizeCard({ inputs, config, results, mcResults, onApply, onCl
           <h3 className="text-sm font-semibold text-slate-800">Optimize</h3>
           {/* Tabs */}
           <div className="flex gap-1 ml-3">
-            {(['strategies', 'agent', 'qa'] as const).map(t => (
+            {(['strategies', 'solver', 'agent', 'qa'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className={`px-2.5 py-1 text-xs font-medium rounded ${tab === t ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
               >
-                {t === 'strategies' ? 'Strategy Explorer' : t === 'agent' ? 'Tune inputs' : 'Ask a question'}
+                {t === 'strategies' ? 'Strategy Explorer' : t === 'solver' ? 'Solver' : t === 'agent' ? 'Tune inputs' : 'Ask a question'}
               </button>
             ))}
           </div>
@@ -130,6 +159,93 @@ export function OptimizeCard({ inputs, config, results, mcResults, onApply, onCl
             yearly spending that survives to max age — deterministic, no randomness. "Apply" writes that
             lever into your inputs (unsaved until you click Save).
           </p>
+        </div>
+      )}
+
+      {tab === 'solver' && (
+        <div className="p-4 max-w-xl">
+          <div className="flex items-start gap-2 mb-3">
+            <Crosshair size={15} className="text-slate-500 mt-0.5 shrink-0" />
+            <p className="text-[11px] text-slate-500 leading-snug">
+              Invert the verdict: pick a confidence level and the solver finds the <strong>most you can
+              spend per year</strong> while your Monte Carlo still succeeds that often. It binary-searches
+              spending against 500 randomized market futures ({(inputs.returnVolatility * 100).toFixed(0)}%
+              volatility), then you can apply the result to your plan.
+            </p>
+          </div>
+
+          <div className="flex items-end gap-3 mb-3">
+            <div>
+              <label className="block text-[11px] text-slate-500 mb-1">Target success rate (%)</label>
+              <input
+                type="number" min={50} max={99} step={1}
+                value={targetPct}
+                onChange={e => setTargetPct(Math.min(99, Math.max(50, parseInt(e.target.value) || 90)))}
+                className="w-24 px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <button
+              onClick={runSolver}
+              disabled={solverBusy}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {solverBusy ? <Loader2 size={13} className="animate-spin" /> : <Crosshair size={13} />}
+              {solverBusy ? 'Solving…' : 'Solve'}
+            </button>
+          </div>
+
+          {solverError && <div className="text-xs text-red-600 mb-2">✕ {solverError}</div>}
+
+          {solverResult && (
+            <div className="border border-slate-200 rounded p-3 bg-slate-50/60">
+              {!solverResult.feasible && (
+                <p className="text-xs text-red-700 leading-snug">
+                  No spending level reaches {Math.round(solverResult.targetSuccessRate * 100)}% success —
+                  the plan depletes even at $0 spending (fixed costs are too high). Lower your expenses or
+                  add income first.
+                </p>
+              )}
+              {solverResult.feasible && solverResult.unconstrained && (
+                <p className="text-xs text-slate-700 leading-snug">
+                  Even very high spending clears {Math.round(solverResult.targetSuccessRate * 100)}% success —
+                  the plan is not spending-constrained. You can spend freely within the tested range.
+                </p>
+              )}
+              {solverResult.feasible && !solverResult.unconstrained && (
+                <>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-lg font-bold text-slate-900">{fmt(solverResult.spending)}</span>
+                    <span className="text-xs text-slate-500">/yr max sustainable spending (today's $)</span>
+                  </div>
+                  <div className="mt-1.5 text-[11px] text-slate-500 leading-snug">
+                    succeeds {(solverResult.achievedSuccessRate * 100).toFixed(1)}% of the time
+                    (target {Math.round(solverResult.targetSuccessRate * 100)}%)
+                    {solverResult.nextStepSuccessRate !== null &&
+                      ` · one step higher only ${(solverResult.nextStepSuccessRate * 100).toFixed(1)}%`}
+                    {' '}· current plan spends {fmt(inputs.desiredSpending)}/yr
+                    {solverResult.spending > inputs.desiredSpending
+                      ? ` (${fmt(solverResult.spending - inputs.desiredSpending)} headroom)`
+                      : solverResult.spending < inputs.desiredSpending
+                        ? ` (${fmt(inputs.desiredSpending - solverResult.spending)} over — you're above the sustainable level)`
+                        : ' (right at the sustainable level)'}
+                  </div>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <button
+                      onClick={() => onApply({ desiredSpending: solverResult.spending })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+                    >
+                      <Check size={13} /> Apply {fmt(solverResult.spending)}/yr
+                    </button>
+                    <span className="text-[10px] text-slate-400">writes to Desired Spending (unsaved until you Save)</span>
+                  </div>
+                </>
+              )}
+              <p className="mt-2.5 text-[10px] text-slate-400 leading-snug border-t border-slate-200 pt-2">
+                Approximate: the answer is exact for the 500 futures tested, but a fresh batch of futures
+                lands within a point or two. Higher targets → lower sustainable spending.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
