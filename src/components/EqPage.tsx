@@ -13,7 +13,7 @@ import { TimelineChart } from './TimelineChart';
 import type { AppConfig } from '../lib/appConfig';
 import {
   AXES, axisValue, withAxis, clampToBand, normalizeBand, effectiveRange, deterministicOutcome, isLimited,
-  renderRange, INT_AXES,
+  renderRange, reconcileControl, INT_AXES,
   type EqAxis, type Band,
 } from '../lib/eqConstraints';
 
@@ -56,13 +56,16 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
 }) {
   const spec = AXES[axis];
   const value = axisValue(inputs, axis);
-  const n = normalizeBand(axis, band); // the crop [min,max]
-  const limited = isLimited(axis, band);
+  // Reconcile for DISPLAY so a stale crop (edges outside the track, or framing
+  // out the value) never renders a stuck knob; the page effect persists it back.
+  const rc = reconcileControl(axis, inputs, band);
+  const n = rc.band; // the crop [min,max], edges ordered/clamped/framed
+  const limited = isLimited(axis, n);
 
   // The range actually RENDERED: the axis, floored at the plan's logical min
   // (retirement ≥ current age, savings ≥ locked RRSP+TFSA) and grown in
   // whole-axis steps when the value exceeds the axis max.
-  const range = renderRange(axis, value, inputs);
+  const range = rc.range;
   const span = range.max - range.min;
 
   const trackRef = useRef<HTMLDivElement>(null);
@@ -444,37 +447,22 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
   const o = deterministicOutcome(inputs, config);
   const setBand = (axis: EqAxis) => (b: Band) => onBandsChange({ ...bands, [axis]: b });
 
-  // The crop frames the value: if the plan value lands OUTSIDE a control's crop
-  // (typed in the sidebar, dragged on the projection timeline, …), extend that
-  // crop's edge to include it. One batched update, only when something is
-  // actually out of frame — so no render loop.
+  // RECONCILE every control to a sane state (crop edges inside the rendered
+  // range, value inside its crop) whenever the plan or a crop changes. This
+  // undoes any stale persisted crop — e.g. a min edge clamped up past the knob
+  // that left it unable to drag left. Batched, and only writes when something
+  // actually changed — so no render loop.
   useEffect(() => {
-    let changed = false;
-    const next = { ...bands };
+    let bandChanged = false;
+    const nextBands = { ...bands };
     for (const axis of Object.keys(AXES) as EqAxis[]) {
-      const value = axisValue(inputs, axis);
-      const band = bands[axis];
-      const range = renderRange(axis, value, inputs);
-      // Extend ONLY the edge the value actually crosses, clamped to the rendered
-      // range — not normalizeBand(both edges), which would clamp a below-floor
-      // crop min back up to the axis min and undo the plan's logical floor
-      // (e.g. savings floor = locked RRSP+TFSA, retirement ≥ current age).
-      let { min, max } = band;
-      const round = (v: number) => INT_AXES.has(axis) ? Math.round(v) : v;
-      const inRange = (v: number) => Math.min(range.max, Math.max(range.min, round(v)));
-      if (value > max) max = inRange(value);
-      else if (value < min) min = inRange(value);
-      // A crop edge left BELOW the rendered floor (e.g. a fraction-persisted
-      // crop saved before the range grew a floor) would render the whole track
-      // selected and mis-frame the value. The value sits at the floor (it did
-      // NOT cross it), so reset that edge up to the floor.
-      if (min < range.min && value <= range.min) min = range.min;
-      if (min !== band.min || max !== band.max) {
-        next[axis] = { min, max };
-        changed = true;
+      const r = reconcileControl(axis, inputs, bands[axis]);
+      if (r.band.min !== bands[axis].min || r.band.max !== bands[axis].max) {
+        nextBands[axis] = r.band;
+        bandChanged = true;
       }
     }
-    if (changed) onBandsChange(next);
+    if (bandChanged) onBandsChange(nextBands);
   }, [inputs, bands, onBandsChange]);
 
   return (

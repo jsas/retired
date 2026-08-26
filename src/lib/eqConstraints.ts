@@ -278,6 +278,49 @@ export function consistentAges<T extends RetirementInputs>(inputs: T): T {
   return { ...inputs, retirementAge, maxAge, cppStartAge, oasStartAge };
 }
 
+/** The result of reconciling a control to a sane state. */
+export interface ReconciledControl {
+  /** The value, held inside the crop. */
+  value: number;
+  /** The crop, edges ordered and clamped into the rendered range, framing the value. */
+  band: Band;
+  /** The range the control renders over (floored/grown for the plan). */
+  range: AxisRange;
+}
+
+/**
+ * RECONCILER — drive one control to a sane state from whatever persisted/
+ * edited mess it was in. The invariants it restores, in order:
+ *
+ *   1. range   = the axis floored/grown for the plan (retirement ≥ current age,
+ *                savings ≥ locked RRSP+TFSA, grows past a too-big value).
+ *   2. value   = the axis value clamped INTO that range (so an out-of-range
+ *                plan value is first brought onto the track).
+ *   3. crop    = edges ordered, snapped, and clamped into the range — so a stale
+ *                edge persisted outside the track is dropped to the range edge
+ *                (this is what frees a knob that was stuck against a min edge
+ *                sitting to its right).
+ *   4. framing = the crop is widened to CONTAIN the value (never inverted).
+ *
+ * After reconcile, `range.min ≤ crop.min ≤ value ≤ crop.max ≤ range.max` always
+ * holds, so the knob renders inside its crop and can drag to both edges.
+ */
+export function reconcileControl(axis: EqAxis, inputs: RetirementInputs, band: Band): ReconciledControl {
+  const round = (v: number) => (INT_AXES.has(axis) ? Math.round(v) : v);
+  const raw = axisValue(inputs, axis);
+  const range = renderRange(axis, raw, inputs);
+  const clampR = (v: number) => Math.min(range.max, Math.max(range.min, round(v)));
+  // (2) value into the range.
+  const value = clampR(raw);
+  // (3) crop edges ordered + clamped into the range.
+  let lo = clampR(Math.min(band.min, band.max));
+  let hi = clampR(Math.max(band.min, band.max));
+  // (4) frame the value.
+  if (value < lo) lo = value;
+  if (value > hi) hi = value;
+  return { value, band: { min: lo, max: hi }, range };
+}
+
 // ---------------------------------------------------------------------------
 // Deterministic outcome (drives the readout cards)
 // ---------------------------------------------------------------------------

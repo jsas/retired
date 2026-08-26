@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   AXES, axisValue, withAxis, deterministicOutcome,
-  fullBand, normalizeBand, effectiveRange, clampToBand, isLimited, renderRange, bandWithValue, consistentAges,
+  fullBand, normalizeBand, effectiveRange, clampToBand, isLimited, renderRange, bandWithValue, consistentAges, reconcileControl,
   type Band,
 } from './eqConstraints';
 import { testConfig, baseInputs } from '../test/helpers';
@@ -233,5 +233,43 @@ describe('consistentAges — everything follows current age', () => {
     const c = consistentAges(i);
     expect(c.cppStartAge).toBe(70);
     expect(c.oasStartAge).toBe(65);
+  });
+});
+
+describe('reconcileControl — drive a control to a sane state', () => {
+  const atAge = (currentAge: number, retirementAge: number) =>
+    baseInputs({ currentAge, retirementAge, maxAge: 90 });
+
+  it('frees a knob stuck against a min edge sitting to its right (the #61 case)', () => {
+    // Value 63, but a stale crop whose min is to the RIGHT of it (can't drag left).
+    const r = reconcileControl('retirementAge', atAge(45, 63), { min: 65, max: 75 });
+    expect(r.band.min).toBeLessThanOrEqual(63); // min edge dropped to/below the value
+    expect(r.band.min).toBeGreaterThanOrEqual(45); // … but not below the current-age floor
+    expect(r.band.max).toBe(75);
+    expect(r.value).toBe(63);
+    // Invariant: range.min ≤ crop.min ≤ value ≤ crop.max ≤ range.max
+    expect(r.range.min).toBeLessThanOrEqual(r.band.min);
+    expect(r.band.min).toBeLessThanOrEqual(r.value);
+    expect(r.value).toBeLessThanOrEqual(r.band.max);
+    expect(r.band.max).toBeLessThanOrEqual(r.range.max);
+  });
+
+  it('clamps a crop edge persisted outside the track back to the range edge', () => {
+    // Crop max persisted at 200 (beyond the 75 ceiling) drops to the ceiling.
+    const r = reconcileControl('retirementAge', atAge(45, 63), { min: 45, max: 200 });
+    expect(r.band.max).toBe(75);
+  });
+
+  it('brings an out-of-range value onto the track and frames it', () => {
+    // Plan retirement age 30 (below the current-age floor of 45) reconciles up.
+    const r = reconcileControl('retirementAge', atAge(45, 30), { min: 45, max: 75 });
+    expect(r.value).toBe(45);
+    expect(r.band.min).toBeLessThanOrEqual(r.value);
+  });
+
+  it('leaves an already-sane control unchanged', () => {
+    const r = reconcileControl('retirementAge', atAge(45, 63), { min: 45, max: 75 });
+    expect(r.band).toEqual({ min: 45, max: 75 });
+    expect(r.value).toBe(63);
   });
 });
