@@ -55,12 +55,12 @@ describe('solveEq grid', () => {
   });
 
   it('streams center-out: the first row is nearest the current spending', () => {
-    // Put spending near the TOP of the axis so the center row is near G-1.
-    const inputs = withAxis(plan(), 'desiredSpending', 230000);
+    // Put spending high on the axis so the center row is near G-1.
+    const inputs = withAxis(plan(), 'desiredSpending', 900000);
     const rows: number[] = [];
     const res = solveEq({ inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } }, (p) => rows.push(p.row));
     const G = res.gridMeta!.size;
-    const centerRow = Math.round(((230000 - 0) / (250000 - 0)) * (G - 1));
+    const centerRow = Math.round(((900000 - AXES.desiredSpending.min) / (AXES.desiredSpending.max - AXES.desiredSpending.min)) * (G - 1));
     expect(rows[0]).toBe(centerRow);
   });
 
@@ -97,7 +97,8 @@ describe('parallel sharding', () => {
     // Round-robin of the center-out order means shard 0 gets the nearest row,
     // shard 1 the next, etc. — every shard holds some near rows.
     const G = 9;
-    const centerRow = Math.round(((60000 - 0) / (250000 - 0)) * (G - 1));
+    const yS = AXES.desiredSpending;
+    const centerRow = Math.round(((60000 - yS.min) / (yS.max - yS.min)) * (G - 1));
     expect(shards[0][0]).toBe(centerRow);
     for (const s of shards) expect(s.length).toBeGreaterThan(0);
   });

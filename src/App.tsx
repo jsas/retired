@@ -403,8 +403,8 @@ function App() {
           // Shade the ranges the pad actually renders (grown to fit an
           // out-of-range point), so the gradient lines up with the dot.
           ranges: {
-            x: renderRange('retirementAge', axisValue(inputs, 'retirementAge')),
-            y: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending')),
+            x: renderRange('retirementAge', axisValue(inputs, 'retirementAge'), inputs),
+            y: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending'), inputs),
           },
         },
         (res) => setEqSolved({

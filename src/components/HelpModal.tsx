@@ -306,10 +306,11 @@ const SECTIONS: HelpSection[] = [
         term: 'The sliders',
         body: (
           <>
-            <P>Each slider is a major lever: annual spending, retirement age, expected return, annual savings (total across RRSP/TFSA/taxable), plan-to age, return volatility, and CPP start age.</P>
+            <P>Each slider is a major lever: annual spending, retirement age, expected return, annual savings, plan-to age, return volatility, CPP start age, and OAS start age.</P>
             {ul([
-              <><strong>Limit</strong> turns any slider into a range. It starts at the middle of the scale (20% in from each end); drag the two <em>at least / at most</em> thumbs to tighten or widen. The slider's value stays inside its range.</>,
-              <>A range with both edges together is a hard pin — the control won't move.</>,
+              <>Drag the two edge handles to crop a range (<em>at least / at most</em>); the middle knob moves the value inside it. A range with both edges together is a hard pin — the control won't move.</>,
+              <><strong>Annual savings</strong> only moves the taxable account on top of your locked RRSP+TFSA — so it never runs into a contribution limit. Its floor is your current RRSP+TFSA total.</>,
+              <>Ranges adapt to the plan: retirement age starts at your current age, and an axis grows if you set a value past its end.</>,
             ])}
           </>
         )

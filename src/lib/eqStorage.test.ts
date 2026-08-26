@@ -34,7 +34,7 @@ describe('band scalar encoding', () => {
   });
 
   it('round-trips an absolute band through fractions and back', () => {
-    const axes: EqAxis[] = ['desiredSpending', 'retirementAge', 'investmentReturn', 'maxAge', 'annualSavings', 'returnVolatility', 'cppStartAge'];
+    const axes: EqAxis[] = ['desiredSpending', 'retirementAge', 'investmentReturn', 'maxAge', 'annualSavings', 'returnVolatility', 'cppStartAge', 'oasStartAge'];
     for (const a of axes) {
       const s = AXES[a];
       const band = normalizeBand(a, { min: s.min + (s.max - s.min) * 0.25, max: s.min + (s.max - s.min) * 0.75 });
@@ -58,12 +58,12 @@ describe('band scalar encoding', () => {
     // fractions, not the absolute numbers, carry the meaning. A middle-60% crop:
     const frac: BandFrac = { lo: 0.2, hi: 0.8 };
     const onAges = bandFromFrac('retirementAge', frac);   // 40..75
-    const onMoney = bandFromFrac('desiredSpending', frac); // 0..250000
+    const onMoney = bandFromFrac('desiredSpending', frac); // 0..1000000
     // Both sit at 20%..80% of their own (different) ranges.
     expect(onAges.min).toBeCloseTo(40 + 0.2 * 35, 6);
     expect(onAges.max).toBeCloseTo(40 + 0.8 * 35, 6);
-    expect(onMoney.min).toBeCloseTo(0.2 * 250000, 6);
-    expect(onMoney.max).toBeCloseTo(0.8 * 250000, 6);
+    expect(onMoney.min).toBeCloseTo(0.2 * 1000000, 6);
+    expect(onMoney.max).toBeCloseTo(0.8 * 1000000, 6);
   });
 });
 

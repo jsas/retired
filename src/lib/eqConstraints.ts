@@ -34,7 +34,8 @@ export type EqAxis =
   | 'maxAge'
   | 'annualSavings'
   | 'returnVolatility'
-  | 'cppStartAge';
+  | 'cppStartAge'
+  | 'oasStartAge';
 
 export interface AxisSpec {
   key: EqAxis;
@@ -54,19 +55,19 @@ const money = (v: number) =>
 export const AXES: Record<EqAxis, AxisSpec> = {
   desiredSpending: {
     key: 'desiredSpending', label: 'Annual spending',
-    min: 0, max: 250000, step: 1000,
+    min: 0, max: 1000000, step: 1000,
     increasingRate: false,
     format: money,
   },
   retirementAge: {
     key: 'retirementAge', label: 'Retirement age',
-    min: 40, max: 75, step: 1,
+    min: 40, max: 75, step: 1, // min becomes the plan's current age (see renderRange)
     increasingRate: true, // retiring later = fewer years to fund = safer
     format: (v) => `${Math.round(v)}`,
   },
   investmentReturn: {
     key: 'investmentReturn', label: 'Expected return',
-    min: 0, max: 0.12, step: 0.0025,
+    min: 0, max: 0.20, step: 0.0025,
     increasingRate: true,
     format: (v) => `${(v * 100).toFixed(1)}%`,
   },
@@ -78,7 +79,8 @@ export const AXES: Record<EqAxis, AxisSpec> = {
   },
   annualSavings: {
     key: 'annualSavings', label: 'Annual savings',
-    min: 0, max: 100000, step: 1000,
+    // Floor is the plan's locked RRSP+TFSA (see renderRange); ceiling $500k.
+    min: 0, max: 500000, step: 1000,
     increasingRate: true,
     format: money,
   },
@@ -97,10 +99,16 @@ export const AXES: Record<EqAxis, AxisSpec> = {
     increasingRate: true,
     format: (v) => `${Math.round(v)}`,
   },
+  oasStartAge: {
+    key: 'oasStartAge', label: 'OAS start age',
+    min: 65, max: 70, step: 1, // OAS can be deferred to 70 (no early option)
+    increasingRate: true,     // +0.6%/month deferral boost dominates the bridge years
+    format: (v) => `${Math.round(v)}`,
+  },
 };
 
 // Axes that hold integer values (snapped in withAxis/normalizeBand/clampToBand).
-export const INT_AXES: ReadonlySet<EqAxis> = new Set(['retirementAge', 'maxAge', 'cppStartAge']);
+export const INT_AXES: ReadonlySet<EqAxis> = new Set(['retirementAge', 'maxAge', 'cppStartAge', 'oasStartAge']);
 
 // Derived/virtual axes that don't map 1:1 onto a RetirementInputs field.
 // annualSavings = total pre-retirement contributions across the three accounts;
@@ -113,6 +121,7 @@ export function axisValue(inputs: RetirementInputs, axis: EqAxis): number {
     return ANNUAL_SAVINGS_FIELDS.reduce((sum, f) => sum + inputs[f], 0);
   }
   if (axis === 'cppStartAge') return inputs.cppStartAge ?? 65;
+  if (axis === 'oasStartAge') return inputs.oasStartAge ?? 65;
   return inputs[axis];
 }
 
@@ -120,18 +129,16 @@ export function axisValue(inputs: RetirementInputs, axis: EqAxis): number {
 export function withAxis(inputs: RetirementInputs, axis: EqAxis, value: number): RetirementInputs {
   const v = INT_AXES.has(axis) ? Math.round(value) : value;
   if (axis === 'annualSavings') {
-    // Put the whole total in the TAXABLE (non-registered) account: it has no
-    // contribution limit, so the axis can never run into an RRSP/TFSA cap, and
-    // the mapping total↔field stays exact and monotone. Registered plans are
-    // for their own dedicated inputs, not this aggregate slider.
-    return {
-      ...inputs,
-      rrspContribution: 0,
-      tfsaContribution: 0,
-      taxableContribution: Math.round(v),
-    };
+    // Registered contributions (RRSP+TFSA) are LOCKED — this slider only moves
+    // the taxable account on top of them. The axis floor is rrsp+tfsa (taxable
+    // = 0); raising the value adds the difference to taxable, which has no
+    // contribution limit to collide with.
+    const locked = inputs.rrspContribution + inputs.tfsaContribution;
+    const taxable = Math.max(0, Math.round(v - locked));
+    return { ...inputs, taxableContribution: taxable };
   }
   if (axis === 'cppStartAge') return { ...inputs, cppStartAge: v };
+  if (axis === 'oasStartAge') return { ...inputs, oasStartAge: v };
   return { ...inputs, [axis]: v };
 }
 
@@ -197,22 +204,32 @@ export function clampToBand(axis: EqAxis, band: Band | undefined, proposed: numb
 export interface AxisRange { min: number; max: number }
 
 /**
- * The range a control should RENDER for a given plan value. Normally the axis's
- * own range, but when the value exceeds the axis max (e.g. spending typed as
- * $500k against a $250k axis) the range GROWS in whole-axis steps until it
- * fits, so the value knob and crop always render in-bounds.
+ * The range a control should RENDER. Starts from the axis range, then adapts to
+ * the plan (`inputs`):
  *
- * Crops are stored as axis fractions (eqStorage), so when a range grows, a
+ *  - Floor: some axes have a logical floor above the axis's generic min —
+ *    retirement age can't be below the plan's CURRENT age; annual savings can't
+ *    go below the locked RRSP+TFSA contributions (the slider only adds taxable).
+ *  - Ceiling: when the plan value exceeds the axis max (spending typed above
+ *    the cap), the range GROWS in whole-axis steps until it fits, so the value
+ *    knob and crop always render in-bounds.
+ *
+ * Crops are stored as axis fractions (eqStorage), so when a range adapts, a
  * saved crop re-scales with it — "the middle 60%" still means the middle 60%
- * of whatever is shown. That's the elegant property: values are decoupled from
- * ranges, so ranges are free to adapt.
+ * of whatever is shown. Values are decoupled from ranges, so ranges are free
+ * to adapt.
  */
-export function renderRange(axis: EqAxis, value: number): AxisRange {
+export function renderRange(axis: EqAxis, value: number, inputs?: RetirementInputs): AxisRange {
   const s = AXES[axis];
-  if (value <= s.max) return { min: s.min, max: s.max };
+  let min = s.min;
+  if (inputs) {
+    if (axis === 'retirementAge') min = Math.max(s.min, Math.round(inputs.currentAge));
+    else if (axis === 'annualSavings') min = Math.max(s.min, inputs.rrspContribution + inputs.tfsaContribution);
+  }
+  if (value <= s.max) return { min, max: Math.max(s.max, min) };
   const base = s.max - s.min;
   const multiples = Math.ceil((value - s.max) / base);
-  return { min: s.min, max: s.max + multiples * base };
+  return { min, max: s.max + multiples * base };
 }
 
 /**
@@ -232,17 +249,8 @@ export function bandWithValue(axis: EqAxis, band: Band, value: number): Band {
 }
 
 // ---------------------------------------------------------------------------
-// Pins (outcome constraints)
+// Deterministic outcome (drives the readout cards)
 // ---------------------------------------------------------------------------
-
-export type PinKind = 'successRate' | 'fundedToAge' | 'legacyFloor';
-
-export interface EqPin {
-  kind: PinKind;
-  /** successRate: 0..1. fundedToAge: an age. legacyFloor: dollars. */
-  value: number;
-  enabled: boolean;
-}
 
 /** Deterministic outcome of one plan run (no Monte Carlo). */
 export interface DeterministicOutcome {
@@ -253,7 +261,7 @@ export interface DeterministicOutcome {
   status: 'ON_TRACK' | 'SHORTFALL';
 }
 
-/** Run the deterministic engine once and reduce to the pin-relevant outcome. */
+/** Run the deterministic engine once and reduce to the readout-relevant outcome. */
 export function deterministicOutcome(inputs: RetirementInputs, config: AppConfig): DeterministicOutcome {
   const r = calculateHousehold(inputs, config);
   const last = r.yearlyBreakdown[r.yearlyBreakdown.length - 1];
@@ -263,179 +271,4 @@ export function deterministicOutcome(inputs: RetirementInputs, config: AppConfig
     endingBalance: depleted ? 0 : Math.max(0, last?.endingBalance ?? 0),
     status: r.status,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Scoring
-// ---------------------------------------------------------------------------
-
-/**
- * A scoring function maps inputs → success rate 0..1 for the successRate pin.
- * The caller supplies this (a seeded Monte Carlo batch, or a deterministic
- * proxy in tests). It MUST be monotonic in each axis for the search to hold.
- */
-export type SuccessScorer = (inputs: RetirementInputs) => number;
-
-/**
- * Evaluate whether a pin is satisfied. `score` is required only for the
- * successRate pin; deterministic pins ignore it.
- */
-export function pinSatisfied(
-  pin: EqPin,
-  inputs: RetirementInputs,
-  config: AppConfig,
-  score?: SuccessScorer,
-): boolean {
-  switch (pin.kind) {
-    case 'successRate': {
-      if (!score) return true; // no scorer wired → treat as satisfied (no constraint)
-      return score(inputs) >= pin.value - 1e-9;
-    }
-    case 'fundedToAge': {
-      const o = deterministicOutcome(inputs, config);
-      // Satisfied when there's no depletion, or depletion happens at/after the target age.
-      return o.depletionAge === null || o.depletionAge >= pin.value;
-    }
-    case 'legacyFloor': {
-      const o = deterministicOutcome(inputs, config);
-      return o.endingBalance >= pin.value;
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Boundary search (the clamp)
-// ---------------------------------------------------------------------------
-
-export interface BoundaryResult {
-  /** The boundary value on this axis: the most extreme value still satisfying the pin. */
-  value: number;
-  /** True if a finite boundary was found within [min,max]; false if the whole range satisfies (unconstrained) or nothing does (infeasible). */
-  kind: 'bounded' | 'unconstrained' | 'infeasible';
-}
-
-/**
- * Find the boundary value on `axis` beyond which `pin` is violated. Because
- * the score is monotonic in the axis, the feasible set is a contiguous
- * sub-range of [min,max]:
- *
- *   increasingRate axis → feasible is [min, boundary]  (boundary is the max OK value)
- *   decreasingRate axis → feasible is [boundary, max]  (boundary is the min OK value)
- *
- * The returned `value` is the edge of the feasible region. Clamping a dragged
- * value to the feasible side is what makes a HARD pin bite.
- */
-export function findBoundary(
-  pin: EqPin,
-  inputs: RetirementInputs,
-  config: AppConfig,
-  axis: EqAxis,
-  score?: SuccessScorer,
-  tolerance?: number,
-): BoundaryResult {
-  const spec = AXES[axis];
-  const tol = tolerance ?? spec.step;
-  const ok = (v: number) => pinSatisfied(pin, withAxis(inputs, axis, v), config, score);
-
-  const okAtMin = ok(spec.min);
-  const okAtMax = ok(spec.max);
-
-  // Feasible side depends on which way the axis moves the score.
-  if (spec.increasingRate) {
-    // Feasible is the UPPER end. If even max fails → infeasible. If min passes → whole range OK.
-    if (!okAtMax) return { value: spec.max, kind: 'infeasible' };
-    if (okAtMin) return { value: spec.min, kind: 'unconstrained' };
-    // Binary search the smallest value that satisfies (boundary = lower edge of feasible).
-    let lo = spec.min, hi = spec.max; // ok(lo)=false, ok(hi)=true
-    while (hi - lo > tol) {
-      const mid = (lo + hi) / 2;
-      if (ok(mid)) hi = mid; else lo = mid;
-    }
-    return { value: hi, kind: 'bounded' };
-  }
-
-  // Decreasing-rate axis (spending): feasible is the LOWER end. If even min fails → infeasible.
-  if (!okAtMin) return { value: spec.min, kind: 'infeasible' };
-  if (okAtMax) return { value: spec.max, kind: 'unconstrained' };
-  // Binary search the largest value that satisfies (boundary = upper edge of feasible).
-  let lo = spec.min, hi = spec.max; // ok(lo)=true, ok(hi)=false
-  while (hi - lo > tol) {
-    const mid = (lo + hi) / 2;
-    if (ok(mid)) lo = mid; else hi = mid;
-  }
-  return { value: lo, kind: 'bounded' };
-}
-
-/**
- * Clamp a proposed axis value to the feasible region for a HARD pin. For a
- * bounded boundary this snaps the value to the nearest feasible side; for
- * unconstrained it returns the value unchanged; for infeasible it returns the
- * boundary (the least-bad value) so the control rests at the edge.
- */
-export function clampToBoundary(
-  axis: EqAxis,
-  proposed: number,
-  boundary: BoundaryResult,
-): number {
-  const spec = AXES[axis];
-  const v = Math.min(spec.max, Math.max(spec.min, proposed));
-  if (boundary.kind === 'unconstrained') return v;
-  if (spec.increasingRate) {
-    // Feasible is [boundary, max].
-    return Math.max(boundary.value, v);
-  }
-  // Feasible is [min, boundary].
-  return Math.min(boundary.value, v);
-}
-
-// ---------------------------------------------------------------------------
-// XY pad: feasibility of a point + boundary slide
-// ---------------------------------------------------------------------------
-
-/** A point on a 2-axis pad. */
-export interface PadPoint {
-  x: number;
-  y: number;
-}
-
-/**
- * Slide a proposed point back into the feasible region for a HARD pin, one
- * axis at a time (x first, then y re-solved given the clamped x). This is the
- * "drag slides along the boundary" behaviour: you can move freely until you
- * hit the constraint edge, then the point tracks it.
- *
- * `solveAxis` finds the boundary on one axis with the OTHER axis held at a
- * given value — supplied by the caller so the pad controls solve order.
- */
-export function slidePoint(
-  proposed: PadPoint,
-  xAxis: EqAxis,
-  yAxis: EqAxis,
-  solveX: (yHeld: number) => BoundaryResult,
-  solveY: (xHeld: number) => BoundaryResult,
-): PadPoint {
-  const x = clampToBoundary(xAxis, proposed.x, solveX(proposed.y));
-  const y = clampToBoundary(yAxis, proposed.y, solveY(x));
-  return { x, y };
-}
-
-// ---------------------------------------------------------------------------
-// Hard/soft classification
-// ---------------------------------------------------------------------------
-
-export type PinMode = 'hard' | 'soft';
-
-/**
- * For a SOFT pin a control may be dragged anywhere; this reports whether the
- * resulting point is in violation (so the UI can flag it). For a HARD pin the
- * value should already have been clamped, so this is used only to show the
- * at-the-boundary state.
- */
-export function isViolation(
-  pin: EqPin,
-  inputs: RetirementInputs,
-  config: AppConfig,
-  score?: SuccessScorer,
-): boolean {
-  return !pinSatisfied(pin, inputs, config, score);
 }

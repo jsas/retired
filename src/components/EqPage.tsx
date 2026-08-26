@@ -13,7 +13,7 @@ import { TimelineChart } from './TimelineChart';
 import type { AppConfig } from '../lib/appConfig';
 import {
   AXES, axisValue, withAxis, clampToBand, normalizeBand, effectiveRange, deterministicOutcome, isLimited,
-  renderRange, bandWithValue, INT_AXES,
+  renderRange, INT_AXES,
   type EqAxis, type Band,
 } from '../lib/eqConstraints';
 
@@ -59,9 +59,10 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
   const n = normalizeBand(axis, band); // the crop [min,max]
   const limited = isLimited(axis, band);
 
-  // The range actually RENDERED: the axis, grown in whole-axis steps when the
-  // plan value exceeds the axis max (so the knob never renders off the track).
-  const range = renderRange(axis, value);
+  // The range actually RENDERED: the axis, floored at the plan's logical min
+  // (retirement ≥ current age, savings ≥ locked RRSP+TFSA) and grown in
+  // whole-axis steps when the value exceeds the axis max.
+  const range = renderRange(axis, value, inputs);
   const span = range.max - range.min;
 
   const trackRef = useRef<HTMLDivElement>(null);
@@ -188,8 +189,8 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, onBandsChange, sol
   const point = { x: axisValue(inputs, xAxis), y: axisValue(inputs, yAxis) };
   // RENDERED axis ranges grow to fit the point; the crop (allowed rectangle)
   // frames it too, so both always render in-bounds.
-  const xView = renderRange(xAxis, point.x);
-  const yView = renderRange(yAxis, point.y);
+  const xView = renderRange(xAxis, point.x, inputs);
+  const yView = renderRange(yAxis, point.y, inputs);
   const xRange = effectiveRange(xAxis, bands[xAxis]);
   const yRange = effectiveRange(yAxis, bands[yAxis]);
 
@@ -448,9 +449,18 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
     let changed = false;
     const next = { ...bands };
     for (const axis of Object.keys(AXES) as EqAxis[]) {
-      const fixed = bandWithValue(axis, bands[axis], axisValue(inputs, axis));
-      if (fixed.min !== bands[axis].min || fixed.max !== bands[axis].max) {
-        next[axis] = fixed;
+      const value = axisValue(inputs, axis);
+      const band = bands[axis];
+      const range = renderRange(axis, value, inputs);
+      // Extend ONLY the edge the value actually crosses, clamped to the rendered
+      // range — not normalizeBand(both edges), which would clamp a below-floor
+      // crop min back up to the axis min and undo the plan's logical floor
+      // (e.g. savings floor = locked RRSP+TFSA, retirement ≥ current age).
+      let { min, max } = band;
+      if (value > max) max = Math.min(range.max, Math.max(range.min, INT_AXES.has(axis) ? Math.round(value) : value));
+      else if (value < min) min = Math.min(range.max, Math.max(range.min, INT_AXES.has(axis) ? Math.round(value) : value));
+      if (min !== band.min || max !== band.max) {
+        next[axis] = { min, max };
         changed = true;
       }
     }
@@ -478,6 +488,7 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
           <RangeFader axis="maxAge" inputs={inputs} band={bands.maxAge} onBand={setBand('maxAge')} onChange={onChange} />
           <RangeFader axis="returnVolatility" inputs={inputs} band={bands.returnVolatility} onBand={setBand('returnVolatility')} onChange={onChange} />
           <RangeFader axis="cppStartAge" inputs={inputs} band={bands.cppStartAge} onBand={setBand('cppStartAge')} onChange={onChange} />
+          <RangeFader axis="oasStartAge" inputs={inputs} band={bands.oasStartAge} onBand={setBand('oasStartAge')} onChange={onChange} />
         </div>
         <div className="space-y-3">
           <XyPad

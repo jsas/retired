@@ -18,7 +18,7 @@ export interface BandFrac {
 
 export const ALL_EQ_AXES: EqAxis[] = [
   'desiredSpending', 'retirementAge', 'investmentReturn',
-  'maxAge', 'annualSavings', 'returnVolatility', 'cppStartAge',
+  'maxAge', 'annualSavings', 'returnVolatility', 'cppStartAge', 'oasStartAge',
 ];
 
 export type EqBands = Record<EqAxis, Band>;
