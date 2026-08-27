@@ -613,13 +613,13 @@ export function calculatePerson(
     baseGross: number,
     yearConfig: AppConfig,
     deposit: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number },
+    fireAge: number,
   ): { label: string; from: string; to: string; gross: number; tax: number; net: number } | null => {
     const { from, to } = eventEndpoints(ev);
     // We only move money when the SOURCE is one of this person's accounts
-    // (the money physically leaves here). External→account inflows and
-    // account→external outflows are handled by the plain in/out paths.
+    // (the money physically leaves here). External→account inflows are handled
+    // by the plain inflow path.
     if (from.kind !== 'account' || from.person !== selfRef) return null;
-    if (to.kind !== 'account') return null; // account→external is a plain outflow
 
     const src = from.account;
     const gross = acct.take(src, ev.amount);
@@ -647,6 +647,23 @@ export function calculatePerson(
     }
     const net = Math.max(0, gross - tax);
 
+    const name = (a: string) => a === 'rrsp' ? 'RRSP' : a === 'tfsa' ? 'TFSA' : a === 'taxable' ? 'Taxable' : 'Cash';
+    const who = (p: string) => (p === selfRef ? '' : p === 'primary' ? ' (primary)' : ' (spouse)');
+
+    // An account→EXTERNAL event is a sourced outflow (e.g. "pay for the car
+    // from my TFSA"): the money leaves the plan here, nothing is redeposited.
+    // Record it so the year shows the draw; the gross already left via acct.take.
+    if (to.kind !== 'account') {
+      return {
+        label: ev.label,
+        from: name(src) + who(from.person),
+        to: 'Spending (leaves plan)',
+        gross,
+        tax,
+        net,
+      };
+    }
+
     // The destination may be the partner's account. This run only tracks THIS
     // person's balances; credit the deposit locally when it's ours, else hand
     // the after-tax net to the household pass to inject into the partner's run.
@@ -657,11 +674,12 @@ export function calculatePerson(
       else if (to.account === 'cash') deposit.cash += net;
       else deposit.taxable += net;
     } else {
-      crossDeposits.push({ age: ev.age, account: to.account, amount: net, label: ev.label });
+      // Stamp the FIRING age, not the event's start age: a recurring transfer
+      // (age 65, endAge 70) must land in the partner's run each year 65..70,
+      // not all six occurrences in the first year.
+      crossDeposits.push({ age: fireAge, account: to.account, amount: net, label: ev.label });
     }
 
-    const name = (a: string) => a === 'rrsp' ? 'RRSP' : a === 'tfsa' ? 'TFSA' : a === 'taxable' ? 'Taxable' : 'Cash';
-    const who = (p: string) => (p === selfRef ? '' : p === 'primary' ? ' (primary)' : ' (spouse)');
     return {
       label: ev.label,
       from: name(src) + who(from.person),
@@ -726,7 +744,7 @@ export function calculatePerson(
     for (const ev of eventsAt(age)) {
       // Transfer events move money account→account; handle them separately.
       if (ev.from || ev.to) {
-        const t = applyTransferEvent(ev, accumTransferBaseGross, configAt(age), accumDeposit);
+        const t = applyTransferEvent(ev, accumTransferBaseGross, configAt(age), accumDeposit, age);
         if (t) {
           accumTransfers.push(t);
           accumTransferTax += t.tax;
@@ -943,7 +961,7 @@ export function calculatePerson(
     // an inter-spousal landing is mirrored by the household pass.
     for (const ev of eventsAt(age)) {
       if (!(ev.from || ev.to)) continue;
-      const t = applyTransferEvent(ev, otherGross + registeredGross, yearConfig, deposit);
+      const t = applyTransferEvent(ev, otherGross + registeredGross, yearConfig, deposit, age);
       if (!t) continue;
       (calc.transfers ??= []).push(t);
       const a = ev.from?.kind === 'account' ? ev.from.account : null;
@@ -954,7 +972,15 @@ export function calculatePerson(
         wd.rrsp += t.gross;
         actualWithdrawals += t.gross;
       } else if (a === 'tfsa') { wd.tfsa += t.gross; actualWithdrawals += t.gross; }
-      else if (a === 'taxable') { wd.taxable += t.gross; actualWithdrawals += t.gross; }
+      else if (a === 'taxable') {
+        // A taxable transfer realizes the embedded gain just like a taxable
+        // spending draw: add it to capitalGains so the year's unified tax,
+        // GIS and OAS clawback all see it (and the math page doesn't report
+        // zero tax while the estimate already left the balances).
+        wd.taxable += t.gross;
+        actualWithdrawals += t.gross;
+        capitalGains += t.gross * gainsFraction();
+      }
       else if (a === 'cash') { wd.cash += t.gross; actualWithdrawals += t.gross; }
     }
 

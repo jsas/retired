@@ -292,6 +292,61 @@ describe('transfer events (RRSP meltdown)', () => {
     // 80k − 30k outflow = 50k, then 5% growth → 52.5k.
     expect(row.tfsaBalance).toBeCloseTo(50000 * 1.05, 0);
   });
+
+  it('a sourced outflow (from account → external) actually leaves the named account', () => {
+    // Regression: converting a plain outflow to advanced mode sets
+    // from: account, to: external — which used to be dropped entirely (no
+    // withdrawal, no trace). The money must leave the named account and be
+    // recorded as a transfer out of the plan.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 0, tfsaBalance: 80000, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      events: [{
+        id: 'car', age: 65, label: 'car', amount: 30000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'tfsa' },
+        to: { kind: 'external' },
+      }],
+    }), config);
+    const row = yearAt(r.yearlyBreakdown, 65);
+    const tr = row.detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    expect(tr!.gross).toBeCloseTo(30000, 0);
+    expect(tr!.tax).toBe(0); // TFSA source is after-tax money
+    // The money left the TFSA (80k − 30k = 50k, then 5% growth → 52.5k) and
+    // did NOT land anywhere else in the plan.
+    expect(row.tfsaBalance).toBeCloseTo(50000 * 1.05, 0);
+    expect(row.detail?.withdraw.tfsa).toBeCloseTo(30000, 0);
+  });
+
+  it('a taxable-account transfer adds its realized gain to capitalGains (feeds year tax/GIS)', () => {
+    // Regression: the taxable-transfer branch never added the realized gain to
+    // capitalGains (unlike a taxable spending draw), so the year's unified
+    // incomeTax and GIS ignored it — the math page showed zero tax while the
+    // transfer-tax estimate had already left the balances.
+    const cfg = testConfig();
+    cfg.engine.taxableAcbRatio = 0.5; // 50% embedded gains
+    const r = calculateRetirement(baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 100000, cashCushionBalance: 0,
+      cppStartAge: 65, cppMonthlyAmount: 900, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 0,
+      events: [{
+        id: 'rebalance', age: 65, label: 'taxable → TFSA', amount: 40000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'taxable' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), cfg);
+    const row = yearAt(r.yearlyBreakdown, 65);
+    const tr = row.detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    // Realized gain = gross × gainsFraction = 40000 × 0.5 = 20000.
+    expect(row.detail?.tax?.capitalGains).toBeCloseTo(20000, 0);
+    // The transfer's tax estimate was positive (gain taxed)...
+    expect(tr!.tax).toBeGreaterThan(0);
+    // ...and the year's unified income tax is NOT zero (it taxes that gain once).
+    expect(row.incomeTax).toBeGreaterThan(0);
+  });
 });
 
 describe('inter-spousal transfers (household conservation)', () => {
@@ -385,6 +440,36 @@ describe('inter-spousal transfers (household conservation)', () => {
     expect(net).toBeGreaterThan(0);
     // Spouse receives it at spouse-age 66 − (65 − 62) = 63.
     expect(yearAt(r.spouse!.yearlyBreakdown, 63).detail?.deposit?.tfsa).toBeCloseTo(net, 0);
+  });
+
+  it('a RECURRING transfer lands in the spouse run each firing year, not all in year one', () => {
+    // Regression: cross-deposits were stamped with the event's START age, so a
+    // 3-year transfer dumped 3× into the spouse's first year and nothing after.
+    const inputs = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 67,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 100000, cashCushionBalance: 0,
+      desiredSpending: 0,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 0, pensions: [],
+      },
+    });
+    inputs.events = [{
+      id: 'gift', age: 65, endAge: 67, label: 'yearly gift', amount: 10000, direction: 'out',
+      from: { kind: 'account', person: 'primary', account: 'taxable' },
+      to: { kind: 'account', person: 'spouse', account: 'tfsa' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    // Outbound landings are stamped 65, 66, 67 — one per firing year.
+    expect((r.crossDeposits ?? []).map(d => d.age)).toEqual([65, 66, 67]);
+    // The spouse receives a deposit in EACH year (taxable source, ACB=balance →
+    // no gain, so the full 10k crosses), not 30k in year one.
+    for (const age of [65, 66, 67]) {
+      expect(yearAt(r.spouse!.yearlyBreakdown, age).detail?.deposit?.tfsa).toBeCloseTo(10000, 0);
+    }
   });
 });
 
