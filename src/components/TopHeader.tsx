@@ -72,7 +72,7 @@ export function TopHeader({
       </button>
       <div className="my-1 h-px bg-neutral-800" />
       <button onClick={() => { closeMenu(); onOpenData(); }} className={MENU_ITEM}>
-        <Database size={14} /> Import / Export
+        <Database size={14} /> Data
       </button>
       <div className="my-1 h-px bg-neutral-800" />
       <button onClick={() => { closeMenu(); onOpenSettings(); }} className={MENU_ITEM}>

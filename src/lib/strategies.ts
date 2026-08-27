@@ -119,6 +119,48 @@ function buildStrategies(inputs: RetirementInputs): StrategySpec[] {
       patch: { cppStartAge: 70, oasStartAge: 70 },
     });
   }
+
+  // Reverse-mortgage timing. RM cash is tax-free and lands in the cash cushion,
+  // and cash is the last-resort draw — so every scheduled RM dollar displaces a
+  // portfolio withdrawal and leaves registered/TFSA money compounding longer.
+  // Drawing EARLY can therefore beat drawing late even though interest accrues
+  // longer, which is exactly the trade-off worth surfacing. Only meaningful when
+  // there is a home value to borrow against; we never invent equity.
+  const rm = inputs.reverseMortgage;
+  const rmHome = rm?.homeValue ?? 0;
+  if (rmHome > 0) {
+    const baseRm = {
+      enabled: true,
+      homeValue: rmHome,
+      appreciationRate: rm?.appreciationRate ?? 0.02,
+      interestRate: rm?.interestRate ?? 0.065,
+      maxLtv: rm?.maxLtv ?? 0.55,
+    };
+    const currentStart = rm?.enabled ? (rm.startAge ?? null) : null;
+    const currentDraw = rm?.enabled ? (rm.drawAmount ?? 0) : 0;
+    for (const startAge of [inputs.retirementAge, inputs.retirementAge + 5, inputs.retirementAge + 10]) {
+      if (startAge >= inputs.maxAge) continue;
+      for (const frac of [0.2, 0.4]) {
+        const draw = Math.round(inputs.desiredSpending * frac / 500) * 500;
+        if (draw <= 0) continue;
+        if (currentStart === startAge && Math.abs(currentDraw - draw) < 1) continue;
+        specs.push({
+          id: `rm-${startAge}-${draw}`,
+          name: `Reverse mortgage ${Math.round(frac * 100)}% from age ${startAge}`,
+          description: `Draw $${draw.toLocaleString()}/yr (tax-free, CPI-indexed) from ${startAge} onward; portfolio draws shrink by the same amount and keep compounding. Loan interest accrues against the home.`,
+          patch: { reverseMortgage: { ...baseRm, drawAmount: draw, startAge, topUp: rm?.topUp ?? false } },
+        });
+      }
+    }
+    if (rm?.enabled && !rm.topUp) {
+      specs.push({
+        id: 'rm-topup',
+        name: 'Add RM top-up backstop',
+        description: 'After every account is drained, borrow just enough each year to cover the remaining spending need — an insurance layer, not new spending money.',
+        patch: { reverseMortgage: { ...rm, topUp: true } },
+      });
+    }
+  }
   return specs;
 }
 

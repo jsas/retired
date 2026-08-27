@@ -72,6 +72,9 @@ export interface AppConfig {
 
 export interface GeneralConfig {
   showWelcomeOnLoad: boolean;  // always show the getting-started welcome card at startup, even after dismissal
+  /** Ask to save before switching away from a scenario with unsaved edits.
+   *  true (default) = prompt each time; false = switch silently (the opt-out). */
+  promptToSaveOnSwitch: boolean;
 }
 
 // 2026 Canadian tax figures (CRA indexation 2.0% for 2026; Alberta's new 8%
@@ -145,7 +148,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   qcFederalAbatement: 0.165,
   // 2026 Ontario surtax thresholds (2025 values × 1.02 CRA indexation).
   ontarioSurtax: { threshold1: 5925, rate1: 0.20, threshold2: 7577, rate2: 0.56 },
-  general: { showWelcomeOnLoad: false }
+  general: { showWelcomeOnLoad: false, promptToSaveOnSwitch: true }
 };
 
 const CONFIG_STORAGE_KEY = 'wealthconsole_config';
@@ -217,6 +220,9 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   const g = c.general as Partial<GeneralConfig> | undefined;
   if (!g || typeof g.showWelcomeOnLoad !== 'boolean') {
     (c as AppConfig).general = { ...DEFAULT_APP_CONFIG.general };
+  } else if (typeof g.promptToSaveOnSwitch !== 'boolean') {
+    // promptToSaveOnSwitch was added after showWelcomeOnLoad — back-fill it.
+    (c as AppConfig).general = { ...g, promptToSaveOnSwitch: true } as GeneralConfig;
   }
 
   return c as AppConfig;

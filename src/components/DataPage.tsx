@@ -11,6 +11,8 @@ import type { AppConfig } from '../lib/appConfig';
 import type { Scenario } from '../lib/scenarioStorage';
 import { migrateInputs } from '../lib/scenarioStorage';
 import type { AppDb } from '../lib/appDb';
+import { AppDatabase } from '../data/db';
+import { buildTemplateCsv, parseTemplateCsv, TEMPLATE_FILENAME } from '../lib/importTemplate';
 
 // What the page hands back when the user confirms a full-backup import. The
 // parent applies it (App owns all scenario/config state).
@@ -57,7 +59,7 @@ export function DataPage(props: DataPageProps) {
     <div>
       <div className="flex items-center gap-2 mb-3">
         <Database size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Import / Export</h2>
+        <h2 className="text-lg font-bold text-slate-900">Data</h2>
       </div>
 
       <div className="space-y-10">
@@ -272,7 +274,9 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
       <div className={SECTION}>Export full backup</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
         The raw scenario inputs (not computed numbers) — for moving your plans to another machine or
-        keeping a snapshot. Choose which scenarios to include; the active one is pre-selected.
+        keeping a snapshot. Downloads a real <span className="font-medium text-slate-700">SQLite database
+        file</span> (.sqlite): the same format the app stores locally, openable by any SQLite tool. Choose
+        which scenarios to include; the active one is pre-selected.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 max-w-3xl mb-3">
         {scenarios.map(s => (
@@ -323,6 +327,49 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
   const readFile = (file: File) => {
     setFileName(file.name);
     setError(null);
+    // CSV import template: flat key,value rows a spreadsheet user filled in.
+    if (/\.csv$/i.test(file.name) || file.type === 'text/csv') {
+      file.text().then(text => {
+        try {
+          const { name, inputs, warnings } = parseTemplateCsv(text);
+          setParsed({ kind: 'projection', name, inputs });
+          setProjName(name);
+          if (warnings.length > 0) setError(`Imported with notes: ${warnings.join(' ')}`);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'That CSV could not be read.');
+          setParsed(null);
+        }
+      });
+      return;
+    }
+    // SQLite backup (the format "save a backup to disk" writes now): open the
+    // bytes with sql.js and read the store back out.
+    if (/\.sqlite3?$/.test(file.name) || file.type === 'application/vnd.sqlite3') {
+      file.arrayBuffer().then(async buf => {
+        try {
+          const db = await AppDatabase.open(new Uint8Array(buf));
+          const doc = db.toDoc();
+          db.close();
+          if (!doc) { setError('That SQLite file is not a RE: tired backup.'); setParsed(null); return; }
+          setParsed({
+            kind: 'backup',
+            db: {
+              version: doc.version,
+              exportedAt: '',
+              scenarios: doc.scenarios,
+              activeScenarioId: doc.activeScenarioId,
+              config: doc.config,
+            },
+          });
+          setChecked(new Set(doc.scenarios.map(s => s.id)));
+          setIncludeConfig(true);
+        } catch {
+          setError('That file could not be opened as a SQLite database.');
+          setParsed(null);
+        }
+      });
+      return;
+    }
     file.text().then(text => {
       let obj: unknown;
       try { obj = JSON.parse(text); } catch { setError('That file is not valid JSON.'); setParsed(null); return; }
@@ -435,9 +482,28 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
     <section>
       <div className={SECTION}>Import</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
-        Load a file from this app — either a <span className="font-medium text-slate-700">full backup</span> (scenarios
-        + settings) or a <span className="font-medium text-slate-700">projection JSON</span> (re-imported as a scenario).
-        You choose what gets applied before anything changes.
+        Load a file from this app — a <span className="font-medium text-slate-700">SQLite backup</span> (.sqlite, or a
+        legacy JSON backup) with scenarios + settings, or a <span className="font-medium text-slate-700">projection
+        JSON</span> (re-imported as a scenario). You choose what gets applied before anything changes.
+      </p>
+      <p className="text-[11px] text-slate-500 leading-snug mb-3">
+        Bringing numbers in from a spreadsheet? Download the{' '}
+        <button
+          onClick={() => {
+            const blob = new Blob([buildTemplateCsv()], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = TEMPLATE_FILENAME;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="text-blue-600 hover:underline font-medium"
+        >
+          CSV import template
+        </button>
+        , fill in the value column (blank = default; leave all <code className="text-[10px]">spouse.*</code> rows
+        blank for a single plan), then choose the file below — it imports as a new scenario.
       </p>
 
       <div className="flex items-center gap-2 mb-3">
@@ -450,7 +516,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
         <input
           ref={fileRef}
           type="file"
-          accept="application/json,.json"
+          accept="application/json,.json,.sqlite,.sqlite3,application/vnd.sqlite3,.csv,text/csv"
           className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) readFile(f); }}
         />

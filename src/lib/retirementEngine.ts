@@ -9,6 +9,14 @@ import {
   gisAnnualCouple,
   indexConfig
 } from './canadianTax';
+import {
+  legacyToPerson,
+  legacyToShared,
+  legacySpouseToPerson,
+  eventEndpoints,
+  type PersonInputs,
+  type SharedInputs,
+} from './householdTypes';
 
 export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable';
 
@@ -49,6 +57,14 @@ export interface RetirementInputs {
   // Optional spouse: a second, independent plan whose results are combined
   // with the primary's for household totals.
   spouse?: SpouseInputs;
+  // How the spouse plan is supplied. Absent (or kind 'builtin') = the spouse
+  // is embedded directly in `spouse` (today's behaviour). kind 'scenario' =
+  // the spouse IS another saved scenario, referenced by id: the app resolves
+  // that scenario's person into `spouse` (host wins on the shared household
+  // fields, with the conflicts surfaced as warnings), so the engine always
+  // sees a concrete SpouseInputs. The reference is the source of truth;
+  // `spouse` is its materialized view.
+  spouseSource?: SpouseSource;
   // DB / bridge pensions: taxable income stacked with CPP/OAS. Bridge benefits
   // have endAge set; lifetime pensions leave it null.
   pensions?: Pension[];
@@ -57,6 +73,11 @@ export interface RetirementInputs {
   // the loan compounds against the home and erodes net equity.
   reverseMortgage?: ReverseMortgage;
 }
+
+/** Where the spouse's plan comes from (see RetirementInputs.spouseSource). */
+export type SpouseSource =
+  | { kind: 'builtin' }
+  | { kind: 'scenario'; scenarioId: string };
 
 export interface SpouseInputs {
   enabled: boolean;
@@ -76,6 +97,14 @@ export interface SpouseInputs {
   desiredSpending: number; // the spouse's own after-tax income goal (today's $)
   withdrawalOrder?: WithdrawalAccount[];
   pensions?: Pension[]; // the spouse's own DB / bridge pensions
+  // Full-person parity fields. Optional so scenarios saved before the spouse
+  // carried them still parse; absent = none (an empty list / no reverse
+  // mortgage). These make the spouse a first-class person: their own one-time
+  // cash events (incl. transfers), go-go/slow-go/no-go spending phases, and a
+  // reverse mortgage all flow into their run exactly like the primary's.
+  events?: CashEvent[];
+  spendingBands?: SpendingBand[];
+  reverseMortgage?: ReverseMortgage;
 }
 
 export interface CashEvent {
@@ -89,6 +118,17 @@ export interface CashEvent {
   // from `age` through endAge inclusive (e.g. "yearly for X years" →
   // endAge = age + X − 1). Amounts are per-occurrence, in that year's dollars.
   endAge?: number | null;
+  // Optional explicit transfer endpoints (advanced mode). When set, they make
+  // the event a TRANSFER between two accounts/people rather than a simple
+  // in/out flow: `from` is where the money leaves (an account, or external),
+  // `to` is where it lands (an account, or external = spending). Registered
+  // sources (rrsp) are taxed on withdrawal before the after-tax remainder is
+  // redeposited — the RRSP→TFSA "meltdown". When both are absent the legacy
+  // direction/account semantics apply (see householdTypes.eventEndpoints).
+  // Declared structurally here (not via the householdTypes import) to avoid a
+  // module cycle; householdTypes.TransferEndpoint is the canonical shape.
+  from?: { kind: 'external' } | { kind: 'account'; person: 'primary' | 'spouse'; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash' };
+  to?: { kind: 'external' } | { kind: 'account'; person: 'primary' | 'spouse'; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash' };
 }
 
 export interface ReverseMortgage {
@@ -165,6 +205,18 @@ export interface YearCalc {
   // Tax decomposition.
   totalNetIncome: number;      // otherGross + registeredGross + gains×inclusion
   taxOnBenefits: number;       // tax(otherGross) — subtracted to isolate withdrawal tax
+  // Transfer events (account→account / inter-spousal) that fired this year.
+  // Each is shown on the math page so the full path is visible: gross amount
+  // leaving the source, the tax on a registered source, and the net landing in
+  // the destination. Without this a meltdown looks like money vanishing.
+  transfers?: Array<{
+    label: string;
+    from: string;            // human-readable source, e.g. "RRSP" / "outside"
+    to: string;              // human-readable destination, e.g. "TFSA" / "spending"
+    gross: number;           // amount that left the source
+    tax: number;             // incremental tax on a registered source (0 otherwise)
+    net: number;             // amount that landed in the destination (gross − tax)
+  }>;
 }
 
 export interface YearDetail {
@@ -177,12 +229,20 @@ export interface YearDetail {
   growth: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number };
   // Contributions per account (accumulation years only).
   contrib?: { rrsp: number; tfsa: number; taxable: number };
+  // Deposit provenance — gross dollars that LANDED in each account this year
+  // from cash events and transfers (inflows + the redeposit side of a
+  // transfer). Symmetric to `withdraw` so both ends of a transfer are visible
+  // and the year's accounting reconciles on the math page. Optional so older
+  // fixtures compile; the engine always sets it.
+  deposit?: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number };
   // Tax decomposition for the year's withdrawals.
   tax: { oasClawback: number; capitalGains: number; registeredGross: number };
   // Reverse mortgage, when enabled.
   rm?: { interestAccrued: number; scheduledDraw: number; topUpDraw: number; homeValue: number; loanBalance: number };
-  // Cash events that fired this year (labelled in/out).
-  events: Array<{ label: string; direction: 'in' | 'out'; amount: number }>;
+  // Cash events that fired this year (labelled in/out). `from`/`to` are the
+  // human-readable endpoints when the event is a transfer (else undefined and
+  // the row is a plain inflow/outflow).
+  events: Array<{ label: string; direction: 'in' | 'out'; amount: number; from?: string; to?: string }>;
   // The pipeline intermediates (decumulation years), for the math page.
   calc?: YearCalc;
 }
@@ -236,6 +296,11 @@ export interface RetirementResults {
   averageReturn: number;
   retirementAge: number;
   spouse?: RetirementResults; // present when inputs.spouse.enabled
+  // After-tax amounts this person's transfer events sent to the PARTNER's
+  // accounts (inter-spousal transfers). The household pass injects these into
+  // the partner's run so the transfer is conserved across the household.
+  // Undefined for a standalone single-person run with no cross transfers.
+  crossDeposits?: Array<{ age: number; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; amount: number; label: string }>;
 }
 
 const MAX_TAX_ITERATIONS = 100;
@@ -252,11 +317,39 @@ const TAX_TOLERANCE = 1.0;
  *  - Withdrawals respect the user-configured account order; the cash
  *    cushion is always the last resort.
  */
-export function calculateRetirement(
-  inputs: RetirementInputs,
+/** A drill-down event line, including transfer endpoints when the event is a
+ *  transfer (so the math page can show "RRSP → TFSA" rather than just in/out). */
+function eventLine(ev: CashEvent): { label: string; direction: 'in' | 'out'; amount: number; from?: string; to?: string } {
+  const base = { label: ev.label, direction: ev.direction, amount: ev.amount };
+  if (!(ev.from || ev.to)) return base;
+  const name = (a: string) => a === 'rrsp' ? 'RRSP' : a === 'tfsa' ? 'TFSA' : a === 'taxable' ? 'Taxable' : 'Cash';
+  const ep = (e: NonNullable<CashEvent['from']>) =>
+    e.kind === 'external' ? 'outside' : `${name(e.account)}${e.person === 'spouse' ? ' (spouse)' : ''}`;
+  return {
+    ...base,
+    from: ev.from ? ep(ev.from) : 'outside',
+    to: ev.to ? ep(ev.to) : 'outside',
+  };
+}
+
+/**
+ * Project ONE person's accounts and benefits across their lifetime. This is the
+ * engine's unit of work; a couple is two of these coupled in calculateHousehold.
+ * The person supplies their accounts/ages/benefits/spending; the household-
+ * shared assumptions (market, province, horizon) come from `shared` so a couple
+ * can't disagree about them. Returns the full per-year breakdown for drill-down.
+ */
+export function calculatePerson(
+  person: PersonInputs,
+  shared: SharedInputs,
   config: AppConfig,
   options?: {
     returnSequence?: Record<number, number>;
+    // Which member of the household this run represents. Transfer events use
+    // it to resolve `{person: 'primary'|'spouse'}` endpoints against THIS run:
+    // an endpoint naming this person moves money in this run's accounts; one
+    // naming the partner is handled by the household pass (which runs both).
+    personRef?: 'primary' | 'spouse';
     // Couple GIS context, set when this person has an enabled spouse: CRA
     // assesses each spouse's GIS on COMBINED non-OAS income and pays the
     // (lower) couple rate when both receive OAS, the single rate when only
@@ -272,12 +365,17 @@ export function calculateRetirement(
       currentAge: number;
       pensions?: Pension[];
     };
+    // After-tax amounts the PARTNER's transfer events sent into THIS person's
+    // accounts (inter-spousal transfers), keyed by THIS person's age. Injected
+    // by the household pass so an inter-spousal transfer is conserved: one
+    // person's cross-deposit is the other's inbound deposit. Landing here is
+    // after-tax money (the source run already taxed the draw).
+    inboundDeposits?: Array<{ age: number; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; amount: number; label: string }>;
   }
 ): RetirementResults {
   const {
     currentAge,
     retirementAge,
-    maxAge,
     rrspBalance,
     tfsaBalance,
     taxableBalance,
@@ -286,8 +384,6 @@ export function calculateRetirement(
     tfsaContribution,
     taxableContribution,
     desiredSpending,
-    investmentReturn,
-    provinceCode,
     cppMonthlyAmount,
     cppAdjustedAmount,
     cppStartAge,
@@ -295,7 +391,8 @@ export function calculateRetirement(
     oasYearsInCanada,
     withdrawalOrder,
     pensions
-  } = inputs;
+  } = person;
+  const { maxAge, investmentReturn, provinceCode } = shared;
 
   const order: WithdrawalAccount[] =
     Array.isArray(withdrawalOrder) && withdrawalOrder.length > 0
@@ -323,7 +420,7 @@ export function calculateRetirement(
   const spendingFactorAt = (age: number) => (indexSpending ? factorAt(age) : 1);
 
   // Spending phases: fraction of desired spending at each age (default 1).
-  const bands = Array.isArray(inputs.spendingBands) ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge) : [];
+  const bands = Array.isArray(person.spendingBands) ? [...person.spendingBands].sort((a, b) => a.fromAge - b.fromAge) : [];
   const spendingPctAt = (age: number): number => {
     let pct = 1;
     for (const b of bands) {
@@ -337,10 +434,20 @@ export function calculateRetirement(
   // Events before the current age are in the model's past — they can't fire,
   // so drop them defensively (the UI clamps them too, but a saved/imported
   // scenario may carry one).
-  const events = (Array.isArray(inputs.events) ? inputs.events : []).filter(e => e.age >= currentAge);
+  const events = (Array.isArray(person.events) ? person.events : []).filter(e => e.age >= currentAge);
   const eventsAt = (age: number) => events.filter(e =>
     e.age === age || (e.endAge != null && age >= e.age && age <= e.endAge));
-  const eventOutAt = (age: number) => eventsAt(age).filter(e => e.direction === 'out').reduce((s, e) => s + e.amount, 0);
+
+  // Inbound inter-spousal transfer deposits (from the partner's run), already
+  // translated to THIS person's age axis by the household pass. They land at
+  // the start of the year like an inflow, as after-tax money.
+  const inboundAt = (age: number) => (options?.inboundDeposits ?? []).filter(d => d.age === age);
+  // Outflows raise the year's spending need — but a TRANSFER event (from/to
+  // set) moves money account→account, so it must NOT be counted as spending
+  // (its source draw is handled by the transfer path, not the spending draws).
+  const eventOutAt = (age: number) => eventsAt(age)
+    .filter(e => e.direction === 'out' && !(e.from || e.to))
+    .reduce((s, e) => s + e.amount, 0);
   const configCache = new Map<number, AppConfig>();
   const configAt = (age: number): AppConfig => {
     if (!indexTables) return config;
@@ -395,7 +502,7 @@ export function calculateRetirement(
   // Reverse mortgage: the home appreciates while the loan compounds with
   // interest + draws. Proceeds are tax-free, so draws land in the cash cushion
   // and never touch taxable income (no GIS/clawback effect). Inert unless enabled.
-  const rm = inputs.reverseMortgage;
+  const rm = person.reverseMortgage;
   const rmOn = rm?.enabled === true && (rm.homeValue ?? 0) > 0;
   let homeValue = rmOn ? rm.homeValue : 0;
   let rmLoan = 0;
@@ -442,6 +549,147 @@ export function calculateRetirement(
 
   const totalBalance = () => rrsp + rrif + tfsa + taxable + cashCushion;
 
+  // ---- transfer events (account→account / inter-spousal) ----
+  // Which household member this run is; transfer endpoints naming this person
+  // move money here, endpoints naming the partner are the household pass's
+  // concern (it runs both people). Default 'primary' for a standalone run.
+  const selfRef = options?.personRef ?? 'primary';
+  // Account accessor so the transfer executor can move money across the
+  // closure's let-bound balances by name.
+  const acct = {
+    get: (a: 'rrsp' | 'tfsa' | 'taxable' | 'cash'): number =>
+      a === 'rrsp' ? rrsp + rrif : a === 'tfsa' ? tfsa : a === 'taxable' ? taxable : cashCushion,
+    // Deposit `amt` into account `a`. RRSP-bound money lands in RRSP pre-
+    // conversion, RRIF post- (mirroring the drawdown). Taxable deposits raise
+    // ACB (new principal); TFSA/cash are after-tax so no ACB effect.
+    put: (a: 'rrsp' | 'tfsa' | 'taxable' | 'cash', amt: number): void => {
+      if (amt <= 0) return;
+      if (a === 'rrsp') { /* transfers into registered are unusual; land in rrsp */ rrsp += amt; }
+      else if (a === 'tfsa') tfsa += amt;
+      else if (a === 'cash') cashCushion += amt;
+      else { taxable += amt; taxableAcb += amt; }
+    },
+    // Withdraw up to `amt` from account `a`, returning the amount actually
+    // taken. Reduces taxable ACB by the principal portion (keeps the gains
+    // fraction correct). Does NOT tax — the caller taxes registered sources.
+    take: (a: 'rrsp' | 'tfsa' | 'taxable' | 'cash', amt: number): number => {
+      if (amt <= 0) return 0;
+      if (a === 'rrsp') {
+        const draw = Math.min(rrsp + rrif, amt);
+        // Drain RRIF first post-conversion (it's the same registered pool).
+        const fromRrif = Math.min(rrif, draw);
+        rrif -= fromRrif;
+        rrsp -= (draw - fromRrif);
+        return draw;
+      }
+      if (a === 'tfsa') { const d = Math.min(tfsa, amt); tfsa -= d; return d; }
+      if (a === 'cash') { const d = Math.min(cashCushion, amt); cashCushion -= d; return d; }
+      const f = gainsFraction();
+      const d = Math.min(taxable, amt);
+      taxableAcb = Math.max(0, taxableAcb - d * (1 - f));
+      taxable -= d;
+      return d;
+    },
+  };
+
+  // Cross-person transfer landings this run produced: money leaving THIS
+  // person's accounts destined for the partner. The household pass injects
+  // these into the partner's run as inflows so an inter-spousal transfer is
+  // conserved across the household (the partner's run can't compute the net
+  // itself — that depends on this person's marginal tax on the draw).
+  const crossDeposits: Array<{ age: number; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; amount: number; label: string }> = [];
+
+  /**
+   * Execute one transfer event for THIS person. Returns a YearCalc.transfers
+   * entry when the event moved money in this run's accounts, else null (a
+   * pure in/out, or a transfer the partner side handles). `baseGross` is the
+   * taxable income already stacked this year (benefits + prior registered
+   * draws) so a registered transfer is taxed at the correct marginal rate;
+   * pre-retirement this is 0. `deposit`/`withdraw` accumulators are updated so
+   * the year's provenance and the accounting identity both see the move.
+   */
+  const applyTransferEvent = (
+    ev: CashEvent,
+    baseGross: number,
+    yearConfig: AppConfig,
+    deposit: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number },
+    fireAge: number,
+  ): { label: string; from: string; to: string; gross: number; tax: number; net: number } | null => {
+    const { from, to } = eventEndpoints(ev);
+    // We only move money when the SOURCE is one of this person's accounts
+    // (the money physically leaves here). External→account inflows are handled
+    // by the plain inflow path.
+    if (from.kind !== 'account' || from.person !== selfRef) return null;
+
+    const src = from.account;
+    const gross = acct.take(src, ev.amount);
+    if (gross <= 0) return null;
+
+    // Tax a REGISTERED source: the withdrawal is income, so only the after-tax
+    // remainder can be redeposited (the RRSP-meltdown cost). Find the gross
+    // registered withdrawal whose after-tax value, stacked on this year's
+    // income, lets us land `ev.amount`... but the user specified the GROSS
+    // (ev.amount) to move, so tax = incremental tax on that gross, net = the
+    // remainder. TFSA/taxable/cash sources are after-tax money (no tax).
+    let tax = 0;
+    if (src === 'rrsp') {
+      const t0 = calculateTax(baseGross, provinceCode, yearConfig).totalTax;
+      const t1 = calculateTax(baseGross + gross, provinceCode, yearConfig).totalTax;
+      tax = t1 - t0;
+    } else if (src === 'taxable') {
+      // Realizing the embedded gain on a taxable transfer is taxable at the
+      // inclusion rate (the gain portion leaves the account).
+      const f = gainsFraction();
+      const includedGain = gross * f * inclusion;
+      const t0 = calculateTax(baseGross, provinceCode, yearConfig).totalTax;
+      const t1 = calculateTax(baseGross + includedGain, provinceCode, yearConfig).totalTax;
+      tax = t1 - t0;
+    }
+    const net = Math.max(0, gross - tax);
+
+    const name = (a: string) => a === 'rrsp' ? 'RRSP' : a === 'tfsa' ? 'TFSA' : a === 'taxable' ? 'Taxable' : 'Cash';
+    const who = (p: string) => (p === selfRef ? '' : p === 'primary' ? ' (primary)' : ' (spouse)');
+
+    // An account→EXTERNAL event is a sourced outflow (e.g. "pay for the car
+    // from my TFSA"): the money leaves the plan here, nothing is redeposited.
+    // Record it so the year shows the draw; the gross already left via acct.take.
+    if (to.kind !== 'account') {
+      return {
+        label: ev.label,
+        from: name(src) + who(from.person),
+        to: 'Spending (leaves plan)',
+        gross,
+        tax,
+        net,
+      };
+    }
+
+    // The destination may be the partner's account. This run only tracks THIS
+    // person's balances; credit the deposit locally when it's ours, else hand
+    // the after-tax net to the household pass to inject into the partner's run.
+    if (to.person === selfRef) {
+      acct.put(to.account, net);
+      if (to.account === 'rrsp') deposit.rrsp += net;
+      else if (to.account === 'tfsa') deposit.tfsa += net;
+      else if (to.account === 'cash') deposit.cash += net;
+      else deposit.taxable += net;
+    } else {
+      // Stamp the FIRING age, not the event's start age: a recurring transfer
+      // (age 65, endAge 70) must land in the partner's run each year 65..70,
+      // not all six occurrences in the first year.
+      crossDeposits.push({ age: fireAge, account: to.account, amount: net, label: ev.label });
+    }
+
+    return {
+      label: ev.label,
+      from: name(src) + who(from.person),
+      to: name(to.account) + who(to.person),
+      gross,
+      tax,
+      net,
+    };
+  };
+
   // ---------------- accumulation phase ----------------
   for (let age = currentAge; age < retirementAge; age++) {
     const startingTotal = totalBalance();
@@ -475,17 +723,41 @@ export function calculateRetirement(
     // Cash events fire pre-retirement too — a house sale at 51 lands in its
     // account and then grows; an outflow is funded by drawing down accounts in
     // the configured withdrawal order. Pre-retirement the engine models no
-    // employment income or tax (consistent with the untaxed growth above), so
-    // these draws are tax-free: they just shrink the balances that compound.
-    const yearEvents = eventsAt(age).map(ev => ({ label: ev.label, direction: ev.direction, amount: ev.amount }));
+    // employment income, so plain in/out draws are tax-free — but a TRANSFER
+    // from a registered account is always a taxable RRSP withdrawal (the
+    // meltdown), so that path taxes the draw before redepositing the net.
+    const accumDeposit = { rrsp: 0, rrif: 0, tfsa: 0, taxable: 0, cash: 0 };
+    const accumTransfers: NonNullable<YearCalc['transfers']> = [];
+    let accumTransferTax = 0;
+    // Registered transfer draws stack as income within the year so a second
+    // transfer the same year is taxed at the right marginal rate.
+    let accumTransferBaseGross = 0;
+    // Inbound inter-spousal transfers land here as after-tax money.
+    for (const d of inboundAt(age)) {
+      if (d.account === 'rrsp') { rrsp += d.amount; accumDeposit.rrsp += d.amount; }
+      else if (d.account === 'tfsa') { tfsa += d.amount; accumDeposit.tfsa += d.amount; }
+      else if (d.account === 'cash') { cashCushion += d.amount; accumDeposit.cash += d.amount; }
+      else { taxable += d.amount; taxableAcb += d.amount; accumDeposit.taxable += d.amount; }
+    }
+    const yearEvents = eventsAt(age).map(eventLine);
     let accumEventOut = 0;
     for (const ev of eventsAt(age)) {
+      // Transfer events move money account→account; handle them separately.
+      if (ev.from || ev.to) {
+        const t = applyTransferEvent(ev, accumTransferBaseGross, configAt(age), accumDeposit, age);
+        if (t) {
+          accumTransfers.push(t);
+          accumTransferTax += t.tax;
+          accumTransferBaseGross += t.gross; // stack this draw's income for the next transfer
+        }
+        continue;
+      }
       if (ev.direction === 'in') {
         const dest = ev.account ?? 'taxable';
-        if (dest === 'rrsp') rrsp += ev.amount;
-        else if (dest === 'tfsa') tfsa += ev.amount;
-        else if (dest === 'cash') cashCushion += ev.amount;
-        else { taxable += ev.amount; taxableAcb += ev.amount; }
+        if (dest === 'rrsp') { rrsp += ev.amount; accumDeposit.rrsp += ev.amount; }
+        else if (dest === 'tfsa') { tfsa += ev.amount; accumDeposit.tfsa += ev.amount; }
+        else if (dest === 'cash') { cashCushion += ev.amount; accumDeposit.cash += ev.amount; }
+        else { taxable += ev.amount; taxableAcb += ev.amount; accumDeposit.taxable += ev.amount; }
       } else {
         accumEventOut += ev.amount;
         let remaining = ev.amount;
@@ -513,13 +785,18 @@ export function calculateRetirement(
       }
     }
 
+    // A registered transfer draw is a taxable RRSP withdrawal even before
+    // retirement (the meltdown tax). Track it in the year's tax so the
+    // accounting identity and cumulative totals stay honest.
+    cumulativeTax += accumTransferTax;
+
     yearlyBreakdown.push({
       age,
       startingBalance: startingTotal,
       contributions: rrspContribution + tfsaContribution + taxableContribution,
       marketGains: rrspGains + tfsaGains + taxableGains + cashGains,
-      withdrawals: accumEventOut,
-      incomeTax: 0,
+      withdrawals: accumEventOut + accumTransfers.reduce((s, t) => s + t.gross, 0),
+      incomeTax: accumTransferTax,
       cumulativeTax,
       spendingTarget: accumEventOut,
       endingBalance: totalBalance(),
@@ -536,9 +813,21 @@ export function calculateRetirement(
         withdraw: { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 },
         growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
         contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution },
-        tax: { oasClawback: 0, capitalGains: 0, registeredGross: 0 },
+        deposit: accumDeposit,
+        tax: { oasClawback: 0, capitalGains: 0, registeredGross: accumTransferBaseGross },
         ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan } } : {}),
         events: yearEvents,
+        // Pre-retirement transfers: surface on the math page too. There is no
+        // full YearCalc pipeline pre-retirement, so attach a minimal calc.
+        ...(accumTransfers.length > 0 ? { calc: {
+          cppMonthlyAtStart: 0, otherGross: 0, netBenefits: 0, neededAfterTax: 0,
+          rrifMinNet: 0, rrifMinExcess: 0,
+          needAfterBenefits: 0, needAfterRrifMin: 0, needAfterGis: 0,
+          needAfterDraws: 0, needAfterCash: 0, needFinal: 0,
+          gainsFraction: gainsFraction(), taxableAcb,
+          totalNetIncome: accumTransferBaseGross, taxOnBenefits: 0,
+          transfers: accumTransfers,
+        } } : {}),
       },
       ...(rmOn ? { homeValue, loanBalance: rmLoan, netHomeEquity: homeValue - rmLoan } : {})
     });
@@ -585,16 +874,28 @@ export function calculateRetirement(
 
     // Cash events firing this year (in flows applied below; out flows raise the
     // spending target). Captured for the year's drill-down.
-    const yearEvents = eventsAt(age).map(ev => ({ label: ev.label, direction: ev.direction, amount: ev.amount }));
+    const yearEvents = eventsAt(age).map(eventLine);
 
     // Cash-event inflows land at the start of the year (before withdrawals).
+    // Transfers are handled further down, once benefit income is known (their
+    // registered draws stack on it for tax).
+    const deposit = { rrsp: 0, rrif: 0, tfsa: 0, taxable: 0, cash: 0 };
     for (const ev of eventsAt(age)) {
+      if (ev.from || ev.to) continue; // transfer — processed below
       if (ev.direction !== 'in') continue;
       const dest = ev.account ?? 'taxable';
-      if (dest === 'rrsp') rrsp += ev.amount;
-      else if (dest === 'tfsa') tfsa += ev.amount;
-      else if (dest === 'cash') cashCushion += ev.amount;
-      else { taxable += ev.amount; taxableAcb += ev.amount; }
+      if (dest === 'rrsp') { rrsp += ev.amount; deposit.rrsp += ev.amount; }
+      else if (dest === 'tfsa') { tfsa += ev.amount; deposit.tfsa += ev.amount; }
+      else if (dest === 'cash') { cashCushion += ev.amount; deposit.cash += ev.amount; }
+      else { taxable += ev.amount; taxableAcb += ev.amount; deposit.taxable += ev.amount; }
+    }
+    // Inbound inter-spousal transfers (the partner's cross-deposits) land here
+    // as after-tax money, at the start of the year.
+    for (const d of inboundAt(age)) {
+      if (d.account === 'rrsp') { rrsp += d.amount; deposit.rrsp += d.amount; }
+      else if (d.account === 'tfsa') { tfsa += d.amount; deposit.tfsa += d.amount; }
+      else if (d.account === 'cash') { cashCushion += d.amount; deposit.cash += d.amount; }
+      else { taxable += d.amount; taxableAcb += d.amount; deposit.taxable += d.amount; }
     }
 
     // This year's spending target: today's dollars, inflated to this year when
@@ -648,6 +949,40 @@ export function calculateRetirement(
       gainsFraction: gainsFraction(), taxableAcb,
       totalNetIncome: otherGross, taxOnBenefits: calculateTax(otherGross, provinceCode, yearConfig).totalTax,
     };
+
+    // Transfer events (account→account / inter-spousal): the RRSP meltdown and
+    // friends. A registered source is a taxable withdrawal — we take the gross,
+    // estimate the incremental tax on it (stacked on benefits + any draws so
+    // far), redeposit the after-tax net into the destination, and add the gross
+    // to registeredGross so the year's unified tax figure taxes it exactly once
+    // (the estimate is for the redeposit amount and the math-page display).
+    // Runs before the spending draws so the transfer's income stacks beneath
+    // them. The destination landing in THIS person's accounts is credited now;
+    // an inter-spousal landing is mirrored by the household pass.
+    for (const ev of eventsAt(age)) {
+      if (!(ev.from || ev.to)) continue;
+      const t = applyTransferEvent(ev, otherGross + registeredGross, yearConfig, deposit, age);
+      if (!t) continue;
+      (calc.transfers ??= []).push(t);
+      const a = ev.from?.kind === 'account' ? ev.from.account : null;
+      if (a === 'rrsp') {
+        // Registered source: gross is taxable income (taxed once in the
+        // year-end unified figure) and counts as a registered withdrawal.
+        registeredGross += t.gross;
+        wd.rrsp += t.gross;
+        actualWithdrawals += t.gross;
+      } else if (a === 'tfsa') { wd.tfsa += t.gross; actualWithdrawals += t.gross; }
+      else if (a === 'taxable') {
+        // A taxable transfer realizes the embedded gain just like a taxable
+        // spending draw: add it to capitalGains so the year's unified tax,
+        // GIS and OAS clawback all see it (and the math page doesn't report
+        // zero tax while the estimate already left the balances).
+        wd.taxable += t.gross;
+        actualWithdrawals += t.gross;
+        capitalGains += t.gross * gainsFraction();
+      }
+      else if (a === 'cash') { wd.cash += t.gross; actualWithdrawals += t.gross; }
+    }
 
     // 1. Mandatory RRIF minimum — forced out first. After-tax excess over the
     //    spending need is redeposited into taxable (still withdrawn & taxed).
@@ -884,6 +1219,7 @@ export function calculateRetirement(
       detail: {
         withdraw: wd,
         growth: { rrsp: rrspGains, rrif: rrifGains, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
+        deposit,
         tax: { oasClawback, capitalGains, registeredGross },
         ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan } } : {}),
         events: yearEvents,
@@ -927,76 +1263,161 @@ export function calculateRetirement(
     status,
     withdrawalRate,
     averageReturn: investmentReturn,
-    retirementAge
+    retirementAge,
+    ...(crossDeposits.length > 0 ? { crossDeposits } : {}),
   };
 
   return primary;
 }
 
 /**
- * Top-level entry point. When a spouse is enabled, both plans are computed
- * with each other's benefit context so GIS is assessed on COMBINED non-OAS
- * income at the correct (couple vs single) rate — CRA's couple rules.
- * `calculateRetirement` itself runs one person's plan; this wrapper supplies
- * the cross-references.
+ * Legacy adapter: run the PRIMARY person's plan from a legacy RetirementInputs
+ * (which flattens the person and the household-shared fields together). New
+ * code should call calculatePerson with an explicit person + shared. This keeps
+ * the many existing consumers (storage, share links, Monte Carlo, solvers)
+ * working unchanged while the unified model is adopted. NOTE: this runs only
+ * the primary person — it ignores inputs.spouse; use calculateHousehold for a
+ * couple.
+ */
+export function calculateRetirement(
+  inputs: RetirementInputs,
+  config: AppConfig,
+  options?: Parameters<typeof calculatePerson>[3]
+): RetirementResults {
+  return calculatePerson(legacyToPerson(inputs), legacyToShared(inputs), config, options);
+}
+
+/**
+ * Top-level entry point. Derives each person's plan from the (possibly legacy)
+ * inputs and runs both as full persons — giving the spouse feature parity
+ * (their own events, spending bands, reverse mortgage). The two runs exchange
+ * benefit context so GIS is assessed on COMBINED non-OAS income at the correct
+ * (couple vs single) rate — CRA's couple rules. Pension-splitting is applied
+ * as a post-pass, and the household verdict reads the combined breakdown.
  */
 export function calculateHousehold(
   inputs: RetirementInputs,
   config: AppConfig,
   options?: { returnSequence?: Record<number, number> }
 ): RetirementResults {
-  const sp = inputs.spouse;
-  const primary = calculateRetirement(inputs, config, sp?.enabled ? {
-    ...options,
-    spouseContext: {
-      cppStartAge: sp.cppStartAge,
-      cppMonthlyAmount: sp.cppMonthlyAmount,
-      oasStartAge: sp.oasStartAge,
-      oasYearsInCanada: sp.oasYearsInCanada,
-      currentAge: sp.currentAge,
-      pensions: sp.pensions,
-    },
-  } : options);
+  const shared = legacyToShared(inputs);
+  const primaryPerson = legacyToPerson(inputs);
+  const sp = inputs.spouse?.enabled ? legacySpouseToPerson(inputs.spouse) : undefined;
 
-  if (sp?.enabled) {
-    const spouseResults = calculateRetirement({
-      currentAge: sp.currentAge,
-      retirementAge: sp.retirementAge,
-      maxAge: inputs.maxAge,
-      rrspBalance: sp.rrspBalance,
-      tfsaBalance: sp.tfsaBalance,
-      taxableBalance: sp.taxableBalance,
-      cashCushionBalance: sp.cashCushionBalance,
-      rrspContribution: sp.rrspContribution,
-      tfsaContribution: sp.tfsaContribution,
-      taxableContribution: sp.taxableContribution,
-      annualWithdrawal: 0,
-      investmentReturn: inputs.investmentReturn,
-      returnVolatility: 0,
-      provinceCode: inputs.provinceCode,
-      cppStartAge: sp.cppStartAge,
-      cppMonthlyAmount: sp.cppMonthlyAmount,
-      cppAdjustedAmount: false,
-      oasStartAge: sp.oasStartAge,
-      oasYearsInCanada: sp.oasYearsInCanada,
-      desiredSpending: sp.desiredSpending,
-      withdrawalOrder: sp.withdrawalOrder ?? inputs.withdrawalOrder,
-      spouse: undefined,
-      pensions: sp.pensions
-    }, config, {
+  const primaryCtx = sp ? {
+    cppStartAge: sp.cppStartAge,
+    cppMonthlyAmount: sp.cppMonthlyAmount,
+    oasStartAge: sp.oasStartAge,
+    oasYearsInCanada: sp.oasYearsInCanada,
+    currentAge: sp.currentAge,
+    pensions: sp.pensions,
+  } : undefined;
+
+  // --- Re-home mis-filed transfer events -----------------------------------
+  // A transfer event FIRES only in the run of the person its money leaves
+  // (applyTransferEvent requires from.person === selfRef). A transfer authored
+  // on person A's event list but sourced from person B's account would
+  // otherwise never fire: A's run skips it (not the source) and B's run never
+  // sees A's events. Re-home it: hand each person the partner's transfer events
+  // whose explicit `from` names THIS person, translated onto this person's age
+  // axis. The destination landing is handled by the cross-deposit pass below,
+  // so a re-homed transfer still conserves household money.
+  // Events authored on `owner`'s list that are sourced from `selfRef`'s
+  // accounts, re-stamped from the owner's age axis onto selfRef's. The age the
+  // author picked is a CALENDAR intent; convert via the current-age gap.
+  const rehome = (
+    ownerEvents: CashEvent[] | undefined,
+    ownerCurrentAge: number,
+    selfRef: 'primary' | 'spouse',
+    selfCurrentAge: number,
+  ): CashEvent[] => (ownerEvents ?? [])
+    .filter(e => e.from && e.from.kind === 'account' && e.from.person === selfRef)
+    .map(e => ({
+      ...e,
+      // owner-age → calendar-year → self-age (same convention as `translate`).
+      age: e.age - (ownerCurrentAge - selfCurrentAge),
+      // Recurring events carry endAge on the same axis; shift it too.
+      ...(e.endAge != null ? { endAge: e.endAge - (ownerCurrentAge - selfCurrentAge) } : {}),
+    }));
+
+  const primaryRun: PersonInputs = sp
+    ? { ...primaryPerson, events: [...(primaryPerson.events ?? []), ...rehome(sp.events, sp.currentAge, 'primary', primaryPerson.currentAge)] }
+    : primaryPerson;
+
+  const primary = calculatePerson(primaryRun, shared, config, {
+    ...options,
+    personRef: 'primary',
+    ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
+  });
+
+  if (sp) {
+    // The spouse's effective events: their own, plus any transfers the primary
+    // authored that pull FROM the spouse's accounts (re-homed onto the spouse's
+    // age axis).
+    const spRun: PersonInputs = {
+      ...sp,
+      events: [...(sp.events ?? []), ...rehome(primaryPerson.events, primaryPerson.currentAge, 'spouse', sp.currentAge)],
+    };
+
+    // Age translation for inter-spousal transfers: a cross-deposit stamped at
+    // the SOURCE's age lands in the partner at the same CALENDAR year, which
+    // on the partner's age axis is source-age minus the current-age gap.
+    const translate = (
+      deposits: NonNullable<RetirementResults['crossDeposits']>,
+      fromCurrentAge: number,
+      toCurrentAge: number,
+    ) => deposits.map(d => ({ ...d, age: d.age - (fromCurrentAge - toCurrentAge) }));
+
+    // Run the spouse, injecting any primary→spouse transfer landings (after-tax).
+    const pToS = translate(primary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
+    let spouseResults = calculatePerson(spRun, shared, config, {
       ...options,
+      personRef: 'spouse',
       spouseContext: {
-        cppStartAge: inputs.cppStartAge,
-        cppMonthlyAmount: inputs.cppMonthlyAmount,
-        oasStartAge: inputs.oasStartAge,
-        oasYearsInCanada: inputs.oasYearsInCanada,
-        currentAge: inputs.currentAge,
-        pensions: inputs.pensions,
+        cppStartAge: primaryPerson.cppStartAge,
+        cppMonthlyAmount: primaryPerson.cppMonthlyAmount,
+        oasStartAge: primaryPerson.oasStartAge,
+        oasYearsInCanada: primaryPerson.oasYearsInCanada,
+        currentAge: primaryPerson.currentAge,
+        pensions: primaryPerson.pensions,
       },
+      ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
     });
-    primary.spouse = spouseResults;
-    if (spouseResults.status === 'SHORTFALL') primary.status = 'SHORTFALL';
-    applyPensionSplitting(primary, spouseResults, inputs, config, sp.currentAge);
+
+    // If the spouse ALSO sent transfers back to the primary, re-run the primary
+    // with those injected (one extra pass; transfers are typically defined on
+    // one person's events, so this converges without ping-pong).
+    const sToP = translate(spouseResults.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge);
+    let finalPrimary = primary;
+    if (sToP.length > 0) {
+      finalPrimary = calculatePerson(primaryRun, shared, config, {
+        ...options,
+        personRef: 'primary',
+        ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
+        inboundDeposits: sToP,
+      });
+      // The primary's re-run may have changed its own cross-deposits to the
+      // spouse; re-inject and re-run the spouse once more for consistency.
+      const pToS2 = translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
+      spouseResults = calculatePerson(spRun, shared, config, {
+        ...options,
+        personRef: 'spouse',
+        spouseContext: {
+          cppStartAge: primaryPerson.cppStartAge,
+          cppMonthlyAmount: primaryPerson.cppMonthlyAmount,
+          oasStartAge: primaryPerson.oasStartAge,
+          oasYearsInCanada: primaryPerson.oasYearsInCanada,
+          currentAge: primaryPerson.currentAge,
+          pensions: primaryPerson.pensions,
+        },
+        ...(pToS2.length > 0 ? { inboundDeposits: pToS2 } : {}),
+      });
+    }
+
+    finalPrimary.spouse = spouseResults;
+    if (spouseResults.status === 'SHORTFALL') finalPrimary.status = 'SHORTFALL';
+    applyPensionSplitting(finalPrimary, spouseResults, inputs, config, sp.currentAge);
+    return finalPrimary;
   }
 
   return primary;
@@ -1024,6 +1445,23 @@ export function combineHouseholdBreakdown(
   const ageOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
   const spouseByCalYear = new Map(spouse.yearlyBreakdown.map(y => [y.age + ageOffset, y]));
 
+  // An INTER-SPOUSAL transfer shows up as a withdrawal in the sender's row but
+  // its landing is not a withdrawal in the receiver's row — so summing the two
+  // `withdrawals` counts the moved money as if it left the household, and the
+  // combined row stops reconciling (start + gains − withdrawals ≠ end). Net
+  // those internal moves back out. After-tax, so sender-gross ≥ receiver-net;
+  // the difference is meltdown tax, which leaves the household via incomeTax.
+  const transferNetAt = (y: YearlyBreakdown, ref: 'primary' | 'spouse'): number => {
+    const ts = y.detail?.calc?.transfers;
+    if (!ts) return 0;
+    let n = 0;
+    for (const t of ts) {
+      if (ref === 'primary' && t.to.includes('(spouse)')) n += t.net;
+      if (ref === 'spouse' && t.to.includes('(primary)')) n += t.net;
+    }
+    return n;
+  };
+
   // The household view sums flows; per-source drill-down detail doesn't sum
   // cleanly into one row, so combined rows drop it (detail === undefined). The
   // table reads per-person detail straight from the primary/spouse plans.
@@ -1037,12 +1475,17 @@ export function combineHouseholdBreakdown(
           netHomeEquity: (py.netHomeEquity ?? 0) + (sy.netHomeEquity ?? 0),
         }
       : {};
+    // Both partners' internal sends are removed once: a one-way transfer is
+    // counted once, a two-way pair is removed on both sides. Result: the
+    // combined row reconciles (start + gains − externalWithdrawals = end,
+    // modulo the meltdown tax already in incomeTax).
+    const internal = transferNetAt(py, 'primary') + transferNetAt(sy, 'spouse');
     return {
       age: py.age,
       startingBalance: py.startingBalance + sy.startingBalance,
       contributions: py.contributions + sy.contributions,
       marketGains: py.marketGains + sy.marketGains,
-      withdrawals: py.withdrawals + sy.withdrawals,
+      withdrawals: py.withdrawals + sy.withdrawals - internal,
       incomeTax: py.incomeTax + sy.incomeTax,
       cumulativeTax: py.cumulativeTax + sy.cumulativeTax,
       spendingTarget: py.spendingTarget + sy.spendingTarget,

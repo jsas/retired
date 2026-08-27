@@ -47,8 +47,26 @@ function migrateRecord(inputs: Record<string, unknown>): RetirementInputs {
     migrated.pensions = [];
   }
   const sp = migrated.spouse as Record<string, unknown> | undefined;
-  if (sp && typeof sp === 'object' && !Array.isArray(sp.pensions)) {
-    sp.pensions = [];
+  if (sp && typeof sp === 'object') {
+    if (!Array.isArray(sp.pensions)) sp.pensions = [];
+    // Full-person parity fields (events, spending bands) — back-fill empty
+    // lists so downstream code can treat them as arrays. reverseMortgage stays
+    // genuinely optional (absent = no reverse mortgage).
+    if (!Array.isArray(sp.events)) sp.events = [];
+    if (!Array.isArray(sp.spendingBands)) sp.spendingBands = [];
+  }
+
+  // Spouse adapter added later (spouseSource). Absent = the embedded spouse is
+  // edited inline, i.e. a 'builtin' adapter — normalize to that explicitly so
+  // downstream code can rely on the discriminated union. A malformed value is
+  // dropped back to builtin rather than trusted.
+  {
+    const src = migrated.spouseSource as Record<string, unknown> | undefined;
+    const valid = src && typeof src === 'object'
+      && (src.kind === 'builtin' || (src.kind === 'scenario' && typeof src.scenarioId === 'string'));
+    migrated.spouseSource = valid
+      ? (src.kind === 'scenario' ? { kind: 'scenario', scenarioId: src.scenarioId as string } : { kind: 'builtin' })
+      : { kind: 'builtin' };
   }
 
   return migrated as unknown as RetirementInputs;
@@ -109,4 +127,40 @@ export function clearScenarioState(): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * A clean baseline plan for a BRAND-NEW scenario. Deliberately modest, neutral
+ * defaults — NOT a copy of whatever scenario is active (that's "Duplicate").
+ * New Scenario should give the user a fresh starting point they can shape,
+ * independent of what they were last editing.
+ */
+export function baselineInputs(): RetirementInputs {
+  return {
+    currentAge: 55,
+    retirementAge: 65,
+    maxAge: 95,
+    rrspBalance: 0,
+    tfsaBalance: 0,
+    taxableBalance: 0,
+    cashCushionBalance: 0,
+    rrspContribution: 0,
+    tfsaContribution: 0,
+    taxableContribution: 0,
+    annualWithdrawal: 0,
+    investmentReturn: 0.05,
+    returnVolatility: 0.10,
+    provinceCode: 'ONT',
+    cppStartAge: 65,
+    cppMonthlyAmount: 900,
+    cppAdjustedAmount: false,
+    oasStartAge: 65,
+    oasYearsInCanada: 40,
+    desiredSpending: 40000,
+    withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
+    pensions: [],
+    events: [],
+    spendingBands: [],
+    spouseSource: { kind: 'builtin' },
+  };
 }

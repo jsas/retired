@@ -1,0 +1,84 @@
+import { describe, it, expect } from 'vitest';
+import { buildDefaultScenarios } from './exampleScenarios';
+import { calculateHousehold } from '../lib/retirementEngine';
+import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
+import { migrateInputs } from '../lib/scenarioStorage';
+
+/**
+ * The first-run examples are the app's front door — a broken or unrealistic
+ * one is the first thing a new user sees. These tests pin two things:
+ *   1. every example survives the storage migration and runs end-to-end
+ *      through the engine without producing NaN or an instant shortfall;
+ *   2. each example actually exercises the engine feature its header comment
+ *      claims it does (spouse plans, spending bands, one-time events, CPP
+ *      deferral) — otherwise the "three mutually distinct starting points"
+ *      promise is fiction.
+ */
+
+const examples = buildDefaultScenarios();
+const byName = (name: string) => {
+  const s = examples.find(e => e.name === name);
+  if (!s) throw new Error(`missing example: ${name}`);
+  return s;
+};
+
+describe('exampleScenarios — data audit', () => {
+  it('ships exactly the three documented examples with unique ids', () => {
+    expect(examples.map(s => s.name)).toEqual([
+      'Example - Early Couple',
+      'Example - Single at 60',
+      'Example - Semi-retirement',
+    ]);
+    expect(new Set(examples.map(s => s.id)).size).toBe(examples.length);
+  });
+
+  it.each(examples.map(s => [s.name, s] as const))('%s: ages are internally consistent', (_name, s) => {
+    const i = s.inputs;
+    expect(i.currentAge).toBeLessThan(i.retirementAge);
+    expect(i.retirementAge).toBeLessThan(i.maxAge);
+    expect(i.maxAge).toBeLessThanOrEqual(105);
+    if (i.spouse?.enabled) {
+      expect(i.spouse.currentAge).toBeLessThan(i.spouse.retirementAge);
+      expect(i.spouse.retirementAge).toBeLessThan(i.maxAge); // shared horizon
+    }
+  });
+
+  it.each(examples.map(s => [s.name, s] as const))('%s: runs end-to-end with sane results', (_name, s) => {
+    const r = calculateHousehold({ ...migrateInputs(s.inputs) }, DEFAULT_APP_CONFIG);
+    expect(r.yearlyBreakdown.length).toBeGreaterThan(10);
+    expect(r.totalNetWorthAtRetirement).toBeGreaterThan(0);
+    expect(Number.isFinite(r.withdrawalRate)).toBe(true);
+    // An example that depletes immediately is a bad demo; late-life depletion
+    // is realistic (and fixable — that's what the Optimize tab is for).
+    expect(r.depletionAge === null || r.depletionAge >= 80).toBe(true);
+  });
+
+  it('Early Couple exercises the spouse plan and spending bands', () => {
+    const s = byName('Example - Early Couple');
+    expect(s.inputs.spouse?.enabled).toBe(true);
+    expect(s.inputs.spendingBands?.length).toBeGreaterThanOrEqual(2);
+    const r = calculateHousehold({ ...migrateInputs(s.inputs) }, DEFAULT_APP_CONFIG);
+    // The spouse plan actually ran (not silently dropped).
+    expect(r.spouse).toBeDefined();
+    expect(r.spouse!.yearlyBreakdown.length).toBeGreaterThan(10);
+  });
+
+  it('Single at 60 exercises one-time events and CPP deferral to 70', () => {
+    const s = byName('Example - Single at 60');
+    expect(s.inputs.cppStartAge).toBe(70); // deferral: +42% vs 65
+    expect(s.inputs.events?.length).toBeGreaterThanOrEqual(2);
+    // Events are inside the projection window and reference real accounts.
+    for (const ev of s.inputs.events!) {
+      expect(ev.age).toBeGreaterThanOrEqual(s.inputs.currentAge);
+      expect(ev.age).toBeLessThanOrEqual(s.inputs.maxAge);
+    }
+    expect(s.inputs.spouse?.enabled).toBeFalsy(); // single, as named
+  });
+
+  it('Semi-retirement exercises spending bands on a tighter plan', () => {
+    const s = byName('Example - Semi-retirement');
+    expect(s.inputs.spendingBands?.length).toBeGreaterThanOrEqual(2);
+    // A partial OAS history (35 of 40 years) is part of the example's texture.
+    expect(s.inputs.oasYearsInCanada).toBeLessThan(40);
+  });
+});

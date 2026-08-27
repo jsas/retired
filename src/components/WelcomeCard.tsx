@@ -40,7 +40,7 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
     {
       icon: PanelLeft,
       title: 'Enter your plan',
-      body: 'Ages, account balances, contributions, CPP/OAS and your desired spending (optionally in phases) go in the sidebar. The projection updates live as you type.',
+      body: 'A short wizard collects ages, balances, contributions, CPP/OAS and your spending goal — and can run a partner through their own. Everything stays editable in the sidebar afterwards, live as you type.',
     },
     {
       icon: LineChart,
@@ -50,7 +50,7 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
     {
       icon: Sparkles,
       title: 'Improve it',
-      body: 'Optimize ranks CPP/OAS timing and withdrawal-order strategies. Steering lets you drag the plan and watch the success rate move. Help documents every input.',
+      body: 'Optimize ranks CPP/OAS timing, withdrawal orders and reverse-mortgage timing. Steering lets you drag the plan and watch the success rate move. Compare puts saved scenarios side by side. Help documents every input.',
     },
   ];
 
@@ -89,7 +89,7 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
         <p className="text-[13px] text-slate-600 leading-relaxed">
           <span className="font-semibold text-slate-800">Your data never leaves this device.</span>{' '}
           Scenarios, settings and results live only in this browser's local storage. Clearing browser
-          data (or switching device) starts fresh — use the Import / Export page to keep a backup file.
+          data (or switching device) starts fresh — use the Data page to keep a backup file.
         </p>
       </div>
 

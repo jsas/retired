@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X } from 'lucide-react';
 import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
+import { baselineSpouse } from '../lib/householdTypes';
 import type { AppConfig } from '../lib/appConfig';
 
 interface SidebarFormProps {
@@ -10,6 +11,17 @@ interface SidebarFormProps {
   provinceCodes: string[];
   config: AppConfig;
   onClose?: () => void; // mobile drawer close (hidden on md+)
+  // For the spouse adapter: the saved scenarios a spouse can be linked to, the
+  // active plan's own id (to exclude self-references), and any host-wins /
+  // resolution warnings from materializing a linked spouse.
+  scenarios?: Array<{ id: string; name: string; inputs: RetirementInputs }>;
+  activeScenarioId?: string;
+  spouseWarnings?: string[];
+  /** Persist edited person fields back into another saved scenario (the linked
+   *  spouse plan) without switching to it. */
+  onUpdateScenarioInputs?: (scenarioId: string, patch: Partial<RetirementInputs>) => void;
+  /** Save the embedded spouse as its own standalone scenario. */
+  onSaveSpouseAsScenario?: (name: string) => void;
 }
 
 const ACCOUNT_LABELS: Record<WithdrawalAccount, string> = {
@@ -131,7 +143,7 @@ function CollapsibleSection({ id, icon, title, open, onToggle, children }: {
   );
 }
 
-export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }: SidebarFormProps) {
+export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, scenarios, activeScenarioId, spouseWarnings, onUpdateScenarioInputs, onSaveSpouseAsScenario }: SidebarFormProps) {
   const updateField = <K extends keyof RetirementInputs>(field: K, value: RetirementInputs[K]) => {
     onChange({ ...inputs, [field]: value });
   };
@@ -153,25 +165,289 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
     ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge)
     : [];
 
-  const updateBand = (index: number, patch: Partial<SpendingBand>) => {
-    const next = sortedBands.map((b, i) => (i === index ? { ...b, ...patch } : b));
-    updateField('spendingBands', next);
-  };
-
-  const updateEvent = (index: number, patch: Partial<CashEvent>) => {
-    const next = (inputs.events ?? []).map((ev, i) => (i === index ? { ...ev, ...patch } : ev));
-    updateField('events', next);
-  };
+  // ---- transfer (advanced) event helpers ----
+  // An event is a transfer when it carries explicit from/to endpoints. Simple
+  // events use direction + account; advanced events move money account→account
+  // (the RRSP meltdown) or between spouses. Encode an endpoint as a compact
+  // string for the <select> value: 'external', or 'person:account'.
+  type Endpoint = NonNullable<CashEvent['from']>;
+  const encodeEndpoint = (e: Endpoint): string =>
+    e.kind === 'external' ? 'external' : `${e.person}:${e.account}`;
+  const decodeEndpoint = (s: string): Endpoint =>
+    s === 'external'
+      ? { kind: 'external' }
+      : (() => { const [person, account] = s.split(':'); return { kind: 'account', person: person as 'primary' | 'spouse', account: account as 'rrsp' | 'tfsa' | 'taxable' | 'cash' }; })();
+  const hasSpouse = inputs.spouse?.enabled === true;
+  // The from/to choices available for a transfer. 'from' can be external (a
+  // plain inflow) or one of a person's accounts; 'to' can be external (= the
+  // year's spending) or an account.
+  const endpointOptions = (allowExternal: boolean, externalLabel: string) => (
+    <>
+      {allowExternal && <option value="external">{externalLabel}</option>}
+      <optgroup label="You">
+        <option value="primary:rrsp">RRSP</option>
+        <option value="primary:tfsa">TFSA</option>
+        <option value="primary:taxable">Taxable</option>
+        <option value="primary:cash">Cash cushion</option>
+      </optgroup>
+      {hasSpouse && (
+        <optgroup label="Spouse">
+          <option value="spouse:rrsp">Spouse RRSP</option>
+          <option value="spouse:tfsa">Spouse TFSA</option>
+          <option value="spouse:taxable">Spouse Taxable</option>
+          <option value="spouse:cash">Spouse Cash cushion</option>
+        </optgroup>
+      )}
+    </>
+  );
 
   const updateSpouse = (patch: Partial<NonNullable<RetirementInputs['spouse']>>) => {
     if (!inputs.spouse) return;
     updateField('spouse', { ...inputs.spouse, ...patch });
   };
 
-  const updateRm = (patch: Partial<ReverseMortgage>) => {
-    if (!inputs.reverseMortgage) return;
-    updateField('reverseMortgage', { ...inputs.reverseMortgage, ...patch });
+  // A person's own event list editor. `self` is the person whose events these
+  // are — it only affects the transfer-seed default (which account a brand-new
+  // transfer starts from), since the endpoint pickers already offer both
+  // people. The events array + setter are passed in so the SAME editor serves
+  // the primary (inputs.events) and the spouse (inputs.spouse.events).
+  const renderEventList = (
+    events: CashEvent[],
+    setEvents: (next: CashEvent[]) => void,
+    currentAge: number,
+    retirementAge: number,
+    self: 'primary' | 'spouse',
+  ) => {
+    const updateEventAt = (index: number, patch: Partial<CashEvent>) => {
+      setEvents(events.map((ev, i) => (i === index ? { ...ev, ...patch } : ev)));
+    };
+    return (
+      <div className="space-y-2">
+        {events.map((ev, i) => (
+          <div key={ev.id} className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={ev.label}
+                placeholder="Label"
+                onChange={(e) => updateEventAt(i, { label: e.target.value })}
+                className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={() => setEvents(events.filter((_, j) => j !== i))}
+                className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+                title="Remove event"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={ev.direction}
+                onChange={(e) => updateEventAt(i, { direction: e.target.value as CashEvent['direction'] })}
+                className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="in">Inflow</option>
+                <option value="out">Outflow</option>
+              </select>
+              <input
+                type="number"
+                step="1000"
+                value={ev.amount}
+                title="Amount ($ / occurrence)"
+                onChange={(e) => updateEventAt(i, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
+                className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={ev.endAge != null ? 'yearly' : 'once'}
+                onChange={(e) => updateEventAt(i, e.target.value === 'yearly' ? { endAge: ev.age } : { endAge: null })}
+                title="One-time or yearly"
+                className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="once">Once at</option>
+                <option value="yearly">Yearly</option>
+              </select>
+              <input
+                type="number"
+                value={ev.age}
+                min={currentAge}
+                title={ev.endAge != null ? `Start age (≥ current age ${currentAge})` : `Age (≥ current age ${currentAge})`}
+                onChange={(e) => updateEventAt(i, { age: Math.max(currentAge, parseInt(e.target.value) || currentAge) })}
+                className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+              {ev.endAge != null && (
+                <>
+                  <span className="text-[10px] text-neutral-500">to</span>
+                  <input
+                    type="number"
+                    value={ev.endAge}
+                    title="End age (inclusive)"
+                    onChange={(e) => updateEventAt(i, { endAge: Math.max(ev.age, parseInt(e.target.value) || ev.age) })}
+                    className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                  />
+                </>
+              )}
+            </div>
+            {(() => {
+              const isTransfer = ev.from != null || ev.to != null;
+              if (isTransfer) {
+                const from = ev.from ?? { kind: 'external' as const };
+                const to = ev.to ?? { kind: 'external' as const };
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-neutral-500 w-8 shrink-0">from</span>
+                      <select
+                        value={encodeEndpoint(from)}
+                        onChange={(e) => updateEventAt(i, { from: decodeEndpoint(e.target.value) })}
+                        className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                      >
+                        {endpointOptions(true, 'Outside (new money)')}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-neutral-500 w-8 shrink-0">to</span>
+                      <select
+                        value={encodeEndpoint(to)}
+                        onChange={(e) => updateEventAt(i, { to: decodeEndpoint(e.target.value) })}
+                        className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                      >
+                        {endpointOptions(true, 'Spending (leaves plan)')}
+                      </select>
+                    </div>
+                    <p className="text-[10px] text-neutral-500 leading-snug">
+                      An RRSP source is taxed on withdrawal; the after-tax remainder is redeposited.
+                    </p>
+                    <button
+                      onClick={() => updateEventAt(i, { from: undefined, to: undefined })}
+                      className="text-[10px] text-blue-400 hover:text-blue-300"
+                    >
+                      ← back to simple inflow/outflow
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-1.5">
+                  {ev.direction === 'in' && (
+                    <select
+                      value={ev.account ?? 'taxable'}
+                      onChange={(e) => updateEventAt(i, { account: e.target.value as CashEvent['account'] })}
+                      className="w-full px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="taxable">→ Taxable account</option>
+                      <option value="tfsa">→ TFSA</option>
+                      <option value="rrsp">→ RRSP</option>
+                      <option value="cash">→ Cash cushion</option>
+                    </select>
+                  )}
+                  <button
+                    onClick={() => updateEventAt(i, {
+                      // Seed a sensible transfer from the current simple value so
+                      // toggling doesn't lose the intent. `self` is whose account
+                      // the default transfer starts from.
+                      from: ev.direction === 'in'
+                        ? { kind: 'external' }
+                        : { kind: 'account', person: self, account: ev.account === 'cash' ? 'cash' : (ev.account ?? 'rrsp') },
+                      to: ev.direction === 'in'
+                        ? { kind: 'account', person: self, account: ev.account ?? 'taxable' }
+                        : { kind: 'external' },
+                    })}
+                    className="text-[10px] text-blue-400 hover:text-blue-300"
+                    title="Move money between accounts or spouses (e.g. an RRSP withdrawal into the TFSA)"
+                  >
+                    advanced: transfer between accounts…
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        ))}
+        <button
+          onClick={() => setEvents([...events, { id: newEventId(), age: retirementAge, label: 'House sale', amount: 100000, direction: 'in', account: 'taxable' }])}
+          className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
+        >
+          <Plus size={12} /> Add event
+        </button>
+        {events.length > 0 && (
+          <p className="text-[10px] text-neutral-500 leading-snug">
+            Inflows land in the chosen account (they do not grow earlier years); outflows add to
+            that year's spending need. Choose <em>Yearly</em> and set a start–end age range to repeat
+            the same amount each year (e.g. yearly for 5 years → end age = start + 4).
+          </p>
+        )}
+      </div>
+    );
   };
+
+  // A person's spending-phase (go-go / slow-go / no-go) editor. Parameterized by
+  // the band list + setter + that person's desiredSpending so the SAME editor
+  // serves the primary (inputs.spendingBands) and the spouse
+  // (inputs.spouse.spendingBands).
+  const renderBandList = (
+    bands: SpendingBand[],
+    setBands: (next: SpendingBand[]) => void,
+    desiredSpending: number,
+  ) => {
+    const sorted = [...bands].sort((a, b) => a.fromAge - b.fromAge);
+    const updateBandAt = (index: number, patch: Partial<SpendingBand>) => {
+      setBands(sorted.map((b, i) => (i === index ? { ...b, ...patch } : b)));
+    };
+    return (
+      <div className="space-y-1.5">
+        {sorted.map((band, i) => (
+          <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded">
+            <input
+              type="number"
+              value={band.fromAge}
+              title="From age"
+              onChange={(e) => updateBandAt(i, { fromAge: parseInt(e.target.value) || band.fromAge })}
+              className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">+</span>
+            <input
+              type="number"
+              value={Math.round(band.pctOfBase * 100)}
+              title="% of desired spending"
+              onChange={(e) => updateBandAt(i, { pctOfBase: Math.max(0, (parseInt(e.target.value) || 0) / 100) })}
+              className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">%</span>
+            <span className="text-[10px] text-neutral-400 whitespace-nowrap" title="Resulting yearly spending in today's dollars">
+              = {formatMoney(desiredSpending * band.pctOfBase)}
+            </span>
+            <button
+              onClick={() => setBands(sorted.filter((_, j) => j !== i))}
+              className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+              title="Remove phase"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => setBands([...sorted, { fromAge: sorted.length > 0 ? sorted[sorted.length - 1].fromAge + 10 : 75, pctOfBase: 0.85 }])}
+          className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
+        >
+          <Plus size={12} /> Add phase
+        </button>
+      </div>
+    );
+  };
+
+  // ---- spouse adapter (built-in vs linked scenario) ----
+  // The spouse's source: 'builtin' = edited inline here (default); 'scenario'
+  // = the spouse IS another saved plan, referenced by id and materialized into
+  // `spouse` by the app (host wins on shared fields). Choosing a source writes
+  // spouseSource; the actual spouse values for a linked scenario come from the
+  // referenced plan, so the inline editors are hidden in that mode.
+  const spouseSource = inputs.spouseSource ?? { kind: 'builtin' as const };
+  const isLinkedSpouse = spouseSource.kind === 'scenario';
+  // Scenarios this spouse can link to: all saved plans except the active one
+  // (a plan can't be its own spouse).
+  const linkableScenarios = (scenarios ?? []).filter(s => s.id !== activeScenarioId);
 
   // Stash the last-used spouse / reverse-mortgage values so toggling the
   // section off and back on restores them instead of resetting to defaults.
@@ -179,22 +455,117 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
   const spouseStash = useRef<NonNullable<RetirementInputs['spouse']> | null>(null);
   const rmStash = useRef<ReverseMortgage | null>(null);
 
+  // Single source of truth for a baseline spouse (shared with the setup
+  // wizard's "add a spouse" path) so the two ways of adding a spouse don't
+  // drift — see householdTypes.baselineSpouse.
+  const defaultSpouse = (): NonNullable<RetirementInputs['spouse']> => baselineSpouse(inputs);
+
+  // The spouse is governed by TWO fields that must stay in sync:
+  //   spouse.enabled — whether a spouse is part of the household at all
+  //   spouseSource   — builtin (embedded) vs scenario (a link to another plan)
+  // If they disagree the resolver can re-inject a spouse the user just turned
+  // off, or the unlink can leave the projection stale. Every transition writes
+  // both together via a single onChange so the memo chain sees one update.
+
+  const setSpouseSourceBuiltin = () => {
+    // Unlink: drop the scenario reference and restore the stashed embedded
+    // spouse (kept when the link was made), or a fresh default if none. The
+    // household keeps an enabled spouse — unlinking changes WHERE the spouse
+    // comes from, not WHETHER there is one.
+    const restored = spouseStash.current ?? defaultSpouse();
+    onChange({
+      ...inputs,
+      spouseSource: { kind: 'builtin' },
+      spouse: { ...restored, enabled: true },
+    });
+  };
+  const setSpouseSourceScenario = (scenarioId: string) => {
+    // Link: the referenced plan becomes the spouse. Stash the embedded spouse so
+    // unlinking can restore it. The materialized spouse is supplied by the app
+    // via resolveSpouseSource; here we record the link and keep the toggle on.
+    if (inputs.spouse) spouseStash.current = inputs.spouse;
+    onChange({
+      ...inputs,
+      spouseSource: { kind: 'scenario', scenarioId },
+      spouse: { ...(inputs.spouse ?? spouseStash.current ?? defaultSpouse()), enabled: true },
+    });
+  };
+
   const toggleSpouse = (on: boolean) => {
     if (on) {
-      const base = spouseStash.current ?? {
-        enabled: true as const,
-        currentAge: inputs.currentAge, retirementAge: inputs.retirementAge,
-        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
-        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-        cppStartAge: 65, cppMonthlyAmount: 900,
-        oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 30000,
-      };
-      updateField('spouse', { ...base, enabled: true });
+      const base = spouseStash.current ?? defaultSpouse();
+      onChange({ ...inputs, spouse: { ...base, enabled: true } });
     } else {
+      // Uncheck: stash for restore, drop the spouse AND detach any scenario
+      // link. Detaching the link is essential — otherwise resolveSpouseSource
+      // keeps materializing the linked plan and the spouse never goes away.
       if (inputs.spouse) spouseStash.current = inputs.spouse;
-      updateField('spouse', undefined);
+      onChange({ ...inputs, spouse: undefined, spouseSource: { kind: 'builtin' } });
     }
+  };
+
+  // ---- linked-spouse basic-number editor ----
+  // When the spouse is a linked plan, show the same basic numbers the built-in
+  // view edits, but fetched from the linked scenario. Edits are LOCAL (a draft)
+  // until "Save to linked plan" writes them back via onUpdateScenarioInputs —
+  // changing another saved plan silently on every keystroke would be surprising.
+  const linkedScenarioId = spouseSource.kind === 'scenario' ? spouseSource.scenarioId : null;
+  const linkedScenario = linkedScenarioId != null
+    ? (scenarios ?? []).find(s => s.id === linkedScenarioId)
+    : undefined;
+  const [linkedDraft, setLinkedDraft] = useState<Partial<RetirementInputs> | null>(null);
+  // The draft re-seeds whenever the link target or the target's saved inputs
+  // change (a save round-trips through scenarios and lands back here clean).
+  const linkedSeedJson = JSON.stringify(
+    linkedScenario
+      ? {
+          currentAge: linkedScenario.inputs.currentAge,
+          retirementAge: linkedScenario.inputs.retirementAge,
+          rrspBalance: linkedScenario.inputs.rrspBalance,
+          tfsaBalance: linkedScenario.inputs.tfsaBalance,
+          taxableBalance: linkedScenario.inputs.taxableBalance,
+          cashCushionBalance: linkedScenario.inputs.cashCushionBalance,
+          rrspContribution: linkedScenario.inputs.rrspContribution,
+          tfsaContribution: linkedScenario.inputs.tfsaContribution,
+          taxableContribution: linkedScenario.inputs.taxableContribution,
+          cppStartAge: linkedScenario.inputs.cppStartAge,
+          cppMonthlyAmount: linkedScenario.inputs.cppMonthlyAmount,
+          oasStartAge: linkedScenario.inputs.oasStartAge,
+          oasYearsInCanada: linkedScenario.inputs.oasYearsInCanada,
+          desiredSpending: linkedScenario.inputs.desiredSpending,
+        }
+      : null,
+  );
+  useEffect(() => {
+    setLinkedDraft(linkedSeedJson ? JSON.parse(linkedSeedJson) : null);
+  }, [linkedSeedJson]);
+  const linkedDirty = linkedSeedJson != null && JSON.stringify(linkedDraft) !== linkedSeedJson;
+  const updateLinkedDraft = (patch: Partial<RetirementInputs>) =>
+    setLinkedDraft(d => (d ? { ...d, ...patch } : d));
+  const saveLinkedDraft = () => {
+    if (linkedScenarioId && linkedDraft && linkedDirty) {
+      onUpdateScenarioInputs?.(linkedScenarioId, linkedDraft);
+    }
+  };
+
+  // ---- save the built-in spouse as its own plan ----
+  const [spouseSaveAsOpen, setSpouseSaveAsOpen] = useState(false);
+  const [spouseSaveAsName, setSpouseSaveAsName] = useState('');
+  const activeScenarioName = (scenarios ?? []).find(s => s.id === activeScenarioId)?.name;
+  const openSpouseSaveAs = () => {
+    setSpouseSaveAsName(`${activeScenarioName ?? 'Plan'} - Spouse`);
+    setSpouseSaveAsOpen(true);
+  };
+  const confirmSpouseSaveAs = () => {
+    const name = spouseSaveAsName.trim();
+    if (!name) return;
+    onSaveSpouseAsScenario?.(name);
+    setSpouseSaveAsOpen(false);
+  };
+
+  const updateRm = (patch: Partial<ReverseMortgage>) => {
+    if (!inputs.reverseMortgage) return;
+    updateField('reverseMortgage', { ...inputs.reverseMortgage, ...patch });
   };
 
   const toggleRm = (on: boolean) => {
@@ -487,102 +858,13 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
 
         {/* Cash Events (one-time & recurring) */}
         <CollapsibleSection id="events" icon={<CalendarClock size={14} />} title="Cash Events" open={isOpen('events')} onToggle={toggleSection}>
-          <div className="space-y-2">
-            {(inputs.events ?? []).map((ev, i) => (
-              <div key={ev.id} className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={ev.label}
-                    placeholder="Label"
-                    onChange={(e) => updateEvent(i, { label: e.target.value })}
-                    className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <button
-                    onClick={() => updateField('events', (inputs.events ?? []).filter((_, j) => j !== i))}
-                    className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
-                    title="Remove event"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <select
-                    value={ev.direction}
-                    onChange={(e) => updateEvent(i, { direction: e.target.value as CashEvent['direction'] })}
-                    className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="in">Inflow</option>
-                    <option value="out">Outflow</option>
-                  </select>
-                  <input
-                    type="number"
-                    step="1000"
-                    value={ev.amount}
-                    title="Amount ($ / occurrence)"
-                    onChange={(e) => updateEvent(i, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
-                    className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <select
-                    value={ev.endAge != null ? 'yearly' : 'once'}
-                    onChange={(e) => updateEvent(i, e.target.value === 'yearly' ? { endAge: ev.age } : { endAge: null })}
-                    title="One-time or yearly"
-                    className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="once">Once at</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={ev.age}
-                    min={inputs.currentAge}
-                    title={ev.endAge != null ? `Start age (≥ current age ${inputs.currentAge})` : `Age (≥ current age ${inputs.currentAge})`}
-                    onChange={(e) => updateEvent(i, { age: Math.max(inputs.currentAge, parseInt(e.target.value) || inputs.currentAge) })}
-                    className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  />
-                  {ev.endAge != null && (
-                    <>
-                      <span className="text-[10px] text-neutral-500">to</span>
-                      <input
-                        type="number"
-                        value={ev.endAge}
-                        title="End age (inclusive)"
-                        onChange={(e) => updateEvent(i, { endAge: Math.max(ev.age, parseInt(e.target.value) || ev.age) })}
-                        className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </>
-                  )}
-                </div>
-                {ev.direction === 'in' && (
-                  <select
-                    value={ev.account ?? 'taxable'}
-                    onChange={(e) => updateEvent(i, { account: e.target.value as CashEvent['account'] })}
-                    className="w-full px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="taxable">→ Taxable account</option>
-                    <option value="tfsa">→ TFSA</option>
-                    <option value="rrsp">→ RRSP</option>
-                    <option value="cash">→ Cash cushion</option>
-                  </select>
-                )}
-              </div>
-            ))}
-            <button
-              onClick={() => updateField('events', [...(inputs.events ?? []), { id: newEventId(), age: inputs.retirementAge, label: 'House sale', amount: 100000, direction: 'in', account: 'taxable' }])}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
-            >
-              <Plus size={12} /> Add event
-            </button>
-            {(inputs.events ?? []).length > 0 && (
-              <p className="text-[10px] text-neutral-500 leading-snug">
-                Inflows land in the chosen account (they do not grow earlier years); outflows add to
-                that year's spending need. Choose <em>Yearly</em> and set a start–end age range to repeat
-                the same amount each year (e.g. yearly for 5 years → end age = start + 4).
-              </p>
-            )}
-          </div>
+          {renderEventList(
+            inputs.events ?? [],
+            (next) => updateField('events', next),
+            inputs.currentAge,
+            inputs.retirementAge,
+            'primary',
+          )}
         </CollapsibleSection>
 
         {/* Spending Phases */}
@@ -604,42 +886,11 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                 </span>
               </div>
             </div>
-            {sortedBands.map((band, i) => (
-              <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded">
-                <input
-                  type="number"
-                  value={band.fromAge}
-                  title="From age"
-                  onChange={(e) => updateBand(i, { fromAge: parseInt(e.target.value) || band.fromAge })}
-                  className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                />
-                <span className="text-[10px] text-neutral-500">+</span>
-                <input
-                  type="number"
-                  value={Math.round(band.pctOfBase * 100)}
-                  title="% of desired spending"
-                  onChange={(e) => updateBand(i, { pctOfBase: Math.max(0, (parseInt(e.target.value) || 0) / 100) })}
-                  className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                />
-                <span className="text-[10px] text-neutral-500">%</span>
-                <span className="text-[10px] text-neutral-400 whitespace-nowrap" title="Resulting yearly spending in today's dollars">
-                  = {formatMoney(inputs.desiredSpending * band.pctOfBase)}
-                </span>
-                <button
-                  onClick={() => updateField('spendingBands', sortedBands.filter((_, j) => j !== i))}
-                  className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
-                  title="Remove phase"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => updateField('spendingBands', [...sortedBands, { fromAge: sortedBands.length > 0 ? sortedBands[sortedBands.length - 1].fromAge + 10 : 75, pctOfBase: 0.85 }])}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
-            >
-              <Plus size={12} /> Add phase
-            </button>
+            {renderBandList(
+              inputs.spendingBands ?? [],
+              (next) => updateField('spendingBands', next),
+              inputs.desiredSpending,
+            )}
             <p className="text-[10px] text-neutral-500 leading-snug">
               Go-go / slow-go / no-go: from each age, spending drops to that share of desired
               spending{config.engine.indexSpending !== false
@@ -663,6 +914,147 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
           </label>
           {inputs.spouse?.enabled && (
             <div className="space-y-3">
+              {/* Spouse source: built-in (edited inline) vs a link to another
+                  saved plan. The link is the source of truth; its person is
+                  materialized into the spouse plan, host wins on shared fields. */}
+              {linkableScenarios.length > 0 && (
+                <div className="flex rounded border border-neutral-700 overflow-hidden text-[11px]">
+                  <button
+                    onClick={setSpouseSourceBuiltin}
+                    className={`flex-1 px-2 py-1.5 font-medium ${!isLinkedSpouse ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white'}`}
+                  >
+                    Built-in
+                  </button>
+                  <button
+                    onClick={() => setSpouseSourceScenario(linkableScenarios[0]?.id ?? '')}
+                    className={`flex-1 px-2 py-1.5 font-medium ${isLinkedSpouse ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400 hover:text-white'}`}
+                    title="Use another saved plan as the spouse"
+                  >
+                    Link a plan
+                  </button>
+                </div>
+              )}
+
+              {isLinkedSpouse ? (
+                <div className="space-y-2">
+                  <div>
+                    <label className={LABEL_CLS}>Spouse is this saved plan</label>
+                    <select
+                      value={spouseSource.kind === 'scenario' ? spouseSource.scenarioId : ''}
+                      onChange={(e) => setSpouseSourceScenario(e.target.value)}
+                      className={INPUT_CLS}
+                    >
+                      {linkableScenarios.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* The linked plan's basic numbers, fetched live from the saved
+                      scenario — same fields the built-in view edits. Edits stay
+                      local until "Save to linked plan" writes them back. */}
+                  {linkedDraft && (
+                    <>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <div>
+                          <label className={LABEL_CLS}>Age</label>
+                          <input type="number" value={linkedDraft.currentAge ?? ''}
+                            onChange={(e) => updateLinkedDraft({ currentAge: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Retire</label>
+                          <input type="number" value={linkedDraft.retirementAge ?? ''}
+                            onChange={(e) => updateLinkedDraft({ retirementAge: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Spending $</label>
+                          <input type="number" step="1000" value={linkedDraft.desiredSpending ?? ''}
+                            onChange={(e) => updateLinkedDraft({ desiredSpending: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className={LABEL_CLS}>RRSP $</label>
+                          <input type="number" step="1000" value={linkedDraft.rrspBalance ?? ''}
+                            onChange={(e) => updateLinkedDraft({ rrspBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>TFSA $</label>
+                          <input type="number" step="1000" value={linkedDraft.tfsaBalance ?? ''}
+                            onChange={(e) => updateLinkedDraft({ tfsaBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Taxable $</label>
+                          <input type="number" step="1000" value={linkedDraft.taxableBalance ?? ''}
+                            onChange={(e) => updateLinkedDraft({ taxableBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Cash $</label>
+                          <input type="number" step="1000" value={linkedDraft.cashCushionBalance ?? ''}
+                            onChange={(e) => updateLinkedDraft({ cashCushionBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>RRSP contrib $/yr</label>
+                          <input type="number" step="1000" value={linkedDraft.rrspContribution ?? ''}
+                            onChange={(e) => updateLinkedDraft({ rrspContribution: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>TFSA contrib $/yr</label>
+                          <input type="number" step="1000" value={linkedDraft.tfsaContribution ?? ''}
+                            onChange={(e) => updateLinkedDraft({ tfsaContribution: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>CPP start</label>
+                          <input type="number" min="60" max="70" value={linkedDraft.cppStartAge ?? ''}
+                            onChange={(e) => updateLinkedDraft({ cppStartAge: e.target.value ? parseInt(e.target.value) : null })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>CPP at 65 $/mo</label>
+                          <input type="number" min="0" value={linkedDraft.cppMonthlyAmount ?? ''}
+                            onChange={(e) => updateLinkedDraft({ cppMonthlyAmount: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>OAS start</label>
+                          <input type="number" min="65" max="70" value={linkedDraft.oasStartAge ?? ''}
+                            onChange={(e) => updateLinkedDraft({ oasStartAge: e.target.value ? parseInt(e.target.value) : null })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Yrs in Canada</label>
+                          <input type="number" value={linkedDraft.oasYearsInCanada ?? ''}
+                            onChange={(e) => updateLinkedDraft({ oasYearsInCanada: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                      </div>
+                      <button
+                        onClick={saveLinkedDraft}
+                        disabled={!linkedDirty || !onUpdateScenarioInputs}
+                        className="w-full px-2 py-1.5 rounded text-[11px] font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-default"
+                        title={linkedDirty ? `Write these numbers back into "${linkedScenario?.name}"` : 'No changes to save'}
+                      >
+                        {linkedDirty ? `Save to "${linkedScenario?.name}"` : 'Saved in the linked plan'}
+                      </button>
+                    </>
+                  )}
+
+                  {(spouseWarnings ?? []).length > 0 && (
+                    <div className="px-2 py-1.5 bg-amber-900/30 border border-amber-700/50 rounded space-y-0.5">
+                      <p className="text-[10px] font-semibold text-amber-200 leading-snug">
+                        Why these are overridden: a couple shares one province, one market and one
+                        planning horizon, so this plan supplies them for both partners.
+                      </p>
+                      {(spouseWarnings ?? []).map((w, i) => (
+                        <p key={i} className="text-[10px] text-amber-300 leading-snug">⚠ {w}</p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-neutral-500 leading-snug">
+                    The linked plan's balances, ages and benefits run as the spouse. Your market
+                    assumptions, province and horizon apply to the household (host wins) — any of the
+                    spouse's own that differ are ignored, as warned above. Pensions, events and
+                    spending phases stay on the linked plan itself.
+                  </p>
+                </div>
+              ) : (
+              <>
               <div className="grid grid-cols-3 gap-1.5">
                 <div>
                   <label className={LABEL_CLS}>Age</label>
@@ -736,12 +1128,73 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose }
                 <label className={LABEL_CLS}>Spouse pensions</label>
                 <PensionList pensions={inputs.spouse.pensions ?? []} onChange={(next) => updateSpouse({ pensions: next })} />
               </div>
+              <div>
+                <label className={LABEL_CLS}>Spouse cash events</label>
+                {renderEventList(
+                  inputs.spouse.events ?? [],
+                  (next) => updateSpouse({ events: next }),
+                  inputs.spouse.currentAge,
+                  inputs.spouse.retirementAge,
+                  'spouse',
+                )}
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Spouse spending phases</label>
+                {renderBandList(
+                  inputs.spouse.spendingBands ?? [],
+                  (next) => updateSpouse({ spendingBands: next }),
+                  inputs.spouse.desiredSpending,
+                )}
+              </div>
               <p className="text-[10px] text-neutral-500 leading-snug">
                 The spouse runs as an independent plan with the same market assumptions, province and
                 max age; household totals are the two plans summed. Pension income splitting (up to
                 50% of eligible pension income to the lower-taxed spouse) is applied to the reported
                 household tax — see Settings → Engine.
               </p>
+
+              {/* Save the embedded spouse as its own standalone scenario — the
+                  first step toward linking instead of embedding (the spouse's
+                  numbers then live in one place, editable from either plan). */}
+              {onSaveSpouseAsScenario && (
+                spouseSaveAsOpen ? (
+                  <div className="px-2 py-2 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
+                    <label className={LABEL_CLS}>Save spouse as a new plan</label>
+                    <input
+                      type="text"
+                      value={spouseSaveAsName}
+                      onChange={(e) => setSpouseSaveAsName(e.target.value)}
+                      className={INPUT_CLS}
+                      placeholder="Plan name"
+                    />
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={confirmSpouseSaveAs}
+                        disabled={!spouseSaveAsName.trim()}
+                        className="flex-1 px-2 py-1.5 rounded text-[11px] font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+                      >
+                        Save plan
+                      </button>
+                      <button
+                        onClick={() => setSpouseSaveAsOpen(false)}
+                        className="px-2 py-1.5 rounded text-[11px] text-neutral-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={openSpouseSaveAs}
+                    className="w-full px-2 py-1.5 rounded text-[11px] font-medium border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500"
+                    title="Create a standalone scenario from this spouse's numbers"
+                  >
+                    Save spouse as its own plan…
+                  </button>
+                )
+              )}
+              </>
+              )}
             </div>
           )}
         </CollapsibleSection>

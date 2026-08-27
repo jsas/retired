@@ -39,6 +39,31 @@ have to hold them.
 - **Bucket strategies** — cash/bond/equity buckets with rebalancing rules, as
   an alternative to the single blended return assumption.
 
+## Architecture
+
+- **Monorepo split: engine package + UI package.** Everything under `src/lib`
+  that is pure TypeScript with no DOM/React dependency (the projection
+  engine, tax tables, Monte Carlo, backtest, EQ/spending solvers, household
+  types, scenario/config schema) graduates into a standalone Node.js library
+  package — e.g. `@retired/engine` — with its own test suite, published or
+  linked into the app. The React UI becomes its own package in the same
+  monorepo (pnpm/npm workspaces) and consumes the engine only through its
+  public API. This is what makes the engine usable from a CLI, a server, or
+  a future self-contained desktop build, and it forces the data layer
+  (scenarios, config, migrations) to be platform-neutral: the storage
+  interface the UI backs with localStorage today is the same interface a
+  Node consumer backs with SQLite/a file later.
+- **Data layer hardening (underway)** — Zod schemas now define every
+  persisted shape (`src/data/schemas.ts`), and all plan state lives in a
+  real SQLite database via sql.js (`src/data/db.ts`), persisted to OPFS
+  (origin-private file system — no 5 MB ceiling, mirrored to localStorage
+  for compatibility) and exportable as a .sqlite file. The app is
+  single-tab by design (see Non-goals). Remaining: a Node SQLite backend
+  behind the same store interface for the engine package, moving the DB
+  onto a worker with the synchronous OPFS VFS for incremental (not
+  whole-file) writes, and folding UI-preference keys (print options,
+  panel collapse state, …) into the store's `kv` table.
+
 ## Non-goals
 
 Worth stating explicitly so issues don't pile up:
@@ -48,3 +73,8 @@ Worth stating explicitly so issues don't pile up:
   editable under Settings; it will never phone home for new ones.
 - **Advice** — RE:tired is a calculator, not a planner. It will never
   recommend a course of action, only show consequences of the inputs.
+- **Multi-tab / multi-window use** — one tab at a time. Two open tabs
+  each hold their own in-memory copy and the last Save silently wins;
+  coordinating them (merging, locking, live sync) is more complexity
+  than a local-first calculator is worth. A storage-event sync was
+  tried and reverted for exactly that reason.
