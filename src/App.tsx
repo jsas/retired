@@ -11,6 +11,7 @@ import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scena
 import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
 import { buildAppDb } from './lib/appDb';
 import { SettingsModal } from './components/SettingsModal';
+import { SavePromptModal } from './components/SavePromptModal';
 import { HelpModal } from './components/HelpModal';
 import { MonteCarloChart } from './components/MonteCarloChart';
 import { TimelineChart } from './components/TimelineChart';
@@ -350,14 +351,27 @@ function App() {
     setView('projection');
   };
 
-  // Update inputs when scenario changes
-  const handleScenarioChange = (id: string) => {
+  // Pending scenario switch, held while the "save your edits first?" prompt is
+  // up. Null = no prompt showing.
+  const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
+
+  const applyScenarioSwitch = (id: string) => {
     const scenario = scenarios.find(s => s.id === id);
-    if (scenario) {
-      setActiveScenarioId(id);
-      setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
-      setHasUnsavedChanges(false);
+    if (!scenario) return;
+    setActiveScenarioId(id);
+    setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
+    setHasUnsavedChanges(false);
+  };
+
+  // Update inputs when scenario changes. If the current scenario has unsaved
+  // edits and the user hasn't opted out, ask whether to save before switching.
+  const handleScenarioChange = (id: string) => {
+    if (id === activeScenarioId) return;
+    if (hasUnsavedChanges && config.general.promptToSaveOnSwitch) {
+      setPendingSwitch(id);
+      return;
     }
+    applyScenarioSwitch(id);
   };
 
   // Update scenario when inputs change - with save button
@@ -375,6 +389,19 @@ function App() {
       s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(inputs)) } : s
     ));
     setHasUnsavedChanges(false);
+  };
+
+  // The save-prompt modal's three outcomes. `dontAskAgain` flips the General
+  // setting off (persisted), so the prompt stops appearing.
+  const resolvePendingSwitch = (action: 'save' | 'discard' | 'cancel', dontAskAgain: boolean) => {
+    const target = pendingSwitch;
+    setPendingSwitch(null);
+    if (dontAskAgain) {
+      setConfig(prev => ({ ...prev, general: { ...prev.general, promptToSaveOnSwitch: false } }));
+    }
+    if (action === 'cancel' || target == null) return;
+    if (action === 'save') handleSaveScenario();
+    applyScenarioSwitch(target);
   };
 
   // First-scenario setup wizard. Launched from the Welcome page ("Get started"),
@@ -914,6 +941,15 @@ function App() {
         </div>
       </div>
       </div>
+
+      {pendingSwitch != null && (
+        <SavePromptModal
+          scenarioName={activeScenario.name}
+          onSave={(dontAsk) => resolvePendingSwitch('save', dontAsk)}
+          onDiscard={(dontAsk) => resolvePendingSwitch('discard', dontAsk)}
+          onCancel={() => resolvePendingSwitch('cancel', false)}
+        />
+      )}
     </div>
   );
 }

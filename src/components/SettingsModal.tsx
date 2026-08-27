@@ -118,6 +118,25 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 </label>
               </div>
 
+              <div className="border-t border-neutral-200 pt-3">
+                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">Unsaved changes</h3>
+                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.general.promptToSaveOnSwitch}
+                    onChange={e => update(c => { c.general.promptToSaveOnSwitch = e.target.checked; })}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Ask before switching away from a scenario with unsaved edits
+                    <span className="block text-[11px] text-slate-500 mt-0.5">
+                      When on, changing scenarios with unsaved edits asks whether to save first —
+                      with a "don't ask again" box that turns this off. Off = switch silently.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
               {/* Danger zone: wipes every app key from localStorage and reloads
                   to the first-run defaults. Kept out of the draft/save flow —
                   it acts immediately, on the stored data itself. */}
