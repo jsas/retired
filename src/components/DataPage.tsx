@@ -12,6 +12,7 @@ import type { Scenario } from '../lib/scenarioStorage';
 import { migrateInputs } from '../lib/scenarioStorage';
 import type { AppDb } from '../lib/appDb';
 import { AppDatabase } from '../data/db';
+import { buildTemplateCsv, parseTemplateCsv, TEMPLATE_FILENAME } from '../lib/importTemplate';
 
 // What the page hands back when the user confirms a full-backup import. The
 // parent applies it (App owns all scenario/config state).
@@ -326,6 +327,21 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
   const readFile = (file: File) => {
     setFileName(file.name);
     setError(null);
+    // CSV import template: flat key,value rows a spreadsheet user filled in.
+    if (/\.csv$/i.test(file.name) || file.type === 'text/csv') {
+      file.text().then(text => {
+        try {
+          const { name, inputs, warnings } = parseTemplateCsv(text);
+          setParsed({ kind: 'projection', name, inputs });
+          setProjName(name);
+          if (warnings.length > 0) setError(`Imported with notes: ${warnings.join(' ')}`);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'That CSV could not be read.');
+          setParsed(null);
+        }
+      });
+      return;
+    }
     // SQLite backup (the format "save a backup to disk" writes now): open the
     // bytes with sql.js and read the store back out.
     if (/\.sqlite3?$/.test(file.name) || file.type === 'application/vnd.sqlite3') {
@@ -470,6 +486,25 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
         legacy JSON backup) with scenarios + settings, or a <span className="font-medium text-slate-700">projection
         JSON</span> (re-imported as a scenario). You choose what gets applied before anything changes.
       </p>
+      <p className="text-[11px] text-slate-500 leading-snug mb-3">
+        Bringing numbers in from a spreadsheet? Download the{' '}
+        <button
+          onClick={() => {
+            const blob = new Blob([buildTemplateCsv()], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = TEMPLATE_FILENAME;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="text-blue-600 hover:underline font-medium"
+        >
+          CSV import template
+        </button>
+        , fill in the value column (blank = default; leave all <code className="text-[10px]">spouse.*</code> rows
+        blank for a single plan), then choose the file below — it imports as a new scenario.
+      </p>
 
       <div className="flex items-center gap-2 mb-3">
         <button
@@ -481,7 +516,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
         <input
           ref={fileRef}
           type="file"
-          accept="application/json,.json,.sqlite,.sqlite3,application/vnd.sqlite3"
+          accept="application/json,.json,.sqlite,.sqlite3,application/vnd.sqlite3,.csv,text/csv"
           className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) readFile(f); }}
         />

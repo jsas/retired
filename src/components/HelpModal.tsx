@@ -458,6 +458,10 @@ const SECTIONS: HelpSection[] = [
         body: <P>Export downloads the chosen scenarios (+ optionally the engine settings) as a <strong>.sqlite file</strong> — the very same database format the app stores locally, openable by any SQLite tool (DB Browser, the sqlite3 CLI). Import reads that file back (and still accepts the older JSON backups), letting you pick which scenarios to apply. Older payloads are migrated automatically (e.g. a legacy single "annual contribution" becomes a TFSA contribution).</P>
       },
       {
+        term: 'Import from a spreadsheet (CSV template)',
+        body: <P>The Import section offers a downloadable <strong>CSV import template</strong>: one row per plan field (ages, balances, contributions, CPP/OAS, spending goal), with <code>spouse.*</code> rows for a partner. Fill in the value column in Excel or Google Sheets — leave a value blank to use the default, leave every spouse row blank for a single plan — save as CSV, and choose it on the Import / Export page. It becomes a new scenario. Strategy structures (spending bands, one-time events, pensions, reverse mortgage) aren't part of the flat template; set those in the app afterward.</P>
+      },
+      {
         term: 'Export CSV',
         body: <P>The link in the breadcrumb row downloads the year-by-year projection table (balances, contributions, gains, withdrawals, tax, benefits) for the active scenario.</P>
       },
