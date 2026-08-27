@@ -454,12 +454,12 @@ const SECTIONS: HelpSection[] = [
         body: <P>Use the app in a <strong>single browser tab</strong>. Multi-tab is deliberately unsupported: two tabs each keep their own in-memory copy, and whichever one saves last silently overwrites the other's work. If a second tab gets opened by accident, close it without saving (or refresh it) before continuing in the other.</P>
       },
       {
-        term: 'Export / Import',
-        body: <P>Export downloads the chosen scenarios (+ optionally the engine settings) as a <strong>.sqlite file</strong> — the very same database format the app stores locally, openable by any SQLite tool (DB Browser, the sqlite3 CLI). Import reads that file back (and still accepts the older JSON backups), letting you pick which scenarios to apply. Older payloads are migrated automatically (e.g. a legacy single "annual contribution" becomes a TFSA contribution).</P>
+        term: 'The Data page (export / import)',
+        body: <P>Everything that moves plan data in or out lives on the <strong>Data</strong> page (the database icon in the header menu). Export downloads the chosen scenarios (+ optionally the engine settings) as a <strong>.sqlite file</strong> — the very same database format the app stores locally, openable by any SQLite tool (DB Browser, the sqlite3 CLI). Import reads that file back (and still accepts the older JSON backups), letting you pick which scenarios to apply. Older payloads are migrated automatically (e.g. a legacy single "annual contribution" becomes a TFSA contribution).</P>
       },
       {
         term: 'Import from a spreadsheet (CSV template)',
-        body: <P>The Import section offers a downloadable <strong>CSV import template</strong>: one row per plan field (ages, balances, contributions, CPP/OAS, spending goal), with <code>spouse.*</code> rows for a partner. Fill in the value column in Excel or Google Sheets — leave a value blank to use the default, leave every spouse row blank for a single plan — save as CSV, and choose it on the Import / Export page. It becomes a new scenario. Strategy structures (spending bands, one-time events, pensions, reverse mortgage) aren't part of the flat template; set those in the app afterward.</P>
+        body: <P>The Data page's Import section offers a downloadable <strong>CSV import template</strong>: one row per plan field (ages, balances, contributions, CPP/OAS, spending goal), with <code>spouse.*</code> rows for a partner. Fill in the value column in Excel or Google Sheets — leave a value blank to use the default, leave every spouse row blank for a single plan — save as CSV, and choose the file. It becomes a new scenario. Strategy structures (spending bands, one-time events, pensions, reverse mortgage) aren't part of the flat template; set those in the app afterward.</P>
       },
       {
         term: 'Export CSV',

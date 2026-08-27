@@ -89,7 +89,7 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
         <p className="text-[13px] text-slate-600 leading-relaxed">
           <span className="font-semibold text-slate-800">Your data never leaves this device.</span>{' '}
           Scenarios, settings and results live only in this browser's local storage. Clearing browser
-          data (or switching device) starts fresh — use the Import / Export page to keep a backup file.
+          data (or switching device) starts fresh — use the Data page to keep a backup file.
         </p>
       </div>
 

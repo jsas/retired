@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Database, Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart } from 'lucide-react';
+import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -248,7 +248,7 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Apply a full-backup import chosen on the Import/Export page.
+  // Apply a full-backup import chosen on the Data page.
   const handleImportFull = (sel: FullBackupSelection) => {
     const list = sel.scenarios.length > 0 ? sel.scenarios : scenarios;
     const activeId = list.some(s => s.id === sel.activeScenarioId) ? sel.activeScenarioId : list[0].id;
@@ -267,7 +267,7 @@ function App() {
     setView('projection');
   };
 
-  // Import/Export page: a projection JSON re-imported as a scenario.
+  // Data page: a projection JSON re-imported as a scenario.
   const handleProjectionImport = (req: ProjectionImportRequest) => {
     importScenario(req.name, req.inputs);
     setView('projection');
@@ -688,7 +688,7 @@ function App() {
                 {view === 'montecarlo' && <span className="text-slate-900">Monte Carlo</span>}
                 {view === 'backtest' && <span className="text-slate-900">Historical Backtest</span>}
                 {view === 'print' && <span className="text-slate-900">Print Summary</span>}
-                {view === 'export' && <span className="text-slate-900">Import / Export</span>}
+                {view === 'export' && <span className="text-slate-900">Data</span>}
                 {view === 'scenarios' && <span className="text-slate-900">Manage Scenarios</span>}
                 {view === 'sharing' && <span className="text-slate-900">Sharing</span>}
                 {view === 'donate' && <span className="text-slate-900">Support This App</span>}
@@ -745,13 +745,6 @@ function App() {
                   title="Choose what goes into the printed plan summary, then print or save as PDF"
                 >
                   <Printer size={13} /> Print summary
-                </button>
-                <button
-                  onClick={() => setView('export')}
-                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                  title="Export the projection or a full backup; import a backup or projection"
-                >
-                  <Database size={13} /> Import / Export
                 </button>
               </div>
             </div>

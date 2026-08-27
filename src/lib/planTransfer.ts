@@ -6,7 +6,7 @@
 //   - share link — the same payload in a URL #plan= fragment (shareLink.ts)
 //
 // Higher-level features build on this: the Sharing page names and previews
-// plans, the Import/Export page moves whole backups — but every plan payload
+// plans, the Data page moves whole backups — but every plan payload
 // funnels through buildPlanCode/parsePlanCode so there's exactly one place
 // that validates and migrates incoming inputs.
 //

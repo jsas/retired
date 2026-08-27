@@ -59,7 +59,7 @@ export function DataPage(props: DataPageProps) {
     <div>
       <div className="flex items-center gap-2 mb-3">
         <Database size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Import / Export</h2>
+        <h2 className="text-lg font-bold text-slate-900">Data</h2>
       </div>
 
       <div className="space-y-10">
