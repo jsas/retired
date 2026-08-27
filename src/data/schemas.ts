@@ -1,0 +1,237 @@
+import { z } from 'zod';
+import type {
+  RetirementInputs, SpouseInputs, CashEvent, Pension, SpendingBand,
+  ReverseMortgage, WithdrawalAccount,
+} from '../lib/retirementEngine';
+import type { AppConfig, TaxTable } from '../lib/appConfig';
+import type { Scenario } from '../lib/scenarioStorage';
+import { migrateInputs } from '../lib/scenarioStorage';
+
+/**
+ * Zod schemas — the single source of truth for every shape the app PERSISTS
+ * (scenarios, engine config, the whole-app database document). Everything that
+ * crosses a storage boundary (localStorage, the SQLite blob, an imported file)
+ * is parsed through these, so a malformed or stale payload is either migrated
+ * or rejected at the door instead of corrupting the app state.
+ *
+ * The schemas are typed against the engine interfaces: a mismatch between the
+ * two is a compile error here, not a runtime surprise in the field.
+ */
+
+// ---------------------------------------------------------------------------
+// Engine input shapes
+// ---------------------------------------------------------------------------
+
+const withdrawalAccount = z.enum(['rrsp', 'tfsa', 'taxable']) satisfies z.ZodType<WithdrawalAccount>;
+
+const transferEndpoint = z.union([
+  z.object({ kind: z.literal('external') }),
+  z.object({
+    kind: z.literal('account'),
+    person: z.enum(['primary', 'spouse']),
+    account: z.enum(['rrsp', 'tfsa', 'taxable', 'cash']),
+  }),
+]);
+
+export const cashEventSchema = z.object({
+  id: z.string(),
+  age: z.number(),
+  label: z.string(),
+  amount: z.number(),
+  direction: z.enum(['in', 'out']),
+  account: z.enum(['rrsp', 'tfsa', 'taxable', 'cash']).optional(),
+  endAge: z.number().nullish(),
+  from: transferEndpoint.optional(),
+  to: transferEndpoint.optional(),
+}) satisfies z.ZodType<CashEvent>;
+
+export const pensionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  annualAmount: z.number(),
+  startAge: z.number(),
+  endAge: z.number().nullable(),
+  indexedToCpi: z.boolean(),
+}) satisfies z.ZodType<Pension>;
+
+export const spendingBandSchema = z.object({
+  fromAge: z.number(),
+  pctOfBase: z.number(),
+}) satisfies z.ZodType<SpendingBand>;
+
+export const reverseMortgageSchema = z.object({
+  enabled: z.boolean(),
+  homeValue: z.number(),
+  appreciationRate: z.number(),
+  interestRate: z.number(),
+  maxLtv: z.number().optional(),
+  drawAmount: z.number().optional(),
+  startAge: z.number().optional(),
+  durationYears: z.number().optional(),
+  topUp: z.boolean().optional(),
+}) satisfies z.ZodType<ReverseMortgage>;
+
+const spouseSourceSchema = z.union([
+  z.object({ kind: z.literal('builtin') }),
+  z.object({ kind: z.literal('scenario'), scenarioId: z.string() }),
+]);
+
+export const spouseSchema = z.object({
+  enabled: z.boolean(),
+  currentAge: z.number(),
+  retirementAge: z.number(),
+  rrspBalance: z.number(),
+  tfsaBalance: z.number(),
+  taxableBalance: z.number(),
+  cashCushionBalance: z.number(),
+  rrspContribution: z.number(),
+  tfsaContribution: z.number(),
+  taxableContribution: z.number(),
+  cppStartAge: z.number().nullable(),
+  cppMonthlyAmount: z.number(),
+  oasStartAge: z.number().nullable(),
+  oasYearsInCanada: z.number(),
+  desiredSpending: z.number(),
+  withdrawalOrder: z.array(withdrawalAccount).optional(),
+  pensions: z.array(pensionSchema).optional(),
+  events: z.array(cashEventSchema).optional(),
+  spendingBands: z.array(spendingBandSchema).optional(),
+  reverseMortgage: reverseMortgageSchema.optional(),
+}) satisfies z.ZodType<SpouseInputs>;
+
+export const retirementInputsSchema = z.object({
+  currentAge: z.number(),
+  retirementAge: z.number(),
+  maxAge: z.number(),
+  rrspBalance: z.number(),
+  tfsaBalance: z.number(),
+  taxableBalance: z.number(),
+  cashCushionBalance: z.number(),
+  rrspContribution: z.number(),
+  tfsaContribution: z.number(),
+  taxableContribution: z.number(),
+  annualWithdrawal: z.number(),
+  investmentReturn: z.number(),
+  returnVolatility: z.number(),
+  provinceCode: z.string(),
+  cppStartAge: z.number().nullable(),
+  cppMonthlyAmount: z.number(),
+  cppAdjustedAmount: z.boolean(),
+  oasStartAge: z.number().nullable(),
+  oasYearsInCanada: z.number(),
+  desiredSpending: z.number(),
+  successFactor: z.number().optional(),
+  withdrawalOrder: z.array(withdrawalAccount),
+  events: z.array(cashEventSchema).optional(),
+  spendingBands: z.array(spendingBandSchema).optional(),
+  spouse: spouseSchema.optional(),
+  spouseSource: spouseSourceSchema.optional(),
+  pensions: z.array(pensionSchema).optional(),
+  reverseMortgage: reverseMortgageSchema.optional(),
+}) satisfies z.ZodType<RetirementInputs>;
+
+export const scenarioSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  inputs: retirementInputsSchema,
+}) satisfies z.ZodType<Scenario>;
+
+// ---------------------------------------------------------------------------
+// Engine configuration
+// ---------------------------------------------------------------------------
+
+const taxTableSchema: z.ZodType<TaxTable> = z.object({
+  brackets: z.array(z.number()),
+  rates: z.array(z.number()),
+  exemption: z.number(),
+}).refine(t => t.rates.length === t.brackets.length + 1, {
+  message: 'rates must have exactly one more entry than brackets',
+});
+
+export const appConfigSchema: z.ZodType<AppConfig> = z.object({
+  federal: taxTableSchema,
+  // z.record's value type is `T | undefined` under noUncheckedIndexedAccess;
+  // the config interfaces index without undefined, so cast the record shape.
+  provinces: z.record(z.string(), taxTableSchema) as z.ZodType<Record<string, TaxTable>>,
+  rrifRates: z.record(z.string(), z.number()) as z.ZodType<Record<string, number>>,
+  oas: z.object({
+    baseMonthly65to74: z.number(),
+    baseMonthly75plus: z.number(),
+    deferralBonusPerMonth: z.number(),
+    eligibleAge: z.number(),
+    maxDeferralAge: z.number(),
+    minResidencyYears: z.number(),
+    fullPensionResidencyYears: z.number(),
+    clawbackRate: z.number(),
+    clawbackThreshold: z.number(),
+    gisMaxAnnualSingle: z.number(),
+    gisMaxAnnualCouple: z.number(),
+    gisReductionRate: z.number(),
+  }),
+  cpp: z.object({
+    standardAge: z.number(),
+    earliestAge: z.number(),
+    maxDeferralAge: z.number(),
+    earlyPenaltyPerMonth: z.number(),
+    deferralBonusPerMonth: z.number(),
+  }),
+  engine: z.object({
+    cashCushionRate: z.number(),
+    rrifConversionAge: z.number(),
+    inflationRate: z.number(),
+    indexSpending: z.boolean(),
+    indexTaxTables: z.boolean(),
+    capitalGainsInclusion: z.number(),
+    taxableAcbRatio: z.number(),
+    pensionSplitMaxRate: z.number(),
+  }),
+  qcFederalAbatement: z.number(),
+  ontarioSurtax: z.object({
+    threshold1: z.number(), rate1: z.number(),
+    threshold2: z.number(), rate2: z.number(),
+  }),
+  general: z.object({
+    showWelcomeOnLoad: z.boolean(),
+    promptToSaveOnSwitch: z.boolean(),
+  }),
+});
+
+// ---------------------------------------------------------------------------
+// The whole-app database document (one row in the SQLite store / one JSON file)
+// ---------------------------------------------------------------------------
+
+export const appDbDocSchema = z.object({
+  version: z.number(),
+  scenarios: z.array(scenarioSchema).min(1),
+  activeScenarioId: z.string(),
+  config: appConfigSchema,
+});
+
+export type AppDbDoc = z.infer<typeof appDbDocSchema>;
+
+/**
+ * Parse an untrusted persisted payload into the app database document.
+ * Legacy payloads (pre-schema fields, bare scenario arrays) are run through
+ * the input migrator first so one code path handles both. Returns null when
+ * the payload can't be made to fit — callers fall back to defaults.
+ */
+export function parseAppDbDoc(raw: unknown): AppDbDoc | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  // Migrate each scenario's inputs first (fills fields added by later
+  // versions), then validate the result strictly.
+  if (Array.isArray(candidate.scenarios)) {
+    for (const s of candidate.scenarios) {
+      if (s && typeof s === 'object' && 'inputs' in s) {
+        (s as { inputs: unknown }).inputs = migrateInputs((s as { inputs: object }).inputs);
+      }
+    }
+  }
+  const result = appDbDocSchema.safeParse(candidate);
+  if (!result.success) return null;
+  // An active id that no longer exists falls back to the first scenario.
+  if (!result.data.scenarios.some(s => s.id === result.data.activeScenarioId)) {
+    result.data.activeScenarioId = result.data.scenarios[0].id;
+  }
+  return result.data;
+}

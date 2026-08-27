@@ -250,7 +250,10 @@ export function OptimizeCard({ inputs, config, results, mcResults, onApply }: Op
             <div className="text-xs font-semibold text-slate-800 mb-1.5">1 · Copy the prompt</div>
             <p className="text-[11px] text-slate-500 mb-2 leading-snug">
               A self-contained prompt describing your plan, the levers and the exact JSON format to reply
-              with. Paste it into any AI (ChatGPT, Claude, …).
+              with. Paste it into any AI (ChatGPT, Claude, …). <strong className="text-slate-700">Heads
+              up:</strong> this app sends nothing anywhere — but the moment you paste, your full plan
+              (ages, balances, benefits, spending) is being read by that AI provider, under its own
+              terms and privacy policy. Don't paste anything you wouldn't hand to that company.
             </p>
             <textarea
               readOnly
@@ -323,7 +326,9 @@ export function OptimizeCard({ inputs, config, results, mcResults, onApply }: Op
               Pick a question (or write your own) and copy a self-contained prompt — it embeds your plan
               <em> and the computed results</em>, so the AI answers from the real numbers instead of
               guessing. Paste it into any AI (ChatGPT, Claude, …) and read the reply. Nothing is sent
-              anywhere by this app, and nothing is written back to your inputs.
+              anywhere by this app, and nothing is written back to your inputs — but once you paste,
+              your plan and results <strong className="text-slate-700">are being read by that AI
+              provider</strong> under its own terms and privacy policy.
             </p>
           </div>
 

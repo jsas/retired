@@ -7,9 +7,10 @@ import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
 import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson } from './lib/householdTypes';
-import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scenarioStorage';
-import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
-import { buildAppDb } from './lib/appDb';
+import { loadScenarioState, type Scenario } from './lib/scenarioStorage';
+import { loadAppConfig, type AppConfig } from './lib/appConfig';
+import { AppStore } from './data/store';
+import { AppDatabase } from './data/db';
 import { SettingsModal } from './components/SettingsModal';
 import { SavePromptModal } from './components/SavePromptModal';
 import { HelpModal } from './components/HelpModal';
@@ -36,6 +37,7 @@ import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
 import { consumePlanFromHash } from './lib/shareLink';
+import { buildDefaultScenarios } from './data/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
 import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
@@ -45,124 +47,14 @@ import { solveEqReadout } from './lib/eqSolver';
 import { renderRange, axisValue, consistentAges } from './lib/eqConstraints';
 import type { MonteCarloRequest } from './lib/monteCarlo';
 
-// First-run scenarios: three realistic, mutually distinct starting points that
-// each exercise different engine features (spouse plans, spending bands,
-// one-time events, CPP deferral). Only used when localStorage is empty.
-const buildDefaultScenarios = (): Scenario[] => [
-  {
-    id: 'scenario-1',
-    name: 'Example - Early Couple',
-    inputs: {
-      currentAge: 45,
-      retirementAge: 55,
-      maxAge: 95,
-      rrspBalance: 320000,
-      tfsaBalance: 140000,
-      taxableBalance: 90000,
-      cashCushionBalance: 30000,
-      rrspContribution: 24000,
-      tfsaContribution: 14000,
-      taxableContribution: 6000,
-      annualWithdrawal: 70000,
-      investmentReturn: 0.06,
-      returnVolatility: 0.15,
-      provinceCode: 'ONT',
-      cppStartAge: 65,
-      cppMonthlyAmount: 1000,
-      cppAdjustedAmount: false,
-      oasStartAge: 65,
-      oasYearsInCanada: 40,
-      desiredSpending: 70000,
-      withdrawalOrder: ['taxable', 'rrsp', 'tfsa'],
-      spendingBands: [
-        { fromAge: 75, pctOfBase: 0.85 },
-        { fromAge: 85, pctOfBase: 0.7 },
-      ],
-      spouse: {
-        enabled: true,
-        currentAge: 43,
-        retirementAge: 55,
-        rrspBalance: 240000,
-        tfsaBalance: 110000,
-        taxableBalance: 40000,
-        cashCushionBalance: 20000,
-        rrspContribution: 18000,
-        tfsaContribution: 7000,
-        taxableContribution: 0,
-        cppStartAge: 65,
-        cppMonthlyAmount: 850,
-        oasStartAge: 65,
-        oasYearsInCanada: 40,
-        desiredSpending: 30000,
-        withdrawalOrder: ['taxable', 'rrsp', 'tfsa'],
-      },
-    },
-  },
-  {
-    id: 'scenario-2',
-    name: 'Example - Single at 60',
-    inputs: {
-      currentAge: 55,
-      retirementAge: 60,
-      maxAge: 95,
-      rrspBalance: 600000,
-      tfsaBalance: 120000,
-      taxableBalance: 80000,
-      cashCushionBalance: 40000,
-      rrspContribution: 20000,
-      tfsaContribution: 7000,
-      taxableContribution: 0,
-      annualWithdrawal: 52000,
-      investmentReturn: 0.05,
-      returnVolatility: 0.12,
-      provinceCode: 'BC',
-      cppStartAge: 70,
-      cppMonthlyAmount: 1250,
-      cppAdjustedAmount: false,
-      oasStartAge: 65,
-      oasYearsInCanada: 40,
-      desiredSpending: 52000,
-      withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
-      events: [
-        { id: 'evt-downsize', age: 68, label: 'Downsize home', amount: 250000, direction: 'in', account: 'taxable' },
-        { id: 'evt-car', age: 63, label: 'Replace car', amount: 35000, direction: 'out' },
-      ],
-    },
-  },
-  {
-    id: 'scenario-3',
-    name: 'Example - Semi-retirement',
-    inputs: {
-      currentAge: 52,
-      retirementAge: 60,
-      maxAge: 90,
-      rrspBalance: 260000,
-      tfsaBalance: 110000,
-      taxableBalance: 40000,
-      cashCushionBalance: 15000,
-      rrspContribution: 14000,
-      tfsaContribution: 7000,
-      taxableContribution: 2000,
-      annualWithdrawal: 36000,
-      investmentReturn: 0.045,
-      returnVolatility: 0.10,
-      provinceCode: 'ONT',
-      cppStartAge: 65,
-      cppMonthlyAmount: 900,
-      cppAdjustedAmount: false,
-      oasStartAge: 65,
-      oasYearsInCanada: 35,
-      desiredSpending: 36000,
-      withdrawalOrder: ['taxable', 'tfsa', 'rrsp'],
-      spendingBands: [
-        { fromAge: 70, pctOfBase: 0.9 },
-        { fromAge: 80, pctOfBase: 0.75 },
-      ],
-    },
-  },
-];
-
-const getInitialState = () => {
+// The SQL store loads asynchronously (the wasm binary has to be fetched/decoded
+// first — near-instant after the first visit). To keep first paint synchronous
+// we seed state from the legacy split-key snapshot (or first-run examples) and
+// then swap in the store's authoritative contents the moment it opens; the two
+// formats are kept in sync by the persist path, so this is a cache read, not a
+// fork. The swap is skipped while the user holds unsaved edits so in-flight
+// work is never clobbered.
+const getSyncSeed = () => {
   const stored = loadScenarioState();
   if (stored) {
     return { scenarios: stored.scenarios, activeScenarioId: stored.activeScenarioId };
@@ -172,11 +64,12 @@ const getInitialState = () => {
 };
 
 function App() {
-  const [initialState] = useState(getInitialState);
+  const [initialState] = useState(getSyncSeed);
 
   const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
   const [activeScenarioId, setActiveScenarioId] = useState<string>(initialState.activeScenarioId);
   const [config, setConfig] = useState<AppConfig>(loadAppConfig);
+  const [store, setStore] = useState<AppStore | null>(null);
   // Default landing: the Welcome page unless the user checked "don't show this
   // again" (or General settings forces it on every load); otherwise the
   // projection dashboard. An explicit hash route always wins.
@@ -272,15 +165,40 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printOptions.includeMonteCarlo, resolvedInputs, config]);
 
-  // Persist scenarios + active scenario to localStorage on every change
+  // Open the SQL store once (async: the wasm has to load). When its contents
+  // differ from the sync seed and the user isn't mid-edit, adopt them — the
+  // store is the authoritative copy.
   useEffect(() => {
-    saveScenarioState(scenarios, activeScenarioId);
-  }, [scenarios, activeScenarioId]);
+    let cancelled = false;
+    AppStore.open(buildDefaultScenarios).then(({ store: opened, state }) => {
+      if (cancelled) return;
+      setStore(opened);
+      setHasUnsavedChanges(dirty => {
+        if (!dirty) {
+          setScenarios(state.scenarios);
+          setActiveScenarioId(state.activeScenarioId);
+          setInputs(JSON.parse(JSON.stringify(
+            state.scenarios.find(s => s.id === state.activeScenarioId)!.inputs,
+          )));
+        }
+        return dirty;
+      });
+      if (state.config) setConfig(state.config);
+    }).catch(err => console.warn('SQL store failed to open; running in-memory:', err));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Persist engine config on every change
+  // Persist scenarios + active scenario on every change (once the store is
+  // open — before that there's nothing to write through to).
   useEffect(() => {
-    saveAppConfig(config);
-  }, [config]);
+    store?.persist({ scenarios, activeScenarioId });
+  }, [store, scenarios, activeScenarioId]);
+
+  // Persist engine config on every change.
+  useEffect(() => {
+    store?.persist({ config });
+  }, [store, config]);
 
   // If the URL carried a shared plan (#plan=...), import it once as a new
   // scenario and select it. Runs before the persist effect's first save would
@@ -308,20 +226,24 @@ function App() {
     setHasUnsavedChanges(false);
   };
 
-  // Full backup: download the chosen scenarios (+ optionally the engine config).
-  const handleExportFull = (scenarioIds: string[], includeConfig: boolean) => {
+  // Full backup: download a REAL SQLite database file holding the chosen
+  // scenarios (+ optionally the engine config). Openable by any SQLite tool
+  // and re-importable here; the same file format a self-contained Node
+  // package would use.
+  const handleExportFull = async (scenarioIds: string[], includeConfig: boolean) => {
     const chosen = scenarios.filter(s => scenarioIds.includes(s.id));
     const activeId = chosen.some(s => s.id === activeScenarioId) ? activeScenarioId : (chosen[0]?.id ?? activeScenarioId);
-    const db = buildAppDb(chosen, activeId, config);
-    if (!includeConfig) {
-      // Strip the config so the receiver keeps their own engine settings.
-      delete (db as Partial<typeof db>).config;
-    }
-    const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+    const db = await AppDatabase.open();
+    db.saveScenarios(chosen);
+    db.saveActiveScenarioId(activeId);
+    if (includeConfig) db.saveConfig(config);
+    const bytes = db.exportBytes();
+    db.close();
+    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/vnd.sqlite3' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `retirement-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `retirement-backup-${new Date().toISOString().split('T')[0]}.sqlite`;
     a.click();
     URL.revokeObjectURL(url);
   };

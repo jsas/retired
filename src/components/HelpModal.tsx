@@ -138,6 +138,19 @@ const SECTIONS: HelpSection[] = [
         body: <P>Runs a second, independent projection for your partner using their own ages, balances, contributions, CPP/OAS and spending. The two plans are combined into a household verdict: the household is SHORTFALL if either plan runs out, and the metric cards show household wealth at retirement with per-person detail.</P>
       },
       {
+        term: 'Built-in vs linked spouse',
+        body: (
+          <>
+            <P>The spouse can live two places, switched by the <strong>Built-in / Link a plan</strong> toggle at the top of the Spouse section:</P>
+            {ul([
+              <><strong>Built-in</strong> — the spouse's numbers are stored inside this scenario and edited inline. <em>Save spouse as its own plan…</em> (bottom of the section) promotes them to a standalone scenario named "this plan - Spouse".</>,
+              <><strong>Link a plan</strong> — the spouse <em>is</em> another saved scenario. Their basic numbers show in the sidebar fetched live from that plan; edits stay a local draft until <em>Save to "plan name"</em> writes them back. One source of truth — editing the linked plan updates every household that links to it.</>,
+            ])}
+            <P>A household shares one province, one market assumption and one planning horizon, so a linked spouse's own values for those are overridden by this plan (each override is listed in the amber warning box).</P>
+          </>
+        )
+      },
+      {
         term: 'Spouse approximation',
         body: <P>Each spouse is drawn down independently; pension income splitting <em>is</em> modelled — up to 50% of eligible pension income (RRIF/RRSP draws and DB pensions, not CPP/OAS) is reallocated to the lower-taxed spouse each year to minimize household tax (affects reported tax only, not GIS or withdrawals). Spousal RRSPs are not modelled. Couple-based GIS <em>is</em> modelled (combined non-OAS income, couple rate when both receive OAS).</P>
       },
@@ -346,6 +359,38 @@ const SECTIONS: HelpSection[] = [
     ]
   },
   {
+    id: 'help-optimize',
+    title: 'Optimize',
+    entries: [
+      {
+        term: null,
+        body: (
+          <P>
+            The <strong>Optimize</strong> page has three tabs: ranked strategies the app computes
+            itself, a spending target solver, and an AI helper you drive manually.
+          </P>
+        )
+      },
+      {
+        term: 'Strategy ranking',
+        body: <P>Re-runs your plan under a menu of alternatives — CPP/OAS timing (take at 60, 65, or defer to 70), withdrawal orders (TFSA-first, RRSP meltdown, and more), and, when a home value is recorded in the Reverse Mortgage section, reverse-mortgage start ages and draw sizes. Each is scored on the sustainable after-tax spending it supports; the best rises to the top with a one-click Apply that writes the changes into your inputs (unsaved until you Save).</P>
+      },
+      {
+        term: 'Sustainable spending',
+        body: <P>Answers "how much could I spend?" instead of "will my spending last?" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures.</P>
+      },
+      {
+        term: 'AI helper (paste-at-your-own-discretion)',
+        body: (
+          <>
+            <P>The <strong>Agent</strong> and <strong>Ask</strong> tabs build a self-contained prompt embedding your plan (Ask also embeds the computed results) for you to copy into any AI — ChatGPT, Claude, whatever you trust. Agent replies can be pasted back and applied field-by-field after validation; Ask is read-only Q&amp;A.</P>
+            <P><strong>Privacy:</strong> this app never sends anything anywhere — the copy button is the only thing that moves data, and it moves it into <em>your</em> clipboard. But once you paste the prompt into an AI service, your ages, balances, benefits and spending <strong>are read by that provider</strong>, under its terms and privacy policy. If that gives you pause, redact the numbers that identify you, or skip the feature — everything else in Optimize runs entirely on your machine.</P>
+          </>
+        )
+      }
+    ]
+  },
+  {
     id: 'help-backtest',
     title: 'Backtest',
     entries: [
@@ -372,20 +417,41 @@ const SECTIONS: HelpSection[] = [
     ]
   },
   {
+    id: 'help-compare',
+    title: 'Compare',
+    entries: [
+      {
+        term: null,
+        body: (
+          <P>
+            The <strong>Compare</strong> page puts 2–3 saved scenarios side by side — verdict, money-lasts-to,
+            spending, tax and ending wealth — so you can see which version of a plan holds up best. Each
+            scenario is scored with its own resolved spouse: a plan whose spouse is a linked scenario is
+            compared as the full household, not the primary alone.
+          </P>
+        )
+      }
+    ]
+  },
+  {
     id: 'help-data',
     title: 'Scenarios & Data',
     entries: [
       {
         term: 'Scenarios',
-        body: <P>A scenario is one complete set of inputs. The top bar switches between them; Save writes your edits into the active scenario; Scenarios opens the manager to create, rename, duplicate and delete. Reset discards your unsaved edits and reverts the sidebar to the active scenario's last-saved inputs.</P>
+        body: <P>A scenario is one complete set of inputs. The top bar switches between them; Save writes your edits into the active scenario; Scenarios opens the manager to create, rename, duplicate and delete. Reset discards your unsaved edits and reverts the sidebar to the active scenario's last-saved inputs. Switching away with unsaved edits asks whether to save first — the prompt's "don't ask again" box (or Settings → General) turns that check off.</P>
+      },
+      {
+        term: 'New Scenario wizard',
+        body: <P>Creating a scenario opens the guided setup: ages, savings, contributions, CPP/OAS and a spending goal, then a review step where you name the plan, answer the own-your-home question (saved into the Reverse Mortgage section so Optimize can weigh the equity), and optionally tick <strong>Add a spouse or partner</strong> — which runs a short second wizard for the partner's own numbers.</P>
       },
       {
         term: 'Where data lives',
-        body: <P>Everything is stored in your browser's localStorage — nothing leaves your machine. Clearing browser data erases your scenarios, so use Export to keep backups.</P>
+        body: <P>Your plans live in a real <strong>SQLite database</strong> (running as WebAssembly) whose bytes are mirrored into this browser's localStorage — nothing leaves your machine. Clearing browser data erases your scenarios, so use Export to keep backups. One exception, and it's your hands on the keyboard: the Optimize tab's <strong>AI helper</strong> builds a prompt containing your plan (and results) for you to paste into an AI of your choice — once pasted, that provider reads the data under its own privacy policy.</P>
       },
       {
         term: 'Export / Import',
-        body: <P>Export downloads the entire app database — all scenarios, the active selection, and all engine settings (tax tables, RRIF rates, OAS parameters) — as one JSON file. Import loads such a file, replacing everything after confirmation. Older files are migrated automatically (e.g. a legacy single "annual contribution" becomes a TFSA contribution).</P>
+        body: <P>Export downloads the chosen scenarios (+ optionally the engine settings) as a <strong>.sqlite file</strong> — the very same database format the app stores locally, openable by any SQLite tool (DB Browser, the sqlite3 CLI). Import reads that file back (and still accepts the older JSON backups), letting you pick which scenarios to apply. Older payloads are migrated automatically (e.g. a legacy single "annual contribution" becomes a TFSA contribution).</P>
       },
       {
         term: 'Export CSV',

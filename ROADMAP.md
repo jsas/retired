@@ -39,6 +39,27 @@ have to hold them.
 - **Bucket strategies** — cash/bond/equity buckets with rebalancing rules, as
   an alternative to the single blended return assumption.
 
+## Architecture
+
+- **Monorepo split: engine package + UI package.** Everything under `src/lib`
+  that is pure TypeScript with no DOM/React dependency (the projection
+  engine, tax tables, Monte Carlo, backtest, EQ/spending solvers, household
+  types, scenario/config schema) graduates into a standalone Node.js library
+  package — e.g. `@retired/engine` — with its own test suite, published or
+  linked into the app. The React UI becomes its own package in the same
+  monorepo (pnpm/npm workspaces) and consumes the engine only through its
+  public API. This is what makes the engine usable from a CLI, a server, or
+  a future self-contained desktop build, and it forces the data layer
+  (scenarios, config, migrations) to be platform-neutral: the storage
+  interface the UI backs with localStorage today is the same interface a
+  Node consumer backs with SQLite/a file later.
+- **Data layer hardening (underway)** — Zod schemas now define every
+  persisted shape (`src/data/schemas.ts`), and all app state lives in a real
+  SQLite database via sql.js (`src/data/db.ts`), mirrored to localStorage and
+  exportable as a .sqlite file. Remaining: OPFS persistence (survives
+  "clear site data" less often, no 5MB localStorage ceiling), and a Node
+  SQLite backend behind the same store interface for the engine package.
+
 ## Non-goals
 
 Worth stating explicitly so issues don't pile up:
