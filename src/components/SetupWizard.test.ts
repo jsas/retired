@@ -78,6 +78,31 @@ describe('SetupWizard data helpers', () => {
     expect(out.reverseMortgage).toBeUndefined();
   });
 
+  it('editing the home value on a plan that already has an RM updates it (not a no-op)', () => {
+    // Regression: applyWizardData only wrote homeValue when reverseMortgage was
+    // null, so re-running the wizard and correcting the value was ignored.
+    const base = baseInputs({
+      reverseMortgage: { enabled: true, homeValue: 650000, appreciationRate: 0.02, interestRate: 0.06, maxLtv: 0.55, topUp: true },
+    });
+    const d = wizardDataFrom(base); // pre-fills ownsHome=true, homeValue=650000
+    d.homeValue = 720000;
+    const out = applyWizardData(base, d);
+    expect(out.reverseMortgage?.homeValue).toBe(720000);
+    // The existing loan's enabled state and terms are preserved, not reset.
+    expect(out.reverseMortgage?.enabled).toBe(true);
+    expect(out.reverseMortgage?.interestRate).toBe(0.06);
+  });
+
+  it('answering "own your home: no" on a plan with an RM removes it', () => {
+    const base = baseInputs({
+      reverseMortgage: { enabled: true, homeValue: 650000, appreciationRate: 0.02, interestRate: 0.06, topUp: true },
+    });
+    const d = wizardDataFrom(base);
+    d.ownsHome = false;
+    const out = applyWizardData(base, d);
+    expect(out.reverseMortgage).toBeUndefined();
+  });
+
   it('the scenario name never leaks into the engine inputs', () => {
     const d = wizardDataFrom(baseInputs(), 'Early Retirement');
     const out = applyWizardData(baseInputs(), d);

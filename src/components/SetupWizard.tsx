@@ -73,17 +73,26 @@ export function wizardDataFrom(inputs: RetirementInputs, suggestedName = 'My Pla
 export function applyWizardData(base: RetirementInputs, data: WizardData): RetirementInputs {
   const { scenarioName: _name, ownsHome, homeValue, ...numbers } = data;
   const next: RetirementInputs = { ...base, ...numbers };
-  if (ownsHome === true && next.reverseMortgage == null) {
-    // Record the equity so the RM section and the Optimize tab have something
-    // real to work with; leave the loan itself off until the user turns it on.
-    next.reverseMortgage = {
-      enabled: false,
-      homeValue,
-      appreciationRate: 0.02,
-      interestRate: 0.065,
-      maxLtv: 0.55,
-      topUp: true,
-    };
+  if (ownsHome === true) {
+    // Record/update the equity so the RM section and the Optimize tab have
+    // something real to work with; leave the loan's enabled state untouched.
+    // When a plan already has a reverseMortgage, UPDATE its homeValue (an edit
+    // is not a no-op) rather than only filling a missing one.
+    next.reverseMortgage = next.reverseMortgage == null
+      ? {
+          enabled: false,
+          homeValue,
+          appreciationRate: 0.02,
+          interestRate: 0.065,
+          maxLtv: 0.55,
+          topUp: true,
+        }
+      : { ...next.reverseMortgage, homeValue };
+  } else if (ownsHome === false) {
+    // "No, I don't own my home" — an existing reverse mortgage no longer makes
+    // sense; remove it so the plan doesn't model borrowing against a home the
+    // user says they don't have.
+    next.reverseMortgage = undefined;
   }
   return next;
 }
