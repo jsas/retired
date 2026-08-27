@@ -21,6 +21,7 @@ import { DataPage, type FullBackupSelection, type ProjectionImportRequest } from
 import { OptimizeCard } from './components/OptimizeCard';
 import { CompareCard } from './components/CompareCard';
 import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
+import { SetupWizard, wizardDataFrom, applyWizardData, type WizardData } from './components/SetupWizard';
 import { PrintOptionsCard } from './components/PrintOptionsCard';
 import { DonateCard } from './components/DonateCard';
 import { loadPrintOptions, savePrintOptions, type PrintOptions } from './lib/printOptions';
@@ -350,6 +351,23 @@ function App() {
       s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(inputs)) } : s
     ));
     setHasUnsavedChanges(false);
+  };
+
+  // First-scenario setup wizard. Launched from the Welcome page ("Get started")
+  // or re-opened from Help; on completion the collected values overlay the
+  // current inputs (keeping engine defaults) and become the active plan.
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const handleWizardComplete = (data: WizardData) => {
+    const next = applyWizardData(inputs, data);
+    setInputs(consistentAges(JSON.parse(JSON.stringify(next))));
+    // Persist straight into the active scenario so the new plan survives a
+    // reload without a separate "save" click.
+    setScenarios(prev => prev.map(s =>
+      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(next)) } : s
+    ));
+    setHasUnsavedChanges(false);
+    setWizardOpen(false);
+    setView('projection');
   };
 
   // Resolve the spouse adapter: when the spouse is a reference to another
@@ -815,7 +833,15 @@ function App() {
             )}
 
             {view === 'welcome' && (
-              <WelcomeCard onContinue={() => setView('projection')} />
+              wizardOpen ? (
+                <SetupWizard
+                  initial={wizardDataFrom(inputs)}
+                  onComplete={handleWizardComplete}
+                  onSkip={() => { setWizardOpen(false); setView('projection'); }}
+                />
+              ) : (
+                <WelcomeCard onContinue={() => setWizardOpen(true)} />
+              )
             )}
 
             {view === 'settings' && (

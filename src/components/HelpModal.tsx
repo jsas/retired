@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Sparkles } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Help content model: every entry is a small tree of {id, title, body} so the
@@ -536,6 +536,19 @@ export function HelpModal() {
 
   return (
     <div>
+      {/* Re-run the guided first-scenario setup (the welcome wizard). */}
+      <a
+        href="#/welcome"
+        className="mb-3 flex items-center gap-3 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 group"
+      >
+        <Sparkles size={16} className="shrink-0 text-blue-600" />
+        <span className="flex-1 text-xs text-slate-700">
+          <span className="font-semibold text-slate-900">Walk through your first scenario</span>
+          {' '}— a 5-step guided setup (ages, savings, benefits, spending).
+        </span>
+        <span className="text-[11px] font-medium text-blue-600 group-hover:underline">Open →</span>
+      </a>
+
       {/* Search */}
       <div className="relative mb-3">
         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
