@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X } from 'lucide-react';
 import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
@@ -14,9 +14,14 @@ interface SidebarFormProps {
   // For the spouse adapter: the saved scenarios a spouse can be linked to, the
   // active plan's own id (to exclude self-references), and any host-wins /
   // resolution warnings from materializing a linked spouse.
-  scenarios?: Array<{ id: string; name: string }>;
+  scenarios?: Array<{ id: string; name: string; inputs: RetirementInputs }>;
   activeScenarioId?: string;
   spouseWarnings?: string[];
+  /** Persist edited person fields back into another saved scenario (the linked
+   *  spouse plan) without switching to it. */
+  onUpdateScenarioInputs?: (scenarioId: string, patch: Partial<RetirementInputs>) => void;
+  /** Save the embedded spouse as its own standalone scenario. */
+  onSaveSpouseAsScenario?: (name: string) => void;
 }
 
 const ACCOUNT_LABELS: Record<WithdrawalAccount, string> = {
@@ -138,7 +143,7 @@ function CollapsibleSection({ id, icon, title, open, onToggle, children }: {
   );
 }
 
-export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, scenarios, activeScenarioId, spouseWarnings }: SidebarFormProps) {
+export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, scenarios, activeScenarioId, spouseWarnings, onUpdateScenarioInputs, onSaveSpouseAsScenario }: SidebarFormProps) {
   const updateField = <K extends keyof RetirementInputs>(field: K, value: RetirementInputs[K]) => {
     onChange({ ...inputs, [field]: value });
   };
@@ -497,6 +502,65 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
       if (inputs.spouse) spouseStash.current = inputs.spouse;
       onChange({ ...inputs, spouse: undefined, spouseSource: { kind: 'builtin' } });
     }
+  };
+
+  // ---- linked-spouse basic-number editor ----
+  // When the spouse is a linked plan, show the same basic numbers the built-in
+  // view edits, but fetched from the linked scenario. Edits are LOCAL (a draft)
+  // until "Save to linked plan" writes them back via onUpdateScenarioInputs —
+  // changing another saved plan silently on every keystroke would be surprising.
+  const linkedScenarioId = spouseSource.kind === 'scenario' ? spouseSource.scenarioId : null;
+  const linkedScenario = linkedScenarioId != null
+    ? (scenarios ?? []).find(s => s.id === linkedScenarioId)
+    : undefined;
+  const [linkedDraft, setLinkedDraft] = useState<Partial<RetirementInputs> | null>(null);
+  // The draft re-seeds whenever the link target or the target's saved inputs
+  // change (a save round-trips through scenarios and lands back here clean).
+  const linkedSeedJson = JSON.stringify(
+    linkedScenario
+      ? {
+          currentAge: linkedScenario.inputs.currentAge,
+          retirementAge: linkedScenario.inputs.retirementAge,
+          rrspBalance: linkedScenario.inputs.rrspBalance,
+          tfsaBalance: linkedScenario.inputs.tfsaBalance,
+          taxableBalance: linkedScenario.inputs.taxableBalance,
+          cashCushionBalance: linkedScenario.inputs.cashCushionBalance,
+          rrspContribution: linkedScenario.inputs.rrspContribution,
+          tfsaContribution: linkedScenario.inputs.tfsaContribution,
+          taxableContribution: linkedScenario.inputs.taxableContribution,
+          cppStartAge: linkedScenario.inputs.cppStartAge,
+          cppMonthlyAmount: linkedScenario.inputs.cppMonthlyAmount,
+          oasStartAge: linkedScenario.inputs.oasStartAge,
+          oasYearsInCanada: linkedScenario.inputs.oasYearsInCanada,
+          desiredSpending: linkedScenario.inputs.desiredSpending,
+        }
+      : null,
+  );
+  useEffect(() => {
+    setLinkedDraft(linkedSeedJson ? JSON.parse(linkedSeedJson) : null);
+  }, [linkedSeedJson]);
+  const linkedDirty = linkedSeedJson != null && JSON.stringify(linkedDraft) !== linkedSeedJson;
+  const updateLinkedDraft = (patch: Partial<RetirementInputs>) =>
+    setLinkedDraft(d => (d ? { ...d, ...patch } : d));
+  const saveLinkedDraft = () => {
+    if (linkedScenarioId && linkedDraft && linkedDirty) {
+      onUpdateScenarioInputs?.(linkedScenarioId, linkedDraft);
+    }
+  };
+
+  // ---- save the built-in spouse as its own plan ----
+  const [spouseSaveAsOpen, setSpouseSaveAsOpen] = useState(false);
+  const [spouseSaveAsName, setSpouseSaveAsName] = useState('');
+  const activeScenarioName = (scenarios ?? []).find(s => s.id === activeScenarioId)?.name;
+  const openSpouseSaveAs = () => {
+    setSpouseSaveAsName(`${activeScenarioName ?? 'Plan'} - Spouse`);
+    setSpouseSaveAsOpen(true);
+  };
+  const confirmSpouseSaveAs = () => {
+    const name = spouseSaveAsName.trim();
+    if (!name) return;
+    onSaveSpouseAsScenario?.(name);
+    setSpouseSaveAsOpen(false);
   };
 
   const updateRm = (patch: Partial<ReverseMortgage>) => {
@@ -885,6 +949,92 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                       ))}
                     </select>
                   </div>
+
+                  {/* The linked plan's basic numbers, fetched live from the saved
+                      scenario — same fields the built-in view edits. Edits stay
+                      local until "Save to linked plan" writes them back. */}
+                  {linkedDraft && (
+                    <>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <div>
+                          <label className={LABEL_CLS}>Age</label>
+                          <input type="number" value={linkedDraft.currentAge ?? ''}
+                            onChange={(e) => updateLinkedDraft({ currentAge: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Retire</label>
+                          <input type="number" value={linkedDraft.retirementAge ?? ''}
+                            onChange={(e) => updateLinkedDraft({ retirementAge: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Spending $</label>
+                          <input type="number" step="1000" value={linkedDraft.desiredSpending ?? ''}
+                            onChange={(e) => updateLinkedDraft({ desiredSpending: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className={LABEL_CLS}>RRSP $</label>
+                          <input type="number" step="1000" value={linkedDraft.rrspBalance ?? ''}
+                            onChange={(e) => updateLinkedDraft({ rrspBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>TFSA $</label>
+                          <input type="number" step="1000" value={linkedDraft.tfsaBalance ?? ''}
+                            onChange={(e) => updateLinkedDraft({ tfsaBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Taxable $</label>
+                          <input type="number" step="1000" value={linkedDraft.taxableBalance ?? ''}
+                            onChange={(e) => updateLinkedDraft({ taxableBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Cash $</label>
+                          <input type="number" step="1000" value={linkedDraft.cashCushionBalance ?? ''}
+                            onChange={(e) => updateLinkedDraft({ cashCushionBalance: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>RRSP contrib $/yr</label>
+                          <input type="number" step="1000" value={linkedDraft.rrspContribution ?? ''}
+                            onChange={(e) => updateLinkedDraft({ rrspContribution: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>TFSA contrib $/yr</label>
+                          <input type="number" step="1000" value={linkedDraft.tfsaContribution ?? ''}
+                            onChange={(e) => updateLinkedDraft({ tfsaContribution: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>CPP start</label>
+                          <input type="number" min="60" max="70" value={linkedDraft.cppStartAge ?? ''}
+                            onChange={(e) => updateLinkedDraft({ cppStartAge: e.target.value ? parseInt(e.target.value) : null })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>CPP at 65 $/mo</label>
+                          <input type="number" min="0" value={linkedDraft.cppMonthlyAmount ?? ''}
+                            onChange={(e) => updateLinkedDraft({ cppMonthlyAmount: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>OAS start</label>
+                          <input type="number" min="65" max="70" value={linkedDraft.oasStartAge ?? ''}
+                            onChange={(e) => updateLinkedDraft({ oasStartAge: e.target.value ? parseInt(e.target.value) : null })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>Yrs in Canada</label>
+                          <input type="number" value={linkedDraft.oasYearsInCanada ?? ''}
+                            onChange={(e) => updateLinkedDraft({ oasYearsInCanada: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                        </div>
+                      </div>
+                      <button
+                        onClick={saveLinkedDraft}
+                        disabled={!linkedDirty || !onUpdateScenarioInputs}
+                        className="w-full px-2 py-1.5 rounded text-[11px] font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-default"
+                        title={linkedDirty ? `Write these numbers back into "${linkedScenario?.name}"` : 'No changes to save'}
+                      >
+                        {linkedDirty ? `Save to "${linkedScenario?.name}"` : 'Saved in the linked plan'}
+                      </button>
+                    </>
+                  )}
+
                   {(spouseWarnings ?? []).length > 0 && (
                     <div className="px-2 py-1.5 bg-amber-900/30 border border-amber-700/50 rounded space-y-0.5">
                       <p className="text-[10px] font-semibold text-amber-200 leading-snug">
@@ -899,8 +1049,8 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                   <p className="text-[10px] text-neutral-500 leading-snug">
                     The linked plan's balances, ages and benefits run as the spouse. Your market
                     assumptions, province and horizon apply to the household (host wins) — any of the
-                    spouse's own that differ are ignored, as warned above. Edit the linked plan to
-                    change them.
+                    spouse's own that differ are ignored, as warned above. Pensions, events and
+                    spending phases stay on the linked plan itself.
                   </p>
                 </div>
               ) : (
@@ -1002,6 +1152,47 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 50% of eligible pension income to the lower-taxed spouse) is applied to the reported
                 household tax — see Settings → Engine.
               </p>
+
+              {/* Save the embedded spouse as its own standalone scenario — the
+                  first step toward linking instead of embedding (the spouse's
+                  numbers then live in one place, editable from either plan). */}
+              {onSaveSpouseAsScenario && (
+                spouseSaveAsOpen ? (
+                  <div className="px-2 py-2 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
+                    <label className={LABEL_CLS}>Save spouse as a new plan</label>
+                    <input
+                      type="text"
+                      value={spouseSaveAsName}
+                      onChange={(e) => setSpouseSaveAsName(e.target.value)}
+                      className={INPUT_CLS}
+                      placeholder="Plan name"
+                    />
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={confirmSpouseSaveAs}
+                        disabled={!spouseSaveAsName.trim()}
+                        className="flex-1 px-2 py-1.5 rounded text-[11px] font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+                      >
+                        Save plan
+                      </button>
+                      <button
+                        onClick={() => setSpouseSaveAsOpen(false)}
+                        className="px-2 py-1.5 rounded text-[11px] text-neutral-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={openSpouseSaveAs}
+                    className="w-full px-2 py-1.5 rounded text-[11px] font-medium border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500"
+                    title="Create a standalone scenario from this spouse's numbers"
+                  >
+                    Save spouse as its own plan…
+                  </button>
+                )
+              )}
               </>
               )}
             </div>

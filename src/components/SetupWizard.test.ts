@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wizardDataFrom, applyWizardData } from './SetupWizard';
+import { wizardDataFrom, applyWizardData, spouseWizardDataFrom, applySpouseWizardData, stepsFor } from './SetupWizard';
 import { baseInputs } from '../test/helpers';
 
 describe('SetupWizard data helpers', () => {
@@ -13,6 +13,7 @@ describe('SetupWizard data helpers', () => {
     });
     const d = wizardDataFrom(inputs, 'Retire at 60');
     expect(d).toEqual({
+      person: 'primary',
       scenarioName: 'Retire at 60',
       currentAge: 55, retirementAge: 60, maxAge: 95,
       rrspBalance: 600000, tfsaBalance: 120000, taxableBalance: 80000, cashCushionBalance: 40000,
@@ -107,5 +108,95 @@ describe('SetupWizard data helpers', () => {
     const d = wizardDataFrom(baseInputs(), 'Early Retirement');
     const out = applyWizardData(baseInputs(), d);
     expect((out as unknown as Record<string, unknown>).scenarioName).toBeUndefined();
+  });
+});
+
+describe('SetupWizard — spouse pass', () => {
+  it('the spouse pass hides household-level fields (maxAge) but keeps person fields', () => {
+    const spouse = stepsFor('spouse');
+    const primary = stepsFor('primary');
+    expect(spouse).toHaveLength(primary.length); // same five steps
+    const agesSpouse = spouse[0];
+    const agesPrimary = primary[0];
+    expect(agesPrimary.fields.map(f => f.key)).toContain('maxAge');
+    expect(agesSpouse.fields.map(f => f.key)).not.toContain('maxAge');
+    expect(agesSpouse.fields.map(f => f.key)).toEqual(['currentAge', 'retirementAge']);
+  });
+
+  it('spouseWizardDataFrom seeds from the existing spouse when one exists', () => {
+    const host = baseInputs({
+      spouse: {
+        enabled: true, currentAge: 58, retirementAge: 63,
+        rrspBalance: 210000, tfsaBalance: 55000, taxableBalance: 10000, cashCushionBalance: 5000,
+        rrspContribution: 8000, tfsaContribution: 3000, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 780, oasStartAge: 67, oasYearsInCanada: 30,
+        desiredSpending: 24000,
+      },
+    });
+    const d = spouseWizardDataFrom(host);
+    expect(d.person).toBe('spouse');
+    expect(d.currentAge).toBe(58);
+    expect(d.retirementAge).toBe(63);
+    expect(d.rrspBalance).toBe(210000);
+    expect(d.cppMonthlyAmount).toBe(780);
+    expect(d.oasStartAge).toBe(67);
+    expect(d.desiredSpending).toBe(24000);
+    // Household-level fields are never the spouse's to answer.
+    expect(d.maxAge).toBe(host.maxAge);
+    expect(d.ownsHome).toBeNull();
+  });
+
+  it('spouseWizardDataFrom falls back to partner defaults when there is no spouse yet', () => {
+    const host = baseInputs({ currentAge: 55, retirementAge: 60, desiredSpending: 52000, spouse: undefined });
+    const d = spouseWizardDataFrom(host);
+    expect(d.currentAge).toBe(55);
+    expect(d.retirementAge).toBe(60);
+    expect(d.desiredSpending).toBe(26000); // half the host's goal
+    expect(d.rrspBalance).toBe(0);
+    expect(d.cppStartAge).toBe(65);
+  });
+
+  it('applySpouseWizardData writes the spouse block, enables it, and keeps the host untouched', () => {
+    const host = baseInputs({ currentAge: 55, desiredSpending: 52000, spouse: undefined });
+    const d = spouseWizardDataFrom(host);
+    d.currentAge = 57;
+    d.rrspBalance = 180000;
+    d.cppMonthlyAmount = 820;
+    d.desiredSpending = 22000;
+    const out = applySpouseWizardData(host, d);
+    expect(out.spouse?.enabled).toBe(true);
+    expect(out.spouse?.currentAge).toBe(57);
+    expect(out.spouse?.rrspBalance).toBe(180000);
+    expect(out.spouse?.cppMonthlyAmount).toBe(820);
+    expect(out.spouse?.desiredSpending).toBe(22000);
+    expect(out.spouseSource).toEqual({ kind: 'builtin' });
+    // Host fields are untouched.
+    expect(out.currentAge).toBe(55);
+    expect(out.desiredSpending).toBe(52000);
+    expect(out.rrspBalance).toBe(host.rrspBalance);
+  });
+
+  it('applySpouseWizardData preserves spouse fields the wizard never asks about', () => {
+    // Pensions, events, bands and a withdrawal order set earlier must survive a
+    // spouse-wizard re-run (the pass edits the basics, not the whole person).
+    const host = baseInputs({
+      spouse: {
+        enabled: true, currentAge: 58, retirementAge: 63,
+        rrspBalance: 100000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 20000,
+        withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+        pensions: [{ id: 'p1', label: 'DB', annualAmount: 12000, startAge: 60, endAge: null, indexedToCpi: true }],
+        events: [{ id: 'e1', age: 70, label: 'gift', amount: 5000, direction: 'in', account: 'tfsa' }],
+      },
+    });
+    const d = spouseWizardDataFrom(host);
+    d.rrspBalance = 150000;
+    const out = applySpouseWizardData(host, d);
+    expect(out.spouse?.rrspBalance).toBe(150000);
+    expect(out.spouse?.withdrawalOrder).toEqual(['rrsp', 'tfsa', 'taxable']);
+    expect(out.spouse?.pensions).toHaveLength(1);
+    expect(out.spouse?.events).toHaveLength(1);
   });
 });

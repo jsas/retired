@@ -6,7 +6,7 @@ import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
-import { resolveSpouseSource, baselineSpouse } from './lib/householdTypes';
+import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson } from './lib/householdTypes';
 import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scenarioStorage';
 import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
 import { buildAppDb } from './lib/appDb';
@@ -22,7 +22,7 @@ import { DataPage, type FullBackupSelection, type ProjectionImportRequest } from
 import { OptimizeCard } from './components/OptimizeCard';
 import { CompareCard } from './components/CompareCard';
 import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
-import { SetupWizard, wizardDataFrom, applyWizardData, type WizardData } from './components/SetupWizard';
+import { SetupWizard, wizardDataFrom, applyWizardData, spouseWizardDataFrom, applySpouseWizardData, type WizardData } from './components/SetupWizard';
 import { PrintOptionsCard } from './components/PrintOptionsCard';
 import { DonateCard } from './components/DonateCard';
 import { loadPrintOptions, savePrintOptions, type PrintOptions } from './lib/printOptions';
@@ -409,11 +409,15 @@ function App() {
   // values overlay the current inputs (keeping engine defaults), the scenario is
   // renamed to what the user typed, and the whole thing is persisted.
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Set when the primary wizard finished with "add a spouse" checked: the plan
+  // is saved (with a baseline spouse so the household already runs as a couple)
+  // and a second, limited wizard pass opens to collect the partner's numbers.
+  const [spouseWizardOpen, setSpouseWizardOpen] = useState(false);
   const handleWizardComplete = (data: WizardData, opts: { addSpouse: boolean }) => {
     let next = applyWizardData(inputs, data);
     // "Add a spouse" on the review step: enable a baseline spouse (starting at
-    // the same ages) so the household runs as a couple, then open the sidebar's
-    // Spouse section for the user to fill in (or link a saved plan).
+    // the same ages) so the household runs as a couple — then the spouse pass
+    // below replaces the baseline with the partner's real numbers.
     if (opts.addSpouse && !next.spouse?.enabled) {
       next = {
         ...next,
@@ -433,8 +437,63 @@ function App() {
     ));
     setHasUnsavedChanges(false);
     setWizardOpen(false);
+    if (opts.addSpouse) {
+      // Run the partner through their own limited wizard rather than dropping
+      // the user into the sidebar's Spouse section cold.
+      setSpouseWizardOpen(true);
+    } else {
+      setView('projection');
+    }
+  };
+
+  // Spouse pass done: write the partner's numbers into the (already saved)
+  // scenario's spouse block and persist again.
+  const handleSpouseWizardComplete = (data: WizardData) => {
+    const next = consistentAges(applySpouseWizardData(inputs, data));
+    setInputs(next);
+    setScenarios(prev => prev.map(s =>
+      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(next)) } : s
+    ));
+    setHasUnsavedChanges(false);
+    setSpouseWizardOpen(false);
     setView('projection');
-    if (opts.addSpouse) setSidebarOpen(true);
+  };
+
+  // Sidebar "Save to linked plan": patch person fields on another saved
+  // scenario (the linked spouse) without switching to it. The resolution memo
+  // picks the change up on the next render, so the household updates in place.
+  const handleUpdateScenarioInputs = (scenarioId: string, patch: Partial<RetirementInputs>) => {
+    setScenarios(prev => prev.map(s =>
+      s.id === scenarioId ? { ...s, inputs: { ...s.inputs, ...patch } } : s
+    ));
+  };
+
+  // Sidebar "Save spouse as its own plan": promote the embedded spouse to a
+  // standalone scenario. Person fields come from the spouse block; the shared
+  // household fields (horizon, market, province) are inherited from the host —
+  // the same split legacyToShared/legacySpouseToPerson make for the engine.
+  // The new plan gets engine-typical defaults for fields a spouse block
+  // doesn't carry (annualWithdrawal is recomputed by the engine anyway).
+  const handleSaveSpouseAsScenario = (name: string) => {
+    if (!inputs.spouse) return;
+    const person = legacySpouseToPerson(inputs.spouse);
+    const spouseInputs: RetirementInputs = {
+      ...person,
+      maxAge: inputs.maxAge,
+      investmentReturn: inputs.investmentReturn,
+      returnVolatility: inputs.returnVolatility,
+      provinceCode: inputs.provinceCode,
+      annualWithdrawal: 0,
+      cppAdjustedAmount: false,
+      withdrawalOrder: person.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp'],
+      spouse: undefined,
+      spouseSource: undefined,
+    };
+    setScenarios(prev => [...prev, {
+      id: `scenario-${Date.now()}`,
+      name,
+      inputs: spouseInputs,
+    }]);
   };
 
   const results = useMemo(() => {
@@ -668,6 +727,8 @@ function App() {
             scenarios={scenarios}
             activeScenarioId={activeScenarioId}
             spouseWarnings={spouseResolution.warnings}
+            onUpdateScenarioInputs={handleUpdateScenarioInputs}
+            onSaveSpouseAsScenario={handleSaveSpouseAsScenario}
           />
         </div>
 
@@ -899,7 +960,14 @@ function App() {
             )}
 
             {view === 'welcome' && (
-              wizardOpen ? (
+              spouseWizardOpen ? (
+                <SetupWizard
+                  key="spouse"
+                  initial={spouseWizardDataFrom(inputs)}
+                  onComplete={(data) => handleSpouseWizardComplete(data)}
+                  onSkip={() => { setSpouseWizardOpen(false); setView('projection'); }}
+                />
+              ) : wizardOpen ? (
                 <SetupWizard
                   initial={wizardDataFrom(inputs, activeScenario.name)}
                   onComplete={handleWizardComplete}
