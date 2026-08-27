@@ -328,16 +328,17 @@ export function resolveHousehold(
   }
 
   // The referenced scenario becomes the spouse PERSON. Its own shared fields
-  // are overridden by the host's (host wins); report each that differed.
+  // are overridden by the host's (host wins); report each that differed, with
+  // the reason (a household shares one province, market and horizon).
   const theirShared = legacyToShared(target.inputs);
   if (theirShared.provinceCode !== shared.provinceCode) {
-    warnings.push(`Province: host (${shared.provinceCode}) used, spouse's (${theirShared.provinceCode}) ignored.`);
+    warnings.push(`Province: using yours (${shared.provinceCode}), not the linked plan's (${theirShared.provinceCode}) — a household files taxes in one province.`);
   }
   if (theirShared.investmentReturn !== shared.investmentReturn) {
-    warnings.push('Investment return: host value used, spouse\'s ignored.');
+    warnings.push('Investment return: using yours, not the linked plan\'s — both partners\' accounts are projected with one shared market assumption.');
   }
   if (theirShared.maxAge !== shared.maxAge) {
-    warnings.push('Horizon (max age): host value used, spouse\'s ignored.');
+    warnings.push('Horizon (max age): using yours, not the linked plan\'s — a household projects both partners to a single planning horizon.');
   }
 
   const person = legacyToPerson(target.inputs);
@@ -444,16 +445,20 @@ export function resolveSpouseSource(
     return { warnings: ['Circular spouse reference detected — the spouse link was ignored.'] };
   }
 
-  // Host wins on the shared household fields; report each that differed.
+  // Host wins on the shared household fields; report each that differed, with
+  // the reason — a couple lives in one province, experiences one market, and
+  // shares one planning horizon, so the household supplies a single value for
+  // both partners. Explaining WHY (not just WHAT was ignored) is what makes the
+  // override feel principled rather than arbitrary.
   const their = target.inputs;
   if (their.provinceCode !== host.provinceCode) {
-    warnings.push(`Province: host (${host.provinceCode}) used, spouse's (${their.provinceCode}) ignored.`);
+    warnings.push(`Province: using yours (${host.provinceCode}), not the linked plan's (${their.provinceCode}) — a household files taxes in one province. Edit the linked plan's province to match if you both live there.`);
   }
   if (their.investmentReturn !== host.investmentReturn) {
-    warnings.push('Investment return: host value used, spouse\'s ignored.');
+    warnings.push(`Investment return: using yours, not the linked plan's — both partners' accounts are projected with one shared market assumption so the household is internally consistent.`);
   }
   if (their.maxAge !== host.maxAge) {
-    warnings.push('Horizon (max age): host value used, spouse\'s ignored.');
+    warnings.push(`Horizon (max age): using yours, not the linked plan's — a household projects both partners to a single planning horizon.`);
   }
 
   // Materialize the referenced plan's person into the SpouseInputs shape the

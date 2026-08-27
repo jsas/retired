@@ -891,6 +891,10 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                   </div>
                   {(spouseWarnings ?? []).length > 0 && (
                     <div className="px-2 py-1.5 bg-amber-900/30 border border-amber-700/50 rounded space-y-0.5">
+                      <p className="text-[10px] font-semibold text-amber-200 leading-snug">
+                        Why these are overridden: a couple shares one province, one market and one
+                        planning horizon, so this plan supplies them for both partners.
+                      </p>
                       {(spouseWarnings ?? []).map((w, i) => (
                         <p key={i} className="text-[10px] text-amber-300 leading-snug">⚠ {w}</p>
                       ))}
