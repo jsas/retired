@@ -97,6 +97,14 @@ export interface SpouseInputs {
   desiredSpending: number; // the spouse's own after-tax income goal (today's $)
   withdrawalOrder?: WithdrawalAccount[];
   pensions?: Pension[]; // the spouse's own DB / bridge pensions
+  // Full-person parity fields. Optional so scenarios saved before the spouse
+  // carried them still parse; absent = none (an empty list / no reverse
+  // mortgage). These make the spouse a first-class person: their own one-time
+  // cash events (incl. transfers), go-go/slow-go/no-go spending phases, and a
+  // reverse mortgage all flow into their run exactly like the primary's.
+  events?: CashEvent[];
+  spendingBands?: SpendingBand[];
+  reverseMortgage?: ReverseMortgage;
 }
 
 export interface CashEvent {

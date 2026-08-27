@@ -431,6 +431,83 @@ describe('spouse toggle / unlink (regression)', () => {
   });
 });
 
+describe('spouse full-person parity', () => {
+  const config = testConfig();
+  const mkSpouse = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 70,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    desiredSpending: 20000,
+    spouse: {
+      enabled: true, currentAge: 65, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 100000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+      desiredSpending: 20000, pensions: [],
+    },
+  });
+
+  it('the spouse runs its own cash events', () => {
+    const inputs = mkSpouse();
+    // A one-time inflow into the spouse's TFSA at 66 — proof the spouse's event
+    // list reaches the engine (previously stripped).
+    inputs.spouse!.events = [{ id: 'gift', age: 66, label: 'inheritance', amount: 30000, direction: 'in', account: 'tfsa' }];
+    const r = calculateHousehold(inputs, config);
+    const srow = yearAt(r.spouse!.yearlyBreakdown, 66);
+    expect(srow.detail?.deposit?.tfsa).toBeCloseTo(30000, 0);
+  });
+
+  it('the spouse runs its own spending bands', () => {
+    const banded = mkSpouse();
+    banded.spouse!.spendingBands = [{ fromAge: 68, pctOfBase: 0.5 }];
+    const flat = mkSpouse();
+    const rb = calculateHousehold(banded, config);
+    const rf = calculateHousehold(flat, config);
+    // From age 68 the banded spouse's spending target halves vs the flat spouse.
+    const band68 = yearAt(rb.spouse!.yearlyBreakdown, 68).spendingTarget;
+    const flat68 = yearAt(rf.spouse!.yearlyBreakdown, 68).spendingTarget;
+    expect(band68).toBeCloseTo(flat68 * 0.5, 0);
+    // Before the band (67) they're identical.
+    expect(yearAt(rb.spouse!.yearlyBreakdown, 67).spendingTarget)
+      .toBeCloseTo(yearAt(rf.spouse!.yearlyBreakdown, 67).spendingTarget, 0);
+  });
+
+  it('the spouse runs its own reverse mortgage', () => {
+    const inputs = mkSpouse();
+    inputs.spouse!.reverseMortgage = {
+      enabled: true, homeValue: 600000, appreciationRate: 0.02, interestRate: 0.06,
+      maxLtv: 0.55, drawAmount: 10000, startAge: 66, durationYears: 3, topUp: false,
+    };
+    const r = calculateHousehold(inputs, config);
+    const srow = yearAt(r.spouse!.yearlyBreakdown, 66);
+    // The spouse's home appreciates and the loan starts accruing once draws begin.
+    expect(srow.homeValue).toBeGreaterThan(600000);
+    expect(srow.loanBalance).toBeGreaterThan(0);
+    // And the primary (no RM) still has no RM fields.
+    expect(yearAt(r.yearlyBreakdown, 66).homeValue).toBeUndefined();
+  });
+
+  it('a spouse transfer event fires from the spouse account', () => {
+    const inputs = mkSpouse();
+    // Spouse melts down its own TFSA into its own taxable (untaxed, after-tax money).
+    // Zero spending so the transfer is the only thing moving the TFSA.
+    inputs.spouse!.desiredSpending = 0;
+    inputs.spouse!.tfsaBalance = 100000;
+    inputs.spouse!.events = [{
+      id: 'shift', age: 65, label: 'spouse shift', amount: 40000, direction: 'out',
+      from: { kind: 'account', person: 'spouse', account: 'tfsa' },
+      to: { kind: 'account', person: 'spouse', account: 'taxable' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    const srow = yearAt(r.spouse!.yearlyBreakdown, 65);
+    const tr = srow.detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    expect(tr!.tax).toBe(0);
+    // 100k − 40k = 60k, then 5% growth → 63k.
+    expect(srow.tfsaBalance).toBeCloseTo(60000 * 1.05, 0);
+    expect(srow.detail?.deposit?.taxable).toBeCloseTo(40000, 0);
+  });
+});
+
 describe('pensions', () => {
   it('lifetime pension pays every year from startAge', () => {
     const r = calculateRetirement(baseInputs({

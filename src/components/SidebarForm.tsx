@@ -159,16 +159,6 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
     ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge)
     : [];
 
-  const updateBand = (index: number, patch: Partial<SpendingBand>) => {
-    const next = sortedBands.map((b, i) => (i === index ? { ...b, ...patch } : b));
-    updateField('spendingBands', next);
-  };
-
-  const updateEvent = (index: number, patch: Partial<CashEvent>) => {
-    const next = (inputs.events ?? []).map((ev, i) => (i === index ? { ...ev, ...patch } : ev));
-    updateField('events', next);
-  };
-
   // ---- transfer (advanced) event helpers ----
   // An event is a transfer when it carries explicit from/to endpoints. Simple
   // events use direction + account; advanced events move money account→account
@@ -208,6 +198,237 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
   const updateSpouse = (patch: Partial<NonNullable<RetirementInputs['spouse']>>) => {
     if (!inputs.spouse) return;
     updateField('spouse', { ...inputs.spouse, ...patch });
+  };
+
+  // A person's own event list editor. `self` is the person whose events these
+  // are — it only affects the transfer-seed default (which account a brand-new
+  // transfer starts from), since the endpoint pickers already offer both
+  // people. The events array + setter are passed in so the SAME editor serves
+  // the primary (inputs.events) and the spouse (inputs.spouse.events).
+  const renderEventList = (
+    events: CashEvent[],
+    setEvents: (next: CashEvent[]) => void,
+    currentAge: number,
+    retirementAge: number,
+    self: 'primary' | 'spouse',
+  ) => {
+    const updateEventAt = (index: number, patch: Partial<CashEvent>) => {
+      setEvents(events.map((ev, i) => (i === index ? { ...ev, ...patch } : ev)));
+    };
+    return (
+      <div className="space-y-2">
+        {events.map((ev, i) => (
+          <div key={ev.id} className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={ev.label}
+                placeholder="Label"
+                onChange={(e) => updateEventAt(i, { label: e.target.value })}
+                className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={() => setEvents(events.filter((_, j) => j !== i))}
+                className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+                title="Remove event"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={ev.direction}
+                onChange={(e) => updateEventAt(i, { direction: e.target.value as CashEvent['direction'] })}
+                className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="in">Inflow</option>
+                <option value="out">Outflow</option>
+              </select>
+              <input
+                type="number"
+                step="1000"
+                value={ev.amount}
+                title="Amount ($ / occurrence)"
+                onChange={(e) => updateEventAt(i, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
+                className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={ev.endAge != null ? 'yearly' : 'once'}
+                onChange={(e) => updateEventAt(i, e.target.value === 'yearly' ? { endAge: ev.age } : { endAge: null })}
+                title="One-time or yearly"
+                className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="once">Once at</option>
+                <option value="yearly">Yearly</option>
+              </select>
+              <input
+                type="number"
+                value={ev.age}
+                min={currentAge}
+                title={ev.endAge != null ? `Start age (≥ current age ${currentAge})` : `Age (≥ current age ${currentAge})`}
+                onChange={(e) => updateEventAt(i, { age: Math.max(currentAge, parseInt(e.target.value) || currentAge) })}
+                className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+              {ev.endAge != null && (
+                <>
+                  <span className="text-[10px] text-neutral-500">to</span>
+                  <input
+                    type="number"
+                    value={ev.endAge}
+                    title="End age (inclusive)"
+                    onChange={(e) => updateEventAt(i, { endAge: Math.max(ev.age, parseInt(e.target.value) || ev.age) })}
+                    className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                  />
+                </>
+              )}
+            </div>
+            {(() => {
+              const isTransfer = ev.from != null || ev.to != null;
+              if (isTransfer) {
+                const from = ev.from ?? { kind: 'external' as const };
+                const to = ev.to ?? { kind: 'external' as const };
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-neutral-500 w-8 shrink-0">from</span>
+                      <select
+                        value={encodeEndpoint(from)}
+                        onChange={(e) => updateEventAt(i, { from: decodeEndpoint(e.target.value) })}
+                        className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                      >
+                        {endpointOptions(true, 'Outside (new money)')}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-neutral-500 w-8 shrink-0">to</span>
+                      <select
+                        value={encodeEndpoint(to)}
+                        onChange={(e) => updateEventAt(i, { to: decodeEndpoint(e.target.value) })}
+                        className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                      >
+                        {endpointOptions(true, 'Spending (leaves plan)')}
+                      </select>
+                    </div>
+                    <p className="text-[10px] text-neutral-500 leading-snug">
+                      An RRSP source is taxed on withdrawal; the after-tax remainder is redeposited.
+                    </p>
+                    <button
+                      onClick={() => updateEventAt(i, { from: undefined, to: undefined })}
+                      className="text-[10px] text-blue-400 hover:text-blue-300"
+                    >
+                      ← back to simple inflow/outflow
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-1.5">
+                  {ev.direction === 'in' && (
+                    <select
+                      value={ev.account ?? 'taxable'}
+                      onChange={(e) => updateEventAt(i, { account: e.target.value as CashEvent['account'] })}
+                      className="w-full px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="taxable">→ Taxable account</option>
+                      <option value="tfsa">→ TFSA</option>
+                      <option value="rrsp">→ RRSP</option>
+                      <option value="cash">→ Cash cushion</option>
+                    </select>
+                  )}
+                  <button
+                    onClick={() => updateEventAt(i, {
+                      // Seed a sensible transfer from the current simple value so
+                      // toggling doesn't lose the intent. `self` is whose account
+                      // the default transfer starts from.
+                      from: ev.direction === 'in'
+                        ? { kind: 'external' }
+                        : { kind: 'account', person: self, account: ev.account === 'cash' ? 'cash' : (ev.account ?? 'rrsp') },
+                      to: ev.direction === 'in'
+                        ? { kind: 'account', person: self, account: ev.account ?? 'taxable' }
+                        : { kind: 'external' },
+                    })}
+                    className="text-[10px] text-blue-400 hover:text-blue-300"
+                    title="Move money between accounts or spouses (e.g. an RRSP withdrawal into the TFSA)"
+                  >
+                    advanced: transfer between accounts…
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        ))}
+        <button
+          onClick={() => setEvents([...events, { id: newEventId(), age: retirementAge, label: 'House sale', amount: 100000, direction: 'in', account: 'taxable' }])}
+          className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
+        >
+          <Plus size={12} /> Add event
+        </button>
+        {events.length > 0 && (
+          <p className="text-[10px] text-neutral-500 leading-snug">
+            Inflows land in the chosen account (they do not grow earlier years); outflows add to
+            that year's spending need. Choose <em>Yearly</em> and set a start–end age range to repeat
+            the same amount each year (e.g. yearly for 5 years → end age = start + 4).
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  // A person's spending-phase (go-go / slow-go / no-go) editor. Parameterized by
+  // the band list + setter + that person's desiredSpending so the SAME editor
+  // serves the primary (inputs.spendingBands) and the spouse
+  // (inputs.spouse.spendingBands).
+  const renderBandList = (
+    bands: SpendingBand[],
+    setBands: (next: SpendingBand[]) => void,
+    desiredSpending: number,
+  ) => {
+    const sorted = [...bands].sort((a, b) => a.fromAge - b.fromAge);
+    const updateBandAt = (index: number, patch: Partial<SpendingBand>) => {
+      setBands(sorted.map((b, i) => (i === index ? { ...b, ...patch } : b)));
+    };
+    return (
+      <div className="space-y-1.5">
+        {sorted.map((band, i) => (
+          <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded">
+            <input
+              type="number"
+              value={band.fromAge}
+              title="From age"
+              onChange={(e) => updateBandAt(i, { fromAge: parseInt(e.target.value) || band.fromAge })}
+              className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">+</span>
+            <input
+              type="number"
+              value={Math.round(band.pctOfBase * 100)}
+              title="% of desired spending"
+              onChange={(e) => updateBandAt(i, { pctOfBase: Math.max(0, (parseInt(e.target.value) || 0) / 100) })}
+              className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">%</span>
+            <span className="text-[10px] text-neutral-400 whitespace-nowrap" title="Resulting yearly spending in today's dollars">
+              = {formatMoney(desiredSpending * band.pctOfBase)}
+            </span>
+            <button
+              onClick={() => setBands(sorted.filter((_, j) => j !== i))}
+              className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+              title="Remove phase"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => setBands([...sorted, { fromAge: sorted.length > 0 ? sorted[sorted.length - 1].fromAge + 10 : 75, pctOfBase: 0.85 }])}
+          className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
+        >
+          <Plus size={12} /> Add phase
+        </button>
+      </div>
+    );
   };
 
   // ---- spouse adapter (built-in vs linked scenario) ----
@@ -577,165 +798,13 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
 
         {/* Cash Events (one-time & recurring) */}
         <CollapsibleSection id="events" icon={<CalendarClock size={14} />} title="Cash Events" open={isOpen('events')} onToggle={toggleSection}>
-          <div className="space-y-2">
-            {(inputs.events ?? []).map((ev, i) => (
-              <div key={ev.id} className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={ev.label}
-                    placeholder="Label"
-                    onChange={(e) => updateEvent(i, { label: e.target.value })}
-                    className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <button
-                    onClick={() => updateField('events', (inputs.events ?? []).filter((_, j) => j !== i))}
-                    className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
-                    title="Remove event"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <select
-                    value={ev.direction}
-                    onChange={(e) => updateEvent(i, { direction: e.target.value as CashEvent['direction'] })}
-                    className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="in">Inflow</option>
-                    <option value="out">Outflow</option>
-                  </select>
-                  <input
-                    type="number"
-                    step="1000"
-                    value={ev.amount}
-                    title="Amount ($ / occurrence)"
-                    onChange={(e) => updateEvent(i, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
-                    className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <select
-                    value={ev.endAge != null ? 'yearly' : 'once'}
-                    onChange={(e) => updateEvent(i, e.target.value === 'yearly' ? { endAge: ev.age } : { endAge: null })}
-                    title="One-time or yearly"
-                    className="px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="once">Once at</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={ev.age}
-                    min={inputs.currentAge}
-                    title={ev.endAge != null ? `Start age (≥ current age ${inputs.currentAge})` : `Age (≥ current age ${inputs.currentAge})`}
-                    onChange={(e) => updateEvent(i, { age: Math.max(inputs.currentAge, parseInt(e.target.value) || inputs.currentAge) })}
-                    className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                  />
-                  {ev.endAge != null && (
-                    <>
-                      <span className="text-[10px] text-neutral-500">to</span>
-                      <input
-                        type="number"
-                        value={ev.endAge}
-                        title="End age (inclusive)"
-                        onChange={(e) => updateEvent(i, { endAge: Math.max(ev.age, parseInt(e.target.value) || ev.age) })}
-                        className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </>
-                  )}
-                </div>
-                {(() => {
-                  const isTransfer = ev.from != null || ev.to != null;
-                  if (isTransfer) {
-                    // Advanced mode: the event is a transfer between two
-                    // endpoints (external / a person's account). direction is
-                    // derived: external→account = inflow, otherwise out.
-                    const from = ev.from ?? { kind: 'external' as const };
-                    const to = ev.to ?? { kind: 'external' as const };
-                    return (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-neutral-500 w-8 shrink-0">from</span>
-                          <select
-                            value={encodeEndpoint(from)}
-                            onChange={(e) => updateEvent(i, { from: decodeEndpoint(e.target.value) })}
-                            className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                          >
-                            {endpointOptions(true, 'Outside (new money)')}
-                          </select>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-neutral-500 w-8 shrink-0">to</span>
-                          <select
-                            value={encodeEndpoint(to)}
-                            onChange={(e) => updateEvent(i, { to: decodeEndpoint(e.target.value) })}
-                            className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                          >
-                            {endpointOptions(true, 'Spending (leaves plan)')}
-                          </select>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 leading-snug">
-                          An RRSP source is taxed on withdrawal; the after-tax remainder is redeposited.
-                        </p>
-                        <button
-                          onClick={() => updateEvent(i, { from: undefined, to: undefined })}
-                          className="text-[10px] text-blue-400 hover:text-blue-300"
-                        >
-                          ← back to simple inflow/outflow
-                        </button>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="space-y-1.5">
-                      {ev.direction === 'in' && (
-                        <select
-                          value={ev.account ?? 'taxable'}
-                          onChange={(e) => updateEvent(i, { account: e.target.value as CashEvent['account'] })}
-                          className="w-full px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                        >
-                          <option value="taxable">→ Taxable account</option>
-                          <option value="tfsa">→ TFSA</option>
-                          <option value="rrsp">→ RRSP</option>
-                          <option value="cash">→ Cash cushion</option>
-                        </select>
-                      )}
-                      <button
-                        onClick={() => updateEvent(i, {
-                          // Seed a sensible transfer from the current simple
-                          // value so toggling doesn't lose the intent.
-                          from: ev.direction === 'in'
-                            ? { kind: 'external' }
-                            : { kind: 'account', person: 'primary', account: ev.account === 'cash' ? 'cash' : (ev.account ?? 'rrsp') },
-                          to: ev.direction === 'in'
-                            ? { kind: 'account', person: 'primary', account: ev.account ?? 'taxable' }
-                            : { kind: 'external' },
-                        })}
-                        className="text-[10px] text-blue-400 hover:text-blue-300"
-                        title="Move money between accounts or spouses (e.g. an RRSP withdrawal into the TFSA)"
-                      >
-                        advanced: transfer between accounts…
-                      </button>
-                    </div>
-                  );
-                })()}
-              </div>
-            ))}
-            <button
-              onClick={() => updateField('events', [...(inputs.events ?? []), { id: newEventId(), age: inputs.retirementAge, label: 'House sale', amount: 100000, direction: 'in', account: 'taxable' }])}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
-            >
-              <Plus size={12} /> Add event
-            </button>
-            {(inputs.events ?? []).length > 0 && (
-              <p className="text-[10px] text-neutral-500 leading-snug">
-                Inflows land in the chosen account (they do not grow earlier years); outflows add to
-                that year's spending need. Choose <em>Yearly</em> and set a start–end age range to repeat
-                the same amount each year (e.g. yearly for 5 years → end age = start + 4).
-              </p>
-            )}
-          </div>
+          {renderEventList(
+            inputs.events ?? [],
+            (next) => updateField('events', next),
+            inputs.currentAge,
+            inputs.retirementAge,
+            'primary',
+          )}
         </CollapsibleSection>
 
         {/* Spending Phases */}
@@ -757,42 +826,11 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 </span>
               </div>
             </div>
-            {sortedBands.map((band, i) => (
-              <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded">
-                <input
-                  type="number"
-                  value={band.fromAge}
-                  title="From age"
-                  onChange={(e) => updateBand(i, { fromAge: parseInt(e.target.value) || band.fromAge })}
-                  className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                />
-                <span className="text-[10px] text-neutral-500">+</span>
-                <input
-                  type="number"
-                  value={Math.round(band.pctOfBase * 100)}
-                  title="% of desired spending"
-                  onChange={(e) => updateBand(i, { pctOfBase: Math.max(0, (parseInt(e.target.value) || 0) / 100) })}
-                  className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
-                />
-                <span className="text-[10px] text-neutral-500">%</span>
-                <span className="text-[10px] text-neutral-400 whitespace-nowrap" title="Resulting yearly spending in today's dollars">
-                  = {formatMoney(inputs.desiredSpending * band.pctOfBase)}
-                </span>
-                <button
-                  onClick={() => updateField('spendingBands', sortedBands.filter((_, j) => j !== i))}
-                  className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
-                  title="Remove phase"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => updateField('spendingBands', [...sortedBands, { fromAge: sortedBands.length > 0 ? sortedBands[sortedBands.length - 1].fromAge + 10 : 75, pctOfBase: 0.85 }])}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
-            >
-              <Plus size={12} /> Add phase
-            </button>
+            {renderBandList(
+              inputs.spendingBands ?? [],
+              (next) => updateField('spendingBands', next),
+              inputs.desiredSpending,
+            )}
             <p className="text-[10px] text-neutral-500 leading-snug">
               Go-go / slow-go / no-go: from each age, spending drops to that share of desired
               spending{config.engine.indexSpending !== false
@@ -939,6 +977,24 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
               <div>
                 <label className={LABEL_CLS}>Spouse pensions</label>
                 <PensionList pensions={inputs.spouse.pensions ?? []} onChange={(next) => updateSpouse({ pensions: next })} />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Spouse cash events</label>
+                {renderEventList(
+                  inputs.spouse.events ?? [],
+                  (next) => updateSpouse({ events: next }),
+                  inputs.spouse.currentAge,
+                  inputs.spouse.retirementAge,
+                  'spouse',
+                )}
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Spouse spending phases</label>
+                {renderBandList(
+                  inputs.spouse.spendingBands ?? [],
+                  (next) => updateSpouse({ spendingBands: next }),
+                  inputs.spouse.desiredSpending,
+                )}
               </div>
               <p className="text-[10px] text-neutral-500 leading-snug">
                 The spouse runs as an independent plan with the same market assumptions, province and

@@ -259,4 +259,21 @@ describe('resolveSpouseSource — the spouse adapter the app stores', () => {
     expect(r.spouse).toBeUndefined();
     expect(r.warnings.some(w => w.includes('not found'))).toBe(true);
   });
+
+  it('carries the linked plan’s full-person parity fields (events, bands, RM)', () => {
+    // A linked spouse must run the referenced plan's OWN events, spending bands
+    // and reverse mortgage — previously these were stripped during
+    // materialization, so the spouse silently lost them.
+    const partner = baseInputs({ currentAge: 58, desiredSpending: 28000 });
+    partner.events = [{ id: 'e', age: 60, label: 'sale', amount: 50000, direction: 'in', account: 'tfsa' }];
+    partner.spendingBands = [{ fromAge: 70, pctOfBase: 0.8 }];
+    partner.reverseMortgage = { enabled: true, homeValue: 500000, appreciationRate: 0.02, interestRate: 0.06, topUp: true };
+    const host = baseInputs({ provinceCode: 'ONT', investmentReturn: 0.05, maxAge: 90 });
+    host.spouseSource = { kind: 'scenario', scenarioId: 'partner' };
+    const r = resolveSpouseSource(host, [{ id: 'partner', inputs: partner }], 'me');
+    expect(r.spouse?.events).toHaveLength(1);
+    expect(r.spouse?.events?.[0].label).toBe('sale');
+    expect(r.spouse?.spendingBands).toEqual([{ fromAge: 70, pctOfBase: 0.8 }]);
+    expect(r.spouse?.reverseMortgage?.homeValue).toBe(500000);
+  });
 });

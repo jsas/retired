@@ -167,10 +167,11 @@ export function legacyToShared(inputs: RetirementInputs): SharedInputs {
   };
 }
 
-/** Convert a legacy embedded SpouseInputs into a full PersonInputs, filling the
- *  fields the stripped spouse type never carried (events, spending bands,
- *  reverse mortgage) with neutral defaults. This is the feature-parity bridge:
- *  an old embedded spouse becomes a first-class person. */
+/** Convert a legacy embedded SpouseInputs into a full PersonInputs. The spouse
+ *  type carries the full-person parity fields (events, spending bands, reverse
+ *  mortgage) optionally — they're passed straight through (absent = none), so
+ *  an embedded spouse is a first-class person. Withdrawal order defaults when
+ *  absent (older saved spouses may not carry one). */
 export function legacySpouseToPerson(sp: SpouseInputs): PersonInputs {
   return {
     currentAge: sp.currentAge,
@@ -192,10 +193,10 @@ export function legacySpouseToPerson(sp: SpouseInputs): PersonInputs {
     oasYearsInCanada: sp.oasYearsInCanada,
     desiredSpending: sp.desiredSpending,
     withdrawalOrder: sp.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp'],
-    spendingBands: undefined,
+    spendingBands: sp.spendingBands,
     pensions: sp.pensions,
-    events: undefined,
-    reverseMortgage: undefined,
+    events: sp.events,
+    reverseMortgage: sp.reverseMortgage,
   };
 }
 
@@ -270,6 +271,9 @@ export function householdToLegacy(resolved: ResolvedHousehold): RetirementInputs
       desiredSpending: spouse.desiredSpending,
       withdrawalOrder: spouse.withdrawalOrder,
       pensions: spouse.pensions,
+      events: spouse.events,
+      spendingBands: spouse.spendingBands,
+      reverseMortgage: spouse.reverseMortgage,
     };
   }
   return legacy;
@@ -472,6 +476,12 @@ export function resolveSpouseSource(
     desiredSpending: their.desiredSpending,
     withdrawalOrder: their.withdrawalOrder,
     pensions: their.pensions,
+    // Full-person parity: the linked plan's own events (incl. transfers),
+    // spending bands and reverse mortgage run as the spouse's, just like an
+    // embedded spouse. Absent on the source = none.
+    events: their.events,
+    spendingBands: their.spendingBands,
+    reverseMortgage: their.reverseMortgage,
   };
   return { spouse, warnings };
 }
