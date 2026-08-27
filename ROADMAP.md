@@ -54,13 +54,16 @@ have to hold them.
   interface the UI backs with localStorage today is the same interface a
   Node consumer backs with SQLite/a file later.
 - **Data layer hardening (underway)** — Zod schemas now define every
-  persisted shape (`src/data/schemas.ts`), and all app state lives in a real
+  persisted shape (`src/data/schemas.ts`), and all plan state lives in a real
   SQLite database via sql.js (`src/data/db.ts`), persisted to OPFS
   (origin-private file system — no 5 MB ceiling, mirrored to localStorage
-  for compatibility) and exportable as a .sqlite file. Remaining: a Node
-  SQLite backend behind the same store interface for the engine package,
-  and moving the DB onto a worker with the synchronous OPFS VFS for
-  incremental (not whole-file) writes.
+  for compatibility) and exportable as a .sqlite file. Open tabs stay in
+  sync via the storage event: a clean tab silently adopts another tab's
+  saves; a dirty tab gets a Reload/Keep-mine conflict banner. Remaining: a
+  Node SQLite backend behind the same store interface for the engine
+  package, moving the DB onto a worker with the synchronous OPFS VFS for
+  incremental (not whole-file) writes, and folding UI-preference keys
+  (print options, panel collapse state, …) into the store's `kv` table.
 
 ## Non-goals
 

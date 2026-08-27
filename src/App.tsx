@@ -9,10 +9,12 @@ import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, t
 import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson } from './lib/householdTypes';
 import { loadScenarioState, type Scenario } from './lib/scenarioStorage';
 import { loadAppConfig, type AppConfig } from './lib/appConfig';
-import { AppStore } from './data/store';
+import { AppStore, type AppState } from './data/store';
 import { AppDatabase } from './data/db';
+import { onExternalChange } from './data/tabSync';
 import { SettingsModal } from './components/SettingsModal';
 import { SavePromptModal } from './components/SavePromptModal';
+import { ExternalUpdateBanner } from './components/ExternalUpdateBanner';
 import { HelpModal } from './components/HelpModal';
 import { MonteCarloChart } from './components/MonteCarloChart';
 import { TimelineChart } from './components/TimelineChart';
@@ -165,6 +167,11 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printOptions.includeMonteCarlo, resolvedInputs, config]);
 
+  // Unsaved-edit tracking: the sidebar edits a draft of the active scenario's
+  // inputs; Save writes the draft back into the scenario list. Declared up top
+  // because the store-sync effects below consult it.
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
   // Open the SQL store once (async: the wasm has to load). When its contents
   // differ from the sync seed and the user isn't mid-edit, adopt them — the
   // store is the authoritative copy.
@@ -199,6 +206,39 @@ function App() {
   useEffect(() => {
     store?.persist({ config });
   }, [store, config]);
+
+  // Cross-tab sync: every persist() touches a localStorage key, which fires a
+  // `storage` event in every OTHER tab. When that arrives: if this tab has no
+  // unsaved edits, silently reload from the store and swap state in (their
+  // changes just appear); if this tab is mid-edit, surface the conflict banner
+  // and let the user choose. (hasUnsavedChanges is read via ref so the
+  // subscription can be installed once, when the store opens.)
+  const [externalUpdate, setExternalUpdate] = useState(false);
+  const dirtyRef = useRef(false);
+  const adoptStoreState = (state: AppState) => {
+    setScenarios(state.scenarios);
+    setActiveScenarioId(state.activeScenarioId);
+    setInputs(JSON.parse(JSON.stringify(
+      state.scenarios.find(s => s.id === state.activeScenarioId)?.inputs ?? state.scenarios[0].inputs,
+    )));
+    if (state.config) setConfig(state.config);
+  };
+  useEffect(() => {
+    dirtyRef.current = hasUnsavedChanges;
+  }, [hasUnsavedChanges]);
+  useEffect(() => {
+    if (!store) return;
+    return onExternalChange(() => {
+      if (dirtyRef.current) {
+        setExternalUpdate(true);
+      } else {
+        store.reload(buildDefaultScenarios)
+          .then(adoptStoreState)
+          .catch(err => console.warn('Cross-tab reload failed:', err));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store]);
 
   // If the URL carried a shared plan (#plan=...), import it once as a new
   // scenario and select it. Runs before the persist effect's first save would
@@ -295,9 +335,6 @@ function App() {
     }
     applyScenarioSwitch(id);
   };
-
-  // Update scenario when inputs change - with save button
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const handleInputsChange = (newInputs: RetirementInputs) => {
     // Keep the plan's ages internally consistent: editing current age can
@@ -758,6 +795,21 @@ function App() {
           </div>
 
           <div className="px-3 md:px-6 pb-3 md:pb-6">
+            {externalUpdate && (
+              <ExternalUpdateBanner
+                onReload={() => {
+                  if (!store) return;
+                  store.reload(buildDefaultScenarios)
+                    .then(state => {
+                      adoptStoreState(state);
+                      setHasUnsavedChanges(false);
+                      setExternalUpdate(false);
+                    })
+                    .catch(err => console.warn('Cross-tab reload failed:', err));
+                }}
+                onKeepMine={() => setExternalUpdate(false)}
+              />
+            )}
             {view === 'projection' && (
               <>
                 {/* KPI Cards */}
