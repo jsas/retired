@@ -592,6 +592,22 @@ describe('baseline plan (New Scenario defaults)', () => {
     expect(r.yearlyBreakdown.every(y => Number.isFinite(y.endingBalance))).toBe(true);
     expect(['ON_TRACK', 'AT_RISK', 'SHORTFALL']).toContain(r.status);
   });
+
+  it('a wizard plan with a spouse added runs as a couple', () => {
+    // The wizard's "add a spouse" path enables a baseline spouse at the same
+    // ages; the household engine must run both and attach results.spouse.
+    const inputs = baselineInputs();
+    inputs.spouse = {
+      enabled: true, currentAge: inputs.currentAge, retirementAge: inputs.retirementAge,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 900, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: Math.round(inputs.desiredSpending / 2), pensions: [],
+    };
+    const r = calculateHousehold(inputs, config);
+    expect(r.spouse).toBeDefined();
+    expect(r.spouse!.yearlyBreakdown.length).toBeGreaterThan(0);
+  });
 });
 
 describe('pensions', () => {

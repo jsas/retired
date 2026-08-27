@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Users, Home, SlidersHorizontal, Target } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
+
+const formatMoney = (v: number) =>
+  new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
 
 /**
  * First-scenario setup wizard. A focused, step-by-step overlay that collects
@@ -62,8 +65,9 @@ export function applyWizardData(base: RetirementInputs, data: WizardData): Retir
 interface SetupWizardProps {
   /** Starting values (the app's current inputs, so defaults are sensible). */
   initial: WizardData;
-  /** Finished all five steps — the caller saves the resulting plan. */
-  onComplete: (data: WizardData) => void;
+  /** Finished all five steps — the caller saves the resulting plan. `addSpouse`
+   *  is true when the user asked (on the review step) to set up a spouse next. */
+  onComplete: (data: WizardData, opts: { addSpouse: boolean }) => void;
   /** Abandon the wizard and just go to the dashboard with whatever's there. */
   onSkip: () => void;
 }
@@ -141,25 +145,34 @@ const STEPS: Step[] = [
 export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(initial);
+  // Review-step offers. `wantsSpouse` flips the CTA to "Create & add spouse";
+  // `ownsHome` surfaces the reverse-mortgage pointer. Neither blocks completion.
+  const [wantsSpouse, setWantsSpouse] = useState(false);
+  const [ownsHome, setOwnsHome] = useState<boolean | null>(null);
 
   const set = <K extends keyof WizardData>(key: K, value: WizardData[K]) =>
     setData(d => ({ ...d, [key]: value }));
 
-  const current = STEPS[step];
-  const isLast = step === STEPS.length - 1;
+  const REVIEW = STEPS.length; // index of the summary step (after the inputs)
+  const isReview = step === REVIEW;
+  const totalSteps = STEPS.length + 1;
+  const current = isReview ? null : STEPS[step];
+  const isLast = isReview;
 
   const next = () => {
-    if (isLast) onComplete(data);
+    if (isLast) onComplete(data, { addSpouse: wantsSpouse });
     else setStep(s => s + 1);
   };
   const back = () => setStep(s => Math.max(0, s - 1));
+
+  const totalSavings = data.rrspBalance + data.tfsaBalance + data.taxableBalance + data.cashCushionBalance;
 
   return (
     <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-lg shadow-sm p-6">
       {/* Progress */}
       <div className="flex items-center justify-between mb-1">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-600">
-          Step {step + 1} of {STEPS.length}
+          Step {step + 1} of {totalSteps}
         </p>
         <button onClick={onSkip} className="text-[11px] text-slate-400 hover:text-slate-600">
           Skip setup
@@ -168,38 +181,115 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
       <div className="h-1 bg-slate-100 rounded-full mb-5 overflow-hidden">
         <div
           className="h-full bg-blue-600 rounded-full transition-all"
-          style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+          style={{ width: `${((step + 1) / totalSteps) * 100}%` }}
         />
       </div>
 
-      <h3 className="text-lg font-bold text-slate-900 mb-1">{current.title}</h3>
-      <p className="text-[13px] text-slate-600 leading-relaxed mb-5">{current.intro}</p>
+      {isReview ? (
+        <>
+          <h3 className="text-lg font-bold text-slate-900 mb-1">Review your plan</h3>
+          <p className="text-[13px] text-slate-600 leading-relaxed mb-4">
+            Here's what you're starting with. Anything look off? Use Back to change it.
+          </p>
 
-      <div className="space-y-4">
-        {current.fields.map(f => (
-          <div key={f.key}>
-            <label className={LABEL_CLS}>{f.label}</label>
-            <input
-              type="number"
-              className={NUM_CLS}
-              step={f.step ?? 1}
-              min={f.min}
-              max={f.max}
-              value={f.nullable && data[f.key] == null ? '' : (data[f.key] as number | null) ?? ''}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (f.nullable && raw === '') {
-                  set(f.key, null as never);
-                  return;
-                }
-                const n = parseInt(raw, 10);
-                set(f.key, (Number.isFinite(n) ? n : 0) as never);
-              }}
-            />
-            {f.hint && <p className={HINT_CLS}>{f.hint}</p>}
+          {/* Summary of what they entered */}
+          <dl className="mb-5 rounded-md border border-slate-200 divide-y divide-slate-100 text-[13px]">
+            <div className="flex justify-between px-3 py-2">
+              <dt className="text-slate-500">Ages</dt>
+              <dd className="font-medium text-slate-900">{data.currentAge} → retire {data.retirementAge} → plan to {data.maxAge}</dd>
+            </div>
+            <div className="flex justify-between px-3 py-2">
+              <dt className="text-slate-500">Total savings</dt>
+              <dd className="font-medium text-slate-900">{formatMoney(totalSavings)}</dd>
+            </div>
+            {(data.rrspContribution + data.tfsaContribution + data.taxableContribution) > 0 && (
+              <div className="flex justify-between px-3 py-2">
+                <dt className="text-slate-500">Saving per year</dt>
+                <dd className="font-medium text-slate-900">{formatMoney(data.rrspContribution + data.tfsaContribution + data.taxableContribution)}</dd>
+              </div>
+            )}
+            <div className="flex justify-between px-3 py-2">
+              <dt className="text-slate-500">CPP / OAS</dt>
+              <dd className="font-medium text-slate-900">
+                {data.cppStartAge != null ? `${formatMoney(data.cppMonthlyAmount)}/mo at ${data.cppStartAge}` : 'no CPP'}
+                {' · '}
+                {data.oasStartAge != null ? `OAS at ${data.oasStartAge}` : 'no OAS'}
+              </dd>
+            </div>
+            <div className="flex justify-between px-3 py-2">
+              <dt className="text-slate-500">Spending goal</dt>
+              <dd className="font-medium text-slate-900">{formatMoney(data.desiredSpending)}/yr</dd>
+            </div>
+          </dl>
+
+          {/* Optional next steps — all skippable, none block creating the plan. */}
+          <div className="space-y-3 mb-2">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={wantsSpouse} onChange={e => setWantsSpouse(e.target.checked)} className="mt-0.5" />
+              <span className="text-[13px] text-slate-700">
+                <span className="inline-flex items-center gap-1 font-medium text-slate-900"><Users size={13} /> Add a spouse or partner</span>
+                <span className="block text-[11px] text-slate-500">Plan together — their accounts, benefits and spending run alongside yours.</span>
+              </span>
+            </label>
+
+            <div>
+              <span className="flex items-start gap-2.5">
+                <Home size={13} className="mt-1 shrink-0 text-slate-500" />
+                <span className="text-[13px] text-slate-700">
+                  <span className="font-medium text-slate-900">Do you own your home?</span>
+                  <span className="ml-2 inline-flex gap-2">
+                    <button onClick={() => setOwnsHome(true)} className={`px-2 py-0.5 rounded border text-[11px] ${ownsHome === true ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 text-slate-600'}`}>Yes</button>
+                    <button onClick={() => setOwnsHome(false)} className={`px-2 py-0.5 rounded border text-[11px] ${ownsHome === false ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 text-slate-600'}`}>No</button>
+                  </span>
+                  {ownsHome === true && (
+                    <span className="block text-[11px] text-slate-500 mt-1">
+                      You can explore a reverse mortgage later — under <em>Reverse Mortgage</em> in the sidebar — to tap home equity tax-free if you need it.
+                    </span>
+                  )}
+                </span>
+              </span>
+            </div>
+
+            {/* The power tools, in one line each. */}
+            <div className="rounded-md bg-slate-50 border border-slate-200 px-3 py-2.5 space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Once your plan is in</p>
+              <p className="flex items-center gap-2 text-[12px] text-slate-600"><SlidersHorizontal size={13} className="text-blue-600 shrink-0" /> <span><strong>Steering</strong> — drag the plan and watch the success rate move.</span></p>
+              <p className="flex items-center gap-2 text-[12px] text-slate-600"><Target size={13} className="text-blue-600 shrink-0" /> <span><strong>Optimize</strong> — ranks CPP/OAS timing and withdrawal order for you.</span></p>
+            </div>
           </div>
-        ))}
-      </div>
+        </>
+      ) : (
+        <>
+          <h3 className="text-lg font-bold text-slate-900 mb-1">{current!.title}</h3>
+          <p className="text-[13px] text-slate-600 leading-relaxed mb-5">{current!.intro}</p>
+
+          <div className="space-y-4">
+            {current!.fields.map(f => (
+              <div key={f.key}>
+                <label className={LABEL_CLS}>{f.label}</label>
+                <input
+                  type="number"
+                  className={NUM_CLS}
+                  step={f.step ?? 1}
+                  min={f.min}
+                  max={f.max}
+                  value={f.nullable && data[f.key] == null ? '' : (data[f.key] as number | null) ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (f.nullable && raw === '') {
+                      set(f.key, null as never);
+                      return;
+                    }
+                    const n = parseInt(raw, 10);
+                    set(f.key, (Number.isFinite(n) ? n : 0) as never);
+                  }}
+                />
+                {f.hint && <p className={HINT_CLS}>{f.hint}</p>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="flex items-center justify-between mt-7">
         <button
@@ -213,7 +303,9 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
           onClick={next}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
         >
-          {isLast ? <>Create my plan <Check size={15} /></> : <>Next <ArrowRight size={15} /></>}
+          {isLast
+            ? (wantsSpouse ? <>Create &amp; add spouse <Users size={15} /></> : <>Create my plan <Check size={15} /></>)
+            : <>Next <ArrowRight size={15} /></>}
         </button>
       </div>
     </div>

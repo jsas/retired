@@ -357,8 +357,27 @@ function App() {
   // or re-opened from Help; on completion the collected values overlay the
   // current inputs (keeping engine defaults) and become the active plan.
   const [wizardOpen, setWizardOpen] = useState(false);
-  const handleWizardComplete = (data: WizardData) => {
-    const next = applyWizardData(inputs, data);
+  const handleWizardComplete = (data: WizardData, opts: { addSpouse: boolean }) => {
+    let next = applyWizardData(inputs, data);
+    // "Add a spouse" on the review step: enable a baseline spouse (starting at
+    // the same ages) so the household runs as a couple, then open the sidebar's
+    // Spouse section for the user to fill in (or link a saved plan).
+    if (opts.addSpouse && !next.spouse?.enabled) {
+      next = {
+        ...next,
+        spouseSource: { kind: 'builtin' },
+        spouse: {
+          enabled: true,
+          currentAge: next.currentAge,
+          retirementAge: next.retirementAge,
+          rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+          rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+          cppStartAge: 65, cppMonthlyAmount: 900,
+          oasStartAge: 65, oasYearsInCanada: 40,
+          desiredSpending: Math.round(next.desiredSpending / 2),
+        },
+      };
+    }
     setInputs(consistentAges(JSON.parse(JSON.stringify(next))));
     // Persist straight into the active scenario so the new plan survives a
     // reload without a separate "save" click.
@@ -368,6 +387,7 @@ function App() {
     setHasUnsavedChanges(false);
     setWizardOpen(false);
     setView('projection');
+    if (opts.addSpouse) setSidebarOpen(true);
   };
 
   // Resolve the spouse adapter: when the spouse is a reference to another
