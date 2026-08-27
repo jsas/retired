@@ -221,17 +221,6 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
   // Scenarios this spouse can link to: all saved plans except the active one
   // (a plan can't be its own spouse).
   const linkableScenarios = (scenarios ?? []).filter(s => s.id !== activeScenarioId);
-  const setSpouseSourceBuiltin = () => {
-    updateField('spouseSource', { kind: 'builtin' });
-  };
-  const setSpouseSourceScenario = (scenarioId: string) => {
-    updateField('spouseSource', { kind: 'scenario', scenarioId });
-  };
-
-  const updateRm = (patch: Partial<ReverseMortgage>) => {
-    if (!inputs.reverseMortgage) return;
-    updateField('reverseMortgage', { ...inputs.reverseMortgage, ...patch });
-  };
 
   // Stash the last-used spouse / reverse-mortgage values so toggling the
   // section off and back on restores them instead of resetting to defaults.
@@ -239,22 +228,63 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
   const spouseStash = useRef<NonNullable<RetirementInputs['spouse']> | null>(null);
   const rmStash = useRef<ReverseMortgage | null>(null);
 
+  const defaultSpouse = (): NonNullable<RetirementInputs['spouse']> => ({
+    enabled: true,
+    currentAge: inputs.currentAge, retirementAge: inputs.retirementAge,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+    cppStartAge: 65, cppMonthlyAmount: 900,
+    oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 30000,
+  });
+
+  // The spouse is governed by TWO fields that must stay in sync:
+  //   spouse.enabled — whether a spouse is part of the household at all
+  //   spouseSource   — builtin (embedded) vs scenario (a link to another plan)
+  // If they disagree the resolver can re-inject a spouse the user just turned
+  // off, or the unlink can leave the projection stale. Every transition writes
+  // both together via a single onChange so the memo chain sees one update.
+
+  const setSpouseSourceBuiltin = () => {
+    // Unlink: drop the scenario reference and restore the stashed embedded
+    // spouse (kept when the link was made), or a fresh default if none. The
+    // household keeps an enabled spouse — unlinking changes WHERE the spouse
+    // comes from, not WHETHER there is one.
+    const restored = spouseStash.current ?? defaultSpouse();
+    onChange({
+      ...inputs,
+      spouseSource: { kind: 'builtin' },
+      spouse: { ...restored, enabled: true },
+    });
+  };
+  const setSpouseSourceScenario = (scenarioId: string) => {
+    // Link: the referenced plan becomes the spouse. Stash the embedded spouse so
+    // unlinking can restore it. The materialized spouse is supplied by the app
+    // via resolveSpouseSource; here we record the link and keep the toggle on.
+    if (inputs.spouse) spouseStash.current = inputs.spouse;
+    onChange({
+      ...inputs,
+      spouseSource: { kind: 'scenario', scenarioId },
+      spouse: { ...(inputs.spouse ?? spouseStash.current ?? defaultSpouse()), enabled: true },
+    });
+  };
+
   const toggleSpouse = (on: boolean) => {
     if (on) {
-      const base = spouseStash.current ?? {
-        enabled: true as const,
-        currentAge: inputs.currentAge, retirementAge: inputs.retirementAge,
-        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
-        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-        cppStartAge: 65, cppMonthlyAmount: 900,
-        oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 30000,
-      };
-      updateField('spouse', { ...base, enabled: true });
+      const base = spouseStash.current ?? defaultSpouse();
+      onChange({ ...inputs, spouse: { ...base, enabled: true } });
     } else {
+      // Uncheck: stash for restore, drop the spouse AND detach any scenario
+      // link. Detaching the link is essential — otherwise resolveSpouseSource
+      // keeps materializing the linked plan and the spouse never goes away.
       if (inputs.spouse) spouseStash.current = inputs.spouse;
-      updateField('spouse', undefined);
+      onChange({ ...inputs, spouse: undefined, spouseSource: { kind: 'builtin' } });
     }
+  };
+
+  const updateRm = (patch: Partial<ReverseMortgage>) => {
+    if (!inputs.reverseMortgage) return;
+    updateField('reverseMortgage', { ...inputs.reverseMortgage, ...patch });
   };
 
   const toggleRm = (on: boolean) => {

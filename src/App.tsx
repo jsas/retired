@@ -361,9 +361,16 @@ function App() {
     [inputs, scenarios, activeScenarioId],
   );
   const resolvedInputs = useMemo<RetirementInputs>(
-    () => (inputs.spouseSource?.kind === 'scenario'
-      ? { ...inputs, spouse: spouseResolution.spouse }
-      : inputs),
+    () => {
+      // Only materialize a linked scenario spouse when the spouse is actually
+      // ENABLED. The enabled flag is the user's explicit on/off and must win:
+      // otherwise unchecking a linked spouse would be silently overridden by
+      // the resolver re-injecting the referenced plan.
+      const linked = inputs.spouseSource?.kind === 'scenario';
+      if (!linked) return inputs;
+      if (!inputs.spouse?.enabled) return { ...inputs, spouse: undefined };
+      return { ...inputs, spouse: spouseResolution.spouse };
+    },
     [inputs, spouseResolution],
   );
 
@@ -476,6 +483,17 @@ function App() {
   const householdBreakdown = useMemo(
     () => combineHouseholdBreakdown(results, resolvedInputs),
     [results, resolvedInputs]
+  );
+
+  // The age gap between the two partners, for aligning spouse rows to the
+  // primary's age axis. Derived from the spouse that ACTUALLY RAN
+  // (results.spouse), not the raw inputs — a disabled spouse leaves the inputs
+  // populated (for re-enabling) but must not shift the display or show tabs.
+  const spouseAgeOffset = useMemo(
+    () => (results.spouse
+      ? resolvedInputs.currentAge - (resolvedInputs.spouse?.currentAge ?? resolvedInputs.currentAge)
+      : 0),
+    [results.spouse, resolvedInputs],
   );
 
   // Monte Carlo is its own page now: build the request while the route is
@@ -710,7 +728,7 @@ function App() {
                     retirementAge={results.retirementAge}
                     primaryBreakdown={results.spouse ? results.yearlyBreakdown : undefined}
                     spouseBreakdown={results.spouse?.yearlyBreakdown}
-                    spouseAgeOffset={resolvedInputs.currentAge - (resolvedInputs.spouse?.currentAge ?? resolvedInputs.currentAge)}
+                    spouseAgeOffset={spouseAgeOffset}
                   />
                 </CollapsiblePanel>
               </>
@@ -812,7 +830,7 @@ function App() {
               <MathPage
                 inputs={inputs}
                 results={results}
-                spouseAgeOffset={resolvedInputs.currentAge - (resolvedInputs.spouse?.currentAge ?? resolvedInputs.currentAge)}
+                spouseAgeOffset={spouseAgeOffset}
               />
             )}
 

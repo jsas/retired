@@ -387,6 +387,50 @@ describe('inter-spousal transfers (household conservation)', () => {
   });
 });
 
+describe('spouse toggle / unlink (regression)', () => {
+  const config = testConfig();
+  const withSpouse = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 70,
+    desiredSpending: 20000,
+    spouse: {
+      enabled: true, currentAge: 63, retirementAge: 65,
+      rrspBalance: 100000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 18000, pensions: [],
+    },
+  });
+
+  it('an enabled spouse runs and attaches results.spouse', () => {
+    const r = calculateHousehold(withSpouse(), config);
+    expect(r.spouse).toBeDefined();
+    expect(r.spouse!.yearlyBreakdown.length).toBeGreaterThan(0);
+  });
+
+  it('removing the spouse drops results.spouse and the age offset collapses', () => {
+    // Mirrors the App's resolved-inputs contract after an UNCHECK: the spouse
+    // field is undefined, so the engine runs single and no spouse rows exist
+    // for the Year Math tabs / spouseAgeOffset to pick up.
+    const inputs = withSpouse();
+    inputs.spouse = undefined;
+    const r = calculateHousehold(inputs, config);
+    expect(r.spouse).toBeUndefined();
+    // combineHouseholdBreakdown must fall back to the primary-only rows.
+    expect(combineHouseholdBreakdown(r, inputs)).toBe(r.yearlyBreakdown);
+  });
+
+  it('a builtin spouseSource with no spouse never re-materializes one', () => {
+    // The uncheck path also detaches the link (spouseSource → builtin) so a
+    // lingering scenario reference can't resurrect the spouse. With builtin +
+    // no spouse there is nothing to resolve.
+    const inputs = withSpouse();
+    inputs.spouse = undefined;
+    inputs.spouseSource = { kind: 'builtin' };
+    const r = calculateHousehold(inputs, config);
+    expect(r.spouse).toBeUndefined();
+  });
+});
+
 describe('pensions', () => {
   it('lifetime pension pays every year from startAge', () => {
     const r = calculateRetirement(baseInputs({
