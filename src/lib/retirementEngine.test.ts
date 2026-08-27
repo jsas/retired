@@ -508,6 +508,79 @@ describe('spouse full-person parity', () => {
   });
 });
 
+describe('re-homed transfer events (authored on the wrong person)', () => {
+  const config = testConfig();
+  // Same-age couple; the spouse holds the money. A transfer is authored on the
+  // PRIMARY's event list but pulls FROM the spouse's TFSA into the primary's
+  // taxable — the source person (spouse) never had it on their list.
+  const mk = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 66,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    desiredSpending: 0,
+    spouse: {
+      enabled: true, currentAge: 65, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 100000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+      desiredSpending: 0, pensions: [],
+    },
+  });
+
+  it('a transfer sourced from the spouse but authored on the primary still fires', () => {
+    const inputs = mk();
+    // Authored on the PRIMARY's events, but the money leaves the SPOUSE's TFSA.
+    inputs.events = [{
+      id: 'misfiled', age: 65, label: 'spouse funds me', amount: 40000, direction: 'out',
+      from: { kind: 'account', person: 'spouse', account: 'tfsa' },
+      to: { kind: 'account', person: 'primary', account: 'taxable' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    const prow = yearAt(r.yearlyBreakdown, 65);
+    const srow = yearAt(r.spouse!.yearlyBreakdown, 65);
+    // The spouse's TFSA was drawn down by the gross (100k − 40k = 60k, ×1.05).
+    expect(srow.tfsaBalance).toBeCloseTo(60000 * 1.05, 0);
+    // ...and the after-tax net landed in the PRIMARY's taxable (untaxed move).
+    expect(prow.detail?.deposit?.taxable).toBeCloseTo(40000, 0);
+    expect(prow.taxableBalance).toBeCloseTo(40000 * 1.05, 0);
+  });
+
+  it('a re-homed transfer fires exactly once (not double-counted)', () => {
+    const inputs = mk();
+    inputs.events = [{
+      id: 'misfiled', age: 65, label: 'spouse funds me', amount: 40000, direction: 'out',
+      from: { kind: 'account', person: 'spouse', account: 'tfsa' },
+      to: { kind: 'account', person: 'primary', account: 'taxable' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    // Across BOTH runs the transfer must appear once total: the source (spouse)
+    // run records it, the destination (primary) run does not re-fire it.
+    const spouseTraces = r.spouse!.yearlyBreakdown.flatMap(y => y.detail?.calc?.transfers ?? []);
+    const primaryTraces = r.yearlyBreakdown.flatMap(y => y.detail?.calc?.transfers ?? []);
+    expect(spouseTraces).toHaveLength(1);
+    expect(primaryTraces.filter(t => t.label === 'spouse funds me')).toHaveLength(0);
+    // Household conservation: spouse TFSA down 40k, primary taxable up 40k.
+    const household = yearAt(r.yearlyBreakdown, 65).endingBalance + yearAt(r.spouse!.yearlyBreakdown, 65).endingBalance;
+    expect(household).toBeCloseTo(100000 * 1.05, 0);
+  });
+
+  it('a re-homed transfer respects the age axis across an age gap', () => {
+    const inputs = mk();
+    inputs.spouse!.currentAge = 62; // spouse is 3 years younger
+    // Authored on the primary at primary-age 66 → calendar year is spouse-age 63.
+    inputs.events = [{
+      id: 'misfiled', age: 66, label: 'spouse funds me', amount: 30000, direction: 'out',
+      from: { kind: 'account', person: 'spouse', account: 'tfsa' },
+      to: { kind: 'account', person: 'primary', account: 'taxable' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    // The spouse's TFSA drops on the spouse's age-63 row (same calendar year).
+    const srow63 = yearAt(r.spouse!.yearlyBreakdown, 63);
+    expect(srow63.detail?.calc?.transfers?.[0]?.gross).toBeCloseTo(30000, 0);
+    // ...and the primary receives the net on its age-66 row.
+    expect(yearAt(r.yearlyBreakdown, 66).detail?.deposit?.taxable).toBeCloseTo(30000, 0);
+  });
+});
+
 describe('pensions', () => {
   it('lifetime pension pays every year from startAge', () => {
     const r = calculateRetirement(baseInputs({

@@ -1287,13 +1287,52 @@ export function calculateHousehold(
     pensions: sp.pensions,
   } : undefined;
 
-  const primary = calculatePerson(primaryPerson, shared, config, {
+  // --- Re-home mis-filed transfer events -----------------------------------
+  // A transfer event FIRES only in the run of the person its money leaves
+  // (applyTransferEvent requires from.person === selfRef). A transfer authored
+  // on person A's event list but sourced from person B's account would
+  // otherwise never fire: A's run skips it (not the source) and B's run never
+  // sees A's events. Re-home it: hand each person the partner's transfer events
+  // whose explicit `from` names THIS person, translated onto this person's age
+  // axis. The destination landing is handled by the cross-deposit pass below,
+  // so a re-homed transfer still conserves household money.
+  // Events authored on `owner`'s list that are sourced from `selfRef`'s
+  // accounts, re-stamped from the owner's age axis onto selfRef's. The age the
+  // author picked is a CALENDAR intent; convert via the current-age gap.
+  const rehome = (
+    ownerEvents: CashEvent[] | undefined,
+    ownerCurrentAge: number,
+    selfRef: 'primary' | 'spouse',
+    selfCurrentAge: number,
+  ): CashEvent[] => (ownerEvents ?? [])
+    .filter(e => e.from && e.from.kind === 'account' && e.from.person === selfRef)
+    .map(e => ({
+      ...e,
+      // owner-age → calendar-year → self-age (same convention as `translate`).
+      age: e.age - (ownerCurrentAge - selfCurrentAge),
+      // Recurring events carry endAge on the same axis; shift it too.
+      ...(e.endAge != null ? { endAge: e.endAge - (ownerCurrentAge - selfCurrentAge) } : {}),
+    }));
+
+  const primaryRun: PersonInputs = sp
+    ? { ...primaryPerson, events: [...(primaryPerson.events ?? []), ...rehome(sp.events, sp.currentAge, 'primary', primaryPerson.currentAge)] }
+    : primaryPerson;
+
+  const primary = calculatePerson(primaryRun, shared, config, {
     ...options,
     personRef: 'primary',
     ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
   });
 
   if (sp) {
+    // The spouse's effective events: their own, plus any transfers the primary
+    // authored that pull FROM the spouse's accounts (re-homed onto the spouse's
+    // age axis).
+    const spRun: PersonInputs = {
+      ...sp,
+      events: [...(sp.events ?? []), ...rehome(primaryPerson.events, primaryPerson.currentAge, 'spouse', sp.currentAge)],
+    };
+
     // Age translation for inter-spousal transfers: a cross-deposit stamped at
     // the SOURCE's age lands in the partner at the same CALENDAR year, which
     // on the partner's age axis is source-age minus the current-age gap.
@@ -1305,7 +1344,7 @@ export function calculateHousehold(
 
     // Run the spouse, injecting any primary→spouse transfer landings (after-tax).
     const pToS = translate(primary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
-    let spouseResults = calculatePerson(sp, shared, config, {
+    let spouseResults = calculatePerson(spRun, shared, config, {
       ...options,
       personRef: 'spouse',
       spouseContext: {
@@ -1325,7 +1364,7 @@ export function calculateHousehold(
     const sToP = translate(spouseResults.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge);
     let finalPrimary = primary;
     if (sToP.length > 0) {
-      finalPrimary = calculatePerson(primaryPerson, shared, config, {
+      finalPrimary = calculatePerson(primaryRun, shared, config, {
         ...options,
         personRef: 'primary',
         ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
@@ -1334,7 +1373,7 @@ export function calculateHousehold(
       // The primary's re-run may have changed its own cross-deposits to the
       // spouse; re-inject and re-run the spouse once more for consistency.
       const pToS2 = translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
-      spouseResults = calculatePerson(sp, shared, config, {
+      spouseResults = calculatePerson(spRun, shared, config, {
         ...options,
         personRef: 'spouse',
         spouseContext: {
