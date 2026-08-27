@@ -6,7 +6,7 @@ import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
-import { resolveSpouseSource } from './lib/householdTypes';
+import { resolveSpouseSource, baselineSpouse } from './lib/householdTypes';
 import { loadScenarioState, saveScenarioState, type Scenario } from './lib/scenarioStorage';
 import { loadAppConfig, saveAppConfig, type AppConfig } from './lib/appConfig';
 import { buildAppDb } from './lib/appDb';
@@ -391,16 +391,7 @@ function App() {
       next = {
         ...next,
         spouseSource: { kind: 'builtin' },
-        spouse: {
-          enabled: true,
-          currentAge: next.currentAge,
-          retirementAge: next.retirementAge,
-          rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
-          rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-          cppStartAge: 65, cppMonthlyAmount: 900,
-          oasStartAge: 65, oasYearsInCanada: 40,
-          desiredSpending: Math.round(next.desiredSpending / 2),
-        },
+        spouse: baselineSpouse(next),
       };
     }
     const finalInputs = consistentAges(JSON.parse(JSON.stringify(next)));

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X } from 'lucide-react';
 import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
+import { baselineSpouse } from '../lib/householdTypes';
 import type { AppConfig } from '../lib/appConfig';
 
 interface SidebarFormProps {
@@ -449,15 +450,10 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
   const spouseStash = useRef<NonNullable<RetirementInputs['spouse']> | null>(null);
   const rmStash = useRef<ReverseMortgage | null>(null);
 
-  const defaultSpouse = (): NonNullable<RetirementInputs['spouse']> => ({
-    enabled: true,
-    currentAge: inputs.currentAge, retirementAge: inputs.retirementAge,
-    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
-    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-    cppStartAge: 65, cppMonthlyAmount: 900,
-    oasStartAge: 65, oasYearsInCanada: 40,
-    desiredSpending: 30000,
-  });
+  // Single source of truth for a baseline spouse (shared with the setup
+  // wizard's "add a spouse" path) so the two ways of adding a spouse don't
+  // drift — see householdTypes.baselineSpouse.
+  const defaultSpouse = (): NonNullable<RetirementInputs['spouse']> => baselineSpouse(inputs);
 
   // The spouse is governed by TWO fields that must stay in sync:
   //   spouse.enabled — whether a spouse is part of the household at all

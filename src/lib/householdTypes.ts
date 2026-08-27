@@ -42,10 +42,10 @@ export type TransferEndpoint =
 /**
  * One person's complete plan. Everything needed to project their accounts and
  * benefits for a lifetime, EXCEPT the household-shared assumptions (which live
- * on HouseholdInputs.shared so a couple can't disagree about the market or the
- * calendar). This is the unified replacement for both RetirementInputs (the
- * person half) and SpouseInputs — giving spouses full feature parity (events,
- * spending bands, reverse mortgage, their own withdrawal order).
+ * on SharedInputs so a couple can't disagree about the market or the calendar).
+ * This is the unified replacement for both RetirementInputs (the person half)
+ * and SpouseInputs — giving spouses full feature parity (events, spending
+ * bands, reverse mortgage, their own withdrawal order).
  */
 export interface PersonInputs {
   currentAge: number;
@@ -89,44 +89,6 @@ export interface SharedInputs {
 }
 
 // ---------------------------------------------------------------------------
-// Spouse adapters
-// ---------------------------------------------------------------------------
-
-/**
- * How the second person in a couple is supplied.
- *  - builtin:  the spouse's plan is embedded directly (today's behaviour, and
- *              what legacy embedded spouses migrate to).
- *  - scenario: the spouse IS another saved scenario, referenced by id. Its
- *              person fields are used; its shared fields are overridden by the
- *              host's (host wins), and the conflict is reported as a warning.
- */
-export type SpouseAdapter =
-  | { kind: 'builtin'; person: PersonInputs }
-  | { kind: 'scenario'; scenarioId: string };
-
-// ---------------------------------------------------------------------------
-// Household — 1–2 people + shared assumptions
-// ---------------------------------------------------------------------------
-
-export interface HouseholdInputs {
-  shared: SharedInputs;
-  primary: PersonInputs;
-  /** Absent = a single-person household. Present = a couple. */
-  spouse?: SpouseAdapter;
-}
-
-/** A spouse adapter resolved to a concrete person, plus any host-wins notes. */
-export interface ResolvedHousehold {
-  shared: SharedInputs;
-  primary: PersonInputs;
-  /** The resolved spouse person (undefined for a single). */
-  spouse?: PersonInputs;
-  /** Host-wins conflicts surfaced when a scenario spouse's shared fields were
-   *  overridden by the host's values. Empty unless spouse.kind === 'scenario'. */
-  warnings: string[];
-}
-
-// ---------------------------------------------------------------------------
 // Legacy ↔ unified converters
 // ---------------------------------------------------------------------------
 
@@ -167,6 +129,31 @@ export function legacyToShared(inputs: RetirementInputs): SharedInputs {
   };
 }
 
+/**
+ * A baseline embedded spouse for a plan that has none — the single source of
+ * truth used by BOTH the setup wizard ("add a spouse") and the sidebar's
+ * spouse checkbox. Ages start at the host's; balances/contributions are zero;
+ * CPP/OAS at 65 with typical amounts; spending defaults to half the host's
+ * goal (a reasonable single-person share of a couple's spending). Centralizing
+ * this keeps the two "add spouse" paths from drifting apart.
+ */
+export function baselineSpouse(host: {
+  currentAge: number;
+  retirementAge: number;
+  desiredSpending: number;
+}): NonNullable<RetirementInputs['spouse']> {
+  return {
+    enabled: true,
+    currentAge: host.currentAge,
+    retirementAge: host.retirementAge,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+    cppStartAge: 65, cppMonthlyAmount: 900,
+    oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: Math.round(host.desiredSpending / 2),
+  };
+}
+
 /** Convert a legacy embedded SpouseInputs into a full PersonInputs. The spouse
  *  type carries the full-person parity fields (events, spending bands, reverse
  *  mortgage) optionally — they're passed straight through (absent = none), so
@@ -200,169 +187,9 @@ export function legacySpouseToPerson(sp: SpouseInputs): PersonInputs {
   };
 }
 
-/**
- * Build a unified HouseholdInputs from a legacy RetirementInputs. The primary
- * and shared fields split off; an enabled embedded spouse becomes a builtin
- * adapter holding a full PersonInputs.
- */
-export function legacyToHousehold(inputs: RetirementInputs): HouseholdInputs {
-  const household: HouseholdInputs = {
-    shared: legacyToShared(inputs),
-    primary: legacyToPerson(inputs),
-  };
-  if (inputs.spouse?.enabled) {
-    household.spouse = { kind: 'builtin', person: legacySpouseToPerson(inputs.spouse) };
-  }
-  return household;
-}
-
-/**
- * Flatten a resolved household back into the legacy RetirementInputs shape.
- * Used where a consumer still speaks the old format (storage, share links, and
- * the many lib callers) so they can adopt the unified model incrementally.
- * A scenario-referenced spouse is flattened to its resolved person as a
- * builtin — the legacy shape has no way to express a live reference.
- */
-export function householdToLegacy(resolved: ResolvedHousehold): RetirementInputs {
-  const { shared, primary, spouse } = resolved;
-  const legacy: RetirementInputs = {
-    currentAge: primary.currentAge,
-    retirementAge: primary.retirementAge,
-    maxAge: shared.maxAge,
-    rrspBalance: primary.rrspBalance,
-    tfsaBalance: primary.tfsaBalance,
-    taxableBalance: primary.taxableBalance,
-    cashCushionBalance: primary.cashCushionBalance,
-    rrspContribution: primary.rrspContribution,
-    tfsaContribution: primary.tfsaContribution,
-    taxableContribution: primary.taxableContribution,
-    annualWithdrawal: 0,
-    investmentReturn: shared.investmentReturn,
-    returnVolatility: shared.returnVolatility,
-    provinceCode: shared.provinceCode,
-    cppStartAge: primary.cppStartAge,
-    cppMonthlyAmount: primary.cppMonthlyAmount,
-    cppAdjustedAmount: primary.cppAdjustedAmount,
-    oasStartAge: primary.oasStartAge,
-    oasYearsInCanada: primary.oasYearsInCanada,
-    desiredSpending: primary.desiredSpending,
-    withdrawalOrder: primary.withdrawalOrder,
-    spendingBands: primary.spendingBands,
-    pensions: primary.pensions,
-    events: primary.events,
-    reverseMortgage: primary.reverseMortgage,
-  };
-  if (spouse) {
-    legacy.spouse = {
-      enabled: true,
-      currentAge: spouse.currentAge,
-      retirementAge: spouse.retirementAge,
-      rrspBalance: spouse.rrspBalance,
-      tfsaBalance: spouse.tfsaBalance,
-      taxableBalance: spouse.taxableBalance,
-      cashCushionBalance: spouse.cashCushionBalance,
-      rrspContribution: spouse.rrspContribution,
-      tfsaContribution: spouse.tfsaContribution,
-      taxableContribution: spouse.taxableContribution,
-      cppStartAge: spouse.cppStartAge,
-      cppMonthlyAmount: spouse.cppMonthlyAmount,
-      oasStartAge: spouse.oasStartAge,
-      oasYearsInCanada: spouse.oasYearsInCanada,
-      desiredSpending: spouse.desiredSpending,
-      withdrawalOrder: spouse.withdrawalOrder,
-      pensions: spouse.pensions,
-      events: spouse.events,
-      spendingBands: spouse.spendingBands,
-      reverseMortgage: spouse.reverseMortgage,
-    };
-  }
-  return legacy;
-}
-
-// ---------------------------------------------------------------------------
-// Spouse-adapter resolution (with circular-reference guard + host-wins)
-// ---------------------------------------------------------------------------
-
-export interface ScenarioLookup {
-  id: string;
-  inputs: RetirementInputs;
-}
-
-/**
- * Resolve a household's spouse adapter to a concrete PersonInputs.
- *
- * A builtin spouse is used directly. A scenario spouse is looked up by id among
- * the saved scenarios and its person half extracted; the host's shared fields
- * always win (host wins), and each overridden field that differed is reported
- * as a warning so the UI can show exactly what was ignored.
- *
- * Circular references are guarded by `seen`: if scenario A names B as its
- * spouse and B (transitively) names A, resolution stops and the spouse is
- * dropped with a warning rather than recursing forever. A self-reference is the
- * degenerate cycle and is caught the same way.
- */
-export function resolveHousehold(
-  household: HouseholdInputs,
-  scenarios?: ScenarioLookup[],
-  seen: Set<string> = new Set(),
-): ResolvedHousehold {
-  const { shared, primary, spouse } = household;
-  if (!spouse) return { shared, primary, warnings: [] };
-
-  if (spouse.kind === 'builtin') {
-    return { shared, primary, spouse: spouse.person, warnings: [] };
-  }
-
-  // spouse.kind === 'scenario'
-  const warnings: string[] = [];
-  const targetId = spouse.scenarioId;
-
-  if (seen.has(targetId)) {
-    warnings.push('Circular spouse reference detected — the spouse link was ignored.');
-    return { shared, primary, warnings };
-  }
-  const target = scenarios?.find(s => s.id === targetId);
-  if (!target) {
-    warnings.push('Linked spouse scenario was not found — the spouse link was ignored.');
-    return { shared, primary, warnings };
-  }
-
-  // The referenced scenario becomes the spouse PERSON. Its own shared fields
-  // are overridden by the host's (host wins); report each that differed, with
-  // the reason (a household shares one province, market and horizon).
-  const theirShared = legacyToShared(target.inputs);
-  if (theirShared.provinceCode !== shared.provinceCode) {
-    warnings.push(`Province: using yours (${shared.provinceCode}), not the linked plan's (${theirShared.provinceCode}) — a household files taxes in one province.`);
-  }
-  if (theirShared.investmentReturn !== shared.investmentReturn) {
-    warnings.push('Investment return: using yours, not the linked plan\'s — both partners\' accounts are projected with one shared market assumption.');
-  }
-  if (theirShared.maxAge !== shared.maxAge) {
-    warnings.push('Horizon (max age): using yours, not the linked plan\'s — a household projects both partners to a single planning horizon.');
-  }
-
-  const person = legacyToPerson(target.inputs);
-
-  // Guard a transitive cycle: if the referenced scenario itself has a spouse
-  // adapter, make sure following it can't loop back here. We only need the
-  // person half, so we don't recurse into their spouse — but a self/chain
-  // reference back to this host is impossible to express once we've taken just
-  // their person fields, so the seen-guard above is the real protection.
-  void seen;
-
-  return { shared, primary, spouse: person, warnings };
-}
-
 // ---------------------------------------------------------------------------
 // Cash-event transfer helpers
 // ---------------------------------------------------------------------------
-
-/** True when an event moves money between two accounts/people (not just in or
- *  out of the model). Drives both the engine's transfer path and the UI's
- *  simple-vs-advanced disclosure. */
-export function isTransferEvent(ev: CashEvent): boolean {
-  return ev.from != null || ev.to != null;
-}
 
 /**
  * Normalize an event to explicit from/to endpoints, filling defaults for the
