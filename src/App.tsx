@@ -234,18 +234,42 @@ function App() {
     savePrintOptions(opts);
   };
 
+  // Resolve the spouse adapter: when the spouse is a reference to another
+  // scenario, materialize that scenario's person into `spouse` (host wins on
+  // the shared fields) and surface any conflicts as warnings. The engine and
+  // every display consumer always see a concrete SpouseInputs. Declared early
+  // because EVERY engine consumer below (projection, Monte Carlo, backtest, EQ,
+  // Optimize) runs against the resolved plan, not the raw inputs.
+  const spouseResolution = useMemo(
+    () => resolveSpouseSource(inputs, scenarios, activeScenarioId),
+    [inputs, scenarios, activeScenarioId],
+  );
+  const resolvedInputs = useMemo<RetirementInputs>(
+    () => {
+      // Only materialize a linked scenario spouse when the spouse is actually
+      // ENABLED. The enabled flag is the user's explicit on/off and must win:
+      // otherwise unchecking a linked spouse would be silently overridden by
+      // the resolver re-injecting the referenced plan.
+      const linked = inputs.spouseSource?.kind === 'scenario';
+      if (!linked) return inputs;
+      if (!inputs.spouse?.enabled) return { ...inputs, spouse: undefined };
+      return { ...inputs, spouse: spouseResolution.spouse };
+    },
+    [inputs, spouseResolution],
+  );
+
   // Run a fresh 500-run simulation for the print fan chart whenever the
   // include-Monte-Carlo option is on and the plan's inputs change.
   useEffect(() => {
     if (!printOptions.includeMonteCarlo) { setPrintMc(null); setPrintMcPending(false); return; }
     setPrintMcPending(true);
     return runMonteCarloAuto(
-      { inputs, config, runs: 500, volatility: inputs.returnVolatility },
+      { inputs: resolvedInputs, config, runs: 500, volatility: resolvedInputs.returnVolatility },
       (res) => { setPrintMc(res); setPrintMcPending(false); },
       (msg) => { console.warn('Print Monte Carlo failed:', msg); setPrintMcPending(false); },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [printOptions.includeMonteCarlo, inputs, config]);
+  }, [printOptions.includeMonteCarlo, resolvedInputs, config]);
 
   // Persist scenarios + active scenario to localStorage on every change
   useEffect(() => {
@@ -395,28 +419,6 @@ function App() {
     if (opts.addSpouse) setSidebarOpen(true);
   };
 
-  // Resolve the spouse adapter: when the spouse is a reference to another
-  // scenario, materialize that scenario's person into `spouse` (host wins on
-  // the shared fields) and surface any conflicts as warnings. The engine and
-  // every display consumer always see a concrete SpouseInputs.
-  const spouseResolution = useMemo(
-    () => resolveSpouseSource(inputs, scenarios, activeScenarioId),
-    [inputs, scenarios, activeScenarioId],
-  );
-  const resolvedInputs = useMemo<RetirementInputs>(
-    () => {
-      // Only materialize a linked scenario spouse when the spouse is actually
-      // ENABLED. The enabled flag is the user's explicit on/off and must win:
-      // otherwise unchecking a linked spouse would be silently overridden by
-      // the resolver re-injecting the referenced plan.
-      const linked = inputs.spouseSource?.kind === 'scenario';
-      if (!linked) return inputs;
-      if (!inputs.spouse?.enabled) return { ...inputs, spouse: undefined };
-      return { ...inputs, spouse: spouseResolution.spouse };
-    },
-    [inputs, spouseResolution],
-  );
-
   const results = useMemo(() => {
     return calculateHousehold(resolvedInputs, config);
   }, [resolvedInputs, config]);
@@ -452,15 +454,15 @@ function App() {
   // retirement-age / spending VALUE thumbs (or the pad dot) leaves the key — and
   // the cached grid — unchanged. Only the cheap readout re-runs on those drags.
   const eqGridKey = useMemo(() => {
-    const { retirementAge: _ra, desiredSpending: _ds, ...financial } = inputs;
+    const { retirementAge: _ra, desiredSpending: _ds, ...financial } = resolvedInputs;
     return JSON.stringify({
       financial,
       config,
-      rx: renderRange('retirementAge', axisValue(inputs, 'retirementAge'), inputs),
-      ry: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending'), inputs),
+      rx: renderRange('retirementAge', axisValue(resolvedInputs, 'retirementAge'), resolvedInputs),
+      ry: renderRange('desiredSpending', axisValue(resolvedInputs, 'desiredSpending'), resolvedInputs),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputs, config]);
+  }, [resolvedInputs, config]);
 
   // The success-rate READOUT under the dot is one cheap Monte Carlo node on the
   // main thread. Unlike the grid, it DOES depend on the current point, so it
@@ -470,7 +472,7 @@ function App() {
     setEqSolved(s => ({ ...s, solving: true }));
     const t = setTimeout(() => {
       try {
-        const successRate = solveEqReadout({ inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } });
+        const successRate = solveEqReadout({ inputs: resolvedInputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } });
         setEqSolved(s => ({ ...s, successRate, solving: false }));
       } catch {
         setEqSolved(s => ({ ...s, solving: false }));
@@ -478,7 +480,7 @@ function App() {
     }, 150);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, inputs, config]);
+  }, [view, resolvedInputs, config]);
 
   // Re-solve the success-rate pad shading only when the grid's actual inputs
   // change (eqGridKey) — NOT on every plan edit. Dragging the retirement-age or
@@ -491,12 +493,12 @@ function App() {
     const t = setTimeout(() => {
       const cancel = runEqSolverAuto(
         {
-          inputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' },
+          inputs: resolvedInputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' },
           // Shade the ranges the pad actually renders (grown to fit an
           // out-of-range point), so the gradient lines up with the dot.
           ranges: {
-            x: renderRange('retirementAge', axisValue(inputs, 'retirementAge'), inputs),
-            y: renderRange('desiredSpending', axisValue(inputs, 'desiredSpending'), inputs),
+            x: renderRange('retirementAge', axisValue(resolvedInputs, 'retirementAge'), resolvedInputs),
+            y: renderRange('desiredSpending', axisValue(resolvedInputs, 'desiredSpending'), resolvedInputs),
           },
         },
         (res) => setEqSolved(s => ({
@@ -547,23 +549,25 @@ function App() {
   const mcNonceSeen = useRef(0);
   useEffect(() => {
     if (view !== 'montecarlo') { setMcRequest(null); return; }
-    const vol = inputs.returnVolatility ?? 0;
+    const vol = resolvedInputs.returnVolatility ?? 0;
     if (vol <= 0) { setMcRequest(null); return; }
     // Build immediately when there's nothing showing yet (first visit) or a
     // fresh manual refresh was requested (nonce consumed once). Debounce only
     // the input-driven rebuilds so slider drags don't spam 500-run batches.
+    // Monte Carlo runs against the RESOLVED plan (linked spouse materialized)
+    // so the fan matches the projection dashboard.
     const manualRefresh = mcRefreshNonce !== mcNonceSeen.current;
     if (mcRequest == null || manualRefresh) {
       mcNonceSeen.current = mcRefreshNonce;
-      setMcRequest({ inputs, config, runs: 500, volatility: vol });
+      setMcRequest({ inputs: resolvedInputs, config, runs: 500, volatility: vol });
       return;
     }
     const t = setTimeout(() => {
-      setMcRequest({ inputs, config, runs: 500, volatility: vol });
+      setMcRequest({ inputs: resolvedInputs, config, runs: 500, volatility: vol });
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, inputs, config, mcRefreshNonce]);
+  }, [view, resolvedInputs, config, mcRefreshNonce]);
 
   // Backtest is its own page too. It's fast and synchronous, so recompute on
   // the route whenever inputs/config change — no debounce needed. Real-return
@@ -572,16 +576,18 @@ function App() {
     if (view !== 'backtest') { setBacktestResult(null); return; }
     const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
     realConfig.engine.inflationRate = 0;
-    setBacktestResult(runBacktest(inputs, realConfig, calculateHousehold));
+    // Backtest the RESOLVED plan so a linked spouse's balances/benefits are
+    // the ones being tested against history.
+    setBacktestResult(runBacktest(resolvedInputs, realConfig, calculateHousehold));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, inputs, config]);
+  }, [view, resolvedInputs, config]);
 
   return (
     <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
       {/* Print-only one-page summary (hidden on screen; see index.css) */}
       <PrintSummary
         scenarioName={activeScenario.name}
-        inputs={inputs}
+        inputs={resolvedInputs}
         results={results}
         householdBreakdown={householdBreakdown}
         options={printOptions}
@@ -779,7 +785,7 @@ function App() {
 
             {view === 'optimize' && (
               <OptimizeCard
-                inputs={inputs}
+                inputs={resolvedInputs}
                 config={config}
                 results={results}
                 mcResults={printMc}
@@ -904,7 +910,7 @@ function App() {
 
             {view === 'eq' && (
               <EqPage
-                inputs={inputs}
+                inputs={resolvedInputs}
                 config={config}
                 onChange={handleInputsChange}
                 bands={eqBands}

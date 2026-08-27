@@ -3,6 +3,7 @@
 // plus a signed diff of each against a chosen baseline. Kept separate from the
 // UI so the verdict-derivation and diff logic is unit-testable.
 import { calculateHousehold, householdOutcome, type RetirementResults, type RetirementInputs } from './retirementEngine';
+import { resolveSpouseSource } from './householdTypes';
 import type { Scenario } from './scenarioStorage';
 import type { AppConfig } from './appConfig';
 
@@ -57,10 +58,22 @@ export function metricsFromResults(id: string, name: string, results: Retirement
   };
 }
 
-/** Run one scenario's inputs through the engine and extract its metrics. */
-export function computeScenarioMetrics(scenario: Scenario, config: AppConfig): ScenarioMetrics {
-  const results = calculateHousehold(scenario.inputs, config);
-  return metricsFromResults(scenario.id, scenario.name, results, scenario.inputs);
+/** Run one scenario's inputs through the engine and extract its metrics. A
+ *  scenario that LINKS its spouse to another saved plan is resolved against the
+ *  same scenario list first, so the comparison uses the linked plan's person —
+ *  not the stale embedded spouse the link replaced. */
+export function computeScenarioMetrics(
+  scenario: Scenario,
+  config: AppConfig,
+  scenarios?: Array<{ id: string; inputs: RetirementInputs }>,
+): ScenarioMetrics {
+  let inputs = scenario.inputs;
+  if (scenarios && inputs.spouseSource?.kind === 'scenario' && inputs.spouse?.enabled) {
+    const res = resolveSpouseSource(inputs, scenarios, scenario.id);
+    if (res.spouse) inputs = { ...inputs, spouse: res.spouse };
+  }
+  const results = calculateHousehold(inputs, config);
+  return metricsFromResults(scenario.id, scenario.name, results, inputs);
 }
 
 // Display tolerances: below these a diff reads as "no change".
@@ -96,7 +109,9 @@ export function compareScenarios(
   baselineId: string,
   config: AppConfig,
 ): ScenarioComparison[] {
-  const all = scenarios.map(s => computeScenarioMetrics(s, config));
+  // Pass the full list so a scenario whose spouse is linked to another saved
+  // plan resolves that link before computing (same as the projection does).
+  const all = scenarios.map(s => computeScenarioMetrics(s, config, scenarios));
   const baseline = all.find(m => m.id === baselineId);
 
   return all.map(metrics => {
