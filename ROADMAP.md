@@ -55,10 +55,12 @@ have to hold them.
   Node consumer backs with SQLite/a file later.
 - **Data layer hardening (underway)** — Zod schemas now define every
   persisted shape (`src/data/schemas.ts`), and all app state lives in a real
-  SQLite database via sql.js (`src/data/db.ts`), mirrored to localStorage and
-  exportable as a .sqlite file. Remaining: OPFS persistence (survives
-  "clear site data" less often, no 5MB localStorage ceiling), and a Node
-  SQLite backend behind the same store interface for the engine package.
+  SQLite database via sql.js (`src/data/db.ts`), persisted to OPFS
+  (origin-private file system — no 5 MB ceiling, mirrored to localStorage
+  for compatibility) and exportable as a .sqlite file. Remaining: a Node
+  SQLite backend behind the same store interface for the engine package,
+  and moving the DB onto a worker with the synchronous OPFS VFS for
+  incremental (not whole-file) writes.
 
 ## Non-goals
 

@@ -447,7 +447,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Where data lives',
-        body: <P>Your plans live in a real <strong>SQLite database</strong> (running as WebAssembly) whose bytes are mirrored into this browser's localStorage — nothing leaves your machine. Clearing browser data erases your scenarios, so use Export to keep backups. One exception, and it's your hands on the keyboard: the Optimize tab's <strong>AI helper</strong> builds a prompt containing your plan (and results) for you to paste into an AI of your choice — once pasted, that provider reads the data under its own privacy policy.</P>
+        body: <P>Your plans live in a real <strong>SQLite database</strong> (running as WebAssembly) whose bytes are stored in this browser's <strong>origin-private file system</strong> — a durable per-site store with no 5&nbsp;MB ceiling, mirrored to localStorage for compatibility. Nothing leaves your machine. Clearing the browser's site data can still erase it, so use Export to keep backups. One exception, and it's your hands on the keyboard: the Optimize tab's <strong>AI helper</strong> builds a prompt containing your plan (and results) for you to paste into an AI of your choice — once pasted, that provider reads the data under its own privacy policy.</P>
       },
       {
         term: 'Export / Import',

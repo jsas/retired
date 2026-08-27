@@ -4,6 +4,7 @@ import type { Scenario } from '../lib/scenarioStorage';
 import { migrateInputs } from '../lib/scenarioStorage';
 import { validateAppConfig } from '../lib/appConfig';
 import { appDbDocSchema, type AppDbDoc } from './schemas';
+import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './opfs';
 
 /**
  * The app's persistent store: a real SQLite database (sql.js / WASM) whose
@@ -83,15 +84,27 @@ const MIGRATIONS: Array<(db: Database) => void> = [
 
 export class AppDatabase {
   private db: Database;
-  private constructor(db: Database) {
+  private backend: OpfsBackend | null;
+  private constructor(db: Database, backend: OpfsBackend | null) {
     this.db = db;
+    this.backend = backend;
   }
 
-  /** Open the store: bytes from localStorage when present (or `seed` for
-   *  tests / imports), else a fresh database. Migrations run to current. */
+  /** Open the store. Byte source priority: an explicit `seed` (tests,
+   *  imports) → OPFS (the primary mirror) → the localStorage mirror (older
+   *  builds and the fallback when OPFS is unavailable). Nothing anywhere → a
+   *  fresh database. Migrations run to current before returning. */
   static async open(seed?: Uint8Array): Promise<AppDatabase> {
     const SQL = await loadSqlJs();
+    const backend = await AsyncOpfsBackend.open();
+    if (backend) {
+      // Best-effort pin so the database isn't evicted under disk pressure.
+      void requestPersistentStorage();
+    }
     let bytes: Uint8Array | null = seed ?? null;
+    if (!bytes && backend) {
+      bytes = await backend.read();
+    }
     if (!bytes) {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -99,7 +112,7 @@ export class AppDatabase {
       } catch { /* storage unavailable — run in-memory */ }
     }
     const db = bytes ? new SQL.Database(bytes) : new SQL.Database();
-    const app = new AppDatabase(db);
+    const app = new AppDatabase(db, backend);
     app.migrate();
     return app;
   }
@@ -126,15 +139,27 @@ export class AppDatabase {
     }
   }
 
-  /** Serialize and stash the whole database. The mirror is best-effort:
-   *  quota failures leave the in-memory db authoritative for the session. */
+  /** Serialize and stash the whole database. Write-through: OPFS first (the
+   *  durable home), then localStorage as the best-effort compatibility
+   *  mirror. OPFS failures are awaited (and logged) since that's the primary
+   *  copy; localStorage failures are swallowed — quota there is a known
+   *  ceiling, and OPFS already has the bytes. */
   save(): void {
-    const b64 = bytesToBase64(this.db.export());
+    const bytes = this.db.export();
+    if (this.backend) {
+      this.backend.write(bytes).catch(err =>
+        console.warn('Failed to persist the database to OPFS:', err));
+    }
     try {
-      localStorage.setItem(STORAGE_KEY, b64);
+      localStorage.setItem(STORAGE_KEY, bytesToBase64(bytes));
     } catch (err) {
       console.warn('Failed to persist the database to localStorage:', err);
     }
+  }
+
+  /** Forget the OPFS backend (tests force the localStorage-only path). */
+  detachBackend(): void {
+    this.backend = null;
   }
 
   /** The raw SQLite file — this is what "save a backup to disk" downloads. */
