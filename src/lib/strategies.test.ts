@@ -64,3 +64,60 @@ describe('runStrategies', () => {
     expect(mentions).toBe(bestGis > report.baseline.lifetimeGis + 1000);
   });
 });
+
+// Homeowner with home equity recorded but RM not yet enabled: the optimizer
+// should explore turning it on at several start ages and draw sizes.
+const rmHomeowner = () => baseInputs({
+  currentAge: 65, retirementAge: 65, maxAge: 95,
+  rrspBalance: 0, tfsaBalance: 150000, taxableBalance: 0,
+  cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
+  desiredSpending: 40000, pensions: [],
+  reverseMortgage: { enabled: false, homeValue: 700000, appreciationRate: 0.02, interestRate: 0.065, maxLtv: 0.55 },
+});
+
+describe('runStrategies — reverse mortgage timing', () => {
+  it('explores RM start ages and draw sizes when a home value is recorded', () => {
+    const report = runStrategies(rmHomeowner(), config);
+    const rmStrats = report.strategies.filter(s => s.id.startsWith('rm-'));
+    // startAge ∈ {65, 70, 75} × two draw sizes; all are inside the horizon.
+    expect(rmStrats.length).toBe(6);
+    expect(new Set(rmStrats.map(s => s.patch.reverseMortgage?.startAge))).toEqual(new Set([65, 70, 75]));
+    expect(rmStrats.every(s => (s.patch.reverseMortgage?.drawAmount ?? 0) > 0)).toBe(true);
+    expect(rmStrats.every(s => s.patch.reverseMortgage?.enabled)).toBe(true);
+  });
+
+  it('skips RM variants entirely when no home value is recorded (never invents equity)', () => {
+    const report = runStrategies(gisSensitive(), config); // no reverseMortgage at all
+    expect(report.strategies.filter(s => s.id.startsWith('rm-')).length).toBe(0);
+  });
+
+  it('RM variants can beat the no-RM baseline on sustainable spending', () => {
+    const report = runStrategies(rmHomeowner(), config);
+    const rmStrats = report.strategies.filter(s => s.id.startsWith('rm-'));
+    expect(Math.max(...rmStrats.map(s => s.sustainableSpending)))
+      .toBeGreaterThan(report.baseline.sustainableSpending);
+  });
+
+  it('suggests an RM strategy in plain language when one beats the baseline by >$500', () => {
+    const report = runStrategies(rmHomeowner(), config);
+    const rmStrats = report.strategies.filter(s => s.id.startsWith('rm-'));
+    const best = Math.max(...rmStrats.map(s => s.deltaSpending));
+    const mentions = report.suggestedActions.some(a => a.includes('Reverse mortgage'));
+    expect(mentions).toBe(best > 500);
+  });
+
+  it('offers the top-up backstop when RM is enabled without top-up', () => {
+    const inputs = rmHomeowner();
+    inputs.reverseMortgage = { ...inputs.reverseMortgage!, enabled: true, drawAmount: 8000, startAge: 70, topUp: false };
+    const report = runStrategies(inputs, config);
+    expect(report.strategies.some(s => s.id === 'rm-topup' && s.patch.reverseMortgage?.topUp === true)).toBe(true);
+  });
+
+  it('does not duplicate the RM setup the user already runs', () => {
+    const inputs = rmHomeowner();
+    inputs.reverseMortgage = { ...inputs.reverseMortgage!, enabled: true, drawAmount: 16000, startAge: 65, topUp: true };
+    const report = runStrategies(inputs, config);
+    expect(report.strategies.filter(s => s.id === 'rm-65-16000').length).toBe(0);
+    expect(report.strategies.filter(s => s.id === 'rm-topup').length).toBe(0); // already on
+  });
+});
