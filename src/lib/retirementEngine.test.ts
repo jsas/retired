@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome } from './retirementEngine';
+import { baselineInputs } from './scenarioStorage';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
 const config = testConfig();
@@ -578,6 +579,18 @@ describe('re-homed transfer events (authored on the wrong person)', () => {
     expect(srow63.detail?.calc?.transfers?.[0]?.gross).toBeCloseTo(30000, 0);
     // ...and the primary receives the net on its age-66 row.
     expect(yearAt(r.yearlyBreakdown, 66).detail?.deposit?.taxable).toBeCloseTo(30000, 0);
+  });
+});
+
+describe('baseline plan (New Scenario defaults)', () => {
+  it('a fresh New-Scenario plan runs end-to-end to maxAge', () => {
+    // Guards the New Scenario flow: the baseline defaults must always produce a
+    // runnable projection (the wizard and ScenarioManager both seed from it).
+    const r = calculateHousehold(baselineInputs(), config);
+    expect(r.yearlyBreakdown.length).toBeGreaterThan(0);
+    expect(r.yearlyBreakdown[r.yearlyBreakdown.length - 1].age).toBe(baselineInputs().maxAge);
+    expect(r.yearlyBreakdown.every(y => Number.isFinite(y.endingBalance))).toBe(true);
+    expect(['ON_TRACK', 'AT_RISK', 'SHORTFALL']).toContain(r.status);
   });
 });
 

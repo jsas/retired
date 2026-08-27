@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit3, Trash2, Save, X, Copy, Check } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
+import { baselineInputs } from '../lib/scenarioStorage';
 
 interface Scenario {
   id: string;
@@ -14,11 +15,16 @@ interface ScenarioManagerProps {
   onScenariosChange: (scenarios: Scenario[]) => void;
   /** Select a scenario and navigate back to the dashboard. */
   onSelectScenario: (id: string) => void;
+  /** Add a freshly-built scenario and make it active. The parent owns this so
+   *  the new scenario is registered AND selected in one update — calling
+   *  onScenariosChange then onSelectScenario separately races (the select reads
+   *  the scenario list before the new one has been added). */
+  onCreateScenario: (scenario: Scenario) => void;
 }
 
 // Manage-scenarios page (was a modal). Light-themed to match the other routed
 // pages; selecting a scenario loads it and returns to the projection dashboard.
-export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, onSelectScenario }: ScenarioManagerProps) {
+export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, onSelectScenario, onCreateScenario }: ScenarioManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
@@ -29,27 +35,24 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
     }
   }, [editingId, scenarios]);
 
+  // New Scenario = a clean baseline, NOT a copy of the active plan. Branching
+  // the current plan is what Duplicate is for.
   const handleCreateNew = () => {
-    const activeScenario = scenarios.find(s => s.id === activeScenarioId) ?? scenarios[0];
-    const newScenario: Scenario = {
+    onCreateScenario({
       id: `scenario-${Date.now()}`,
       name: `New Scenario ${scenarios.length + 1}`,
-      inputs: JSON.parse(JSON.stringify(activeScenario.inputs))
-    };
-    onScenariosChange([...scenarios, newScenario]);
-    onSelectScenario(newScenario.id);
+      inputs: baselineInputs(),
+    });
   };
 
   const handleDuplicate = (id: string) => {
     const scenario = scenarios.find(s => s.id === id);
     if (!scenario) return;
-    const newScenario: Scenario = {
+    onCreateScenario({
       id: `scenario-${Date.now()}`,
       name: `${scenario.name} Copy`,
       inputs: JSON.parse(JSON.stringify(scenario.inputs))
-    };
-    onScenariosChange([...scenarios, newScenario]);
-    onSelectScenario(newScenario.id);
+    });
   };
 
   const handleRename = () => {

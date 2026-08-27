@@ -817,6 +817,16 @@ function App() {
                 activeScenarioId={activeScenarioId}
                 onScenariosChange={setScenarios}
                 onSelectScenario={(id) => { handleScenarioChange(id); setView('projection'); }}
+                onCreateScenario={(scenario) => {
+                  // Add AND activate in one shot. Setting inputs directly from the
+                  // new scenario (rather than re-finding it in the list) avoids
+                  // the stale-state race where the select ran before the add.
+                  setScenarios(prev => [...prev, scenario]);
+                  setActiveScenarioId(scenario.id);
+                  setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
+                  setHasUnsavedChanges(false);
+                  setView('projection');
+                }}
               />
             )}
 
