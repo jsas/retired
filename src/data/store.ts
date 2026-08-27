@@ -2,7 +2,6 @@ import type { Scenario } from '../lib/scenarioStorage';
 import type { AppConfig } from '../lib/appConfig';
 import { validateAppConfig } from '../lib/appConfig';
 import { AppDatabase, DB_STORAGE_KEY } from './db';
-import { signalTabSync } from './tabSync';
 import type { AppDbDoc } from './schemas';
 
 /**
@@ -85,26 +84,15 @@ export class AppStore {
     if (state.activeScenarioId != null) this.db.saveActiveScenarioId(state.activeScenarioId);
     if (state.config) this.db.saveConfig(state.config);
     this.db.save();
-    // Ring the doorbell so other open tabs reload (or warn) — see tabSync.
-    signalTabSync();
   }
 
   exportBytes(): Uint8Array {
     return this.db.exportBytes();
   }
 
-  /** Re-read the store's current contents. Used when another tab signalled a
-   *  change: this instance's in-memory db was opened from the same mirrored
-   *  bytes, so a fresh open picks the other tab's writes up. */
-  async reload(buildDefaults: () => Scenario[]): Promise<AppState> {
-    const fresh = await AppStore.open(buildDefaults);
-    return fresh.state;
-  }
-
   loadDoc(doc: AppDbDoc): void {
     this.db.loadDoc(doc);
     this.db.save();
-    signalTabSync();
   }
 }
 

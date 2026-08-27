@@ -54,16 +54,15 @@ have to hold them.
   interface the UI backs with localStorage today is the same interface a
   Node consumer backs with SQLite/a file later.
 - **Data layer hardening (underway)** — Zod schemas now define every
-  persisted shape (`src/data/schemas.ts`), and all plan state lives in a real
-  SQLite database via sql.js (`src/data/db.ts`), persisted to OPFS
+  persisted shape (`src/data/schemas.ts`), and all plan state lives in a
+  real SQLite database via sql.js (`src/data/db.ts`), persisted to OPFS
   (origin-private file system — no 5 MB ceiling, mirrored to localStorage
-  for compatibility) and exportable as a .sqlite file. Open tabs stay in
-  sync via the storage event: a clean tab silently adopts another tab's
-  saves; a dirty tab gets a Reload/Keep-mine conflict banner. Remaining: a
-  Node SQLite backend behind the same store interface for the engine
-  package, moving the DB onto a worker with the synchronous OPFS VFS for
-  incremental (not whole-file) writes, and folding UI-preference keys
-  (print options, panel collapse state, …) into the store's `kv` table.
+  for compatibility) and exportable as a .sqlite file. The app is
+  single-tab by design (see Non-goals). Remaining: a Node SQLite backend
+  behind the same store interface for the engine package, moving the DB
+  onto a worker with the synchronous OPFS VFS for incremental (not
+  whole-file) writes, and folding UI-preference keys (print options,
+  panel collapse state, …) into the store's `kv` table.
 
 ## Non-goals
 
@@ -74,3 +73,8 @@ Worth stating explicitly so issues don't pile up:
   editable under Settings; it will never phone home for new ones.
 - **Advice** — RE:tired is a calculator, not a planner. It will never
   recommend a course of action, only show consequences of the inputs.
+- **Multi-tab / multi-window use** — one tab at a time. Two open tabs
+  each hold their own in-memory copy and the last Save silently wins;
+  coordinating them (merging, locking, live sync) is more complexity
+  than a local-first calculator is worth. A storage-event sync was
+  tried and reverted for exactly that reason.

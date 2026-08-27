@@ -450,8 +450,8 @@ const SECTIONS: HelpSection[] = [
         body: <P>Your plans live in a real <strong>SQLite database</strong> (running as WebAssembly) whose bytes are stored in this browser's <strong>origin-private file system</strong> — a durable per-site store with no 5&nbsp;MB ceiling, mirrored to localStorage for compatibility. Nothing leaves your machine. Clearing the browser's site data can still erase it, so use Export to keep backups. One exception, and it's your hands on the keyboard: the Optimize tab's <strong>AI helper</strong> builds a prompt containing your plan (and results) for you to paste into an AI of your choice — once pasted, that provider reads the data under its own privacy policy.</P>
       },
       {
-        term: 'Multiple tabs',
-        body: <P>Open the app in two tabs at once and they stay in sync: when one tab saves, the other notices within a moment. If that other tab has no unsaved edits it simply reloads — you'll see the changes appear. If it <em>does</em> hold unsaved edits, a banner appears instead: <strong>Reload their version</strong> discards your unsaved edits and shows what the other tab saved; <strong>Keep mine</strong> carries on — your next Save then overwrites the other tab's changes. (There is no per-field merging; the last Save wins.)</P>
+        term: 'One tab at a time',
+        body: <P>Use the app in a <strong>single browser tab</strong>. Multi-tab is deliberately unsupported: two tabs each keep their own in-memory copy, and whichever one saves last silently overwrites the other's work. If a second tab gets opened by accident, close it without saving (or refresh it) before continuing in the other.</P>
       },
       {
         term: 'Export / Import',
