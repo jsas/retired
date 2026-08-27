@@ -7,6 +7,9 @@ interface Scenario {
   id: string;
   name: string;
   inputs: RetirementInputs;
+  /** True when this is a clean baseline (New Scenario) so the parent can run
+   *  the setup wizard; false/undefined for a Duplicate (already-filled plan). */
+  isFresh?: boolean;
 }
 
 interface ScenarioManagerProps {
@@ -42,6 +45,7 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
       id: `scenario-${Date.now()}`,
       name: `New Scenario ${scenarios.length + 1}`,
       inputs: baselineInputs(),
+      isFresh: true,
     });
   };
 
@@ -51,7 +55,8 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
     onCreateScenario({
       id: `scenario-${Date.now()}`,
       name: `${scenario.name} Copy`,
-      inputs: JSON.parse(JSON.stringify(scenario.inputs))
+      inputs: JSON.parse(JSON.stringify(scenario.inputs)),
+      isFresh: false,
     });
   };
 

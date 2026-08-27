@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Users, Home, SlidersHorizontal, Target } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Users, Home, SlidersHorizontal, Sparkles, GitCompareArrows } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 
 const formatMoney = (v: number) =>
@@ -19,6 +19,8 @@ const formatMoney = (v: number) =>
 // carried over from the caller's current inputs (market assumptions, province,
 // withdrawal order, etc.) so the engine keeps its defaults.
 export interface WizardData {
+  /** Scenario name — user-editable on the review step; we suggest one. */
+  scenarioName: string;
   currentAge: number;
   retirementAge: number;
   maxAge: number;
@@ -34,10 +36,15 @@ export interface WizardData {
   oasStartAge: number | null;
   oasYearsInCanada: number;
   desiredSpending: number;
+  /** Review-step "do you own your home?" + the value when they do. The answer
+   *  pre-fills the reverse-mortgage section so the question is never dead. */
+  ownsHome: boolean | null;
+  homeValue: number;
 }
 
-export function wizardDataFrom(inputs: RetirementInputs): WizardData {
+export function wizardDataFrom(inputs: RetirementInputs, suggestedName = 'My Plan'): WizardData {
   return {
+    scenarioName: suggestedName,
     currentAge: inputs.currentAge,
     retirementAge: inputs.retirementAge,
     maxAge: inputs.maxAge,
@@ -53,13 +60,32 @@ export function wizardDataFrom(inputs: RetirementInputs): WizardData {
     oasStartAge: inputs.oasStartAge,
     oasYearsInCanada: inputs.oasYearsInCanada,
     desiredSpending: inputs.desiredSpending,
+    ownsHome: inputs.reverseMortgage != null ? true : null,
+    homeValue: inputs.reverseMortgage?.homeValue ?? 800000,
   };
 }
 
 /** Overlay the wizard's collected values onto a base plan, leaving every other
- *  field (market assumptions, province, events, spouse, …) untouched. */
+ *  field (market assumptions, province, events, spouse, …) untouched. The
+ *  scenario name and the own-home answer are handled by the caller, not here:
+ *  the name labels the scenario, and the home answer becomes a (disabled)
+ *  reverse-mortgage section so the question is never a dead end. */
 export function applyWizardData(base: RetirementInputs, data: WizardData): RetirementInputs {
-  return { ...base, ...data };
+  const { scenarioName: _name, ownsHome, homeValue, ...numbers } = data;
+  const next: RetirementInputs = { ...base, ...numbers };
+  if (ownsHome === true && next.reverseMortgage == null) {
+    // Record the equity so the RM section and the Optimize tab have something
+    // real to work with; leave the loan itself off until the user turns it on.
+    next.reverseMortgage = {
+      enabled: false,
+      homeValue,
+      appreciationRate: 0.02,
+      interestRate: 0.065,
+      maxLtv: 0.55,
+      topUp: true,
+    };
+  }
+  return next;
 }
 
 interface SetupWizardProps {
@@ -145,10 +171,12 @@ const STEPS: Step[] = [
 export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(initial);
-  // Review-step offers. `wantsSpouse` flips the CTA to "Create & add spouse";
-  // `ownsHome` surfaces the reverse-mortgage pointer. Neither blocks completion.
+  // Review-step offer: `wantsSpouse` flips the CTA to "Create & add spouse".
+  // The own-home answer lives in `data.ownsHome`/`data.homeValue` so it flows
+  // through applyWizardData into the plan (never a dead question).
   const [wantsSpouse, setWantsSpouse] = useState(false);
-  const [ownsHome, setOwnsHome] = useState<boolean | null>(null);
+  const ownsHome = data.ownsHome;
+  const setOwnsHome = (v: boolean | null) => set('ownsHome', v);
 
   const set = <K extends keyof WizardData>(key: K, value: WizardData[K]) =>
     setData(d => ({ ...d, [key]: value }));
@@ -191,6 +219,18 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
           <p className="text-[13px] text-slate-600 leading-relaxed mb-4">
             Here's what you're starting with. Anything look off? Use Back to change it.
           </p>
+
+          {/* Give the scenario a name — we suggest one, they can keep or change it. */}
+          <div className="mb-4">
+            <label className={LABEL_CLS}>Name this plan</label>
+            <input
+              type="text"
+              className={NUM_CLS}
+              value={data.scenarioName}
+              onChange={(e) => set('scenarioName', e.target.value)}
+              placeholder="My Plan"
+            />
+          </div>
 
           {/* Summary of what they entered */}
           <dl className="mb-5 rounded-md border border-slate-200 divide-y divide-slate-100 text-[13px]">
@@ -235,26 +275,38 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
             <div>
               <span className="flex items-start gap-2.5">
                 <Home size={13} className="mt-1 shrink-0 text-slate-500" />
-                <span className="text-[13px] text-slate-700">
+                <span className="text-[13px] text-slate-700 flex-1">
                   <span className="font-medium text-slate-900">Do you own your home?</span>
                   <span className="ml-2 inline-flex gap-2">
                     <button onClick={() => setOwnsHome(true)} className={`px-2 py-0.5 rounded border text-[11px] ${ownsHome === true ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 text-slate-600'}`}>Yes</button>
                     <button onClick={() => setOwnsHome(false)} className={`px-2 py-0.5 rounded border text-[11px] ${ownsHome === false ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 text-slate-600'}`}>No</button>
                   </span>
                   {ownsHome === true && (
-                    <span className="block text-[11px] text-slate-500 mt-1">
-                      You can explore a reverse mortgage later — under <em>Reverse Mortgage</em> in the sidebar — to tap home equity tax-free if you need it.
+                    <span className="block mt-2">
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">Estimated home value</label>
+                      <input
+                        type="number"
+                        step="10000"
+                        min="0"
+                        className={NUM_CLS}
+                        value={data.homeValue}
+                        onChange={(e) => set('homeValue', Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      />
+                      <span className="block text-[11px] text-slate-500 mt-1">
+                        We'll save this into the <em>Reverse Mortgage</em> section (left off) so <strong>Optimize</strong> can weigh tapping your home equity tax-free later.
+                      </span>
                     </span>
                   )}
                 </span>
               </span>
             </div>
 
-            {/* The power tools, in one line each. */}
+            {/* The power tools, matching the top nav: Steering / Optimize / Compare. */}
             <div className="rounded-md bg-slate-50 border border-slate-200 px-3 py-2.5 space-y-1.5">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Once your plan is in</p>
-              <p className="flex items-center gap-2 text-[12px] text-slate-600"><SlidersHorizontal size={13} className="text-blue-600 shrink-0" /> <span><strong>Steering</strong> — drag the plan and watch the success rate move.</span></p>
-              <p className="flex items-center gap-2 text-[12px] text-slate-600"><Target size={13} className="text-blue-600 shrink-0" /> <span><strong>Optimize</strong> — ranks CPP/OAS timing and withdrawal order for you.</span></p>
+              <p className="flex items-center gap-2 text-[12px] text-slate-600"><SlidersHorizontal size={13} className="text-amber-600 shrink-0" /> <span><strong>Steering</strong> — drag the plan and watch the success rate move.</span></p>
+              <p className="flex items-center gap-2 text-[12px] text-slate-600"><Sparkles size={13} className="text-blue-600 shrink-0" /> <span><strong>Optimize</strong> — ranks CPP/OAS timing, withdrawal order and reverse-mortgage timing for you.</span></p>
+              <p className="flex items-center gap-2 text-[12px] text-slate-600"><GitCompareArrows size={13} className="text-blue-600 shrink-0" /> <span><strong>Compare</strong> — put 2–3 saved scenarios side by side to see which holds up best.</span></p>
             </div>
           </div>
         </>
@@ -301,7 +353,9 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
         </button>
         <button
           onClick={next}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+          disabled={isLast && !data.scenarioName.trim()}
+          title={isLast && !data.scenarioName.trim() ? 'Give the plan a name first' : undefined}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLast
             ? (wantsSpouse ? <>Create &amp; add spouse <Users size={15} /></> : <>Create my plan <Check size={15} /></>)

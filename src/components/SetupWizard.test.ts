@@ -11,13 +11,16 @@ describe('SetupWizard data helpers', () => {
       cppStartAge: 70, cppMonthlyAmount: 1250, oasStartAge: 65, oasYearsInCanada: 40,
       desiredSpending: 52000,
     });
-    const d = wizardDataFrom(inputs);
+    const d = wizardDataFrom(inputs, 'Retire at 60');
     expect(d).toEqual({
+      scenarioName: 'Retire at 60',
       currentAge: 55, retirementAge: 60, maxAge: 95,
       rrspBalance: 600000, tfsaBalance: 120000, taxableBalance: 80000, cashCushionBalance: 40000,
       rrspContribution: 20000, tfsaContribution: 7000, taxableContribution: 0,
       cppStartAge: 70, cppMonthlyAmount: 1250, oasStartAge: 65, oasYearsInCanada: 40,
       desiredSpending: 52000,
+      ownsHome: null, // no reverseMortgage recorded → unanswered
+      homeValue: 800000,
     });
   });
 
@@ -55,5 +58,29 @@ describe('SetupWizard data helpers', () => {
     expect(d.oasStartAge).toBeNull();
     const out = applyWizardData(baseInputs({ cppStartAge: 65 }), d);
     expect(out.cppStartAge).toBeNull();
+  });
+
+  it('answering "own your home: yes" records the equity as a disabled RM section', () => {
+    // The question must not be a dead end: Yes + a value becomes a real
+    // (still-off) reverseMortgage so Optimize and the RM sidebar can use it.
+    const d = wizardDataFrom(baseInputs());
+    d.ownsHome = true;
+    d.homeValue = 650000;
+    const out = applyWizardData(baseInputs(), d);
+    expect(out.reverseMortgage?.enabled).toBe(false);
+    expect(out.reverseMortgage?.homeValue).toBe(650000);
+  });
+
+  it('answering "own your home: no" leaves reverseMortgage unset', () => {
+    const d = wizardDataFrom(baseInputs());
+    d.ownsHome = false;
+    const out = applyWizardData(baseInputs(), d);
+    expect(out.reverseMortgage).toBeUndefined();
+  });
+
+  it('the scenario name never leaks into the engine inputs', () => {
+    const d = wizardDataFrom(baseInputs(), 'Early Retirement');
+    const out = applyWizardData(baseInputs(), d);
+    expect((out as unknown as Record<string, unknown>).scenarioName).toBeUndefined();
   });
 });

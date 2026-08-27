@@ -353,9 +353,10 @@ function App() {
     setHasUnsavedChanges(false);
   };
 
-  // First-scenario setup wizard. Launched from the Welcome page ("Get started")
-  // or re-opened from Help; on completion the collected values overlay the
-  // current inputs (keeping engine defaults) and become the active plan.
+  // First-scenario setup wizard. Launched from the Welcome page ("Get started"),
+  // re-opened from Help, or run after New Scenario. On completion the collected
+  // values overlay the current inputs (keeping engine defaults), the scenario is
+  // renamed to what the user typed, and the whole thing is persisted.
   const [wizardOpen, setWizardOpen] = useState(false);
   const handleWizardComplete = (data: WizardData, opts: { addSpouse: boolean }) => {
     let next = applyWizardData(inputs, data);
@@ -378,11 +379,15 @@ function App() {
         },
       };
     }
-    setInputs(consistentAges(JSON.parse(JSON.stringify(next))));
-    // Persist straight into the active scenario so the new plan survives a
-    // reload without a separate "save" click.
+    const finalInputs = consistentAges(JSON.parse(JSON.stringify(next)));
+    setInputs(finalInputs);
+    // Persist inputs AND the chosen name straight into the active scenario so
+    // the new plan survives a reload without a separate "save" click. The name
+    // must be included here — setScenarios and setInputs flush together, so
+    // renaming in the same functional update keeps name and inputs in sync.
+    const name = data.scenarioName.trim() || 'My Plan';
     setScenarios(prev => prev.map(s =>
-      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(next)) } : s
+      s.id === activeScenarioId ? { ...s, name, inputs: JSON.parse(JSON.stringify(finalInputs)) } : s
     ));
     setHasUnsavedChanges(false);
     setWizardOpen(false);
@@ -845,7 +850,14 @@ function App() {
                   setActiveScenarioId(scenario.id);
                   setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
                   setHasUnsavedChanges(false);
-                  setView('projection');
+                  // A brand-new baseline gets the guided setup; a Duplicate
+                  // (already-filled inputs) goes straight to the projection.
+                  if (scenario.isFresh) {
+                    setWizardOpen(true);
+                    setView('welcome');
+                  } else {
+                    setView('projection');
+                  }
                 }}
               />
             )}
@@ -865,7 +877,7 @@ function App() {
             {view === 'welcome' && (
               wizardOpen ? (
                 <SetupWizard
-                  initial={wizardDataFrom(inputs)}
+                  initial={wizardDataFrom(inputs, activeScenario.name)}
                   onComplete={handleWizardComplete}
                   onSkip={() => { setWizardOpen(false); setView('projection'); }}
                 />
