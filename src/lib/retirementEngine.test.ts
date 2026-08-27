@@ -1195,6 +1195,36 @@ describe('combineHouseholdBreakdown (household display)', () => {
     const richEnd = yearAt(combineHouseholdBreakdown(rich, richInputs), 75).endingBalance;
     expect(richEnd).toBeGreaterThan(poorEnd);
   });
+
+  it('an inter-spousal transfer does NOT count as a household withdrawal (row reconciles)', () => {
+    // Regression: the sender's row counts the transfer as a withdrawal but the
+    // receiver's landing is not one, so summing withdrawals overstated what
+    // left the household and start + gains − withdrawals ≠ end.
+    const inputs = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 100000, cashCushionBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 0, pensions: [],
+      },
+    });
+    inputs.events = [{
+      id: 'gift', age: 65, label: 'fund spouse', amount: 40000, direction: 'out',
+      from: { kind: 'account', person: 'primary', account: 'taxable' },
+      to: { kind: 'account', person: 'spouse', account: 'tfsa' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    const c = yearAt(combineHouseholdBreakdown(r, inputs), 65);
+    // Taxable source, ACB = balance → no gain, no tax: the full 40k crosses.
+    // Combined withdrawals must EXCLUDE the internal move (it changed hands,
+    // it didn't leave), so the year reconciles: start + gains − 0 = end.
+    expect(c.withdrawals).toBeCloseTo(0, 0);
+    expect(c.startingBalance + c.marketGains - c.withdrawals).toBeCloseTo(c.endingBalance, 0);
+  });
 });
 
 describe('householdOutcome (household-first verdict)', () => {

@@ -50,7 +50,7 @@ import type { MonteCarloRequest } from './lib/monteCarlo';
 const buildDefaultScenarios = (): Scenario[] => [
   {
     id: 'scenario-1',
-    name: 'Early retirement — couple',
+    name: 'Example - Early Couple',
     inputs: {
       currentAge: 45,
       retirementAge: 55,
@@ -99,7 +99,7 @@ const buildDefaultScenarios = (): Scenario[] => [
   },
   {
     id: 'scenario-2',
-    name: 'Retire at 60 — single',
+    name: 'Example - Single at 60',
     inputs: {
       currentAge: 55,
       retirementAge: 60,
@@ -130,7 +130,7 @@ const buildDefaultScenarios = (): Scenario[] => [
   },
   {
     id: 'scenario-3',
-    name: 'Semi-retirement glide path',
+    name: 'Example - Semi-retirement',
     inputs: {
       currentAge: 52,
       retirementAge: 60,

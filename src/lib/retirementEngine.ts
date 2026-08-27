@@ -1445,6 +1445,23 @@ export function combineHouseholdBreakdown(
   const ageOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
   const spouseByCalYear = new Map(spouse.yearlyBreakdown.map(y => [y.age + ageOffset, y]));
 
+  // An INTER-SPOUSAL transfer shows up as a withdrawal in the sender's row but
+  // its landing is not a withdrawal in the receiver's row — so summing the two
+  // `withdrawals` counts the moved money as if it left the household, and the
+  // combined row stops reconciling (start + gains − withdrawals ≠ end). Net
+  // those internal moves back out. After-tax, so sender-gross ≥ receiver-net;
+  // the difference is meltdown tax, which leaves the household via incomeTax.
+  const transferNetAt = (y: YearlyBreakdown, ref: 'primary' | 'spouse'): number => {
+    const ts = y.detail?.calc?.transfers;
+    if (!ts) return 0;
+    let n = 0;
+    for (const t of ts) {
+      if (ref === 'primary' && t.to.includes('(spouse)')) n += t.net;
+      if (ref === 'spouse' && t.to.includes('(primary)')) n += t.net;
+    }
+    return n;
+  };
+
   // The household view sums flows; per-source drill-down detail doesn't sum
   // cleanly into one row, so combined rows drop it (detail === undefined). The
   // table reads per-person detail straight from the primary/spouse plans.
@@ -1458,12 +1475,17 @@ export function combineHouseholdBreakdown(
           netHomeEquity: (py.netHomeEquity ?? 0) + (sy.netHomeEquity ?? 0),
         }
       : {};
+    // Both partners' internal sends are removed once: a one-way transfer is
+    // counted once, a two-way pair is removed on both sides. Result: the
+    // combined row reconciles (start + gains − externalWithdrawals = end,
+    // modulo the meltdown tax already in incomeTax).
+    const internal = transferNetAt(py, 'primary') + transferNetAt(sy, 'spouse');
     return {
       age: py.age,
       startingBalance: py.startingBalance + sy.startingBalance,
       contributions: py.contributions + sy.contributions,
       marketGains: py.marketGains + sy.marketGains,
-      withdrawals: py.withdrawals + sy.withdrawals,
+      withdrawals: py.withdrawals + sy.withdrawals - internal,
       incomeTax: py.incomeTax + sy.incomeTax,
       cumulativeTax: py.cumulativeTax + sy.cumulativeTax,
       spendingTarget: py.spendingTarget + sy.spendingTarget,

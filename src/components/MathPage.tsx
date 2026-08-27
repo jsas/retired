@@ -158,18 +158,17 @@ function YearWorksheet({ row, inputs, isCouple }: {
         </Step>
       )}
 
-      {/* 7d — inflows & deposits landing this year (event inflows + the
-          redeposit side of any transfer), so the year's deposits are visible
-          alongside the withdrawals. */}
-      {(d.events.some(e => e.direction === 'in') || (d.deposit && (d.deposit.rrsp + d.deposit.rrif + d.deposit.tfsa + d.deposit.taxable + d.deposit.cash) > 0.5)) && (
-        <Step n={++n} title="Deposits landing this year" note="Money landing in the accounts: one-time inflow events and the redeposited side of any transfer.">
+      {/* 7d — inflows landing this year. The engine already adds each inflow
+          into the deposit accumulators, so rendering BOTH the event line and a
+          per-account deposit line would count the same dollars twice — the
+          event lines (which carry the label and destination) are the truthful
+          display; the per-account deposit lines are dropped. The redeposit side
+          of a transfer is shown in the Transfers step above, not here. */}
+      {d.events.some(e => e.direction === 'in') && (
+        <Step n={++n} title="Deposits landing this year" note="One-time inflow events landing in the accounts.">
           {d.events.filter(e => e.direction === 'in').map((e, i) => (
             <Line key={`ev-${i}`} label={`${e.label}${e.to ? ` → ${e.to}` : ''} (inflow)`} value={e.amount} />
           ))}
-          {d.deposit && d.deposit.rrsp > 0.5 && <Line label="→ RRSP" value={d.deposit.rrsp} indent />}
-          {d.deposit && d.deposit.tfsa > 0.5 && <Line label="→ TFSA" value={d.deposit.tfsa} indent />}
-          {d.deposit && d.deposit.taxable > 0.5 && <Line label="→ Taxable" value={d.deposit.taxable} indent />}
-          {d.deposit && d.deposit.cash > 0.5 && <Line label="→ Cash cushion" value={d.deposit.cash} indent />}
         </Step>
       )}
 
