@@ -481,6 +481,64 @@ const SECTIONS: HelpSection[] = [
     ]
   },
   {
+    id: 'help-glossary',
+    title: 'Glossary — the jargon, in plain words',
+    entries: [
+      {
+        term: 'Reading this section',
+        body: <P>The app and this Help try to stay plain-language, but a few technical terms sneak in — especially around how your data is stored. Here's what they actually mean. Nothing here is something you need to <em>do</em>; it's just translation.</P>
+      },
+      {
+        term: 'SQLite / .sqlite file',
+        body: <P>A database kept in a single ordinary file. Your plans live in one inside the browser, and Export downloads a copy of that very file. You never need to open it — but if you're curious, free tools like "DB Browser for SQLite" can look inside. Think of it as the app's filing cabinet.</P>
+      },
+      {
+        term: 'Database',
+        body: <P>An organized place to keep data so it can be found and updated later — here, the list of your saved scenarios and settings. Not a website, not "the cloud": yours sits inside your browser on your own machine.</P>
+      },
+      {
+        term: 'OPFS / "origin-private file system"',
+        body: <P>A private folder your browser gives each website, invisible to other sites and (mostly) to you. That's where this app keeps its database file, which is why your plans survive closing the browser — and why clearing the browser's "site data" erases them. Mentioned in "Where data lives"; you don't need to remember the acronym.</P>
+      },
+      {
+        term: 'localStorage',
+        body: <P>The browser's older, smaller storage cubby (about 5&nbsp;MB). The app keeps a backup copy of the database there in case the newer OPFS storage isn't available (e.g. some private-browsing modes). If you ever see it mentioned, that's all it is.</P>
+      },
+      {
+        term: 'Backup / Export',
+        body: <P>A copy of your plans saved out to a file you choose, kept somewhere you control (Downloads folder, a USB stick, email to yourself). The app keeps everything on this one computer in this one browser — a backup is the only copy that exists anywhere else. The Data page makes one in one click.</P>
+      },
+      {
+        term: 'Import',
+        body: <P>The reverse of a backup: loading a file back in. On the Data page you can load a backup file (yours, or one from another computer), a projection JSON, or the fill-in spreadsheet template — each becomes scenarios in the app.</P>
+      },
+      {
+        term: 'CSV',
+        body: <P>"Comma-separated values" — the simplest spreadsheet format there is. Excel, Google Sheets, and Numbers all open and save it. The projection export and the import template use it so your numbers move freely between this app and a spreadsheet.</P>
+      },
+      {
+        term: 'JSON',
+        body: <P>A text format for structured data — readable by programs (and, squinting, by people). Some exports use it because it preserves detail a spreadsheet can't. You don't need to read it; you just need to know it's one of ours and can be imported back.</P>
+      },
+      {
+        term: 'Browser tab (and the one-tab rule)',
+        body: <P>Each tab you open this app in keeps its own working copy, and saving in one doesn't update the other — the last Save wins, silently. Use one tab at a time; if a second opens by accident, close it without saving.</P>
+      },
+      {
+        term: 'Scenario',
+        body: <P>One complete "what-if" plan: your ages, balances, benefits, spending goal, and strategy choices, saved under a name. Make several — "retire at 60" vs "65", "with the cottage sale" vs without — and flip between them from the dropdown up top or compare them side by side on the Compare page.</P>
+      },
+      {
+        term: 'WebAssembly / wasm',
+        body: <P>The technology that lets a real database engine run inside your browser tab. Only mentioned because you might glimpse "wasm" in a downloaded file or an error message. It's on your machine doing the work; nothing is sent anywhere.</P>
+      },
+      {
+        term: 'AI helper disclaimer (what "read by the AI" means)',
+        body: <P>The Optimize tab can draft a question for an AI chatbot (ChatGPT, Claude, …). The app itself never contacts them — but the moment <em>you</em> paste that text into their site, the plan details in it (ages, balances, benefits, spending) are being read by that company, under its privacy policy, not ours. Don't paste anything you wouldn't hand to that company.</P>
+      },
+    ]
+  },
+  {
     id: 'help-legal',
     title: 'License & Legal',
     entries: [
