@@ -482,12 +482,8 @@ const SECTIONS: HelpSection[] = [
   },
   {
     id: 'help-glossary',
-    title: 'Glossary — the jargon, in plain words',
+    title: 'Glossary',
     entries: [
-      {
-        term: 'Reading this section',
-        body: <P>The app and this Help try to stay plain-language, but a few technical terms sneak in — especially around how your data is stored. Here's what they actually mean. Nothing here is something you need to <em>do</em>; it's just translation.</P>
-      },
       {
         term: 'SQLite / .sqlite file',
         body: <P>A database kept in a single ordinary file. Your plans live in one inside the browser, and Export downloads a copy of that very file. You never need to open it — but if you're curious, free tools like "DB Browser for SQLite" can look inside. Think of it as the app's filing cabinet.</P>
@@ -519,6 +515,10 @@ const SECTIONS: HelpSection[] = [
       {
         term: 'JSON',
         body: <P>A text format for structured data — readable by programs (and, squinting, by people). Some exports use it because it preserves detail a spreadsheet can't. You don't need to read it; you just need to know it's one of ours and can be imported back.</P>
+      },
+      {
+        term: 'YAML',
+        body: <P>JSON's more human-readable cousin — same structured data, written as indented lists instead of brackets and braces. The projection export offers it as an alternative to JSON for anyone who wants to read (or hand-edit) the numbers outside the app. Like JSON, you don't need to touch it to use the app.</P>
       },
       {
         term: 'Browser tab (and the one-tab rule)',
