@@ -12,13 +12,12 @@ export function DonateCard() {
       </div>
 
       <div>
-        <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-          RE: tired is a free, open-source side project that runs entirely in your browser — no
-          server, no accounts, no data harvesting. It's also largely built by an AI pair-programmer,
-          and those tokens aren't free. So, full honesty: donations pay for more tokens to keep the
-          features coming, cover the domain and hosting, keep the tax tables current each year… and
-          if there's anything left over, it goes into the very RRSP this app was built to optimize.
-          Help me retire a few days earlier — the irony is included at no extra charge.
+        <p className="text-xs text-slate-600 leading-relaxed">
+          <p>RE: tired is a free, open-source side project that runs entirely in your browser, sans servers, accounts, or data harvesting. Your privacy — and mine! — are maximally important.</p>
+          <p>It’s also mostly built with the help of an AI pair-programmer, which costs a few bucks. But really, I just want all Canadians to think about their money and do something about it!</p>
+          <p>Anything left over from donations, after I pay for tokens et al., goes into the accounts this app was built to help optimize.</p>
+          <p>So if RE: tired saves you some money, or helps you get a clearer picture of where you’re headed and what you might need to do to get there, I’m blessed to receive a few bucks to that end.</p>
+          <p>Maybe you’ll help <em>me</em> retire a few days early. :)</p>
         </p>
         <div className="mt-3">
           <a
