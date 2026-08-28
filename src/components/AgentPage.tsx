@@ -12,6 +12,8 @@ import {
 } from '../lib/aiSettings';
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
 import { buildSystemPrompt, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
+import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '../lib/retirementEngine';
@@ -109,10 +111,10 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
   const ready = connection != null && connectionReady(connection);
-  // web-llm runs in-browser and can't be trusted with tool calling (WIP
-  // upstream) — chat-only, with the plan digest injected into the prompt.
   const isLocal = connection?.provider === 'webllm';
-  const toolsEnabled = !isLocal;
+  // Local models call tools through a text protocol taught in the system
+  // prompt (no native function-calling on the web-llm chat surface).
+  const toolMode: 'native' | 'prompt' = isLocal ? 'prompt' : 'native';
 
   useEffect(() => { saveAiSettings(settings); }, [settings]);
 
@@ -156,12 +158,14 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
       setTurns(prev => prev.map(t => (t.id === assistantTurn.id ? { ...t, ...(() => { const c = { ...t, tools: [...t.tools], changes: [...t.changes] }; mutate(c); return c; })() } : t)));
     };
 
-    // Chat-only (local) models can't call tools, so give them the plan digest
-    // directly. Cloud models get the lean system prompt and pull numbers via tools.
-    const system = toolsEnabled
-      ? buildSystemPrompt(scenarioName)
-      : buildSystemPrompt(scenarioName, { toolsEnabled: false }) + '\n\n' +
-        buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) });
+    // Local models need two extras in their prompt: the tool-protocol
+    // instructions (they have no native tool API) and the plan digest (small
+    // models do better with the numbers in front of them than chained reads).
+    const system = toolMode === 'prompt'
+      ? buildSystemPrompt(scenarioName, { toolMode: 'prompt' }) + '\n\n' +
+        buildPromptToolInstructions(toolSpecs()) + '\n\n' +
+        buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) })
+      : buildSystemPrompt(scenarioName);
 
     if (isLocal) {
       downloadDoneRef.current = false;
@@ -196,7 +200,8 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
           }
         },
         signal: abort.signal,
-        toolsEnabled,
+        toolMode,
+        maxRounds: toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS : undefined,
         onMutation: proposal =>
           new Promise(resolve => {
             patchAssistant(t => { t.changes.push({ ...proposal }); });
@@ -644,74 +649,34 @@ function ConnectionSetup({ settings, onChange, onClose }: {
 
       {/* ---- Simple: on this computer (the default for everyone) ---- */}
       <div className="border border-emerald-200 bg-emerald-50/60 rounded p-3">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900 mb-1">
-          Simplest: on this computer — no key, no account, private
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900">
+          <Lock size={12} /> On this computer — free, private, works offline
         </div>
-        <p className="text-[11px] text-emerald-900/80 leading-snug mb-2">
-          The assistant's brain downloads onto your computer and runs here. Nothing you type ever
-          leaves your device, and it works offline once downloaded. The first download is large
-          (a few GB) and can take a few minutes.
-        </p>
-        {guide && (
-          <div className="text-[11px] mb-2">
-            <div className={`font-semibold ${guide.webgpu ? 'text-emerald-900' : 'text-red-700'}`}>{guide.headline}</div>
+        {!webllmConn && (
+          <p className="text-[11px] text-emerald-900/80 leading-snug mt-1">
+            The model downloads once and runs here; nothing you type leaves the device.
+          </p>
+        )}
+        {guide && !guide.webgpu && (
+          <div className="text-[11px] mt-1.5">
+            <div className="font-semibold text-red-700">{guide.headline}</div>
             <div className="text-slate-600 leading-snug mt-0.5">{guide.detail}</div>
           </div>
         )}
-        <button
-          onClick={ensureWebllm}
-          disabled={guide != null && !guide.webgpu}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 disabled:opacity-40"
-        >
-          <Check size={13} /> {webllmConn ? 'Use the on-computer assistant' : 'Set up the on-computer assistant'}
-        </button>
 
-        {webllmConn && (
-          <div className="mt-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Choose a model size
-              </span>
-              <span
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-bold"
-                title="Runs entirely on this device: no account, no key, nothing you type leaves the computer."
-              >
-                <Lock size={9} /> PRIVATE — STAYS ON THIS DEVICE
-              </span>
-            </div>
-            <div className="space-y-1">
-              {WEBLLM_MODELS.map(m => (
-                <label key={m.id} className={`flex items-start gap-2 px-2 py-1.5 rounded border text-[11px] cursor-pointer bg-white ${
-                  webllmConn.model === m.id ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'
-                }`}>
-                  <input
-                    type="radio"
-                    name="webllm-model"
-                    checked={webllmConn.model === m.id}
-                    onChange={() => patch(webllmConn.id, { model: m.id })}
-                    className="mt-0.5"
-                  />
-                  <span className="flex-1">
-                    <span className="font-semibold text-slate-800">{m.label}</span>
-                    <span className="text-slate-400"> · {fmtVram(m.vramMB)}</span>
-                    {guide?.recommended.id === m.id && (
-                      <span className="ml-1.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 rounded px-1 py-0.5">RECOMMENDED FOR YOU</span>
-                    )}
-                    <span className="block text-[10px] text-slate-500">{m.blurb}</span>
-                  </span>
-                </label>
-              ))}
-              <label className="block pt-1">
-                <span className="block text-[10px] text-slate-500 mb-0.5">…or any web-llm prebuilt model id</span>
-                <input
-                  value={WEBLLM_MODELS.some(m => m.id === webllmConn.model) ? '' : webllmConn.model}
-                  onChange={e => patch(webllmConn.id, { model: e.target.value })}
-                  placeholder="e.g. Llama-3.1-8B-Instruct-q4f32_1-MLC"
-                  className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono bg-white"
-                />
-              </label>
-            </div>
-          </div>
+        {!webllmConn ? (
+          <button
+            onClick={ensureWebllm}
+            disabled={guide != null && !guide.webgpu}
+            className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 disabled:opacity-40"
+          >
+            <Check size={13} />
+            {guide && guide.webgpu && guide.gpuMemoryGB != null
+              ? `Set up — we suggest ${guide.recommended.label}`
+              : 'Set up the on-computer assistant'}
+          </button>
+        ) : (
+          <LocalModelPicker conn={webllmConn} guide={guide} onPatch={patch} />
         )}
       </div>
 
@@ -761,6 +726,87 @@ function ConnectionSetup({ settings, onChange, onClose }: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Compact local-model chooser: shows the current pick with a Change toggle;
+ *  expanding reveals the short list (recommended first, or the full curated
+ *  list on demand) plus the custom-id field. */
+function LocalModelPicker({ conn, guide, onPatch }: {
+  conn: AiConnection;
+  guide: MachineGuide | null;
+  onPatch: (id: string, p: Partial<AiConnection>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const current = WEBLLM_MODELS.find(m => m.id === conn.model);
+  const isCustom = !current;
+
+  // Short list: the recommendation + the current pick (if different), or the
+  // three smallest models when we have no recommendation to anchor on.
+  const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
+  let visible: typeof WEBLLM_MODELS;
+  if (showAll) {
+    visible = WEBLLM_MODELS;
+  } else if (guide) {
+    const short = new Set([guide.recommended.id, ...(isCustom ? [] : [conn.model])]);
+    visible = WEBLLM_MODELS.filter(m => short.has(m.id));
+    if (visible.length < 2) visible = byVram.slice(0, 3);
+  } else {
+    visible = byVram.slice(0, 3);
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900"
+      >
+        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        <span className="font-semibold">{current?.label ?? conn.model}</span>
+        {current && <span className="text-slate-400">· {fmtVram(current.vramMB)}</span>}
+        <span className="text-emerald-700 font-semibold ml-1">{open ? 'close' : 'change'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-1">
+          {visible.map(m => (
+            <label key={m.id} className={`flex items-center gap-2 px-2 py-1 rounded border text-[11px] cursor-pointer bg-white ${
+              conn.model === m.id ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'
+            }`}>
+              <input
+                type="radio"
+                name="webllm-model"
+                checked={conn.model === m.id}
+                onChange={() => onPatch(conn.id, { model: m.id })}
+              />
+              <span className="flex-1 min-w-0">
+                <span className="font-semibold text-slate-800">{m.label}</span>
+                <span className="text-slate-400"> · {fmtVram(m.vramMB)}</span>
+                {guide?.recommended.id === m.id && (
+                  <span className="ml-1.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 rounded px-1 py-0.5">SUGGESTED</span>
+                )}
+                <span className="block text-[10px] text-slate-500 truncate">{m.blurb}</span>
+              </span>
+            </label>
+          ))}
+          {!showAll && (
+            <button
+              onClick={() => setShowAll(true)}
+              className="text-[11px] text-emerald-700 hover:underline pl-1"
+            >
+              Show all {WEBLLM_MODELS.length} models…
+            </button>
+          )}
+          <input
+            value={isCustom ? conn.model : ''}
+            onChange={e => onPatch(conn.id, { model: e.target.value })}
+            placeholder="…or paste any web-llm model id"
+            className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] font-mono bg-white"
+          />
+        </div>
+      )}
     </div>
   );
 }

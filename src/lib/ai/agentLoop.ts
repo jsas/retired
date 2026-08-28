@@ -10,6 +10,7 @@
 
 import type { AgentToolCall, ChatMessage, StreamEvent, ToolSpec } from './providers';
 import { executeToolCall, toolSpecs, type ToolContext, type ToolOutcome } from './tools';
+import { extractPromptToolCalls, formatPromptToolResults } from './promptTools';
 
 export type AgentEvent =
   | { type: 'text'; text: string }
@@ -48,10 +49,12 @@ export interface AgentLoopOptions {
     tools: ToolSpec[];
     signal?: AbortSignal;
   }) => AsyncGenerator<StreamEvent>;
-  /** When false, tools are NOT advertised and any tool_use from the model is
-   *  answered with a "tools unavailable" result. Use for chat-only providers
-   *  (web-llm) whose function-calling can't be trusted yet. Default true. */
-  toolsEnabled?: boolean;
+  /** How the model invokes tools. 'native' = provider function-calling APIs
+   *  (Anthropic/OpenAI/Gemini). 'prompt' = chat-only providers (web-llm): the
+   *  system prompt teaches a ```tool fenced-JSON protocol and calls are
+   *  parsed out of the model's text. 'off' = no tools at all. Default
+   *  'native'. */
+  toolMode?: 'native' | 'prompt' | 'off';
   /** Called when the model proposes a mutation; resolves with the user's decision. */
   onMutation: (proposal: MutationProposal) => Promise<MutationDecision>;
   signal?: AbortSignal;
@@ -60,18 +63,21 @@ export interface AgentLoopOptions {
 }
 
 /** Build the system prompt the agent runs under. */
-export function buildSystemPrompt(scenarioName: string, opts?: { toolsEnabled?: boolean }): string {
-  const toolsEnabled = opts?.toolsEnabled !== false;
+export function buildSystemPrompt(
+  scenarioName: string,
+  opts?: { toolsEnabled?: boolean; toolMode?: 'native' | 'prompt' | 'off' },
+): string {
+  const mode = opts?.toolMode ?? (opts?.toolsEnabled === false ? 'off' : 'native');
   return [
     'You are the assistant inside RE:tired, a Canadian retirement drawdown CALCULATOR.',
-    toolsEnabled
-      ? 'You help the user understand and edit their scenario using the provided tools.'
-      : 'You help the user understand their scenario. You cannot run tools; answer from the plan summary below.',
+    mode === 'off'
+      ? 'You help the user understand their scenario. You cannot run tools; answer from the plan summary below.'
+      : 'You help the user understand and edit their scenario using the provided tools.',
     '',
     'Rules you must follow:',
     '- RE:tired is a calculator, not a planner. You explain consequences of inputs;',
     '  you never give personalized financial advice or tell the user what they SHOULD do.',
-    ...(toolsEnabled ? [
+    ...(mode !== 'off' ? [
       '- Ground every claim in tool output: use get_scenario to read the plan and',
       '  run_projection / compare_scenarios for numbers. Never invent balances or results.',
       '- You can only change the plan through set_scenario_value, which the USER must',
@@ -99,20 +105,26 @@ export function buildSystemPrompt(scenarioName: string, opts?: { toolsEnabled?: 
  */
 export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<AgentEvent> {
   const maxRounds = opts.maxRounds ?? 8;
-  const toolsEnabled = opts.toolsEnabled !== false;
-  const tools = toolsEnabled ? toolSpecs() : [];
+  const mode = opts.toolMode ?? 'native';
+  const tools = mode === 'native' ? toolSpecs() : [];
   const messages: ChatMessage[] = [...opts.history, { role: 'user', content: opts.userMessage }];
+  const knownTools = new Set(toolSpecs().map(s => s.name));
 
   try {
     for (let round = 0; round < maxRounds; round++) {
       let text = '';
       const calls: AgentToolCall[] = [];
       let stopReason = 'unknown';
+      let parseErrors: Array<{ raw: string; message: string }> = [];
+      // Prompt mode: prose is yielded AFTER the reply is complete and tool
+      // blocks have been stripped (streaming raw text would flash ```tool
+      // JSON at the user). A spinner shows in the meantime.
+      const bufferText = mode === 'prompt';
 
       for await (const evt of opts.chat({ system: opts.system, messages, tools, signal: opts.signal })) {
         if (evt.type === 'text') {
           text += evt.text;
-          yield { type: 'text', text: evt.text };
+          if (!bufferText) yield { type: 'text', text: evt.text };
         } else if (evt.type === 'tool_use') {
           calls.push(evt.call);
         } else if (evt.type === 'done') {
@@ -120,20 +132,27 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
         }
       }
 
-      if (calls.length === 0) {
+      if (mode === 'prompt') {
+        const parsed = extractPromptToolCalls(text, knownTools);
+        calls.push(...parsed.calls);
+        parseErrors = parsed.errors;
+        if (parsed.prose) yield { type: 'text', text: parsed.prose };
+      }
+
+      if (calls.length === 0 && parseErrors.length === 0) {
         yield { type: 'done', stopReason };
         return;
       }
 
       // Record the assistant turn (prose + tool calls) before executing, so
       // the next request serializes correctly for every provider.
-      messages.push({ role: 'assistant', content: text, toolCalls: calls });
+      messages.push({ role: 'assistant', content: text, toolCalls: calls.length ? calls : undefined });
       const results: Array<{ toolCallId: string; content: string; isError: boolean }> = [];
 
       for (const call of calls) {
         yield { type: 'tool_start', call };
         // Chat-only providers: never execute — tell the model tools are off.
-        if (!toolsEnabled) {
+        if (mode === 'off') {
           const content = 'Tool use is not available with this provider. Answer from the conversation and the plan summary in the system prompt instead.';
           results.push({ toolCallId: call.id, content, isError: true });
           yield { type: 'tool_result', call, content, isError: true };
@@ -168,7 +187,13 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
       }
 
       // Feed results back; the loop continues for the model's next turn.
-      messages.push({ role: 'user', content: '', toolResults: results });
+      if (mode === 'prompt') {
+        // Text-protocol providers: results go back as a plain user message in
+        // the fenced-block convention the system prompt taught.
+        messages.push({ role: 'user', content: formatPromptToolResults(results, parseErrors) });
+      } else {
+        messages.push({ role: 'user', content: '', toolResults: results });
+      }
     }
 
     yield {

@@ -159,7 +159,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('drops tool instructions for chat-only providers', () => {
-    const s = buildSystemPrompt('My Plan', { toolsEnabled: false });
+    const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
     expect(s).not.toContain('set_scenario_value');
     expect(s).toContain('cannot run tools');
   });
@@ -181,7 +181,7 @@ describe('chat-only (tools disabled) providers', () => {
     const events = await collect(runAgentTurn({
       context: ctx(), history: [], userMessage: 'how am I doing?',
       system: 's', chat, onMutation: async () => ({ approved: false }),
-      toolsEnabled: false,
+      toolMode: 'off',
     }));
     // No tools were advertised on the first request.
     expect(requests[0].tools).toEqual([]);
@@ -191,5 +191,72 @@ describe('chat-only (tools disabled) providers', () => {
     expect((refusal as { content: string }).content).toContain('not available');
     // The engine never ran: the content contains no projection output.
     expect((refusal as { content: string }).content).not.toContain('lifetime tax');
+  });
+});
+
+describe('prompt-protocol tools (local models)', () => {
+  it('parses a ```tool block out of text, executes it, and feeds results back', async () => {
+    const { chat, requests } = scripted([
+      // Local model reply: prose + a fenced tool block, streamed in chunks.
+      [
+        { type: 'text', text: 'Let me check. ```tool\n{"name": "run_projection", "args": {}}\n```' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+      [
+        { type: 'text', text: 'Your plan is funded to age 95.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'is my plan ok?',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    // The engine actually ran.
+    const result = events.find(e => e.type === 'tool_result');
+    expect(result && !result.isError).toBe(true);
+    expect((result as { content: string }).content).toContain('lifetime tax');
+    // The user saw prose with the raw JSON stripped, never the fence.
+    const prose = events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join('');
+    expect(prose).toContain('Let me check.');
+    expect(prose).toContain('funded to age 95.');
+    expect(prose).not.toContain('```tool');
+    expect(prose).not.toContain('"name"');
+    // Round 2's request carries the tool result as a plain user message
+    // (chat providers have no tool-result role).
+    const round2 = requests[1];
+    const lastMsg = round2.messages.at(-1) as ChatMessage;
+    expect(lastMsg.role).toBe('user');
+    expect(lastMsg.content).toContain('lifetime tax');
+    expect(lastMsg.toolResults).toBeUndefined();
+  });
+
+  it('returns malformed tool JSON as an error the model can retry from', async () => {
+    const { chat } = scripted([
+      [{ type: 'text', text: '```tool\n{not json}\n```' }, { type: 'done', stopReason: 'end_turn' }],
+      [{ type: 'text', text: 'Sorry, let me just answer.' }, { type: 'done', stopReason: 'end_turn' }],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'check',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    // The loop survived the malformed block and the model got a second turn.
+    const prose = events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join('');
+    expect(prose).toContain('let me just answer');
+  });
+
+  it('caps prompt-mode loops so a model repeating broken calls stops', async () => {
+    const { chat } = scripted([[
+      { type: 'text', text: '```tool\n{"name": "nope"}\n```' },
+      { type: 'done', stopReason: 'end_turn' },
+    ]]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'check',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt', maxRounds: 3,
+    }));
+    const safety = events.find(e => e.type === 'error');
+    expect(safety && (safety as { message: string }).message).toContain('safety limit');
   });
 });
