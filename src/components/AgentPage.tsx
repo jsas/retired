@@ -62,6 +62,16 @@ interface ToolActivity {
 
 interface PendingChange extends MutationProposal {
   resolved?: 'approved' | 'rejected';
+  /** Legacy persisted shape (pre-patch proposals) tolerated on load. */
+  field?: string;
+  value?: unknown;
+}
+
+/** The inputs patch a change applies on approval. Current proposals carry
+ *  `patch` directly; older saved threads stored a single field/value pair. */
+function changePatch(change: PendingChange): Record<string, unknown> {
+  if (change.patch && Object.keys(change.patch).length > 0) return change.patch;
+  return change.field != null ? { [change.field]: change.value } : {};
 }
 
 interface Turn {
@@ -522,7 +532,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
       ...t,
       changes: t.changes.map(c => c.callId === change.callId ? { ...c, resolved: approved ? 'approved' : 'rejected' } : c),
     })));
-    if (approved) onApply({ [change.field]: change.value } as Partial<RetirementInputs>);
+    if (approved) onApply(changePatch(change) as Partial<RetirementInputs>);
     pendingDecisions.current.get(change.callId)?.({ approved });
     pendingDecisions.current.delete(change.callId);
   };
@@ -806,10 +816,10 @@ function ChangeCard({ change, onDecide }: {
 }) {
   return (
     <div className="border border-violet-200 bg-violet-50 rounded-lg p-2.5 text-xs">
-      {change.rationale && <div className="font-semibold text-violet-900 mb-1">{change.rationale}</div>}
-      <div className="text-slate-600 mb-2">
-        {change.field}: <span className="line-through">{fmtValue(change.preview.from)}</span>{' '}
-        → <span className="font-semibold">{fmtValue(change.preview.to)}</span>
+      <div className="font-semibold text-violet-900 mb-1">{change.label ?? (change.field ? `Set ${change.field}` : 'Proposed change')}</div>
+      {change.rationale && <div className="text-violet-800/80 mb-1">{change.rationale}</div>}
+      <div className="text-slate-600 mb-2 space-y-0.5">
+        <PreviewLines preview={change.preview} />
       </div>
       {change.resolved ? (
         <div className={`flex items-center gap-1 font-semibold ${change.resolved === 'approved' ? 'text-emerald-700' : 'text-slate-500'}`}>
@@ -841,6 +851,39 @@ function fmtValue(v: unknown): string {
   if (typeof v === 'number') return v.toLocaleString('en-CA');
   return String(v);
 }
+
+/** Render a proposal's preview: a single from→to line for scalar fields, or a
+ *  compact line per entry for structural proposals (objects/arrays are
+ *  JSON-compacted so a spouse/reverse-mortgage block stays readable). */
+function PreviewLines({ preview }: { preview: Record<string, unknown> }) {
+  const entries = Object.entries(preview);
+  const isFromTo = (v: unknown): v is { from: unknown; to: unknown } =>
+    !!v && typeof v === 'object' && 'from' in (v as object) && 'to' in (v as object);
+  return (
+    <>
+      {entries.map(([key, value]) => {
+        if (isFromTo(value)) {
+          return (
+            <div key={key}>
+              {key}: <span className="line-through">{fmtValue(value.from)}</span>{' '}
+              → <span className="font-semibold">{fmtValue(value.to)}</span>
+            </div>
+          );
+        }
+        if (key === 'add') {
+          return <div key={key}>adds <span className="font-semibold">{compact(value)}</span></div>;
+        }
+        if (Array.isArray(value)) {
+          return <div key={key}>{key}: <span className="font-semibold">{value.join('; ')}</span></div>;
+        }
+        return <div key={key}>{key}: <span className="font-semibold">{compact(value)}</span></div>;
+      })}
+    </>
+  );
+}
+
+const compact = (v: unknown): string =>
+  typeof v === 'object' && v !== null ? JSON.stringify(v) : fmtValue(v);
 
 // ---------------------------------------------------------------------------
 // Empty states

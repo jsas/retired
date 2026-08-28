@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runAgentTurn, buildSystemPrompt, type AgentEvent } from './agentLoop';
+import { runAgentTurn, buildSystemPrompt, type AgentEvent, type MutationProposal } from './agentLoop';
 import type { ChatMessage, StreamEvent } from './providers';
 import type { ToolContext } from './tools';
 import { baseInputs, testConfig } from '../../test/helpers';
@@ -89,13 +89,16 @@ describe('runAgentTurn', () => {
         { type: 'done', stopReason: 'end_turn' },
       ],
     ]);
-    const proposals: Array<{ field: string; value: unknown }> = [];
+    const proposals: MutationProposal[] = [];
     const events = await collect(runAgentTurn({
       context: ctx(), history: [], userMessage: 'defer cpp',
       system: 's', chat,
       onMutation: async (p) => { proposals.push(p); return { approved: true }; },
     }));
-    expect(proposals).toEqual([{ callId: 'm1', field: 'cppStartAge', value: 70, rationale: undefined, preview: { field: 'cppStartAge', from: null, to: 70 } }]);
+    expect(proposals).toEqual([{
+      callId: 'm1', patch: { cppStartAge: 70 }, label: 'Set cppStartAge',
+      rationale: undefined, preview: { field: 'cppStartAge', from: null, to: 70 },
+    }]);
     expect(events.some(e => e.type === 'mutation')).toBe(true);
     const toolResultBack = requests[1].messages.at(-1)?.toolResults?.[0];
     expect(toolResultBack?.content).toContain('APPROVED');

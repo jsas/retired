@@ -20,11 +20,17 @@ const toolActivitySchema = z.object({
   summary: z.string().optional(),
 });
 
-/** A proposed (and possibly decided) plan change awaiting/after user review. */
+/** A proposed (and possibly decided) plan change awaiting/after user review.
+ *  `patch` is the partial inputs patch applied on approval (scalar or
+ *  structural); `label` is the card title. Older threads stored field/value —
+ *  those are tolerated on load but new proposals always carry patch+label. */
 const pendingChangeSchema = z.object({
   callId: z.string(),
-  field: z.string(),
-  value: z.unknown(),
+  patch: z.record(z.string(), z.unknown()).optional(),
+  label: z.string().optional(),
+  // Legacy single-field shape (pre-patch proposals).
+  field: z.string().optional(),
+  value: z.unknown().optional(),
   rationale: z.string().optional(),
   preview: z.record(z.string(), z.unknown()),
   resolved: z.enum(['approved', 'rejected']).optional(),

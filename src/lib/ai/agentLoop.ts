@@ -22,8 +22,10 @@ export type AgentEvent =
 
 export interface MutationProposal {
   callId: string;
-  field: string;
-  value: unknown;
+  /** The proposed change as a partial inputs patch, applied on approval. */
+  patch: Record<string, unknown>;
+  /** Short card label ("Add spouse", "Set CPP start age"). */
+  label: string;
   rationale?: string;
   preview: Record<string, unknown>;
 }
@@ -81,9 +83,14 @@ export function buildSystemPrompt(
     '  you never give personalized financial advice or tell the user what they SHOULD do.',
     ...(mode !== 'off' ? [
       '- Ground every claim in tool output: use get_scenario to read the plan and',
-      '  run_projection / compare_scenarios for numbers. Never invent balances or results.',
-      '- You can only change the plan through set_scenario_value, which the USER must',
-      '  confirm. Propose changes when asked (or when clearly wanted), never silently.',
+      '  run_projection / compare_scenarios / run_monte_carlo for numbers.',
+      '  Never invent balances or results. Use run_strategies to compare levers',
+      '  and solve_spending for "how much can I safely spend?"',
+      '- You can only change the plan through the propose_* / set_scenario_value',
+      '  tools, and the USER must confirm every one. Propose changes when asked',
+      '  (or when clearly wanted), never silently. For a batch of related scalar',
+      '  edits prefer propose_patch; for a spouse, pension, work income, spending',
+      '  phases, a cash event, or a reverse mortgage use its dedicated propose_* tool.',
     ] : [
       '- Ground every claim in the plan summary below; do not invent balances or results.',
       '- You cannot change the plan or run new projections. When the user asks for a',
@@ -185,15 +192,15 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
         if (outcome.kind === 'mutation') {
           const proposal: MutationProposal = {
             callId: call.id,
-            field: outcome.field,
-            value: outcome.value,
+            patch: outcome.patch as Record<string, unknown>,
+            label: outcome.label,
             rationale: outcome.rationale,
             preview: outcome.preview,
           };
           yield { type: 'mutation', proposal };
           const decision = await opts.onMutation(proposal);
           const content = decision.approved
-            ? `APPROVED: ${outcome.field} set to ${JSON.stringify(outcome.value)}.` +
+            ? `APPROVED: ${outcome.label} (${JSON.stringify(outcome.patch)}).` +
               (decision.note ? ` User note: ${decision.note}` : '')
             : `REJECTED by the user — do not apply or repeat this change unprompted.` +
               (decision.note ? ` User note: ${decision.note}` : '');

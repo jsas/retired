@@ -163,7 +163,7 @@ export function buildPromptToolInstructions(specs: ToolSpec[]): string {
     '- Available tools:',
     catalog,
     '- Prefer run_projection/compare_scenarios numbers over guessing.',
-    '- set_scenario_value only PROPOSES a change; the user confirms it.',
+    '- Every propose_* and set_scenario_value tool only PROPOSES a change; the user confirms it.',
   ].join('\n');
 }
 
