@@ -11,6 +11,8 @@
 import type { AgentToolCall, ChatMessage, StreamEvent, ToolSpec } from './providers';
 import { executeToolCall, toolSpecs, type ToolContext, type ToolOutcome } from './tools';
 import { extractPromptToolCalls, formatPromptToolResults } from './promptTools';
+import { buildProgramRules } from './programRules';
+import type { AppConfig } from '../appConfig';
 
 export type AgentEvent =
   | { type: 'text'; text: string }
@@ -63,6 +65,9 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   /** Safety net: max tool-call round trips per user message (default 8). */
   maxRounds?: number;
+  /** The live app config; when supplied, the finalization pass after the round
+   *  limit re-reads the rules from it. Not required for the loop itself. */
+  config?: AppConfig;
 }
 
 /**
@@ -96,13 +101,9 @@ export const DEFAULT_SYSTEM_PROMPT = [
   '- Be concrete: cite specific ages and dollar figures, and quantify the effect',
   '  of each option (depletion age, lifetime tax, ending balance, success rate).',
   '',
-  'Canadian retirement rules you must apply correctly:',
-  '- CPP may start 60–70 (0.6%/month reduction before 65, +0.7%/month after, to',
-  '  70). OAS may start 65–70 (+0.6%/month to 70) and is clawed back at high',
-  '  income. GIS is income-tested and clawed back by taxable income.',
-  '- RRSP/RRIF draws are fully taxable and count against GIS/OAS; TFSA',
-  '  withdrawals are tax-free and do not. RRIF minimums are mandatory from 71.',
-  '- Only Canadian residents; no US cross-border or non-resident tax.',
+  'The exact benefit/tax rules this program applies (CPP/OAS/GIS amounts, RRIF',
+  'minimums, registered-plan limits) are listed below, read live from the',
+  'engine settings — quote those figures, not generic ones.',
   '',
   'Keep answers concise and plain-language. You explain consequences and make',
   'evidence-based recommendations; the user always makes the final call.',
@@ -110,13 +111,22 @@ export const DEFAULT_SYSTEM_PROMPT = [
 
 /** Build the system prompt the agent runs under. The persona comes from
  *  `basePrompt` (DEFAULT_SYSTEM_PROMPT unless the user has overridden it in
- *  Settings); this appends the tool-usage mechanics and the scenario name. */
+ *  Settings); this appends the tool-usage mechanics, the live program rules
+ *  (from `config`, when given), and the scenario name. */
 export function buildSystemPrompt(
   scenarioName: string,
-  opts?: { toolsEnabled?: boolean; toolMode?: 'native' | 'prompt' | 'off'; basePrompt?: string },
+  opts?: {
+    toolsEnabled?: boolean;
+    toolMode?: 'native' | 'prompt' | 'off';
+    basePrompt?: string;
+    /** Live engine config; when supplied, the CPP/OAS/GIS/RRIF/limit rules are
+     *  rendered from it so the model quotes the program's real numbers. */
+    config?: AppConfig;
+  },
 ): string {
   const mode = opts?.toolMode ?? (opts?.toolsEnabled === false ? 'off' : 'native');
   const persona = (opts?.basePrompt?.trim()) || DEFAULT_SYSTEM_PROMPT;
+  const rules = opts?.config ? buildProgramRules(opts.config) : '';
   return [
     persona,
     '',
@@ -137,6 +147,7 @@ export function buildSystemPrompt(
             'income, spending phases, a cash event, or a reverse mortgage use its dedicated',
             'propose_* tool.',
           ].join('\n'),
+    ...(rules ? ['', rules] : []),
     '',
     `The active scenario is "${scenarioName}".`,
   ].join('\n');
@@ -261,14 +272,87 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
       }
     }
 
-    yield {
-      type: 'error',
-      message: `Stopped after ${maxRounds} tool round trips (safety limit). The model kept calling tools without finishing — try rephrasing.`,
-    };
+    // Round limit hit. A small local model can loop tool calls until here and
+    // leave the user with NOTHING — so don't just error out. Make one forced
+    // finalization pass with NO tools available and an explicit "answer from
+    // what you have" instruction, so the model produces a real reply from the
+    // tool results already in the transcript. Only if that pass also fails do
+    // we surface an error.
+    yield* finalizeWithoutTools(opts, messages, mode);
   } catch (err) {
     yield {
       type: 'error',
       message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * The forced final answer after the tool round-trip limit. Runs ONE more model
+ * pass with no tools on offer and a direct instruction to answer from the tool
+ * results already gathered, so a tool-happy small model still leaves the user
+ * with a usable reply. Tool blocks a stubborn model emits anyway are parsed
+ * out (not executed) and stripped from the prose.
+ */
+async function* finalizeWithoutTools(
+  opts: AgentLoopOptions,
+  messages: ChatMessage[],
+  mode: 'native' | 'prompt' | 'off',
+): AsyncGenerator<AgentEvent> {
+  const knownTools = new Set(toolSpecs().map(s => s.name));
+  // A fresh system prompt for the final pass: same persona/rules, but the
+  // tool catalog is replaced by the instruction to stop and answer. Keeping
+  // the full tool instructions would invite yet another tool call.
+  const base = buildSystemPrompt(opts.context.scenarioName, {
+    toolMode: 'off',
+    basePrompt: undefined, // default persona — the override lives on the full prompt
+    config: opts.config ?? opts.context.config,
+  });
+  const finalSystem = [
+    base,
+    '',
+    'You have already gathered tool results in this conversation. Do NOT call',
+    'any more tools. Answer the user\'s question NOW in plain prose, using the',
+    'numbers from the tool results above. If a needed number is missing, say so',
+    'briefly and give the best answer you can with what you have.',
+  ].join('\n');
+
+  const finalMessages: ChatMessage[] = [
+    ...messages,
+    {
+      role: 'user',
+      content:
+        'You have reached the tool-use limit. Do not call any more tools. ' +
+        'Answer my question now in plain prose using the tool results above.',
+    },
+  ];
+
+  try {
+    let text = '';
+    for await (const evt of opts.chat({ system: finalSystem, messages: finalMessages, tools: [], signal: opts.signal })) {
+      if (evt.type === 'text') {
+        text += evt.text;
+        // Prompt mode buffers prose until tool blocks are stripped; native
+        // streams it straight through (there are no tool blocks to strip).
+        if (mode !== 'prompt') yield { type: 'text', text: evt.text };
+      } else if (evt.type === 'reasoning') {
+        yield { type: 'reasoning', text: evt.text };
+      }
+      // A 'done' here ends the pass; tool_use is impossible (no tools offered)
+      // but if a provider emitted one anyway it's ignored, not executed.
+    }
+    if (mode === 'prompt') {
+      const parsed = extractPromptToolCalls(text, knownTools);
+      if (parsed.prose) yield { type: 'text', text: parsed.prose };
+    }
+    yield { type: 'done', stopReason: 'end_turn' };
+  } catch (err) {
+    // Even the finalization pass failed — now there's genuinely nothing to say.
+    yield {
+      type: 'error',
+      message:
+        `The model kept calling tools without finishing, and the wrap-up answer failed too ` +
+        `(${err instanceof Error ? err.message : String(err)}). Try rephrasing the question.`,
     };
   }
 }

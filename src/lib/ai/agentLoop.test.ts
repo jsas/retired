@@ -156,18 +156,45 @@ describe('runAgentTurn', () => {
     expect(events.at(-1)).toEqual({ type: 'error', message: 'Provider error 401 — check the API key' });
   });
 
-  it('stops at the round limit instead of looping forever', async () => {
-    const { chat } = scripted([[
-      { type: 'tool_use', call: { id: 'c', name: 'get_scenario', args: {} } },
-      { type: 'done', stopReason: 'tool_use' },
-    ]]);
+  it('forces a no-tools final answer after the round limit instead of leaving nothing', async () => {
+    // The model keeps calling the same tool every round; once maxRounds is
+    // hit the loop must NOT just error out — it makes one more pass with no
+    // tools on offer so the user still gets a real answer.
+    const { chat, requests } = scripted([
+      [
+        { type: 'tool_use', call: { id: 'c', name: 'get_scenario', args: {} } },
+        { type: 'done', stopReason: 'tool_use' },
+      ],
+    ]);
     const events = await collect(runAgentTurn({
       context: ctx(), history: [], userMessage: 'loop',
       system: 's', chat, onMutation: async () => ({ approved: false }),
       maxRounds: 3,
     }));
-    expect(events.at(-1)?.type).toBe('error');
-    expect((events.at(-1) as { message: string }).message).toContain('safety limit');
+    // The final pass ran AFTER the 3 tool rounds, with no tools offered.
+    expect(requests.length).toBe(4);
+    expect(requests.at(-1)?.tools).toEqual([]);
+    // And the final pass's system prompt tells the model to stop and answer.
+    // (The scripted chat replays a tool call, but the loop ignores it and
+    // still closes with a done, not a dead-end safety error.)
+    expect(events.at(-1)?.type).toBe('done');
+    expect(events.some(e => e.type === 'error' && (e as { message: string }).message.includes('safety limit'))).toBe(false);
+  });
+
+  it('the forced final answer surfaces its prose to the user', async () => {
+    // Round-limit path where the finalization pass actually answers.
+    const { chat } = scripted([
+      [{ type: 'tool_use', call: { id: 'c', name: 'get_scenario', args: {} } }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'text', text: 'Based on the numbers, you are on track.' }, { type: 'done', stopReason: 'end_turn' }],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'loop',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      maxRounds: 1,
+    }));
+    const prose = events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join('');
+    expect(prose).toContain('on track');
+    expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'end_turn' });
   });
 });
 
@@ -200,6 +227,32 @@ describe('buildSystemPrompt', () => {
     const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
     expect(s).not.toContain('set_scenario_value');
     expect(s).toContain('cannot run tools');
+  });
+
+  it('renders the program rules from the live config when supplied', () => {
+    const s = buildSystemPrompt('My Plan', { config: testConfig() });
+    // The rules come from the app's real settings, not hard-coded prose.
+    expect(s).toContain('CPP');
+    expect(s).toContain('OAS');
+    expect(s).toContain('GIS');
+    expect(s).toContain('RRIF');
+    // And it reflects the config's actual numbers (2026 TFSA limit).
+    expect(s).toContain('7,000');
+  });
+
+  it('reflects user-edited config values in the rules', () => {
+    // Bump the TFSA limit; the prompt must quote the NEW value, proving the
+    // rules are read live from config rather than frozen in the persona.
+    const config = testConfig();
+    config.engine.tfsaAnnualLimit = 9999;
+    const s = buildSystemPrompt('My Plan', { config });
+    expect(s).toContain('9,999');
+    expect(s).not.toContain('7,000');
+  });
+
+  it('omits the rules section when no config is given', () => {
+    const s = buildSystemPrompt('My Plan');
+    expect(s).not.toContain('Rules this program applies');
   });
 });
 
@@ -284,8 +337,10 @@ describe('prompt-protocol tools (local models)', () => {
     expect(prose).toContain('let me just answer');
   });
 
-  it('caps prompt-mode loops so a model repeating broken calls stops', async () => {
-    const { chat } = scripted([[
+  it('caps prompt-mode loops, then forces a no-tools final answer', async () => {
+    // A stuck model emits an unknown tool every round; after the cap the loop
+    // makes one finalization pass (no tools) instead of erroring out empty.
+    const { chat, requests } = scripted([[
       { type: 'text', text: 'TOOL_CALL: {"name": "nope"}' },
       { type: 'done', stopReason: 'end_turn' },
     ]]);
@@ -294,8 +349,13 @@ describe('prompt-protocol tools (local models)', () => {
       system: 's', chat, onMutation: async () => ({ approved: false }),
       toolMode: 'prompt', maxRounds: 3,
     }));
-    const safety = events.find(e => e.type === 'error');
-    expect(safety && (safety as { message: string }).message).toContain('safety limit');
+    // Finalization pass ran after the 3 rounds with no tools offered.
+    expect(requests.length).toBe(4);
+    expect(requests.at(-1)?.tools).toEqual([]);
+    // The unknown-TOOL_CALL prose from the final pass is stripped; the loop
+    // closes cleanly rather than surfacing a dead-end "safety limit" error.
+    expect(events.at(-1)?.type).toBe('done');
+    expect(events.some(e => e.type === 'error' && (e as { message: string }).message.includes('safety limit'))).toBe(false);
   });
 
   it('a mid-stream engine crash surfaces as an error event, not a stuck spinner', async () => {
