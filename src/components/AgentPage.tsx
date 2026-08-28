@@ -30,7 +30,7 @@ import {
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
-import { buildSystemPrompt, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
@@ -307,6 +307,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
               isLocal={isLocal}
               toolMode={toolMode}
               settings={settings}
+              onSettingsChange={setSettings}
               inputs={inputs}
               config={config}
               scenarioName={scenarioName}
@@ -367,12 +368,13 @@ function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
 // One conversation (assistant-ui runtime around our agent loop)
 // ---------------------------------------------------------------------------
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
   toolMode: 'native' | 'prompt';
   settings: AiSettings;
+  onSettingsChange: (mutate: (prev: AiSettings) => AiSettings) => void;
   inputs: RetirementInputs;
   config: AppConfig;
   scenarioName: string;
@@ -429,11 +431,12 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
         : t)));
     };
 
+    const basePrompt = settings.systemPromptOverride;
     const baseSystem = toolMode === 'prompt'
-      ? buildSystemPrompt(scenarioName, { toolMode: 'prompt' }) + '\n\n' +
+      ? buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt }) + '\n\n' +
         buildPromptToolInstructions(toolSpecs()) + '\n\n' +
         buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) })
-      : buildSystemPrompt(scenarioName);
+      : buildSystemPrompt(scenarioName, { basePrompt });
     // The chat's standing instructions go last so they read as the user's own
     // voice; they can steer tone/focus but the base prompt's rules come first.
     const system = thread.systemNote?.trim()
@@ -679,10 +682,16 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
 
           {/* Composer */}
           <div className="border-t border-slate-100 p-2.5">
-            <SystemNoteEditor
-              note={thread.systemNote ?? ''}
-              onChange={note => patchThread({ systemNote: note || undefined })}
-            />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
+              <SystemNoteEditor
+                note={thread.systemNote ?? ''}
+                onChange={note => patchThread({ systemNote: note || undefined })}
+              />
+              <BasePromptEditor
+                override={settings.systemPromptOverride ?? ''}
+                onChange={text => onSettingsChange(prev => ({ ...prev, systemPromptOverride: text || undefined }))}
+              />
+            </div>
             <ComposerPrimitive.Root className="flex items-end gap-2">
               <ComposerPrimitive.Input
                 placeholder={ready ? 'Ask about your plan, or describe your situation…' : 'Connect a provider first (Connections page)'}
@@ -786,7 +795,7 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
     return (
       <button
         onClick={() => { setDraft(note); setOpen(true); }}
-        className="flex items-center gap-1.5 mb-2 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
+        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
         title="Add standing instructions for this chat (appended to the system prompt)"
       >
         <Settings2 size={11} />
@@ -822,6 +831,72 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
         >
           Save
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** The assistant's base persona prompt, editable across all chats. A collapsed
+ *  one-line button by default; opens into an editor pre-filled with whatever
+ *  is currently in effect (the user's override, or the built-in default they
+ *  can use as a starting point). Clearing it restores the default. */
+function BasePromptEditor({ override, onChange }: { override: string; onChange: (text: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(override);
+  const customized = override.trim().length > 0;
+  if (!open) {
+    return (
+      <button
+        onClick={() => { setDraft(customized ? override : DEFAULT_SYSTEM_PROMPT); setOpen(true); }}
+        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
+        title="View and edit the assistant's base persona prompt (applies to every chat)"
+      >
+        <Bot size={11} />
+        {customized ? 'Base prompt: customized' : 'Base prompt'}
+      </button>
+    );
+  }
+  return (
+    <div className="mb-2 border border-slate-200 rounded p-2 bg-slate-50 w-full">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          Base persona prompt (all chats)
+        </span>
+        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700" title="Close">
+          <X size={12} />
+        </button>
+      </div>
+      <textarea
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        rows={10}
+        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500 resize-y font-mono"
+      />
+      <div className="flex items-center justify-between gap-2 mt-1">
+        <button
+          onClick={() => { setDraft(DEFAULT_SYSTEM_PROMPT); }}
+          className="text-[10px] font-semibold text-slate-400 hover:text-violet-700"
+          title="Restore the built-in default persona"
+        >
+          Reset to default
+        </button>
+        <div className="flex gap-2">
+          {customized && (
+            <button
+              onClick={() => { onChange(''); setOpen(false); }}
+              className="px-2.5 py-1 border border-slate-300 text-slate-600 text-[11px] font-semibold rounded hover:bg-slate-100"
+              title="Stop customizing and use the built-in default"
+            >
+              Use default
+            </button>
+          )}
+          <button
+            onClick={() => { onChange(draft.trim() === DEFAULT_SYSTEM_PROMPT.trim() ? '' : draft.trim()); setOpen(false); }}
+            className="px-2.5 py-1 bg-violet-600 text-white text-[11px] font-semibold rounded hover:bg-violet-700"
+          >
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -41,6 +41,9 @@ export interface AiSettings {
   connections: AiConnection[];
   activeConnectionId: string | null;
   prompts: AiPromptPreset[];
+  /** User-edited replacement for the assistant's base persona prompt. When
+   *  unset the built-in DEFAULT_SYSTEM_PROMPT (agentLoop) is used. */
+  systemPromptOverride?: string;
 }
 
 const connectionSchema = z.object({
@@ -63,6 +66,7 @@ const settingsSchema = z.object({
   connections: z.array(connectionSchema),
   activeConnectionId: z.string().nullable(),
   prompts: z.array(promptSchema),
+  systemPromptOverride: z.string().optional(),
 });
 
 const STORAGE_KEY = 'retirement_ai_settings';

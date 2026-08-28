@@ -172,11 +172,28 @@ describe('runAgentTurn', () => {
 });
 
 describe('buildSystemPrompt', () => {
-  it('names the scenario and states the calculator-not-advisor rule', () => {
+  it('names the scenario, takes a planner stance, and never refuses to plan', () => {
     const s = buildSystemPrompt('My Plan');
     expect(s).toContain('"My Plan"');
-    expect(s).toContain('calculator, not a planner');
+    // The persona must engage as a planner — the old "calculator, not a
+    // planner" guardrail made small models parrot "I'm not a planner" back.
+    expect(s).toContain('planning assistant');
+    expect(s).not.toContain('not a planner');
     expect(s).toContain('set_scenario_value');
+  });
+
+  it('uses a user-supplied base prompt in place of the default persona', () => {
+    const s = buildSystemPrompt('My Plan', { basePrompt: 'You are a terse actuary.' });
+    expect(s).toContain('You are a terse actuary.');
+    expect(s).not.toContain('planning assistant');
+    // Tool mechanics + scenario name are still appended after the persona.
+    expect(s).toContain('set_scenario_value');
+    expect(s).toContain('"My Plan"');
+  });
+
+  it('falls back to the default persona when the override is blank', () => {
+    const s = buildSystemPrompt('My Plan', { basePrompt: '   ' });
+    expect(s).toContain('planning assistant');
   });
 
   it('drops tool instructions for chat-only providers', () => {
