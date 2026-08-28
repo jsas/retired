@@ -19,7 +19,9 @@ import { TimelineChart } from './components/TimelineChart';
 import { BacktestPanel } from './components/BacktestPanel';
 import { CollapsiblePanel } from './components/CollapsiblePanel';
 import { SharingPage, type SharingImportRequest } from './components/SharingPage';
-import { DataPage, type FullBackupSelection, type ProjectionImportRequest } from './components/DataPage';
+import { DataPage, type FullBackupSelection, type ProjectionImportRequest, type AiBackupInclude } from './components/DataPage';
+import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
+import { AI_SETTINGS_STORAGE_KEY } from './lib/aiSettings';
 import { OptimizeCard } from './components/OptimizeCard';
 import { AgentPage } from './components/AgentPage';
 import { ConnectionsPage } from './components/ConnectionsPage';
@@ -232,13 +234,28 @@ function App() {
   // scenarios (+ optionally the engine config). Openable by any SQLite tool
   // and re-importable here; the same file format a self-contained Node
   // package would use.
-  const handleExportFull = async (scenarioIds: string[], includeConfig: boolean) => {
+  // Copy one AI localStorage payload into the backup's kv table under the same
+  // key, or strip it from the file when the user didn't opt in.
+  const packAiKey = (db: AppDatabase, key: string, include: boolean) => {
+    if (!include) { db.deleteKv(key); return; }
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) db.setKv(key, raw);
+    } catch { /* storage unavailable — nothing to pack */ }
+  };
+
+  const handleExportFull = async (scenarioIds: string[], includeConfig: boolean, ai: AiBackupInclude) => {
     const chosen = scenarios.filter(s => scenarioIds.includes(s.id));
     const activeId = chosen.some(s => s.id === activeScenarioId) ? activeScenarioId : (chosen[0]?.id ?? activeScenarioId);
     const db = await AppDatabase.open();
     db.saveScenarios(chosen);
     db.saveActiveScenarioId(activeId);
     if (includeConfig) db.saveConfig(config);
+    // AI data is opt-in: pack the localStorage payload under the same kv key
+    // when the user asked for it, strip it from the file otherwise (the live
+    // store may hold it even when this backup shouldn't).
+    packAiKey(db, AI_CHATS_STORAGE_KEY, ai.chats);
+    packAiKey(db, AI_SETTINGS_STORAGE_KEY, ai.settings);
     const bytes = db.exportBytes();
     db.close();
     const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/vnd.sqlite3' });
@@ -259,6 +276,12 @@ function App() {
     const active = list.find(s => s.id === activeId) ?? list[0];
     setInputs(JSON.parse(JSON.stringify(active.inputs)));
     if (sel.config) setConfig(sel.config);
+    // AI data applies straight back to its localStorage key; the assistant /
+    // connections pages load it on next mount. The values were validated by
+    // the Data page only as parseable JSON, so a malformed payload can still
+    // fail those pages' own loaders — they fall back to empty, never crash.
+    if (sel.aiChats !== undefined) localStorage.setItem(AI_CHATS_STORAGE_KEY, JSON.stringify(sel.aiChats));
+    if (sel.aiSettings !== undefined) localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(sel.aiSettings));
     setHasUnsavedChanges(false);
     setView('projection');
   };

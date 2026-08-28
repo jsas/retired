@@ -7,6 +7,9 @@
 import { z } from 'zod';
 
 const STORAGE_KEY = 'retirement_ai_chats';
+/** Exported so the backup layer (db.ts / Data page) can carry chats in the
+ *  SQLite file under the same key they occupy in localStorage. */
+export const AI_CHATS_STORAGE_KEY = STORAGE_KEY;
 
 // ---------------------------------------------------------------------------
 // Serializable transcript model

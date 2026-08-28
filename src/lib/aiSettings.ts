@@ -74,6 +74,9 @@ const settingsSchema = z.object({
 });
 
 const STORAGE_KEY = 'retirement_ai_settings';
+/** Exported so the backup layer (db.ts / Data page) can carry AI settings in
+ *  the SQLite file under the same key they occupy in localStorage. */
+export const AI_SETTINGS_STORAGE_KEY = STORAGE_KEY;
 
 /** Starter prompt library. The first is the headline onboarding flow: the
  *  agent interviews the user and drafts a scenario instead of the user facing

@@ -15,7 +15,10 @@ import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './
  *   scenarios(id TEXT PK, name TEXT,   — one row per saved plan
  *             inputs TEXT,             — RetirementInputs as JSON
  *             updated_at TEXT)
- *   kv(key TEXT PK, value TEXT)        — engine config ('config') as JSON
+ *   kv(key TEXT PK, value TEXT)        — engine config ('config') as JSON, plus
+ *                                        opt-in app data ('retirement_ai_chats',
+ *                                        'retirement_ai_settings') when the user
+ *                                        includes it in a backup
  *
  * Why a document-per-row model rather than one column per input field: the
  * engine's input shape is deep and still evolving (spouse blocks, events,
@@ -234,6 +237,30 @@ export class AppDatabase {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
       [JSON.stringify(config)],
     );
+  }
+
+  // ---- generic kv (AI chats, AI settings, …) --------------------------------
+
+  /** Read a raw kv value by key (null when absent). Unlike loadConfig this
+   *  returns the stored string verbatim — the caller owns (de)serialization
+   *  and validation, so non-config app data can share the backup file. */
+  getKv(key: string): string | null {
+    const res = this.db.exec(`SELECT value FROM kv WHERE key = ?`, [key]);
+    return res.length > 0 ? (res[0].values[0][0] as string) : null;
+  }
+
+  /** Write a raw kv value (insert-or-replace). */
+  setKv(key: string, value: string): void {
+    this.db.run(
+      `INSERT INTO kv (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      [key, value],
+    );
+  }
+
+  /** Remove a kv key (used to strip AI data from a backup that excludes it). */
+  deleteKv(key: string): void {
+    this.db.run(`DELETE FROM kv WHERE key = ?`, [key]);
   }
 
   // ---- whole-document interchange ------------------------------------------
