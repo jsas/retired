@@ -46,6 +46,7 @@ export interface LoadProgress {
 export async function loadWebLlmEngine(
   modelId: string,
   onProgress?: (p: LoadProgress) => void,
+  signal?: AbortSignal,
 ): Promise<MlcEngine> {
   if (enginePromise && engineModel === modelId) return enginePromise;
   // A different model was requested: drop the old engine (VRAM is scarce).
@@ -53,17 +54,28 @@ export async function loadWebLlmEngine(
 
   engineModel = modelId;
   enginePromise = (async () => {
+    // Cancelling means abandoning the load: web-llm keeps downloading in the
+    // background (browser cache still fills, so a later retry is faster) but
+    // we drop the promise so nothing reports back and the next attempt starts
+    // fresh.
+    if (signal?.aborted) throw new DOMException('Load cancelled', 'AbortError');
     const webllm = await import('@mlc-ai/web-llm');
     const engine = await webllm.CreateMLCEngine(modelId, {
       initProgressCallback: (report: { progress?: number; text?: string }) => {
-        onProgress?.({ progress: report.progress ?? 0, text: report.text ?? '' });
+        if (!signal?.aborted) onProgress?.({ progress: report.progress ?? 0, text: report.text ?? '' });
       },
     });
+    if (signal?.aborted) {
+      // It finished racing a cancel — release it rather than hold VRAM for an
+      // engine the user walked away from.
+      await (engine as unknown as MlcEngine).unload?.();
+      throw new DOMException('Load cancelled', 'AbortError');
+    }
     return engine as unknown as MlcEngine;
   })();
 
-  // If the load fails, clear the cached promise so the next attempt retries
-  // instead of reusing a rejected engine.
+  // If the load fails (or is cancelled), clear the cached promise so the next
+  // attempt retries instead of reusing a rejected engine.
   enginePromise.catch(() => { enginePromise = null; engineModel = null; });
   return enginePromise;
 }

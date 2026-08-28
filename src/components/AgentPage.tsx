@@ -17,7 +17,7 @@ import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '../lib/retirementEngine';
-import { WEBLLM_MODELS, fmtSize, fmtVram, webGpuAvailable, type WebLlmModelChoice } from '../lib/ai/webLlmModels';
+import { WEBLLM_MODELS, fmtSize, webGpuAvailable, type WebLlmModelChoice } from '../lib/ai/webLlmModels';
 import { buildMachineGuide, detectGpuMemoryGB, type MachineGuide } from '../lib/ai/machineGuide';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 
@@ -142,9 +142,12 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
   }
 
   /** Download + compile the chosen local model right now, so the first chat
-   *  doesn't stall. Shared progress UI with the chat-time load path. */
+   *  doesn't stall. Cancellable; shared progress UI with the chat-time load. */
+  const warmAbortRef = useRef<AbortController | null>(null);
   const warmUpLocalModel = async () => {
     if (!connection || connection.provider !== 'webllm') return;
+    const abort = new AbortController();
+    warmAbortRef.current = abort;
     setEngineState('loading');
     setEngineError(null);
     setLoadProgress({ progress: 0, text: 'Downloading the model…' });
@@ -154,15 +157,21 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
         setLoadProgress(p.progress >= 1
           ? { progress: 1, text: 'Compiling the model for your GPU…' }
           : p);
-      });
+      }, abort.signal);
       setEngineState(loadedWebLlmModel() === connection.model ? 'ready' : 'idle');
     } catch (err) {
-      setEngineState('error');
-      setEngineError(err instanceof Error ? err.message : String(err));
+      if (abort.signal.aborted) {
+        setEngineState('idle'); // cancelled — quiet reset, not an error
+      } else {
+        setEngineState('error');
+        setEngineError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setLoadProgress(null);
+      warmAbortRef.current = null;
     }
   };
+  const cancelWarmUp = () => warmAbortRef.current?.abort();
 
   const updateSettings = (mutate: (s: AiSettings) => void) => {
     setSettings(prev => {
@@ -378,7 +387,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
           settings={settings}
           onChange={updateSettings}
           onClose={() => setSetupOpen(false)}
-          engine={{ state: engineState, error: engineError, progress: loadProgress, onUse: () => void warmUpLocalModel() }}
+          engine={{ state: engineState, error: engineError, progress: loadProgress, onUse: () => void warmUpLocalModel(), onCancel: cancelWarmUp }}
         />
       )}
 
@@ -627,7 +636,7 @@ function ConnectionSetup({ settings, onChange, onClose, engine }: {
   settings: AiSettings;
   onChange: (mutate: (s: AiSettings) => void) => void;
   onClose: () => void;
-  engine: { state: 'idle' | 'loading' | 'ready' | 'error'; error: string | null; progress: { progress: number; text: string } | null; onUse: () => void };
+  engine: { state: 'idle' | 'loading' | 'ready' | 'error'; error: string | null; progress: { progress: number; text: string } | null; onUse: () => void; onCancel: () => void };
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [addingProvider, setAddingProvider] = useState<(typeof AI_PROVIDERS)[number]>('gemini');
@@ -774,23 +783,66 @@ function ConnectionSetup({ settings, onChange, onClose, engine }: {
   );
 }
 
-/** Compact local-model chooser: a single row per candidate (radio, label,
- *  sizes, SUGGESTED tag, one-line blurb) with a "Use this model" button that
- *  starts the download immediately, reports progress, and closes the panel
- *  once the model is warm — no more "send a chat to start loading". */
+/** Dead-simple local-model setup. Three states, one at a time:
+ *   1. PICK  — click a model card to select it, one big download button.
+ *   2. LOAD  — the list is gone; only a progress bar and Cancel remain.
+ *   3. READY — a check mark and "Start chatting →" that closes the panel. */
 function LocalModelPicker({ conn, guide, onPatch, engine, onClose }: {
   conn: AiConnection;
   guide: MachineGuide | null;
   onPatch: (id: string, p: Partial<AiConnection>) => void;
-  engine: { state: 'idle' | 'loading' | 'ready' | 'error'; error: string | null; progress: { progress: number; text: string } | null; onUse: () => void };
+  engine: { state: 'idle' | 'loading' | 'ready' | 'error'; error: string | null; progress: { progress: number; text: string } | null; onUse: () => void; onCancel: () => void };
   onClose: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const current = WEBLLM_MODELS.find(m => m.id === conn.model);
   const isCustom = !current;
 
-  // Short list: the recommendation + current pick, or the three smallest when
-  // there's no recommendation to anchor on. "Show all" reveals everything.
+  // ---- 2. LOADING: progress + cancel, nothing else. ----
+  if (engine.state === 'loading') {
+    const pct = engine.progress ? Math.round(engine.progress.progress * 100) : 0;
+    const compiling = engine.progress != null && engine.progress.progress >= 1;
+    return (
+      <div className="mt-3 max-w-md">
+        <div className="text-xs font-semibold text-slate-800 mb-1.5">
+          {compiling ? 'Almost there — finishing setup…' : `Downloading ${current?.label ?? 'the model'}…`}
+        </div>
+        <div className="h-2 bg-slate-200 rounded overflow-hidden">
+          <div className="h-full bg-emerald-500 transition-all" style={{ width: `${compiling ? 100 : pct}%` }} />
+        </div>
+        <div className="flex items-center justify-between mt-1.5">
+          <span className="text-[10px] text-slate-500">
+            {compiling ? 'getting it ready for your computer' : `${pct}% · ${fmtSize(current?.sizeGB ?? 0)} one-time download`}
+          </span>
+          <button
+            onClick={engine.onCancel}
+            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-red-600 font-semibold"
+          >
+            <X size={12} /> Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- 3. READY: confirm + jump to chat. ----
+  if (engine.state === 'ready') {
+    return (
+      <div className="mt-3 flex items-center gap-3">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+          <Check size={14} /> {current?.label ?? 'The model'} is ready — private, on this device
+        </span>
+        <button
+          onClick={onClose}
+          className="px-4 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+        >
+          Start chatting →
+        </button>
+      </div>
+    );
+  }
+
+  // ---- 1. PICK (or recover from an error). ----
   const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
   let visible: WebLlmModelChoice[];
   if (showAll) {
@@ -803,90 +855,55 @@ function LocalModelPicker({ conn, guide, onPatch, engine, onClose }: {
     visible = byVram.slice(0, 3);
   }
 
-  const loading = engine.state === 'loading';
-  const pct = engine.progress ? Math.round(engine.progress.progress * 100) : 0;
-
   return (
     <div className="mt-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+        1 · Pick a model
+      </div>
       <div className="space-y-1">
         {visible.map(m => (
-          <label key={m.id} className={`flex items-center gap-2 px-2 py-1 rounded border text-[11px] cursor-pointer bg-white ${
-            conn.model === m.id ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'
-          }`}>
-            <input
-              type="radio"
-              name="webllm-model"
-              checked={conn.model === m.id}
-              disabled={loading}
-              onChange={() => onPatch(conn.id, { model: m.id })}
-            />
+          <button
+            key={m.id}
+            onClick={() => onPatch(conn.id, { model: m.id })}
+            className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded border text-left text-[11px] bg-white ${
+              conn.model === m.id ? 'border-emerald-500 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
+              conn.model === m.id ? 'border-emerald-600 bg-emerald-500' : 'border-slate-300'
+            }`} />
             <span className="flex-1 min-w-0">
               <span className="font-semibold text-slate-800">{m.label}</span>
-              <span className="text-slate-400"> · {fmtSize(m.sizeGB)} · {fmtVram(m.vramMB)}</span>
+              <span className="text-slate-400"> · {fmtSize(m.sizeGB)}</span>
               {guide?.recommended.id === m.id && (
-                <span className="ml-1.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 rounded px-1 py-0.5">SUGGESTED</span>
+                <span className="ml-1.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 rounded px-1 py-0.5">BEST FOR YOU</span>
               )}
               <span className="block text-[10px] text-slate-500 truncate">{m.blurb}</span>
             </span>
-          </label>
+          </button>
         ))}
         {!showAll && (
-          <button
-            onClick={() => setShowAll(true)}
-            className="text-[11px] text-emerald-700 hover:underline pl-1"
-          >
+          <button onClick={() => setShowAll(true)} className="text-[11px] text-emerald-700 hover:underline pl-1">
             Show all {WEBLLM_MODELS.length} models…
           </button>
         )}
-        <input
-          value={isCustom ? conn.model : ''}
-          onChange={e => onPatch(conn.id, { model: e.target.value })}
-          disabled={loading}
-          placeholder="…or paste any web-llm model id"
-          className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] font-mono bg-white disabled:opacity-50"
-        />
       </div>
 
-      {/* Action row: download/compile now, then jump straight to the chat. */}
-      <div className="mt-2.5">
-        {engine.state === 'ready' ? (
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-              <Check size={14} /> {current?.label ?? 'Model'} is ready on this device
-            </span>
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
-            >
-              Start chatting →
-            </button>
-          </div>
-        ) : loading && engine.progress ? (
-          <div className="max-w-md">
-            <div className="flex items-center gap-2 text-xs text-slate-600 mb-1">
-              <Loader2 size={13} className="animate-spin" />
-              <span className="truncate">{engine.progress.text}</span>
-              {engine.progress.progress < 1 && <span className="ml-auto shrink-0">{pct}%</span>}
-            </div>
-            <div className="h-1.5 bg-slate-200 rounded overflow-hidden">
-              <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={engine.onUse}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
-            >
-              Use this model{current ? ` · ${fmtSize(current.sizeGB)} download` : ''}
-            </button>
-            <span className="text-[10px] text-slate-400">downloads once, runs offline after</span>
-          </div>
-        )}
-        {engine.state === 'error' && (
-          <div className="mt-1.5 text-[11px] text-red-700">{engine.error}</div>
-        )}
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-3 mb-1">
+        2 · Download it (once)
       </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={engine.onUse}
+          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+        >
+          Download {current?.label ?? 'model'}{current ? ` · ${fmtSize(current.sizeGB)}` : ''}
+        </button>
+        <span className="text-[10px] text-slate-400">then it works offline, nothing leaves this device</span>
+      </div>
+      {engine.state === 'error' && (
+        <div className="mt-1.5 text-[11px] text-red-700">{engine.error}</div>
+      )}
     </div>
   );
 }
