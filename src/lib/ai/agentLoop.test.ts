@@ -259,4 +259,23 @@ describe('prompt-protocol tools (local models)', () => {
     const safety = events.find(e => e.type === 'error');
     expect(safety && (safety as { message: string }).message).toContain('safety limit');
   });
+
+  it('a mid-stream engine crash surfaces as an error event, not a stuck spinner', async () => {
+    // Simulates the GPU dying partway through (the mapAsync failure) — the
+    // chat generator throws, the loop must emit an 'error' the UI can render.
+    const chat = async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: 'text', text: 'partial…' };
+      throw new Error('GPU device lost');
+    };
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'check',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const err = events.find(e => e.type === 'error');
+    expect(err).toBeTruthy();
+    expect((err as { message: string }).message).toContain('GPU device lost');
+    // The loop terminated (no infinite hang waiting for a done that never came).
+    expect(events.some(e => e.type === 'done')).toBe(false);
+  });
 });

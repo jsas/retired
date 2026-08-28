@@ -11,12 +11,19 @@ import type { StreamEvent } from './providers';
 // is reset per test by clearing the provider's cached engine.
 let scriptedChunks: Array<Record<string, unknown>> = [];
 let interruptCalls = 0;
+let crashAfter: string | null = null; // when set, the stream throws after one chunk
 
 vi.mock('@mlc-ai/web-llm', () => ({
   CreateMLCEngine: async () => ({
     chat: {
       completions: {
-        create: async () => (async function* () { yield* scriptedChunks; })(),
+        create: async () => (async function* () {
+          if (crashAfter) {
+            yield { choices: [{ delta: { content: crashAfter } }] };
+            throw new Error("Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
+          }
+          yield* scriptedChunks;
+        })(),
       },
     },
     interruptGenerate: async () => { interruptCalls++; },
@@ -134,5 +141,17 @@ describe('streamWebLlm', () => {
     const events = await collect(controller.signal);
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'aborted' });
     expect(interruptCalls).toBeGreaterThan(0);
+  });
+
+  it('translates a mid-stream GPU crash (mapAsync) into plain language', async () => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    crashAfter = 'partial…'; // engine dies mid-generation like the real mapAsync failure
+    await expect(async () => {
+      for await (const _ of streamWebLlm(conn, {
+        system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
+      })) { /* drain */ }
+    }).rejects.toThrow(/graphics memory/);
+    crashAfter = null;
   });
 });

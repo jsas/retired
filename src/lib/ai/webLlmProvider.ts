@@ -99,6 +99,21 @@ export function loadedWebLlmModel(): string | null {
   return engineModel;
 }
 
+/** Translate engine failures into plain, actionable language. Raw WebGPU
+ *  errors ("mapAsync", "device lost") mean nothing to a non-technical user. */
+function translateLocalError(err: unknown): ProviderError {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/mapAsync|device.?lost|out of memory|was unmapped|GPUBuffer/i.test(msg)) {
+    return new ProviderError(
+      'The local model crashed while answering — this usually means it ran out of graphics ' +
+      'memory (the question plus your plan data was too big for this model on this GPU). ' +
+      'Try a shorter question, or switch to a smaller/larger model in Connections. If it keeps ' +
+      'happening, a cloud provider (Advanced) is more reliable on this computer.',
+    );
+  }
+  return new ProviderError(`Local model error: ${msg.slice(0, 300)}`);
+}
+
 /** Serialize the provider-neutral history into OpenAI-style messages. */
 function toMessages(system: string, messages: ChatMessage[]): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [{ role: 'system', content: system }];
@@ -143,6 +158,10 @@ export async function* streamWebLlm(
       messages: toMessages(req.system, req.messages),
       stream: true,
       max_tokens: req.maxTokens ?? 4096,
+      // Bound the context: the plan digest + tool catalog + a long user answer
+      // can exceed the KV cache a small model was compiled for, which is the
+      // main cause of mid-generation GPU crashes (mapAsync / device lost).
+      context_window_size: 8192,
       temperature: 0.3, // math/reasoning models: keep them deterministic-ish
       // Small quantized models occasionally get stuck emitting one token
       // ("000000…") at low temperature; a mild penalty breaks the loop.
@@ -150,7 +169,7 @@ export async function* streamWebLlm(
       frequency_penalty: 0.1,
     });
   } catch (err) {
-    throw new ProviderError(`Local model error: ${err instanceof Error ? err.message : String(err)}`);
+    throw translateLocalError(err);
   }
 
   let stopped = false;
@@ -172,6 +191,10 @@ export async function* streamWebLlm(
       if (text) yield { type: 'text', text };
       if (delta?.finish_reason) finishReason = delta.finish_reason;
     }
+  } catch (err) {
+    // The engine can die mid-stream (GPU device lost, context overflow) —
+    // translate to something a person can act on instead of a raw WebGPU dump.
+    throw translateLocalError(err);
   } finally {
     req.signal?.removeEventListener('abort', onAbort);
   }
