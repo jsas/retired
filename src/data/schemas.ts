@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type {
   RetirementInputs, SpouseInputs, CashEvent, Pension, SpendingBand,
-  ReverseMortgage, WithdrawalAccount,
+  ReverseMortgage, WithdrawalAccount, EmploymentIncome,
 } from '../lib/retirementEngine';
 import type { AppConfig, TaxTable } from '../lib/appConfig';
 import type { Scenario } from '../lib/scenarioStorage';
@@ -59,6 +59,17 @@ export const spendingBandSchema = z.object({
   pctOfBase: z.number(),
 }) satisfies z.ZodType<SpendingBand>;
 
+export const employmentIncomeSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  annualAmount: z.number(),
+  startAge: z.number(),
+  endAge: z.number(),
+  destAccount: z.enum(['rrsp', 'tfsa', 'taxable', 'cash']),
+  topUpSpending: z.boolean(),
+  indexedToCpi: z.boolean(),
+}) satisfies z.ZodType<EmploymentIncome>;
+
 export const reverseMortgageSchema = z.object({
   enabled: z.boolean(),
   homeValue: z.number(),
@@ -94,6 +105,7 @@ export const spouseSchema = z.object({
   desiredSpending: z.number(),
   withdrawalOrder: z.array(withdrawalAccount).optional(),
   pensions: z.array(pensionSchema).optional(),
+  employment: z.array(employmentIncomeSchema).optional(),
   events: z.array(cashEventSchema).optional(),
   spendingBands: z.array(spendingBandSchema).optional(),
   reverseMortgage: reverseMortgageSchema.optional(),
@@ -127,6 +139,7 @@ export const retirementInputsSchema = z.object({
   spouse: spouseSchema.optional(),
   spouseSource: spouseSourceSchema.optional(),
   pensions: z.array(pensionSchema).optional(),
+  employment: z.array(employmentIncomeSchema).optional(),
   reverseMortgage: reverseMortgageSchema.optional(),
 }) satisfies z.ZodType<RetirementInputs>;
 

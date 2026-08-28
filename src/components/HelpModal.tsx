@@ -122,6 +122,16 @@ const SECTIONS: HelpSection[] = [
         )
       },
       {
+        term: 'Employment income (semi- / post-retirement work)',
+        body: (
+          <>
+            <P>The Employment Income section models <strong>earned income</strong> — a part-time job or consulting gig in the early retirement years. Unlike a pension this is wages: it stacks on top of CPP/OAS/pension for tax (taxed at your marginal rate), counts toward the OAS clawback, and reduces GIS. Set a gross $/yr and a start–end age window (inclusive).</P>
+            <P>Two modes per job. With <strong>tops up spending</strong> on, the after-tax pay covers spending first — so portfolio withdrawals shrink dollar-for-dollar and the savings keep compounding; any excess over the year's need is saved. With it off, the whole after-tax pay is saved. Either way the net lands in the account you pick (TFSA / RRSP / Taxable / Cash). Tick <em>indexed</em> if the pay grows with CPI.</P>
+            <P>The Optimize tab's Strategy Explorer suggests work stints automatically: fixed rows (e.g. "$10k/yr to 70") and, when the plan runs a shortfall, a gap-targeted stint sized to the first depleted window. The spouse plan has its own employment list, and a spouse's earnings count toward the couple's GIS.</P>
+          </>
+        )
+      },
+      {
         term: 'Cash inflow (house sale, inheritance…)',
         body: <P>A lump sum landing in the chosen account at the chosen age — taxable, TFSA, RRSP or cash cushion. It appears in that year's balances and grows thereafter. Switch the event to <em>Yearly</em> and give a start–end age range to repeat the same amount every year (e.g. rental income for a few years).</P>
       },

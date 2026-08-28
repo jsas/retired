@@ -68,6 +68,10 @@ export interface RetirementInputs {
   // DB / bridge pensions: taxable income stacked with CPP/OAS. Bridge benefits
   // have endAge set; lifetime pensions leave it null.
   pensions?: Pension[];
+  // Semi-retirement / post-retirement work: earned income, taxed in the year
+  // earned, then saved (destAccount) or used to top up spending. See
+  // EmploymentIncome. Absent/empty = not working.
+  employment?: EmploymentIncome[];
   // Optional reverse mortgage: borrow against home equity via scheduled draws
   // and/or a last-resort top-up. Proceeds are tax-free (no GIS/clawback impact);
   // the loan compounds against the home and erodes net equity.
@@ -97,6 +101,7 @@ export interface SpouseInputs {
   desiredSpending: number; // the spouse's own after-tax income goal (today's $)
   withdrawalOrder?: WithdrawalAccount[];
   pensions?: Pension[]; // the spouse's own DB / bridge pensions
+  employment?: EmploymentIncome[]; // the spouse's own work income
   // Full-person parity fields. Optional so scenarios saved before the spouse
   // carried them still parse; absent = none (an empty list / no reverse
   // mortgage). These make the spouse a first-class person: their own one-time
@@ -159,6 +164,26 @@ export interface Pension {
   indexedToCpi: boolean;  // grow with CPI (when indexTaxTables is on) vs flat nominal
 }
 
+/**
+ * Semi-retirement / post-retirement work. Earned income — taxed in the year
+ * it's earned (stacks with CPP/OAS/pensions/RRIF for the marginal rate, OAS
+ * clawback and GIS), then the after-tax net either:
+ *  - topUpSpending=false (save mode): lands in destAccount and compounds, or
+ *  - topUpSpending=true  (top-up mode, RM-style): covers that year's spending
+ *    first (displacing portfolio withdrawals); only net above the need is saved.
+ * Contribution-room limits are ignored, consistent with the rest of the app.
+ */
+export interface EmploymentIncome {
+  id: string;
+  label: string;
+  annualAmount: number;   // gross $/yr at startAge, today's dollars
+  startAge: number;
+  endAge: number;         // inclusive — work through this age
+  destAccount: 'rrsp' | 'tfsa' | 'taxable' | 'cash';
+  topUpSpending: boolean;
+  indexedToCpi: boolean;
+}
+
 export interface SpendingBand {
   fromAge: number;      // applies from this age until the next band
   pctOfBase: number;    // 0..1+ fraction of desiredSpending (e.g. 1, 0.85, 0.7)
@@ -188,7 +213,7 @@ export interface YearCalc {
   cppMonthlyAtStart: number;   // age-65 CPP amount × the start-age multiplier
   otherGross: number;          // cpp + oas + pension (taxable benefit income)
   netBenefits: number;         // after-tax value of otherGross on its own
-  neededAfterTax: number;      // spending target − netBenefits (≥0)
+  neededAfterTax: number;      // spending target − netBenefits − top-up employment net (≥0)
   // RRIF-minimum pass (0 before the conversion age).
   rrifMinNet: number;          // after-tax cash the mandatory minimum contributed
   rrifMinExcess: number;       // excess over need, redeposited into taxable
@@ -203,8 +228,8 @@ export interface YearCalc {
   gainsFraction: number;       // embedded-gain fraction at draw time
   taxableAcb: number;          // adjusted cost base at year end
   // Tax decomposition.
-  totalNetIncome: number;      // otherGross + registeredGross + gains×inclusion
-  taxOnBenefits: number;       // tax(otherGross) — subtracted to isolate withdrawal tax
+  totalNetIncome: number;      // otherGross + employment + registeredGross + gains×inclusion
+  taxOnBenefits: number;       // tax(otherGross) — the benefits-only share of the year's tax
   // Transfer events (account→account / inter-spousal) that fired this year.
   // Each is shown on the math page so the full path is visible: gross amount
   // leaving the source, the tax on a registered source, and the net landing in
@@ -270,6 +295,12 @@ export interface YearlyBreakdown {
   oasIncome: number;
   gisIncome: number;
   pensionIncome: number; // DB / bridge pension gross income this year (taxable)
+  // Employment (semi-retirement work) this year. gross stacks for tax; net is
+  // the after-tax amount saved and/or used to top up spending. Optional so
+  // older fixtures compile; the engine always sets them (0 when not working).
+  employmentGross?: number;
+  employmentTax?: number;
+  employmentNet?: number;
   // Reverse mortgage (undefined when the feature is off). homeValue appreciates,
   // loanBalance compounds with interest + draws, netHomeEquity = value − loan.
   homeValue?: number;
@@ -364,6 +395,7 @@ export function calculatePerson(
       oasYearsInCanada: number;
       currentAge: number;
       pensions?: Pension[];
+      employment?: EmploymentIncome[];
     };
     // After-tax amounts the PARTNER's transfer events sent into THIS person's
     // accounts (inter-spousal transfers), keyed by THIS person's age. Injected
@@ -390,7 +422,8 @@ export function calculatePerson(
     oasStartAge,
     oasYearsInCanada,
     withdrawalOrder,
-    pensions
+    pensions,
+    employment
   } = person;
   const { maxAge, investmentReturn, provinceCode } = shared;
 
@@ -400,6 +433,7 @@ export function calculatePerson(
       : ['tfsa', 'taxable', 'rrsp'];
 
   const pensionList: Pension[] = Array.isArray(pensions) ? pensions : [];
+  const employmentList: EmploymentIncome[] = Array.isArray(employment) ? employment : [];
 
   const cushionRate = config.engine.cashCushionRate;
   const rrifAge = config.engine.rrifConversionAge;
@@ -478,6 +512,11 @@ export function calculatePerson(
       if (spouseAge < p.startAge) continue;
       if (p.endAge != null && spouseAge > p.endAge) continue;
       fixed += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+    // The spouse's employment income counts toward the couple's GIS base too.
+    for (const e of spouseCtx.employment ?? []) {
+      if (spouseAge < e.startAge || spouseAge > e.endAge) continue;
+      fixed += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
     const hasOas = spouseCtx.oasStartAge != null
       && spouseAge >= spouseCtx.oasStartAge
@@ -925,13 +964,43 @@ export function calculatePerson(
       pensionGross += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
 
-    const otherGross = cppGross + oasGross + pensionGross;
+    // Employment income: earned, so it stacks for tax like the benefits and is
+    // taxed in the year it's earned (regardless of what the money is then used
+    // for). Split by mode: top-up net covers spending first (RM-style), save
+    // net is deposited into its account below.
+    let employmentTopUpGross = 0;
+    let employmentSaveGross = 0;
+    const employmentSaveActive: EmploymentIncome[] = [];
+    for (const e of employmentList) {
+      if (age < e.startAge || age > e.endAge) continue;
+      const amt = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+      if (e.topUpSpending) employmentTopUpGross += amt;
+      else { employmentSaveGross += amt; employmentSaveActive.push(e); }
+    }
+    const employmentGross = employmentTopUpGross + employmentSaveGross;
+    const otherGrossNoEmployment = cppGross + oasGross + pensionGross;
+    const employmentTax = employmentGross > 0
+      ? Math.max(0,
+          calculateTax(otherGrossNoEmployment + employmentGross, provinceCode, yearConfig).totalTax
+          - calculateTax(otherGrossNoEmployment, provinceCode, yearConfig).totalTax)
+      : 0;
+    const employmentNet = employmentGross - employmentTax;
+    // Apportion the net between the two modes pro-rata to their gross.
+    const employmentTopUpNet = employmentGross > 0 ? employmentNet * (employmentTopUpGross / employmentGross) : 0;
+    const employmentSaveNet = employmentGross > 0 ? employmentNet * (employmentSaveGross / employmentGross) : 0;
 
-    // After-tax value of the benefits on their own.
+    const otherGross = cppGross + oasGross + pensionGross;
+    // For all marginal-rate math below, benefits and employment stack together:
+    // a registered draw or realized gain lands on TOP of the year's wages, so
+    // grossing up on benefits alone would under-estimate withdrawal tax.
+    const stackBase = otherGross + employmentGross;
+
+    // After-tax value of the benefits on their own (employment taxed above).
     const netBenefits = calculateTax(otherGross, provinceCode, yearConfig).takeHome;
 
     // What the portfolio must supply after tax so total take-home = spending.
-    const neededAfterTax = Math.max(0, yearSpending - netBenefits);
+    // Top-up employment covers part of the need before the portfolio is drawn.
+    const neededAfterTax = Math.max(0, yearSpending - netBenefits - employmentTopUpNet);
 
     let actualWithdrawals = 0;  // gross dollars leaving registered accounts + raw dollars elsewhere
     let registeredGross = 0;    // RRSP/RRIF gross withdrawn this year (taxable)
@@ -961,7 +1030,7 @@ export function calculatePerson(
     // an inter-spousal landing is mirrored by the household pass.
     for (const ev of eventsAt(age)) {
       if (!(ev.from || ev.to)) continue;
-      const t = applyTransferEvent(ev, otherGross + registeredGross, yearConfig, deposit, age);
+      const t = applyTransferEvent(ev, stackBase + registeredGross, yearConfig, deposit, age);
       if (!t) continue;
       (calc.transfers ??= []).push(t);
       const a = ev.from?.kind === 'account' ? ev.from.account : null;
@@ -993,7 +1062,8 @@ export function calculatePerson(
       registeredGross += minimum;
       wd.rrifMin += minimum;
 
-      const netFromRrif = calculateTax(minimum + otherGross, provinceCode, yearConfig).takeHome - netBenefits;
+      const netFromRrif = calculateTax(minimum + stackBase, provinceCode, yearConfig).takeHome
+        - calculateTax(stackBase, provinceCode, yearConfig).takeHome;
       calc.rrifMinNet = netFromRrif;
 
       const excess = netFromRrif - remainingAfterTaxNeed;
@@ -1007,8 +1077,9 @@ export function calculatePerson(
     calc.needAfterRrifMin = remainingAfterTaxNeed;
 
     // Gross income already stacking into the brackets this year (benefits +
-    // any RRIF minimum). Additional registered draws are taxed on top of it.
-    const stackedGross = () => otherGross + registeredGross;
+    // employment + any RRIF minimum). Additional registered draws are taxed on
+    // top of it.
+    const stackedGross = () => stackBase + registeredGross;
 
     // GIS: tax-free, based on income EXCLUDING OAS itself (CPP + pensions +
     // registered draws + realized capital gains). Computed after the mandatory
@@ -1026,12 +1097,12 @@ export function calculatePerson(
         const sp = spouseFixedIncomeAt(age);
         return gisAnnualCouple(
           registeredGross + capitalGains,
-          cppGross + pensionGross + sp.fixed,
+          cppGross + pensionGross + employmentGross + sp.fixed,
           sp.hasOas,
           yearConfig
         );
       }
-      return gisAnnual(cppGross + pensionGross + registeredGross + capitalGains, yearConfig);
+      return gisAnnual(stackBase + registeredGross + capitalGains - oasGross, yearConfig);
     };
     let gisGross = gisAt();
     remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - gisGross);
@@ -1126,6 +1197,35 @@ export function calculatePerson(
     }
     calc.needFinal = remainingAfterTaxNeed;
 
+    // Employment net is saved. Save-mode net goes to its account directly;
+    // top-up net that exceeded the year's spending need is saved too (the
+    // rest already displaced withdrawals). Deposit at end of year, after
+    // withdrawals, as after-tax money.
+    {
+      const afterBenefits = Math.max(0, yearSpending - netBenefits);
+      const topUpExcess = Math.max(0, employmentTopUpNet - afterBenefits);
+      // Save-mode: split the save net across active save jobs by gross share.
+      const perJob: Array<{ e: EmploymentIncome; net: number }> = [];
+      for (const e of employmentSaveActive) {
+        const g = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+        perJob.push({ e, net: employmentSaveGross > 0 ? employmentSaveNet * (g / employmentSaveGross) : 0 });
+      }
+      const depositEmployment = (e: EmploymentIncome, amt: number) => {
+        if (amt <= 0) return;
+        if (e.destAccount === 'rrsp') { rrsp += amt; deposit.rrsp += amt; }
+        else if (e.destAccount === 'tfsa') { tfsa += amt; deposit.tfsa += amt; }
+        else if (e.destAccount === 'cash') { cashCushion += amt; deposit.cash += amt; }
+        else { taxable += amt; taxableAcb += amt; deposit.taxable += amt; }
+      };
+      for (const { e, net } of perJob) depositEmployment(e, net);
+      // Top-up excess goes to the first top-up job's account (or taxable).
+      if (topUpExcess > 0) {
+        const firstTopUp = employmentList.find(e => e.topUpSpending && age >= e.startAge && age <= e.endAge);
+        if (firstTopUp) depositEmployment(firstTopUp, topUpExcess);
+        else { taxable += topUpExcess; taxableAcb += topUpExcess; deposit.taxable += topUpExcess; }
+      }
+    }
+
     // Recompute GIS now that the year's discretionary draws (and the capital
     // gains they realized) are known. If the draws clawed GIS back further
     // than the initial estimate, the overpayment is returned to the taxable
@@ -1140,10 +1240,13 @@ export function calculatePerson(
       }
     }
 
-    // Single consistent tax figure: total tax on (benefits + registered
-    // withdrawals) minus tax on benefits alone, plus the OAS recovery tax
-    // (clawback) when total net income crosses the threshold.
-    const totalNetIncome = otherGross + registeredGross + capitalGains * inclusion;
+    // Single consistent tax figure: total tax on (benefits + employment +
+    // registered withdrawals) minus tax on (benefits + employment) alone, plus
+    // the OAS recovery tax (clawback) when total net income crosses the
+    // threshold. Employment is taxed exactly once: it's inside totalNetIncome
+    // (so brackets and clawback see it) and its marginal share — this figure
+    // minus what a no-employment year would report — equals employmentTax.
+    const totalNetIncome = otherGross + employmentGross + registeredGross + capitalGains * inclusion;
     const oasClawback = oasGross > 0
       ? Math.min(oasGross, Math.max(0, totalNetIncome - yearConfig.oas.clawbackThreshold) * yearConfig.oas.clawbackRate)
       : 0;
@@ -1214,6 +1317,9 @@ export function calculatePerson(
       oasIncome: oasGross,
       gisIncome: gisGross,
       pensionIncome: pensionGross,
+      employmentGross,
+      employmentTax,
+      employmentNet,
       splitEligibleIncome,
       unsplitNetIncome,
       detail: {
@@ -1311,6 +1417,7 @@ export function calculateHousehold(
     oasYearsInCanada: sp.oasYearsInCanada,
     currentAge: sp.currentAge,
     pensions: sp.pensions,
+    employment: sp.employment,
   } : undefined;
 
   // --- Re-home mis-filed transfer events -----------------------------------
@@ -1380,6 +1487,7 @@ export function calculateHousehold(
         oasYearsInCanada: primaryPerson.oasYearsInCanada,
         currentAge: primaryPerson.currentAge,
         pensions: primaryPerson.pensions,
+        employment: primaryPerson.employment,
       },
       ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
     });
@@ -1409,6 +1517,7 @@ export function calculateHousehold(
           oasYearsInCanada: primaryPerson.oasYearsInCanada,
           currentAge: primaryPerson.currentAge,
           pensions: primaryPerson.pensions,
+          employment: primaryPerson.employment,
         },
         ...(pToS2.length > 0 ? { inboundDeposits: pToS2 } : {}),
       });
@@ -1500,6 +1609,9 @@ export function combineHouseholdBreakdown(
       oasIncome: py.oasIncome + sy.oasIncome,
       gisIncome: py.gisIncome + sy.gisIncome,
       pensionIncome: py.pensionIncome + sy.pensionIncome,
+      employmentGross: (py.employmentGross ?? 0) + (sy.employmentGross ?? 0),
+      employmentTax: (py.employmentTax ?? 0) + (sy.employmentTax ?? 0),
+      employmentNet: (py.employmentNet ?? 0) + (sy.employmentNet ?? 0),
       ...rm,
       splitTransferred: undefined,
       detail: undefined,

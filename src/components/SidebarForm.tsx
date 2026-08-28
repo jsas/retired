@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X } from 'lucide-react';
-import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage } from '../lib/retirementEngine';
+import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X, Briefcase } from 'lucide-react';
+import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage, EmploymentIncome } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
 import { baselineSpouse } from '../lib/householdTypes';
 import type { AppConfig } from '../lib/appConfig';
@@ -39,6 +39,7 @@ const formatMoney = (v: number) =>
 let eventSeq = 0;
 const newEventId = () => `ev-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
 const newPensionId = () => `pen-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
+const newEmploymentId = () => `emp-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
 
 // Reusable DB/bridge-pension list editor (primary plan and spouse plan both
 // render one). Compact card per pension: label, $/yr, start/end ages, indexed.
@@ -109,6 +110,103 @@ function PensionList({ pensions, onChange }: { pensions: Pension[]; onChange: (n
         className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
       >
         <Plus size={12} /> Add pension
+      </button>
+    </div>
+  );
+}
+
+// Reusable employment-income list editor (primary plan and spouse plan both
+// render one). Compact card per job: label, $/yr, start/end ages, destination
+// account, top-up and indexed toggles. Unlike a pension this is EARNED income:
+// it stacks for tax, feeds OAS clawback and GIS reduction, and the after-tax
+// net is either saved (destAccount) or used to top up spending first.
+function EmploymentList({ employment, onChange }: { employment: EmploymentIncome[]; onChange: (next: EmploymentIncome[]) => void }) {
+  const update = (i: number, patch: Partial<EmploymentIncome>) =>
+    onChange(employment.map((e, j) => (j === i ? { ...e, ...patch } : e)));
+  return (
+    <div className="space-y-1.5">
+      {employment.map((e, i) => (
+        <div key={e.id} className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={e.label}
+              placeholder="Label (e.g. Part-time consulting)"
+              onChange={(ev) => update(i, { label: ev.target.value })}
+              className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <button
+              onClick={() => onChange(employment.filter((_, j) => j !== i))}
+              className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+              title="Remove job"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              step="1000"
+              value={e.annualAmount}
+              title="Gross annual pay ($/yr, before tax, today's dollars)"
+              onChange={(ev) => update(i, { annualAmount: Math.max(0, parseInt(ev.target.value) || 0) })}
+              className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">$/yr</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              value={e.startAge}
+              title="Start age"
+              onChange={(ev) => update(i, { startAge: parseInt(ev.target.value) || e.startAge })}
+              className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">to</span>
+            <input
+              type="number"
+              value={e.endAge}
+              title="End age (last working year, inclusive)"
+              onChange={(ev) => update(i, { endAge: parseInt(ev.target.value) || e.endAge })}
+              className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <select
+              value={e.destAccount}
+              title="Where the after-tax pay is saved"
+              onChange={(ev) => update(i, { destAccount: ev.target.value as EmploymentIncome['destAccount'] })}
+              className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="tfsa">TFSA</option>
+              <option value="rrsp">RRSP</option>
+              <option value="taxable">Taxable</option>
+              <option value="cash">Cash</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] text-neutral-400">
+            <label className="flex items-center gap-1 cursor-pointer" title="Use the after-tax pay to cover spending first (displaces withdrawals); any excess is saved">
+              <input
+                type="checkbox"
+                checked={e.topUpSpending}
+                onChange={(ev) => update(i, { topUpSpending: ev.target.checked })}
+              />
+              tops up spending
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer" title="Grow with CPI (when table indexation is on)">
+              <input
+                type="checkbox"
+                checked={e.indexedToCpi}
+                onChange={(ev) => update(i, { indexedToCpi: ev.target.checked })}
+              />
+              indexed
+            </label>
+          </div>
+        </div>
+      ))}
+      <button
+        onClick={() => onChange([...employment, { id: newEmploymentId(), label: 'Part-time work', annualAmount: 15000, startAge: 65, endAge: 70, destAccount: 'tfsa', topUpSpending: true, indexedToCpi: false }])}
+        className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
+      >
+        <Plus size={12} /> Add job
       </button>
     </div>
   );
@@ -856,6 +954,17 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
           </p>
         </CollapsibleSection>
 
+        {/* Employment income (semi-/post-retirement work) */}
+        <CollapsibleSection id="employment" icon={<Briefcase size={14} />} title="Employment Income" open={isOpen('employment')} onToggle={toggleSection}>
+          <EmploymentList employment={inputs.employment ?? []} onChange={(next) => updateField('employment', next)} />
+          <p className="text-[10px] text-neutral-500 leading-snug">
+            Semi- or post-retirement work: earned income taxed on top of your benefits (and counted
+            for OAS clawback and GIS). With "tops up spending" the after-tax pay covers spending
+            first — displacing withdrawals — and any excess is saved; otherwise the whole after-tax
+            pay is saved into the chosen account. "indexed" grows with CPI when table indexation is on.
+          </p>
+        </CollapsibleSection>
+
         {/* Cash Events (one-time & recurring) */}
         <CollapsibleSection id="events" icon={<CalendarClock size={14} />} title="Cash Events" open={isOpen('events')} onToggle={toggleSection}>
           {renderEventList(
@@ -1127,6 +1236,10 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
               <div>
                 <label className={LABEL_CLS}>Spouse pensions</label>
                 <PensionList pensions={inputs.spouse.pensions ?? []} onChange={(next) => updateSpouse({ pensions: next })} />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Spouse employment income</label>
+                <EmploymentList employment={inputs.spouse.employment ?? []} onChange={(next) => updateSpouse({ employment: next })} />
               </div>
               <div>
                 <label className={LABEL_CLS}>Spouse cash events</label>

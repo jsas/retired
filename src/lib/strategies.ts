@@ -15,7 +15,7 @@
 // ending balance shown for context.
 
 import { calculateHousehold } from './retirementEngine';
-import type { RetirementInputs, RetirementResults, WithdrawalAccount } from './retirementEngine';
+import type { RetirementInputs, RetirementResults, WithdrawalAccount, EmploymentIncome } from './retirementEngine';
 import type { AppConfig } from './appConfig';
 
 export interface StrategyResult {
@@ -75,7 +75,7 @@ interface StrategySpec {
   patch: Partial<RetirementInputs>;
 }
 
-function buildStrategies(inputs: RetirementInputs): StrategySpec[] {
+function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategySpec[] {
   const specs: StrategySpec[] = [];
   const cppNow = inputs.cppStartAge ?? 65;
   const oasNow = inputs.oasStartAge ?? 65;
@@ -161,6 +161,63 @@ function buildStrategies(inputs: RetirementInputs): StrategySpec[] {
       });
     }
   }
+
+  // Part-time work: a stint of earned income in the early retirement years.
+  // Top-up mode means the after-tax pay displaces portfolio withdrawals dollar
+  // for dollar, so the savings keep compounding. Earned income stacks for tax
+  // (and counts for OAS clawback / GIS), which is exactly the trade-off worth
+  // surfacing. Fixed rows plus, when the plan runs a shortfall, a gap-targeted
+  // stint sized to the first depleted window.
+  const existingJobs = inputs.employment ?? [];
+  const retire = inputs.retirementAge;
+  const mkJob = (id: string, label: string, amount: number, startAge: number, endAge: number): EmploymentIncome => ({
+    id, label, annualAmount: amount, startAge, endAge,
+    destAccount: 'tfsa', topUpSpending: true, indexedToCpi: false,
+  });
+  const addJob = (specId: string, name: string, description: string, job: EmploymentIncome) => {
+    // Skip if an identical stint is already in the plan.
+    if (existingJobs.some(e => e.annualAmount === job.annualAmount && e.startAge === job.startAge && e.endAge === job.endAge)) return;
+    specs.push({ id: specId, name, description, patch: { employment: [...existingJobs, job] } });
+  };
+  if (retire + 5 <= inputs.maxAge) {
+    addJob(
+      `work-10k-${retire}-${retire + 5}`,
+      `Part-time work $10k/yr to ${retire + 5}`,
+      `Earn $10,000/yr from ${retire} to ${retire + 5}. After tax it tops up spending first, so portfolio draws shrink and keep compounding.`,
+      mkJob('opt-work-10k', 'Part-time work', 10000, retire, retire + 5),
+    );
+  }
+  if (retire + 10 <= inputs.maxAge) {
+    addJob(
+      `work-20k-${retire}-${retire + 10}`,
+      `Part-time work $20k/yr to ${retire + 10}`,
+      `Earn $20,000/yr from ${retire} to ${retire + 10}. Bigger bridge: the after-tax pay displaces withdrawals through the early years.`,
+      mkJob('opt-work-20k', 'Part-time work', 20000, retire, retire + 10),
+    );
+  }
+  // Gap-targeted: if the current plan depletes, size a stint to the first
+  // shortfall window (cap at the window length and a sane annual amount).
+  {
+    const r = calculateHousehold(inputs, config);
+    const gap = r.yearlyBreakdown.filter(y => (y.shortfall ?? 0) > 0.5);
+    if (gap.length > 0) {
+      const start = gap[0].age;
+      // Contiguous window from the first shortfall year.
+      let end = start;
+      while (end + 1 <= inputs.maxAge && gap.some(y => y.age === end + 1)) end++;
+      const worst = Math.max(...gap.map(y => y.shortfall ?? 0));
+      // Gross up the worst shortfall for tax (~30% marginal) so the NET covers it.
+      const amount = Math.min(60000, Math.ceil((worst / 0.7) / 1000) * 1000);
+      if (amount > 0 && start <= end) {
+        addJob(
+          `work-gap-${start}-${end}`,
+          `Work to cover the shortfall (${start}–${end})`,
+          `The plan runs short from age ${start}. Earning about $${amount.toLocaleString()}/yr through ${end} (≈$${Math.round(amount * 0.7).toLocaleString()} after tax) covers the worst gap year (${Math.round(worst).toLocaleString()}).`,
+          mkJob('opt-work-gap', 'Work to cover the gap', amount, start, end),
+        );
+      }
+    }
+  }
   return specs;
 }
 
@@ -191,7 +248,7 @@ export function runStrategies(inputs: RetirementInputs, config: AppConfig): Stra
     id: 'baseline', name: 'Current plan', description: 'Your settings as entered.', patch: {},
   });
 
-  const strategies = buildStrategies(inputs).map(spec => runOne(inputs, config, spec));
+  const strategies = buildStrategies(inputs, config).map(spec => runOne(inputs, config, spec));
   for (const s of strategies) s.deltaSpending = s.sustainableSpending - baseline.sustainableSpending;
   baseline.deltaSpending = 0;
 
