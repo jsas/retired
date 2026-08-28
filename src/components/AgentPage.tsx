@@ -87,7 +87,11 @@ interface Turn {
   reasoning?: string;
   tools: ToolActivity[];
   changes: PendingChange[];
-  state?: 'streaming' | 'done' | 'aborted' | 'truncated' | 'error';
+  /** 'needs-decision': the loop is PAUSED on a proposed change awaiting the
+   *  user's Accept/Decline. Distinct from 'streaming' (which means the model
+   *  is actively replying) so a reload doesn't leave the bubble looking busy
+   *  forever, and so the spinner clears while the card waits. */
+  state?: 'streaming' | 'done' | 'aborted' | 'truncated' | 'error' | 'needs-decision';
 }
 
 let turnSeq = 0;
@@ -171,6 +175,9 @@ function turnToMessage(t: Turn): ThreadMessageLike {
   if (t.role === 'user') return base;
   const status =
     t.state === 'streaming' ? ({ type: 'running' } as const)
+    // Paused-on-approval is NOT running: a 'running' status makes assistant-ui's
+    // default renderer paint its ● in-progress bullet, and the action bar hides.
+    : t.state === 'needs-decision' ? ({ type: 'complete', reason: 'stop' } as const)
     : t.state === 'error' ? ({ type: 'incomplete', reason: 'error' } as const)
     : t.state === 'aborted' ? ({ type: 'incomplete', reason: 'cancelled' } as const)
     : t.state === 'truncated' ? ({ type: 'incomplete', reason: 'length' } as const)
@@ -521,19 +528,33 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   /**
    * Run one assistant turn: append (or replace) a streaming assistant bubble
    * and drive the agent loop against the given prior history. Shared by send
-   * (new user message) and regenerate (re-run after an existing user message).
+   * (new user message), regenerate (re-run after an existing user message),
+   * and resume (continue a turn paused on a proposed change).
+   *
+   * `resumeTurnId` continues the EXISTING paused turn instead of appending a
+   * new bubble: the user just clicked Accept/Decline on a change card from a
+   * previous session (or after an accidental cancel), so the loop must pick up
+   * after that proposal rather than start a fresh turn that would re-propose.
    */
-  const runTurn = async (priorTurns: Turn[], content: string, appendUser: boolean) => {
+  const runTurn = async (priorTurns: Turn[], content: string, appendUser: boolean, resumeTurnId?: string) => {
     if (!content || running || !connection) return;
     setRunning(true);
     statsRef.current = { start: Date.now(), first: null, chars: 0 };
     setTps(null);
 
+    const resuming = resumeTurnId != null;
     const userTurn: Turn | null = appendUser
       ? { id: newTurnId(), role: 'user', text: content, tools: [], changes: [] }
       : null;
-    const assistantTurn: Turn = { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming' };
-    patchTurns(prev => userTurn ? [...prev, userTurn, assistantTurn] : [...prev, assistantTurn]);
+    const assistantTurn: Turn = resuming
+      ? priorTurns.find(t => t.id === resumeTurnId)!
+      : { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming' };
+    if (!resuming) {
+      patchTurns(prev => userTurn ? [...prev, userTurn, assistantTurn] : [...prev, assistantTurn]);
+    } else {
+      // Flip the paused bubble back to actively-working.
+      patchTurns(prev => prev.map(t => (t.id === resumeTurnId ? { ...t, state: 'streaming' } : t)));
+    }
 
     const abort = new AbortController();
     abortRef.current = abort;
@@ -561,8 +582,14 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     // by the running digest. The transcript itself is never altered — only
     // what the provider sees. The digest is written by the model (below) the
     // first time turns are dropped; until then a placeholder note stands in.
+    //
+    // On resume, the paused assistant turn (with its proposal) must stay OUT
+    // of the history — the loop re-runs it, and duplicating it would teach the
+    // model the proposal was already answered. The decision rides as the user
+    // message instead ("I accepted/declined the change you proposed…").
+    const historyTurns = resuming ? priorTurns.filter(t => t.id !== resumeTurnId) : priorTurns;
     const contextSize = connection.contextSize ?? defaultContextSize(connection.provider);
-    const fullHistory = toHistory(priorTurns);
+    const fullHistory = toHistory(historyTurns);
     const compaction = planCompaction({
       system,
       messages: fullHistory,
@@ -609,7 +636,13 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
         config,
         onMutation: proposal =>
           new Promise(resolve => {
-            patchAssistant(t => { t.changes.push({ ...proposal }); });
+            patchAssistant(t => {
+              t.changes.push({ ...proposal });
+              // The loop is now parked on the user's decision — mark the turn
+              // so the UI stops the busy spinner and a reload can re-bind the
+              // decision instead of losing the loop.
+              t.state = 'needs-decision';
+            });
             pendingDecisions.current.set(proposal.callId, resolve);
           }),
       })) {
@@ -661,6 +694,10 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       });
     } finally {
       patchAssistant(t => {
+        // Only flip a turn that's still ACTIVELY working. A 'needs-decision'
+        // turn is parked on an approval card (the loop's promise is pending) —
+        // leave it paused; deciding the card resumes it. A 'streaming' turn
+        // here means the generator ended without a 'done' (usually an abort).
         if (t.state === 'streaming') t.state = abort.signal.aborted ? 'aborted' : 'done';
       });
       setRunning(false);
@@ -685,9 +722,56 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       changes: t.changes.map(c => c.callId === change.callId ? { ...c, resolved: approved ? 'approved' : 'rejected' } : c),
     })));
     if (approved) onApply(changePatch(change) as Partial<RetirementInputs>);
-    pendingDecisions.current.get(change.callId)?.({ approved });
-    pendingDecisions.current.delete(change.callId);
+    const live = pendingDecisions.current.get(change.callId);
+    if (live) {
+      // The loop that proposed this is parked on the promise — resolve it and
+      // it continues on its own.
+      live({ approved });
+      pendingDecisions.current.delete(change.callId);
+      return;
+    }
+    // No live loop (page reloaded, or the turn was cancelled while parked):
+    // resume the paused turn with the decision so the assistant acknowledges
+    // it instead of the card just going quiet.
+    const turn = turns.find(t => t.changes.some(c => c.callId === change.callId));
+    if (turn && !running) {
+      void runTurn(
+        turns,
+        approved
+          ? `I accepted the change you proposed (${change.label ?? 'plan update'}). Continue.`
+          : `I declined the change you proposed (${change.label ?? 'plan update'}). Don't apply it — answer with that in mind.`,
+        false,
+        turn.id,
+      );
+    }
   };
+
+  // After a reload the in-memory decision map is empty but a paused turn is
+  // still persisted as 'needs-decision' with an unresolved card. Re-bind a
+  // resolver for it: decideChange looks the map up FIRST, so it finds this,
+  // resolves it (resuming the paused turn with the decision), and returns
+  // before its own no-live-loop fallback — exactly one resume, not two.
+  useEffect(() => {
+    if (running) return;
+    for (const t of turns) {
+      if (t.state !== 'needs-decision') continue;
+      for (const c of t.changes) {
+        if (!c.resolved && !pendingDecisions.current.has(c.callId)) {
+          pendingDecisions.current.set(c.callId, ({ approved }) => {
+            void runTurn(
+              turns,
+              approved
+                ? `I accepted the change you proposed (${c.label ?? 'plan update'}). Continue.`
+                : `I declined the change you proposed (${c.label ?? 'plan update'}). Don't apply it — answer with that in mind.`,
+              false,
+              t.id,
+            );
+          });
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turns, running]);
 
   const send = async (message: AppendMessage) => {
     const textPart = message.content.find(p => p.type === 'text');
@@ -790,30 +874,65 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                 // chain-of-thought) arrives, then content. The spinner always
                 // clears the moment there's anything to read.
                 const thinking = !loadProgress && streaming && !turn?.text && !turn?.reasoning;
+                // The model proposed a change and is parked on the Accept /
+                // Decline card. NOT busy — the spinner and the ● bullet must
+                // both clear while the card waits.
+                const needsDecision = turn?.state === 'needs-decision';
+                // A paused turn whose card is already answered (an abort landed
+                // while it waited) — tell the user it's stuck, offer a way out.
+                const stuckPaused = needsDecision && turn != null && turn.changes.every(c => c.resolved);
+                // Render the turn's OWN text, never MessagePrimitive.Content:
+                // the default renderer draws assistant-ui's ● in-progress
+                // bullet for any running/empty message, which is exactly the
+                // stray dot a tool-only or paused reply showed. Our text (or a
+                // "working…" placeholder while tools run with no prose yet) is
+                // always the right thing.
+                const working = !thinking && streaming && !turn?.text && (turn?.tools.length ?? 0) > 0;
+                const showBubble = thinking || working || turn?.text || turn?.state === 'error';
                 return (
                   <div className="group flex justify-start items-start gap-1">
                     <div className="max-w-[85%] space-y-2">
-                      {(thinking || turn?.text || turn?.reasoning || turn?.state === 'error') && (
+                      {showBubble && (
                         <div className="px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs whitespace-pre-wrap leading-relaxed">
                           {thinking ? (
                             <span className="flex items-center gap-1.5 text-slate-400 italic">
                               <Loader2 size={11} className="animate-spin" /> Thinking…
                             </span>
+                          ) : working ? (
+                            <span className="flex items-center gap-1.5 text-slate-400 italic">
+                              <Loader2 size={11} className="animate-spin" /> Working…
+                            </span>
                           ) : (
-                            <MessagePrimitive.Content />
+                            turn?.text ?? null
                           )}
                         </div>
                       )}
                       {turn?.reasoning && (
                         // Keyed on the turn so each reply's block starts open
-                        // while it streams and the user folds it once done.
-                        <ReasoningBlock key={turn.id} reasoning={turn.reasoning} streaming={streaming && !turn.text} />
+                        // while it streams and the user folds it once done. The
+                        // spinner clears the moment the answer text arrives OR
+                        // the turn pauses on an approval — not just when the
+                        // whole turn ends.
+                        <ReasoningBlock
+                          key={turn.id}
+                          reasoning={turn.reasoning}
+                          streaming={streaming && !turn.text && !needsDecision}
+                        />
+                      )}
+                      {stuckPaused && (
+                        <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-snug">
+                          This reply stopped while it was waiting for you. Use the
+                          regenerate button to run it again.
+                        </div>
                       )}
                       {turn && (
                         <AssistantExtras turn={turn} onDecide={decideChange} tokensPerSecond={tps} />
                       )}
                     </div>
-                    {!streaming && (
+                    {/* Actions show whenever the turn isn't actively streaming —
+                        including a paused (needs-decision) turn, so a stuck one
+                        can be regenerated or deleted. */}
+                    {(!streaming || needsDecision) && (
                       <div className="flex flex-col gap-0.5 pt-1.5">
                         {message.isLast && (
                           <MessageActionButton onClick={() => void reload(message.parentId)} title="Regenerate this response">

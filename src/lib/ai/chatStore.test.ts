@@ -61,6 +61,33 @@ describe('chatStore persistence', () => {
     const broken = { getItem: () => null, setItem: () => { throw new Error('quota'); } };
     expect(() => saveChats({ threads: [], activeThreadId: null }, broken)).not.toThrow();
   });
+
+  it('round-trips a turn paused on a decision (needs-decision + unresolved change)', () => {
+    // The confirm-before-apply pause must survive a reload so the decision
+    // card can be re-bound and the loop resumed — a 'streaming' state would
+    // wrongly read as "still working" and offer no way back.
+    const paused: StoredTurn = {
+      id: 'a1', role: 'assistant', text: 'I can defer CPP for you.',
+      tools: [{ id: 'm1', name: 'set_scenario_value', state: 'running' }],
+      changes: [{
+        callId: 'm1', patch: { cppStartAge: 70 }, label: 'Set cppStartAge',
+        preview: { field: 'cppStartAge', from: null, to: 70 },
+      }],
+      state: 'needs-decision',
+    };
+    const store: ChatStore = {
+      threads: [{ ...newThread('Plan', 1000), turns: [turn('defer cpp'), paused] }],
+      activeThreadId: null,
+    };
+    store.activeThreadId = store.threads[0].id;
+    const mem = kv();
+    saveChats(store, mem);
+    const loaded = loadChats(mem);
+    const t = loaded.threads[0].turns[1];
+    expect(t.state).toBe('needs-decision');
+    expect(t.changes[0].resolved).toBeUndefined();
+    expect(t.changes[0].patch).toEqual({ cppStartAge: 70 });
+  });
 });
 
 describe('thread helpers', () => {

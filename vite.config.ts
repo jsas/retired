@@ -30,6 +30,11 @@ export default defineConfig(({ mode }) => {
   const single = mode === 'singlefile'
   return {
     base: single ? './' : '/retired/',
+    server: {
+      // Listen on all interfaces (0.0.0.0) so the dev server is reachable from
+      // other devices on the LAN (phone, tablet) — vite prints the network URL.
+      host: true,
+    },
     plugins: [
       react(),
       ...(single ? [viteSingleFile(), pruneToSingleHtml('dist-single')] : []),

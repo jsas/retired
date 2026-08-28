@@ -47,7 +47,10 @@ const turnSchema = z.object({
   reasoning: z.string().optional(),
   tools: z.array(toolActivitySchema),
   changes: z.array(pendingChangeSchema),
-  state: z.enum(['streaming', 'done', 'aborted', 'truncated', 'error']).optional(),
+  /** 'needs-decision' = the model proposed a change and the loop is paused
+   *  waiting for the user to Accept/Decline it (survives a page reload, where
+   *  'streaming' would wrongly suggest it's still working). */
+  state: z.enum(['streaming', 'done', 'aborted', 'truncated', 'error', 'needs-decision']).optional(),
 });
 
 export type StoredTurn = z.infer<typeof turnSchema>;
