@@ -116,6 +116,34 @@ describe('openai-compatible adapter', () => {
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'end_turn' });
   });
 
+  it('streams reasoning_content as reasoning events, separate from the answer', async () => {
+    // gpt-oss / DeepSeek-R1 / Qwen3 put the chain of thought in a separate
+    // delta field; it must arrive as 'reasoning' events, not be dropped (which
+    // left the chat bubble stuck on "Thinking…") and not mixed into the prose.
+    const events = await collect(streamChat(openai, { system: 's', messages: userTurn },
+      sseFetch([
+        JSON.stringify({ choices: [{ delta: { reasoning_content: 'The user is 60. ' } }] }),
+        JSON.stringify({ choices: [{ delta: { reasoning_content: 'CPP at 65 is reduced.' } }] }),
+        JSON.stringify({ choices: [{ delta: { content: 'Your plan lasts to 95.' }, finish_reason: 'stop' }] }),
+        '[DONE]',
+      ])));
+    expect(events.filter(e => e.type === 'reasoning').map(e => (e as { text: string }).text).join(''))
+      .toBe('The user is 60. CPP at 65 is reduced.');
+    expect(events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join(''))
+      .toBe('Your plan lasts to 95.');
+    expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'end_turn' });
+  });
+
+  it('also reads the `reasoning` delta alias some servers use', async () => {
+    const events = await collect(streamChat(openai, { system: 's', messages: userTurn },
+      sseFetch([
+        JSON.stringify({ choices: [{ delta: { reasoning: 'thinking…' } }] }),
+        JSON.stringify({ choices: [{ delta: { content: 'done' }, finish_reason: 'stop' }] }),
+        '[DONE]',
+      ])));
+    expect(events.find(e => e.type === 'reasoning')).toEqual({ type: 'reasoning', text: 'thinking…' });
+  });
+
   it('accumulates streamed tool_calls fragments', async () => {
     const events = await collect(streamChat(openai, {
       system: 's', messages: userTurn,

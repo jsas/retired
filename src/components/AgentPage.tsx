@@ -19,7 +19,8 @@ import {
 } from '@assistant-ui/react';
 import {
   Bot, Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench,
-  Copy, ClipboardPaste, Download, RotateCcw, Settings2,
+  Copy, ClipboardPaste, Download, RotateCcw, Settings2, Brain, ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
@@ -78,6 +79,9 @@ interface Turn {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+  /** Chain-of-thought streamed by reasoning models (gpt-oss, DeepSeek, Qwen).
+   *  Kept separate from `text` so the answer stays clean; shown collapsibly. */
+  reasoning?: string;
   tools: ToolActivity[];
   changes: PendingChange[];
   state?: 'streaming' | 'done' | 'aborted' | 'truncated' | 'error';
@@ -484,6 +488,9 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
               if (secs > 0.5) setTps(statsRef.current.chars / 4 / secs);
             }
             break;
+          case 'reasoning':
+            patchAssistant(t => { t.reasoning = (t.reasoning ?? '') + evt.text; });
+            break;
           case 'tool_start':
             patchAssistant(t => { t.tools.push({ id: evt.call.id, name: evt.call.name, state: 'running' }); });
             break;
@@ -602,14 +609,23 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
                   return (
                     <div className="group flex justify-end items-start gap-1">
                       <DeleteButton running={running} onDelete={() => deleteMessage(message.id)} />
+                      {/* Render the turn's own text rather than the converted
+                          message part — the bubble must never depend on the
+                          runtime's content conversion, so it can't vanish
+                          while the assistant reply streams below it. */}
                       <div className="max-w-[85%] px-3 py-2 rounded-lg bg-violet-600 text-white text-xs whitespace-pre-wrap">
-                        <MessagePrimitive.Content />
+                        {turn?.text ?? <MessagePrimitive.Content />}
                       </div>
                     </div>
                   );
                 }
                 const streaming = turn?.state === 'streaming';
-                const thinking = streaming && !turn?.text && !loadProgress;
+                // "Thinking…" only while nothing at all has arrived yet — no
+                // answer prose AND no chain-of-thought. Once a reasoning model
+                // starts streaming its thinking, that stream itself shows
+                // below; once prose starts, the bubble fills. So the spinner
+                // always clears as soon as there's anything to read.
+                const thinking = streaming && !turn?.text && !turn?.reasoning && !loadProgress;
                 return (
                   <div className="group flex justify-start items-start gap-1">
                     <div className="max-w-[85%] space-y-2">
@@ -622,6 +638,11 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
                           <MessagePrimitive.Content />
                         )}
                       </div>
+                      {turn?.reasoning && (
+                        // Keyed on the turn so each reply's block starts open
+                        // while it streams and the user folds it once done.
+                        <ReasoningBlock key={turn.id} reasoning={turn.reasoning} streaming={streaming && !turn.text} />
+                      )}
                       {turn && (
                         <AssistantExtras turn={turn} onDecide={decideChange} tokensPerSecond={tps} />
                       )}
@@ -690,6 +711,31 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
         </ThreadPrimitive.Root>
       </div>
     </AssistantRuntimeProvider>
+  );
+}
+
+/** The model's chain-of-thought, shown collapsibly so it never clutters the
+ *  answer. Open while it streams (so the thinking is visible live); the user
+ *  folds it away once the answer arrives. */
+function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="border border-violet-200 rounded bg-violet-50/60">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 w-full px-2 py-1 text-[10px] font-semibold text-violet-700 hover:text-violet-900"
+      >
+        {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+        <Brain size={11} />
+        {streaming ? 'Thinking…' : 'Reasoning'}
+        {streaming && <Loader2 size={10} className="animate-spin ml-auto" />}
+      </button>
+      {open && (
+        <div className="px-2 pb-2 text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto italic">
+          {reasoning}
+        </div>
+      )}
+    </div>
   );
 }
 

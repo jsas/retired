@@ -14,6 +14,7 @@ import { extractPromptToolCalls, formatPromptToolResults } from './promptTools';
 
 export type AgentEvent =
   | { type: 'text'; text: string }
+  | { type: 'reasoning'; text: string }
   | { type: 'tool_start'; call: AgentToolCall }
   | { type: 'tool_result'; call: AgentToolCall; content: string; isError: boolean }
   | { type: 'mutation'; proposal: MutationProposal }
@@ -143,6 +144,10 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
         if (evt.type === 'text') {
           text += evt.text;
           if (!bufferText) yield { type: 'text', text: evt.text };
+        } else if (evt.type === 'reasoning') {
+          // Chain-of-thought is never part of the answer text; forward it for
+          // display only (and even in prompt mode, where prose is buffered).
+          yield { type: 'reasoning', text: evt.text };
         } else if (evt.type === 'tool_use') {
           calls.push(evt.call);
         } else if (evt.type === 'done') {

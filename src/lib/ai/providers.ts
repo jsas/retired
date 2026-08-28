@@ -7,11 +7,14 @@
 // the agent loop and UI never see provider wire formats:
 //
 //   { type: 'text', text }        — a chunk of assistant prose
+//   { type: 'reasoning', text }   — a chunk of chain-of-thought (reasoning models)
 //   { type: 'tool_use', call }    — the model wants a tool run (accumulated)
 //   { type: 'done', stopReason }  — terminal event, exactly once
 //
 // Anything unrecognized on the wire is skipped, never fatal; a malformed
-// stream yields whatever text arrived before the break.
+// stream yields whatever text arrived before the break. Reasoning is separated
+// from prose so the UI can show the model's thinking collapsibly instead of
+// mixing it into the answer (gpt-oss, DeepSeek-R1, Qwen3 all emit one).
 
 import type { AiConnection } from '../aiSettings';
 
@@ -24,6 +27,7 @@ export interface AgentToolCall {
 
 export type StreamEvent =
   | { type: 'text'; text: string }
+  | { type: 'reasoning'; text: string }
   | { type: 'tool_use'; call: AgentToolCall }
   | { type: 'done'; stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'aborted' | 'unknown' };
 
@@ -382,6 +386,15 @@ async function* streamOpenAICompatible(
     const choice = (evt.choices as Array<Record<string, unknown>> | undefined)?.[0];
     if (!choice) continue;
     const delta = choice.delta as Record<string, unknown> | undefined;
+    // Reasoning models (gpt-oss, DeepSeek-R1, Qwen3) stream their chain of
+    // thought in a SEPARATE delta field — `reasoning_content` on OpenRouter /
+    // LM Studio / DeepSeek, `reasoning` on some OpenAI-compat servers. Surface
+    // it as its own event so the UI can show the thinking instead of dropping
+    // it (which left the bubble looking permanently stuck on "Thinking…").
+    const reasoning = delta?.reasoning_content ?? delta?.reasoning;
+    if (typeof reasoning === 'string' && reasoning) {
+      yield { type: 'reasoning', text: reasoning };
+    }
     if (typeof delta?.content === 'string' && delta.content) {
       yield { type: 'text', text: delta.content };
     }

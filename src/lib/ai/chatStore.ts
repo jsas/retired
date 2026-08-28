@@ -40,6 +40,8 @@ const turnSchema = z.object({
   id: z.string(),
   role: z.enum(['user', 'assistant']),
   text: z.string(),
+  /** Chain-of-thought from reasoning models; optional so older chats load. */
+  reasoning: z.string().optional(),
   tools: z.array(toolActivitySchema),
   changes: z.array(pendingChangeSchema),
   state: z.enum(['streaming', 'done', 'aborted', 'truncated', 'error']).optional(),

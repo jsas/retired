@@ -119,29 +119,32 @@ export async function deleteWebLlmModel(modelId: string): Promise<void> {
   await webllm.deleteModelAllInfoInCache(modelId);
 }
 
-/** Streaming <think>…</think> stripper. Reasoning models wrap their hidden
- *  chain-of-thought in these tags; the user should only see the final answer.
- *  A small carry buffer copes with a tag split across chunk boundaries
- *  (e.g. "<thi" + "nk>"). Content inside the tags is dropped; everything else
- *  passes through. Exported for tests. */
-export function createThinkStripper(): { push(text: string): string } {
+/** Streaming <think>…</think> splitter. Reasoning models wrap their chain-of-
+ *  thought in these tags; the two kinds of content are returned separately so
+ *  the UI can show the thinking collapsibly and the answer as the prose. A
+ *  small carry buffer copes with a tag split across chunk boundaries (e.g.
+ *  "<thi" + "nk>"). Exported for tests. */
+export function createThinkSplitter(): { push(text: string): { text: string; reasoning: string } } {
   const OPEN = '<think>';
   const CLOSE = '</think>';
   let inThink = false;
   let carry = '';
   return {
-    push(text: string): string {
+    push(text: string): { text: string; reasoning: string } {
       let buf = carry + text;
       carry = '';
-      let out = '';
+      let text0 = '';
+      let reasoning0 = '';
       while (buf.length > 0) {
         if (inThink) {
           const end = buf.indexOf(CLOSE);
           if (end === -1) {
             // Still inside the thought; keep only a possible partial close tag.
-            carry = buf.slice(-(CLOSE.length - 1));
-            return out;
+            reasoning0 += buf.slice(0, buf.length - longestSuffixPrefix(buf, CLOSE));
+            carry = buf.slice(buf.length - longestSuffixPrefix(buf, CLOSE));
+            return { text: text0, reasoning: reasoning0 };
           }
+          reasoning0 += buf.slice(0, end);
           buf = buf.slice(end + CLOSE.length);
           inThink = false;
           continue;
@@ -150,15 +153,15 @@ export function createThinkStripper(): { push(text: string): string } {
         if (start === -1) {
           // No open tag: emit everything except a possible partial "<think" tail.
           const partial = longestSuffixPrefix(buf, OPEN);
-          out += buf.slice(0, buf.length - partial);
+          text0 += buf.slice(0, buf.length - partial);
           carry = buf.slice(buf.length - partial);
-          return out;
+          return { text: text0, reasoning: reasoning0 };
         }
-        out += buf.slice(0, start);
+        text0 += buf.slice(0, start);
         buf = buf.slice(start + OPEN.length);
         inThink = true;
       }
-      return out;
+      return { text: text0, reasoning: reasoning0 };
     },
   };
 }
@@ -290,7 +293,7 @@ export async function* streamWebLlm(
   req.signal?.addEventListener('abort', onAbort, { once: true });
   if (req.signal?.aborted) onAbort(); // signal fired before we subscribed
   let finishReason: string | null = null;
-  const think = createThinkStripper();
+  const think = createThinkSplitter();
   let visibleSoFar = ''; // for the repetition circuit breaker
   let loopedOut = false; // set when the breaker cuts a degenerate repeat
   try {
@@ -299,12 +302,14 @@ export async function* streamWebLlm(
       const delta = (chunk as {
         choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>;
       }).choices?.[0];
-      const text = delta?.delta?.content;
-      if (text) {
+      const raw = delta?.delta?.content;
+      if (raw) {
         // Reasoning models (Qwen3 "thinking", DeepSeek-R1) emit their chain of
-        // thought inside <think>…</think>; strip it so the chat shows only the
-        // answer. Handles the tag arriving split across chunks.
-        const visible = think.push(text);
+        // thought inside <think>…</think>; split it out so the chat shows the
+        // thinking collapsibly and the answer as the prose. Handles the tag
+        // arriving split across chunks.
+        const { text: visible, reasoning } = think.push(raw);
+        if (reasoning) yield { type: 'reasoning', text: reasoning };
         if (visible) {
           visibleSoFar += visible;
           // Circuit breaker: a small model locked into a repeat loop would

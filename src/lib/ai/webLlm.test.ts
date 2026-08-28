@@ -167,70 +167,74 @@ describe('streamWebLlm', () => {
     crashAfter = null;
   });
 
-  it('strips <think>…</think> reasoning from the visible stream', async () => {
+  it('splits <think>…</think> reasoning out of the visible stream', async () => {
     scriptedChunks = [
       { choices: [{ delta: { content: '<think>Let me consider the balances…' } }] },
       { choices: [{ delta: { content: 'the user is 60.</think>Your plan lasts to 95.' }, finish_reason: 'stop' }] },
     ];
     const events = await collect();
     expect(events).toEqual([
+      { type: 'reasoning', text: 'Let me consider the balances…' },
+      { type: 'reasoning', text: 'the user is 60.' },
       { type: 'text', text: 'Your plan lasts to 95.' },
       { type: 'done', stopReason: 'end_turn' },
     ]);
   });
 
-  it('strips a think block whose tag is split across chunks', async () => {
+  it('splits a think block whose tag is split across chunks', async () => {
     scriptedChunks = [
       { choices: [{ delta: { content: '<thi' } }] },
       { choices: [{ delta: { content: 'nk>hidden</think>visible answer' }, finish_reason: 'stop' }] },
     ];
     const events = await collect();
     expect(events).toEqual([
+      { type: 'reasoning', text: 'hidden' },
       { type: 'text', text: 'visible answer' },
       { type: 'done', stopReason: 'end_turn' },
     ]);
   });
 });
 
-describe('createThinkStripper', () => {
-  it('passes plain text through untouched', async () => {
-    const { createThinkStripper } = await import('./webLlmProvider');
-    const s = createThinkStripper();
-    expect(s.push('Hello, ')).toBe('Hello, ');
-    expect(s.push('world.')).toBe('world.');
+describe('createThinkSplitter', () => {
+  it('passes plain text through as text, no reasoning', async () => {
+    const { createThinkSplitter } = await import('./webLlmProvider');
+    const s = createThinkSplitter();
+    expect(s.push('Hello, ')).toEqual({ text: 'Hello, ', reasoning: '' });
+    expect(s.push('world.')).toEqual({ text: 'world.', reasoning: '' });
   });
 
-  it('drops a complete think block in one push', async () => {
-    const { createThinkStripper } = await import('./webLlmProvider');
-    const s = createThinkStripper();
-    expect(s.push('<think>secret</think>answer')).toBe('answer');
+  it('splits a complete think block from the answer in one push', async () => {
+    const { createThinkSplitter } = await import('./webLlmProvider');
+    const s = createThinkSplitter();
+    expect(s.push('<think>secret</think>answer')).toEqual({ text: 'answer', reasoning: 'secret' });
   });
 
   it('holds back a partial open tag until the rest arrives', async () => {
-    const { createThinkStripper } = await import('./webLlmProvider');
-    const s = createThinkStripper();
-    expect(s.push('before <th')).toBe('before ');
-    expect(s.push('ink>hidden</think>after')).toBe('after');
+    const { createThinkSplitter } = await import('./webLlmProvider');
+    const s = createThinkSplitter();
+    expect(s.push('before <th')).toEqual({ text: 'before ', reasoning: '' });
+    expect(s.push('ink>hidden</think>after')).toEqual({ text: 'after', reasoning: 'hidden' });
   });
 
-  it('drops everything while a thought is still open', async () => {
-    const { createThinkStripper } = await import('./webLlmProvider');
-    const s = createThinkStripper();
-    expect(s.push('<think>still')).toBe('');
-    expect(s.push(' thinking…')).toBe('');
-    expect(s.push('done</think>out')).toBe('out');
+  it('streams reasoning while a thought is still open', async () => {
+    const { createThinkSplitter } = await import('./webLlmProvider');
+    const s = createThinkSplitter();
+    expect(s.push('<think>still')).toEqual({ text: '', reasoning: 'still' });
+    expect(s.push(' thinking…')).toEqual({ text: '', reasoning: ' thinking…' });
+    expect(s.push('done</think>out')).toEqual({ text: 'out', reasoning: 'done' });
   });
 
   it('handles multiple think blocks in sequence', async () => {
-    const { createThinkStripper } = await import('./webLlmProvider');
-    const s = createThinkStripper();
-    expect(s.push('<think>a</think>one<think>b</think>two')).toBe('onetwo');
+    const { createThinkSplitter } = await import('./webLlmProvider');
+    const s = createThinkSplitter();
+    expect(s.push('<think>a</think>one<think>b</think>two'))
+      .toEqual({ text: 'onetwo', reasoning: 'ab' });
   });
 
   it('does not swallow text that merely contains an angle bracket', async () => {
-    const { createThinkStripper } = await import('./webLlmProvider');
-    const s = createThinkStripper();
-    expect(s.push('a < b and c > d')).toBe('a < b and c > d');
+    const { createThinkSplitter } = await import('./webLlmProvider');
+    const s = createThinkSplitter();
+    expect(s.push('a < b and c > d')).toEqual({ text: 'a < b and c > d', reasoning: '' });
   });
 });
 

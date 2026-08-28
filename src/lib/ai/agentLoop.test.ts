@@ -53,6 +53,24 @@ describe('runAgentTurn', () => {
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'end_turn' });
   });
 
+  it('forwards reasoning events for display without mixing them into the answer', async () => {
+    const { chat } = scripted([[
+      { type: 'reasoning', text: 'Let me check the balances… ' },
+      { type: 'reasoning', text: 'the TFSA outlives the RRIF.' },
+      { type: 'text', text: 'Your plan is funded to 95.' },
+      { type: 'done', stopReason: 'end_turn' },
+    ]]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'how am I doing?',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+    }));
+    const reasoning = events.filter(e => e.type === 'reasoning').map(e => (e as { text: string }).text).join('');
+    expect(reasoning).toBe('Let me check the balances… the TFSA outlives the RRIF.');
+    // Reasoning must not leak into the prose the model is quoted as saying.
+    const text = events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join('');
+    expect(text).toBe('Your plan is funded to 95.');
+  });
+
   it('executes a tool, feeds the result back, and continues the loop', async () => {
     const { chat, requests } = scripted([
       [
