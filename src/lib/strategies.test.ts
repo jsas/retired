@@ -150,6 +150,15 @@ describe('work strategies (employment, issue #22)', () => {
     expect(jobs[0].sustainableSpending).toBeGreaterThanOrEqual(report.baseline.sustainableSpending);
   });
 
+  it('suggested work stints save to taxable (no room tracking yet, issue #24)', () => {
+    const report = runStrategies(worker(), config);
+    const jobs = report.strategies.filter(s => s.id.startsWith('work-'));
+    expect(jobs.length).toBeGreaterThan(0);
+    for (const j of jobs) {
+      expect(j.patch.employment![0].destAccount).toBe('taxable');
+    }
+  });
+
   it('skips a fixed variant already in the plan', () => {
     const inputs = worker();
     inputs.employment = [{

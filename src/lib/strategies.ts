@@ -170,9 +170,11 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
   // stint sized to the first depleted window.
   const existingJobs = inputs.employment ?? [];
   const retire = inputs.retirementAge;
+  // Save to taxable by default: the app doesn't track TFSA/RRSP room yet
+  // (issue #24), so a registered destination could silently over-contribute.
   const mkJob = (id: string, label: string, amount: number, startAge: number, endAge: number): EmploymentIncome => ({
     id, label, annualAmount: amount, startAge, endAge,
-    destAccount: 'tfsa', topUpSpending: true, indexedToCpi: false,
+    destAccount: 'taxable', topUpSpending: true, indexedToCpi: false,
   });
   const addJob = (specId: string, name: string, description: string, job: EmploymentIncome) => {
     // Skip if an identical stint is already in the plan.

@@ -197,6 +197,8 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
     capitalGainsInclusion: z.number(),
     taxableAcbRatio: z.number(),
     pensionSplitMaxRate: z.number(),
+    tfsaAnnualLimit: z.number(),
+    rrspAnnualMax: z.number(),
   }),
   qcFederalAbatement: z.number(),
   ontarioSurtax: z.object({

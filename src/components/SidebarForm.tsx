@@ -120,7 +120,11 @@ function PensionList({ pensions, onChange }: { pensions: Pension[]; onChange: (n
 // account, top-up and indexed toggles. Unlike a pension this is EARNED income:
 // it stacks for tax, feeds OAS clawback and GIS reduction, and the after-tax
 // net is either saved (destAccount) or used to top up spending first.
-function EmploymentList({ employment, onChange }: { employment: EmploymentIncome[]; onChange: (next: EmploymentIncome[]) => void }) {
+function EmploymentList({ employment, onChange, tfsaAnnualLimit }: {
+  employment: EmploymentIncome[];
+  onChange: (next: EmploymentIncome[]) => void;
+  tfsaAnnualLimit: number;
+}) {
   const update = (i: number, patch: Partial<EmploymentIncome>) =>
     onChange(employment.map((e, j) => (j === i ? { ...e, ...patch } : e)));
   return (
@@ -176,12 +180,24 @@ function EmploymentList({ employment, onChange }: { employment: EmploymentIncome
               onChange={(ev) => update(i, { destAccount: ev.target.value as EmploymentIncome['destAccount'] })}
               className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
             >
+              <option value="taxable">Taxable</option>
               <option value="tfsa">TFSA</option>
               <option value="rrsp">RRSP</option>
-              <option value="taxable">Taxable</option>
               <option value="cash">Cash</option>
             </select>
           </div>
+          {e.destAccount === 'tfsa' && e.annualAmount > tfsaAnnualLimit && (
+            <div className="text-[10px] text-amber-400 leading-snug">
+              Over the {formatMoney(tfsaAnnualLimit)}/yr TFSA limit — the app doesn't track
+              contribution room yet, so a taxable destination is safer unless you have the room.
+            </div>
+          )}
+          {e.destAccount === 'rrsp' && (
+            <div className="text-[10px] text-amber-400 leading-snug">
+              The app doesn't track RRSP room — make sure you have the contribution room
+              (18% of earned income/yr, capped) before directing pay here.
+            </div>
+          )}
           <div className="flex items-center gap-3 text-[10px] text-neutral-400">
             <label className="flex items-center gap-1 cursor-pointer" title="Use the after-tax pay to cover spending first (displaces withdrawals); any excess is saved">
               <input
@@ -203,7 +219,7 @@ function EmploymentList({ employment, onChange }: { employment: EmploymentIncome
         </div>
       ))}
       <button
-        onClick={() => onChange([...employment, { id: newEmploymentId(), label: 'Part-time work', annualAmount: 15000, startAge: 65, endAge: 70, destAccount: 'tfsa', topUpSpending: true, indexedToCpi: false }])}
+        onClick={() => onChange([...employment, { id: newEmploymentId(), label: 'Part-time work', annualAmount: 15000, startAge: 65, endAge: 70, destAccount: 'taxable', topUpSpending: true, indexedToCpi: false }])}
         className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
       >
         <Plus size={12} /> Add job
@@ -956,7 +972,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
 
         {/* Employment income (semi-/post-retirement work) */}
         <CollapsibleSection id="employment" icon={<Briefcase size={14} />} title="Employment Income" open={isOpen('employment')} onToggle={toggleSection}>
-          <EmploymentList employment={inputs.employment ?? []} onChange={(next) => updateField('employment', next)} />
+          <EmploymentList employment={inputs.employment ?? []} onChange={(next) => updateField('employment', next)} tfsaAnnualLimit={config.engine.tfsaAnnualLimit} />
           <p className="text-[10px] text-neutral-500 leading-snug">
             Semi- or post-retirement work: earned income taxed on top of your benefits (and counted
             for OAS clawback and GIS). With "tops up spending" the after-tax pay covers spending
@@ -1239,7 +1255,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
               </div>
               <div>
                 <label className={LABEL_CLS}>Spouse employment income</label>
-                <EmploymentList employment={inputs.spouse.employment ?? []} onChange={(next) => updateSpouse({ employment: next })} />
+                <EmploymentList employment={inputs.spouse.employment ?? []} onChange={(next) => updateSpouse({ employment: next })} tfsaAnnualLimit={config.engine.tfsaAnnualLimit} />
               </div>
               <div>
                 <label className={LABEL_CLS}>Spouse cash events</label>

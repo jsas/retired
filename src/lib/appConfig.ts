@@ -53,6 +53,11 @@ export interface EngineConfig {
   // NOT CPP or OAS) may be allocated to the lower-taxed spouse. Set 0 to
   // disable. CRA's maximum is 0.5.
   pensionSplitMaxRate: number;
+  // Registered-plan limits (2026): the TFSA annual dollar limit and the RRSP
+  // annual maximum (18% of earned income, capped here). Used to flag deposits
+  // that exceed a year's limit; full room tracking is issue #24.
+  tfsaAnnualLimit: number;
+  rrspAnnualMax: number;
 }
 
 export interface AppConfig {
@@ -143,7 +148,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     indexTaxTables: false,
     capitalGainsInclusion: 0.5,
     taxableAcbRatio: 1,
-    pensionSplitMaxRate: 0.5
+    pensionSplitMaxRate: 0.5,
+    tfsaAnnualLimit: 7000,
+    rrspAnnualMax: 32890
   },
   qcFederalAbatement: 0.165,
   // 2026 Ontario surtax thresholds (2025 values × 1.02 CRA indexation).
@@ -210,6 +217,9 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   if (typeof e.taxableAcbRatio !== 'number') e.taxableAcbRatio = DEFAULT_APP_CONFIG.engine.taxableAcbRatio;
   // Pension-splitting was added later — back-fill the CRA maximum.
   if (typeof e.pensionSplitMaxRate !== 'number') e.pensionSplitMaxRate = DEFAULT_APP_CONFIG.engine.pensionSplitMaxRate;
+  // Registered-plan annual limits were added later — back-fill defaults.
+  if (typeof e.tfsaAnnualLimit !== 'number') e.tfsaAnnualLimit = DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit;
+  if (typeof e.rrspAnnualMax !== 'number') e.rrspAnnualMax = DEFAULT_APP_CONFIG.engine.rrspAnnualMax;
   // QC abatement / ON surtax were added later — back-fill defaults.
   if (typeof c.qcFederalAbatement !== 'number') (c as AppConfig).qcFederalAbatement = DEFAULT_APP_CONFIG.qcFederalAbatement;
   const os = c.ontarioSurtax as AppConfig['ontarioSurtax'] | undefined;
