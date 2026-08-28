@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot, Plug } from 'lucide-react';
+import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -737,13 +737,6 @@ function App() {
                   <Bot size={13} /> Assistant
                 </button>
                 <button
-                  onClick={() => setView('connections')}
-                  className="flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-800 hover:underline"
-                  title="Choose and manage AI models and provider connections"
-                >
-                  <Plug size={13} /> Connections
-                </button>
-                <button
                   onClick={() => setView('compare')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   title="Diff 2–3 saved scenarios' verdict cards side by side"
@@ -799,8 +792,6 @@ function App() {
               <OptimizeCard
                 inputs={resolvedInputs}
                 config={config}
-                results={results}
-                mcResults={printMc}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
               />
             )}

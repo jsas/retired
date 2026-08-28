@@ -18,13 +18,16 @@ import {
   type ThreadMessageLike,
 } from '@assistant-ui/react';
 import {
-  Bot, Plus, Trash2, Lock, Cloud, Plug, MessageSquare, Check, X, Loader2, Wrench,
+  Bot, Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench,
+  Copy, ClipboardPaste, Download,
 } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
 import {
-  connectionReady, loadAiSettings, type AiSettings,
+  connectionReady, loadAiSettings, saveAiSettings, type AiSettings,
 } from '../lib/aiSettings';
+import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
+import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
 import { buildSystemPrompt, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
@@ -132,8 +135,9 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // ---------------------------------------------------------------------------
 
 export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply, onOpenConnections }: AgentPageProps) {
-  const [settings] = useState<AiSettings>(loadAiSettings);
+  const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
+  useEffect(() => { saveAiSettings(settings); }, [settings]);
   useEffect(() => { saveChats(chatState); }, [chatState]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
@@ -163,6 +167,11 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
     });
   };
 
+  /** Switch the active connection (and implicitly its model) from the header
+   *  picker. */
+  const chooseConnection = (id: string) =>
+    setSettings(prev => ({ ...prev, activeConnectionId: id }));
+
   /** Patch the active thread's turns (and bump updatedAt / title). */
   const patchTurns = (mutate: (turns: Turn[]) => Turn[]) => {
     setChatState(prev => {
@@ -183,68 +192,145 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
   };
 
   return (
-    <div className="flex gap-3 h-[calc(100vh-11rem)] min-h-[30rem]">
-      {/* ---- Chat list ---- */}
-      <aside className="w-52 shrink-0 flex flex-col border border-slate-200 rounded bg-white">
-        <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Chats</span>
-          <button
-            onClick={newChat}
-            className="flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-900 font-semibold"
-            title="Start a new chat"
-          >
-            <Plus size={13} /> New
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
-          {chatState.threads.length === 0 && (
-            <p className="text-[11px] text-slate-400 px-1.5 py-2">No chats yet. Start a new one.</p>
-          )}
-          {chatState.threads.map(t => (
-            <div
-              key={t.id}
-              className={`group flex items-center gap-1.5 rounded px-2 py-1.5 cursor-pointer text-[11px] ${
-                t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-900' : 'hover:bg-slate-50 text-slate-700'
-              }`}
-              onClick={() => setActiveThread(t.id)}
-            >
-              <MessageSquare size={12} className="shrink-0 text-slate-400" />
-              <span className="flex-1 min-w-0 truncate">{t.title}</span>
-              <button
-                onClick={e => { e.stopPropagation(); deleteChat(t.id); }}
-                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 shrink-0"
-                title="Delete this chat"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      {/* ---- Active conversation ---- */}
-      <div className="flex-1 min-w-0">
-        {!activeThread ? (
-          <EmptyChatState ready={ready} onNew={newChat} onConnect={onOpenConnections} />
-        ) : (
-          <Conversation
-            key={activeThread.id}
-            thread={activeThread}
-            ready={ready}
-            isLocal={isLocal}
-            connectionLabel={connection ? `${connection.label || connection.provider} · ${connection.model}` : null}
-            toolMode={toolMode}
+    <div className="flex flex-col h-[calc(100vh-11rem)] min-h-[30rem]">
+      {/* Header: title + model picker + connections link. Lives on the page so
+          it's visible in chat, empty, and copy/paste modes alike. */}
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <Bot size={16} className="text-violet-600" />
+        <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
+        <div className="flex items-center gap-2 ml-auto">
+          <ModelPicker
             settings={settings}
-            inputs={inputs}
-            config={config}
-            scenarioName={scenarioName}
-            scenarioList={scenarioList}
-            onApply={onApply}
-            onOpenConnections={onOpenConnections}
-            patchTurns={patchTurns}
+            activeId={settings.activeConnectionId}
+            onChoose={chooseConnection}
+            onLoadModel={onOpenConnections}
           />
-        )}
+          {connection && (
+            <span
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold ${
+                isLocal ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+              }`}
+              title={isLocal
+                ? 'Runs entirely on this device: no account, no key, nothing you type leaves the computer.'
+                : 'Chats go directly from this browser to the provider; the key is stored only in this browser.'}
+            >
+              {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
+              {isLocal ? 'On this device · private' : 'Direct browser → provider'}
+            </span>
+          )}
+        </div>
       </div>
+
+      <div className="flex gap-3 flex-1 min-h-0">
+        {/* ---- Chat list ---- */}
+        <aside className="w-52 shrink-0 flex flex-col border border-slate-200 rounded bg-white">
+          <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Chats</span>
+            <button
+              onClick={newChat}
+              className="flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-900 font-semibold"
+              title="Start a new chat"
+            >
+              <Plus size={13} /> New
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+            {chatState.threads.length === 0 && (
+              <p className="text-[11px] text-slate-400 px-1.5 py-2">No chats yet. Start a new one.</p>
+            )}
+            {chatState.threads.map(t => (
+              <div
+                key={t.id}
+                className={`group flex items-center gap-1.5 rounded px-2 py-1.5 cursor-pointer text-[11px] ${
+                  t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-900' : 'hover:bg-slate-50 text-slate-700'
+                }`}
+                onClick={() => setActiveThread(t.id)}
+              >
+                <MessageSquare size={12} className="shrink-0 text-slate-400" />
+                <span className="flex-1 min-w-0 truncate">{t.title}</span>
+                <button
+                  onClick={e => { e.stopPropagation(); deleteChat(t.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 shrink-0"
+                  title="Delete this chat"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* ---- Active conversation, or the copy/paste fallback ---- */}
+        <div className="flex-1 min-w-0">
+          {!ready ? (
+            <OfflineAssistant
+              inputs={inputs}
+              config={config}
+              hasConnections={settings.connections.length > 0}
+              onApply={onApply}
+              onConnect={onOpenConnections}
+            />
+          ) : !activeThread ? (
+            <EmptyChatState onNew={newChat} />
+          ) : (
+            <Conversation
+              key={activeThread.id}
+              thread={activeThread}
+              ready={ready}
+              isLocal={isLocal}
+              toolMode={toolMode}
+              settings={settings}
+              inputs={inputs}
+              config={config}
+              scenarioName={scenarioName}
+              scenarioList={scenarioList}
+              onApply={onApply}
+              patchTurns={patchTurns}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Model picker in the header: every configured connection's model, plus a
+ *  "Load model…" escape hatch that opens the Connections page. Choosing an
+ *  entry makes that connection (and its model) active. */
+function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
+  settings: AiSettings;
+  activeId: string | null;
+  onChoose: (id: string) => void;
+  onLoadModel: () => void;
+}) {
+  if (settings.connections.length === 0) {
+    return (
+      <button
+        onClick={onLoadModel}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700"
+      >
+        <Download size={13} /> Load a model
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <select
+        value={activeId ?? ''}
+        onChange={e => {
+          if (e.target.value === '__load__') onLoadModel();
+          else if (e.target.value) onChoose(e.target.value);
+        }}
+        className="px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-violet-500 max-w-56"
+        title="Pick which model answers. Add or download models on the Connections page."
+      >
+        {settings.connections.map(c => (
+          <option key={c.id} value={c.id}>
+            {c.label || c.provider} · {c.model}
+          </option>
+        ))}
+        <option value="__load__">Load a model…</option>
+      </select>
     </div>
   );
 }
@@ -253,11 +339,10 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
 // One conversation (assistant-ui runtime around our agent loop)
 // ---------------------------------------------------------------------------
 
-function Conversation({ thread, ready, isLocal, connectionLabel, toolMode, settings, inputs, config, scenarioName, scenarioList, onApply, onOpenConnections, patchTurns }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, config, scenarioName, scenarioList, onApply, patchTurns }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
-  connectionLabel: string | null;
   toolMode: 'native' | 'prompt';
   settings: AiSettings;
   inputs: RetirementInputs;
@@ -265,7 +350,6 @@ function Conversation({ thread, ready, isLocal, connectionLabel, toolMode, setti
   scenarioName: string;
   scenarioList: Array<{ id: string; name: string }>;
   onApply: (patch: Partial<RetirementInputs>) => void;
-  onOpenConnections: () => void;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
 }) {
   const turns = thread.turns as Turn[];
@@ -419,38 +503,11 @@ function Conversation({ thread, ready, isLocal, connectionLabel, toolMode, setti
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex flex-col h-full">
-        {/* Header: connection badge + link to connections page */}
-        <div className="flex flex-wrap items-center gap-2 mb-2">
-          <Bot size={16} className="text-violet-600" />
-          <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
-          <div className="flex items-center gap-2 ml-auto">
-            {connectionLabel && (
-              <span
-                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold ${
-                  isLocal ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-                }`}
-                title={isLocal
-                  ? 'Runs entirely on this device: no account, no key, nothing you type leaves the computer.'
-                  : 'Chats go directly from this browser to the provider; the key is stored only in this browser.'}
-              >
-                {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
-                {isLocal ? 'On this device · private' : connectionLabel}
-              </span>
-            )}
-            <button
-              onClick={onOpenConnections}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
-            >
-              <Plug size={13} /> Connections
-            </button>
-          </div>
-        </div>
-
         {/* Thread */}
         <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded bg-white">
           <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto p-3 space-y-3">
             <ThreadPrimitive.Empty>
-              <EmptyThread ready={ready} onConnect={onOpenConnections} />
+              <EmptyThread />
             </ThreadPrimitive.Empty>
             <ThreadPrimitive.Messages>
               {({ message }) => {
@@ -607,65 +664,263 @@ function fmtValue(v: unknown): string {
 // Empty states
 // ---------------------------------------------------------------------------
 
-function EmptyChatState({ ready, onNew, onConnect }: {
-  ready: boolean;
-  onNew: () => void;
-  onConnect: () => void;
-}) {
+function EmptyChatState({ onNew }: { onNew: () => void }) {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center border border-slate-200 rounded bg-white py-12">
       <Bot size={32} className="text-violet-300 mb-3" />
-      {!ready ? (
-        <>
-          <p className="text-sm font-medium text-slate-700 mb-1">Meet your planning assistant</p>
-          <p className="text-xs text-slate-500 max-w-md mb-4">
-            Set up a model first — the simplest runs entirely on this computer, free and private.
+      <p className="text-sm font-medium text-slate-700 mb-1">Start a conversation</p>
+      <p className="text-xs text-slate-500 max-w-md mb-4">
+        Each chat is saved on this device so you can come back to it.
+      </p>
+      <button
+        onClick={onNew}
+        className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+      >
+        <Plus size={13} /> New chat
+      </button>
+    </div>
+  );
+}
+
+function EmptyThread() {
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-center py-8">
+      <Bot size={28} className="text-violet-300 mb-3" />
+      <p className="text-xs text-slate-500 max-w-md">
+        Ask about your plan, or describe your situation. The assistant reads your scenario and runs
+        the real engine before answering; every change it proposes needs your approval.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Offline assistant: no ready connection. The old "Tune inputs" and "Ask a
+// question" flows — copy a self-contained prompt to any AI, and (for tuning)
+// paste the JSON reply back through the local validation/apply path.
+// ---------------------------------------------------------------------------
+
+function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect }: {
+  inputs: RetirementInputs;
+  config: AppConfig;
+  hasConnections: boolean;
+  onApply: (patch: Partial<RetirementInputs>) => void;
+  onConnect: () => void;
+}) {
+  const [tab, setTab] = useState<'ask' | 'tune'>('ask');
+  const results = useMemo(() => calculateHousehold(inputs, config), [inputs, config]);
+
+  return (
+    <div className="h-full overflow-y-auto border border-slate-200 rounded bg-white">
+      <div className="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-52">
+          <p className="text-sm font-semibold text-slate-800">No model connected</p>
+          <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+            Copy a self-contained prompt into any AI (ChatGPT, Claude, …) below — or connect a model
+            (even one that runs privately on this device) to chat right here.
           </p>
+        </div>
+        <button
+          onClick={onConnect}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 shrink-0"
+        >
+          <Download size={13} /> {hasConnections ? 'Set up a connection' : 'Load a model'}
+        </button>
+      </div>
+
+      <div className="flex gap-1 px-4 pt-3">
+        {(['ask', 'tune'] as const).map(t => (
           <button
-            onClick={onConnect}
-            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-2.5 py-1 text-xs font-medium rounded ${tab === t ? 'bg-violet-50 text-violet-700' : 'text-slate-600 hover:bg-slate-100'}`}
           >
-            <Plug size={13} /> Set up a connection
+            {t === 'ask' ? 'Ask a question' : 'Tune inputs'}
           </button>
-        </>
+        ))}
+      </div>
+
+      {tab === 'ask' ? (
+        <AskQuestionPanel inputs={inputs} results={results} />
       ) : (
-        <>
-          <p className="text-sm font-medium text-slate-700 mb-1">Start a conversation</p>
-          <p className="text-xs text-slate-500 max-w-md mb-4">
-            Each chat is saved on this device so you can come back to it.
-          </p>
-          <button
-            onClick={onNew}
-            className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
-          >
-            <Plus size={13} /> New chat
-          </button>
-        </>
+        <TuneInputsPanel inputs={inputs} onApply={onApply} />
       )}
     </div>
   );
 }
 
-function EmptyThread({ ready, onConnect }: { ready: boolean; onConnect: () => void }) {
+/** Copy a question prompt (plan + computed results + question) to paste into
+ *  any external AI. Nothing is ingested back. */
+function AskQuestionPanel({ inputs, results }: {
+  inputs: RetirementInputs;
+  results: ReturnType<typeof calculateHousehold>;
+}) {
+  const [presetId, setPresetId] = useState(QA_PRESETS[0].id);
+  const [customQuestion, setCustomQuestion] = useState('');
+  const [copied, setCopied] = useState(false);
+  const preset = QA_PRESETS.find(p => p.id === presetId) ?? QA_PRESETS[0];
+  const prompt = useMemo(
+    () => buildQAPrompt(inputs, { results }, preset, customQuestion),
+    [inputs, results, preset, customQuestion],
+  );
+
+  const copy = () => {
+    navigator.clipboard.writeText(prompt).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
+      () => window.prompt('Copy this prompt:', prompt),
+    );
+  };
+
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center py-8">
-      <Bot size={28} className="text-violet-300 mb-3" />
-      {!ready ? (
-        <>
-          <p className="text-sm font-medium text-slate-700 mb-1">No provider connected</p>
+    <div className="p-4 grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-4">
+      <div className="space-y-1">
+        {QA_PRESETS.map(p => (
           <button
-            onClick={onConnect}
-            className="mt-2 flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+            key={p.id}
+            onClick={() => setPresetId(p.id)}
+            className={`w-full text-left px-2.5 py-1.5 rounded border text-xs ${presetId === p.id
+              ? 'border-violet-300 bg-violet-50 text-violet-800'
+              : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
           >
-            <Plug size={13} /> Set up a connection
+            <div className="font-medium">{p.title}</div>
+            <div className={`text-[10px] ${presetId === p.id ? 'text-violet-600' : 'text-slate-500'}`}>{p.blurb}</div>
           </button>
-        </>
-      ) : (
-        <p className="text-xs text-slate-500 max-w-md">
-          Ask about your plan, or describe your situation. The assistant reads your scenario and runs
-          the real engine before answering; every change it proposes needs your approval.
+        ))}
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-2 mb-1">
+            …or your own question
+          </label>
+          <textarea
+            value={customQuestion}
+            onChange={e => setCustomQuestion(e.target.value)}
+            placeholder="Type a custom question; it replaces the preset."
+            className="w-full h-16 px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-slate-800 mb-1.5">
+          Prompt{customQuestion.trim() ? ' (custom question)' : ` — ${preset.title}`}
+        </div>
+        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
+          Embeds your plan <em>and the computed results</em>, so the AI answers from the real numbers.
+          Once you paste, that AI provider reads your plan under its own privacy policy.
         </p>
-      )}
+        <textarea
+          readOnly
+          value={prompt}
+          onFocus={e => e.target.select()}
+          className="w-full h-64 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded text-[10px] font-mono text-slate-600 focus:outline-none"
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            onClick={copy}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? 'Copied' : 'Copy prompt'}
+          </button>
+          <span className="text-[10px] text-slate-400">~{Math.round(prompt.length / 4).toLocaleString()} tokens</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Copy a tuning prompt, then paste the AI's JSON reply back through the local
+ *  validation/apply path (the "local update api"): field-by-field checks, then
+ *  write the patch to the plan. */
+function TuneInputsPanel({ inputs, onApply }: {
+  inputs: RetirementInputs;
+  onApply: (patch: Partial<RetirementInputs>) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [ingest, setIngest] = useState<ReturnType<typeof parseAgentResult> | null>(null);
+  const prompt = useMemo(() => buildAgentPrompt(inputs), [inputs]);
+
+  const copy = () => {
+    navigator.clipboard.writeText(prompt).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
+      () => window.prompt('Copy this prompt:', prompt),
+    );
+  };
+
+  const apply = () => {
+    if (ingest?.ok && ingest.patch) {
+      onApply(ingest.patch);
+      setPasteText('');
+      setIngest(null);
+    }
+  };
+
+  return (
+    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <div className="text-xs font-semibold text-slate-800 mb-1.5">1 · Copy the prompt</div>
+        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
+          A self-contained prompt describing your plan, the levers, and the exact JSON format to reply
+          with. Paste it into any AI. <strong className="text-slate-700">Heads up:</strong> once you paste,
+          that provider reads your full plan under its own privacy policy.
+        </p>
+        <textarea
+          readOnly
+          value={prompt}
+          onFocus={e => e.target.select()}
+          className="w-full h-56 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded text-[10px] font-mono text-slate-600 focus:outline-none"
+        />
+        <button
+          onClick={copy}
+          className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+          {copied ? 'Copied' : 'Copy prompt'}
+        </button>
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-slate-800 mb-1.5">2 · Paste the AI's JSON reply</div>
+        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
+          Paste the model's JSON below. It's validated field-by-field — unknown fields ignored,
+          out-of-range values rejected with reasons — then applied to your inputs.
+        </p>
+        <textarea
+          value={pasteText}
+          onChange={e => { setPasteText(e.target.value); setIngest(null); }}
+          placeholder='{"cppStartAge":70, "oasStartAge":70, ...}'
+          className="w-full h-56 px-2.5 py-2 bg-white border border-slate-300 rounded text-[10px] font-mono text-slate-700 focus:outline-none focus:border-violet-500"
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            onClick={() => setIngest(parseAgentResult(pasteText, inputs))}
+            disabled={!pasteText.trim()}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 text-slate-700 text-xs font-semibold rounded hover:bg-slate-50 disabled:opacity-40"
+          >
+            <ClipboardPaste size={13} /> Validate
+          </button>
+          {ingest?.ok && (
+            <button
+              onClick={apply}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+            >
+              <Check size={13} /> Apply {ingest.applied.length} change{ingest.applied.length === 1 ? '' : 's'}
+            </button>
+          )}
+        </div>
+
+        {ingest && (
+          <div className="mt-3 text-[11px] leading-snug space-y-1">
+            {ingest.error && <div className="text-red-600">✕ {ingest.error}</div>}
+            {ingest.applied.length > 0 && (
+              <div className="text-emerald-700">✓ Will apply: {ingest.applied.join('; ')}</div>
+            )}
+            {ingest.warnings.map((w, i) => (
+              <div key={i} className="text-amber-700">⚠ {w}</div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
