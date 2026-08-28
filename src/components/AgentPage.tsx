@@ -20,7 +20,7 @@ import {
 import {
   Bot, Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench,
   Copy, ClipboardPaste, Download, RotateCcw, Settings2, Brain, ChevronDown,
-  ChevronRight,
+  ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
@@ -185,6 +185,9 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply, onOpenConnections }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
+  // Chat list: pinned open (default) or collapsed to a slim strip. Session-
+  // only — not worth persisting.
+  const [chatsPinned, setChatsPinned] = useState(true);
   useEffect(() => { saveAiSettings(settings); }, [settings]);
   useEffect(() => { saveChats(chatState); }, [chatState]);
 
@@ -282,43 +285,85 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
       </div>
 
       <div className="flex gap-3 flex-1 min-h-0">
-        {/* ---- Chat list ---- */}
-        <aside className="w-52 shrink-0 flex flex-col border border-slate-200 rounded bg-white">
-          <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Chats</span>
-            <button
-              onClick={newChat}
-              className="flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-900 font-semibold"
-              title="Start a new chat"
-            >
-              <Plus size={13} /> New
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
-            {chatState.threads.length === 0 && (
-              <p className="text-[11px] text-slate-400 px-1.5 py-2">No chats yet. Start a new one.</p>
-            )}
-            {chatState.threads.map(t => (
-              <div
-                key={t.id}
-                className={`group flex items-center gap-1.5 rounded px-2 py-1.5 cursor-pointer text-[11px] ${
-                  t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-900' : 'hover:bg-slate-50 text-slate-700'
-                }`}
-                onClick={() => setActiveThread(t.id)}
-              >
-                <MessageSquare size={12} className="shrink-0 text-slate-400" />
-                <span className="flex-1 min-w-0 truncate">{t.title}</span>
+        {/* ---- Chat list: pinned open, or collapsed to a slim strip ---- */}
+        {chatsPinned ? (
+          <aside className="w-52 shrink-0 flex flex-col border border-slate-200 rounded bg-white">
+            <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Chats</span>
+              <div className="flex items-center gap-1.5">
                 <button
-                  onClick={e => { e.stopPropagation(); deleteChat(t.id); }}
-                  className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 shrink-0"
-                  title="Delete this chat"
+                  onClick={newChat}
+                  className="flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-900 font-semibold"
+                  title="Start a new chat"
                 >
-                  <Trash2 size={12} />
+                  <Plus size={13} /> New
+                </button>
+                <button
+                  onClick={() => setChatsPinned(false)}
+                  className="text-slate-400 hover:text-slate-700"
+                  title="Collapse the chat list to the left"
+                >
+                  <ChevronsLeft size={13} />
                 </button>
               </div>
-            ))}
-          </div>
-        </aside>
+            </div>
+            <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+              {chatState.threads.length === 0 && (
+                <p className="text-[11px] text-slate-400 px-1.5 py-2">No chats yet. Start a new one.</p>
+              )}
+              {chatState.threads.map(t => (
+                <div
+                  key={t.id}
+                  className={`group flex items-center gap-1.5 rounded px-2 py-1.5 cursor-pointer text-[11px] ${
+                    t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-900' : 'hover:bg-slate-50 text-slate-700'
+                  }`}
+                  onClick={() => setActiveThread(t.id)}
+                >
+                  <MessageSquare size={12} className="shrink-0 text-slate-400" />
+                  <span className="flex-1 min-w-0 truncate">{t.title}</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteChat(t.id); }}
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 shrink-0"
+                    title="Delete this chat"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </aside>
+        ) : (
+          <aside className="w-9 shrink-0 flex flex-col items-center gap-2 border border-slate-200 rounded bg-white py-2">
+            <button
+              onClick={() => setChatsPinned(true)}
+              className="text-slate-400 hover:text-slate-700"
+              title="Show the chat list"
+            >
+              <ChevronsRight size={14} />
+            </button>
+            <button
+              onClick={newChat}
+              className="text-violet-700 hover:text-violet-900"
+              title="Start a new chat"
+            >
+              <Plus size={14} />
+            </button>
+            <div className="flex-1 overflow-y-auto flex flex-col items-center gap-1.5 w-full px-1">
+              {chatState.threads.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { setActiveThread(t.id); setChatsPinned(true); }}
+                  title={t.title}
+                  className={`flex items-center justify-center w-6 h-6 rounded ${
+                    t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-700' : 'text-slate-400 hover:bg-slate-50'
+                  }`}
+                >
+                  <MessageSquare size={13} />
+                </button>
+              ))}
+            </div>
+          </aside>
+        )}
 
         {/* ---- Active conversation, or the copy/paste fallback ---- */}
         <div className="flex-1 min-w-0">
@@ -437,20 +482,27 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
-  // Estimated context usage for the meter: a persona-sized system prompt plus
-  // the serialized history (the digest note when the thread was compacted).
-  // Recomputed as the transcript grows; the prompt-mode plan digest isn't
-  // counted, so local readings run a little low — acceptable for a gauge.
+  // Estimated context usage for the meter. Mirror what runTurn actually sends:
+  // prompt-mode (local) prepends the tool catalog AND the computed plan digest
+  // to the system prompt — that's the bulk of a local model's small window, so
+  // omitting it (as an earlier gauge did) read far too low. This runs the
+  // engine once per render; cheap for a household plan, and it makes the meter
+  // honest about what the local model must fit.
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
-    const system = (settings.systemPromptOverride?.trim() || DEFAULT_SYSTEM_PROMPT) +
-      (thread.systemNote ? `\n${thread.systemNote}` : '');
+    const basePrompt = settings.systemPromptOverride;
+    const base = toolMode === 'prompt'
+      ? buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
+        buildPromptToolInstructions(toolSpecs()) + '\n\n' +
+        buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) })
+      : buildSystemPrompt(scenarioName, { basePrompt, config });
+    const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
     const history = toHistory(turns);
     if (thread.contextSummary) {
       return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...history]);
     }
     return estimateTokens(system, history);
-  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns]);
+  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config]);
 
   /**
    * Run one assistant turn: append (or replace) a streaming assistant bubble
@@ -480,10 +532,10 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
 
     const basePrompt = settings.systemPromptOverride;
     const baseSystem = toolMode === 'prompt'
-      ? buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt }) + '\n\n' +
+      ? buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
         buildPromptToolInstructions(toolSpecs()) + '\n\n' +
         buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) })
-      : buildSystemPrompt(scenarioName, { basePrompt });
+      : buildSystemPrompt(scenarioName, { basePrompt, config });
     // The chat's standing instructions go last so they read as the user's own
     // voice; they can steer tone/focus but the base prompt's rules come first.
     const system = thread.systemNote?.trim()
@@ -540,6 +592,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
         signal: abort.signal,
         toolMode,
         maxRounds: toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS : undefined,
+        config,
         onMutation: proposal =>
           new Promise(resolve => {
             patchAssistant(t => { t.changes.push({ ...proposal }); });
@@ -686,7 +739,18 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                 if (message.role === 'user') {
                   return (
                     <div className="group flex justify-end items-start gap-1">
-                      <DeleteButton running={running} onDelete={() => deleteMessage(message.id)} />
+                      <div className="flex flex-col gap-0.5 pt-1.5">
+                        {/* A trailing user message with no reply yet (e.g. after
+                            deleting the assistant turns) gets a way to generate
+                            one — otherwise there's nothing to regenerate and
+                            nothing to send. */}
+                        {message.isLast && !running && (
+                          <MessageActionButton onClick={() => void reload(message.id)} title="Generate a response to this message">
+                            <Bot size={12} />
+                          </MessageActionButton>
+                        )}
+                        <DeleteButton running={running} onDelete={() => deleteMessage(message.id)} />
+                      </div>
                       {/* Render the turn's own text rather than the converted
                           message part — the bubble must never depend on the
                           runtime's content conversion, so it can't vanish
@@ -698,24 +762,28 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                   );
                 }
                 const streaming = turn?.state === 'streaming';
-                // "Thinking…" only while nothing at all has arrived yet — no
-                // answer prose AND no chain-of-thought. Once a reasoning model
-                // starts streaming its thinking, that stream itself shows
-                // below; once prose starts, the bubble fills. So the spinner
-                // always clears as soon as there's anything to read.
-                const thinking = streaming && !turn?.text && !turn?.reasoning && !loadProgress;
+                // While the local model's weights load, the dedicated progress
+                // bar below the messages owns the "busy" indication — the bubble
+                // must NOT also show a "Thinking…" spinner, or the two stack.
+                // Once loadProgress clears (load done / generation started) the
+                // bubble takes over: spinner only until SOMETHING (prose or
+                // chain-of-thought) arrives, then content. The spinner always
+                // clears the moment there's anything to read.
+                const thinking = !loadProgress && streaming && !turn?.text && !turn?.reasoning;
                 return (
                   <div className="group flex justify-start items-start gap-1">
                     <div className="max-w-[85%] space-y-2">
-                      <div className="px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs whitespace-pre-wrap leading-relaxed">
-                        {thinking ? (
-                          <span className="flex items-center gap-1.5 text-slate-400 italic">
-                            <Loader2 size={11} className="animate-spin" /> Thinking…
-                          </span>
-                        ) : (
-                          <MessagePrimitive.Content />
-                        )}
-                      </div>
+                      {(thinking || turn?.text || turn?.reasoning || turn?.state === 'error') && (
+                        <div className="px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs whitespace-pre-wrap leading-relaxed">
+                          {thinking ? (
+                            <span className="flex items-center gap-1.5 text-slate-400 italic">
+                              <Loader2 size={11} className="animate-spin" /> Thinking…
+                            </span>
+                          ) : (
+                            <MessagePrimitive.Content />
+                          )}
+                        </div>
+                      )}
                       {turn?.reasoning && (
                         // Keyed on the turn so each reply's block starts open
                         // while it streams and the user folds it once done.
@@ -923,23 +991,26 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
 function ContextMeter({ used, limit, compacted }: { used: number; limit: number; compacted: boolean }) {
   const pct = Math.min(100, Math.round((used / limit) * 100));
   const over = used > limit * COMPACT_AT;
+  const hard = used > limit;
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
   return (
     <span
       className="flex items-center gap-1.5 ml-auto"
       title={
         `Estimated context usage: ~${fmt(used)} of ${fmt(limit)} tokens (~4 chars/token). ` +
-        (compacted
-          ? 'Older messages have been compacted into a summary to fit.'
-          : `Past ${Math.round(COMPACT_AT * 100)}% the oldest messages are summarized to fit.`)
+        (hard
+          ? 'Over the model\'s context window — raise "Context window" for this connection on the Connections page, or older messages will be summarized aggressively.'
+          : compacted
+            ? 'Older messages have been compacted into a summary to fit.'
+            : `Past ${Math.round(COMPACT_AT * 100)}% the oldest messages are summarized to fit.`)
       }
     >
-      <span className={`text-[10px] font-semibold ${over ? 'text-amber-600' : 'text-slate-400'}`}>
+      <span className={`text-[10px] font-semibold ${hard ? 'text-red-600' : over ? 'text-amber-600' : 'text-slate-400'}`}>
         ~{fmt(used)}/{fmt(limit)}
       </span>
       <span className="w-16 h-1.5 bg-slate-200 rounded overflow-hidden">
         <span
-          className={`block h-full transition-all ${over ? 'bg-amber-500' : 'bg-violet-400'}`}
+          className={`block h-full transition-all ${hard ? 'bg-red-500' : over ? 'bg-amber-500' : 'bg-violet-400'}`}
           style={{ width: `${pct}%` }}
         />
       </span>
