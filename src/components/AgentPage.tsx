@@ -109,25 +109,26 @@ function toHistory(turns: Turn[]): ChatMessage[] {
 
 /** Turn → what assistant-ui renders. Tool calls + change cards are added by a
  *  custom component below (they aren't standard message parts), so the content
- *  here is just the prose. */
+ *  here is just the prose. Status is only valid on assistant messages — the
+ *  converter throws otherwise — so user turns carry none. */
 function turnToMessage(t: Turn): ThreadMessageLike {
-  const status =
-    t.role === 'user' ? ({ type: 'complete', reason: 'unknown' } as const)
-    : t.state === 'streaming' ? ({ type: 'running' } as const)
-    : t.state === 'error' ? ({ type: 'incomplete', reason: 'error' } as const)
-    : t.state === 'aborted' ? ({ type: 'incomplete', reason: 'cancelled' } as const)
-    : t.state === 'truncated' ? ({ type: 'incomplete', reason: 'length' } as const)
-    : ({ type: 'complete', reason: 'stop' } as const);
-  return {
+  const base = {
     id: t.id,
     role: t.role,
-    content: [{ type: 'text', text: t.text }],
+    content: [{ type: 'text' as const, text: t.text }],
     createdAt: new Date(0),
-    status,
     // Carry the full Turn through metadata.custom so the message component can
     // render tool chips + change cards.
     metadata: { custom: { turn: t as unknown as Record<string, unknown> } },
   };
+  if (t.role === 'user') return base;
+  const status =
+    t.state === 'streaming' ? ({ type: 'running' } as const)
+    : t.state === 'error' ? ({ type: 'incomplete', reason: 'error' } as const)
+    : t.state === 'aborted' ? ({ type: 'incomplete', reason: 'cancelled' } as const)
+    : t.state === 'truncated' ? ({ type: 'incomplete', reason: 'length' } as const)
+    : ({ type: 'complete', reason: 'stop' } as const);
+  return { ...base, status };
 }
 
 // ---------------------------------------------------------------------------
