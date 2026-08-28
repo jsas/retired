@@ -173,6 +173,39 @@ function longestSuffixPrefix(s: string, tag: string): number {
   return 0;
 }
 
+/** Degenerate-repetition circuit breaker. Small quantized models at low
+ *  temperature can lock onto one sentence and emit it hundreds of times,
+ *  burning the whole token budget on garbage. This watches the visible text
+ *  and, once the tail is clearly one repeated block, reports the cut point so
+ *  the caller can truncate + stop instead of streaming nonsense. Returns the
+ *  index to cut at, or -1 while the text looks healthy. Exported for tests. */
+export function detectRepetitionCut(text: string): number {
+  // Don't judge short replies; only the tail matters (a legit answer can
+  // repeat a phrase a couple of times early on).
+  const MIN = 200;
+  if (text.length < MIN) return -1;
+  const tail = text.slice(-1600);
+  // Try block sizes from a sentence up to a paragraph; if the tail is the same
+  // block repeated ≥3 times, it's a loop.
+  for (let size = 40; size <= 600; size++) {
+    if (tail.length < size * 3) continue;
+    const block = tail.slice(-size);
+    let runs = 1;
+    let pos = tail.length - size;
+    while (pos - size >= 0 && tail.slice(pos - size, pos) === block) {
+      runs++;
+      pos -= size;
+    }
+    if (runs >= 3) {
+      // Cut just after the FIRST occurrence of the block so the user keeps one
+      // clean copy. Find where the repeated run started within the whole text.
+      const runStart = text.length - size * runs;
+      return runStart + size;
+    }
+  }
+  return -1;
+}
+
 /** Translate engine failures into plain, actionable language. Raw WebGPU
  *  errors ("mapAsync", "device lost") mean nothing to a non-technical user. */
 function translateLocalError(err: unknown): ProviderError {
@@ -231,16 +264,18 @@ export async function* streamWebLlm(
     stream = await engine.chat.completions.create({
       messages: toMessages(req.system, req.messages),
       stream: true,
-      max_tokens: req.maxTokens ?? 4096,
+      max_tokens: req.maxTokens ?? 1024,
       // Bound the context: the plan digest + tool catalog + a long user answer
       // can exceed the KV cache a small model was compiled for, which is the
       // main cause of mid-generation GPU crashes (mapAsync / device lost).
       context_window_size: 8192,
       temperature: 0.3, // math/reasoning models: keep them deterministic-ish
-      // Small quantized models occasionally get stuck emitting one token
-      // ("000000…") at low temperature; a mild penalty breaks the loop.
-      repetition_penalty: 1.1,
-      frequency_penalty: 0.1,
+      // A degenerate reply is a REPEATED sentence, not a single token, so
+      // penalize whole n-gram repeats (repetition_penalty) rather than per-
+      // token frequency — and a streaming circuit-breaker below cuts it off
+      // entirely once it's clearly looping.
+      repetition_penalty: 1.15,
+      presence_penalty: 0.3,
     });
   } catch (err) {
     throw translateLocalError(err);
@@ -256,6 +291,8 @@ export async function* streamWebLlm(
   if (req.signal?.aborted) onAbort(); // signal fired before we subscribed
   let finishReason: string | null = null;
   const think = createThinkStripper();
+  let visibleSoFar = ''; // for the repetition circuit breaker
+  let loopedOut = false; // set when the breaker cuts a degenerate repeat
   try {
     for await (const chunk of stream) {
       if (stopped) break;
@@ -268,7 +305,22 @@ export async function* streamWebLlm(
         // thought inside <think>…</think>; strip it so the chat shows only the
         // answer. Handles the tag arriving split across chunks.
         const visible = think.push(text);
-        if (visible) yield { type: 'text', text: visible };
+        if (visible) {
+          visibleSoFar += visible;
+          // Circuit breaker: a small model locked into a repeat loop would
+          // otherwise burn the whole token budget on garbage. Cut at the end
+          // of the first clean copy and stop.
+          const cut = detectRepetitionCut(visibleSoFar);
+          if (cut !== -1) {
+            const keep = visibleSoFar.slice(0, cut);
+            const alreadySent = visibleSoFar.length - visible.length;
+            if (keep.length > alreadySent) yield { type: 'text', text: keep.slice(alreadySent) };
+            loopedOut = true;
+            void engine.interruptGenerate?.();
+            break;
+          }
+          yield { type: 'text', text: visible };
+        }
       }
       if (delta?.finish_reason) finishReason = delta.finish_reason;
     }
@@ -281,9 +333,10 @@ export async function* streamWebLlm(
   }
   // 'length' means the model hit the token cap mid-thought — the agent loop
   // surfaces that so the UI can say the answer was cut short. An abort that
-  // landed after the last chunk still counts as aborted.
+  // landed after the last chunk still counts as aborted. A repetition cut is
+  // reported as truncation so the UI says the answer was cut short.
   const wasAborted = stopped || req.signal?.aborted === true;
   const stopReason: 'end_turn' | 'max_tokens' | 'aborted' =
-    wasAborted ? 'aborted' : finishReason === 'length' ? 'max_tokens' : 'end_turn';
+    wasAborted ? 'aborted' : (loopedOut || finishReason === 'length') ? 'max_tokens' : 'end_turn';
   yield { type: 'done', stopReason };
 }

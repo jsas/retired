@@ -226,6 +226,40 @@ describe('createThinkStripper', () => {
   });
 });
 
+describe('detectRepetitionCut (degenerate-loop circuit breaker)', () => {
+  it('returns -1 for healthy, varied text', async () => {
+    const { detectRepetitionCut } = await import('./webLlmProvider');
+    const healthy = 'Your plan is funded to age 95. The TFSA lasts longest because ' +
+      'withdrawals are tax-free. Consider the RRIF minimums after 71. ' +
+      'CPP at 65 is reduced by 0.6% per month before that age. ' +
+      'OAS begins at 65 and can be deferred to 70 for a higher amount. ' +
+      'The RRIF minimum percentage rises each year from age 71 onward.';
+    expect(detectRepetitionCut(healthy)).toBe(-1);
+  });
+
+  it('returns -1 for short replies even if repetitive', async () => {
+    const { detectRepetitionCut } = await import('./webLlmProvider');
+    expect(detectRepetitionCut('yes yes yes yes')).toBe(-1);
+  });
+
+  it('detects a sentence repeated many times and cuts after the first copy', async () => {
+    const { detectRepetitionCut } = await import('./webLlmProvider');
+    const sentence = 'Now let\'s assume that you contribute at age 65 and take away at age 95. ';
+    const text = 'Here is the answer. ' + sentence.repeat(10);
+    const cut = detectRepetitionCut(text);
+    expect(cut).toBeGreaterThan(-1);
+    // Keep the intro + exactly one copy of the repeated sentence.
+    expect(text.slice(0, cut)).toBe('Here is the answer. ' + sentence);
+  });
+
+  it('does not fire on a couple of repeats (below the 3x threshold)', async () => {
+    const { detectRepetitionCut } = await import('./webLlmProvider');
+    const sentence = 'Bigger models give smarter answers but need a stronger computer. ';
+    const text = 'Some intro text here. ' + sentence.repeat(2);
+    expect(detectRepetitionCut(text)).toBe(-1);
+  });
+});
+
 describe('web-llm model cache management', () => {
   const conn: AiConnection = {
     id: 'c', provider: 'webllm', label: 'local', apiKey: '',

@@ -67,6 +67,17 @@ export function extractPromptToolCalls(text: string, toolNames: ReadonlySet<stri
       const args = obj.args !== undefined && typeof obj.args === 'object' && obj.args !== null
         ? (obj.args as Record<string, unknown>)
         : {};
+      // A confused model can emit dozens of TOOL_CALL: lines in one reply —
+      // running them all spams the transcript. Keep the first few and report
+      // the overflow as an error so the model learns to stop.
+      if (calls.length >= PROMPT_TOOL_MAX_CALLS_PER_REPLY) {
+        errors.push({
+          raw,
+          message: `Too many tool calls in one reply (max ${PROMPT_TOOL_MAX_CALLS_PER_REPLY}). ` +
+            'Call one tool, read its result, then decide the next step.',
+        });
+        continue;
+      }
       calls.push({ id: nextCallId(), name, args });
     } catch {
       errors.push({
@@ -112,6 +123,12 @@ export function formatPromptToolResults(
  *  they can loop the same broken call forever. */
 export const PROMPT_TOOL_MAX_CALLS = 5;
 
+/** Cap on tool calls parsed from a SINGLE assistant reply. A small model that
+ *  has lost the plot can emit dozens of TOOL_CALL: lines in one message; each
+ *  becomes a transcript chip, so we keep only the first few and tell the model
+ *  to slow down. */
+export const PROMPT_TOOL_MAX_CALLS_PER_REPLY = 3;
+
 /** Minimal JSON-Schema → compact text for the prompt. Full schemas are too
  *  token-heavy for small context windows, so we render "name (type, req?):
  *  description" lines instead. */
@@ -138,7 +155,9 @@ export function buildPromptToolInstructions(specs: ToolSpec[]): string {
     'TOOL_CALL: {"name": "run_projection", "args": {}}',
     'The result comes back as the next message. Rules:',
     '- The TOOL_CALL: line contains ONLY the JSON — all prose goes on other lines.',
-    '- One tool per TOOL_CALL: line; you may emit several lines.',
+    '- Call AT MOST ONE tool, then STOP and wait for its result. Do NOT emit',
+    '  several TOOL_CALL: lines in one reply.',
+    '- Never call the same tool twice in a row with the same arguments.',
     '- Available tools:',
     catalog,
     '- Prefer run_projection/compare_scenarios numbers over guessing.',

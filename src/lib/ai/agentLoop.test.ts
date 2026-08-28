@@ -278,4 +278,29 @@ describe('prompt-protocol tools (local models)', () => {
     // The loop terminated (no infinite hang waiting for a done that never came).
     expect(events.some(e => e.type === 'done')).toBe(false);
   });
+
+  it('refuses to re-run the identical tool+args back-to-back (loop guard)', async () => {
+    // A stuck model calls run_projection with the same args twice in a row.
+    // The second must bounce as an error instead of re-executing and feeding
+    // the loop — and only ONE real tool_result should reference the engine.
+    const { chat } = scripted([
+      [{ type: 'tool_use', call: { id: 'c1', name: 'run_projection', args: {} } },
+       { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'tool_use', call: { id: 'c2', name: 'run_projection', args: {} } },
+       { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'text', text: 'Ok, here is the answer.' },
+       { type: 'done', stopReason: 'end_turn' }],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'check',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+    }));
+    const results = events.filter(e => e.type === 'tool_result') as Array<{ isError: boolean; content: string }>;
+    // First ran fine, second bounced with the loop-guard message.
+    expect(results[0].isError).toBe(false);
+    expect(results[1].isError).toBe(true);
+    expect(results[1].content).toContain('already have its result');
+    // Only one execution hit the engine.
+    expect(results.filter(r => r.content.includes('lifetime tax'))).toHaveLength(1);
+  });
 });

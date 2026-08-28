@@ -116,6 +116,10 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
   const tools = mode === 'native' ? toolSpecs() : [];
   const messages: ChatMessage[] = [...opts.history, { role: 'user', content: opts.userMessage }];
   const knownTools = new Set(toolSpecs().map(s => s.name));
+  // Track the last executed call so we can refuse an immediate identical
+  // repeat — the classic small-model failure is ping-ponging the same two
+  // tools (run_projection / compare_scenarios) with unchanged args forever.
+  let lastCallKey: string | null = null;
 
   try {
     for (let round = 0; round < maxRounds; round++) {
@@ -165,7 +169,18 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
           yield { type: 'tool_result', call, content, isError: true };
           continue;
         }
+        // Refuse an immediate identical re-call (same tool, same args as the
+        // one just executed). The result would be byte-identical, so re-running
+        // it only feeds a loop; bounce it back as an error the model can read.
+        const callKey = `${call.name}:${JSON.stringify(call.args ?? {})}`;
+        if (callKey === lastCallKey) {
+          const content = 'You just ran this exact tool with the same arguments and already have its result above. Do not call it again — answer the user from the numbers you have.';
+          results.push({ toolCallId: call.id, content, isError: true });
+          yield { type: 'tool_result', call, content, isError: true };
+          continue;
+        }
         const outcome: ToolOutcome = executeToolCall(opts.context, call);
+        lastCallKey = callKey;
 
         if (outcome.kind === 'mutation') {
           const proposal: MutationProposal = {

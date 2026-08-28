@@ -57,6 +57,16 @@ describe('extractPromptToolCalls', () => {
     expect(errors).toHaveLength(0);
     expect(prose).toContain('2+2=4');
   });
+
+  it('caps the number of calls kept from one reply and flags the overflow', () => {
+    const spam = Array.from(
+      { length: 8 },
+      () => 'TOOL_CALL: {"name": "run_projection", "args": {}}',
+    ).join('\n');
+    const { calls, errors } = extractPromptToolCalls(spam, names);
+    expect(calls.length).toBe(3); // PROMPT_TOOL_MAX_CALLS_PER_REPLY
+    expect(errors.some(e => e.message.includes('Too many tool calls'))).toBe(true);
+  });
 });
 
 describe('formatPromptToolResults', () => {
