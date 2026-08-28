@@ -830,7 +830,7 @@ function App() {
               />
             )}
 
-            {view === 'connections' && <ConnectionsPage />}
+            {view === 'connections' && <ConnectionsPage onClose={() => setView('agent')} />}
 
             {view === 'compare' && (
               <CompareCard

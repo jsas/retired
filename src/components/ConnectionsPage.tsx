@@ -29,10 +29,17 @@ import {
 import { listModels, testConnection, type ModelInfo } from '../lib/ai/providers';
 import { WEBLLM_MODELS, fmtSize, webGpuAvailable } from '../lib/ai/webLlmModels';
 import { buildMachineGuide, detectGpuMemoryGB, type MachineGuide } from '../lib/ai/machineGuide';
+import { estimateContextFit, fmtMB } from '../lib/ai/vramEstimate';
+import { defaultContextSize } from '../lib/ai/context';
 import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 
-export function ConnectionsPage() {
+/** Upper bound for the local context window — above this even big GPUs run
+ *  out of room for the KV cache, and the small models lose coherence long
+ *  before they fill it. */
+const MAX_LOCAL_CONTEXT = 32768;
+
+export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   useEffect(() => { saveAiSettings(settings); }, [settings]);
 
@@ -51,6 +58,17 @@ export function ConnectionsPage() {
       <div className="flex items-center gap-1.5 mb-1">
         <Plug size={18} className="text-violet-600" />
         <h2 className="text-lg font-bold text-slate-900">Models &amp; Connections</h2>
+        {/* This page is reached from (and is subordinate to) the Assistant —
+            the close button returns there. */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            title="Back to the assistant"
+            className="ml-auto p-1 text-slate-400 hover:text-slate-700 rounded"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
       <p className="text-[11px] text-slate-500 leading-snug mb-4">
         <strong className="text-slate-700">Models</strong> are what thinks; <strong className="text-slate-700">connections</strong> are
@@ -278,30 +296,52 @@ function ModelsSection({ onChange, webllmConn }: {
 
       {/* How much the model can read at once. Plain-language framing: the
           model "sees" this much of your plan and the conversation at a time.
-          Bigger = answers stay coherent on long chats, but needs more memory. */}
-      {webllmConn && (
-        <div className="mt-3 pt-2 border-t border-emerald-100 flex flex-wrap items-center gap-x-2 gap-y-1">
-          <label htmlFor="local-ctx" className="text-[11px] font-medium text-emerald-900">
-            How much the model reads at once
-          </label>
-          <input
-            id="local-ctx"
-            type="number"
-            min={2048}
-            step={1024}
-            value={webllmConn.contextSize ?? ''}
-            onChange={e => onChange(s => {
-              const c = s.connections.find(x => x.id === webllmConn.id);
-              if (c) c.contextSize = e.target.value ? Math.max(2048, Math.round(Number(e.target.value))) : undefined;
-            })}
-            placeholder="16384"
-            className="w-24 px-2 py-1 border border-emerald-200 rounded text-xs font-mono bg-white"
-          />
-          <span className="text-[10px] text-emerald-900/70">
-            Leave blank for the default. Larger needs more memory; smaller runs on weaker computers.
-          </span>
-        </div>
-      )}
+          The window costs GPU memory on top of the model itself, so we show
+          the estimated total and warn when it won't fit. */}
+      {webllmConn && (() => {
+        const modelMeta = WEBLLM_MODELS.find(m => m.id === webllmConn.model);
+        const tokens = webllmConn.contextSize ?? defaultContextSize('webllm');
+        const fit = modelMeta ? estimateContextFit(modelMeta.vramMB, tokens, guide?.gpuMemoryGB ?? null) : null;
+        return (
+          <div className="mt-3 pt-2 border-t border-emerald-100">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <label htmlFor="local-ctx" className="text-[11px] font-medium text-emerald-900">
+                How much the model reads at once
+              </label>
+              <input
+                id="local-ctx"
+                type="number"
+                min={2048}
+                max={MAX_LOCAL_CONTEXT}
+                step={1024}
+                value={webllmConn.contextSize ?? ''}
+                onChange={e => onChange(s => {
+                  const c = s.connections.find(x => x.id === webllmConn.id);
+                  if (!c) return;
+                  c.contextSize = e.target.value
+                    ? Math.min(MAX_LOCAL_CONTEXT, Math.max(2048, Math.round(Number(e.target.value))))
+                    : undefined;
+                })}
+                placeholder={String(defaultContextSize('webllm'))}
+                className="w-24 px-2 py-1 border border-emerald-200 rounded text-xs font-mono bg-white"
+              />
+              <span className="text-[10px] text-emerald-900/70">
+                Leave blank for the default. Larger needs more memory; smaller runs on weaker computers.
+              </span>
+            </div>
+            {fit && (
+              <div className={`text-[10px] mt-1 leading-snug ${fit.fits === false ? 'text-amber-700 font-medium' : 'text-emerald-900/60'}`}>
+                Needs ≈{fmtMB(fit.neededMB)} of graphics memory at this setting
+                ({fmtMB(modelMeta!.vramMB)} for the model + ≈{fmtMB(fit.cacheMB)} for the window).
+                {fit.fits === false && fit.budgetMB != null && (
+                  <> Your computer has about {fmtMB(fit.budgetMB)} free — lower the number or pick a smaller model.</>
+                )}
+                {fit.fits == null && ' Your browser didn\'t say how much you have; if loading fails, lower it.'}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Other downloads: cached models the catalog no longer lists, e.g. an
           older fetch. Shown so they can be deleted to free disk space. */}
