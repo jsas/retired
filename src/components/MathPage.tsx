@@ -89,7 +89,16 @@ function YearWorksheet({ row, inputs, isCouple }: {
         <Line label="Pension" value={row.pensionIncome} />
         <Eq parts="gross benefits (otherGross)" result={c.otherGross} strong />
         <Eq parts="after-tax value (netBenefits)" result={c.netBenefits} />
-        <Eq parts={`portfolio must supply = ${fmt(row.spendingTarget)} − ${fmt(c.netBenefits)}`} result={c.neededAfterTax} strong />
+        {(row.employmentGross ?? 0) > 0.5 && (
+          <>
+            <Line label="employment (gross, stacks for tax)" value={row.employmentGross ?? 0} />
+            <Line label="tax on the employment income" value={row.employmentTax ?? 0} indent />
+            <Line label="after-tax value" value={row.employmentNet ?? 0} indent />
+          </>
+        )}
+        <Eq parts={(row.employmentGross ?? 0) > 0.5
+          ? `portfolio must supply = ${fmt(row.spendingTarget)} − ${fmt(c.netBenefits)} − top-up employment`
+          : `portfolio must supply = ${fmt(row.spendingTarget)} − ${fmt(c.netBenefits)}`} result={c.neededAfterTax} strong />
       </Step>
 
       {/* 3 — RRIF minimum */}
@@ -185,7 +194,7 @@ function YearWorksheet({ row, inputs, isCouple }: {
       {/* 8 — tax */}
       {(row.incomeTax > 0.5 || d.tax.oasClawback > 0.5 || (row.splitTransferred ?? 0) !== 0) && (
         <Step n={++n} title="Income tax" note="Tax on total income, minus the tax already counted on benefits, plus the OAS recovery tax.">
-          <Line label="total net income (benefits + registered + gains×inclusion)" value={c.totalNetIncome} />
+          <Line label="total net income (benefits + employment + registered + gains×inclusion)" value={c.totalNetIncome} />
           <Line label="tax already counted on benefits alone" value={c.taxOnBenefits} indent />
           {d.tax.oasClawback > 0.5 && <Line label="+ OAS clawback (15¢/$ over the threshold)" value={d.tax.oasClawback} indent />}
           {(row.splitTransferred ?? 0) !== 0 && (

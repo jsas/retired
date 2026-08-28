@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Search, X, Sparkles } from 'lucide-react';
+import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
 
 // ---------------------------------------------------------------------------
 // Help content model: every entry is a small tree of {id, title, body} so the
@@ -118,6 +119,17 @@ const SECTIONS: HelpSection[] = [
             <P>The Pensions section models employer <strong>defined-benefit</strong> income: a fixed $/yr starting at the age you choose, taxed as ordinary income and stacked with CPP/OAS — so it directly shrinks how much the portfolio must supply. Tick <em>indexed</em> if the pension grows with CPI (many DB plans do, fully or partially); leave it unticked for a flat nominal pension.</P>
             <P>Set an <strong>end age</strong> for a <strong>bridge / temporary</strong> benefit (e.g. $12k/yr from 60–65 that stops when CPP begins); leave it blank for a lifetime pension. Pension income counts toward the GIS and OAS clawbacks, exactly like CPP does. The spouse plan has its own pension list.</P>
             <P>A <strong>DC / LIRA</strong> lump sum is not entered here — it's already modelled by your RRSP/RRIF balance (it converts to a RRIF and is drawn down like registered savings).</P>
+          </>
+        )
+      },
+      {
+        term: 'Employment income (semi- / post-retirement work)',
+        body: (
+          <>
+            <P>The Employment Income section models <strong>earned income</strong> — a part-time job or consulting gig in the early retirement years. Unlike a pension this is wages: it stacks on top of CPP/OAS/pension for tax (taxed at your marginal rate), counts toward the OAS clawback, and reduces GIS. Set a gross $/yr and a start–end age window (inclusive).</P>
+            <P>Two modes per job. With <strong>tops up spending</strong> on, the after-tax pay covers spending first — so portfolio withdrawals shrink dollar-for-dollar and the savings keep compounding; any excess over the year's need is saved. With it off, the whole after-tax pay is saved. Either way the net lands in the account you pick (Taxable / TFSA / RRSP / Cash). Tick <em>indexed</em> if the pay grows with CPI.</P>
+            <P>The destination defaults to <strong>Taxable</strong>: the app doesn't track TFSA/RRSP contribution room yet, so a registered destination could silently over-contribute. If you pick TFSA or RRSP, an amber note appears when the yearly amount exceeds the annual limit ({new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit)}/yr TFSA) — only use a registered destination if you know you have the room.</P>
+            <P>The Optimize tab's Strategy Explorer suggests work stints automatically: fixed rows (e.g. "$10k/yr to 70") and, when the plan runs a shortfall, a gap-targeted stint sized to the first depleted window. The spouse plan has its own employment list, and a spouse's earnings count toward the couple's GIS.</P>
           </>
         )
       },

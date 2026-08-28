@@ -11,6 +11,12 @@ describe('migrateInputs', () => {
     expect((m.spouse as { pensions: unknown[] }).pensions).toEqual([]);
   });
 
+  it('back-fills an empty employment list for primary and spouse', () => {
+    const m = migrateInputs({ spouse: { enabled: true } });
+    expect(m.employment).toEqual([]);
+    expect((m.spouse as { employment: unknown[] }).employment).toEqual([]);
+  });
+
   it('splits a legacy single annualContribution into the TFSA', () => {
     const m = migrateInputs({ annualContribution: 6000 });
     expect('annualContribution' in m).toBe(false);
