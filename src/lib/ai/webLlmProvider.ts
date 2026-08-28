@@ -207,6 +207,31 @@ export function detectRepetitionCut(text: string): number {
   return -1;
 }
 
+/** Degenerate "word salad" detector. The verbatim-block breaker above misses
+ *  the failure small models like Phi-4 actually produce: a long run-on that
+ *  isn't the SAME block but the same TOKENS recycled in ever-shifting order
+ *  ("…seamlessly adapted successfully continuously reviewed regularly…") plus
+ *  vocabulary dumping (long strings of barely-repeated capitalized terms).
+ *  Healthy prose repeats common words but keeps a rich vocabulary; a loop's
+ *  vocabulary collapses. This returns true when the recent window is clearly
+ *  degenerate. Exported for tests. */
+export function isTokenEcho(text: string): boolean {
+  // Need enough words for the ratio to mean anything; short answers pass.
+  const WORDS = 220;
+  const tokens = text.toLowerCase().split(/[^a-z']+/).filter(w => w.length > 2);
+  if (tokens.length < WORDS) return false;
+  const window = tokens.slice(-WORDS);
+  const unique = new Set(window);
+  const ratio = unique.size / window.length;
+  // A collapsed-vocabulary loop: few distinct words across a long window.
+  if (ratio < 0.30) return true;
+  // A synonym/word-dump: the window is dominated by LONG tokens (the model
+  // listing jargon), which normal sentences never are.
+  const long = window.filter(w => w.length >= 9).length;
+  if (long / window.length > 0.55) return true;
+  return false;
+}
+
 /** Translate engine failures into plain, actionable language. Raw WebGPU
  *  errors ("mapAsync", "device lost") mean nothing to a non-technical user. */
 function translateLocalError(err: unknown): ProviderError {
@@ -272,7 +297,8 @@ export async function* streamWebLlm(
       // Bound the context: the plan digest + tool catalog + a long user answer
       // can exceed the KV cache a small model was compiled for, which is the
       // main cause of mid-generation GPU crashes (mapAsync / device lost).
-      context_window_size: req.contextSize ?? 8192,
+      // Clamp the compile window so an over-large user value can't blow VRAM.
+      context_window_size: Math.min(req.contextSize ?? 16384, 32768),
       temperature: 0.3, // math/reasoning models: keep them deterministic-ish
       // A degenerate reply is a REPEATED sentence, not a single token, so
       // penalize whole n-gram repeats (repetition_penalty) rather than per-
@@ -296,6 +322,7 @@ export async function* streamWebLlm(
   let finishReason: string | null = null;
   const think = createThinkSplitter();
   let visibleSoFar = ''; // for the repetition circuit breaker
+  let reasoningSoFar = ''; // reasoning loops too — and worse, it isn't visible-checked
   let loopedOut = false; // set when the breaker cuts a degenerate repeat
   try {
     for await (const chunk of stream) {
@@ -310,17 +337,35 @@ export async function* streamWebLlm(
         // thinking collapsibly and the answer as the prose. Handles the tag
         // arriving split across chunks.
         const { text: visible, reasoning } = think.push(raw);
-        if (reasoning) yield { type: 'reasoning', text: reasoning };
+        if (reasoning) {
+          reasoningSoFar += reasoning;
+          // A reasoning model can loop INSIDE the thought and never produce an
+          // answer at all. Same breakers as the visible text; on a hit we stop
+          // (the partial thought stays visible, marked as cut short).
+          if (detectRepetitionCut(reasoningSoFar) !== -1 || isTokenEcho(reasoningSoFar)) {
+            loopedOut = true;
+            void engine.interruptGenerate?.();
+            break;
+          }
+          yield { type: 'reasoning', text: reasoning };
+        }
         if (visible) {
           visibleSoFar += visible;
           // Circuit breaker: a small model locked into a repeat loop would
           // otherwise burn the whole token budget on garbage. Cut at the end
-          // of the first clean copy and stop.
+          // of the first clean copy and stop. The token-echo check catches the
+          // synonym word-salad the verbatim-block check can't (Phi-4's failure
+          // mode) — there we drop the degenerate tail rather than yield it.
           const cut = detectRepetitionCut(visibleSoFar);
           if (cut !== -1) {
             const keep = visibleSoFar.slice(0, cut);
             const alreadySent = visibleSoFar.length - visible.length;
             if (keep.length > alreadySent) yield { type: 'text', text: keep.slice(alreadySent) };
+            loopedOut = true;
+            void engine.interruptGenerate?.();
+            break;
+          }
+          if (isTokenEcho(visibleSoFar)) {
             loopedOut = true;
             void engine.interruptGenerate?.();
             break;

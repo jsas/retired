@@ -272,6 +272,35 @@ describe('detectRepetitionCut (degenerate-loop circuit breaker)', () => {
   });
 });
 
+describe('isTokenEcho (word-salad circuit breaker)', () => {
+  it('returns false for healthy, varied prose', async () => {
+    const { isTokenEcho } = await import('./webLlmProvider');
+    const healthy = Array.from({ length: 12 }, (_, i) =>
+      `Year ${2026 + i}: the balance grows, tax is owed, and withdrawals cover spending.`,
+    ).join(' ');
+    expect(isTokenEcho(healthy)).toBe(false);
+  });
+
+  it('returns false for short answers', async () => {
+    const { isTokenEcho } = await import('./webLlmProvider');
+    expect(isTokenEcho('Yes, that works.')).toBe(false);
+  });
+
+  it('fires on a collapsed-vocabulary loop (Phi-4 style rambling)', async () => {
+    const { isTokenEcho } = await import('./webLlmProvider');
+    // The same handful of filler words recycled — the real Phi-4 failure.
+    const salad = 'seamlessly continuously consistently successfully optimally effectively proactively ';
+    const text = 'Let me compute the contribution. ' + salad.repeat(40);
+    expect(isTokenEcho(text)).toBe(true);
+  });
+
+  it('fires on a jargon word-dump (long barely-repeated terms)', async () => {
+    const { isTokenEcho } = await import('./webLlmProvider');
+    const dump = Array.from({ length: 240 }, (_, i) => `transcendentalization${i}`).join(' ');
+    expect(isTokenEcho(dump)).toBe(true);
+  });
+});
+
 describe('web-llm model cache management', () => {
   const conn: AiConnection = {
     id: 'c', provider: 'webllm', label: 'local', apiKey: '',

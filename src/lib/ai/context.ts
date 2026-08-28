@@ -31,11 +31,14 @@ export function estimateTokens(system: string, messages: ChatMessage[]): number 
 }
 
 /** The context window a connection gets when the user hasn't set one. Local
- *  models are compiled for a small KV cache (web-llm is created with
- *  context_window_size 8192); cloud endpoints default to a large window the
- *  user can narrow in Connections if their model is smaller. */
+ *  models default to 16384: every model in the curated list (Phi-3/4, Qwen3,
+ *  Llama-3.x) supports at least that, and the plan digest + tool catalog alone
+ *  is several thousand tokens — at 8192 the history was compacted so hard the
+ *  model lost the thread and rambled. The KV cache is clamped separately so an
+ *  over-large value can't blow GPU memory. Cloud endpoints default to a large
+ *  window the user can narrow in Connections if their model is smaller. */
 export function defaultContextSize(provider: string): number {
-  return provider === 'webllm' ? 8192 : 128000;
+  return provider === 'webllm' ? 16384 : 128000;
 }
 
 export interface CompactionPlan {

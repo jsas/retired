@@ -26,9 +26,12 @@ describe('estimateTokens', () => {
 });
 
 describe('defaultContextSize', () => {
-  it('gives local web-llm models a small window and cloud a large one', () => {
-    expect(defaultContextSize('webllm')).toBe(8192);
-    expect(defaultContextSize('openai')).toBeGreaterThan(8192);
+  it('gives local web-llm models a modest window and cloud a large one', () => {
+    // 16384: big enough that the plan digest + tool catalog + history aren't
+    // compacted into incoherence (the 8192 default caused word-salad rambles),
+    // small enough to compile on a mid-range GPU. Cloud gets a large window.
+    expect(defaultContextSize('webllm')).toBe(16384);
+    expect(defaultContextSize('openai')).toBeGreaterThan(16384);
   });
 });
 
