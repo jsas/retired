@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   Check, ClipboardCopy, Download, FileJson, FileSpreadsheet, FileText, Upload, Database,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import {
   COLUMN_GROUPS, METADATA_SECTIONS, buildExport,
@@ -119,6 +120,9 @@ function ProjectionExportSection({
   const fileBase = (nameTouched ? baseName : defaultBase) || defaultBase;
 
   const [copied, setCopied] = useState(false);
+  // The full file preview is long; keep it folded until asked for so the
+  // export/backup controls below stay within reach without scrolling.
+  const [contentsOpen, setContentsOpen] = useState(false);
   const copy = () => {
     navigator.clipboard.writeText(payload.content).then(
       () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
@@ -228,16 +232,32 @@ function ProjectionExportSection({
           </div>
         )}
 
-        {/* The FULL file, copyable — this is exactly what download writes. */}
+        {/* The FULL file, copyable — this is exactly what download writes.
+            Collapsed by default: it's long, and the export controls below are
+            the part the user usually wants. */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <div className={SECTION.replace(' mb-1.5', '')}>File contents</div>
+            <button
+              onClick={() => setContentsOpen(o => !o)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-800"
+              title={contentsOpen ? 'Hide the file preview' : 'Show the file preview'}
+            >
+              {contentsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              File contents
+              {!contentsOpen && (
+                <span className="normal-case font-normal text-slate-400">
+                  ({payload.content.split('\n').length.toLocaleString()} lines)
+                </span>
+              )}
+            </button>
             <button onClick={copy} className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline">
               {copied ? <Check size={12} /> : <ClipboardCopy size={12} />}
               {copied ? 'Copied' : 'Copy to clipboard'}
             </button>
           </div>
-          <pre className="max-h-[28rem] overflow-auto rounded border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre">{payload.content}</pre>
+          {contentsOpen && (
+            <pre className="max-h-[28rem] overflow-auto rounded border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre">{payload.content}</pre>
+          )}
         </div>
 
         {/* Filename + actions */}
