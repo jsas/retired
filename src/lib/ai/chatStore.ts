@@ -50,6 +50,9 @@ const threadSchema = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   turns: z.array(turnSchema),
+  /** Extra standing instructions for this chat, appended to the built system
+   *  prompt. Optional so older saved chats stay valid. */
+  systemNote: z.string().optional(),
 });
 
 export type ChatThread = z.infer<typeof threadSchema>;

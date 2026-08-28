@@ -19,7 +19,7 @@ import {
 } from '@assistant-ui/react';
 import {
   Bot, Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench,
-  Copy, ClipboardPaste, Download,
+  Copy, ClipboardPaste, Download, RotateCcw, Settings2,
 } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
@@ -192,6 +192,18 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
     });
   };
 
+  /** Patch non-turn fields of the active thread (e.g. its system note). */
+  const patchThread = (patch: Partial<ChatThread>) => {
+    setChatState(prev => {
+      const id = prev.activeThreadId;
+      if (!id) return prev;
+      return {
+        ...prev,
+        threads: prev.threads.map(t => (t.id === id ? { ...t, ...patch } : t)),
+      };
+    });
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-11rem)] min-h-[30rem]">
       {/* Header: title + model picker + connections link. Lives on the page so
@@ -287,6 +299,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
               scenarioList={scenarioList}
               onApply={onApply}
               patchTurns={patchTurns}
+              patchThread={patchThread}
             />
           )}
         </div>
@@ -340,7 +353,7 @@ function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
 // One conversation (assistant-ui runtime around our agent loop)
 // ---------------------------------------------------------------------------
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, config, scenarioName, scenarioList, onApply, patchTurns }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -352,10 +365,16 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
   scenarioList: Array<{ id: string; name: string }>;
   onApply: (patch: Partial<RetirementInputs>) => void;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
+  patchThread: (patch: Partial<ChatThread>) => void;
 }) {
   const turns = thread.turns as Turn[];
   const [running, setRunning] = useState(false);
   const [loadProgress, setLoadProgress] = useState<{ progress: number; text: string } | null>(null);
+  // Speed of the current/last reply, measured while it streams. Tokens are
+  // estimated from characters (~4 chars/token) since prompt-mode streams give
+  // us no provider counts.
+  const [tps, setTps] = useState<number | null>(null);
+  const statsRef = useRef<{ start: number; first: number | null; chars: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const downloadDoneRef = useRef(false);
   const pendingDecisions = useRef(new Map<string, (d: { approved: boolean; note?: string }) => void>());
@@ -369,17 +388,24 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
-  const send = async (message: AppendMessage) => {
-    const textPart = message.content.find(p => p.type === 'text');
-    const content = (textPart && 'text' in textPart ? textPart.text : '').trim();
+  /**
+   * Run one assistant turn: append (or replace) a streaming assistant bubble
+   * and drive the agent loop against the given prior history. Shared by send
+   * (new user message) and regenerate (re-run after an existing user message).
+   */
+  const runTurn = async (priorTurns: Turn[], content: string, appendUser: boolean) => {
     if (!content || running || !connection) return;
     setRunning(true);
+    statsRef.current = { start: Date.now(), first: null, chars: 0 };
+    setTps(null);
 
-    const userTurn: Turn = { id: newTurnId(), role: 'user', text: content, tools: [], changes: [] };
+    const userTurn: Turn | null = appendUser
+      ? { id: newTurnId(), role: 'user', text: content, tools: [], changes: [] }
+      : null;
     const assistantTurn: Turn = { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming' };
-    patchTurns(prev => [...prev, userTurn, assistantTurn]);
+    patchTurns(prev => userTurn ? [...prev, userTurn, assistantTurn] : [...prev, assistantTurn]);
 
-    const history = toHistory(turns);
+    const history = toHistory(priorTurns);
     const abort = new AbortController();
     abortRef.current = abort;
 
@@ -389,11 +415,16 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
         : t)));
     };
 
-    const system = toolMode === 'prompt'
+    const baseSystem = toolMode === 'prompt'
       ? buildSystemPrompt(scenarioName, { toolMode: 'prompt' }) + '\n\n' +
         buildPromptToolInstructions(toolSpecs()) + '\n\n' +
         buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) })
       : buildSystemPrompt(scenarioName);
+    // The chat's standing instructions go last so they read as the user's own
+    // voice; they can steer tone/focus but the base prompt's rules come first.
+    const system = thread.systemNote?.trim()
+      ? `${baseSystem}\n\nAdditional instructions for this chat:\n${thread.systemNote.trim()}`
+      : baseSystem;
 
     if (isLocal) {
       downloadDoneRef.current = false;
@@ -436,6 +467,12 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
         switch (evt.type) {
           case 'text':
             patchAssistant(t => { t.text += evt.text; });
+            if (statsRef.current) {
+              statsRef.current.chars += evt.text.length;
+              statsRef.current.first ??= Date.now();
+              const secs = (Date.now() - statsRef.current.first) / 1000;
+              if (secs > 0.5) setTps(statsRef.current.chars / 4 / secs);
+            }
             break;
           case 'tool_start':
             patchAssistant(t => { t.tools.push({ id: evt.call.id, name: evt.call.name, state: 'running' }); });
@@ -490,6 +527,39 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
     pendingDecisions.current.delete(change.callId);
   };
 
+  const send = async (message: AppendMessage) => {
+    const textPart = message.content.find(p => p.type === 'text');
+    const content = (textPart && 'text' in textPart ? textPart.text : '').trim();
+    await runTurn(turns, content, true);
+  };
+
+  /** Regenerate: drop every turn after the user message that preceded the
+   *  assistant reply, then re-run from that message. parentId is the id of
+   *  that user turn (null only for a leading assistant message — regenerate
+   *  is offered on user-preceded replies only, so this won't fire). */
+  const reload = async (parentId: string | null) => {
+    if (running || !parentId) return;
+    const idx = turns.findIndex(t => t.id === parentId);
+    if (idx === -1 || turns[idx].role !== 'user') return;
+    const prior = turns.slice(0, idx + 1);
+    patchTurns(() => prior);
+    await runTurn(prior, prior[prior.length - 1].text, false);
+  };
+
+  /** Remove one turn. Deleting an assistant turn keeps the conversation
+   *  intact; deleting a user turn also drops the assistant reply that
+   *  followed it, so the transcript stays a clean user→assistant pairing. */
+  const deleteMessage = (messageId: string) => {
+    if (running) return;
+    patchTurns(prev => {
+      const idx = prev.findIndex(t => t.id === messageId);
+      if (idx === -1) return prev;
+      const drop = new Set([messageId]);
+      if (prev[idx].role === 'user' && prev[idx + 1]?.role === 'assistant') drop.add(prev[idx + 1].id);
+      return prev.filter(t => !drop.has(t.id));
+    });
+  };
+
   const cancel = async () => { abortRef.current?.abort(); };
 
   const runtime = useExternalStoreRuntime<Turn>({
@@ -499,6 +569,11 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
     convertMessage: turnToMessage,
     onNew: send,
     onCancel: cancel,
+    onReload: reload,
+    onDelete: deleteMessage,
+    // The runtime rewrites the list itself on some flows (e.g. cancel after
+    // send); hand the rewrite straight back into the chat store.
+    setMessages: next => patchTurns(() => next.map(t => ({ ...t }))),
   });
 
   return (
@@ -515,21 +590,42 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
                 const turn = message.metadata?.custom?.turn as Turn | undefined;
                 if (message.role === 'user') {
                   return (
-                    <div className="flex justify-end">
+                    <div className="group flex justify-end items-start gap-1">
+                      <DeleteButton running={running} onDelete={() => deleteMessage(message.id)} />
                       <div className="max-w-[85%] px-3 py-2 rounded-lg bg-violet-600 text-white text-xs whitespace-pre-wrap">
                         <MessagePrimitive.Content />
                       </div>
                     </div>
                   );
                 }
+                const streaming = turn?.state === 'streaming';
+                const thinking = streaming && !turn?.text && !loadProgress;
                 return (
-                  <div className="flex justify-start">
+                  <div className="group flex justify-start items-start gap-1">
                     <div className="max-w-[85%] space-y-2">
                       <div className="px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs whitespace-pre-wrap leading-relaxed">
-                        <MessagePrimitive.Content />
+                        {thinking ? (
+                          <span className="flex items-center gap-1.5 text-slate-400 italic">
+                            <Loader2 size={11} className="animate-spin" /> Thinking…
+                          </span>
+                        ) : (
+                          <MessagePrimitive.Content />
+                        )}
                       </div>
-                      {turn && <AssistantExtras turn={turn} onDecide={decideChange} />}
+                      {turn && (
+                        <AssistantExtras turn={turn} onDecide={decideChange} tokensPerSecond={tps} />
+                      )}
                     </div>
+                    {!streaming && (
+                      <div className="flex flex-col gap-0.5 pt-1.5">
+                        {message.isLast && (
+                          <MessageActionButton onClick={() => void reload(message.parentId)} title="Regenerate this response">
+                            <RotateCcw size={12} />
+                          </MessageActionButton>
+                        )}
+                        <DeleteButton running={running} onDelete={() => deleteMessage(message.id)} />
+                      </div>
+                    )}
                   </div>
                 );
               }}
@@ -552,6 +648,10 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
 
           {/* Composer */}
           <div className="border-t border-slate-100 p-2.5">
+            <SystemNoteEditor
+              note={thread.systemNote ?? ''}
+              onChange={note => patchThread({ systemNote: note || undefined })}
+            />
             <ComposerPrimitive.Root className="flex items-end gap-2">
               <ComposerPrimitive.Input
                 placeholder={ready ? 'Ask about your plan, or describe your situation…' : 'Connect a provider first (Connections page)'}
@@ -584,11 +684,12 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, inputs, conf
 }
 
 /** Renders the parts assistant-ui doesn't model, read off the Turn carried in
- *  the message's metadata.custom: tool-activity chips and the confirm-before-
- *  apply change cards. */
-function AssistantExtras({ turn, onDecide }: {
+ *  the message's metadata.custom: tool-activity chips, the confirm-before-
+ *  apply change cards, and the measured reply speed. */
+function AssistantExtras({ turn, onDecide, tokensPerSecond }: {
   turn: Turn;
   onDecide: (change: PendingChange, approved: boolean) => void;
+  tokensPerSecond: number | null;
 }) {
   return (
     <>
@@ -613,7 +714,87 @@ function AssistantExtras({ turn, onDecide }: {
       {turn.changes.map(change => (
         <ChangeCard key={change.callId} change={change} onDecide={onDecide} />
       ))}
+      {tokensPerSecond != null && turn.state !== 'streaming' && (
+        <div className="text-[10px] text-slate-400">~{tokensPerSecond.toFixed(1)} tok/s</div>
+      )}
     </>
+  );
+}
+
+/** Per-chat standing instructions, appended to the built system prompt. A
+ *  collapsed one-line button by default; opens into a small editor. */
+function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(note);
+  if (!open) {
+    return (
+      <button
+        onClick={() => { setDraft(note); setOpen(true); }}
+        className="flex items-center gap-1.5 mb-2 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
+        title="Add standing instructions for this chat (appended to the system prompt)"
+      >
+        <Settings2 size={11} />
+        {note.trim() ? 'Custom instructions: on' : 'Custom instructions'}
+      </button>
+    );
+  }
+  return (
+    <div className="mb-2 border border-slate-200 rounded p-2 bg-slate-50">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          Custom instructions for this chat
+        </span>
+        <button
+          onClick={() => setOpen(false)}
+          className="text-slate-400 hover:text-slate-700"
+          title="Close"
+        >
+          <X size={12} />
+        </button>
+      </div>
+      <textarea
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        rows={2}
+        placeholder='e.g. "Keep answers short" or "Focus on the TFSA vs RRSP trade-off".'
+        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500 resize-none"
+      />
+      <div className="flex justify-end gap-2 mt-1">
+        <button
+          onClick={() => { onChange(draft.trim()); setOpen(false); }}
+          className="px-2.5 py-1 bg-violet-600 text-white text-[11px] font-semibold rounded hover:bg-violet-700"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Small hover-revealed button next to a bubble. */
+function MessageActionButton({ onClick, title, children }: {
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Per-message delete; hidden while a reply is streaming. */
+function DeleteButton({ running, onDelete }: { running: boolean; onDelete: () => void }) {
+  if (running) return null;
+  return (
+    <MessageActionButton onClick={onDelete} title="Delete this message">
+      <Trash2 size={12} />
+    </MessageActionButton>
   );
 }
 

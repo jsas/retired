@@ -19,6 +19,17 @@ describe('extractPromptToolCalls', () => {
     expect(errors).toHaveLength(0);
   });
 
+  it('matches the marker case-insensitively (small models emit tool_call:)', () => {
+    const { prose, calls, errors } = extractPromptToolCalls(
+      'tool_call: {"name": "run_projection", "args": {"overrides": {}}}\nThe plan is in a shortfall state.',
+      names,
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].name).toBe('run_projection');
+    expect(prose).toBe('The plan is in a shortfall state.');
+    expect(errors).toHaveLength(0);
+  });
+
   it('swallows continuation lines when args wrap', () => {
     const { calls } = extractPromptToolCalls(
       'TOOL_CALL: {"name": "get_scenario",\n  "args": {"section": "summary"}}',

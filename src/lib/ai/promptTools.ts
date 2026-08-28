@@ -42,10 +42,12 @@ export function extractPromptToolCalls(text: string, toolNames: ReadonlySet<stri
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const start = line.indexOf('TOOL_CALL:');
+    // Small models emit the marker in any casing (tool_call:, Tool_Call:, …) —
+    // match case-insensitively so a lowercase marker doesn't leak into the chat.
+    const start = line.toLowerCase().indexOf('tool_call:');
     if (start === -1) { proseLines.push(line); continue; }
     proseLines.push(line.slice(0, start));
-    let raw = line.slice(start + 'TOOL_CALL:'.length).trim();
+    let raw = line.slice(start + 'tool_call:'.length).trim();
     // Swallow continuation lines while the JSON is incomplete (more opens
     // than closes) so multi-line args still parse.
     while (i + 1 < lines.length && !jsonLooksComplete(raw)) {
