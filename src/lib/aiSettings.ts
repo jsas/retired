@@ -28,6 +28,9 @@ export interface AiConnection {
   model: string;
   /** OpenAI-compatible providers only; the provider's default when omitted. */
   baseUrl?: string;
+  /** Context window in tokens, for the usage indicator + compaction trigger.
+   *  When omitted a provider default is assumed (small for local models). */
+  contextSize?: number;
 }
 
 export interface AiPromptPreset {
@@ -53,6 +56,7 @@ const connectionSchema = z.object({
   apiKey: z.string(),
   model: z.string().min(1),
   baseUrl: z.string().optional(),
+  contextSize: z.number().int().positive().optional(),
 });
 
 const promptSchema = z.object({

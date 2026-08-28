@@ -625,6 +625,20 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
             />
           </label>
         )}
+        <label className="block">
+          <span className="block text-[10px] text-slate-500 mb-0.5">Context window (tokens, optional)</span>
+          <input
+            type="number"
+            min={1024}
+            value={c.contextSize ?? ''}
+            onChange={e => onPatch(c.id, { contextSize: e.target.value ? Math.max(1024, Math.round(Number(e.target.value))) : undefined })}
+            placeholder={c.provider === 'webllm' ? '8192' : '128000'}
+            className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+          />
+          <span className="block text-[9px] text-slate-400 mt-0.5">
+            Drives the usage meter + auto-compaction. Default is small for local models.
+          </span>
+        </label>
       </div>
 
       {/* Reachability + model discovery */}

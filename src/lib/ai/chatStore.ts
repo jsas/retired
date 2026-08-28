@@ -61,6 +61,10 @@ const threadSchema = z.object({
   /** Extra standing instructions for this chat, appended to the built system
    *  prompt. Optional so older saved chats stay valid. */
   systemNote: z.string().optional(),
+  /** Running digest of compacted older turns, written by the model the first
+   *  time the conversation outgrows the context window and extended on later
+   *  compactions. Optional so older saved chats stay valid. */
+  contextSummary: z.string().optional(),
 });
 
 export type ChatThread = z.infer<typeof threadSchema>;

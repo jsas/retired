@@ -25,12 +25,15 @@ import {
 import type { RetirementInputs } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
 import {
-  connectionReady, loadAiSettings, saveAiSettings, type AiSettings,
+  connectionReady, loadAiSettings, saveAiSettings, type AiConnection, type AiSettings,
 } from '../lib/aiSettings';
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
 import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import {
+  defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
+} from '../lib/ai/context';
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
@@ -119,6 +122,36 @@ function toHistory(turns: Turn[]): ChatMessage[] {
     }
   }
   return messages;
+}
+
+/** Ask the model to condense compacted history into a short running digest.
+ *  Uses a minimal one-off request (no tools, small max_tokens) so it stays
+ *  cheap. Returns '' when nothing usable came back. */
+async function digestHistory(
+  connection: AiConnection,
+  isLocal: boolean,
+  excerpt: string,
+  abort: AbortController,
+): Promise<string> {
+  const req = {
+    system:
+      'You condense a retirement-planning conversation into a running digest for the model ' +
+      'that continues it. Preserve every concrete fact (ages, balances, benefit amounts, ' +
+      'start ages, decisions made, changes the user approved or rejected) and drop the prose. ' +
+      'Reply with ONLY the digest — bullet points, under 200 words.',
+    messages: [{ role: 'user' as const, content: excerpt }],
+    tools: [],
+    maxTokens: 400,
+    signal: abort.signal,
+  };
+  let text = '';
+  const stream = isLocal
+    ? (await import('../lib/ai/webLlmProvider')).streamWebLlm(connection, req)
+    : streamChat(connection, req);
+  for await (const evt of stream) {
+    if (evt.type === 'text') text += evt.text;
+  }
+  return text.trim();
 }
 
 /** Turn → what assistant-ui renders. Tool calls + change cards are added by a
@@ -404,6 +437,21 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
+  // Estimated context usage for the meter: a persona-sized system prompt plus
+  // the serialized history (the digest note when the thread was compacted).
+  // Recomputed as the transcript grows; the prompt-mode plan digest isn't
+  // counted, so local readings run a little low — acceptable for a gauge.
+  const contextUsed = useMemo(() => {
+    if (!connection) return 0;
+    const system = (settings.systemPromptOverride?.trim() || DEFAULT_SYSTEM_PROMPT) +
+      (thread.systemNote ? `\n${thread.systemNote}` : '');
+    const history = toHistory(turns);
+    if (thread.contextSummary) {
+      return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...history]);
+    }
+    return estimateTokens(system, history);
+  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns]);
+
   /**
    * Run one assistant turn: append (or replace) a streaming assistant bubble
    * and drive the agent loop against the given prior history. Shared by send
@@ -421,7 +469,6 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     const assistantTurn: Turn = { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming' };
     patchTurns(prev => userTurn ? [...prev, userTurn, assistantTurn] : [...prev, assistantTurn]);
 
-    const history = toHistory(priorTurns);
     const abort = new AbortController();
     abortRef.current = abort;
 
@@ -442,6 +489,24 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     const system = thread.systemNote?.trim()
       ? `${baseSystem}\n\nAdditional instructions for this chat:\n${thread.systemNote.trim()}`
       : baseSystem;
+
+    // Fit the conversation into the model's context window: when the estimated
+    // usage crosses the trigger, the oldest turns are folded away and replaced
+    // by the running digest. The transcript itself is never altered — only
+    // what the provider sees. The digest is written by the model (below) the
+    // first time turns are dropped; until then a placeholder note stands in.
+    const contextSize = connection.contextSize ?? defaultContextSize(connection.provider);
+    const fullHistory = toHistory(priorTurns);
+    const compaction = planCompaction({
+      system,
+      messages: fullHistory,
+      contextSize,
+      priorSummary: thread.contextSummary ?? '',
+    });
+    const history = compaction.messages;
+    if (compaction.compacted) {
+      patchAssistant(t => { t.tools.push({ id: `compact-${Date.now().toString(36)}`, name: 'context compacted', state: 'done', summary: 'Older messages were summarized to fit the context window.' }); });
+    }
 
     if (isLocal) {
       downloadDoneRef.current = false;
@@ -534,6 +599,16 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       setRunning(false);
       setLoadProgress(null);
       abortRef.current = null;
+    }
+
+    // Write (or extend) the running digest after a compacted turn, so the next
+    // request carries a real summary rather than the placeholder. Fire-and-
+    // forget: it must not block the reply, and a failure just means the next
+    // compaction reuses the prior digest.
+    if (compaction.compacted && compaction.excerptToDigest) {
+      void digestHistory(connection, isLocal, compaction.excerptToDigest, abort)
+        .then(digest => { if (digest) patchThread({ contextSummary: digest }); })
+        .catch(() => { /* keep the prior digest */ });
     }
   };
 
@@ -691,6 +766,13 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                 override={settings.systemPromptOverride ?? ''}
                 onChange={text => onSettingsChange(prev => ({ ...prev, systemPromptOverride: text || undefined }))}
               />
+              {connection && (
+                <ContextMeter
+                  used={contextUsed}
+                  limit={connection.contextSize ?? defaultContextSize(connection.provider)}
+                  compacted={Boolean(thread.contextSummary)}
+                />
+              )}
             </div>
             <ComposerPrimitive.Root className="flex items-end gap-2">
               <ComposerPrimitive.Input
@@ -833,6 +915,35 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
         </button>
       </div>
     </div>
+  );
+}
+
+/** Estimated context-window usage as a small bar. Amber near the compaction
+ *  trigger, red past it; the tooltip explains the estimate and compaction. */
+function ContextMeter({ used, limit, compacted }: { used: number; limit: number; compacted: boolean }) {
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+  const over = used > limit * COMPACT_AT;
+  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+  return (
+    <span
+      className="flex items-center gap-1.5 ml-auto"
+      title={
+        `Estimated context usage: ~${fmt(used)} of ${fmt(limit)} tokens (~4 chars/token). ` +
+        (compacted
+          ? 'Older messages have been compacted into a summary to fit.'
+          : `Past ${Math.round(COMPACT_AT * 100)}% the oldest messages are summarized to fit.`)
+      }
+    >
+      <span className={`text-[10px] font-semibold ${over ? 'text-amber-600' : 'text-slate-400'}`}>
+        ~{fmt(used)}/{fmt(limit)}
+      </span>
+      <span className="w-16 h-1.5 bg-slate-200 rounded overflow-hidden">
+        <span
+          className={`block h-full transition-all ${over ? 'bg-amber-500' : 'bg-violet-400'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+    </span>
   );
 }
 
