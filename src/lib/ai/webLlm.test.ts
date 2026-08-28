@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { prebuiltAppConfig } from '@mlc-ai/web-llm';
 import { WEBLLM_MODELS, fmtVram, webGpuAvailable } from './webLlmModels';
 import { connectionReady, defaultModelFor, type AiConnection } from '../aiSettings';
 import { buildPlanDigest } from '../agentQA';
@@ -15,25 +16,31 @@ let crashAfter: string | null = null; // when set, the stream throws after one c
 const cachedModels = new Set<string>(); // models the fake cache reports as present
 let deletedModels: string[] = [];
 
-vi.mock('@mlc-ai/web-llm', () => ({
-  CreateMLCEngine: async () => ({
-    chat: {
-      completions: {
-        create: async () => (async function* () {
-          if (crashAfter) {
-            yield { choices: [{ delta: { content: crashAfter } }] };
-            throw new Error("Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
-          }
-          yield* scriptedChunks;
-        })(),
+vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
+  // Keep the real prebuilt catalog (so the curated-list test validates against
+  // genuine ids) but fake the engine + cache.
+  const actual = await importOriginal<typeof import('@mlc-ai/web-llm')>();
+  return {
+    ...actual,
+    CreateMLCEngine: async () => ({
+      chat: {
+        completions: {
+          create: async () => (async function* () {
+            if (crashAfter) {
+              yield { choices: [{ delta: { content: crashAfter } }] };
+              throw new Error("Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
+            }
+            yield* scriptedChunks;
+          })(),
+        },
       },
-    },
-    interruptGenerate: async () => { interruptCalls++; },
-    unload: async () => {},
-  }),
-  hasModelInCache: async (id: string) => cachedModels.has(id),
-  deleteModelAllInfoInCache: async (id: string) => { deletedModels.push(id); cachedModels.delete(id); },
-}));
+      interruptGenerate: async () => { interruptCalls++; },
+      unload: async () => {},
+    }),
+    hasModelInCache: async (id: string) => cachedModels.has(id),
+    deleteModelAllInfoInCache: async (id: string) => { deletedModels.push(id); cachedModels.delete(id); },
+  };
+});
 
 describe('curated web-llm model list', () => {
   it('ships only valid MLC prebuilt ids with VRAM labels', () => {
@@ -46,13 +53,14 @@ describe('curated web-llm model list', () => {
     }
   });
 
-  it('is math/reasoning focused (math, R1, thinking, or reasoning in the id/label)', () => {
+  it('contains only ids that exist in web-llm\'s prebuilt catalog (else they won\'t load)', () => {
+    // A stale or hand-typed id fails at download time with a confusing error —
+    // verify every curated id is actually a known prebuild.
+    const prebuilt = new Set(
+      (prebuiltAppConfig.model_list as Array<{ model_id: string }>).map(m => m.model_id),
+    );
     for (const m of WEBLLM_MODELS) {
-      const s = `${m.id} ${m.label}`.toLowerCase();
-      expect(
-        s.includes('math') || s.includes('r1') || s.includes('reasoning') || s.includes('thinking') || s.includes('qwen3'),
-        `model ${m.id} is not math/reasoning-flavored`,
-      ).toBe(true);
+      expect(prebuilt.has(m.id), `model ${m.id} is not in web-llm's prebuilt catalog`).toBe(true);
     }
   });
 
@@ -70,7 +78,7 @@ describe('curated web-llm model list', () => {
 describe('webllm as a provider in settings', () => {
   const local: AiConnection = {
     id: 'c', provider: 'webllm', label: 'local', apiKey: '',
-    model: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
+    model: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
   };
 
   it('needs no key or base URL — just a model id', () => {
@@ -101,7 +109,7 @@ describe('buildPlanDigest (chat-only provider context)', () => {
 describe('streamWebLlm', () => {
   const conn: AiConnection = {
     id: 'c', provider: 'webllm', label: 'local', apiKey: '',
-    model: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
+    model: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
   };
 
   const collect = async (signal?: AbortSignal): Promise<StreamEvent[]> => {
@@ -263,7 +271,7 @@ describe('detectRepetitionCut (degenerate-loop circuit breaker)', () => {
 describe('web-llm model cache management', () => {
   const conn: AiConnection = {
     id: 'c', provider: 'webllm', label: 'local', apiKey: '',
-    model: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
+    model: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
   };
 
   it('reports whether a model is cached, and false on a cache error', async () => {

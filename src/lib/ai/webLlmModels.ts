@@ -5,11 +5,17 @@
 // from MLC's public HuggingFace mirrors on first use (one multi-GB download,
 // then cached in the browser's Cache API / IndexedDB / OPFS).
 //
-// The list is curated toward MATH AND REASONING models — the ones most useful
-// for poking at a retirement projection — each labeled with its VRAM
-// requirement so users pick what their GPU can actually hold. The full
-// prebuilt catalog (60+ general-chat and vision models) stays available via
-// the free-text model field; these are just the good defaults.
+// Every id below is a verified MLC PREBUILD (present in web-llm's
+// prebuiltAppConfig) — a model that isn't MLC-compiled will not load. The
+// LiteRT/MediaPipe collections (litert-community Gemma etc.) are a DIFFERENT
+// runtime and are intentionally absent here.
+//
+// The list is curated toward INSTRUCT/REASONING models that can follow the
+// tool protocol and stay grounded on a retirement projection, ordered
+// best-first for a typical laptop GPU. VRAM figures come straight from
+// web-llm's own metadata. The full prebuilt catalog (160+ general-chat and
+// vision models) stays available via the free-text model field; these are
+// just the good defaults.
 
 export interface WebLlmModelChoice {
   /** The prebuilt model_id from web-llm's prebuiltAppConfig. */
@@ -26,36 +32,43 @@ export interface WebLlmModelChoice {
 }
 
 export const WEBLLM_MODELS: WebLlmModelChoice[] = [
-  // NOTE: the list is ordered best-first for a typical laptop GPU. The 1.5B
-  // sits last deliberately — it fits anywhere but is too weak to follow the
-  // tool protocol or stay grounded on a long interview, so it's a last resort.
+  // NOTE: ordered best-first for a typical laptop GPU. Small ≠ good here —
+  // the weakest models can't follow the tool protocol, so the list starts at
+  // models that actually work and only goes down to genuinely usable ones.
+  {
+    id: 'Qwen3.5-4B-q4f16_1-MLC',
+    label: 'Qwen3.5 4B',
+    vramMB: 3868,
+    sizeGB: 2.8,
+    blurb: 'Newest all-rounder; strongest instruction-following in this size. Recommended for most.',
+  },
   {
     id: 'Qwen3-4B-q4f16_1-MLC',
     label: 'Qwen3 4B (thinking)',
     vramMB: 3432,
     sizeGB: 2.5,
-    blurb: 'Best balance of size and quality; has a reasoning mode. Recommended for most.',
+    blurb: 'Reasoning mode for multi-step math; a touch smaller download than 3.5.',
   },
   {
     id: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
     label: 'Ministral 3 3B Reasoning',
     vramMB: 2864,
     sizeGB: 2.1,
-    blurb: 'Compact reasoning model, strong on multi-step arithmetic. Smaller download.',
+    blurb: 'Compact reasoning model, strong on multi-step arithmetic. Smallest good option.',
   },
   {
-    id: 'Qwen2.5-Math-7B-Instruct-q4f16_1-MLC',
-    label: 'Qwen2.5 Math 7B',
-    vramMB: 5107,
-    sizeGB: 4.5,
-    blurb: 'Strongest dedicated math model that fits a mid-range GPU.',
+    id: 'Phi-4-mini-instruct-q4f16_1-MLC',
+    label: 'Phi-4 Mini 3.8B',
+    vramMB: 3438,
+    sizeGB: 2.5,
+    blurb: 'Microsoft\'s small instruct model; reliable at following formats.',
   },
   {
     id: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
     label: 'DeepSeek R1 Distill 7B',
     vramMB: 5107,
     sizeGB: 4.5,
-    blurb: 'Thinks out loud (R1-style), then answers. Verbose but careful.',
+    blurb: 'Thinks out loud (R1-style), then answers. Verbose but careful; needs ~6 GB VRAM.',
   },
   {
     id: 'Qwen3-8B-q4f16_1-MLC',
@@ -65,18 +78,18 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     blurb: 'Biggest thinking Qwen most GPUs can hold; needs ~6 GB free VRAM.',
   },
   {
-    id: 'WizardMath-7B-V1.1-q4f16_1-MLC',
-    label: 'WizardMath 7B',
-    vramMB: 4573,
-    sizeGB: 4.0,
-    blurb: 'Classic math-tuned Llama; requires shader-f16 support.',
+    id: 'Qwen3.5-9B-q4f16_1-MLC',
+    label: 'Qwen3.5 9B',
+    vramMB: 6433,
+    sizeGB: 5.7,
+    blurb: 'Strongest model in the list, for GPUs with 8 GB+. Largest download.',
   },
   {
-    id: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
-    label: 'Qwen2.5 Math 1.5B',
-    vramMB: 1630,
-    sizeGB: 1.2,
-    blurb: 'Fits almost any GPU, but too weak to use tools reliably or stay on track — avoid unless nothing else runs.',
+    id: 'gemma-2-2b-it-q4f16_1-MLC',
+    label: 'Gemma 2 2B',
+    vramMB: 1895,
+    sizeGB: 1.6,
+    blurb: 'Smallest that still follows instructions — pick only if the others won\'t fit your GPU.',
   },
 ];
 

@@ -42,17 +42,15 @@ export async function detectGpuMemoryGB(): Promise<number | null> {
  */
 export function buildMachineGuide(webgpu: boolean, gpuMemoryGB: number | null): MachineGuide {
   const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
-  // The 1.5B is the smallest but a last resort (too weak for tools); prefer
-  // the smallest model that ISN'T it, and only fall back to it when nothing
-  // else fits the budget at all.
+  // Every model in the list is usable (the too-weak ones were removed), so the
+  // smallest is a fine floor and the largest a fine ceiling.
   const smallest = byVram[0];
-  const smallestUsable = byVram.find(m => m.vramMB > smallest.vramMB) ?? smallest;
 
   if (!webgpu) {
     return {
       webgpu: false,
       gpuMemoryGB: null,
-      recommended: smallestUsable,
+      recommended: smallest,
       headline: 'Local models won\'t run in this browser.',
       detail:
         'Running a model on your own computer needs a browser feature called WebGPU, which this browser ' +
@@ -62,17 +60,17 @@ export function buildMachineGuide(webgpu: boolean, gpuMemoryGB: number | null): 
   }
 
   // Pick the largest model that fits comfortably (leave ~1 GB headroom for the
-  // rest of the page and the OS's compositor), skipping the last-resort 1.5B
-  // unless it's the only thing that fits.
-  let pick = smallestUsable;
+  // rest of the page and the OS's compositor). Unknown VRAM → play it safe
+  // with the smallest model rather than guessing big.
+  let pick = smallest;
   if (gpuMemoryGB != null) {
     const budgetMB = Math.max(0, (gpuMemoryGB - 1) * 1024);
+    // byVram is ascending, so the last one that fits is the largest that fits.
     for (const m of byVram) {
-      if (m === smallest) continue; // last resort — only via the fallback below
       if (m.vramMB <= budgetMB) pick = m;
     }
-    // Nothing usable fits: offer the tiny last-resort model rather than nothing.
-    if (pick.vramMB > budgetMB) pick = smallest;
+    // (If nothing fits, pick stays `smallest` — offered as a tight fit rather
+    // than nothing at all.)
   }
 
   const headline = gpuMemoryGB == null

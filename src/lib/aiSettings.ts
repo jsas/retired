@@ -194,9 +194,9 @@ export function defaultModelFor(provider: AiProviderId): string {
     case 'openrouter': return 'anthropic/claude-sonnet-4';
     case 'gemini': return 'gemini-2.0-flash';
     case 'ollama': return 'llama3.1';
-    // Default to a model strong enough to follow the tool protocol — the 1.5B
-    // fits everywhere but derails, so it stays a last-resort in the picker.
-    case 'webllm': return 'Qwen3-4B-q4f16_1-MLC';
+    // Default to the newest 4B all-rounder — strong instruction-following at a
+    // size most GPUs hold. Weaker models derail on the tool protocol.
+    case 'webllm': return 'Qwen3.5-4B-q4f16_1-MLC';
     case 'openai-compatible': return '';
   }
 }

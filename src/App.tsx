@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot } from 'lucide-react';
+import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot, Plug } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -22,6 +22,7 @@ import { SharingPage, type SharingImportRequest } from './components/SharingPage
 import { DataPage, type FullBackupSelection, type ProjectionImportRequest } from './components/DataPage';
 import { OptimizeCard } from './components/OptimizeCard';
 import { AgentPage } from './components/AgentPage';
+import { ConnectionsPage } from './components/ConnectionsPage';
 import { CompareCard } from './components/CompareCard';
 import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
 import { SetupWizard, wizardDataFrom, applyWizardData, spouseWizardDataFrom, applySpouseWizardData, type WizardData } from './components/SetupWizard';
@@ -693,6 +694,7 @@ function App() {
                 {view === 'scenarios' && <span className="text-slate-900">Manage Scenarios</span>}
                 {view === 'sharing' && <span className="text-slate-900">Sharing</span>}
                 {view === 'agent' && <span className="text-slate-900">AI Assistant</span>}
+                {view === 'connections' && <span className="text-slate-900">AI Connections</span>}
                 {view === 'donate' && <span className="text-slate-900">Support This App</span>}
                 {view === 'welcome' && <span className="text-slate-900">Welcome</span>}
               </div>
@@ -733,6 +735,13 @@ function App() {
                   title="Chat with an AI that can read your plan and run the engine (bring your own API key)"
                 >
                   <Bot size={13} /> Assistant
+                </button>
+                <button
+                  onClick={() => setView('connections')}
+                  className="flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-800 hover:underline"
+                  title="Choose and manage AI models and provider connections"
+                >
+                  <Plug size={13} /> Connections
                 </button>
                 <button
                   onClick={() => setView('compare')}
@@ -803,8 +812,11 @@ function App() {
                 scenarioName={activeScenario.name}
                 scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+                onOpenConnections={() => setView('connections')}
               />
             )}
+
+            {view === 'connections' && <ConnectionsPage />}
 
             {view === 'compare' && (
               <CompareCard

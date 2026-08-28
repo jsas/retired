@@ -18,6 +18,7 @@ export type View =
   | 'sharing'
   | 'donate'
   | 'agent'
+  | 'connections'
   | 'welcome';
 
 export const VIEW_ROUTES: Record<View, string> = {
@@ -34,6 +35,7 @@ export const VIEW_ROUTES: Record<View, string> = {
   sharing: 'sharing',
   donate: 'donate',
   agent: 'assistant',
+  connections: 'connections',
   welcome: 'welcome',
   help: 'help',
   settings: 'settings',
