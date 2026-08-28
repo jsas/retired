@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot, Send, KeyRound, Plug, Plus, Trash2, X, Check, Loader2, Wrench,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
@@ -15,6 +16,8 @@ import type { ToolContext } from '../lib/ai/tools';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '../lib/retirementEngine';
 import { WEBLLM_MODELS, fmtVram, webGpuAvailable } from '../lib/ai/webLlmModels';
+import { buildMachineGuide, detectGpuMemoryGB, type MachineGuide } from '../lib/ai/machineGuide';
+import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 
 interface AgentPageProps {
   inputs: RetirementInputs;
@@ -373,16 +376,19 @@ function EmptyState({ ready, prompts, onPick, onConnect }: {
       <Bot size={32} className="text-violet-300 mb-3" />
       {!ready ? (
         <>
-          <p className="text-sm font-medium text-slate-700 mb-1">No provider connected yet</p>
+          <p className="text-sm font-medium text-slate-700 mb-1">Meet your planning assistant</p>
+          <p className="text-xs text-slate-500 max-w-md mb-1">
+            The simplest setup runs entirely <strong>on this computer</strong> — free, private, no
+            sign-up, works offline. Your plan data never leaves the device.
+          </p>
           <p className="text-xs text-slate-500 max-w-md mb-4">
-            The assistant runs entirely in this tab against your own API key — Anthropic, OpenAI,
-            Gemini, OpenRouter, or a local model via Ollama. Set one up to start.
+            (Online providers like Claude, GPT or Gemini are also available in the advanced section.)
           </p>
           <button
             onClick={onConnect}
-            className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
           >
-            <KeyRound size={13} /> Connect a provider
+            <Check size={13} /> Set up the on-computer assistant
           </button>
         </>
       ) : (
@@ -514,22 +520,22 @@ function ConnectionSetup({ settings, onChange, onClose }: {
   onChange: (mutate: (s: AiSettings) => void) => void;
   onClose: () => void;
 }) {
-  const [addingProvider, setAddingProvider] = useState<(typeof AI_PROVIDERS)[number]>('anthropic');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [addingProvider, setAddingProvider] = useState<(typeof AI_PROVIDERS)[number]>('gemini');
+  const [guide, setGuide] = useState<MachineGuide | null>(null);
 
-  const addConnection = () => {
-    const id = newConnectionId();
-    onChange(s => {
-      s.connections.push({
-        id,
-        provider: addingProvider,
-        label: '',
-        apiKey: '',
-        model: defaultModelFor(addingProvider),
-        baseUrl: defaultBaseUrlFor(addingProvider),
-      });
-      s.activeConnectionId = id;
-    });
-  };
+  const webllmConn = settings.connections.find(c => c.provider === 'webllm') ?? null;
+
+  // Probe the machine once so we can recommend a model size in plain English.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const gpu = webGpuAvailable();
+      const mem = gpu ? await detectGpuMemoryGB() : null;
+      if (!cancelled) setGuide(buildMachineGuide(gpu, mem));
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const patch = (id: string, p: Partial<AiConnection>) => {
     onChange(s => {
@@ -538,151 +544,245 @@ function ConnectionSetup({ settings, onChange, onClose }: {
     });
   };
 
+  const ensureWebllm = () => {
+    if (webllmConn) {
+      onChange(s => { s.activeConnectionId = webllmConn.id; });
+      return;
+    }
+    const id = newConnectionId();
+    onChange(s => {
+      s.connections.push({
+        id, provider: 'webllm', label: 'On this computer', apiKey: '',
+        model: guide?.recommended.id ?? defaultModelFor('webllm'),
+      });
+      s.activeConnectionId = id;
+    });
+  };
+
+  const addCloud = () => {
+    const id = newConnectionId();
+    onChange(s => {
+      s.connections.push({
+        id, provider: addingProvider, label: '', apiKey: '',
+        model: defaultModelFor(addingProvider),
+        baseUrl: defaultBaseUrlFor(addingProvider),
+      });
+      s.activeConnectionId = id;
+    });
+  };
+
   return (
     <div className="border border-violet-200 bg-violet-50/40 rounded p-3 mb-3">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-          <Plug size={13} className="text-violet-600" /> Provider connections
+          <Plug size={13} className="text-violet-600" /> Set up the assistant
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600" title="Close">
           <X size={14} />
         </button>
       </div>
 
-      {settings.connections.length === 0 && (
-        <p className="text-[11px] text-slate-500 mb-2">
-          No connections yet. Pick a provider below — your key stays in this browser and is sent only
-          to that provider, over HTTPS, when you chat.
+      {/* ---- Simple: on this computer (the default for everyone) ---- */}
+      <div className="border border-emerald-200 bg-emerald-50/60 rounded p-3">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900 mb-1">
+          Simplest: on this computer — no key, no account, private
+        </div>
+        <p className="text-[11px] text-emerald-900/80 leading-snug mb-2">
+          The assistant's brain downloads onto your computer and runs here. Nothing you type ever
+          leaves your device, and it works offline once downloaded. The first download is large
+          (a few GB) and can take a few minutes.
         </p>
-      )}
+        {guide && (
+          <div className="text-[11px] mb-2">
+            <div className={`font-semibold ${guide.webgpu ? 'text-emerald-900' : 'text-red-700'}`}>{guide.headline}</div>
+            <div className="text-slate-600 leading-snug mt-0.5">{guide.detail}</div>
+          </div>
+        )}
+        <button
+          onClick={ensureWebllm}
+          disabled={guide != null && !guide.webgpu}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 disabled:opacity-40"
+        >
+          <Check size={13} /> {webllmConn ? 'Use the on-computer assistant' : 'Set up the on-computer assistant'}
+        </button>
 
-      <div className="space-y-3">
-        {settings.connections.map(c => (
-          <div key={c.id} className="border border-slate-200 bg-white rounded p-2.5">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700 bg-violet-100 rounded px-1.5 py-0.5">
-                {c.provider}
-              </span>
-              <input
-                value={c.label}
-                onChange={e => patch(c.id, { label: e.target.value })}
-                placeholder="Label (e.g. My Claude key)"
-                className="flex-1 px-2 py-1 border border-slate-200 rounded text-xs"
-              />
-              <button
-                onClick={() => onChange(s => {
+        {webllmConn && (
+          <div className="mt-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+              Choose a model size
+            </div>
+            <div className="space-y-1">
+              {WEBLLM_MODELS.map(m => (
+                <label key={m.id} className={`flex items-start gap-2 px-2 py-1.5 rounded border text-[11px] cursor-pointer bg-white ${
+                  webllmConn.model === m.id ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'
+                }`}>
+                  <input
+                    type="radio"
+                    name="webllm-model"
+                    checked={webllmConn.model === m.id}
+                    onChange={() => patch(webllmConn.id, { model: m.id })}
+                    className="mt-0.5"
+                  />
+                  <span className="flex-1">
+                    <span className="font-semibold text-slate-800">{m.label}</span>
+                    <span className="text-slate-400"> · {fmtVram(m.vramMB)}</span>
+                    {guide?.recommended.id === m.id && (
+                      <span className="ml-1.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 rounded px-1 py-0.5">RECOMMENDED FOR YOU</span>
+                    )}
+                    <span className="block text-[10px] text-slate-500">{m.blurb}</span>
+                  </span>
+                </label>
+              ))}
+              <label className="block pt-1">
+                <span className="block text-[10px] text-slate-500 mb-0.5">…or any web-llm prebuilt model id</span>
+                <input
+                  value={WEBLLM_MODELS.some(m => m.id === webllmConn.model) ? '' : webllmConn.model}
+                  onChange={e => patch(webllmConn.id, { model: e.target.value })}
+                  placeholder="e.g. Llama-3.1-8B-Instruct-q4f32_1-MLC"
+                  className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono bg-white"
+                />
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ---- Advanced: cloud providers with API keys ---- */}
+      <div className="mt-3">
+        <button
+          onClick={() => setAdvancedOpen(o => !o)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800"
+        >
+          {advancedOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          Advanced: use an online provider (needs an API key)
+        </button>
+
+        {advancedOpen && (
+          <div className="mt-2 border border-slate-200 bg-white rounded p-3">
+            <p className="text-[11px] text-slate-500 leading-snug mb-3">
+              For stronger models. You sign up with the provider, copy an API key, and paste it here —
+              the key is stored only in this browser and sent only to that provider when you chat.
+            </p>
+
+            <div className="space-y-3">
+              {settings.connections.filter(c => c.provider !== 'webllm').map(c => (
+                <CloudConnectionCard key={c.id} conn={c} onPatch={patch} onDelete={() => onChange(s => {
                   s.connections = s.connections.filter(x => x.id !== c.id);
                   if (s.activeConnectionId === c.id) s.activeConnectionId = s.connections[0]?.id ?? null;
-                })}
-                className="text-slate-400 hover:text-red-600"
-                title="Delete this connection (the key is removed from this browser)"
+                })} />
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+              <select
+                value={addingProvider}
+                onChange={e => setAddingProvider(e.target.value as (typeof AI_PROVIDERS)[number])}
+                className="px-2 py-1.5 bg-white border border-slate-300 rounded text-xs"
               >
-                <Trash2 size={13} />
+                {AI_PROVIDERS.filter(p => p !== 'webllm').map(p => (
+                  <option key={p} value={p}>{PROVIDER_HELP[p]?.name ?? p}</option>
+                ))}
+              </select>
+              <button
+                onClick={addCloud}
+                className="flex items-center gap-1 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+              >
+                <Plus size={13} /> Add provider
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {c.provider !== 'ollama' && c.provider !== 'webllm' && (
-                <label className="block">
-                  <span className="block text-[10px] text-slate-500 mb-0.5">API key (stored locally only)</span>
-                  <input
-                    type="password"
-                    value={c.apiKey}
-                    onChange={e => patch(c.id, { apiKey: e.target.value })}
-                    placeholder={c.provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'}
-                    autoComplete="off"
-                    className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
-                  />
-                </label>
-              )}
-              {c.provider === 'webllm' ? (
-                <div className="sm:col-span-2">
-                  <span className="block text-[10px] text-slate-500 mb-1">
-                    Local model — runs on your GPU, no key needed. First use downloads the weights (cached after).
-                  </span>
-                  {!webGpuAvailable() && (
-                    <div className="mb-1.5 text-[10px] text-red-700">
-                      This browser reports no WebGPU — local models won't run here. Use Chrome/Edge 113+ or pick a cloud provider.
-                    </div>
-                  )}
-                  <div className="space-y-1">
-                    {WEBLLM_MODELS.map(m => (
-                      <label key={m.id} className={`flex items-start gap-2 px-2 py-1.5 rounded border text-[11px] cursor-pointer ${
-                        c.model === m.id ? 'border-violet-400 bg-violet-50' : 'border-slate-200 hover:bg-slate-50'
-                      }`}>
-                        <input
-                          type="radio"
-                          name={`webllm-model-${c.id}`}
-                          checked={c.model === m.id}
-                          onChange={() => patch(c.id, { model: m.id })}
-                          className="mt-0.5"
-                        />
-                        <span className="flex-1">
-                          <span className="font-semibold text-slate-800">{m.label}</span>
-                          <span className="text-slate-400"> · {fmtVram(m.vramMB)}</span>
-                          <span className="block text-[10px] text-slate-500">{m.blurb}</span>
-                        </span>
-                      </label>
-                    ))}
-                    <label className="block pt-1">
-                      <span className="block text-[10px] text-slate-500 mb-0.5">…or any web-llm prebuilt model id</span>
-                      <input
-                        value={WEBLLM_MODELS.some(m => m.id === c.model) ? '' : c.model}
-                        onChange={e => patch(c.id, { model: e.target.value })}
-                        placeholder="e.g. Llama-3.1-8B-Instruct-q4f32_1-MLC"
-                        className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
-                      />
-                    </label>
-                  </div>
-                </div>
-              ) : (
-                <label className="block">
-                  <span className="block text-[10px] text-slate-500 mb-0.5">Model</span>
-                  <input
-                    value={c.model}
-                    onChange={e => patch(c.id, { model: e.target.value })}
-                    placeholder={defaultModelFor(c.provider) || 'model id'}
-                    className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
-                  />
-                </label>
-              )}
-              {(c.provider === 'ollama' || c.provider === 'openai-compatible' || c.provider === 'openrouter' || c.provider === 'openai') && (
-                <label className="block sm:col-span-2">
-                  <span className="block text-[10px] text-slate-500 mb-0.5">Base URL</span>
-                  <input
-                    value={c.baseUrl ?? ''}
-                    onChange={e => patch(c.id, { baseUrl: e.target.value })}
-                    placeholder={defaultBaseUrlFor(c.provider) ?? 'https://…/v1'}
-                    className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
-                  />
-                </label>
-              )}
-            </div>
-            {!connectionReady(c) && (
-              <div className="mt-1.5 text-[10px] text-amber-700">
-                Incomplete: {c.provider === 'ollama' || c.provider === 'openai-compatible'
-                  ? 'needs a base URL and a model'
-                  : 'needs an API key and a model'}.
-              </div>
-            )}
           </div>
-        ))}
+        )}
       </div>
+    </div>
+  );
+}
 
-      <div className="flex items-center gap-2 mt-3">
-        <select
-          value={addingProvider}
-          onChange={e => setAddingProvider(e.target.value as (typeof AI_PROVIDERS)[number])}
-          className="px-2 py-1.5 bg-white border border-slate-300 rounded text-xs"
-        >
-          {AI_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
+function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
+  conn: AiConnection;
+  onPatch: (id: string, p: Partial<AiConnection>) => void;
+  onDelete: () => void;
+}) {
+  const help = PROVIDER_HELP[c.provider];
+  return (
+    <div className="border border-slate-200 bg-white rounded p-2.5">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700 bg-violet-100 rounded px-1.5 py-0.5">
+          {help?.name ?? c.provider}
+        </span>
+        {help?.easiest && (
+          <span className="text-[9px] font-bold text-blue-700 bg-blue-100 rounded px-1 py-0.5">EASIEST</span>
+        )}
+        <input
+          value={c.label}
+          onChange={e => onPatch(c.id, { label: e.target.value })}
+          placeholder="Label (e.g. My key)"
+          className="flex-1 px-2 py-1 border border-slate-200 rounded text-xs"
+        />
         <button
-          onClick={addConnection}
-          className="flex items-center gap-1 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+          onClick={onDelete}
+          className="text-slate-400 hover:text-red-600"
+          title="Delete this connection (the key is removed from this browser)"
         >
-          <Plus size={13} /> Add connection
+          <Trash2 size={13} />
         </button>
       </div>
+
+      {help && (
+        <div className="mb-2 text-[11px] text-slate-500 leading-snug">
+          {help.howTo}
+          {help.keyUrl && (
+            <> {' '}
+              <a href={help.keyUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                Get a key here ↗
+              </a>
+            </>
+          )}
+          <span className="block text-[10px] text-slate-400 mt-0.5">{help.cost}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {c.provider !== 'ollama' && (
+          <label className="block">
+            <span className="block text-[10px] text-slate-500 mb-0.5">API key (stored locally only)</span>
+            <input
+              type="password"
+              value={c.apiKey}
+              onChange={e => onPatch(c.id, { apiKey: e.target.value })}
+              placeholder={c.provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'}
+              autoComplete="off"
+              className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+            />
+          </label>
+        )}
+        <label className="block">
+          <span className="block text-[10px] text-slate-500 mb-0.5">Model</span>
+          <input
+            value={c.model}
+            onChange={e => onPatch(c.id, { model: e.target.value })}
+            placeholder={defaultModelFor(c.provider) || 'model id'}
+            className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+          />
+        </label>
+        {(c.provider === 'ollama' || c.provider === 'openai-compatible' || c.provider === 'openrouter' || c.provider === 'openai') && (
+          <label className="block sm:col-span-2">
+            <span className="block text-[10px] text-slate-500 mb-0.5">Base URL</span>
+            <input
+              value={c.baseUrl ?? ''}
+              onChange={e => onPatch(c.id, { baseUrl: e.target.value })}
+              placeholder={defaultBaseUrlFor(c.provider) ?? 'https://…/v1'}
+              className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+            />
+          </label>
+        )}
+      </div>
+      {!connectionReady(c) && (
+        <div className="mt-1.5 text-[10px] text-amber-700">
+          Incomplete: {c.provider === 'ollama' || c.provider === 'openai-compatible'
+            ? 'needs a base URL and a model'
+            : 'needs an API key and a model'}.
+        </div>
+      )}
     </div>
   );
 }
