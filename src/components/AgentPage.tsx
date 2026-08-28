@@ -19,6 +19,7 @@ import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '../lib/retirementEngine';
 import { WEBLLM_MODELS, fmtSize, webGpuAvailable, type WebLlmModelChoice } from '../lib/ai/webLlmModels';
 import { buildMachineGuide, detectGpuMemoryGB, type MachineGuide } from '../lib/ai/machineGuide';
+import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 
 interface AgentPageProps {
@@ -388,6 +389,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
           onChange={updateSettings}
           onClose={() => setSetupOpen(false)}
           engine={{ state: engineState, error: engineError, progress: loadProgress, onUse: () => void warmUpLocalModel(), onCancel: cancelWarmUp }}
+          onModelDeleted={() => { setEngineState('idle'); setEngineError(null); }}
         />
       )}
 
@@ -632,11 +634,12 @@ function fmtValue(v: unknown): string {
 // Connection setup panel
 // ---------------------------------------------------------------------------
 
-function ConnectionSetup({ settings, onChange, onClose, engine }: {
+function ConnectionSetup({ settings, onChange, onClose, engine, onModelDeleted }: {
   settings: AiSettings;
   onChange: (mutate: (s: AiSettings) => void) => void;
   onClose: () => void;
   engine: { state: 'idle' | 'loading' | 'ready' | 'error'; error: string | null; progress: { progress: number; text: string } | null; onUse: () => void; onCancel: () => void };
+  onModelDeleted: () => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [addingProvider, setAddingProvider] = useState<(typeof AI_PROVIDERS)[number]>('gemini');
@@ -729,7 +732,7 @@ function ConnectionSetup({ settings, onChange, onClose, engine }: {
               : 'Set up the on-computer assistant'}
           </button>
         ) : (
-          <LocalModelPicker conn={webllmConn} guide={guide} onPatch={patch} engine={engine} onClose={onClose} />
+          <LocalModelPicker conn={webllmConn} guide={guide} onPatch={patch} engine={engine} onClose={onClose} onModelDeleted={onModelDeleted} />
         )}
       </div>
 
@@ -787,12 +790,13 @@ function ConnectionSetup({ settings, onChange, onClose, engine }: {
  *   1. PICK  — click a model card to select it, one big download button.
  *   2. LOAD  — the list is gone; only a progress bar and Cancel remain.
  *   3. READY — a check mark and "Start chatting →" that closes the panel. */
-function LocalModelPicker({ conn, guide, onPatch, engine, onClose }: {
+function LocalModelPicker({ conn, guide, onPatch, engine, onClose, onModelDeleted }: {
   conn: AiConnection;
   guide: MachineGuide | null;
   onPatch: (id: string, p: Partial<AiConnection>) => void;
   engine: { state: 'idle' | 'loading' | 'ready' | 'error'; error: string | null; progress: { progress: number; text: string } | null; onUse: () => void; onCancel: () => void };
   onClose: () => void;
+  onModelDeleted: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const current = WEBLLM_MODELS.find(m => m.id === conn.model);
@@ -903,6 +907,73 @@ function LocalModelPicker({ conn, guide, onPatch, engine, onClose }: {
       </div>
       {engine.state === 'error' && (
         <div className="mt-1.5 text-[11px] text-red-700">{engine.error}</div>
+      )}
+
+      <DeleteLocalModel modelId={conn.model} sizeGB={current?.sizeGB} onDeleted={onModelDeleted} />
+    </div>
+  );
+}
+
+/** Shows whether the picked model is already downloaded, with a delete
+ *  affordance to free the disk space. Deleting also unloads the live engine
+ *  (handled in the provider), so the parent resets its engine state. */
+function DeleteLocalModel({ modelId, sizeGB, onDeleted }: {
+  modelId: string;
+  sizeGB?: number;
+  onDeleted: () => void;
+}) {
+  const [cached, setCached] = useState<boolean | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void isWebLlmModelCached(modelId).then(c => { if (!cancelled) setCached(c); });
+    return () => { cancelled = true; };
+  }, [modelId]);
+
+  if (cached !== true) return null;
+
+  const doDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteWebLlmModel(modelId);
+      setCached(false);
+      setConfirming(false);
+      onDeleted();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-2 border-t border-slate-100">
+      {!confirming ? (
+        <button
+          onClick={() => setConfirming(true)}
+          className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-red-600"
+        >
+          <Trash2 size={11} />
+          Remove this download{sizeGB ? ` (frees ~${fmtSize(sizeGB)})` : ''}
+        </button>
+      ) : (
+        <span className="flex items-center gap-2 text-[11px]">
+          <span className="text-slate-600">Delete the downloaded model? You'll download it again to use it.</span>
+          <button
+            onClick={() => void doDelete()}
+            disabled={deleting}
+            className="px-2 py-0.5 bg-red-600 text-white font-semibold rounded hover:bg-red-700 disabled:opacity-50"
+          >
+            {deleting ? 'Deleting…' : 'Delete'}
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            disabled={deleting}
+            className="text-slate-500 hover:underline"
+          >
+            Keep
+          </button>
+        </span>
       )}
     </div>
   );

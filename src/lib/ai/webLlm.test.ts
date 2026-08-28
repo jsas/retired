@@ -12,6 +12,8 @@ import type { StreamEvent } from './providers';
 let scriptedChunks: Array<Record<string, unknown>> = [];
 let interruptCalls = 0;
 let crashAfter: string | null = null; // when set, the stream throws after one chunk
+const cachedModels = new Set<string>(); // models the fake cache reports as present
+let deletedModels: string[] = [];
 
 vi.mock('@mlc-ai/web-llm', () => ({
   CreateMLCEngine: async () => ({
@@ -29,6 +31,8 @@ vi.mock('@mlc-ai/web-llm', () => ({
     interruptGenerate: async () => { interruptCalls++; },
     unload: async () => {},
   }),
+  hasModelInCache: async (id: string) => cachedModels.has(id),
+  deleteModelAllInfoInCache: async (id: string) => { deletedModels.push(id); cachedModels.delete(id); },
 }));
 
 describe('curated web-llm model list', () => {
@@ -153,5 +157,110 @@ describe('streamWebLlm', () => {
       })) { /* drain */ }
     }).rejects.toThrow(/graphics memory/);
     crashAfter = null;
+  });
+
+  it('strips <think>…</think> reasoning from the visible stream', async () => {
+    scriptedChunks = [
+      { choices: [{ delta: { content: '<think>Let me consider the balances…' } }] },
+      { choices: [{ delta: { content: 'the user is 60.</think>Your plan lasts to 95.' }, finish_reason: 'stop' }] },
+    ];
+    const events = await collect();
+    expect(events).toEqual([
+      { type: 'text', text: 'Your plan lasts to 95.' },
+      { type: 'done', stopReason: 'end_turn' },
+    ]);
+  });
+
+  it('strips a think block whose tag is split across chunks', async () => {
+    scriptedChunks = [
+      { choices: [{ delta: { content: '<thi' } }] },
+      { choices: [{ delta: { content: 'nk>hidden</think>visible answer' }, finish_reason: 'stop' }] },
+    ];
+    const events = await collect();
+    expect(events).toEqual([
+      { type: 'text', text: 'visible answer' },
+      { type: 'done', stopReason: 'end_turn' },
+    ]);
+  });
+});
+
+describe('createThinkStripper', () => {
+  it('passes plain text through untouched', async () => {
+    const { createThinkStripper } = await import('./webLlmProvider');
+    const s = createThinkStripper();
+    expect(s.push('Hello, ')).toBe('Hello, ');
+    expect(s.push('world.')).toBe('world.');
+  });
+
+  it('drops a complete think block in one push', async () => {
+    const { createThinkStripper } = await import('./webLlmProvider');
+    const s = createThinkStripper();
+    expect(s.push('<think>secret</think>answer')).toBe('answer');
+  });
+
+  it('holds back a partial open tag until the rest arrives', async () => {
+    const { createThinkStripper } = await import('./webLlmProvider');
+    const s = createThinkStripper();
+    expect(s.push('before <th')).toBe('before ');
+    expect(s.push('ink>hidden</think>after')).toBe('after');
+  });
+
+  it('drops everything while a thought is still open', async () => {
+    const { createThinkStripper } = await import('./webLlmProvider');
+    const s = createThinkStripper();
+    expect(s.push('<think>still')).toBe('');
+    expect(s.push(' thinking…')).toBe('');
+    expect(s.push('done</think>out')).toBe('out');
+  });
+
+  it('handles multiple think blocks in sequence', async () => {
+    const { createThinkStripper } = await import('./webLlmProvider');
+    const s = createThinkStripper();
+    expect(s.push('<think>a</think>one<think>b</think>two')).toBe('onetwo');
+  });
+
+  it('does not swallow text that merely contains an angle bracket', async () => {
+    const { createThinkStripper } = await import('./webLlmProvider');
+    const s = createThinkStripper();
+    expect(s.push('a < b and c > d')).toBe('a < b and c > d');
+  });
+});
+
+describe('web-llm model cache management', () => {
+  const conn: AiConnection = {
+    id: 'c', provider: 'webllm', label: 'local', apiKey: '',
+    model: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
+  };
+
+  it('reports whether a model is cached, and false on a cache error', async () => {
+    const { isWebLlmModelCached } = await import('./webLlmProvider');
+    cachedModels.add('Some-Model-MLC');
+    expect(await isWebLlmModelCached('Some-Model-MLC')).toBe(true);
+    expect(await isWebLlmModelCached('Not-There-MLC')).toBe(false);
+    cachedModels.clear();
+  });
+
+  it('deletes a cached model that is not loaded', async () => {
+    const { deleteWebLlmModel } = await import('./webLlmProvider');
+    cachedModels.add('Other-Model-MLC');
+    deletedModels = [];
+    await deleteWebLlmModel('Other-Model-MLC');
+    expect(deletedModels).toContain('Other-Model-MLC');
+    expect(cachedModels.has('Other-Model-MLC')).toBe(false);
+  });
+
+  it('unloads the live engine before deleting its model', async () => {
+    const { streamWebLlm, deleteWebLlmModel, loadedWebLlmModel } = await import('./webLlmProvider');
+    // Load the engine by streaming once.
+    scriptedChunks = [{ choices: [{ delta: { content: 'hi' }, finish_reason: 'stop' }] }];
+    for await (const _ of streamWebLlm(conn, {
+      system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
+    })) { /* drain to load */ }
+    expect(loadedWebLlmModel()).toBe(conn.model);
+    cachedModels.add(conn.model);
+    deletedModels = [];
+    await deleteWebLlmModel(conn.model);
+    expect(loadedWebLlmModel()).toBeNull(); // engine torn down first
+    expect(deletedModels).toContain(conn.model);
   });
 });

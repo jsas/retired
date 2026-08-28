@@ -99,6 +99,80 @@ export function loadedWebLlmModel(): string | null {
   return engineModel;
 }
 
+/** True when the model's weights are cached on this device. Best-effort:
+ *  resolves false when the cache can't be queried. */
+export async function isWebLlmModelCached(modelId: string): Promise<boolean> {
+  try {
+    const webllm = await import('@mlc-ai/web-llm');
+    return await webllm.hasModelInCache(modelId);
+  } catch {
+    return false;
+  }
+}
+
+/** Delete a model's downloaded weights + metadata from this device. If the
+ *  model is the one currently loaded, unload it first (VRAM), then purge the
+ *  cache so the disk space is reclaimed. */
+export async function deleteWebLlmModel(modelId: string): Promise<void> {
+  if (engineModel === modelId) await unloadWebLlmEngine();
+  const webllm = await import('@mlc-ai/web-llm');
+  await webllm.deleteModelAllInfoInCache(modelId);
+}
+
+/** Streaming <think>…</think> stripper. Reasoning models wrap their hidden
+ *  chain-of-thought in these tags; the user should only see the final answer.
+ *  A small carry buffer copes with a tag split across chunk boundaries
+ *  (e.g. "<thi" + "nk>"). Content inside the tags is dropped; everything else
+ *  passes through. Exported for tests. */
+export function createThinkStripper(): { push(text: string): string } {
+  const OPEN = '<think>';
+  const CLOSE = '</think>';
+  let inThink = false;
+  let carry = '';
+  return {
+    push(text: string): string {
+      let buf = carry + text;
+      carry = '';
+      let out = '';
+      while (buf.length > 0) {
+        if (inThink) {
+          const end = buf.indexOf(CLOSE);
+          if (end === -1) {
+            // Still inside the thought; keep only a possible partial close tag.
+            carry = buf.slice(-(CLOSE.length - 1));
+            return out;
+          }
+          buf = buf.slice(end + CLOSE.length);
+          inThink = false;
+          continue;
+        }
+        const start = buf.indexOf(OPEN);
+        if (start === -1) {
+          // No open tag: emit everything except a possible partial "<think" tail.
+          const partial = longestSuffixPrefix(buf, OPEN);
+          out += buf.slice(0, buf.length - partial);
+          carry = buf.slice(buf.length - partial);
+          return out;
+        }
+        out += buf.slice(0, start);
+        buf = buf.slice(start + OPEN.length);
+        inThink = true;
+      }
+      return out;
+    },
+  };
+}
+
+/** Length of the longest suffix of `s` that is also a prefix of `tag` — the
+ *  part that might be the start of a split tag and must be held back. */
+function longestSuffixPrefix(s: string, tag: string): number {
+  const max = Math.min(s.length, tag.length - 1);
+  for (let n = max; n > 0; n--) {
+    if (s.endsWith(tag.slice(0, n))) return n;
+  }
+  return 0;
+}
+
 /** Translate engine failures into plain, actionable language. Raw WebGPU
  *  errors ("mapAsync", "device lost") mean nothing to a non-technical user. */
 function translateLocalError(err: unknown): ProviderError {
@@ -181,6 +255,7 @@ export async function* streamWebLlm(
   req.signal?.addEventListener('abort', onAbort, { once: true });
   if (req.signal?.aborted) onAbort(); // signal fired before we subscribed
   let finishReason: string | null = null;
+  const think = createThinkStripper();
   try {
     for await (const chunk of stream) {
       if (stopped) break;
@@ -188,7 +263,13 @@ export async function* streamWebLlm(
         choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>;
       }).choices?.[0];
       const text = delta?.delta?.content;
-      if (text) yield { type: 'text', text };
+      if (text) {
+        // Reasoning models (Qwen3 "thinking", DeepSeek-R1) emit their chain of
+        // thought inside <think>…</think>; strip it so the chat shows only the
+        // answer. Handles the tag arriving split across chunks.
+        const visible = think.push(text);
+        if (visible) yield { type: 'text', text: visible };
+      }
       if (delta?.finish_reason) finishReason = delta.finish_reason;
     }
   } catch (err) {

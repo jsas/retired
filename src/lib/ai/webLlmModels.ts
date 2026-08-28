@@ -26,26 +26,22 @@ export interface WebLlmModelChoice {
 }
 
 export const WEBLLM_MODELS: WebLlmModelChoice[] = [
-  {
-    id: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
-    label: 'Qwen2.5 Math 1.5B',
-    vramMB: 1630,
-    sizeGB: 1.2,
-    blurb: 'Smallest math model — fast, runs anywhere. Can derail on long answers.',
-  },
+  // NOTE: the list is ordered best-first for a typical laptop GPU. The 1.5B
+  // sits last deliberately — it fits anywhere but is too weak to follow the
+  // tool protocol or stay grounded on a long interview, so it's a last resort.
   {
     id: 'Qwen3-4B-q4f16_1-MLC',
     label: 'Qwen3 4B (thinking)',
     vramMB: 3432,
     sizeGB: 2.5,
-    blurb: 'Best balance of size and quality; has a reasoning mode.',
+    blurb: 'Best balance of size and quality; has a reasoning mode. Recommended for most.',
   },
   {
     id: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
     label: 'Ministral 3 3B Reasoning',
     vramMB: 2864,
     sizeGB: 2.1,
-    blurb: 'Compact reasoning model, strong on multi-step arithmetic.',
+    blurb: 'Compact reasoning model, strong on multi-step arithmetic. Smaller download.',
   },
   {
     id: 'Qwen2.5-Math-7B-Instruct-q4f16_1-MLC',
@@ -74,6 +70,13 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 4573,
     sizeGB: 4.0,
     blurb: 'Classic math-tuned Llama; requires shader-f16 support.',
+  },
+  {
+    id: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
+    label: 'Qwen2.5 Math 1.5B',
+    vramMB: 1630,
+    sizeGB: 1.2,
+    blurb: 'Fits almost any GPU, but too weak to use tools reliably or stay on track — avoid unless nothing else runs.',
   },
 ];
 
