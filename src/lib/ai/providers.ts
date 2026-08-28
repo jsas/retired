@@ -52,6 +52,9 @@ export interface StreamChatRequest {
   messages: ChatMessage[];
   tools?: ToolSpec[];
   maxTokens?: number;
+  /** Local (web-llm) models: KV-cache size to compile the context for. Left
+   *  unset, the provider picks a safe default. Ignored by cloud providers. */
+  contextSize?: number;
   signal?: AbortSignal;
 }
 

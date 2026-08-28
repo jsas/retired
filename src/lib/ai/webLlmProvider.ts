@@ -54,23 +54,21 @@ export async function loadWebLlmEngine(
 
   engineModel = modelId;
   enginePromise = (async () => {
-    // Cancelling means abandoning the load: web-llm keeps downloading in the
-    // background (browser cache still fills, so a later retry is faster) but
-    // we drop the promise so nothing reports back and the next attempt starts
-    // fresh.
-    if (signal?.aborted) throw new DOMException('Load cancelled', 'AbortError');
+    // The load belongs to the MODEL, not to whichever turn happened to start
+    // it. It is NOT cancelled by that turn's abort signal: if the user stops a
+    // chat (or the agent loop's per-request signal fires) mid-load, we still
+    // finish and keep the engine, so the NEXT turn reuses it instead of
+    // re-downloading from zero. Dropping the promise on that turn's abort was
+    // the regenerate-after-stop bug — every retry recompiled from scratch and
+    // looked like a hang at "Preparing the local model… 0%". Only the signal
+    // passed here (an explicit "cancel the download" from Connections) abandons
+    // a load, and nothing currently passes one.
     const webllm = await import('@mlc-ai/web-llm');
     const engine = await webllm.CreateMLCEngine(modelId, {
       initProgressCallback: (report: { progress?: number; text?: string }) => {
         if (!signal?.aborted) onProgress?.({ progress: report.progress ?? 0, text: report.text ?? '' });
       },
     });
-    if (signal?.aborted) {
-      // It finished racing a cancel — release it rather than hold VRAM for an
-      // engine the user walked away from.
-      await (engine as unknown as MlcEngine).unload?.();
-      throw new DOMException('Load cancelled', 'AbortError');
-    }
     return engine as unknown as MlcEngine;
   })();
 
@@ -250,6 +248,9 @@ export async function* streamWebLlm(
 ): AsyncGenerator<StreamEvent> {
   let engine: MlcEngine;
   try {
+    // Deliberately do NOT pass req.signal as the load-abort: the engine load
+    // must outlive this one request (see loadWebLlmEngine). req.signal still
+    // aborts the GENERATION below via interruptGenerate.
     engine = await loadWebLlmEngine(conn.model, onProgress);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -271,7 +272,7 @@ export async function* streamWebLlm(
       // Bound the context: the plan digest + tool catalog + a long user answer
       // can exceed the KV cache a small model was compiled for, which is the
       // main cause of mid-generation GPU crashes (mapAsync / device lost).
-      context_window_size: 8192,
+      context_window_size: req.contextSize ?? 8192,
       temperature: 0.3, // math/reasoning models: keep them deterministic-ish
       // A degenerate reply is a REPEATED sentence, not a single token, so
       // penalize whole n-gram repeats (repetition_penalty) rather than per-
