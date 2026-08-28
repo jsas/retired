@@ -95,6 +95,115 @@ export async function* streamChat(
 }
 
 // ---------------------------------------------------------------------------
+// Test connection + model discovery (Connections page)
+// ---------------------------------------------------------------------------
+
+export interface ModelInfo {
+  id: string;
+  /** Human-friendly detail when the API offers one (display name, owner). */
+  detail?: string;
+}
+
+/**
+ * List the models a connection can use. Supported per provider:
+ *  - OpenAI-compatible endpoints (OpenAI, OpenRouter, Ollama, LM Studio, …):
+ *    GET {baseUrl}/models, the standard OpenAI shape.
+ *  - Gemini: GET /v1beta/models?key=…, filtered to chat-capable models.
+ *  - Anthropic: GET /v1/models (keyed).
+ *  - web-llm: no remote list — the catalog lives in webLlmModels.ts; throws.
+ */
+export async function listModels(
+  conn: AiConnection,
+  fetchFn: FetchFn = fetch,
+): Promise<ModelInfo[]> {
+  switch (conn.provider) {
+    case 'webllm':
+      throw new ProviderError('On-computer models are managed from the Models section.');
+    case 'gemini': {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(conn.apiKey)}&pageSize=1000`;
+      const res = await fetchFn(url);
+      await ensureOk(res, 'Gemini');
+      const json = await res.json() as { models?: Array<Record<string, unknown>> };
+      return (json.models ?? [])
+        .filter(m => {
+          const methods = (m.supportedGenerationMethods as string[] | undefined) ?? [];
+          return methods.includes('generateContent');
+        })
+        .map(m => ({
+          id: String(m.name ?? '').replace(/^models\//, ''),
+          detail: typeof m.displayName === 'string' ? m.displayName : undefined,
+        }))
+        .filter(m => m.id)
+        .sort((a, b) => a.id.localeCompare(b.id));
+    }
+    case 'anthropic': {
+      const res = await fetchFn('https://api.anthropic.com/v1/models?limit=1000', {
+        headers: {
+          'x-api-key': conn.apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+      });
+      await ensureOk(res, 'Anthropic');
+      const json = await res.json() as { data?: Array<Record<string, unknown>> };
+      return (json.data ?? [])
+        .map(m => ({
+          id: String(m.id ?? ''),
+          detail: typeof m.display_name === 'string' ? m.display_name : undefined,
+        }))
+        .filter(m => m.id)
+        .sort((a, b) => a.id.localeCompare(b.id));
+    }
+    default: {
+      // OpenAI-compatible: GET {base}/models with an optional Bearer key.
+      const base = (conn.baseUrl ?? '').replace(/\/+$/, '');
+      if (!base) throw new ProviderError('Set a base URL first (e.g. http://localhost:1234/v1).');
+      const headers: Record<string, string> = {};
+      if (conn.apiKey) headers.authorization = `Bearer ${conn.apiKey}`;
+      const res = await fetchFn(`${base}/models`, { headers });
+      await ensureOk(res, 'Provider');
+      const json = await res.json() as { data?: Array<Record<string, unknown>> };
+      return (json.data ?? [])
+        .map(m => ({
+          id: String(m.id ?? ''),
+          detail: typeof m.owned_by === 'string' && m.owned_by !== 'organization_owner'
+            ? m.owned_by : undefined,
+        }))
+        .filter(m => m.id)
+        .sort((a, b) => a.id.localeCompare(b.id));
+    }
+  }
+}
+
+/**
+ * Cheap reachability check. Ollama is the odd one out — its /v1/models can
+ * 404 on older builds while /api/tags works, so probe it natively and fall
+ * back to /v1/models. Everything else just lists models; web-llm is local
+ * and trivially "reachable" (the Models section reports download state).
+ */
+export async function testConnection(
+  conn: AiConnection,
+  fetchFn: FetchFn = fetch,
+): Promise<void> {
+  if (conn.provider === 'webllm') return;
+  if (conn.provider === 'ollama') {
+    const base = (conn.baseUrl ?? '').replace(/\/+$/, '').replace(/\/v1$/, '');
+    if (!base) throw new ProviderError('Set a base URL first.');
+    try {
+      const res = await fetchFn(`${base}/api/tags`);
+      if (res.ok) return;
+    } catch (err) {
+      if (err instanceof ProviderError) throw err;
+      throw new ProviderError(`Could not reach ${base} — is Ollama running?`);
+    }
+    // Older Ollama lacks /api/tags under /v1 compat — fall through to /models.
+    await listModels(conn, fetchFn);
+    return;
+  }
+  await listModels(conn, fetchFn);
+}
+
+// ---------------------------------------------------------------------------
 // Anthropic Messages API (SSE)
 // ---------------------------------------------------------------------------
 

@@ -19,12 +19,14 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Plug, Plus, Trash2, X, Check, ChevronDown, ChevronRight, Lock, Download, Loader2,
+  RefreshCw, Zap,
 } from 'lucide-react';
 import {
   AI_PROVIDERS, connectionReady, defaultBaseUrlFor, defaultModelFor,
   loadAiSettings, newConnectionId, saveAiSettings,
   type AiConnection, type AiSettings,
 } from '../lib/aiSettings';
+import { listModels, testConnection, type ModelInfo } from '../lib/ai/providers';
 import { WEBLLM_MODELS, fmtSize, webGpuAvailable } from '../lib/ai/webLlmModels';
 import { buildMachineGuide, detectGpuMemoryGB, type MachineGuide } from '../lib/ai/machineGuide';
 import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
@@ -510,6 +512,40 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
   onDelete: () => void;
 }) {
   const help = PROVIDER_HELP[c.provider];
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [modelList, setModelList] = useState<ModelInfo[] | null>(null);
+
+  const runTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      await testConnection(c);
+      setTestResult({ ok: true, message: 'Connection works.' });
+    } catch (err) {
+      setTestResult({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const fetchModels = async () => {
+    setFetchingModels(true);
+    setTestResult(null);
+    try {
+      const models = await listModels(c);
+      setModelList(models);
+      setTestResult(models.length
+        ? { ok: true, message: `${models.length} model${models.length === 1 ? '' : 's'} available.` }
+        : { ok: false, message: 'Connected, but the endpoint listed no models.' });
+    } catch (err) {
+      setModelList(null);
+      setTestResult({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setFetchingModels(false);
+    }
+  };
   return (
     <div className="border border-slate-200 bg-white rounded p-2.5">
       <div className="flex items-center gap-2 mb-2">
@@ -568,8 +604,15 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
             value={c.model}
             onChange={e => onPatch(c.id, { model: e.target.value })}
             placeholder={defaultModelFor(c.provider) || 'model id'}
+            list={`models-${c.id}`}
             className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
           />
+          {/* Suggestions appear after "Fetch models" below; typing still works. */}
+          <datalist id={`models-${c.id}`}>
+            {(modelList ?? []).map(m => (
+              <option key={m.id} value={m.id}>{m.detail ?? m.id}</option>
+            ))}
+          </datalist>
         </label>
         {(c.provider === 'ollama' || c.provider === 'openai-compatible' || c.provider === 'openrouter' || c.provider === 'openai') && (
           <label className="block sm:col-span-2">
@@ -583,6 +626,33 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
           </label>
         )}
       </div>
+
+      {/* Reachability + model discovery */}
+      <div className="flex flex-wrap items-center gap-2 mt-2">
+        <button
+          onClick={() => void runTest()}
+          disabled={testing || fetchingModels}
+          className="flex items-center gap-1 px-2.5 py-1 border border-slate-300 text-slate-700 text-[11px] font-semibold rounded hover:bg-slate-50 disabled:opacity-40"
+        >
+          {testing ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />}
+          Test connection
+        </button>
+        <button
+          onClick={() => void fetchModels()}
+          disabled={testing || fetchingModels}
+          className="flex items-center gap-1 px-2.5 py-1 border border-slate-300 text-slate-700 text-[11px] font-semibold rounded hover:bg-slate-50 disabled:opacity-40"
+        >
+          {fetchingModels ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+          Fetch models
+        </button>
+        {testResult && (
+          <span className={`flex items-center gap-1 text-[11px] ${testResult.ok ? 'text-emerald-700' : 'text-red-700'}`}>
+            {testResult.ok ? <Check size={11} /> : <X size={11} />}
+            {testResult.message}
+          </span>
+        )}
+      </div>
+
       {!connectionReady(c) && (
         <div className="mt-1.5 text-[10px] text-amber-700">
           Incomplete: {c.provider === 'ollama' || c.provider === 'openai-compatible'

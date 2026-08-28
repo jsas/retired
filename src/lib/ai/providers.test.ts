@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { streamChat, ProviderError, type StreamEvent, type ChatMessage } from './providers';
+import {
+  streamChat, listModels, testConnection, ProviderError,
+  type StreamEvent, type ChatMessage,
+} from './providers';
 import type { AiConnection } from '../aiSettings';
 
 /** Build a fake fetch returning an SSE stream of the given `data:` payloads. */
@@ -203,5 +206,129 @@ describe('gemini adapter', () => {
     expect(contents[1].parts[0].functionCall.name).toBe('get_scenario');
     expect(contents[2].parts[0].functionResponse.name).toBe('get_scenario');
     expect(contents[2].parts[0].functionResponse.response).toEqual({ result: '{"ok":true}' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test connection + model discovery (Connections page)
+// ---------------------------------------------------------------------------
+
+/** A fetch double returning a canned JSON body. */
+function fakeFetch(
+  handler: (url: string, init?: RequestInit) => { status?: number; body: unknown },
+) {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fn = (async (url: string | URL, init?: RequestInit) => {
+    const u = String(url);
+    calls.push({ url: u, init });
+    const out = handler(u, init);
+    return new Response(JSON.stringify(out.body), {
+      status: out.status ?? 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+  return { fn, calls };
+}
+
+const compatBase: AiConnection = {
+  id: 'c1', provider: 'openai-compatible', label: '', apiKey: '', model: 'm',
+};
+
+describe('listModels', () => {
+  it('GETs {baseUrl}/models for OpenAI-compatible endpoints (LM Studio, Ollama, …)', async () => {
+    const { fn, calls } = fakeFetch(() => ({
+      body: { data: [{ id: 'qwen2.5-7b', owned_by: 'lmstudio' }, { id: 'gemma-2-2b' }] },
+    }));
+    const models = await listModels({ ...compatBase, baseUrl: 'http://localhost:1234/v1' }, fn);
+    expect(calls[0].url).toBe('http://localhost:1234/v1/models');
+    expect(models.map(m => m.id)).toEqual(['gemma-2-2b', 'qwen2.5-7b']);
+    expect(models.find(m => m.id === 'qwen2.5-7b')?.detail).toBe('lmstudio');
+  });
+
+  it('sends the API key as a Bearer token when one is set', async () => {
+    const { fn, calls } = fakeFetch(() => ({ body: { data: [{ id: 'gpt-4o-mini' }] } }));
+    await listModels(
+      { ...compatBase, provider: 'openai', apiKey: 'sk-test', baseUrl: 'https://api.openai.com/v1' },
+      fn,
+    );
+    expect(calls[0].init?.headers && (calls[0].init.headers as Record<string, string>).authorization)
+      .toBe('Bearer sk-test');
+  });
+
+  it('throws a helpful error when no base URL is set', async () => {
+    await expect(listModels(compatBase, fakeFetch(() => ({ body: {} })).fn))
+      .rejects.toThrow(/base URL/);
+  });
+
+  it('wraps provider HTTP errors with the status and detail', async () => {
+    const { fn } = fakeFetch(() => ({ status: 401, body: { error: { message: 'bad key' } } }));
+    await expect(
+      listModels({ ...compatBase, baseUrl: 'http://x/v1' }, fn),
+    ).rejects.toThrow(/401.*bad key/);
+  });
+
+  it('lists Gemini models, filtering to chat-capable ones and stripping the prefix', async () => {
+    const { fn, calls } = fakeFetch(() => ({
+      body: {
+        models: [
+          { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+        ],
+      },
+    }));
+    const models = await listModels({ ...compatBase, provider: 'gemini', apiKey: 'k' }, fn);
+    expect(calls[0].url).toContain('v1beta/models?key=k');
+    expect(models).toEqual([{ id: 'gemini-2.0-flash', detail: 'Gemini 2.0 Flash' }]);
+  });
+
+  it('lists Anthropic models via /v1/models with the key header', async () => {
+    const { fn, calls } = fakeFetch(() => ({
+      body: { data: [{ id: 'claude-sonnet-4-20250514', display_name: 'Claude Sonnet 4' }] },
+    }));
+    const models = await listModels({ ...compatBase, provider: 'anthropic', apiKey: 'sk-ant' }, fn);
+    expect(calls[0].url).toBe('https://api.anthropic.com/v1/models?limit=1000');
+    expect(calls[0].init?.headers && (calls[0].init.headers as Record<string, string>)['x-api-key'])
+      .toBe('sk-ant');
+    expect(models).toEqual([{ id: 'claude-sonnet-4-20250514', detail: 'Claude Sonnet 4' }]);
+  });
+
+  it('refuses web-llm (its catalog is local)', async () => {
+    await expect(listModels({ ...compatBase, provider: 'webllm' })).rejects.toThrow(ProviderError);
+  });
+});
+
+describe('testConnection', () => {
+  it('is a no-op for the on-computer engine', async () => {
+    await expect(testConnection({ ...compatBase, provider: 'webllm' })).resolves.toBeUndefined();
+  });
+
+  it('probes Ollama via /api/tags', async () => {
+    const { fn, calls } = fakeFetch(() => ({ body: { models: [] } }));
+    await testConnection(
+      { ...compatBase, provider: 'ollama', baseUrl: 'http://localhost:11434/v1' }, fn,
+    );
+    expect(calls[0].url).toBe('http://localhost:11434/api/tags');
+  });
+
+  it('falls back to /v1/models when /api/tags 404s', async () => {
+    const { fn, calls } = fakeFetch(url =>
+      url.endsWith('/api/tags')
+        ? { status: 404, body: {} }
+        : { body: { data: [{ id: 'llama3.1' }] } },
+    );
+    await testConnection(
+      { ...compatBase, provider: 'ollama', baseUrl: 'http://localhost:11434/v1' }, fn,
+    );
+    expect(calls.map(c => c.url)).toEqual([
+      'http://localhost:11434/api/tags',
+      'http://localhost:11434/v1/models',
+    ]);
+  });
+
+  it('succeeds for an OpenAI-compatible endpoint that answers /models', async () => {
+    const { fn } = fakeFetch(() => ({ body: { data: [{ id: 'm' }] } }));
+    await expect(
+      testConnection({ ...compatBase, baseUrl: 'http://localhost:1234/v1' }, fn),
+    ).resolves.toBeUndefined();
   });
 });
