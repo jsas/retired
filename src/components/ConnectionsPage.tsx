@@ -433,28 +433,50 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
           <Plus size={13} /> Add the on-computer connection
         </button>
       ) : (
-        <div className="border border-emerald-200 bg-white rounded p-2.5 mb-3 flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">
-            On this computer
-          </span>
-          <span className="flex-1 text-[11px] text-slate-600 truncate">
-            Uses the model chosen above · <span className="font-mono">{webllmConn.model}</span>
-          </span>
-          {settings.activeConnectionId !== webllmConn.id && (
+        <div className="border border-emerald-200 bg-white rounded p-2.5 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">
+              On this computer
+            </span>
+            <span className="flex-1 text-[11px] text-slate-600 truncate">
+              Uses the model chosen above · <span className="font-mono">{webllmConn.model}</span>
+            </span>
+            {settings.activeConnectionId !== webllmConn.id && (
+              <button
+                onClick={() => onChange(s => { s.activeConnectionId = webllmConn.id; })}
+                className="text-[11px] text-emerald-700 hover:underline shrink-0"
+              >
+                Make active
+              </button>
+            )}
             <button
-              onClick={() => onChange(s => { s.activeConnectionId = webllmConn.id; })}
-              className="text-[11px] text-emerald-700 hover:underline shrink-0"
+              onClick={() => deleteConnection(webllmConn.id)}
+              className="text-slate-400 hover:text-red-600 shrink-0"
+              title="Remove this connection (the downloaded model stays until you delete it above)"
             >
-              Make active
+              <Trash2 size={13} />
             </button>
-          )}
-          <button
-            onClick={() => deleteConnection(webllmConn.id)}
-            className="text-slate-400 hover:text-red-600 shrink-0"
-            title="Remove this connection (the downloaded model stays until you delete it above)"
-          >
-            <Trash2 size={13} />
-          </button>
+          </div>
+          {/* Local models compile a KV cache sized to this window. The default
+              8192 is safe; a larger window lets the model see the whole plan +
+              tool catalog (fewer tool-loop stalls) but needs more GPU memory. */}
+          <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-600">
+            <span className="shrink-0">Context window (tokens)</span>
+            <input
+              type="number"
+              min={2048}
+              step={1024}
+              value={webllmConn.contextSize ?? ''}
+              onChange={e => patch(webllmConn.id, {
+                contextSize: e.target.value ? Math.max(2048, Math.round(Number(e.target.value))) : undefined,
+              })}
+              placeholder="16384"
+              className="w-24 px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+            />
+            <span className="text-[10px] text-slate-400">
+              Default 16384. Raise only if your GPU has room — it helps the model stop rambling.
+            </span>
+          </label>
         </div>
       )}
 
@@ -632,7 +654,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
             min={1024}
             value={c.contextSize ?? ''}
             onChange={e => onPatch(c.id, { contextSize: e.target.value ? Math.max(1024, Math.round(Number(e.target.value))) : undefined })}
-            placeholder={c.provider === 'webllm' ? '8192' : '128000'}
+            placeholder={c.provider === 'webllm' ? '16384' : '128000'}
             className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
           />
           <span className="block text-[9px] text-slate-400 mt-0.5">
