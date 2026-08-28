@@ -82,6 +82,13 @@ export async function* streamChat(
     case 'gemini':
       yield* streamGemini(conn, req, fetchFn);
       return;
+    case 'webllm': {
+      // In-browser inference; imported lazily so web-llm's payload stays out
+      // of the main bundle. Chat-only (no tools) — see webLlmProvider.ts.
+      const { streamWebLlm } = await import('./webLlmProvider');
+      yield* streamWebLlm(conn, req);
+      return;
+    }
     default:
       yield* streamOpenAICompatible(conn, req, fetchFn);
   }

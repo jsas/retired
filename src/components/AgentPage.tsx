@@ -12,6 +12,9 @@ import {
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
 import { buildSystemPrompt, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import type { ToolContext } from '../lib/ai/tools';
+import { buildPlanDigest } from '../lib/agentQA';
+import { calculateHousehold } from '../lib/retirementEngine';
+import { WEBLLM_MODELS, fmtVram, webGpuAvailable } from '../lib/ai/webLlmModels';
 
 interface AgentPageProps {
   inputs: RetirementInputs;
@@ -91,11 +94,18 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  // Local-model weight download/load progress (0–1 + status text), shown while
+  // a web-llm engine warms up — a multi-GB model takes minutes the first time.
+  const [loadProgress, setLoadProgress] = useState<{ progress: number; text: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
   const ready = connection != null && connectionReady(connection);
+  // web-llm runs in-browser and can't be trusted with tool calling (WIP
+  // upstream) — chat-only, with the plan digest injected into the prompt.
+  const isLocal = connection?.provider === 'webllm';
+  const toolsEnabled = !isLocal;
 
   useEffect(() => { saveAiSettings(settings); }, [settings]);
 
@@ -139,14 +149,30 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
       setTurns(prev => prev.map(t => (t.id === assistantTurn.id ? { ...t, ...(() => { const c = { ...t, tools: [...t.tools], changes: [...t.changes] }; mutate(c); return c; })() } : t)));
     };
 
+    // Chat-only (local) models can't call tools, so give them the plan digest
+    // directly. Cloud models get the lean system prompt and pull numbers via tools.
+    const system = toolsEnabled
+      ? buildSystemPrompt(scenarioName)
+      : buildSystemPrompt(scenarioName, { toolsEnabled: false }) + '\n\n' +
+        buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) });
+
+    if (isLocal) setLoadProgress({ progress: 0, text: 'Preparing the local model…' });
     try {
       for await (const evt of runAgentTurn({
         context: toolContext,
         history,
         userMessage: content,
-        system: buildSystemPrompt(scenarioName),
-        chat: req => streamChat(connection, { ...req, signal: abort.signal }),
+        system,
+        chat: async function* (req) {
+          if (isLocal) {
+            const { streamWebLlm } = await import('../lib/ai/webLlmProvider');
+            yield* streamWebLlm(connection, { ...req, signal: abort.signal }, setLoadProgress);
+          } else {
+            yield* streamChat(connection, { ...req, signal: abort.signal });
+          }
+        },
         signal: abort.signal,
+        toolsEnabled,
         onMutation: proposal =>
           new Promise(resolve => {
             patchAssistant(t => { t.changes.push({ ...proposal }); });
@@ -186,6 +212,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
       });
     } finally {
       setBusy(false);
+      setLoadProgress(null);
       abortRef.current = null;
     }
   };
@@ -272,9 +299,28 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
           <TurnView key={t.id} turn={t} onDecide={decideChange} />
         ))}
         {busy && turns.at(-1)?.text === '' && turns.at(-1)?.tools.length === 0 && (
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Loader2 size={13} className="animate-spin" /> thinking…
-          </div>
+          loadProgress ? (
+            <div className="max-w-md">
+              <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                <Loader2 size={13} className="animate-spin" />
+                <span className="truncate">{loadProgress.text || 'Loading the local model…'}</span>
+                <span className="ml-auto shrink-0">{Math.round(loadProgress.progress * 100)}%</span>
+              </div>
+              <div className="h-1.5 bg-slate-200 rounded overflow-hidden">
+                <div
+                  className="h-full bg-violet-500 transition-all"
+                  style={{ width: `${Math.round(loadProgress.progress * 100)}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">
+                First load downloads the model weights to this device (cached afterwards).
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Loader2 size={13} className="animate-spin" /> thinking…
+            </div>
+          )
         )}
       </div>
 
@@ -535,7 +581,7 @@ function ConnectionSetup({ settings, onChange, onClose }: {
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {c.provider !== 'ollama' && (
+              {c.provider !== 'ollama' && c.provider !== 'webllm' && (
                 <label className="block">
                   <span className="block text-[10px] text-slate-500 mb-0.5">API key (stored locally only)</span>
                   <input
@@ -548,15 +594,57 @@ function ConnectionSetup({ settings, onChange, onClose }: {
                   />
                 </label>
               )}
-              <label className="block">
-                <span className="block text-[10px] text-slate-500 mb-0.5">Model</span>
-                <input
-                  value={c.model}
-                  onChange={e => patch(c.id, { model: e.target.value })}
-                  placeholder={defaultModelFor(c.provider) || 'model id'}
-                  className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
-                />
-              </label>
+              {c.provider === 'webllm' ? (
+                <div className="sm:col-span-2">
+                  <span className="block text-[10px] text-slate-500 mb-1">
+                    Local model — runs on your GPU, no key needed. First use downloads the weights (cached after).
+                  </span>
+                  {!webGpuAvailable() && (
+                    <div className="mb-1.5 text-[10px] text-red-700">
+                      This browser reports no WebGPU — local models won't run here. Use Chrome/Edge 113+ or pick a cloud provider.
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    {WEBLLM_MODELS.map(m => (
+                      <label key={m.id} className={`flex items-start gap-2 px-2 py-1.5 rounded border text-[11px] cursor-pointer ${
+                        c.model === m.id ? 'border-violet-400 bg-violet-50' : 'border-slate-200 hover:bg-slate-50'
+                      }`}>
+                        <input
+                          type="radio"
+                          name={`webllm-model-${c.id}`}
+                          checked={c.model === m.id}
+                          onChange={() => patch(c.id, { model: m.id })}
+                          className="mt-0.5"
+                        />
+                        <span className="flex-1">
+                          <span className="font-semibold text-slate-800">{m.label}</span>
+                          <span className="text-slate-400"> · {fmtVram(m.vramMB)}</span>
+                          <span className="block text-[10px] text-slate-500">{m.blurb}</span>
+                        </span>
+                      </label>
+                    ))}
+                    <label className="block pt-1">
+                      <span className="block text-[10px] text-slate-500 mb-0.5">…or any web-llm prebuilt model id</span>
+                      <input
+                        value={WEBLLM_MODELS.some(m => m.id === c.model) ? '' : c.model}
+                        onChange={e => patch(c.id, { model: e.target.value })}
+                        placeholder="e.g. Llama-3.1-8B-Instruct-q4f32_1-MLC"
+                        className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <label className="block">
+                  <span className="block text-[10px] text-slate-500 mb-0.5">Model</span>
+                  <input
+                    value={c.model}
+                    onChange={e => patch(c.id, { model: e.target.value })}
+                    placeholder={defaultModelFor(c.provider) || 'model id'}
+                    className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+                  />
+                </label>
+              )}
               {(c.provider === 'ollama' || c.provider === 'openai-compatible' || c.provider === 'openrouter' || c.provider === 'openai') && (
                 <label className="block sm:col-span-2">
                   <span className="block text-[10px] text-slate-500 mb-0.5">Base URL</span>

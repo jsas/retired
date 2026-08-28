@@ -15,6 +15,7 @@ export const AI_PROVIDERS = [
   'gemini',
   'ollama',
   'openai-compatible',
+  'webllm',
 ] as const;
 
 export type AiProviderId = (typeof AI_PROVIDERS)[number];
@@ -193,6 +194,7 @@ export function defaultModelFor(provider: AiProviderId): string {
     case 'openrouter': return 'anthropic/claude-sonnet-4';
     case 'gemini': return 'gemini-2.0-flash';
     case 'ollama': return 'llama3.1';
+    case 'webllm': return 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC';
     case 'openai-compatible': return '';
   }
 }
@@ -207,9 +209,11 @@ export function defaultBaseUrlFor(provider: AiProviderId): string | undefined {
 }
 
 /** True when a connection has everything needed to attempt a call. Ollama may
- *  legitimately have no key; a generic compatible endpoint needs a URL. */
+ *  legitimately have no key; web-llm needs no key or URL (in-browser); a
+ *  generic compatible endpoint needs a URL. */
 export function connectionReady(c: AiConnection): boolean {
   if (!c.model.trim()) return false;
+  if (c.provider === 'webllm') return true; // in-browser: a model id is enough
   if (c.provider === 'ollama') return (c.baseUrl ?? '').trim().length > 0;
   if (c.provider === 'openai-compatible') {
     return (c.baseUrl ?? '').trim().length > 0 && c.apiKey.trim().length > 0;

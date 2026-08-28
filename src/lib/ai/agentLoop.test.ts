@@ -15,15 +15,15 @@ function ctx(): ToolContext {
 
 /** A scripted chat function: each entry is one assistant turn's events. */
 function scripted(turns: StreamEvent[][]): {
-  chat: (req: { messages: ChatMessage[] }) => AsyncGenerator<StreamEvent>;
-  requests: Array<{ messages: ChatMessage[] }>;
+  chat: (req: { messages: ChatMessage[]; tools?: unknown[] }) => AsyncGenerator<StreamEvent>;
+  requests: Array<{ messages: ChatMessage[]; tools?: unknown[] }>;
 } {
-  const requests: Array<{ messages: ChatMessage[] }> = [];
+  const requests: Array<{ messages: ChatMessage[]; tools?: unknown[] }> = [];
   let i = 0;
   return {
     requests,
     chat: async function* (req) {
-      requests.push({ messages: JSON.parse(JSON.stringify(req.messages)) });
+      requests.push(JSON.parse(JSON.stringify({ messages: req.messages, tools: req.tools })));
       const turn = turns[Math.min(i, turns.length - 1)];
       i += 1;
       for (const evt of turn) yield evt;
@@ -156,5 +156,40 @@ describe('buildSystemPrompt', () => {
     expect(s).toContain('"My Plan"');
     expect(s).toContain('calculator, not a planner');
     expect(s).toContain('set_scenario_value');
+  });
+
+  it('drops tool instructions for chat-only providers', () => {
+    const s = buildSystemPrompt('My Plan', { toolsEnabled: false });
+    expect(s).not.toContain('set_scenario_value');
+    expect(s).toContain('cannot run tools');
+  });
+});
+
+describe('chat-only (tools disabled) providers', () => {
+  it('does not advertise tools and refuses stray tool_use from the model', async () => {
+    const { chat, requests } = scripted([
+      // A small local model hallucinating a tool call despite not being offered any:
+      [
+        { type: 'tool_use', call: { id: 'x', name: 'run_projection', args: {} } },
+        { type: 'done', stopReason: 'tool_use' },
+      ],
+      [
+        { type: 'text', text: 'From the summary: you are on track.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'how am I doing?',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolsEnabled: false,
+    }));
+    // No tools were advertised on the first request.
+    expect(requests[0].tools).toEqual([]);
+    // The stray tool call was answered with an unavailable message, not executed.
+    const refusal = events.find(e => e.type === 'tool_result');
+    expect(refusal && refusal.isError).toBe(true);
+    expect((refusal as { content: string }).content).toContain('not available');
+    // The engine never ran: the content contains no projection output.
+    expect((refusal as { content: string }).content).not.toContain('lifetime tax');
   });
 });

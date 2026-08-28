@@ -48,6 +48,10 @@ export interface AgentLoopOptions {
     tools: ToolSpec[];
     signal?: AbortSignal;
   }) => AsyncGenerator<StreamEvent>;
+  /** When false, tools are NOT advertised and any tool_use from the model is
+   *  answered with a "tools unavailable" result. Use for chat-only providers
+   *  (web-llm) whose function-calling can't be trusted yet. Default true. */
+  toolsEnabled?: boolean;
   /** Called when the model proposes a mutation; resolves with the user's decision. */
   onMutation: (proposal: MutationProposal) => Promise<MutationDecision>;
   signal?: AbortSignal;
@@ -56,22 +60,31 @@ export interface AgentLoopOptions {
 }
 
 /** Build the system prompt the agent runs under. */
-export function buildSystemPrompt(scenarioName: string): string {
+export function buildSystemPrompt(scenarioName: string, opts?: { toolsEnabled?: boolean }): string {
+  const toolsEnabled = opts?.toolsEnabled !== false;
   return [
     'You are the assistant inside RE:tired, a Canadian retirement drawdown CALCULATOR.',
-    'You help the user understand and edit their scenario using the provided tools.',
+    toolsEnabled
+      ? 'You help the user understand and edit their scenario using the provided tools.'
+      : 'You help the user understand their scenario. You cannot run tools; answer from the plan summary below.',
     '',
     'Rules you must follow:',
     '- RE:tired is a calculator, not a planner. You explain consequences of inputs;',
     '  you never give personalized financial advice or tell the user what they SHOULD do.',
-    '- Ground every claim in tool output: use get_scenario to read the plan and',
-    '  run_projection / compare_scenarios for numbers. Never invent balances or results.',
-    '- You can only change the plan through set_scenario_value, which the USER must',
-    '  confirm. Propose changes when asked (or when clearly wanted), never silently.',
+    ...(toolsEnabled ? [
+      '- Ground every claim in tool output: use get_scenario to read the plan and',
+      '  run_projection / compare_scenarios for numbers. Never invent balances or results.',
+      '- You can only change the plan through set_scenario_value, which the USER must',
+      '  confirm. Propose changes when asked (or when clearly wanted), never silently.',
+    ] : [
+      '- Ground every claim in the plan summary below; do not invent balances or results.',
+      '- You cannot change the plan or run new projections. When the user asks for a',
+      '  what-if, explain the trade-off qualitatively and suggest they try it in the app.',
+    ]),
     '- CPP/OAS rules: CPP may start 60–70 (0.6%/month reduction before 65, +0.7%/month',
     '  after, to 70). OAS may start 65–70 (+0.6%/month to 70). RRSP/RRIF draws are fully',
     '  taxable and claw back GIS; TFSA withdrawals are tax-free.',
-    '- Keep answers concise. Reference specific ages and dollar figures from tool output.',
+    '- Keep answers concise. Reference specific ages and dollar figures where helpful.',
     '',
     `The active scenario is "${scenarioName}".`,
   ].join('\n');
@@ -86,7 +99,8 @@ export function buildSystemPrompt(scenarioName: string): string {
  */
 export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<AgentEvent> {
   const maxRounds = opts.maxRounds ?? 8;
-  const tools = toolSpecs();
+  const toolsEnabled = opts.toolsEnabled !== false;
+  const tools = toolsEnabled ? toolSpecs() : [];
   const messages: ChatMessage[] = [...opts.history, { role: 'user', content: opts.userMessage }];
 
   try {
@@ -118,6 +132,13 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
 
       for (const call of calls) {
         yield { type: 'tool_start', call };
+        // Chat-only providers: never execute — tell the model tools are off.
+        if (!toolsEnabled) {
+          const content = 'Tool use is not available with this provider. Answer from the conversation and the plan summary in the system prompt instead.';
+          results.push({ toolCallId: call.id, content, isError: true });
+          yield { type: 'tool_result', call, content, isError: true };
+          continue;
+        }
         const outcome: ToolOutcome = executeToolCall(opts.context, call);
 
         if (outcome.kind === 'mutation') {

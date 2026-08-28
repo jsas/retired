@@ -114,6 +114,28 @@ export interface QAContext {
 }
 
 /**
+ * The plan + computed-projection digest WITHOUT a framing question — used by
+ * chat-only providers (web-llm) that can't call tools, so the model still
+ * answers from the real numbers.
+ */
+export function buildPlanDigest(inputs: RetirementInputs, ctx: QAContext): string {
+  const digests: string[] = [
+    planDigest(inputs.spouse?.enabled ? 'You' : 'Plan', ctx.results, inputs.maxAge),
+  ];
+  if (ctx.results.spouse) {
+    digests.push(planDigest('Spouse', ctx.results.spouse, inputs.maxAge));
+  }
+  let mc = '';
+  if (ctx.mcResults) {
+    mc =
+      `\nMONTE CARLO (${ctx.mcResults.runs} runs, ${(ctx.mcResults.volatility * 100).toFixed(1)}% volatility):\n` +
+      `  success rate ${(ctx.mcResults.successRate * 100).toFixed(1)}%, ` +
+      `median final balance ${money(ctx.mcResults.medianFinalBalance)}\n`;
+  }
+  return `PLAN INPUTS (JSON):\n${JSON.stringify(inputs, null, 2)}\n\nCOMPUTED PROJECTION (summary):\n${digests.join('\n')}\n${mc}`;
+}
+
+/**
  * Build a self-contained question prompt: a framing instruction, the plan
  * inputs, a digest of the computed results (and optional Monte Carlo), then
  * the question. `customQuestion` overrides the preset text when provided.

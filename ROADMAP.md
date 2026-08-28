@@ -71,8 +71,11 @@ have to hold them.
 - **Embedded AI agent (savvy users)** — graduate the paste-based agent
   prompts (`agentIngest.ts`, `agentQA.ts`) into an in-app chat that talks
   to the user's own model provider: a provider array (Anthropic, OpenAI,
-  Gemini, OpenRouter, Ollama/local, OpenAI-compatible endpoints) with
-  per-provider API keys and model choices stored in the local DB
+  Gemini, OpenRouter, Ollama/local, OpenAI-compatible endpoints, **and
+  fully in-browser models via `@mlc-ai/web-llm`** — open weights run on the
+  user's GPU over WebGPU, no key, offline after a one-time download; a
+  curated math/reasoning list like Qwen2.5-Math and DeepSeek-R1 distills)
+  with per-provider API keys and model choices stored in the local DB
   (OPFS/sql.js, keyed, never synced anywhere). Ship a starter prompt
   library built on the existing QA presets, user-editable and saved per
   scenario. Headline flow: **scenario onboarding** — a blank plan starts
