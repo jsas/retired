@@ -72,7 +72,9 @@ export function buildSystemPrompt(
     'You are the assistant inside RE:tired, a Canadian retirement drawdown CALCULATOR.',
     mode === 'off'
       ? 'You help the user understand their scenario. You cannot run tools; answer from the plan summary below.'
-      : 'You help the user understand and edit their scenario using the provided tools.',
+      : mode === 'prompt'
+        ? 'You help the user understand and edit their scenario using tools and the plan data below.'
+        : 'You help the user understand and edit their scenario using the provided tools.',
     '',
     'Rules you must follow:',
     '- RE:tired is a calculator, not a planner. You explain consequences of inputs;',
@@ -91,6 +93,11 @@ export function buildSystemPrompt(
     '  after, to 70). OAS may start 65–70 (+0.6%/month to 70). RRSP/RRIF draws are fully',
     '  taxable and claw back GIS; TFSA withdrawals are tax-free.',
     '- Keep answers concise. Reference specific ages and dollar figures where helpful.',
+    ...(mode === 'prompt' ? [
+      '- The plan inputs and computed projection are BELOW in this message. The user\'s age,',
+      '  balances, and benefits are already there — never ask for them; quote the numbers',
+      '  directly and use tools only for what-ifs or fresh projections.',
+    ] : []),
     '',
     `The active scenario is "${scenarioName}".`,
   ].join('\n');

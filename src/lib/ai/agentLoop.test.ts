@@ -195,11 +195,11 @@ describe('chat-only (tools disabled) providers', () => {
 });
 
 describe('prompt-protocol tools (local models)', () => {
-  it('parses a ```tool block out of text, executes it, and feeds results back', async () => {
+  it('parses a TOOL_CALL line out of text, executes it, and feeds results back', async () => {
     const { chat, requests } = scripted([
-      // Local model reply: prose + a fenced tool block, streamed in chunks.
+      // Local model reply: prose + a one-line tool call, streamed as one chunk.
       [
-        { type: 'text', text: 'Let me check. ```tool\n{"name": "run_projection", "args": {}}\n```' },
+        { type: 'text', text: 'Let me check.\nTOOL_CALL: {"name": "run_projection", "args": {}}' },
         { type: 'done', stopReason: 'end_turn' },
       ],
       [
@@ -216,11 +216,11 @@ describe('prompt-protocol tools (local models)', () => {
     const result = events.find(e => e.type === 'tool_result');
     expect(result && !result.isError).toBe(true);
     expect((result as { content: string }).content).toContain('lifetime tax');
-    // The user saw prose with the raw JSON stripped, never the fence.
+    // The user saw prose with the tool line stripped, never the raw JSON.
     const prose = events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join('');
     expect(prose).toContain('Let me check.');
     expect(prose).toContain('funded to age 95.');
-    expect(prose).not.toContain('```tool');
+    expect(prose).not.toContain('TOOL_CALL:');
     expect(prose).not.toContain('"name"');
     // Round 2's request carries the tool result as a plain user message
     // (chat providers have no tool-result role).
@@ -233,7 +233,7 @@ describe('prompt-protocol tools (local models)', () => {
 
   it('returns malformed tool JSON as an error the model can retry from', async () => {
     const { chat } = scripted([
-      [{ type: 'text', text: '```tool\n{not json}\n```' }, { type: 'done', stopReason: 'end_turn' }],
+      [{ type: 'text', text: 'TOOL_CALL: {not json}' }, { type: 'done', stopReason: 'end_turn' }],
       [{ type: 'text', text: 'Sorry, let me just answer.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);
     const events = await collect(runAgentTurn({
@@ -248,7 +248,7 @@ describe('prompt-protocol tools (local models)', () => {
 
   it('caps prompt-mode loops so a model repeating broken calls stops', async () => {
     const { chat } = scripted([[
-      { type: 'text', text: '```tool\n{"name": "nope"}\n```' },
+      { type: 'text', text: 'TOOL_CALL: {"name": "nope"}' },
       { type: 'done', stopReason: 'end_turn' },
     ]]);
     const events = await collect(runAgentTurn({

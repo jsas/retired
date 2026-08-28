@@ -28,22 +28,29 @@ export interface ParsedToolText {
 let promptCallSeq = 0;
 const nextCallId = () => `prompt-call-${++promptCallSeq}`;
 
-/** Extract ```tool blocks from assistant text. Tolerates prose before/after
- *  and multiple blocks; anything not matching a known tool name is an error
- *  the model can learn from, not a silent drop. */
+/** Extract TOOL_CALL: lines from assistant text. Tolerates prose before/after
+ *  and multiple calls; anything not matching a known tool name is an error
+ *  the model can learn from, not a silent drop. The line format (vs a fenced
+ *  block) gives small models one unambiguous thing to emit and no closing
+ *  fence to forget — the main source of raw-protocol leakage into the chat. */
 export function extractPromptToolCalls(text: string, toolNames: ReadonlySet<string>): ParsedToolText {
   const calls: AgentToolCall[] = [];
   const errors: ParsedToolText['errors'] = [];
-  // ```tool\n{...}\n``` — block ends at the next fence or end of text (small
-  // models often forget the closing fence).
-  const pattern = /```tool\s*\n([\s\S]*?)(?:```|$)/g;
-  let prose = '';
-  let last = 0;
-  for (const match of text.matchAll(pattern)) {
-    const idx = match.index ?? 0;
-    prose += text.slice(last, idx);
-    last = idx + match[0].length;
-    const raw = match[1].trim();
+  const proseLines: string[] = [];
+  // A call runs from 'TOOL_CALL:' to the end of its line; a call with an
+  // "args" object may wrap onto continuation lines that end with '}'.
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const start = line.indexOf('TOOL_CALL:');
+    if (start === -1) { proseLines.push(line); continue; }
+    proseLines.push(line.slice(0, start));
+    let raw = line.slice(start + 'TOOL_CALL:'.length).trim();
+    // Swallow continuation lines while the JSON is incomplete (more opens
+    // than closes) so multi-line args still parse.
+    while (i + 1 < lines.length && !jsonLooksComplete(raw)) {
+      raw += '\n' + lines[++i];
+    }
     try {
       const parsed: unknown = JSON.parse(raw);
       const obj = parsed as Record<string, unknown>;
@@ -52,8 +59,8 @@ export function extractPromptToolCalls(text: string, toolNames: ReadonlySet<stri
         errors.push({
           raw,
           message: name
-            ? `Unknown tool "${name}". Check the tool list and use the exact name.`
-            : 'Tool call is missing a "name" field. Format: {"name": "<tool>", "args": {…}}',
+            ? `Unknown tool "${name}". Use one of the listed tool names exactly.`
+            : 'Tool call is missing "name". Format: TOOL_CALL: {"name": "<tool>", "args": {…}}',
         });
         continue;
       }
@@ -64,13 +71,21 @@ export function extractPromptToolCalls(text: string, toolNames: ReadonlySet<stri
     } catch {
       errors.push({
         raw,
-        message: 'The tool block was not valid JSON. Re-emit it as a single JSON object: ' +
-          '```tool {"name": "<tool>", "args": {…}} ``` — no comments, no trailing commas.',
+        message: 'That tool call was not valid JSON. Emit one line: ' +
+          'TOOL_CALL: {"name": "<tool>", "args": {…}} — no comments, no trailing commas.',
       });
     }
   }
-  prose += text.slice(last);
-  return { prose: prose.trim(), calls, errors };
+  return { prose: proseLines.join('\n').trim(), calls, errors };
+}
+
+/** Cheap brace balance check: true when the string plausibly contains a whole
+ *  JSON object (as many closes as opens). Good enough for swallowing wrapped
+ *  args; real validation happens in JSON.parse. */
+function jsonLooksComplete(raw: string): boolean {
+  const opens = (raw.match(/[{[]/g) ?? []).length;
+  const closes = (raw.match(/[}\]]/g) ?? []).length;
+  return opens > 0 && closes >= opens;
 }
 
 /** Serialize tool results as the next user message in the text protocol. */
@@ -86,8 +101,8 @@ export function formatPromptToolResults(
     parts.push(`\n[ERROR] Your tool block could not be used: ${e.message}`);
   }
   parts.push(
-    '\nIf you have everything you need, answer the user in plain prose (no tool block). ' +
-    'Otherwise call another tool with a ```tool block.',
+    '\nIf you have everything you need, answer the user in plain prose now. ' +
+    'Otherwise emit another TOOL_CALL: line.',
   );
   return parts.join('\n');
 }
@@ -114,18 +129,16 @@ function compactSchema(jsonSchema: Record<string, unknown>): string {
 }
 
 /** Build the system-prompt section that teaches a chat-only model the tool
- *  protocol: the format, the tool catalog, and the discipline rules. */
+ *  protocol: the format, the tool catalog, and the discipline rules. Small
+ *  models follow a one-line format far more reliably than fenced blocks. */
 export function buildPromptToolInstructions(specs: ToolSpec[]): string {
-  const catalog = specs.map(s => `  - ${s.name}: ${s.description}\n  args:\n${compactSchema(s.jsonSchema)}`).join('\n');
+  const catalog = specs.map(s => `- ${s.name}: ${s.description}\n  args:\n${compactSchema(s.jsonSchema)}`).join('\n');
   return [
-    'You can run LOCAL CODE through tool calls. To call a tool, output a fenced block EXACTLY like this,',
-    'with one JSON object inside (no prose inside the block):',
-    '```tool',
-    '{"name": "run_projection", "args": {}}',
-    '```',
-    'The tool result comes back as the next message. Rules:',
-    '- Put ALL prose outside the block; a block contains JSON only.',
-    '- One tool per block; you may emit several blocks in one reply.',
+    'TOOLS: to run local code, output ONE line starting with TOOL_CALL: followed by one JSON object:',
+    'TOOL_CALL: {"name": "run_projection", "args": {}}',
+    'The result comes back as the next message. Rules:',
+    '- The TOOL_CALL: line contains ONLY the JSON — all prose goes on other lines.',
+    '- One tool per TOOL_CALL: line; you may emit several lines.',
     '- Available tools:',
     catalog,
     '- Prefer run_projection/compare_scenarios numbers over guessing.',

@@ -18,6 +18,9 @@ export interface WebLlmModelChoice {
   label: string;
   /** VRAM needed at runtime, in MB (from web-llm's model metadata). */
   vramMB: number;
+  /** Approximate one-time download size in GB (q4f16 weights ≈ params × 0.55);
+   *  shown on the download button so users know what they're in for. */
+  sizeGB: number;
   /** One-line "why this one" for the picker. */
   blurb: string;
 }
@@ -27,43 +30,50 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     id: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
     label: 'Qwen2.5 Math 1.5B',
     vramMB: 1630,
-    blurb: 'Smallest real math model — fast download, runs on almost any GPU. Good first try.',
+    sizeGB: 1.2,
+    blurb: 'Smallest math model — fast, runs anywhere. Can derail on long answers.',
   },
   {
     id: 'Qwen3-4B-q4f16_1-MLC',
     label: 'Qwen3 4B (thinking)',
     vramMB: 3432,
-    blurb: 'General reasoning with a thinking mode; the best balance of size and quality.',
+    sizeGB: 2.5,
+    blurb: 'Best balance of size and quality; has a reasoning mode.',
   },
   {
     id: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
     label: 'Ministral 3 3B Reasoning',
     vramMB: 2864,
-    blurb: 'Mistral\'s compact reasoning model — strong on multi-step arithmetic.',
+    sizeGB: 2.1,
+    blurb: 'Compact reasoning model, strong on multi-step arithmetic.',
   },
   {
     id: 'Qwen2.5-Math-7B-Instruct-q4f16_1-MLC',
     label: 'Qwen2.5 Math 7B',
     vramMB: 5107,
-    blurb: 'The strongest dedicated math model that still fits a mid-range GPU.',
+    sizeGB: 4.5,
+    blurb: 'Strongest dedicated math model that fits a mid-range GPU.',
   },
   {
     id: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
     label: 'DeepSeek R1 Distill 7B',
     vramMB: 5107,
-    blurb: 'R1-style chain-of-thought reasoning distilled into 7B — thinks out loud, then answers.',
+    sizeGB: 4.5,
+    blurb: 'Thinks out loud (R1-style), then answers. Verbose but careful.',
   },
   {
     id: 'Qwen3-8B-q4f16_1-MLC',
     label: 'Qwen3 8B (thinking)',
     vramMB: 5696,
-    blurb: 'Biggest thinking-capable Qwen most GPUs can hold; needs ~6 GB free VRAM.',
+    sizeGB: 5.0,
+    blurb: 'Biggest thinking Qwen most GPUs can hold; needs ~6 GB free VRAM.',
   },
   {
     id: 'WizardMath-7B-V1.1-q4f16_1-MLC',
     label: 'WizardMath 7B',
     vramMB: 4573,
-    blurb: 'Classic math-tuned Llama — older than Qwen2.5-Math but solid; requires shader-f16.',
+    sizeGB: 4.0,
+    blurb: 'Classic math-tuned Llama; requires shader-f16 support.',
   },
 ];
 
@@ -79,4 +89,9 @@ export function webGpuAvailable(): boolean {
 /** Human-readable size for the picker. */
 export function fmtVram(mb: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB VRAM` : `${mb} MB VRAM`;
+}
+
+/** Human-readable download size ("2.5 GB"). */
+export function fmtSize(gb: number): string {
+  return `${gb.toFixed(1)} GB`;
 }

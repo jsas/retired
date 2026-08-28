@@ -7,45 +7,55 @@ import { toolSpecs } from './tools';
 const names = new Set(toolSpecs().map(s => s.name));
 
 describe('extractPromptToolCalls', () => {
-  it('pulls a valid tool block out of surrounding prose', () => {
+  it('pulls a valid TOOL_CALL line out of surrounding prose', () => {
     const { prose, calls, errors } = extractPromptToolCalls(
-      'Checking now. ```tool\n{"name": "run_projection", "args": {}}\n``` One moment.',
+      'Checking now.\nTOOL_CALL: {"name": "run_projection", "args": {}}\nOne moment.',
       names,
     );
-    expect(prose).toBe('Checking now.  One moment.');
+    expect(prose).toBe('Checking now.\n\nOne moment.');
     expect(calls).toHaveLength(1);
     expect(calls[0].name).toBe('run_projection');
     expect(calls[0].id).toBeTruthy();
     expect(errors).toHaveLength(0);
   });
 
-  it('handles a missing closing fence (small-model habit)', () => {
+  it('swallows continuation lines when args wrap', () => {
     const { calls } = extractPromptToolCalls(
-      '```tool\n{"name": "get_scenario", "args": {"section": "summary"}}',
+      'TOOL_CALL: {"name": "get_scenario",\n  "args": {"section": "summary"}}',
       names,
     );
     expect(calls).toHaveLength(1);
     expect(calls[0].args).toEqual({ section: 'summary' });
   });
 
-  it('supports multiple blocks in one reply', () => {
+  it('supports multiple calls in one reply', () => {
     const { calls } = extractPromptToolCalls(
-      '```tool\n{"name": "get_scenario"}\n```\n```tool\n{"name": "run_projection"}\n```',
+      'TOOL_CALL: {"name": "get_scenario"}\nTOOL_CALL: {"name": "run_projection"}',
       names,
     );
     expect(calls.map(c => c.name)).toEqual(['get_scenario', 'run_projection']);
   });
 
   it('flags invalid JSON as a retryable error, not a crash', () => {
-    const { calls, errors } = extractPromptToolCalls('```tool\n{oops}\n```', names);
+    const { calls, errors } = extractPromptToolCalls('TOOL_CALL: {oops}', names);
     expect(calls).toHaveLength(0);
     expect(errors).toHaveLength(1);
     expect(errors[0].message).toContain('not valid JSON');
   });
 
   it('flags unknown tool names with guidance', () => {
-    const { errors } = extractPromptToolCalls('```tool\n{"name": "delete_everything"}\n```', names);
+    const { errors } = extractPromptToolCalls('TOOL_CALL: {"name": "delete_everything"}', names);
     expect(errors[0].message).toContain('Unknown tool');
+  });
+
+  it('never mistakes ordinary prose or code fences for a call', () => {
+    const { calls, errors, prose } = extractPromptToolCalls(
+      'Sure! Here is math: 2+2=4.\n```json\n{"kkk": 1}\n```',
+      names,
+    );
+    expect(calls).toHaveLength(0);
+    expect(errors).toHaveLength(0);
+    expect(prose).toContain('2+2=4');
   });
 });
 
@@ -62,9 +72,9 @@ describe('formatPromptToolResults', () => {
 });
 
 describe('buildPromptToolInstructions', () => {
-  it('teaches the fenced format and lists every tool compactly', () => {
+  it('teaches the one-line format and lists every tool compactly', () => {
     const s = buildPromptToolInstructions(toolSpecs());
-    expect(s).toContain('```tool');
+    expect(s).toContain('TOOL_CALL:');
     for (const name of names) expect(s).toContain(name);
     // Compact: no full JSON-schema dump (token-heavy for small models).
     expect(s).not.toContain('"$schema"');
