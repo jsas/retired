@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot, Send, KeyRound, Plug, Plus, Trash2, X, Check, Loader2, Wrench,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Lock, Cloud,
 } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
@@ -48,7 +48,8 @@ interface Turn {
   text: string;                 // streamed prose for assistant turns
   tools: ToolActivity[];        // tool calls made during this turn
   changes: PendingChange[];     // mutation proposals awaiting/after decision
-  isError?: boolean;
+  /** Assistant only: where the turn is in its lifecycle. */
+  state?: 'streaming' | 'done' | 'aborted' | 'truncated' | 'error';
 }
 
 let turnSeq = 0;
@@ -64,7 +65,7 @@ function toHistory(turns: Turn[]): ChatMessage[] {
       messages.push({ role: 'user', content: t.text });
       continue;
     }
-    if (t.isError) continue; // don't teach the model its own failures
+    if (t.state === 'error') continue; // don't teach the model its own failures
     messages.push({
       role: 'assistant',
       content: t.text,
@@ -97,9 +98,12 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  // Local-model weight download/load progress (0–1 + status text), shown while
-  // a web-llm engine warms up — a multi-GB model takes minutes the first time.
+  // Local-model warm-up status, shown while a web-llm engine gets ready — a
+  // multi-GB download takes minutes the first time, and the GPU compile that
+  // follows it (progress stops at 100% but the model isn't answering yet) can
+  // take another minute on slower machines.
   const [loadProgress, setLoadProgress] = useState<{ progress: number; text: string } | null>(null);
+  const downloadDoneRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -139,7 +143,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
     setBusy(true);
 
     const userTurn: Turn = { id: newTurnId(), role: 'user', text: content, tools: [], changes: [] };
-    const assistantTurn: Turn = { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [] };
+    const assistantTurn: Turn = { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming' };
     setTurns(prev => [...prev, userTurn, assistantTurn]);
 
     // History excludes the two turns just added; mutation RESULTS from earlier
@@ -159,7 +163,24 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
       : buildSystemPrompt(scenarioName, { toolsEnabled: false }) + '\n\n' +
         buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) });
 
-    if (isLocal) setLoadProgress({ progress: 0, text: 'Preparing the local model…' });
+    if (isLocal) {
+      downloadDoneRef.current = false;
+      setLoadProgress({ progress: 0, text: 'Preparing the local model…' });
+    }
+    const reportLoad = (p: { progress: number; text: string }) => {
+      // web-llm reports download progress, then goes quiet while the GPU
+      // compiles — show a distinct "compiling" state so the UI doesn't look
+      // frozen between 100% and the first token.
+      if (p.progress >= 1) {
+        if (!downloadDoneRef.current) {
+          downloadDoneRef.current = true;
+          setLoadProgress({ progress: 1, text: 'Compiling the model for your GPU — this can take a minute…' });
+        }
+        // else: keep the compiling message; further 100% reports add nothing.
+      } else {
+        setLoadProgress(p);
+      }
+    };
     try {
       for await (const evt of runAgentTurn({
         context: toolContext,
@@ -169,7 +190,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
         chat: async function* (req) {
           if (isLocal) {
             const { streamWebLlm } = await import('../lib/ai/webLlmProvider');
-            yield* streamWebLlm(connection, { ...req, signal: abort.signal }, setLoadProgress);
+            yield* streamWebLlm(connection, { ...req, signal: abort.signal }, reportLoad);
           } else {
             yield* streamChat(connection, { ...req, signal: abort.signal });
           }
@@ -202,18 +223,30 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
             // The proposal card was already added by onMutation above.
             break;
           case 'error':
-            patchAssistant(t => { t.isError = true; t.text = t.text ? `${t.text}\n\n${evt.message}` : evt.message; });
+            patchAssistant(t => { t.state = 'error'; t.text = t.text ? `${t.text}\n\n${evt.message}` : evt.message; });
             break;
           case 'done':
+            patchAssistant(t => {
+              if (t.state !== 'error') {
+                t.state = evt.stopReason === 'max_tokens'
+                  ? 'truncated'
+                  : evt.stopReason === 'aborted' ? 'aborted' : 'done';
+              }
+            });
             break;
         }
       }
     } catch (err) {
       patchAssistant(t => {
-        t.isError = true;
+        t.state = 'error';
         t.text = err instanceof Error ? err.message : String(err);
       });
     } finally {
+      // If neither 'done' nor 'error' arrived (e.g. Stop aborted the stream),
+      // close the turn out so the composer doesn't stay "busy" forever.
+      patchAssistant(t => {
+        if (t.state === 'streaming') t.state = abort.signal.aborted ? 'aborted' : 'done';
+      });
       setBusy(false);
       setLoadProgress(null);
       abortRef.current = null;
@@ -262,6 +295,19 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
               ))}
             </select>
           )}
+          {connection && (
+            <span
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold ${
+                isLocal ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+              }`}
+              title={isLocal
+                ? 'Runs entirely on this device: no account, no key, nothing you type leaves the computer.'
+                : `Chats go directly from this browser to ${connection.provider}; the key is stored only in this browser.`}
+            >
+              {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
+              {isLocal ? 'On this device · private' : 'Cloud · direct from browser'}
+            </span>
+          )}
           <button
             onClick={() => setSetupOpen(o => !o)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded border ${
@@ -307,7 +353,9 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
               <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                 <Loader2 size={13} className="animate-spin" />
                 <span className="truncate">{loadProgress.text || 'Loading the local model…'}</span>
-                <span className="ml-auto shrink-0">{Math.round(loadProgress.progress * 100)}%</span>
+                {loadProgress.progress < 1 && (
+                  <span className="ml-auto shrink-0">{Math.round(loadProgress.progress * 100)}%</span>
+                )}
               </div>
               <div className="h-1.5 bg-slate-200 rounded overflow-hidden">
                 <div
@@ -315,8 +363,10 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply 
                   style={{ width: `${Math.round(loadProgress.progress * 100)}%` }}
                 />
               </div>
-              <div className="text-[10px] text-slate-400 mt-1">
-                First load downloads the model weights to this device (cached afterwards).
+              <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-1">
+                <Lock size={9} />
+                First load downloads the model weights to this device (cached afterwards). After that,
+                everything runs locally — nothing you type leaves this computer.
               </div>
             </div>
           ) : (
@@ -438,9 +488,19 @@ function TurnView({ turn, onDecide }: {
       <div className="max-w-[85%] space-y-2">
         {turn.text && (
           <div className={`px-3 py-2 rounded-lg text-xs whitespace-pre-wrap leading-relaxed ${
-            turn.isError ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-slate-100 text-slate-800'
+            turn.state === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-slate-100 text-slate-800'
           }`}>
             {turn.text}
+            {turn.state === 'streaming' && (
+              <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-violet-500 animate-pulse align-text-bottom" />
+            )}
+          </div>
+        )}
+        {(turn.state === 'truncated' || turn.state === 'aborted') && (
+          <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+            {turn.state === 'truncated'
+              ? 'The answer was cut short at the model\'s length limit — ask it to continue or to be briefer.'
+              : 'Stopped early.'}
           </div>
         )}
         {turn.tools.map(tool => (
@@ -608,8 +668,16 @@ function ConnectionSetup({ settings, onChange, onClose }: {
 
         {webllmConn && (
           <div className="mt-3">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-              Choose a model size
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Choose a model size
+              </span>
+              <span
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-bold"
+                title="Runs entirely on this device: no account, no key, nothing you type leaves the computer."
+              >
+                <Lock size={9} /> PRIVATE — STAYS ON THIS DEVICE
+              </span>
             </div>
             <div className="space-y-1">
               {WEBLLM_MODELS.map(m => (

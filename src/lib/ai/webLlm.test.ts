@@ -1,9 +1,28 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { WEBLLM_MODELS, fmtVram, webGpuAvailable } from './webLlmModels';
 import { connectionReady, defaultModelFor, type AiConnection } from '../aiSettings';
 import { buildPlanDigest } from '../agentQA';
 import { calculateHousehold } from '../retirementEngine';
 import { baseInputs, testConfig } from '../../test/helpers';
+import type { StreamEvent } from './providers';
+
+// Fake the @mlc-ai/web-llm module: the real engine needs WebGPU and downloads
+// multi-GB weights, so tests drive a scripted engine instead. The mock engine
+// is reset per test by clearing the provider's cached engine.
+let scriptedChunks: Array<Record<string, unknown>> = [];
+let interruptCalls = 0;
+
+vi.mock('@mlc-ai/web-llm', () => ({
+  CreateMLCEngine: async () => ({
+    chat: {
+      completions: {
+        create: async () => (async function* () { yield* scriptedChunks; })(),
+      },
+    },
+    interruptGenerate: async () => { interruptCalls++; },
+    unload: async () => {},
+  }),
+}));
 
 describe('curated web-llm model list', () => {
   it('ships only valid MLC prebuilt ids with VRAM labels', () => {
@@ -65,5 +84,55 @@ describe('buildPlanDigest (chat-only provider context)', () => {
     expect(digest).not.toContain('QUESTION:');
     // The digest must carry the actual numbers, not placeholders.
     expect(digest).toContain('"tfsaBalance": 500000');
+  });
+});
+
+describe('streamWebLlm', () => {
+  const conn: AiConnection = {
+    id: 'c', provider: 'webllm', label: 'local', apiKey: '',
+    model: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
+  };
+
+  const collect = async (signal?: AbortSignal): Promise<StreamEvent[]> => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine(); // reset the cached engine so the mock reloads
+    const events: StreamEvent[] = [];
+    for await (const e of streamWebLlm(conn, {
+      system: 'sys', messages: [{ role: 'user', content: 'hi' }], tools: [], signal,
+    })) events.push(e);
+    return events;
+  };
+
+  it('streams text chunks and reports end_turn on a clean finish', async () => {
+    scriptedChunks = [
+      { choices: [{ delta: { content: 'Your plan ' } }] },
+      { choices: [{ delta: { content: 'lasts.' }, finish_reason: 'stop' }] },
+    ];
+    const events = await collect();
+    expect(events).toEqual([
+      { type: 'text', text: 'Your plan ' },
+      { type: 'text', text: 'lasts.' },
+      { type: 'done', stopReason: 'end_turn' },
+    ]);
+  });
+
+  it('maps finish_reason length to max_tokens so the UI can flag truncation', async () => {
+    scriptedChunks = [
+      { choices: [{ delta: { content: 'half an answer…' }, finish_reason: 'length' }] },
+    ];
+    const events = await collect();
+    expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'max_tokens' });
+  });
+
+  it('aborting interrupts the engine and reports aborted', async () => {
+    interruptCalls = 0;
+    const controller = new AbortController();
+    scriptedChunks = [{ choices: [{ delta: { content: 'x' } }] }];
+    // Abort before collecting: the stream sees the signal, interrupts the
+    // engine, and finishes with 'aborted'.
+    controller.abort();
+    const events = await collect(controller.signal);
+    expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'aborted' });
+    expect(interruptCalls).toBeGreaterThan(0);
   });
 });

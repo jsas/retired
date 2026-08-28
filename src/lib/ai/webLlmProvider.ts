@@ -23,6 +23,9 @@ interface MlcEngine {
       create(req: Record<string, unknown>): Promise<AsyncIterable<unknown>>;
     };
   };
+  /** Halts the in-flight generation; used when the user presses Stop, since
+   *  the engine's own stream doesn't observe our AbortSignal. */
+  interruptGenerate?(): Promise<void>;
   unload?(): Promise<void>;
 }
 
@@ -127,16 +130,26 @@ export async function* streamWebLlm(
     stream = await engine.chat.completions.create({
       messages: toMessages(req.system, req.messages),
       stream: true,
-      max_tokens: req.maxTokens ?? 2048,
+      max_tokens: req.maxTokens ?? 4096,
       temperature: 0.3, // math/reasoning models: keep them deterministic-ish
+      // Small quantized models occasionally get stuck emitting one token
+      // ("000000…") at low temperature; a mild penalty breaks the loop.
+      repetition_penalty: 1.1,
+      frequency_penalty: 0.1,
     });
   } catch (err) {
     throw new ProviderError(`Local model error: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   let stopped = false;
-  const onAbort = () => { stopped = true; };
+  const onAbort = () => {
+    stopped = true;
+    // Actually halt the GPU work — the stream alone doesn't observe the signal.
+    void engine.interruptGenerate?.();
+  };
   req.signal?.addEventListener('abort', onAbort, { once: true });
+  if (req.signal?.aborted) onAbort(); // signal fired before we subscribed
+  let finishReason: string | null = null;
   try {
     for await (const chunk of stream) {
       if (stopped) break;
@@ -145,9 +158,16 @@ export async function* streamWebLlm(
       }).choices?.[0];
       const text = delta?.delta?.content;
       if (text) yield { type: 'text', text };
+      if (delta?.finish_reason) finishReason = delta.finish_reason;
     }
   } finally {
     req.signal?.removeEventListener('abort', onAbort);
   }
-  yield { type: 'done', stopReason: 'end_turn' };
+  // 'length' means the model hit the token cap mid-thought — the agent loop
+  // surfaces that so the UI can say the answer was cut short. An abort that
+  // landed after the last chunk still counts as aborted.
+  const wasAborted = stopped || req.signal?.aborted === true;
+  const stopReason: 'end_turn' | 'max_tokens' | 'aborted' =
+    wasAborted ? 'aborted' : finishReason === 'length' ? 'max_tokens' : 'end_turn';
+  yield { type: 'done', stopReason };
 }

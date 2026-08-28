@@ -25,7 +25,7 @@ export interface AgentToolCall {
 export type StreamEvent =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; call: AgentToolCall }
-  | { type: 'done'; stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'unknown' };
+  | { type: 'done'; stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'aborted' | 'unknown' };
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
