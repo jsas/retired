@@ -163,6 +163,8 @@ export function buildPromptToolInstructions(specs: ToolSpec[]): string {
     '- Available tools:',
     catalog,
     '- Prefer run_projection/compare_scenarios numbers over guessing.',
+    '- NEVER ask the user for balances, ages, or account values — they are in the plan',
+    '  summary in the system prompt, and get_scenario/run_projection return them.',
     '- Every propose_* and set_scenario_value tool only PROPOSES a change; the user confirms it.',
   ].join('\n');
 }

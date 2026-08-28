@@ -135,8 +135,10 @@ export function buildSystemPrompt(
       : mode === 'prompt'
         ? [
             'Tools: the plan inputs and computed projection are BELOW in this message. The',
-            'user\'s age, balances, and benefits are already there — never ask for them;',
-            'quote the numbers directly and use tools only for what-ifs or fresh projections.',
+            'user\'s age, balances, benefits, and account values are ALREADY there — never',
+            'ask the user for them. Read them from the summary, and call get_scenario or',
+            'run_projection (with overrides) for any number you don\'t have. Answer with the',
+            'real figures; only use run_projection/compare_scenarios for what-ifs.',
           ].join('\n')
         : [
             'Tools: use get_scenario to read the plan and run_projection / compare_scenarios /',

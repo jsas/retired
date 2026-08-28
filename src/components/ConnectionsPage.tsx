@@ -276,6 +276,33 @@ function ModelsSection({ onChange, webllmConn }: {
       )}
       {error && <div className="mt-1.5 text-[11px] text-red-700">{error}</div>}
 
+      {/* How much the model can read at once. Plain-language framing: the
+          model "sees" this much of your plan and the conversation at a time.
+          Bigger = answers stay coherent on long chats, but needs more memory. */}
+      {webllmConn && (
+        <div className="mt-3 pt-2 border-t border-emerald-100 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <label htmlFor="local-ctx" className="text-[11px] font-medium text-emerald-900">
+            How much the model reads at once
+          </label>
+          <input
+            id="local-ctx"
+            type="number"
+            min={2048}
+            step={1024}
+            value={webllmConn.contextSize ?? ''}
+            onChange={e => onChange(s => {
+              const c = s.connections.find(x => x.id === webllmConn.id);
+              if (c) c.contextSize = e.target.value ? Math.max(2048, Math.round(Number(e.target.value))) : undefined;
+            })}
+            placeholder="16384"
+            className="w-24 px-2 py-1 border border-emerald-200 rounded text-xs font-mono bg-white"
+          />
+          <span className="text-[10px] text-emerald-900/70">
+            Leave blank for the default. Larger needs more memory; smaller runs on weaker computers.
+          </span>
+        </div>
+      )}
+
       {/* Other downloads: cached models the catalog no longer lists, e.g. an
           older fetch. Shown so they can be deleted to free disk space. */}
       {extraIds.length > 0 && (
@@ -457,26 +484,6 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
               <Trash2 size={13} />
             </button>
           </div>
-          {/* Local models compile a KV cache sized to this window. The default
-              8192 is safe; a larger window lets the model see the whole plan +
-              tool catalog (fewer tool-loop stalls) but needs more GPU memory. */}
-          <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-600">
-            <span className="shrink-0">Context window (tokens)</span>
-            <input
-              type="number"
-              min={2048}
-              step={1024}
-              value={webllmConn.contextSize ?? ''}
-              onChange={e => patch(webllmConn.id, {
-                contextSize: e.target.value ? Math.max(2048, Math.round(Number(e.target.value))) : undefined,
-              })}
-              placeholder="16384"
-              className="w-24 px-2 py-1 border border-slate-200 rounded text-xs font-mono"
-            />
-            <span className="text-[10px] text-slate-400">
-              Default 16384. Raise only if your GPU has room — it helps the model stop rambling.
-            </span>
-          </label>
         </div>
       )}
 
@@ -654,7 +661,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
             min={1024}
             value={c.contextSize ?? ''}
             onChange={e => onPatch(c.id, { contextSize: e.target.value ? Math.max(1024, Math.round(Number(e.target.value))) : undefined })}
-            placeholder={c.provider === 'webllm' ? '16384' : '128000'}
+            placeholder="128000"
             className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
           />
           <span className="block text-[9px] text-slate-400 mt-0.5">

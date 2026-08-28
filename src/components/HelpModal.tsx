@@ -548,6 +548,34 @@ const SECTIONS: HelpSection[] = [
         term: 'AI helper disclaimer (what "read by the AI" means)',
         body: <P>The Optimize tab can draft a question for an AI chatbot (ChatGPT, Claude, …). The app itself never contacts them — but the moment <em>you</em> paste that text into their site, the plan details in it (ages, balances, benefits, spending) are being read by that company, under its privacy policy, not ours. Don't paste anything you wouldn't hand to that company.</P>
       },
+      {
+        term: 'Assistant (the chat)',
+        body: <P>The built-in chat that answers questions about your plan. It can read your scenario inputs and run the projection itself, so it answers with your real numbers — and it can suggest changes, which you always review and approve before anything is applied. It never changes your plan on its own.</P>
+      },
+      {
+        term: 'Model',
+        body: <P>The AI "brain" doing the answering. Bigger models answer better but need a stronger computer. The assistant can use a model that runs entirely on this computer (private, free, works offline — downloaded once on the Connections page) or an online model from a provider like Google or Anthropic (smarter, but your plan details travel to them — see the AI helper disclaimer).</P>
+      },
+      {
+        term: 'Local vs online model',
+        body: <P><strong>Local</strong> runs on your own computer: nothing leaves the machine, no account or key needed, but answers are only as good as your hardware allows. <strong>Online</strong> sends your question (and the plan details in it) to a provider's servers: generally smarter answers, but you need an API key and the privacy trade-off above applies. Pick on the Connections page.</P>
+      },
+      {
+        term: 'Tokens',
+        body: <P>How AI models measure text — roughly three-quarters of a word each. Your question, the plan summary, and the answer all count. Only matters because a model can only hold so many at once (see Context window).</P>
+      },
+      {
+        term: 'Context window',
+        body: <P>How much the model can take in at once — your plan, the conversation so far, and its answer all have to fit. Long chats with a small window make the model lose track of earlier details. Adjustable for local models on the Connections page ("How much the model reads at once"): larger needs more computer memory.</P>
+      },
+      {
+        term: 'Thinking / reasoning',
+        body: <P>Some models show a scratch-pad of their working before the final answer. It's the model thinking out loud, not part of the answer — collapse it if it's in the way. The final reply below it is what matters.</P>
+      },
+      {
+        term: 'API key',
+        body: <P>A password you get from an online AI provider to use their models. Paste it on the Connections page — it is stored only in this browser and sent only to that provider when you chat. The app's local models never need one.</P>
+      },
     ]
   },
   {

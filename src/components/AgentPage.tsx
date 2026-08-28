@@ -476,6 +476,20 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   // Cancel any in-flight request on unmount.
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  /** Like patchTurns but lets the mutator also RETURN a value computed from
+   *  the up-to-date turns (avoids acting on a stale `turns` closure, and keeps
+   *  a truncate + read atomic so the external store can't drop a message
+   *  between the two). */
+  const reduceTurns = <R,>(fn: (turns: Turn[]) => { turns: Turn[]; result: R }): R => {
+    let result!: R;
+    patchTurns(prev => {
+      const out = fn(prev);
+      result = out.result;
+      return out.turns;
+    });
+    return result;
+  };
+
   const toolContext: ToolContext = useMemo(() => ({
     inputs, config, scenarioName, scenarioList,
   }), [inputs, config, scenarioName, scenarioList]);
@@ -684,13 +698,19 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   /** Regenerate: drop every turn after the user message that preceded the
    *  assistant reply, then re-run from that message. parentId is the id of
    *  that user turn (null only for a leading assistant message — regenerate
-   *  is offered on user-preceded replies only, so this won't fire). */
+   *  is offered on user-preceded replies only, so this won't fire).
+   *
+   *  The truncation is computed from CURRENT state (not the `turns` closure,
+   *  which can be stale) and the kept list always includes that user message —
+   *  an earlier version could drop it when the closure was out of date. */
   const reload = async (parentId: string | null) => {
     if (running || !parentId) return;
-    const idx = turns.findIndex(t => t.id === parentId);
-    if (idx === -1 || turns[idx].role !== 'user') return;
-    const prior = turns.slice(0, idx + 1);
-    patchTurns(() => prior);
+    const prior = reduceTurns(prev => {
+      const idx = prev.findIndex(t => t.id === parentId);
+      if (idx === -1 || prev[idx].role !== 'user') return { turns: prev, result: null };
+      return { turns: prev.slice(0, idx + 1), result: prev.slice(0, idx + 1) };
+    });
+    if (!prior || prior.length === 0) return;
     await runTurn(prior, prior[prior.length - 1].text, false);
   };
 
