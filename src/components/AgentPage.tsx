@@ -849,7 +849,13 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       <div className="flex flex-col h-full">
         {/* Thread */}
         <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded bg-white">
-          <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto p-3 space-y-3">
+          {/* autoScroll off: the default re-pins to the bottom on every content
+              growth, and a streaming reply (tool rounds / reasoning) keeps
+              growing — so once you answered, scrolling back up got yanked to
+              the bottom. Turn that chase off; the run-start / initialize /
+              thread-switch jumps still snap to the latest reply, then the
+              scroll position stays where the user put it. */}
+          <ThreadPrimitive.Viewport autoScroll={false} className="flex-1 overflow-y-auto p-3 space-y-3">
             <ThreadPrimitive.Empty>
               <EmptyThread />
             </ThreadPrimitive.Empty>
