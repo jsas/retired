@@ -60,6 +60,44 @@ export interface EngineConfig {
   rrspAnnualMax: number;
 }
 
+/**
+ * Registered Disability Savings Plan parameters (2026). A savings plan for
+ * Canadians eligible for the Disability Tax Credit: contributions are NOT
+ * deductible, growth is tax-sheltered, and the federal government adds
+ * Canada Disability Savings Grants (CDSG, matching contributions) and Bonds
+ * (CDSB, income-tested, no contribution needed). On withdrawal, the
+ * CONTRIBUTION portion is tax-free while the grant/bond/growth portion is
+ * taxable income. Sources: canada.ca "How much you could get in grants and
+ * bonds" (2026 thresholds).
+ *
+ * NOT modelled (by design, surfaced in Help): the 10-year Assistance
+ * Holdback Amount (AHA) clawback on withdrawal, and the 10-year carry-forward
+ * of unused grant/bond entitlements.
+ */
+export interface RdspConfig {
+  // CDSG (grant): family income at/below grantThreshold gets 300% on the
+  // first $500 contributed + 200% on the next $1,000 (max grantAnnualMax/yr,
+  // reached with $1,500 of contributions). Above the threshold the match is
+  // 100% on the first $1,000 (max $1,000). Family income = the beneficiary's
+  // own + spouse's income (app uses current-year income; CRA actually reads
+  // the return from 2 years prior).
+  grantThreshold: number;
+  grantAnnualMax: number;    // max CDSG per year (3,500)
+  grantLifetimeMax: number;  // max CDSG over a lifetime (70,000)
+  grantEndAge: number;       // grants/bonds are paid up to Dec 31 of the year the beneficiary turns this age (49)
+  // CDSB (bond): income-tested, no contribution required. At/below
+  // bondThresholdLower pays bondAnnualMax/yr; between lower and upper the bond
+  // phases out linearly to $0; at/above the upper threshold, $0.
+  bondThresholdLower: number;
+  bondThresholdUpper: number;
+  bondAnnualMax: number;     // max CDSB per year (1,000)
+  bondLifetimeMax: number;   // max CDSB over a lifetime (20,000)
+  // Contributions: no annual limit, a lifetime cap, allowed up to Dec 31 of
+  // the year the beneficiary turns contributionEndAge (59).
+  contributionLifetimeMax: number; // (200,000)
+  contributionEndAge: number;      // (59)
+}
+
 export interface AppConfig {
   federal: TaxTable;
   provinces: Record<string, TaxTable>;
@@ -67,6 +105,7 @@ export interface AppConfig {
   oas: OasConfig;
   cpp: CppConfig;
   engine: EngineConfig;
+  rdsp: RdspConfig;
   qcFederalAbatement: number;  // Quebec abatement: fraction of federal tax refunded (0.165)
   ontarioSurtax: {             // Ontario surtax on provincial tax above two thresholds
     threshold1: number; rate1: number;
@@ -152,6 +191,20 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     tfsaAnnualLimit: 7000,
     rrspAnnualMax: 32890
   },
+  // 2026 RDSP parameters (canada.ca "How much you could get in grants and
+  // bonds", July 2026 thresholds).
+  rdsp: {
+    grantThreshold: 117045,
+    grantAnnualMax: 3500,
+    grantLifetimeMax: 70000,
+    grantEndAge: 49,
+    bondThresholdLower: 38237,
+    bondThresholdUpper: 58523,
+    bondAnnualMax: 1000,
+    bondLifetimeMax: 20000,
+    contributionLifetimeMax: 200000,
+    contributionEndAge: 59,
+  },
   qcFederalAbatement: 0.165,
   // 2026 Ontario surtax thresholds (2025 values × 1.02 CRA indexation).
   ontarioSurtax: { threshold1: 5925, rate1: 0.20, threshold2: 7577, rate2: 0.56 },
@@ -220,6 +273,19 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   // Registered-plan annual limits were added later — back-fill defaults.
   if (typeof e.tfsaAnnualLimit !== 'number') e.tfsaAnnualLimit = DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit;
   if (typeof e.rrspAnnualMax !== 'number') e.rrspAnnualMax = DEFAULT_APP_CONFIG.engine.rrspAnnualMax;
+  // RDSP config was added later — back-fill the whole block (all-or-nothing:
+  // a partial RDSP config is treated as absent and replaced with defaults).
+  {
+    const r = c.rdsp as Partial<RdspConfig> | undefined;
+    const nums: Array<keyof RdspConfig> = [
+      'grantThreshold', 'grantAnnualMax', 'grantLifetimeMax', 'grantEndAge',
+      'bondThresholdLower', 'bondThresholdUpper', 'bondAnnualMax', 'bondLifetimeMax',
+      'contributionLifetimeMax', 'contributionEndAge',
+    ];
+    if (!r || nums.some(k => typeof r[k] !== 'number')) {
+      (c as AppConfig).rdsp = { ...DEFAULT_APP_CONFIG.rdsp };
+    }
+  }
   // QC abatement / ON surtax were added later — back-fill defaults.
   if (typeof c.qcFederalAbatement !== 'number') (c as AppConfig).qcFederalAbatement = DEFAULT_APP_CONFIG.qcFederalAbatement;
   const os = c.ontarioSurtax as AppConfig['ontarioSurtax'] | undefined;

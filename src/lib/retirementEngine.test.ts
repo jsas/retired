@@ -1847,3 +1847,203 @@ describe('totalTaxPaid (total tax on all income)', () => {
     expect(closeTo(cy.totalTaxPaid!, (py.totalTaxPaid ?? 0) + (sy.totalTaxPaid ?? 0), 0.02)).toBe(true);
   });
 });
+
+describe('RDSP (Registered Disability Savings Plan)', () => {
+  // A young beneficiary accumulating before retirement. currentAge 30, retire
+  // at 65, so ages 30..64 are the accumulation years (contribution + grant/bond).
+  const rdspAccum = (over: Parameters<typeof baseInputs>[0] = {}) => baseInputs({
+    currentAge: 30, retirementAge: 65, maxAge: 70,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    desiredSpending: 0,
+    rdsp: { enabled: true, balance: 0, contribution: 1500, familyIncome: 50000, dtcEligible: true },
+    ...over,
+  });
+
+  it('pays the low-income grant: 300% on first $500 + 200% on next $1,000 = $3,500', () => {
+    const r = calculateRetirement(rdspAccum(), config);
+    const y30 = yearAt(r.yearlyBreakdown, 30);
+    // $1,500 contributed, family income 50,000 ≤ 117,045 → full grant $3,500.
+    expect(y30.detail?.rdsp?.contribution).toBeCloseTo(1500, 0);
+    expect(y30.detail?.rdsp?.grant).toBeCloseTo(3500, 0);
+    // The year's balance is contribution + grant + bond (+ growth, which is 0
+    // on an empty opening balance) — and it's part of the year's ending balance.
+    const d = y30.detail!.rdsp!;
+    expect(closeTo(y30.rdspBalance!, d.contribution + d.grant + d.bond + d.growth, 1)).toBe(true);
+    expect(closeTo(y30.endingBalance, y30.rdspBalance!, 1)).toBe(true);
+  });
+
+  it('pays the high-income grant: 100% on first $1,000 = $1,000', () => {
+    const r = calculateRetirement(rdspAccum({
+      rdsp: { enabled: true, balance: 0, contribution: 1500, familyIncome: 200000, dtcEligible: true },
+    }), config);
+    const y30 = yearAt(r.yearlyBreakdown, 30);
+    // Family income 200,000 > 117,045 → 100% match on first $1,000 only.
+    expect(y30.detail?.rdsp?.grant).toBeCloseTo(1000, 0);
+    // High income is above the bond upper threshold → no bond.
+    expect(y30.detail?.rdsp?.bond).toBeCloseTo(0, 0);
+  });
+
+  it('pays the full bond below the lower threshold, phases it out, and zeroes it above the upper', () => {
+    // Below lower (38,237): full $1,000 bond even with no contribution.
+    const low = calculateRetirement(rdspAccum({
+      rdsp: { enabled: true, balance: 0, contribution: 0, familyIncome: 20000, dtcEligible: true },
+    }), config);
+    expect(yearAt(low.yearlyBreakdown, 30).detail?.rdsp?.bond).toBeCloseTo(1000, 0);
+
+    // Mid-band (between 38,237 and 58,523): linear phase-out. At the midpoint
+    // (48,380) the bond is half of $1,000.
+    const mid = calculateRetirement(rdspAccum({
+      rdsp: { enabled: true, balance: 0, contribution: 0, familyIncome: 48380, dtcEligible: true },
+    }), config);
+    expect(yearAt(mid.yearlyBreakdown, 30).detail?.rdsp?.bond).toBeCloseTo(500, 0);
+
+    // Above upper (58,523): no bond.
+    const high = calculateRetirement(rdspAccum({
+      rdsp: { enabled: true, balance: 0, contribution: 0, familyIncome: 80000, dtcEligible: true },
+    }), config);
+    expect(yearAt(high.yearlyBreakdown, 30).detail?.rdsp?.bond).toBeCloseTo(0, 0);
+  });
+
+  it('stops grants and bonds after the year the beneficiary turns 49', () => {
+    const r = calculateRetirement(rdspAccum(), config);
+    expect(yearAt(r.yearlyBreakdown, 49).detail?.rdsp?.grant).toBeGreaterThan(0);
+    // From 50 onward no grant/bond is paid (contribution may still continue).
+    for (const age of [50, 55, 60]) {
+      const d = yearAt(r.yearlyBreakdown, age).detail?.rdsp;
+      expect(d?.grant ?? 0).toBe(0);
+      expect(d?.bond ?? 0).toBe(0);
+    }
+  });
+
+  it('stops contributions after the year the beneficiary turns 59', () => {
+    const r = calculateRetirement(rdspAccum(), config);
+    expect(yearAt(r.yearlyBreakdown, 59).detail?.rdsp?.contribution).toBeCloseTo(1500, 0);
+    for (const age of [60, 64]) {
+      expect(yearAt(r.yearlyBreakdown, age).detail?.rdsp?.contribution ?? 0).toBe(0);
+    }
+  });
+
+  it('caps contributions at the $200,000 lifetime maximum', () => {
+    // Huge annual contribution; the lifetime cap must bite.
+    const r = calculateRetirement(rdspAccum({
+      rdsp: { enabled: true, balance: 0, contribution: 50000, familyIncome: 200000, dtcEligible: true },
+    }), config);
+    // Sum of contributions across the whole run never exceeds 200,000.
+    const totalContrib = r.yearlyBreakdown.reduce((s, y) => s + (y.detail?.rdsp?.contribution ?? 0), 0);
+    expect(totalContrib).toBeLessThanOrEqual(200000 + 0.01);
+    expect(totalContrib).toBeGreaterThan(0);
+  });
+
+  it('caps grants at the $70,000 lifetime maximum', () => {
+    const r = calculateRetirement(rdspAccum(), config);
+    const totalGrant = r.yearlyBreakdown.reduce((s, y) => s + (y.detail?.rdsp?.grant ?? 0), 0);
+    expect(totalGrant).toBeLessThanOrEqual(70000 + 0.01);
+  });
+
+  it('caps bonds at the $20,000 lifetime maximum', () => {
+    const r = calculateRetirement(rdspAccum({
+      rdsp: { enabled: true, balance: 0, contribution: 0, familyIncome: 10000, dtcEligible: true },
+    }), config);
+    const totalBond = r.yearlyBreakdown.reduce((s, y) => s + (y.detail?.rdsp?.bond ?? 0), 0);
+    expect(totalBond).toBeLessThanOrEqual(20000 + 0.01);
+  });
+
+  it('grows tax-sheltered and reports the balance in net worth', () => {
+    const r = calculateRetirement(rdspAccum(), config);
+    const y40 = yearAt(r.yearlyBreakdown, 40);
+    // The RDSP balance is part of the year's ending balance (net worth).
+    expect(y40.rdspBalance!).toBeGreaterThan(0);
+    expect(closeTo(y40.endingBalance, y40.rdspBalance!, 1)).toBe(true);
+    // Growth is reported per year.
+    expect(y40.detail?.rdsp?.growth!).toBeGreaterThan(0);
+  });
+
+  it('does nothing when DTC-ineligible (no account, no grants)', () => {
+    const r = calculateRetirement(rdspAccum({
+      rdsp: { enabled: true, balance: 10000, contribution: 1500, familyIncome: 50000, dtcEligible: false },
+    }), config);
+    const y30 = yearAt(r.yearlyBreakdown, 30);
+    expect(y30.rdspBalance).toBeUndefined();
+    expect(y30.detail?.rdsp).toBeUndefined();
+  });
+});
+
+describe('RDSP withdrawals (decumulation)', () => {
+  // A retired beneficiary drawing from an RDSP. Open with a $100k balance that
+  // is 40% contribution principal (tax-free) and 60% grant/bond/growth (taxable).
+  const rdspDraw = (over: Parameters<typeof baseInputs>[0] = {}) => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 80,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    desiredSpending: 20000,
+    withdrawalOrder: ['rdsp', 'tfsa', 'taxable', 'rrsp'],
+    rdsp: { enabled: true, balance: 100000, contribution: 0, familyIncome: 0, contributionBasis: 40000, dtcEligible: true },
+    ...over,
+  });
+
+  it('draws from the RDSP first when it leads the withdrawal order', () => {
+    const r = calculateRetirement(rdspDraw(), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    expect((y65.detail?.withdraw.rdsp ?? 0)).toBeGreaterThan(0);
+    expect(y65.detail?.rdsp?.withdrawal!).toBeGreaterThan(0);
+  });
+
+  it('splits the withdrawal into a taxable (grant/growth) and tax-free (contribution) portion', () => {
+    const r = calculateRetirement(rdspDraw(), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    const wd = y65.detail!.rdsp!.withdrawal!;
+    const taxablePart = y65.detail!.rdsp!.taxablePortion!;
+    // 40% contribution basis → 60% of any draw is taxable.
+    expect(closeTo(taxablePart, wd * 0.6, 1)).toBe(true);
+    // The taxable portion stacks into the year's taxable income.
+    expect(y65.detail!.calc!.totalNetIncome).toBeGreaterThanOrEqual(taxablePart - 0.01);
+  });
+
+  it('a pure-contribution RDSP (basis = balance) withdraws fully tax-free', () => {
+    const r = calculateRetirement(rdspDraw({
+      rdsp: { enabled: true, balance: 100000, contribution: 0, familyIncome: 0, contributionBasis: 100000, dtcEligible: true },
+    }), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    // All principal → no taxable portion, no incremental tax on the draw.
+    expect(y65.detail!.rdsp!.taxablePortion ?? 0).toBeCloseTo(0, 0);
+  });
+
+  it('an all-growth RDSP (basis = 0) withdraws fully taxable', () => {
+    const r = calculateRetirement(rdspDraw({
+      rdsp: { enabled: true, balance: 100000, contribution: 0, familyIncome: 0, contributionBasis: 0, dtcEligible: true },
+    }), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    const wd = y65.detail!.rdsp!.withdrawal!;
+    expect(closeTo(y65.detail!.rdsp!.taxablePortion!, wd, 1)).toBe(true);
+    // Taxable draw → incremental tax is positive (income above the exemption).
+    expect(y65.incomeTax).toBeGreaterThan(0);
+  });
+
+  it('reduces the contribution basis pro-rata as it draws down', () => {
+    const r = calculateRetirement(rdspDraw(), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    const wd = y65.detail!.rdsp!.withdrawal!;
+    // Basis shrinks by the tax-free (contribution) part of the draw.
+    expect(closeTo(y65.detail!.rdsp!.contributionBasis!, 40000 - wd * 0.4, 1)).toBe(true);
+  });
+
+  it('sums both spouses\' RDSP balances in the household combiner', () => {
+    const inputs = baseInputs({
+      rrspBalance: 100000, tfsaBalance: 0, desiredSpending: 20000,
+      rdsp: { enabled: true, balance: 50000, contribution: 0, familyIncome: 0, contributionBasis: 50000, dtcEligible: true },
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 100000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 15000, pensions: [],
+        rdsp: { enabled: true, balance: 30000, contribution: 0, familyIncome: 0, contributionBasis: 30000, dtcEligible: true },
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    const combined = combineHouseholdBreakdown(r, inputs);
+    const cy = yearAt(combined, 65);
+    const py = yearAt(r.yearlyBreakdown, 65);
+    const sy = yearAt(r.spouse!.yearlyBreakdown, 65);
+    expect(closeTo(cy.rdspBalance!, (py.rdspBalance ?? 0) + (sy.rdspBalance ?? 0), 0.02)).toBe(true);
+  });
+});

@@ -28,6 +28,7 @@ const ACCOUNT_LABELS: Record<WithdrawalAccount, string> = {
   tfsa: 'TFSA',
   taxable: 'Taxable',
   rrsp: 'RRSP / RRIF',
+  rdsp: 'RDSP',
 };
 
 const INPUT_CLS = 'w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500';

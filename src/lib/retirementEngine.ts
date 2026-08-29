@@ -18,7 +18,7 @@ import {
   type SharedInputs,
 } from './householdTypes';
 
-export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable';
+export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable' | 'rdsp';
 
 export interface RetirementInputs {
   currentAge: number;
@@ -76,6 +76,9 @@ export interface RetirementInputs {
   // and/or a last-resort top-up. Proceeds are tax-free (no GIS/clawback impact);
   // the loan compounds against the home and erodes net equity.
   reverseMortgage?: ReverseMortgage;
+  // Registered Disability Savings Plan — the primary person is the beneficiary.
+  // Optional; absent = no RDSP.
+  rdsp?: RdspInputs;
 }
 
 /** Where the spouse's plan comes from (see RetirementInputs.spouseSource). */
@@ -110,6 +113,8 @@ export interface SpouseInputs {
   events?: CashEvent[];
   spendingBands?: SpendingBand[];
   reverseMortgage?: ReverseMortgage;
+  // The spouse's own RDSP (they are the beneficiary). Optional; absent = none.
+  rdsp?: RdspInputs;
 }
 
 export interface CashEvent {
@@ -197,6 +202,33 @@ export interface SpendingBand {
   pctOfBase: number;    // 0..1+ fraction of desiredSpending (e.g. 1, 0.85, 0.7)
 }
 
+/**
+ * A Registered Disability Savings Plan. Per-person (a beneficiary holds their
+ * own RDSP). The account is tax-SHELTERED (not deductible on the way in, like a
+ * TFSA) but unlike a TFSA the grant/bond/growth portion is TAXABLE on the way
+ * out — only the contribution principal comes back tax-free. Grants (CDSG) and
+ * bonds (CDSB) are paid on income-tested rules driven by `familyIncome`.
+ * Parameters (thresholds, caps, end ages) live in config.rdsp. Absent = the
+ * person has no RDSP.
+ */
+export interface RdspInputs {
+  enabled: boolean;
+  balance: number;          // current RDSP market value, today's dollars
+  contribution: number;     // planned contribution $/yr while accumulating (pre-retirement)
+  // Annual family income used for the CDSG/CDSB income tests, today's dollars.
+  // For a beneficiary 19+ that's their own + spouse's income (the app uses the
+  // current year's; CRA actually reads the return from 2 years prior). Indexed
+  // with CPI when indexTaxTables is on, like other income figures.
+  familyIncome: number;
+  // Basis already in the account: how much of `balance` is after-tax
+  // CONTRIBUTION principal (vs grant/bond/growth). Used to split withdrawals
+  // into the tax-free (contribution) and taxable (grant/bond/growth) portions.
+  // Defaults to `balance` when omitted (a pre-existing balance is assumed to be
+  // all contributed principal — the common case for a plan opened years ago).
+  contributionBasis?: number;
+  dtcEligible: boolean;     // Disability Tax Credit eligible — required to hold/receive grants & bonds
+}
+
 export interface AccountBreakdown {
   age: number;
   rrspBalance: number;
@@ -204,6 +236,7 @@ export interface AccountBreakdown {
   tfsaBalance: number;
   taxableBalance: number;
   cashCushionBalance: number;
+  rdspBalance?: number; // undefined when the person has no RDSP
 }
 
 /**
@@ -257,11 +290,22 @@ export interface YearDetail {
   // rrifMin is the mandatory RRIF minimum (a subset of registered draws);
   // rrif/rrsp are discretionary registered draws; rmDraw is reverse-mortgage
   // borrowing (tax-free). Registered and taxable draws are grossed up for tax.
-  withdraw: { rrifMin: number; rrif: number; rrsp: number; tfsa: number; taxable: number; cash: number; rmDraw: number };
+  withdraw: { rrifMin: number; rrif: number; rrsp: number; tfsa: number; taxable: number; cash: number; rmDraw: number; rdsp?: number };
   // Market growth / interest earned per account this year (before it's added).
-  growth: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number };
+  growth: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number; rdsp?: number };
   // Contributions per account (accumulation years only).
-  contrib?: { rrsp: number; tfsa: number; taxable: number };
+  contrib?: { rrsp: number; tfsa: number; taxable: number; rdsp?: number };
+  // RDSP flow this year, when the account exists. contribution/grant/bond are
+  // deposits; growth is the year's sheltered growth; balance/contributionBasis
+  // are year-end. taxableFraction is the share of any withdrawal that is
+  // taxable (grant + bond + growth). withdrawal is the gross drawn this year
+  // (decumulation); of that, taxablePortion is taxable income and the rest is
+  // the tax-free return of contribution principal.
+  rdsp?: {
+    contribution: number; grant: number; bond: number; growth: number;
+    balance: number; contributionBasis: number; taxableFraction: number;
+    withdrawal?: number; taxablePortion?: number;
+  };
   // Deposit provenance — gross dollars that LANDED in each account this year
   // from cash events and transfers (inflows + the redeposit side of a
   // transfer). Symmetric to `withdraw` so both ends of a transfer are visible
@@ -308,6 +352,9 @@ export interface YearlyBreakdown {
   tfsaBalance: number;
   taxableBalance: number;
   cashCushionBalance: number;
+  // RDSP balance (undefined when the person has no RDSP). Included in the
+  // ending/total balance; the grant/bond/growth portion is taxable on withdrawal.
+  rdspBalance?: number;
   cppIncome: number;
   oasIncome: number;
   gisIncome: number;
@@ -378,6 +425,50 @@ function eventLine(ev: CashEvent): { label: string; direction: 'in' | 'out'; amo
     from: ev.from ? ep(ev.from) : 'outside',
     to: ev.to ? ep(ev.to) : 'outside',
   };
+}
+
+// ---------------------------------------------------------------------------
+// RDSP (Registered Disability Savings Plan) — grants & bonds
+// ---------------------------------------------------------------------------
+
+/**
+ * Canada Disability Savings Grant for a year, given the contribution and the
+ * income band. At/below the threshold: 300% on the first $500 + 200% on the
+ * next $1,000 (max grantAnnualMax, reached with $1,500 contributed). Above it:
+ * 100% on the first $1,000 (max $1,000). Capped by the year's annual max and
+ * the remaining lifetime grant room.
+ */
+function rdspGrantFor(contribution: number, familyIncome: number, cfg: AppConfig['rdsp'], lifetimeRemaining: number): number {
+  if (contribution <= 0 || lifetimeRemaining <= 0) return 0;
+  const c = contribution;
+  let grant: number;
+  if (familyIncome <= cfg.grantThreshold) {
+    grant = Math.min(c, 500) * 3 + Math.min(Math.max(0, c - 500), 1000) * 2;
+    grant = Math.min(grant, cfg.grantAnnualMax);
+  } else {
+    grant = Math.min(c, 1000) * 1;
+    grant = Math.min(grant, 1000); // the high-income band's annual max is $1,000
+  }
+  return Math.min(grant, lifetimeRemaining);
+}
+
+/**
+ * Canada Disability Savings Bond for a year — income-tested, no contribution
+ * needed. At/below the lower threshold pays the full bondAnnualMax; between the
+ * lower and upper thresholds it phases out linearly to $0; at/above the upper
+ * threshold, $0. Capped by the remaining lifetime bond room.
+ */
+function rdspBondFor(familyIncome: number, cfg: AppConfig['rdsp'], lifetimeRemaining: number): number {
+  if (lifetimeRemaining <= 0) return 0;
+  let bond = 0;
+  if (familyIncome <= cfg.bondThresholdLower) {
+    bond = cfg.bondAnnualMax;
+  } else if (familyIncome < cfg.bondThresholdUpper) {
+    const span = cfg.bondThresholdUpper - cfg.bondThresholdLower;
+    const frac = span > 0 ? (cfg.bondThresholdUpper - familyIncome) / span : 0;
+    bond = cfg.bondAnnualMax * Math.max(0, frac);
+  }
+  return Math.min(bond, lifetimeRemaining);
 }
 
 /**
@@ -615,7 +706,27 @@ export function calculatePerson(
   const gainsFraction = () => (taxable > 0 ? Math.max(0, Math.min(1, 1 - taxableAcb / taxable)) : 0);
   const inclusion = Math.min(1, Math.max(0, config.engine.capitalGainsInclusion));
 
-  const totalBalance = () => rrsp + rrif + tfsa + taxable + cashCushion;
+  // RDSP: tax-sheltered growth, contributions not deductible, grant/bond/growth
+  // taxable on withdrawal. Tracked by BASIS so a withdrawal can be split into
+  // the tax-free contribution portion and the taxable grant/bond/growth portion.
+  // Grants/bonds are paid only while DTC-eligible and only up to the year the
+  // beneficiary turns grantEndAge; contributions up to contributionEndAge.
+  const rdspIn = person.rdsp;
+  const rdspCfg = config.rdsp;
+  const rdspOn = rdspIn?.enabled === true && rdspIn?.dtcEligible === true;
+  let rdspBal = rdspOn ? Math.max(0, rdspIn.balance) : 0;
+  // The contribution principal already inside the opening balance (tax-free on
+  // the way out). Defaults to the whole balance — a long-held plan is assumed
+  // to be mostly contributed principal.
+  let rdspContribBasis = rdspOn ? Math.min(rdspBal, Math.max(0, rdspIn.contributionBasis ?? rdspIn.balance)) : 0;
+  // Grant/bond principal paid in to date (a subset of the taxable portion on
+  // withdrawal). The opening balance is assumed to hold none of either beyond
+  // the contribution basis (its taxable remainder is growth).
+  let rdspGrantBasis = 0, rdspBondBasis = 0;
+  // The fraction of any withdrawal that is TAXABLE (grant + bond + growth).
+  const rdspTaxableFraction = () => (rdspBal > 0 ? Math.max(0, Math.min(1, 1 - rdspContribBasis / rdspBal)) : 0);
+
+  const totalBalance = () => rrsp + rrif + tfsa + taxable + cashCushion + rdspBal;
 
   // ---- transfer events (account→account / inter-spousal) ----
   // Which household member this run is; transfer endpoints naming this person
@@ -774,6 +885,29 @@ export function calculatePerson(
     taxableAcb += taxableContribution;
     cashCushion += cashGains;
 
+    // RDSP: contribution + CDSG/CDSB grants, then growth on the whole account.
+    // Contributions stop after the year the beneficiary turns contributionEndAge
+    // and are lifetime-capped; grants/bonds stop after grantEndAge and are
+    // income-tested (family income indexed with CPI when indexTaxTables is on).
+    let rdspContribution = 0, rdspGrant = 0, rdspBond = 0, rdspGains = 0;
+    if (rdspOn) {
+      if (age <= rdspCfg.contributionEndAge) {
+        const want = Math.max(0, rdspIn.contribution) * (indexTables ? factorAt(age) : 1);
+        const lifetimeLeft = Math.max(0, rdspCfg.contributionLifetimeMax - rdspContribBasis);
+        rdspContribution = Math.min(want, lifetimeLeft);
+      }
+      if (age <= rdspCfg.grantEndAge) {
+        const famIncome = Math.max(0, rdspIn.familyIncome) * (indexTables ? factorAt(age) : 1);
+        rdspGrant = rdspGrantFor(rdspContribution, famIncome, rdspCfg, rdspCfg.grantLifetimeMax - rdspGrantBasis);
+        rdspBond = rdspBondFor(famIncome, rdspCfg, rdspCfg.bondLifetimeMax - rdspBondBasis);
+      }
+      rdspGains = rdspBal * r;
+      rdspBal += rdspContribution + rdspGrant + rdspBond + rdspGains;
+      rdspContribBasis += rdspContribution;
+      rdspGrantBasis += rdspGrant;
+      rdspBondBasis += rdspBond;
+    }
+
     // Reverse mortgage / HELOC: appreciate the home, accrue interest (reverse)
     // or charge it as an expense (HELOC), take any scheduled draw into the cash
     // cushion (rare pre-retirement, but allowed). Draws are capped at headroom.
@@ -876,8 +1010,8 @@ export function calculatePerson(
     yearlyBreakdown.push({
       age,
       startingBalance: startingTotal,
-      contributions: rrspContribution + tfsaContribution + taxableContribution,
-      marketGains: rrspGains + tfsaGains + taxableGains + cashGains,
+      contributions: rrspContribution + tfsaContribution + taxableContribution + rdspContribution,
+      marketGains: rrspGains + tfsaGains + taxableGains + cashGains + rdspGains,
       withdrawals: accumEventOut + accumTransfers.reduce((s, t) => s + t.gross, 0),
       incomeTax: accumTransferTax,
       cumulativeTax,
@@ -888,6 +1022,7 @@ export function calculatePerson(
       tfsaBalance: tfsa,
       taxableBalance: taxable,
       cashCushionBalance: cashCushion,
+      ...(rdspOn ? { rdspBalance: rdspBal } : {}),
       cppIncome: 0,
       oasIncome: 0,
       gisIncome: 0,
@@ -895,9 +1030,10 @@ export function calculatePerson(
       detail: {
         withdraw: { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 },
         growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
-        contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution },
+        contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution, ...(rdspOn ? { rdsp: rdspContribution } : {}) },
         deposit: accumDeposit,
         tax: { oasClawback: 0, capitalGains: 0, registeredGross: accumTransferBaseGross },
+        ...(rdspOn ? { rdsp: { contribution: rdspContribution, grant: rdspGrant, bond: rdspBond, growth: rdspGains, balance: rdspBal, contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction() } } : {}),
         ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: accRmInterestExpense } : {}) } } : {}),
         events: yearEvents,
         // Pre-retirement transfers: surface on the math page too. There is no
@@ -921,7 +1057,8 @@ export function calculatePerson(
       rrifBalance: rrif,
       tfsaBalance: tfsa,
       taxableBalance: taxable,
-      cashCushionBalance: cashCushion
+      cashCushionBalance: cashCushion,
+      ...(rdspOn ? { rdspBalance: rdspBal } : {})
     });
   }
 
@@ -1056,9 +1193,11 @@ export function calculatePerson(
     let actualWithdrawals = 0;  // gross dollars leaving registered accounts + raw dollars elsewhere
     let registeredGross = 0;    // RRSP/RRIF gross withdrawn this year (taxable)
     let capitalGains = 0;       // taxable-account gains realized this year (taxed at inclusion rate)
+    let rdspTaxable = 0;        // taxable (grant/bond/growth) portion of this year's RDSP withdrawal
+    let rdspWithdrawn = 0;      // gross RDSP dollars withdrawn this year
     let remainingAfterTaxNeed = neededAfterTax;
     // Per-source withdrawal provenance for the year's drill-down.
-    const wd = { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 };
+    const wd: { rrifMin: number; rrif: number; rrsp: number; tfsa: number; taxable: number; cash: number; rmDraw: number; rdsp?: number } = { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 };
     // Calc trace for the math page: the intermediates a year runs through.
     const calc: YearCalc = {
       cppMonthlyAtStart, otherGross, netBenefits, neededAfterTax,
@@ -1147,13 +1286,13 @@ export function calculatePerson(
       if (spouseCtx) {
         const sp = spouseFixedIncomeAt(age);
         return gisAnnualCouple(
-          registeredGross + capitalGains,
+          registeredGross + capitalGains + rdspTaxable,
           cppGross + pensionGross + employmentGross + sp.fixed,
           sp.hasOas,
           yearConfig
         );
       }
-      return gisAnnual(stackBase + registeredGross + capitalGains - oasGross, yearConfig);
+      return gisAnnual(stackBase + registeredGross + capitalGains + rdspTaxable - oasGross, yearConfig);
     };
     let gisGross = gisAt();
     remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - gisGross);
@@ -1190,6 +1329,28 @@ export function calculatePerson(
         const base = stackedGross() + capitalGains * inclusion;
         const netOfDraw = draw
           - (calculateTax(base, provinceCode, yearConfig).totalTax - calculateTax(base - draw * f * inclusion, provinceCode, yearConfig).totalTax);
+        remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - netOfDraw);
+        return;
+      }
+
+      if (account === 'rdsp') {
+        // Only the grant/bond/growth fraction of the withdrawal is taxable; the
+        // contribution-principal portion is a tax-free return of capital. Gross
+        // up on the taxable portion so the after-tax proceeds cover the need.
+        if (!rdspOn || rdspBal <= 0) return;
+        const ft = rdspTaxableFraction();
+        const drawGross = grossTaxableWithdrawal(remainingAfterTaxNeed, stackedGross() + capitalGains * inclusion + rdspTaxable, ft, 1, provinceCode, yearConfig);
+        const draw = Math.min(rdspBal, drawGross);
+        const taxablePart = draw * ft;
+        rdspBal -= draw;
+        rdspContribBasis = Math.max(0, rdspContribBasis - draw * (1 - ft));
+        rdspTaxable += taxablePart;
+        rdspWithdrawn += draw;
+        actualWithdrawals += draw;
+        wd.rdsp = (wd.rdsp ?? 0) + draw;
+        const base = stackedGross() + capitalGains * inclusion + rdspTaxable;
+        const netOfDraw = draw
+          - (calculateTax(base, provinceCode, yearConfig).totalTax - calculateTax(base - taxablePart, provinceCode, yearConfig).totalTax);
         remainingAfterTaxNeed = Math.max(0, remainingAfterTaxNeed - netOfDraw);
         return;
       }
@@ -1297,7 +1458,7 @@ export function calculatePerson(
     // threshold. Employment is taxed exactly once: it's inside totalNetIncome
     // (so brackets and clawback see it) and its marginal share — this figure
     // minus what a no-employment year would report — equals employmentTax.
-    const totalNetIncome = otherGross + employmentGross + registeredGross + capitalGains * inclusion;
+    const totalNetIncome = otherGross + employmentGross + registeredGross + capitalGains * inclusion + rdspTaxable;
     const oasClawback = oasGross > 0
       ? Math.min(oasGross, Math.max(0, totalNetIncome - yearConfig.oas.clawbackThreshold) * yearConfig.oas.clawbackRate)
       : 0;
@@ -1316,12 +1477,14 @@ export function calculatePerson(
     const tfsaGains = tfsa * r;
     const taxableGains = taxable * r;
     const cashGains = cashCushion * cushionRate;
+    const rdspGains = rdspBal * r; // sheltered growth on the post-withdrawal balance
 
     rrsp += rrspGains;
     rrif += rrifGains;
     tfsa += tfsaGains;
     taxable += taxableGains;
     cashCushion += cashGains;
+    rdspBal += rdspGains;
 
     const endingTotal = totalBalance();
 
@@ -1349,7 +1512,7 @@ export function calculatePerson(
       age,
       startingBalance: startingTotal,
       contributions: 0,
-      marketGains: rrspGains + rrifGains + tfsaGains + taxableGains + cashGains,
+      marketGains: rrspGains + rrifGains + tfsaGains + taxableGains + cashGains + rdspGains,
       withdrawals: actualWithdrawals,
       incomeTax,
       totalTaxPaid: calculateTax(totalNetIncome, provinceCode, yearConfig).totalTax + oasClawback,
@@ -1365,6 +1528,7 @@ export function calculatePerson(
       tfsaBalance: Math.max(0, tfsa),
       taxableBalance: Math.max(0, taxable),
       cashCushionBalance: Math.max(0, cashCushion),
+      ...(rdspOn ? { rdspBalance: Math.max(0, rdspBal) } : {}),
       cppIncome: cppGross,
       oasIncome: oasGross,
       gisIncome: gisGross,
@@ -1376,9 +1540,10 @@ export function calculatePerson(
       unsplitNetIncome,
       detail: {
         withdraw: wd,
-        growth: { rrsp: rrspGains, rrif: rrifGains, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
+        growth: { rrsp: rrspGains, rrif: rrifGains, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains, ...(rdspOn ? { rdsp: rdspGains } : {}) },
         deposit,
         tax: { oasClawback, capitalGains, registeredGross },
+        ...(rdspOn ? { rdsp: { contribution: 0, grant: 0, bond: 0, growth: rdspGains, balance: Math.max(0, rdspBal), contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction(), withdrawal: rdspWithdrawn, taxablePortion: rdspTaxable } } : {}),
         ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: rmInterestExpense } : {}) } } : {}),
         events: yearEvents,
         calc,
@@ -1392,7 +1557,8 @@ export function calculatePerson(
       rrifBalance: Math.max(0, rrif),
       tfsaBalance: Math.max(0, tfsa),
       taxableBalance: Math.max(0, taxable),
-      cashCushionBalance: Math.max(0, cashCushion)
+      cashCushionBalance: Math.max(0, cashCushion),
+      ...(rdspOn ? { rdspBalance: Math.max(0, rdspBal) } : {})
     });
   }
 
@@ -1658,6 +1824,9 @@ export function combineHouseholdBreakdown(
       tfsaBalance: py.tfsaBalance + sy.tfsaBalance,
       taxableBalance: py.taxableBalance + sy.taxableBalance,
       cashCushionBalance: py.cashCushionBalance + sy.cashCushionBalance,
+      ...((py.rdspBalance !== undefined || sy.rdspBalance !== undefined)
+        ? { rdspBalance: (py.rdspBalance ?? 0) + (sy.rdspBalance ?? 0) }
+        : {}),
       cppIncome: py.cppIncome + sy.cppIncome,
       oasIncome: py.oasIncome + sy.oasIncome,
       gisIncome: py.gisIncome + sy.gisIncome,

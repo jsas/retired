@@ -13,7 +13,7 @@
 // Carlo, the solvers) can migrate to the unified model independently while the
 // wire/storage formats stay stable.
 
-import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, Pension, SpendingBand, ReverseMortgage, EmploymentIncome } from './retirementEngine';
+import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, Pension, SpendingBand, ReverseMortgage, EmploymentIncome, RdspInputs } from './retirementEngine';
 
 // ---------------------------------------------------------------------------
 // Accounts & transfers
@@ -69,6 +69,7 @@ export interface PersonInputs {
   employment?: EmploymentIncome[];
   events?: CashEvent[];
   reverseMortgage?: ReverseMortgage;
+  rdsp?: RdspInputs;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,7 @@ export function legacyToPerson(inputs: RetirementInputs): PersonInputs {
     employment: inputs.employment,
     events: inputs.events,
     reverseMortgage: inputs.reverseMortgage,
+    rdsp: inputs.rdsp,
   };
 }
 
@@ -187,6 +189,7 @@ export function legacySpouseToPerson(sp: SpouseInputs): PersonInputs {
     employment: sp.employment,
     events: sp.events,
     reverseMortgage: sp.reverseMortgage,
+    rdsp: sp.rdsp,
   };
 }
 
@@ -318,6 +321,7 @@ export function resolveSpouseSource(
     events: their.events,
     spendingBands: their.spendingBands,
     reverseMortgage: their.reverseMortgage,
+    rdsp: their.rdsp,
   };
   return { spouse, warnings };
 }
