@@ -38,6 +38,10 @@ import {
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
+import {
+  captureCheckpoint, appendCheckpoint, decodeRevertPatch,
+  type PlanCheckpoint,
+} from '../lib/ai/checkpoints';
 import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '../lib/retirementEngine';
@@ -268,6 +272,22 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
     });
   };
 
+  /** Record an automatic checkpoint for the active thread: the plan as it was
+   *  JUST BEFORE an approved change landed. Ring-buffered per thread; kept in
+   *  the chat store so revert history survives a reload. */
+  const recordCheckpoint = (label: string, inputsBefore: RetirementInputs) => {
+    setChatState(prev => {
+      const id = prev.activeThreadId;
+      if (!id) return prev;
+      return {
+        ...prev,
+        threads: prev.threads.map(t => (t.id === id
+          ? { ...t, checkpoints: appendCheckpoint(t.checkpoints ?? [], captureCheckpoint(label, inputsBefore)) }
+          : t)),
+      };
+    });
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-11rem)] min-h-[30rem]">
       {/* Header: title + model picker + connections link. Lives on the page so
@@ -421,6 +441,8 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
               onApply={onApply}
               patchTurns={patchTurns}
               patchThread={patchThread}
+              recordCheckpoint={recordCheckpoint}
+              checkpoints={activeThread.checkpoints ?? []}
             />
           )}
         </div>
@@ -498,7 +520,7 @@ function buildSystemBody(
   return buildSystemPrompt(scenarioName, { basePrompt, config });
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -512,6 +534,8 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   onApply: (patch: Partial<RetirementInputs>) => void;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
   patchThread: (patch: Partial<ChatThread>) => void;
+  recordCheckpoint: (label: string, inputsBefore: RetirementInputs) => void;
+  checkpoints: PlanCheckpoint[];
 }) {
   const turns = thread.turns as Turn[];
   const [running, setRunning] = useState(false);
@@ -556,8 +580,14 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   // scenario, so a plain memo is fine for those.
   const inputsRef = useRef(inputs);
   inputsRef.current = inputs;
+  // Same trick for checkpoints: the loop is long-lived across renders, and a
+  // revert proposal must read the checkpoint list AS OF execution time (it
+  // grows as changes are approved mid-conversation).
+  const checkpointsRef = useRef(checkpoints);
+  checkpointsRef.current = checkpoints;
   const toolContext: ToolContext = useMemo(() => ({
     get inputs() { return inputsRef.current; },
+    get checkpoints() { return checkpointsRef.current; },
     config, scenarioName, scenarioList,
   }), [config, scenarioName, scenarioList]);
 
@@ -779,7 +809,17 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       ...t,
       changes: t.changes.map(c => c.callId === change.callId ? { ...c, resolved: approved ? 'approved' : 'rejected' } : c),
     })));
-    if (approved) onApply(changePatch(change) as Partial<RetirementInputs>);
+    if (approved) {
+      // Snapshot the plan BEFORE the patch lands — the automatic checkpoint
+      // propose_revert rolls back to. The label is the card's, so the model
+      // (and the user) can name the checkpoint later.
+      recordCheckpoint(change.label ?? 'Plan change', inputs);
+      // Revert patches carry encoded undefined-removals; decode them here so
+      // the spread in App's onApply actually deletes the keys.
+      const raw = changePatch(change);
+      const decoded = change.revert ? decodeRevertPatch(raw) : raw;
+      onApply(decoded as Partial<RetirementInputs>);
+    }
     const live = pendingDecisions.current.get(change.callId);
     if (live) {
       // The loop that proposed this is parked on the promise — resolve it and

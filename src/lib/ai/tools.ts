@@ -16,13 +16,14 @@ import { z } from 'zod';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '../retirementEngine';
 import { calculateHousehold } from '../retirementEngine';
 import type { AppConfig } from '../appConfig';
-import { runStrategies } from '../strategies';
+import { runStrategies, type StrategyFilter } from '../strategies';
 import { solveSustainableSpending } from '../spendingSolver';
 import { runMonteCarlo } from '../monteCarlo';
 import {
   retirementInputsSchema, spouseSchema, pensionSchema, employmentIncomeSchema,
   cashEventSchema, reverseMortgageSchema,
 } from '../../data/schemas';
+import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
 import type { AgentToolCall, ToolSpec } from './providers';
 
 // ---------------------------------------------------------------------------
@@ -42,8 +43,14 @@ const runProjectionArgs = z.object({
 });
 
 const compareScenariosArgs = z.object({
-  overrides: z.record(z.string(), z.unknown())
-    .describe('Flat patch of top-level RetirementInputs fields defining the variant to compare against the current plan.'),
+  overrides: z.record(z.string(), z.unknown()).optional()
+    .describe('Flat patch of top-level RetirementInputs fields defining ONE variant to compare against the current plan. Use variants for several.'),
+  variants: z.array(z.object({
+    label: z.string().optional().describe('Short name shown for this variant (e.g. "Retire at 60").'),
+    overrides: z.record(z.string(), z.unknown())
+      .describe('Flat patch of top-level RetirementInputs fields defining this variant.'),
+  })).max(4).optional()
+    .describe('Up to 4 variants compared in ONE call (e.g. three retirement ages). Current plan is always included as the baseline. Takes precedence over the singular overrides.'),
 });
 
 const setScenarioValueArgs = z.object({
@@ -95,24 +102,59 @@ const proposeReverseMortgageArgs = z.object({
   rationale: z.string().optional(),
 });
 
-const runStrategiesArgs = z.object({}).describe('No arguments.');
+const proposeRevertArgs = z.object({
+  checkpoint: z.string().optional()
+    .describe('Which checkpoint to revert to: its label, or omit for the most recent one. Labels come from the change cards the user approved ("Add pension").'),
+  rationale: z.string().optional(),
+});
+
+const manageCashEventArgs = z.object({
+  action: z.enum(['update', 'remove']),
+  target: z.string().min(1)
+    .describe('Which cash event: its id, or its label if unique (e.g. "Downsize").'),
+  changes: z.record(z.string(), z.unknown()).optional()
+    .describe('For update: the cash-event fields to change (age, amount, direction, endAge, account, label). Missing fields keep their current values.'),
+  rationale: z.string().optional(),
+});
+
+const managePensionArgs = z.object({
+  action: z.enum(['update', 'remove']),
+  target: z.string().min(1)
+    .describe('Which pension: its id, or its label if unique (e.g. "Work DB").'),
+  changes: z.record(z.string(), z.unknown()).optional()
+    .describe('For update: the pension fields to change (annualAmount, startAge, endAge, indexedToCpi, label). endAge must be a number or explicit null.'),
+  rationale: z.string().optional(),
+});
+
+const runStrategiesArgs = z.object({
+  categories: z.array(z.enum(['cpp', 'oas', 'withdrawal_order', 'reverse_mortgage', 'work'])).optional()
+    .describe('Scope the explorer to specific lever families (e.g. ["cpp","oas"] for benefit timing only). Omit for all.'),
+  maxVariants: z.number().int().min(1).max(50).optional()
+    .describe('Cap the number of variants returned (best first).'),
+}).describe('Optional filters; call with {} for the full exploration.');
 
 const solveSpendingArgs = z.object({
   targetSuccessRate: z.number().min(0.5).max(0.99).default(0.9)
     .describe('Target Monte Carlo success rate as a fraction, e.g. 0.9 = 90% chance the money lasts to max age.'),
   runs: z.number().int().min(50).max(2000).default(500)
     .describe('Market futures to simulate per candidate. More = smoother, slower.'),
+  overrides: z.record(z.string(), z.unknown()).optional()
+    .describe('Optional flat patch of top-level scalar fields to apply to a COPY of the plan before solving (what-if: solve under different assumptions).'),
 });
 
 const runMonteCarloArgs = z.object({
   runs: z.number().int().min(50).max(2000).default(500),
   volatility: z.number().min(0).max(0.5).optional()
     .describe('Annual return standard deviation. Defaults to the plan\'s returnVolatility.'),
+  overrides: z.record(z.string(), z.unknown()).optional()
+    .describe('Optional flat patch of top-level scalar fields to apply to a COPY of the plan before simulating (what-if: success rate under different assumptions).'),
 });
 
 const getScheduleArgs = z.object({
   fromAge: z.number().optional().describe('First age to include (default: currentAge).'),
   toAge: z.number().optional().describe('Last age to include (default: maxAge). Keep ranges small to save tokens.'),
+  stride: z.number().int().min(1).max(20).optional()
+    .describe('Return every Nth year (e.g. 5 covers a whole horizon in one call). The LAST year in range is always included.'),
   overrides: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -132,6 +174,9 @@ const TOOL_SCHEMAS = {
   propose_spending_bands: proposeSpendingBandsArgs,
   propose_cash_event: proposeCashEventArgs,
   propose_reverse_mortgage: proposeReverseMortgageArgs,
+  propose_revert: proposeRevertArgs,
+  manage_cash_event: manageCashEventArgs,
+  manage_pension: managePensionArgs,
 } as const;
 
 export type AgentToolName = keyof typeof TOOL_SCHEMAS;
@@ -177,19 +222,19 @@ export function toolSpecs(): ToolSpec[] {
       'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.',
       runProjectionArgs),
     spec('compare_scenarios',
-      'Run the engine twice — current plan and a variant defined by overrides — and return both outcomes plus the deltas.',
+      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".',
       compareScenariosArgs),
     spec('run_strategies',
-      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, withdrawal order, retirement age) against the current plan by sustainable spending, tax, and GIS. Use for "what levers help most?" steering.',
+      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, withdrawal order, retirement age) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.',
       runStrategiesArgs),
     spec('solve_spending',
-      'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Use for "how much can I safely spend?"',
+      'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"',
       solveSpendingArgs),
     spec('run_monte_carlo',
-      'Run the Monte Carlo simulation on the current plan and return the success rate, median final balance, and depletion spread across market futures.',
+      'Run the Monte Carlo simulation on the current plan (optionally with overrides) and return the success rate, median final balance, and depletion spread across market futures.',
       runMonteCarloArgs),
     spec('get_schedule',
-      'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Keep the range small.',
+      'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.',
       getScheduleArgs),
     spec('set_scenario_value',
       'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.',
@@ -215,6 +260,15 @@ export function toolSpecs(): ToolSpec[] {
     spec('propose_reverse_mortgage',
       'PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.',
       proposeReverseMortgageArgs),
+    spec('propose_revert',
+      'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.',
+      proposeRevertArgs),
+    spec('manage_cash_event',
+      'PROPOSE updating or REMOVING an existing cash event (by id or unique label). User confirms. Use propose_cash_event to add a new one.',
+      manageCashEventArgs),
+    spec('manage_pension',
+      'PROPOSE updating or REMOVING an existing pension (by id or unique label). User confirms. Use propose_pension to add a new one.',
+      managePensionArgs),
   ];
 }
 
@@ -229,6 +283,10 @@ export interface ToolContext {
   scenarioName: string;
   /** Names/ids of other saved scenarios, for orientation. */
   scenarioList: Array<{ id: string; name: string }>;
+  /** Automatic checkpoints (snapshots taken before each approved change),
+   *  newest last, for propose_revert. Optional so tests and 'off'-mode callers
+   *  can omit it — revert then simply reports that no checkpoints exist. */
+  checkpoints?: PlanCheckpoint[];
 }
 
 export type ToolOutcome =
@@ -244,6 +302,9 @@ export type ToolOutcome =
       /** Human-readable preview lines shown on the confirm card. */
       preview: Record<string, unknown>;
       rationale?: string;
+      /** Revert proposals encode absent-at-checkpoint fields with a sentinel
+       *  (JSON can't carry undefined); the UI must decode before applying. */
+      revert?: true;
     }
   | { kind: 'error'; content: string };
 
@@ -279,9 +340,9 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
     case 'run_projection':
       return runProjection(ctx, (parsed.data as z.infer<typeof runProjectionArgs>).overrides);
     case 'compare_scenarios':
-      return compareScenarios(ctx, (parsed.data as z.infer<typeof compareScenariosArgs>).overrides);
+      return compareScenarios(ctx, parsed.data as z.infer<typeof compareScenariosArgs>);
     case 'run_strategies':
-      return runStrategiesTool(ctx);
+      return runStrategiesTool(ctx, parsed.data as z.infer<typeof runStrategiesArgs>);
     case 'solve_spending':
       return solveSpendingTool(ctx, parsed.data as z.infer<typeof solveSpendingArgs>);
     case 'run_monte_carlo':
@@ -304,6 +365,12 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return proposeElement(ctx, 'events', cashEventSchema, parsed.data, 'cash event');
     case 'propose_reverse_mortgage':
       return proposeReverseMortgage(ctx, parsed.data as z.infer<typeof proposeReverseMortgageArgs>);
+    case 'propose_revert':
+      return proposeRevert(ctx, parsed.data as z.infer<typeof proposeRevertArgs>);
+    case 'manage_cash_event':
+      return manageElement(ctx, 'events', cashEventSchema, parsed.data as z.infer<typeof manageCashEventArgs>, 'cash event');
+    case 'manage_pension':
+      return manageElement(ctx, 'pensions', pensionSchema, parsed.data as z.infer<typeof managePensionArgs>, 'pension');
   }
 }
 
@@ -453,29 +520,53 @@ function runProjection(ctx: ToolContext, overrides?: Record<string, unknown>): T
   }
 }
 
-function compareScenarios(ctx: ToolContext, overrides: Record<string, unknown>): ToolOutcome {
-  const { patch, rejected } = validateOverrides(overrides);
-  if (Object.keys(patch).length === 0) {
-    return { kind: 'error', content: `No valid overrides to compare. ${rejected.join('; ') || 'Patch was empty.'}` };
+function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenariosArgs>): ToolOutcome {
+  // The singular form stays valid (back-compat); variants win when both arrive.
+  const variants: Array<{ label: string; overrides: Record<string, unknown> }> = args.variants?.length
+    ? args.variants.map((v, i) => ({ label: v.label ?? `Variant ${i + 1}`, overrides: v.overrides }))
+    : args.overrides
+      ? [{ label: 'VARIANT', overrides: args.overrides }]
+      : [];
+  if (variants.length === 0) {
+    return { kind: 'error', content: 'No variants to compare. Pass overrides (one variant) or variants (up to 4).' };
   }
+
+  const validated = variants.map(v => ({ ...v, ...validateOverrides(v.overrides) }));
+  const usable = validated.filter(v => Object.keys(v.patch).length > 0);
+  if (usable.length === 0) {
+    return { kind: 'error', content: `No valid overrides in any variant. ${validated.map(v => v.rejected.join('; ')).filter(Boolean).join(' | ') || 'All patches were empty.'}` };
+  }
+
   try {
     const base = calculateHousehold(ctx.inputs, ctx.config);
-    const variantInputs = { ...ctx.inputs, ...patch };
-    const variant = calculateHousehold(variantInputs, ctx.config);
-    const delta = (a: number, b: number) => {
-      const d = b - a;
-      return `${d >= 0 ? '+' : '−'}${money(Math.abs(d))}`;
-    };
-    const lines = [
-      `Variant overrides: ${JSON.stringify(patch)}`,
-      ...(rejected.length ? [`Ignored invalid overrides: ${rejected.join('; ')}`] : []),
-      summarizeResults('CURRENT plan', ctx.inputs, base),
-      summarizeResults('VARIANT', variantInputs, variant),
-      'DELTAS (variant − current):',
-      `  ending balance ${delta(end(base), end(variant))}`,
-      `  lifetime tax ${delta(lifeTax(base), lifeTax(variant))}`,
-      `  depletion: ${fmtDepl(base)} → ${fmtDepl(variant)}`,
+    const lines: string[] = [
+      `Comparing ${usable.length} variant${usable.length > 1 ? 's' : ''} against the current plan.`,
     ];
+    for (const v of validated) {
+      if (Object.keys(v.patch).length === 0) {
+        lines.push(`Skipped variant "${v.label}" — no valid overrides (${v.rejected.join('; ')}).`);
+      }
+    }
+    // One verdict line per plan (current first), then deltas per variant.
+    lines.push(summarizeResults('CURRENT plan', ctx.inputs, base));
+    const variantRuns = usable.map(v => ({
+      label: v.label,
+      overrides: v.patch,
+      inputs: { ...ctx.inputs, ...v.patch } as RetirementInputs,
+      results: calculateHousehold({ ...ctx.inputs, ...v.patch } as RetirementInputs, ctx.config),
+      notes: v.rejected.length ? ` (ignored invalid: ${v.rejected.join('; ')})` : '',
+    }));
+    for (const r of variantRuns) {
+      lines.push(summarizeResults(`VARIANT "${r.label}" ${JSON.stringify(r.overrides)}${r.notes}`, r.inputs, r.results));
+    }
+    lines.push('DELTAS (variant − current):');
+    for (const r of variantRuns) {
+      lines.push(
+        `  ${r.label}: ending balance ${delta(end(base), end(r.results))}, ` +
+        `lifetime tax ${delta(lifeTax(base), lifeTax(r.results))}, ` +
+        `depletion: ${fmtDepl(base)} → ${fmtDepl(r.results)}`,
+      );
+    }
     return { kind: 'result', content: lines.join('\n') };
   } catch (err) {
     return { kind: 'error', content: `Engine failed to run: ${err instanceof Error ? err.message : String(err)}` };
@@ -485,6 +576,10 @@ function compareScenarios(ctx: ToolContext, overrides: Record<string, unknown>):
 const end = (r: RetirementResults) => r.yearlyBreakdown.at(-1)?.endingBalance ?? 0;
 const lifeTax = (r: RetirementResults) => r.yearlyBreakdown.at(-1)?.cumulativeTax ?? 0;
 const fmtDepl = (r: RetirementResults) => (r.depletionAge != null ? `depletes ${r.depletionAge}` : 'funded to max age');
+const delta = (a: number, b: number) => {
+  const d = b - a;
+  return `${d >= 0 ? '+' : '−'}${money(Math.abs(d))}`;
+};
 
 function proposeSet(
   ctx: ToolContext,
@@ -652,12 +747,118 @@ let idSeq = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(++idSeq).toString(36)}`;
 
 // ---------------------------------------------------------------------------
+// Revert + element management
+// ---------------------------------------------------------------------------
+
+/** Propose rolling the plan back to a checkpoint. The patch is DIFF-based
+ *  (checkpoint vs live) so only fields the checkpoint disagrees with move;
+ *  manual edits since the change are visible on the card, not silently
+ *  clobbered. Nothing applies without the user's confirmation. */
+function proposeRevert(ctx: ToolContext, args: z.infer<typeof proposeRevertArgs>): ToolOutcome {
+  const checkpoints = ctx.checkpoints ?? [];
+  if (checkpoints.length === 0) {
+    return {
+      kind: 'error',
+      content: 'There is nothing to revert: no checkpoints exist yet. Checkpoints are captured automatically each time the user approves one of your changes.',
+    };
+  }
+  const wanted = args.checkpoint?.trim().toLowerCase();
+  let target: PlanCheckpoint | undefined;
+  if (wanted) {
+    target = checkpoints.find(c => c.id.toLowerCase() === wanted)
+      ?? checkpoints.filter(c => c.label.toLowerCase() === wanted)[0];
+    if (!target) {
+      const known = [...checkpoints].reverse().map(c => `"${c.label}" (${new Date(c.at).toLocaleDateString('en-CA')})`).join(', ');
+      return { kind: 'error', content: `No checkpoint matches "${args.checkpoint}". Recent checkpoints: ${known}. Omit the argument to revert to the most recent.` };
+    }
+  } else {
+    target = checkpoints[checkpoints.length - 1];
+  }
+  const plan = buildRevertPlan(ctx.inputs, target);
+  if (plan.changed === 0) {
+    return { kind: 'error', content: `The plan already matches checkpoint "${target.label}" — nothing to revert.` };
+  }
+  return {
+    kind: 'mutation',
+    // Encode undefined-valued removals so the persisted patch keeps them (the
+    // UI decodes them back before applying).
+    patch: encodeRevertPatch(plan.patch) as Partial<RetirementInputs>,
+    label: `Revert to before "${target.label}"`,
+    rationale: args.rationale,
+    preview: plan.preview,
+    revert: true,
+  };
+}
+
+/** Shared helper for manage_cash_event / manage_pension: update (merge fields
+ *  over the matched element, re-validated) or remove. Target matches by exact
+ *  id first, then by unique case-insensitive label. */
+function manageElement(
+  ctx: ToolContext,
+  key: 'events' | 'pensions',
+  schema: z.ZodType,
+  args: { action: 'update' | 'remove'; target: string; changes?: Record<string, unknown>; rationale?: string },
+  noun: string,
+): ToolOutcome {
+  const current = (ctx.inputs[key] as unknown[] | undefined) ?? [];
+  if (current.length === 0) {
+    return { kind: 'error', content: `There are no ${noun}s in the plan to ${args.action}.` };
+  }
+  const wanted = args.target.trim().toLowerCase();
+  const byId = current.filter(e => typeof (e as { id?: unknown }).id === 'string' && ((e as { id: string }).id.toLowerCase() === wanted));
+  const byLabel = current.filter(e => typeof (e as { label?: unknown }).label === 'string' && ((e as { label: string }).label.toLowerCase() === wanted));
+  const matches = byId.length > 0 ? byId : byLabel;
+  if (matches.length === 0) {
+    const known = current.map(e => `"${(e as { label?: string }).label ?? (e as { id: string }).id}"`).join(', ');
+    return { kind: 'error', content: `No ${noun} matches "${args.target}". Existing: ${known || '(none)'}.` };
+  }
+  if (matches.length > 1) {
+    const ids = matches.map(e => (e as { id: string }).id).join(', ');
+    return { kind: 'error', content: `"${args.target}" matches ${matches.length} ${noun}s (ids: ${ids}). Use an id to pick one.` };
+  }
+  const existing = matches[0] as Record<string, unknown>;
+  const existingId = existing.id as string;
+
+  if (args.action === 'remove') {
+    const next = current.filter(e => (e as { id: string }).id !== existingId);
+    return {
+      kind: 'mutation',
+      patch: { [key]: next } as Partial<RetirementInputs>,
+      label: `Remove ${noun} "${existing.label ?? existingId}"`,
+      rationale: args.rationale,
+      preview: { removes: existing, remaining: next.length },
+    };
+  }
+
+  // Update: merge the changed fields over the existing element and re-validate
+  // the whole element against its schema (never trust the patch alone).
+  const changes = args.changes ?? {};
+  if (Object.keys(changes).length === 0) {
+    return { kind: 'error', content: `Update requested for ${noun} "${existing.label ?? existingId}" but no fields were given in "changes".` };
+  }
+  const { id: _ignored, ...rest } = changes; // id is immutable
+  const merged = { ...existing, ...rest, id: existingId };
+  const res = schema.safeParse(merged);
+  if (!res.success) {
+    return { kind: 'error', content: `Invalid ${noun} update: ${zodIssues(res.error)}` };
+  }
+  const next = current.map(e => ((e as { id: string }).id === existingId ? res.data : e));
+  return {
+    kind: 'mutation',
+    patch: { [key]: next } as Partial<RetirementInputs>,
+    label: `Update ${noun} "${(res.data as { label?: string }).label ?? existingId}"`,
+    rationale: args.rationale,
+    preview: { changes: rest, result: res.data },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Read backends (pure; no confirmation)
 // ---------------------------------------------------------------------------
 
-function runStrategiesTool(ctx: ToolContext): ToolOutcome {
+function runStrategiesTool(ctx: ToolContext, filter?: StrategyFilter): ToolOutcome {
   try {
-    const report = runStrategies(ctx.inputs, ctx.config);
+    const report = runStrategies(ctx.inputs, ctx.config, filter);
     const row = (s: { name: string; survived: boolean; sustainableSpending: number; deltaSpending: number; lifetimeTax: number; lifetimeGis: number; endingBalance: number; depletionAge: number | null }) =>
       `  ${s.name}: ${s.survived ? 'survives' : `depletes ${s.depletionAge}`}, ` +
       `sustainable spending ${money(s.sustainableSpending)}/yr (${s.deltaSpending >= 0 ? '+' : '−'}${money(Math.abs(s.deltaSpending))} vs current), ` +
@@ -665,7 +866,10 @@ function runStrategiesTool(ctx: ToolContext): ToolOutcome {
     const lines = [
       `CURRENT plan: sustainable spending ${money(report.baseline.sustainableSpending)}/yr.`,
       'Strategies (best first):',
-      ...report.strategies.map(row),
+      ...report.shown.map(row),
+      ...(report.shown.length < report.filteredFrom
+        ? [`(${report.filteredFrom - report.shown.length} variants hidden by filters; raise maxVariants or drop categories to see more.)`]
+        : []),
       'Suggested levers:',
       ...report.suggestedActions.map(a => `  - ${a}`),
     ];
@@ -676,16 +880,24 @@ function runStrategiesTool(ctx: ToolContext): ToolOutcome {
 }
 
 function solveSpendingTool(ctx: ToolContext, args: z.infer<typeof solveSpendingArgs>): ToolOutcome {
+  let inputs = ctx.inputs;
+  const notes: string[] = [];
+  if (args.overrides && Object.keys(args.overrides).length > 0) {
+    const { patch, rejected } = validateOverrides(args.overrides);
+    if (rejected.length) notes.push(`Ignored invalid overrides: ${rejected.join('; ')}`);
+    inputs = { ...ctx.inputs, ...patch };
+  }
   try {
     const result = solveSustainableSpending({
-      inputs: ctx.inputs,
+      inputs,
       config: ctx.config,
       targetSuccessRate: args.targetSuccessRate,
       runs: args.runs,
-      volatility: ctx.inputs.returnVolatility,
+      volatility: inputs.returnVolatility,
     });
     const lines = [
       `Max sustainable after-tax spending for a ${(args.targetSuccessRate * 100).toFixed(0)}% success rate: ${money(result.spending)}/yr (today's $).`,
+      ...notes,
       `  achieved success rate ${(result.achievedSuccessRate * 100).toFixed(1)}% over ${result.runs} futures` +
         (result.nextStepSuccessRate != null ? `; one step up drops to ${(result.nextStepSuccessRate * 100).toFixed(1)}%.` : '.'),
     ];
@@ -700,14 +912,25 @@ function solveSpendingTool(ctx: ToolContext, args: z.infer<typeof solveSpendingA
 }
 
 function runMonteCarloTool(ctx: ToolContext, args: z.infer<typeof runMonteCarloArgs>): ToolOutcome {
+  let inputs = ctx.inputs;
+  const notes: string[] = [];
+  if (args.overrides && Object.keys(args.overrides).length > 0) {
+    const { patch, rejected } = validateOverrides(args.overrides);
+    if (rejected.length) notes.push(`Ignored invalid overrides: ${rejected.join('; ')}`);
+    inputs = { ...ctx.inputs, ...patch };
+  }
   try {
-    const volatility = args.volatility ?? ctx.inputs.returnVolatility;
+    const volatility = args.volatility ?? inputs.returnVolatility;
     const result = runMonteCarlo({
-      inputs: ctx.inputs, config: ctx.config,
+      inputs, config: ctx.config,
       runs: args.runs, volatility, seed: 0xC0FFEE,
     });
+    const head = notes.length || (args.overrides && Object.keys(args.overrides).length)
+      ? `Monte Carlo WITH overrides (what-if; plan unchanged)`
+      : 'Monte Carlo of the current plan';
     const lines = [
-      `Monte Carlo (${result.runs} futures, ${(volatility * 100).toFixed(0)}% volatility): success rate ${(result.successRate * 100).toFixed(1)}% (money lasts to age ${ctx.inputs.maxAge}).`,
+      `${head} (${result.runs} futures, ${(volatility * 100).toFixed(0)}% volatility): success rate ${(result.successRate * 100).toFixed(1)}% (money lasts to age ${inputs.maxAge}).`,
+      ...notes,
       `  median final balance ${money(result.medianFinalBalance)}.`,
     ];
     if (result.depletionHistogram.length) {
@@ -732,10 +955,17 @@ function getScheduleTool(ctx: ToolContext, args: z.infer<typeof getScheduleArgs>
     const results = calculateHousehold(inputs, ctx.config);
     const from = args.fromAge ?? ctx.inputs.currentAge;
     const to = args.toAge ?? ctx.inputs.maxAge;
-    const rows = results.yearlyBreakdown.filter(r => r.age >= from && r.age <= to);
-    if (rows.length === 0) {
+    const inRange = results.yearlyBreakdown.filter(r => r.age >= from && r.age <= to);
+    if (inRange.length === 0) {
       return { kind: 'error', content: `No years in range ${from}–${to}.` };
     }
+    // Stride N returns every Nth year — but ALWAYS keeps the last year in
+    // range, so a horizon-wide view still shows where the plan ends up.
+    const stride = args.stride ?? 1;
+    const lastAge = inRange[inRange.length - 1].age;
+    const rows = stride > 1
+      ? inRange.filter((r, i) => i % stride === 0 || r.age === lastAge)
+      : inRange;
     const fmtRow = (r: YearlyBreakdown) => {
       const rm = r.loanBalance != null ? `, RM loan ${money(r.loanBalance)} / equity ${money(r.netHomeEquity ?? 0)}` : '';
       const emp = (r.employmentGross ?? 0) > 0 ? `, work net ${money(r.employmentNet ?? 0)}` : '';
@@ -744,7 +974,10 @@ function getScheduleTool(ctx: ToolContext, args: z.infer<typeof getScheduleArgs>
         `cpp ${money(r.cppIncome)} oas ${money(r.oasIncome)} gis ${money(r.gisIncome)} pension ${money(r.pensionIncome)}` +
         emp + rm + ((r.shortfall ?? 0) > 0 ? `, SHORT ${money(r.shortfall ?? 0)}` : '');
     };
-    return { kind: 'result', content: [...notes, ...rows.map(fmtRow)].join('\n') };
+    const strideNote = stride > 1 && rows.length < inRange.length
+      ? [`(showing every ${stride}nd/rd/th year of ${inRange.length} in range ${from}–${to}; the final year is always included)`]
+      : [];
+    return { kind: 'result', content: [...notes, ...strideNote, ...rows.map(fmtRow)].join('\n') };
   } catch (err) {
     return { kind: 'error', content: `Engine failed to run: ${err instanceof Error ? err.message : String(err)}` };
   }

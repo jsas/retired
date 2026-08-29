@@ -5,6 +5,7 @@
 // rather than breaking the page (unlike scenarios, which are precious).
 
 import { z } from 'zod';
+import type { RetirementInputs } from '../retirementEngine';
 
 const STORAGE_KEY = 'retirement_ai_chats';
 /** Exported so the backup layer (db.ts / Data page) can carry chats in the
@@ -36,6 +37,9 @@ const pendingChangeSchema = z.object({
   value: z.unknown().optional(),
   rationale: z.string().optional(),
   preview: z.record(z.string(), z.unknown()),
+  // Revert proposals carry encoded undefined-removals (see checkpoints.ts);
+  // the flag tells the UI to decode before applying.
+  revert: z.boolean().optional(),
   resolved: z.enum(['approved', 'rejected']).optional(),
 });
 
@@ -71,6 +75,16 @@ const threadSchema = z.object({
    *  time the conversation outgrows the context window and extended on later
    *  compactions. Optional so older saved chats stay valid. */
   contextSummary: z.string().optional(),
+  /** Automatic plan checkpoints (snapshots taken before each approved agent
+   *  change), oldest first, for propose_revert. Optional so older saved chats
+   *  stay valid. Typed explicitly: a z.record would infer Record<string,
+   *  unknown>, which doesn't overlap RetirementInputs. */
+  checkpoints: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    at: z.number(),
+    inputs: z.custom<RetirementInputs>(() => true),
+  })).optional(),
 });
 
 export type ChatThread = z.infer<typeof threadSchema>;
@@ -116,7 +130,12 @@ function emptyStore(): ChatStore {
   return { threads: [], activeThreadId: null };
 }
 
-/** Parse storage into a valid store; corrupt payloads fall back to empty. */
+/** Parse storage into a valid store; corrupt payloads fall back to empty.
+ *  A turn persisted mid-stream keeps state 'streaming' forever (the abort/
+ *  finalize that would have flipped it died with the page), which makes the
+ *  bubble look stuck and the conversation cut off after a reload — so a
+ *  loaded 'streaming' turn is normalized to 'done'. A turn genuinely awaiting
+ *  a decision ('needs-decision') is preserved untouched. */
 export function loadChats(kv: KV = defaultKV()): ChatStore {
   try {
     const raw = kv.getItem(STORAGE_KEY);
@@ -126,6 +145,11 @@ export function loadChats(kv: KV = defaultKV()): ChatStore {
     const s = parsed.data;
     if (s.activeThreadId && !s.threads.some(t => t.id === s.activeThreadId)) {
       s.activeThreadId = s.threads[0]?.id ?? null;
+    }
+    for (const t of s.threads) {
+      for (const turn of t.turns) {
+        if (turn.state === 'streaming') turn.state = 'done';
+      }
     }
     return s;
   } catch {

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { executeToolCall, toolSpecs, EDITABLE_FIELDS, type ToolContext } from './tools';
 import { calculateHousehold } from '../retirementEngine';
 import { baseInputs, testConfig } from '../../test/helpers';
+import { captureCheckpoint, UNDEFINED_SENTINEL } from './checkpoints';
+import type { RetirementInputs } from '../retirementEngine';
 
 function ctx(over: Partial<ToolContext> = {}): ToolContext {
   return {
@@ -18,8 +20,9 @@ describe('toolSpecs', () => {
     const specs = toolSpecs();
     expect(specs.map(s => s.name).sort()).toEqual([
       'compare_scenarios', 'get_schedule', 'get_scenario',
+      'manage_cash_event', 'manage_pension',
       'propose_cash_event', 'propose_employment', 'propose_patch', 'propose_pension',
-      'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
+      'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'run_monte_carlo', 'run_projection', 'run_strategies',
       'set_scenario_value', 'solve_spending',
     ].sort());
@@ -88,7 +91,7 @@ describe('run_projection', () => {
 });
 
 describe('compare_scenarios', () => {
-  it('runs both plans and reports deltas', () => {
+  it('runs both plans and reports deltas (singular overrides form)', () => {
     const out = executeToolCall(ctx(), {
       id: '1', name: 'compare_scenarios',
       args: { overrides: { desiredSpending: 30000 } },
@@ -100,13 +103,64 @@ describe('compare_scenarios', () => {
     expect(out.content).toContain('"desiredSpending":30000');
   });
 
-  it('errors when no override survives validation', () => {
+  it('compares several variants in one call (variants form)', () => {
     const out = executeToolCall(ctx(), {
       id: '1', name: 'compare_scenarios',
-      args: { overrides: { bogus: 1 } },
+      args: {
+        variants: [
+          { label: 'Retire at 60', overrides: { retirementAge: 60 } },
+          { label: 'Retire at 70', overrides: { retirementAge: 70 } },
+        ],
+      },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('CURRENT plan');
+    expect(out.content).toContain('Retire at 60');
+    expect(out.content).toContain('Retire at 70');
+    expect(out.content).toContain('DELTAS');
+    expect(out.content).toContain('Comparing 2 variants');
+  });
+
+  it('caps variants at 4 and skips an invalid variant without killing the batch', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'compare_scenarios',
+      args: {
+        variants: [
+          { label: 'Good', overrides: { desiredSpending: 25000 } },
+          { label: 'Bad', overrides: { bogus: 1 } },
+        ],
+      },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('Good');
+    expect(out.content).toContain('Skipped variant "Bad"');
+  });
+
+  it('variants take precedence when both forms are passed', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'compare_scenarios',
+      args: {
+        overrides: { desiredSpending: 30000 },
+        variants: [{ label: 'List form', overrides: { desiredSpending: 28000 } }],
+      },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('"desiredSpending":28000');
+    expect(out.content).not.toContain('"desiredSpending":30000');
+  });
+
+  it('errors when no override survives validation in ANY variant', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'compare_scenarios',
+      args: { variants: [{ overrides: { bogus: 1 } }] },
     });
     expect(out.kind).toBe('error');
     if (out.kind === 'error') expect(out.content).toContain('bogus');
+  });
+
+  it('errors when neither form is provided', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'compare_scenarios', args: {} });
+    expect(out.kind).toBe('error');
   });
 });
 
@@ -297,6 +351,165 @@ describe('propose_reverse_mortgage', () => {
   });
 });
 
+describe('propose_revert', () => {
+  it('errors clearly when no checkpoints exist', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'propose_revert', args: {} });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('nothing to revert');
+  });
+
+  it('reverts to the most recent checkpoint by default, as a diff patch', () => {
+    const before = baseInputs({ desiredSpending: 20000 });
+    const live = { ...before, desiredSpending: 40000, cppStartAge: 70 };
+    const c = ctx({
+      inputs: live,
+      checkpoints: [captureCheckpoint('Set desiredSpending', before)],
+    });
+    const out = executeToolCall(c, { id: '1', name: 'propose_revert', args: {} });
+    expect(out.kind).toBe('mutation');
+    if (out.kind !== 'mutation') return;
+    expect(out.label).toContain('Set desiredSpending');
+    // The diff is live→checkpoint: spending and CPP both differed, so both
+    // roll back (CPP's checkpoint value is null — it was set AFTER the snapshot).
+    expect(out.patch).toEqual({ desiredSpending: 20000, cppStartAge: null });
+    expect(out.revert).toBe(true);
+    expect(out.preview).toHaveProperty('desiredSpending');
+  });
+
+  it('removes structural fields added after the checkpoint via the sentinel', () => {
+    const before = baseInputs();
+    const withSpouse = { ...before, spouse: spouseBlock() };
+    const c = ctx({
+      inputs: withSpouse,
+      checkpoints: [captureCheckpoint('Add spouse', before)],
+    });
+    const out = executeToolCall(c, { id: '1', name: 'propose_revert', args: {} });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    // JSON can't carry undefined — the patch encodes the removal instead.
+    expect(out.patch.spouse).toBe(UNDEFINED_SENTINEL);
+    expect(out.revert).toBe(true);
+  });
+
+  it('reverts to a named checkpoint by label', () => {
+    const first = baseInputs({ desiredSpending: 20000 });
+    const second = { ...first, desiredSpending: 30000 };
+    const live = { ...second, cppStartAge: 70 };
+    const c = ctx({
+      inputs: live,
+      checkpoints: [
+        captureCheckpoint('Lower spending', first),
+        captureCheckpoint('Defer CPP', second),
+      ],
+    });
+    const out = executeToolCall(c, { id: '1', name: 'propose_revert', args: { checkpoint: 'lower spending' } });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toContain('Lower spending');
+    expect(out.patch).toEqual({ desiredSpending: 20000, cppStartAge: null });
+  });
+
+  it('errors on an unknown checkpoint name with the recent list', () => {
+    const c = ctx({ checkpoints: [captureCheckpoint('Add pension', baseInputs())] });
+    const out = executeToolCall(c, { id: '1', name: 'propose_revert', args: { checkpoint: 'nope' } });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('Add pension');
+  });
+
+  it('errors when the plan already matches the checkpoint', () => {
+    const before = baseInputs();
+    const c = ctx({ inputs: before, checkpoints: [captureCheckpoint('Add pension', before)] });
+    const out = executeToolCall(c, { id: '1', name: 'propose_revert', args: {} });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('nothing to revert');
+  });
+});
+
+describe('manage_cash_event / manage_pension', () => {
+  it('updates a cash event by unique label, re-validated', () => {
+    const c = ctx({ inputs: baseInputs({ events: [{ id: 'e1', label: 'Downsize', age: 70, amount: 300000, direction: 'in', account: 'taxable' }] }) });
+    const out = executeToolCall(c, {
+      id: '1', name: 'manage_cash_event',
+      args: { action: 'update', target: 'downsize', changes: { amount: 250000 } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    const events = out.patch.events as Array<{ id: string; amount: number; label: string }>;
+    expect(events).toHaveLength(1);
+    expect(events[0].amount).toBe(250000);
+    expect(events[0].id).toBe('e1'); // id immutable
+    expect(events[0].label).toBe('Downsize'); // untouched fields survive
+  });
+
+  it('updates a pension by exact id, including an explicit null endAge', () => {
+    const c = ctx({ inputs: baseInputs({ pensions: [{ id: 'p1', label: 'Work DB', annualAmount: 12000, startAge: 65, endAge: 75, indexedToCpi: true }] }) });
+    const out = executeToolCall(c, {
+      id: '1', name: 'manage_pension',
+      args: { action: 'update', target: 'p1', changes: { endAge: null } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    const pensions = out.patch.pensions as Array<{ id: string; endAge: number | null }>;
+    expect(pensions[0].endAge).toBeNull();
+  });
+
+  it('rejects an update that fails the element schema', () => {
+    const c = ctx({ inputs: baseInputs({ pensions: [{ id: 'p1', label: 'Work DB', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true }] }) });
+    const out = executeToolCall(c, {
+      id: '1', name: 'manage_pension',
+      args: { action: 'update', target: 'p1', changes: { annualAmount: 'lots' } },
+    });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('Invalid pension update');
+  });
+
+  it('removes a cash event by id', () => {
+    const c = ctx({ inputs: baseInputs({
+      events: [
+        { id: 'e1', label: 'Downsize', age: 70, amount: 300000, direction: 'in', account: 'taxable' },
+        { id: 'e2', label: 'Gift', age: 60, amount: 10000, direction: 'out' },
+      ],
+    }) });
+    const out = executeToolCall(c, { id: '1', name: 'manage_cash_event', args: { action: 'remove', target: 'e1' } });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect((out.patch.events as unknown[]).map(e => (e as { id: string }).id)).toEqual(['e2']);
+  });
+
+  it('errors on ambiguous labels, unknown targets, and empty plans', () => {
+    const two = ctx({ inputs: baseInputs({ events: [
+      { id: 'e1', label: 'Gift', age: 60, amount: 10000, direction: 'out' },
+      { id: 'e2', label: 'Gift', age: 61, amount: 12000, direction: 'out' },
+    ] }) });
+    const ambiguous = executeToolCall(two, { id: '1', name: 'manage_cash_event', args: { action: 'remove', target: 'gift' } });
+    expect(ambiguous.kind).toBe('error');
+    if (ambiguous.kind === 'error') expect(ambiguous.content).toContain('ids');
+
+    const none = ctx();
+    const missing = executeToolCall(none, { id: '1', name: 'manage_cash_event', args: { action: 'remove', target: 'e1' } });
+    expect(missing.kind).toBe('error');
+    if (missing.kind === 'error') expect(missing.content).toContain('no cash events');
+
+    const one = ctx({ inputs: baseInputs({ events: [{ id: 'e1', label: 'Downsize', age: 70, amount: 1, direction: 'in' }] }) });
+    const unknown = executeToolCall(one, { id: '1', name: 'manage_cash_event', args: { action: 'remove', target: 'zzz' } });
+    expect(unknown.kind).toBe('error');
+    if (unknown.kind === 'error') expect(unknown.content).toContain('Downsize');
+  });
+
+  it('rejects an update with no changes given', () => {
+    const c = ctx({ inputs: baseInputs({ pensions: [{ id: 'p1', label: 'Work DB', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true }] }) });
+    const out = executeToolCall(c, { id: '1', name: 'manage_pension', args: { action: 'update', target: 'p1' } });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('no fields were given');
+  });
+});
+
+// A minimal valid spouse block for checkpoint/removal tests.
+function spouseBlock(): RetirementInputs['spouse'] {
+  return {
+    enabled: true, currentAge: 60, retirementAge: 65,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+    cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+    desiredSpending: 0,
+  };
+}
+
 describe('read backends', () => {
   it('run_strategies ranks variants and suggests levers', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'run_strategies', args: {} });
@@ -306,11 +519,59 @@ describe('read backends', () => {
     expect(out.content).toContain('Suggested levers');
   });
 
+  it('run_strategies scopes to requested categories', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'run_strategies', args: { categories: ['cpp', 'oas'] } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    // CPP/OAS rows present…
+    expect(out.content).toContain('CPP');
+    // …and withdrawal-order rows excluded.
+    expect(out.content).not.toContain('Withdraw TFSA');
+  });
+
+  it('run_strategies errors on an unknown category instead of silently narrowing', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'run_strategies', args: { categories: ['cppp'] } });
+    expect(out.kind).toBe('error');
+  });
+
+  it('run_strategies caps the variant list with maxVariants', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'run_strategies', args: { maxVariants: 3 } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('hidden by filters');
+  });
+
   it('solve_spending returns a sustainable spending figure', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'solve_spending', args: { targetSuccessRate: 0.9, runs: 100 } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('Max sustainable after-tax spending');
     expect(out.content).toContain('90%');
+  });
+
+  it('solve_spending accepts what-if overrides without touching the plan', () => {
+    const c = ctx({ inputs: baseInputs({ cppStartAge: 65, cppMonthlyAmount: 1000 }) });
+    const withCpp = executeToolCall(c, {
+      id: '1', name: 'solve_spending',
+      args: { targetSuccessRate: 0.9, runs: 100 },
+    });
+    const withoutCpp = executeToolCall(c, {
+      id: '2', name: 'solve_spending',
+      args: { targetSuccessRate: 0.9, runs: 100, overrides: { cppMonthlyAmount: 0 } },
+    });
+    if (withCpp.kind !== 'result' || withoutCpp.kind !== 'result') throw new Error('expected results');
+    // Zeroing CPP via the override changes the solved spending — it landed.
+    expect(withoutCpp.content).not.toBe(withCpp.content);
+    // Caller's plan is untouched.
+    expect(c.inputs.cppMonthlyAmount).toBe(1000);
+  });
+
+  it('solve_spending reports invalid overrides instead of applying them', () => {
+    const c = ctx({ inputs: baseInputs({ cppMonthlyAmount: 1000 }) });
+    const out = executeToolCall(c, {
+      id: '1', name: 'solve_spending',
+      args: { targetSuccessRate: 0.9, runs: 100, overrides: { spouse: { enabled: true } } },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('structural field');
+    expect(c.inputs.cppMonthlyAmount).toBe(1000);
   });
 
   it('run_monte_carlo returns a success rate', () => {
@@ -319,11 +580,38 @@ describe('read backends', () => {
     expect(out.content).toContain('success rate');
   });
 
+  it('run_monte_carlo applies what-if overrides and leaves the plan untouched', () => {
+    const c = ctx({ inputs: baseInputs({ desiredSpending: 20000, tfsaBalance: 500000 }) });
+    const out = executeToolCall(c, {
+      id: '1', name: 'run_monte_carlo',
+      args: { runs: 100, overrides: { desiredSpending: 60000 } },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('WITH overrides');
+    // A 3x spending jump on the same portfolio must change the answer vs base.
+    const base = executeToolCall(c, { id: '2', name: 'run_monte_carlo', args: { runs: 100 } });
+    if (base.kind !== 'result') throw new Error('expected result');
+    expect(out.content).not.toBe(base.content);
+    expect(c.inputs.desiredSpending).toBe(20000);
+  });
+
   it('get_schedule returns year rows for the requested range', () => {
     const c = ctx();
     const out = executeToolCall(c, { id: '1', name: 'get_schedule', args: { fromAge: c.inputs.currentAge, toAge: c.inputs.currentAge + 2 } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain(`age ${c.inputs.currentAge}:`);
     expect(out.content).toContain('withdrew');
+  });
+
+  it('get_schedule stride skips years but always keeps the last', () => {
+    const c = ctx();
+    const from = c.inputs.currentAge;      // 65
+    const to = c.inputs.currentAge + 20;   // 85
+    const out = executeToolCall(c, { id: '1', name: 'get_schedule', args: { fromAge: from, toAge: to, stride: 5 } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain(`age ${from}:`);
+    expect(out.content).toContain(`age ${from + 5}:`);
+    expect(out.content).toContain(`age ${to}:`);
+    expect(out.content).not.toContain(`age ${from + 1}:`);
   });
 });
