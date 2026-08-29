@@ -201,6 +201,37 @@ function ModelsSection({ onChange, webllmConn }: {
 
   const [wizardOpen, setWizardOpen] = useState(false);
 
+  // The probe resolves after mount. While it's pending (guide === null) show a
+  // brief placeholder rather than the full catalog; once it says this browser
+  // CAN'T run local models, collapse the whole section to just the explanation
+  // and a pointer to the online path — no catalog, context control, or wizard
+  // that can't work here.
+  if (guide == null) {
+    return (
+      <section className="border border-emerald-200 bg-emerald-50/60 rounded p-3">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900">
+          <Lock size={12} /> Models on this computer
+        </div>
+        <p className="text-[11px] text-emerald-900/70 mt-1 flex items-center gap-1.5">
+          <Loader2 size={11} className="animate-spin" /> Checking whether this browser can run local models…
+        </p>
+      </section>
+    );
+  }
+  if (!guide.webgpu) {
+    return (
+      <section className="border border-slate-200 bg-slate-50 rounded p-3">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+          <Lock size={12} /> Models on this computer — not available in this browser
+        </div>
+        <div className="text-[11px] mt-1.5">
+          <div className="font-semibold text-red-700">{guide.headline}</div>
+          <div className="text-slate-600 leading-snug mt-0.5">{guide.detail}</div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="border border-emerald-200 bg-emerald-50/60 rounded p-3">
       <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900">
@@ -227,16 +258,8 @@ function ModelsSection({ onChange, webllmConn }: {
       )}
       <p className="text-[11px] text-emerald-900/80 leading-snug mt-1">
         Download once, then the model runs here and nothing you type leaves the device.
-        {guide && guide.webgpu && (
-          <> We suggest <strong>{guide.recommended.label}</strong> for this computer.</>
-        )}
+        <> We suggest <strong>{guide.recommended.label}</strong> for this computer.</>
       </p>
-      {guide && !guide.webgpu && (
-        <div className="text-[11px] mt-1.5">
-          <div className="font-semibold text-red-700">{guide.headline}</div>
-          <div className="text-slate-600 leading-snug mt-0.5">{guide.detail}</div>
-        </div>
-      )}
 
       {/* Catalog */}
       <div className="mt-2 space-y-1">
@@ -280,7 +303,7 @@ function ModelsSection({ onChange, webllmConn }: {
               ) : (
                 <button
                   onClick={() => void download(m.id)}
-                  disabled={downloading != null || (guide != null && !guide.webgpu)}
+                  disabled={downloading != null}
                   className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 text-white text-[11px] font-semibold rounded hover:bg-emerald-700 disabled:opacity-40 shrink-0"
                 >
                   <Download size={11} /> Download
@@ -512,14 +535,19 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
         </div>
       )}
 
-      {/* The local connection uses whatever model is chosen in Models above. */}
+      {/* The local connection uses whatever model is chosen in Models above.
+          Hidden entirely when this browser can't run local models (no WebGPU)
+          — offering a connection that can never load would just strand a broken
+          entry in the picker. */}
       {!webllmConn ? (
-        <button
-          onClick={ensureWebllm}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
-        >
-          <Plus size={13} /> Add the on-computer connection
-        </button>
+        webGpuAvailable() && (
+          <button
+            onClick={ensureWebllm}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+          >
+            <Plus size={13} /> Add the on-computer connection
+          </button>
+        )
       ) : (
         <div className="border border-emerald-200 bg-white rounded p-2.5 mb-3">
           <div className="flex items-center gap-2">
