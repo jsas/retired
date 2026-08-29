@@ -190,6 +190,11 @@ const saveScenarioAsArgs = z.object({
     .describe('Name for the new scenario (e.g. "Downsized at 65"). Duplicates are allowed.'),
 });
 
+const listScenariosArgs = z.object({
+  withDetails: z.boolean().default(false)
+    .describe('true = include the key numbers of each plan (ages, balances, spending, benefits) so you can compare saved plans without opening them. Omit/false for a compact list.'),
+});
+
 const TOOL_SCHEMAS = {
   get_scenario: getScenarioArgs,
   run_projection: runProjectionArgs,
@@ -213,6 +218,7 @@ const TOOL_SCHEMAS = {
   recall: recallArgs,
   open_scenario: openScenarioArgs,
   save_scenario_as: saveScenarioAsArgs,
+  list_scenarios: listScenariosArgs,
 } as const;
 
 export type AgentToolName = keyof typeof TOOL_SCHEMAS;
@@ -317,6 +323,9 @@ export function toolSpecs(): ToolSpec[] {
     spec('save_scenario_as',
       'Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.',
       saveScenarioAsArgs),
+    spec('list_scenarios',
+      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.',
+      listScenariosArgs),
   ];
 }
 
@@ -331,6 +340,14 @@ export interface ToolContext {
   scenarioName: string;
   /** Names/ids of other saved scenarios, for orientation. */
   scenarioList: Array<{ id: string; name: string }>;
+  /** Which of scenarioList is currently open (list_scenarios marks it).
+   *  Optional so tests and 'off'-mode callers can omit it — the marker is
+   *  then simply absent from the listing. */
+  activeScenarioId?: string;
+  /** Full inputs for an arbitrary saved scenario by id (list_scenarios'
+   *  withDetails for non-active plans). Optional — callers that don't supply
+   *  it get compact lines for the other scenarios instead of numbers. */
+  scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   /** Automatic checkpoints (snapshots taken before each approved change),
    *  newest last, for propose_revert. Optional so tests and 'off'-mode callers
    *  can omit it — revert then simply reports that no checkpoints exist. */
@@ -438,6 +455,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return openScenarioTool(ctx, parsed.data as z.infer<typeof openScenarioArgs>);
     case 'save_scenario_as':
       return saveScenarioAsTool(ctx, parsed.data as z.infer<typeof saveScenarioAsArgs>);
+    case 'list_scenarios':
+      return listScenariosTool(ctx, parsed.data as z.infer<typeof listScenariosArgs>);
   }
 }
 
@@ -1014,6 +1033,44 @@ function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioA
   }
   ctx.onSaveScenarioAs(name);
   return { kind: 'result', content: `Saved the current plan as scenario "${name}" and opened it. The previous plan is unchanged and still in the list.` };
+}
+
+/** list_scenarios: enumerate the saved plans. Compact by default (one line per
+ *  scenario, active marked); withDetails adds each plan's key numbers so the
+ *  model can compare saved plans without opening them. A pure read. */
+function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
+  const list = ctx.scenarioList;
+  if (list.length === 0) {
+    return { kind: 'result', content: 'There are no saved scenarios yet.' };
+  }
+  const activeId = ctx.activeScenarioId;
+  const lines: string[] = [`${list.length} saved scenario${list.length === 1 ? '' : 's'}:`];
+  for (const s of list) {
+    const isActive = s.id === activeId;
+    if (!args.withDetails) {
+      lines.push(`- ${s.name}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`);
+      continue;
+    }
+    const inputs = s.id === activeId
+      ? ctx.inputs
+      : ctx.scenarioInputsById?.(s.id);
+    const head = `- ${s.name}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`;
+    if (!inputs) {
+      // Not the active plan and the caller supplied no detail source: fall
+      // back to the compact line rather than fabricate numbers.
+      lines.push(head);
+      continue;
+    }
+    lines.push(
+      `${head}: ages ${inputs.currentAge}→${inputs.retirementAge} (max ${inputs.maxAge}), ` +
+      `spending ${money(inputs.desiredSpending)}/yr, ` +
+      `RRSP ${money(inputs.rrspBalance)}, TFSA ${money(inputs.tfsaBalance)}, taxable ${money(inputs.taxableBalance)}, ` +
+      `CPP ${inputs.cppStartAge == null ? 'not taken' : `from ${inputs.cppStartAge}`}, ` +
+      `OAS ${inputs.oasStartAge == null ? 'not taken' : `from ${inputs.oasStartAge}`}, ` +
+      `${inputs.spouse?.enabled ? 'spouse enabled' : 'single'}`,
+    );
+  }
+  return { kind: 'result', content: lines.join('\n') };
 }
 
 // ---------------------------------------------------------------------------
