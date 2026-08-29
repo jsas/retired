@@ -903,7 +903,13 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                 // stray dot a tool-only or paused reply showed. Our text (or a
                 // "working…" placeholder while tools run with no prose yet) is
                 // always the right thing.
-                const working = !thinking && streaming && !turn?.text && (turn?.tools.length ?? 0) > 0;
+                //
+                // ONE busy signal at a time: while chain-of-thought is streaming
+                // the Reasoning block below already shows "Thinking…", so the
+                // bubble must NOT also spin "Working…" — the two stacked labels
+                // read as if two things are running at once. The bubble only
+                // shows "Working…" for a tool-only reply with no reasoning yet.
+                const working = !thinking && !turn?.reasoning && streaming && !turn?.text && (turn?.tools.length ?? 0) > 0;
                 const showBubble = thinking || working || turn?.text || turn?.state === 'error';
                 return (
                   <div className="group flex justify-start items-start gap-1">
