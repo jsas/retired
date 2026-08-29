@@ -271,7 +271,9 @@ describe('buildSystemPrompt', () => {
   it('drops tool instructions for chat-only providers', () => {
     const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
     expect(s).not.toContain('set_scenario_value');
-    expect(s).toContain('cannot run tools');
+    // Grounded in the plan summary, and honest that it can't change the plan.
+    expect(s).toContain('plan summary');
+    expect(s).toContain('can\'t change the plan');
   });
 
   it('renders the program rules from the live config when supplied', () => {

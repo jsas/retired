@@ -131,7 +131,10 @@ export function buildSystemPrompt(
     persona,
     '',
     mode === 'off'
-      ? 'You cannot run tools in this mode; answer from the plan summary below.'
+      ? 'Answer questions from the plan summary below — it has the ages, balances, benefits, ' +
+        'and computed projection. Ground every number in it; never invent figures or ask the ' +
+        'user for values that are already there. This model can\'t change the plan, so don\'t ' +
+        'promise edits; just explain the numbers plainly.'
       : mode === 'prompt'
         ? [
             'Tools: the plan inputs and computed projection are BELOW in this message. The',

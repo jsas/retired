@@ -28,9 +28,11 @@ export { webGpuAvailable };
  */
 export function buildMachineGuide(webgpu: boolean): MachineGuide {
   const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
-  // Recommend the smallest genuinely-good model: it runs on almost any GPU,
-  // downloads fastest, and the catalog blurbs tell the user when to size up.
-  const recommended = byVram[0];
+  // Recommend the smallest model that can still drive the tool protocol (read
+  // the plan, propose edits). Recommending a non-tool-capable model would
+  // strand the user in a "questions only" assistant — a worse first run than
+  // a slightly bigger download. (Smallest tool-capable = Ministral 3 3B.)
+  const recommended = byVram.find(m => m.toolCapable) ?? byVram[0];
 
   if (!webgpu) {
     const browser = detectBrowser();

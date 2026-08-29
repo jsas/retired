@@ -4,7 +4,7 @@ import { WEBLLM_MODELS } from './webLlmModels';
 
 // The list is ordered best-first (not by size), so derive size facts here.
 const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
-const smallest = byVram[0];
+const smallestToolCapable = byVram.find(m => m.toolCapable)!;
 
 // Swap navigator.userAgent per test, then restore (the guide reads it via
 // browserDetect). jsdom exposes it as a getter, so redefine the property.
@@ -33,13 +33,16 @@ describe('buildMachineGuide', () => {
     expect(g.webgpu).toBe(false);
     expect(g.headline).toMatch(/won't run/);
     expect(g.detail).toMatch(/WebGPU/);
-    expect(g.recommended).toBe(smallest); // harmless default
   });
 
-  it('recommends a safe default for everyone (no fake memory detection)', () => {
+  it('recommends the smallest TOOL-CAPABLE model, not the absolute smallest', () => {
+    // Gemma 2 2B is the smallest download but can't drive the tool protocol;
+    // defaulting to it would strand the user in a questions-only assistant.
     const g = buildMachineGuide(true);
-    expect(g.recommended).toBe(smallest);
-    expect(g.headline).toContain(smallest.label);
+    expect(g.recommended).toBe(smallestToolCapable);
+    expect(g.recommended.toolCapable).toBe(true);
+    expect(g.recommended.id).not.toBe('gemma-2-2b-it-q4f16_1-MLC');
+    expect(g.headline).toContain(g.recommended.label);
   });
 
   it('never claims a detected memory figure', () => {

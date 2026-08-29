@@ -27,6 +27,10 @@ export interface WebLlmModelChoice {
   /** Approximate one-time download size in GB (q4f16 weights ≈ params × 0.55);
    *  shown on the download button so users know what they're in for. */
   sizeGB: number;
+  /** Can this model drive the assistant's tool protocol (read the plan, call
+   *  run_projection, propose edits)? Small models mangle the fenced-JSON tool
+   *  calls, so they're forced into a tools-off "answer questions only" mode. */
+  toolCapable: boolean;
   /** One-line "why this one" for the picker. */
   blurb: string;
 }
@@ -40,6 +44,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     label: 'Qwen3.5 4B',
     vramMB: 3868,
     sizeGB: 2.8,
+    toolCapable: true,
     blurb: 'Newest all-rounder; strongest instruction-following in this size. Recommended for most.',
   },
   {
@@ -47,6 +52,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     label: 'Qwen3 4B (thinking)',
     vramMB: 3432,
     sizeGB: 2.5,
+    toolCapable: true,
     blurb: 'Reasoning mode for multi-step math; a touch smaller download than 3.5.',
   },
   {
@@ -54,13 +60,15 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     label: 'Ministral 3 3B Reasoning',
     vramMB: 2864,
     sizeGB: 2.1,
-    blurb: 'Compact reasoning model, strong on multi-step arithmetic. Smallest good option.',
+    toolCapable: true,
+    blurb: 'Compact reasoning model, strong on multi-step arithmetic. Smallest that still edits your plan.',
   },
   {
     id: 'Phi-4-mini-instruct-q4f16_1-MLC',
     label: 'Phi-4 Mini 3.8B',
     vramMB: 3438,
     sizeGB: 2.5,
+    toolCapable: true,
     blurb: 'Microsoft\'s small instruct model; reliable at following formats.',
   },
   {
@@ -68,6 +76,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     label: 'DeepSeek R1 Distill 7B',
     vramMB: 5107,
     sizeGB: 4.5,
+    toolCapable: true,
     blurb: 'Thinks out loud (R1-style), then answers. Verbose but careful; needs ~6 GB VRAM.',
   },
   {
@@ -75,6 +84,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     label: 'Qwen3 8B (thinking)',
     vramMB: 5696,
     sizeGB: 5.0,
+    toolCapable: true,
     blurb: 'Biggest thinking Qwen most GPUs can hold; needs ~6 GB free VRAM.',
   },
   {
@@ -82,6 +92,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     label: 'Qwen3.5 9B',
     vramMB: 6433,
     sizeGB: 5.7,
+    toolCapable: true,
     blurb: 'Strongest model in the list, for GPUs with 8 GB+. Largest download.',
   },
   {
@@ -89,7 +100,8 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     label: 'Gemma 2 2B',
     vramMB: 1895,
     sizeGB: 1.6,
-    blurb: 'Smallest that still follows instructions — pick only if the others won\'t fit your GPU.',
+    toolCapable: false,
+    blurb: 'Smallest download, but too weak to change your plan — answers questions only. Pick only if nothing else fits your GPU.',
   },
 ];
 

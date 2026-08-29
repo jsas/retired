@@ -38,6 +38,7 @@ import {
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
+import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '../lib/retirementEngine';
 import {
@@ -202,7 +203,12 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
   const ready = connection != null && connectionReady(connection);
   const isLocal = connection?.provider === 'webllm';
-  const toolMode: 'native' | 'prompt' = isLocal ? 'prompt' : 'native';
+  // A local model that's too weak for the tool protocol (e.g. Gemma 2 2B)
+  // drops to 'off': it answers from the plan summary instead of mangling
+  // fenced-JSON tool calls. Anything not in the catalog is assumed capable.
+  const localMeta = isLocal ? WEBLLM_MODELS.find(m => m.id === connection?.model) : undefined;
+  const toolCapable = !isLocal || (localMeta?.toolCapable ?? true);
+  const toolMode: 'native' | 'prompt' | 'off' = !isLocal ? 'native' : toolCapable ? 'prompt' : 'off';
 
   // The active thread object (creating one lazily if the store is empty).
   const activeThread: ChatThread | null =
@@ -293,6 +299,14 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
             >
               {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
               {isLocal ? 'On this device · private' : 'Direct browser → provider'}
+            </span>
+          )}
+          {isLocal && !toolCapable && (
+            <span
+              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
+              title="This model is too small to read your plan or propose changes reliably, so tools are off: it answers questions from a summary of your plan. Pick a larger model (Connections) to let it edit."
+            >
+              Answers only · can't edit plan
             </span>
           )}
         </div>
@@ -460,11 +474,35 @@ function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
 // One conversation (assistant-ui runtime around our agent loop)
 // ---------------------------------------------------------------------------
 
+/** Assemble the system prompt body for a turn, by tool mode. 'prompt' and
+ *  'off' both embed the live plan digest (local models have no other way to
+ *  see the numbers); 'off' just leaves out the tool catalog so a weak model
+ *  isn't tempted to emit tool calls it can't form. 'native' relies on the
+ *  provider's function-calling, so the digest arrives via get_scenario. */
+function buildSystemBody(
+  toolMode: 'native' | 'prompt' | 'off',
+  scenarioName: string,
+  basePrompt: string | undefined,
+  config: AppConfig,
+  inputs: RetirementInputs,
+): string {
+  if (toolMode === 'prompt') {
+    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
+      buildPromptToolInstructions(toolSpecs()) + '\n\n' +
+      buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) });
+  }
+  if (toolMode === 'off') {
+    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config }) + '\n\n' +
+      buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) });
+  }
+  return buildSystemPrompt(scenarioName, { basePrompt, config });
+}
+
 function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
-  toolMode: 'native' | 'prompt';
+  toolMode: 'native' | 'prompt' | 'off';
   settings: AiSettings;
   onSettingsChange: (mutate: (prev: AiSettings) => AiSettings) => void;
   inputs: RetirementInputs;
@@ -534,11 +572,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
     const basePrompt = settings.systemPromptOverride;
-    const base = toolMode === 'prompt'
-      ? buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
-        buildPromptToolInstructions(toolSpecs()) + '\n\n' +
-        buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) })
-      : buildSystemPrompt(scenarioName, { basePrompt, config });
+    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config, inputs);
     const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
     const history = toHistory(turns);
     if (thread.contextSummary) {
@@ -594,11 +628,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     };
 
     const basePrompt = settings.systemPromptOverride;
-    const baseSystem = toolMode === 'prompt'
-      ? buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
-        buildPromptToolInstructions(toolSpecs()) + '\n\n' +
-        buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) })
-      : buildSystemPrompt(scenarioName, { basePrompt, config });
+    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config, inputs);
     // The chat's standing instructions go last so they read as the user's own
     // voice; they can steer tone/focus but the base prompt's rules come first.
     const system = thread.systemNote?.trim()
@@ -660,7 +690,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
         },
         signal: abort.signal,
         toolMode,
-        maxRounds: toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS : undefined,
+        maxRounds: toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS : toolMode === 'off' ? 0 : undefined,
         config,
         onMutation: proposal =>
           new Promise(resolve => {

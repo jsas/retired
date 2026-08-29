@@ -70,6 +70,20 @@ describe('curated web-llm model list', () => {
     expect(fmtVram(512)).toBe('512 MB VRAM');
   });
 
+  it('marks exactly one model as too weak for tools, and it is the smallest download', () => {
+    // The tool-capability contract: every model except the tiniest can drive
+    // the tool protocol; the one that can't is offered only as a small-download
+    // fallback. If a future model is also weak, this forces a conscious choice.
+    const weak = WEBLLM_MODELS.filter(m => !m.toolCapable);
+    expect(weak.map(m => m.id)).toEqual(['gemma-2-2b-it-q4f16_1-MLC']);
+    const minSize = Math.min(...WEBLLM_MODELS.map(m => m.sizeGB));
+    expect(weak[0].sizeGB).toBe(minSize);
+    // ...and a tool-capable model exists at a comparable size, so "small" never
+    // has to mean "can't edit the plan".
+    const smallestCapable = [...WEBLLM_MODELS].filter(m => m.toolCapable).sort((a, b) => a.sizeGB - b.sizeGB)[0];
+    expect(smallestCapable.sizeGB).toBeLessThanOrEqual(2.5);
+  });
+
   it('webGpuAvailable reports a boolean without throwing', () => {
     expect(typeof webGpuAvailable()).toBe('boolean');
   });
