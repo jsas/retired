@@ -14,6 +14,7 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   useExternalStoreRuntime,
+  useThreadViewportStore,
   type AppendMessage,
   type ThreadMessageLike,
 } from '@assistant-ui/react';
@@ -479,6 +480,11 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const abortRef = useRef<AbortController | null>(null);
   const downloadDoneRef = useRef(false);
   const pendingDecisions = useRef(new Map<string, (d: { approved: boolean; note?: string }) => void>());
+  // Filled in by SnapToBottomOnSend (inside the viewport) with the store's
+  // scrollToBottom. send() calls it so a new user message snaps the reply into
+  // view — the ONE auto-jump we keep now that the library's own triggers are
+  // off (they re-pinned on every streaming update and blocked scrolling up).
+  const snapToBottomRef = useRef<(() => void) | null>(null);
 
   // Cancel any in-flight request on unmount.
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -792,6 +798,8 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const send = async (message: AppendMessage) => {
     const textPart = message.content.find(p => p.type === 'text');
     const content = (textPart && 'text' in textPart ? textPart.text : '').trim();
+    // Snap the new exchange into view, then let the user scroll freely.
+    snapToBottomRef.current?.();
     await runTurn(turns, content, true);
   };
 
@@ -849,13 +857,22 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       <div className="flex flex-col h-full">
         {/* Thread */}
         <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded bg-white">
-          {/* autoScroll off: the default re-pins to the bottom on every content
-              growth, and a streaming reply (tool rounds / reasoning) keeps
-              growing — so once you answered, scrolling back up got yanked to
-              the bottom. Turn that chase off; the run-start / initialize /
-              thread-switch jumps still snap to the latest reply, then the
-              scroll position stays where the user put it. */}
-          <ThreadPrimitive.Viewport autoScroll={false} className="flex-1 overflow-y-auto p-3 space-y-3">
+          {/* All four auto-scroll triggers OFF. The defaults re-pin to the
+              bottom on content growth (autoScroll), on run start, on
+              initialize, and on the store's selectionChanged event — and in an
+              external-store runtime that event fires on every streaming update,
+              so scrolling back up during a reply kept getting yanked to the
+              bottom. With them off the viewport is a plain scroller; we snap
+              to the latest reply only when the USER sends a message (see
+              SnapToBottomOnSend), and offer a ScrollToBottom button for the
+              trip back down after reading history. */}
+          <ThreadPrimitive.Viewport
+            autoScroll={false}
+            scrollToBottomOnRunStart={false}
+            scrollToBottomOnInitialize={false}
+            scrollToBottomOnThreadSwitch={false}
+            className="flex-1 overflow-y-auto p-3 space-y-3"
+          >
             <ThreadPrimitive.Empty>
               <EmptyThread />
             </ThreadPrimitive.Empty>
@@ -974,6 +991,19 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                 );
               }}
             </ThreadPrimitive.Messages>
+            {/* Registers the store's scrollToBottom with the page so send() can
+                snap a fresh exchange into view without re-enabling the library
+                auto-scroll (which blocked scrolling up). */}
+            <SnapToBottomOnSend register={snapToBottomRef} />
+            {/* Floating "back to latest" button, shown only when scrolled up. */}
+            <ThreadPrimitive.ScrollToBottom asChild>
+              <button
+                className="self-center -mt-2 mb-1 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-slate-300 text-slate-600 text-[10px] font-semibold shadow hover:bg-slate-50"
+                title="Jump to the latest message"
+              >
+                <ChevronDown size={11} /> Latest
+              </button>
+            </ThreadPrimitive.ScrollToBottom>
             {running && loadProgress && (
               <div className="max-w-md">
                 <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
@@ -1038,6 +1068,18 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       </div>
     </AssistantRuntimeProvider>
   );
+}
+
+/** Lives inside the thread viewport so it can reach the viewport store. Hands
+ *  the store's scrollToBottom up to the page via `register`, so send() can snap
+ *  a new exchange into view. Renders nothing. */
+function SnapToBottomOnSend({ register }: { register: React.MutableRefObject<(() => void) | null> }) {
+  const store = useThreadViewportStore();
+  useEffect(() => {
+    register.current = () => store.getState().scrollToBottom({ behavior: 'smooth' });
+    return () => { register.current = null; };
+  }, [store, register]);
+  return null;
 }
 
 /** The model's chain-of-thought, shown collapsibly so it never clutters the
