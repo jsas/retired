@@ -269,6 +269,12 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <Bot size={16} className="text-violet-600" />
         <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
+        <span
+          className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
+          title="Experimental: the assistant is new and still being tuned. It proposes changes for you to approve — it never edits your plan on its own."
+        >
+          Experimental
+        </span>
         <div className="flex items-center gap-2 ml-auto">
           <ModelPicker
             settings={settings}
