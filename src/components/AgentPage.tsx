@@ -783,7 +783,13 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     const live = pendingDecisions.current.get(change.callId);
     if (live) {
       // The loop that proposed this is parked on the promise — resolve it and
-      // it continues on its own.
+      // it continues on its own. Flip the turn back to 'streaming' so the state
+      // machine resumes correctly: without this it stays 'needs-decision' with
+      // all changes resolved, which the UI reads as "stuck waiting for you" and
+      // shows the regenerate banner even though the reply is live again.
+      patchTurns(prev => prev.map(t => (t.changes.some(c => c.callId === change.callId) && t.state === 'needs-decision'
+        ? { ...t, state: 'streaming' }
+        : t)));
       live({ approved });
       pendingDecisions.current.delete(change.callId);
       return;
@@ -970,9 +976,19 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                 // shows "Working…" for a tool-only reply with no reasoning yet.
                 const working = !thinking && !turn?.reasoning && streaming && !turn?.text && (turn?.tools.length ?? 0) > 0;
                 const showBubble = thinking || working || turn?.text || turn?.state === 'error';
+                // A turn that RESUMED after a decision has resolved change cards
+                // in its history plus NEW text streaming in. Render the resolved
+                // cards ABOVE the new text so the continued answer appears after
+                // them (chronological), not above them. On a first-pass turn the
+                // cards are unresolved and stay in AssistantExtras below.
+                const resumedWithCards = turn != null && turn.changes.some(c => c.resolved) && (streaming || turn.text.length > 0);
+                const historicalCards = resumedWithCards ? turn.changes.filter(c => c.resolved) : [];
                 return (
                   <div className="group flex justify-start items-start gap-1">
                     <div className="max-w-[85%] space-y-2">
+                      {historicalCards.map(change => (
+                        <ChangeCard key={change.callId} change={change} onDecide={decideChange} />
+                      ))}
                       {showBubble && (
                         <div className="px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs whitespace-pre-wrap leading-relaxed">
                           {thinking ? (
@@ -1007,7 +1023,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                         </div>
                       )}
                       {turn && (
-                        <AssistantExtras turn={turn} onDecide={decideChange} tokensPerSecond={tps} />
+                        <AssistantExtras turn={turn} onDecide={decideChange} tokensPerSecond={tps} hideResolvedCards={resumedWithCards} />
                       )}
                     </div>
                     {/* Actions show whenever the turn isn't actively streaming —
@@ -1181,11 +1197,15 @@ function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming
 /** Renders the parts assistant-ui doesn't model, read off the Turn carried in
  *  the message's metadata.custom: tool-activity chips, the confirm-before-
  *  apply change cards, and the measured reply speed. */
-function AssistantExtras({ turn, onDecide, tokensPerSecond }: {
+function AssistantExtras({ turn, onDecide, tokensPerSecond, hideResolvedCards = false }: {
   turn: Turn;
   onDecide: (change: PendingChange, approved: boolean) => void;
   tokensPerSecond: number | null;
+  /** Resolved cards already rendered above the bubble (resumed turn) — skip
+   *  them here so they don't appear twice. */
+  hideResolvedCards?: boolean;
 }) {
+  const cards = hideResolvedCards ? turn.changes.filter(c => !c.resolved) : turn.changes;
   return (
     <>
       {turn.tools.length > 0 && (
@@ -1206,7 +1226,7 @@ function AssistantExtras({ turn, onDecide, tokensPerSecond }: {
           ))}
         </div>
       )}
-      {turn.changes.map(change => (
+      {cards.map(change => (
         <ChangeCard key={change.callId} change={change} onDecide={onDecide} />
       ))}
       {turn.state === 'truncated' && (

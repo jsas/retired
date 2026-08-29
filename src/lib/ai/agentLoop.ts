@@ -252,9 +252,15 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
           yield { type: 'mutation', proposal };
           const decision = await opts.onMutation(proposal);
           const content = decision.approved
-            ? `APPROVED: ${outcome.label} (${JSON.stringify(outcome.patch)}).` +
+            // Say plainly that the change is ALREADY APPLIED so the model doesn't
+            // wonder whether "APPROVED" means proposed-vs-live (it was re-running
+            // the proposal or questioning the state). Just confirm and report.
+            ? `The user approved this change and it is now APPLIED to the plan: ${outcome.label} ` +
+              `(${JSON.stringify(outcome.patch)}). It is live — do NOT re-propose it. Confirm it to ` +
+              `the user and report the resulting numbers (run a fresh projection if useful).` +
               (decision.note ? ` User note: ${decision.note}` : '')
-            : `REJECTED by the user — do not apply or repeat this change unprompted.` +
+            : `The user REJECTED this change — it was NOT applied. Do not apply or repeat it ` +
+              `unprompted; answer with that in mind.` +
               (decision.note ? ` User note: ${decision.note}` : '');
           results.push({ toolCallId: call.id, content, isError: !decision.approved });
           yield { type: 'tool_result', call, content, isError: !decision.approved };

@@ -119,7 +119,9 @@ describe('runAgentTurn', () => {
     }]);
     expect(events.some(e => e.type === 'mutation')).toBe(true);
     const toolResultBack = requests[1].messages.at(-1)?.toolResults?.[0];
-    expect(toolResultBack?.content).toContain('APPROVED');
+    // Unambiguous: applied-and-live, so the model doesn't re-propose it.
+    expect(toolResultBack?.content).toContain('now APPLIED');
+    expect(toolResultBack?.content).toContain('do NOT re-propose');
   });
 
   it('reads the LIVE inputs after an approved change, not the stale snapshot', async () => {
@@ -186,6 +188,7 @@ describe('runAgentTurn', () => {
     const back = requests[1].messages.at(-1)?.toolResults?.[0];
     expect(back?.isError).toBe(true);
     expect(back?.content).toContain('REJECTED');
+    expect(back?.content).toContain('NOT applied');
     expect(back?.content).toContain('too high');
   });
 
