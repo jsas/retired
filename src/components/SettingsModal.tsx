@@ -6,11 +6,38 @@ import {
   validateAppConfig,
   resetAppConfig
 } from '../lib/appConfig';
+import { DB_STORAGE_KEY } from '../data/db';
+import { AsyncOpfsBackend } from '../data/opfs';
+import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';
+import { AI_SETTINGS_STORAGE_KEY } from '../lib/aiSettings';
 
 interface SettingsModalProps {
   config: AppConfig;
   onSave: (config: AppConfig) => void;
 }
+
+// EVERY persisted key — "reset means reset": scenarios, engine config, the
+// SQL database (localStorage mirror here; the OPFS file itself is cleared via
+// AsyncOpfsBackend below), agent memories (a table inside that database), EQ
+// crops, panel layouts, AI chat threads and AI model connections. The reload
+// lands on factory defaults + the first-run example scenarios.
+//   wealthconsole_db                — the SQLite bytes (localStorage mirror)
+//   wealthconsole.sqlite            — the SQLite file itself (OPFS)
+//   wealthconsole_scenarios/_config — pre-SQLite legacy split keys
+//   wealthconsole_eq                — EQ steering crops
+//   wealthconsole_panel_state       — collapsed panels + print/export options
+//                                     + welcome dismissal
+//   retirement_ai_chats             — assistant chat threads
+//   retirement_ai_settings          — model connections + AI preferences
+const ERASABLE_KEYS = [
+  DB_STORAGE_KEY,
+  'wealthconsole_scenarios',
+  'wealthconsole_config',
+  'wealthconsole_eq',
+  'wealthconsole_panel_state',
+  AI_CHATS_STORAGE_KEY,
+  AI_SETTINGS_STORAGE_KEY,
+];
 
 type Section = 'general' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains';
 
@@ -59,6 +86,22 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
     const defaults = resetAppConfig();
     setDraft(structuredClone(defaults));
     setError(null);
+  };
+
+  // Erase every app key AND the OPFS SQLite file. Async because the file
+  // removal is; the reload only fires once the bytes are gone so the app
+  // can't boot from the old database.
+  const handleEraseAll = async () => {
+    if (!window.confirm('Erase EVERYTHING — all scenarios, engine settings, agent memories, AI chats and model connections — from this browser? This cannot be undone.')) return;
+    if (!window.confirm('Really erase everything? Nothing is kept; the app restarts with factory defaults.')) return;
+    try {
+      const backend = await AsyncOpfsBackend.open();
+      await backend?.clear();
+    } catch { /* OPFS unavailable — the localStorage mirror is the store */ }
+    try {
+      for (const key of ERASABLE_KEYS) localStorage.removeItem(key);
+    } catch { /* ignore */ }
+    window.location.reload();
   };
 
   return (
@@ -137,27 +180,20 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 </label>
               </div>
 
-              {/* Danger zone: wipes every app key from localStorage and reloads
-                  to the first-run defaults. Kept out of the draft/save flow —
-                  it acts immediately, on the stored data itself. */}
+              {/* Danger zone: wipes the SQLite database (OPFS file + localStorage
+                  mirror) and every app key, then reloads to first-run defaults.
+                  Kept out of the draft/save flow — it acts immediately, on the
+                  stored data itself. */}
               <div className="border border-red-300 bg-red-50/60 rounded p-3">
                 <h3 className="text-xs font-semibold text-red-800 mb-1">Danger zone</h3>
                 <p className="text-[11px] text-red-700 leading-snug mb-2">
-                  Erase everything: all scenarios, engine settings, panel layouts and dismissals are
-                  permanently deleted from this browser, and the app restarts with factory defaults.
-                  Export a backup first if you might want any of it back.
+                  Erase it all: every scenario, engine setting, agent memory, AI chat, model
+                  connection, panel layout and dismissal is permanently deleted from this browser —
+                  including the database file itself — and the app restarts with factory defaults.
+                  Nothing is kept. Export a backup first if you might want any of it back.
                 </p>
                 <button
-                  onClick={() => {
-                    if (!window.confirm('Erase ALL scenarios, settings and preferences from this browser? This cannot be undone.')) return;
-                    if (!window.confirm('Really erase everything? The app will reload with factory defaults.')) return;
-                    try {
-                      for (const key of ['wealthconsole_scenarios', 'wealthconsole_config', 'wealthconsole_panel_state']) {
-                        localStorage.removeItem(key);
-                      }
-                    } catch { /* ignore */ }
-                    window.location.reload();
-                  }}
+                  onClick={handleEraseAll}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700"
                 >
                   <Trash2 size={13} /> Erase everything and reset
