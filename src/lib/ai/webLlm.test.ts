@@ -15,6 +15,7 @@ let interruptCalls = 0;
 let crashAfter: string | null = null; // when set, the stream throws after one chunk
 const cachedModels = new Set<string>(); // models the fake cache reports as present
 let deletedModels: string[] = [];
+let lastRequest: Record<string, unknown> | null = null; // the completion request, captured
 
 vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
   // Keep the real prebuilt catalog (so the curated-list test validates against
@@ -25,13 +26,16 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
     CreateMLCEngine: async () => ({
       chat: {
         completions: {
-          create: async () => (async function* () {
-            if (crashAfter) {
-              yield { choices: [{ delta: { content: crashAfter } }] };
-              throw new Error("Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
-            }
-            yield* scriptedChunks;
-          })(),
+          create: async (req: Record<string, unknown>) => {
+            lastRequest = req;
+            return (async function* () {
+              if (crashAfter) {
+                yield { choices: [{ delta: { content: crashAfter } }] };
+                throw new Error("Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
+              }
+              yield* scriptedChunks;
+            })();
+          },
         },
       },
       interruptGenerate: async () => { interruptCalls++; },
@@ -155,6 +159,25 @@ describe('streamWebLlm', () => {
     ];
     const events = await collect();
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'max_tokens' });
+  });
+
+  it('defaults to a generous token budget so a reasoning model can think AND answer', async () => {
+    // Regression: a 1024 cap let a reasoning model spend its whole budget on
+    // chain-of-thought and stop with finish_reason 'length' before writing any
+    // visible answer (the "thought, then quit; continue cut off" bug).
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    await collect();
+    expect(lastRequest?.max_tokens).toBeGreaterThanOrEqual(4096);
+  });
+
+  it('respects an explicit maxTokens cap', async () => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    for await (const _ of streamWebLlm(conn, {
+      system: 'sys', messages: [{ role: 'user', content: 'hi' }], tools: [], maxTokens: 512,
+    })) void _;
+    expect(lastRequest?.max_tokens).toBe(512);
   });
 
   it('aborting interrupts the engine and reports aborted', async () => {

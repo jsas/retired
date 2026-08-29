@@ -21,7 +21,7 @@ import {
 import {
   Bot, Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench,
   Copy, ClipboardPaste, Download, RotateCcw, Settings2, Brain, ChevronDown,
-  ChevronRight, ChevronsLeft, ChevronsRight,
+  ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle,
 } from 'lucide-react';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
@@ -1209,6 +1209,14 @@ function AssistantExtras({ turn, onDecide, tokensPerSecond }: {
       {turn.changes.map(change => (
         <ChangeCard key={change.callId} change={change} onDecide={onDecide} />
       ))}
+      {turn.state === 'truncated' && (
+        <div className="flex items-start gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[10px] leading-snug">
+          <AlertTriangle size={11} className="mt-px shrink-0" />
+          <span>
+            This answer was cut short (token limit).{turn.text ? ' Regenerate to retry it.' : ' It spent the whole budget thinking and produced no answer — regenerate to retry.'}
+          </span>
+        </div>
+      )}
       {tokensPerSecond != null && turn.state !== 'streaming' && (
         <div className="text-[10px] text-slate-400">~{tokensPerSecond.toFixed(1)} tok/s</div>
       )}

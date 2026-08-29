@@ -293,7 +293,13 @@ export async function* streamWebLlm(
     stream = await engine.chat.completions.create({
       messages: toMessages(req.system, req.messages),
       stream: true,
-      max_tokens: req.maxTokens ?? 1024,
+      // Reasoning models (Qwen3 "thinking", DeepSeek-R1) spend their chain of
+      // thought INSIDE this same budget before writing a word of the visible
+      // answer — a 1024 cap let a long thought consume the whole turn and stop
+      // with finish_reason 'length' and no answer at all (the "it thought,
+      // then quit; 'continue' then cut off mid-sentence" bug). Give local
+      // turns room to think AND answer; the caller can still cap lower.
+      max_tokens: req.maxTokens ?? 4096,
       // Bound the context: the plan digest + tool catalog + a long user answer
       // can exceed the KV cache a small model was compiled for, which is the
       // main cause of mid-generation GPU crashes (mapAsync / device lost).
