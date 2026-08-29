@@ -992,18 +992,14 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
               }}
             </ThreadPrimitive.Messages>
             {/* Registers the store's scrollToBottom with the page so send() can
-                snap a fresh exchange into view without re-enabling the library
-                auto-scroll (which blocked scrolling up). */}
-            <SnapToBottomOnSend register={snapToBottomRef} />
-            {/* Floating "back to latest" button, shown only when scrolled up. */}
-            <ThreadPrimitive.ScrollToBottom asChild>
-              <button
-                className="self-center -mt-2 mb-1 flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-slate-300 text-slate-600 text-[10px] font-semibold shadow hover:bg-slate-50"
-                title="Jump to the latest message"
-              >
-                <ChevronDown size={11} /> Latest
-              </button>
-            </ThreadPrimitive.ScrollToBottom>
+                snap a fresh exchange into view (the one auto-jump we keep now
+                that the library's scroll triggers are off), and shows a small
+                "back to latest" cue ONLY when scrolled well up. Built by hand
+                rather than ThreadPrimitive.ScrollToBottom because the store's
+                isAtBottom flag is only maintained by the auto-scroll hook we
+                disabled — it would never flip, so the library button never
+                appeared. */}
+            <ScrollControls register={snapToBottomRef} />
             {running && loadProgress && (
               <div className="max-w-md">
                 <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
@@ -1070,16 +1066,55 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   );
 }
 
-/** Lives inside the thread viewport so it can reach the viewport store. Hands
- *  the store's scrollToBottom up to the page via `register`, so send() can snap
- *  a new exchange into view. Renders nothing. */
-function SnapToBottomOnSend({ register }: { register: React.MutableRefObject<(() => void) | null> }) {
+/** Lives inside the thread viewport so it can reach the viewport store. Two
+ *  jobs: hand the store's scrollToBottom up to the page via `register` (so
+ *  send() can snap a new exchange into view), and render a small "back to
+ *  latest" cue ONLY when the user has scrolled well up from the bottom. The
+ *  threshold (SHOW_AFTER_PX) keeps it out of the way during normal reading at
+ *  or near the latest message. */
+const SCROLL_UP_SHOW_PX = 240;
+function ScrollControls({ register }: { register: React.MutableRefObject<(() => void) | null> }) {
   const store = useThreadViewportStore();
+  const [showJump, setShowJump] = useState(false);
+
   useEffect(() => {
     register.current = () => store.getState().scrollToBottom({ behavior: 'smooth' });
     return () => { register.current = null; };
   }, [store, register]);
-  return null;
+
+  // Watch the scrollable element; show the cue only when far enough from the
+  // bottom. The element arrives after mount, so poll once via rAF rather than
+  // assume it's there. Re-checks on scroll and on content growth (resize).
+  useEffect(() => {
+    let raf = 0;
+    let cleanup: (() => void) | null = null;
+    const attach = () => {
+      const el = store.getState().element.viewport;
+      if (!el) { raf = requestAnimationFrame(attach); return; }
+      const update = () => {
+        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+        setShowJump(dist > SCROLL_UP_SHOW_PX);
+      };
+      update();
+      el.addEventListener('scroll', update, { passive: true });
+      const ro = new ResizeObserver(update);
+      ro.observe(el);
+      cleanup = () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+    };
+    attach();
+    return () => { cancelAnimationFrame(raf); cleanup?.(); };
+  }, [store]);
+
+  if (!showJump) return null;
+  return (
+    <button
+      onClick={() => store.getState().scrollToBottom({ behavior: 'smooth' })}
+      className="self-center mb-1 flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 border border-slate-200 text-slate-400 text-[10px] shadow-sm hover:text-slate-600 hover:border-slate-300"
+      title="Jump to the latest message"
+    >
+      <ChevronDown size={10} /> Latest
+    </button>
+  );
 }
 
 /** The model's chain-of-thought, shown collapsibly so it never clutters the
