@@ -28,7 +28,7 @@ import {
 } from '../lib/aiSettings';
 import { listModels, testConnection, type ModelInfo } from '../lib/ai/providers';
 import { WEBLLM_MODELS, fmtSize, webGpuAvailable } from '../lib/ai/webLlmModels';
-import { buildMachineGuide, detectGpuMemoryGB, type MachineGuide } from '../lib/ai/machineGuide';
+import { buildMachineGuide, type MachineGuide } from '../lib/ai/machineGuide';
 import { estimateContextFit, fmtMB } from '../lib/ai/vramEstimate';
 import { defaultContextSize } from '../lib/ai/context';
 import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
@@ -111,15 +111,10 @@ function ModelsSection({ onChange, webllmConn }: {
 
   const chosenId = webllmConn?.model ?? null;
 
-  // Probe the machine (for a recommendation) and the cache once on mount.
+  // Check WebGPU support once on mount (for the recommendation + gating).
+  // No memory detection — the browser won't report real VRAM.
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const gpu = webGpuAvailable();
-      const mem = gpu ? await detectGpuMemoryGB() : null;
-      if (!cancelled) setGuide(buildMachineGuide(gpu, mem));
-    })();
-    return () => { cancelled = true; };
+    setGuide(buildMachineGuide(webGpuAvailable()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -345,7 +340,9 @@ function ModelsSection({ onChange, webllmConn }: {
       {webllmConn && (() => {
         const modelMeta = WEBLLM_MODELS.find(m => m.id === webllmConn.model);
         const tokens = webllmConn.contextSize ?? defaultContextSize('webllm');
-        const fit = modelMeta ? estimateContextFit(modelMeta.vramMB, tokens, guide?.gpuMemoryGB ?? null) : null;
+        // No real VRAM available (WebGPU hides it), so pass null: we show the
+        // honest "needs ≈X" estimate but never a fake "your computer has Y".
+        const fit = modelMeta ? estimateContextFit(modelMeta.vramMB, tokens, null) : null;
         return (
           <div className="mt-3 pt-2 border-t border-emerald-100">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -374,13 +371,10 @@ function ModelsSection({ onChange, webllmConn }: {
               </span>
             </div>
             {fit && (
-              <div className={`text-[10px] mt-1 leading-snug ${fit.fits === false ? 'text-amber-700 font-medium' : 'text-emerald-900/60'}`}>
+              <div className="text-[10px] mt-1 leading-snug text-emerald-900/60">
                 Needs ≈{fmtMB(fit.neededMB)} of graphics memory at this setting
                 ({fmtMB(modelMeta!.vramMB)} for the model + ≈{fmtMB(fit.cacheMB)} for the window).
-                {fit.fits === false && fit.budgetMB != null && (
-                  <> Your computer has about {fmtMB(fit.budgetMB)} free — lower the number or pick a smaller model.</>
-                )}
-                {fit.fits == null && ' Your browser didn\'t say how much you have; if loading fails, lower it.'}
+                If loading fails, lower the number or pick a smaller model.
               </div>
             )}
           </div>
@@ -904,9 +898,9 @@ function ModelWizard({ guide, cached, webllmConn, downloading, progress, onDownl
         <p className="text-[11px] text-slate-500 mt-1 leading-snug">
           {guide?.webgpu === false
             ? 'This browser cannot run local models (it needs a feature called WebGPU). Go back and choose the online path instead.'
-            : <>We recommend <strong>{rec.label}</strong> for this computer
-              {guide?.gpuMemoryGB != null && <> (about {guide.gpuMemoryGB.toFixed(0)} GB of graphics memory detected)</>}.
-              It is a one-time {fmtSize(rec.sizeGB)} download, then it runs here — nothing you type leaves the device.</>}
+            : <>We suggest <strong>{rec.label}</strong> — a good balance for most computers.
+              It is a one-time {fmtSize(rec.sizeGB)} download, then it runs here — nothing you type leaves the device.
+              Bigger models are smarter but need a stronger computer.</>}
         </p>
         {progress && (
           <div className="mt-2">

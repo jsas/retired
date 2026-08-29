@@ -1,7 +1,8 @@
-// Plain-English guidance for picking a LOCAL (web-llm) model: detect what the
-// user's machine can do and point at a model size, in language a non-technical
-// person can follow. Everything here is best-effort — when the browser won't
-// say, we recommend the smallest model and say so.
+// Plain-English guidance for picking a LOCAL (web-llm) model. WebGPU (per
+// MDN / the spec) deliberately does NOT expose real VRAM — you only get
+// capability limits and a GPUOutOfMemoryError after the fact — so we don't
+// pretend to detect memory. We check ONE thing (does the browser support
+// WebGPU at all) and recommend a sensible default; the user picks the size.
 
 import { WEBLLM_MODELS, webGpuAvailable, type WebLlmModelChoice } from './webLlmModels';
 import { browserLabel, detectBrowser, isLikelyAppleSilicon } from './browserDetect';
@@ -9,9 +10,7 @@ import { browserLabel, detectBrowser, isLikelyAppleSilicon } from './browserDete
 export interface MachineGuide {
   /** Can this browser even try local models? */
   webgpu: boolean;
-  /** Detected GPU VRAM in GB, when the adapter reports it (else null). */
-  gpuMemoryGB: number | null;
-  /** The model we suggest they start with. */
+  /** The model we suggest they start with (a safe default, not a detection). */
   recommended: WebLlmModelChoice;
   /** One or two plain sentences explaining the recommendation. */
   headline: string;
@@ -19,37 +18,19 @@ export interface MachineGuide {
   detail: string;
 }
 
-/** Query the WebGPU adapter for a memory ceiling. Best-effort: resolves null
- *  when WebGPU or the limit is unavailable. Never throws. */
-export async function detectGpuMemoryGB(): Promise<number | null> {
-  if (!webGpuAvailable()) return null;
-  try {
-    const nav = navigator as unknown as { gpu?: { requestAdapter(): Promise<unknown> } };
-    const adapter = await nav.gpu?.requestAdapter();
-    if (!adapter) return null;
-    // maxBufferSize is a decent proxy for usable VRAM on most adapters. On
-    // Apple Silicon it's often clamped low, so take the larger of the buffer
-    // limits to avoid under-reading unified memory.
-    const limits = (adapter as {
-      limits?: { maxBufferSize?: number; maxStorageBufferBindingSize?: number };
-    }).limits;
-    const bytes = Math.max(limits?.maxBufferSize ?? 0, limits?.maxStorageBufferBindingSize ?? 0);
-    if (bytes > 0) return bytes / 1e9;
-    return null;
-  } catch {
-    return null;
-  }
-}
+/** True when the browser can attempt WebGPU inference at all. */
+export { webGpuAvailable };
 
 /**
- * Build the plain-English guide. `gpuMemoryGB` is injected (from
- * detectGpuMemoryGB) so the logic is testable without a real GPU.
+ * Build the plain-English guide. Support-only: we recommend a middle-of-the-
+ * road model for everyone and let the user size up/down, because the browser
+ * won't tell us how much graphics memory there really is.
  */
-export function buildMachineGuide(webgpu: boolean, gpuMemoryGB: number | null): MachineGuide {
+export function buildMachineGuide(webgpu: boolean): MachineGuide {
   const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
-  // Every model in the list is usable (the too-weak ones were removed), so the
-  // smallest is a fine floor and the largest a fine ceiling.
-  const smallest = byVram[0];
+  // Recommend the smallest genuinely-good model: it runs on almost any GPU,
+  // downloads fastest, and the catalog blurbs tell the user when to size up.
+  const recommended = byVram[0];
 
   if (!webgpu) {
     const browser = detectBrowser();
@@ -72,48 +53,24 @@ export function buildMachineGuide(webgpu: boolean, gpuMemoryGB: number | null): 
             'instead (the "advanced" option below).';
     return {
       webgpu: false,
-      gpuMemoryGB: null,
-      recommended: smallest,
+      recommended,
       headline: `Local models won't run in ${name}.`,
       detail: `Running a model on your own computer needs a browser feature called WebGPU, which ${name} ` +
         `isn't exposing. ${fix}`,
     };
   }
 
-  // Pick the largest model that fits comfortably (leave ~1 GB headroom for the
-  // rest of the page and the OS's compositor). Unknown VRAM → play it safe
-  // with the smallest model rather than guessing big.
-  let pick = smallest;
-  if (gpuMemoryGB != null) {
-    const budgetMB = Math.max(0, (gpuMemoryGB - 1) * 1024);
-    // byVram is ascending, so the last one that fits is the largest that fits.
-    for (const m of byVram) {
-      if (m.vramMB <= budgetMB) pick = m;
-    }
-    // (If nothing fits, pick stays `smallest` — offered as a tight fit rather
-    // than nothing at all.)
-  }
-
-  const headline = gpuMemoryGB == null
-    ? `Start with ${pick.label} — a good balance for most computers.`
-    : `Your computer can likely run ${pick.label}.`;
-
-  // Apple Silicon shares memory between CPU and GPU, so the reported figure is
-  // a conservative ceiling, not a hard wall — a Mac can usually run a size up.
   const siliconNote = isLikelyAppleSilicon()
-    ? ' On Apple Silicon the CPU and GPU share one memory pool, so you can usually run a larger ' +
-      'model than the number suggests.'
+    ? ' On Apple Silicon the CPU and GPU share one memory pool, so larger models usually run well.'
     : '';
 
-  const detail = gpuMemoryGB == null
-    ? 'Your browser didn\'t tell us how much graphics memory you have, so we picked a model ' +
-      'that works well for most people. Bigger models give smarter answers but need a stronger ' +
-      'computer and a longer first download; when in doubt, start with the suggested one.' +
-      siliconNote
-    : `We detected roughly ${gpuMemoryGB.toFixed(1)} GB of graphics memory. The model we picked fits ` +
-      'with room to spare. Bigger models give smarter answers but take longer to download the first ' +
-      'time and can feel slow on a weaker computer. When in doubt, start smaller — you can always ' +
-      'switch.' + siliconNote;
-
-  return { webgpu: true, gpuMemoryGB, recommended: pick, headline, detail };
+  return {
+    webgpu: true,
+    recommended,
+    headline: `Start with ${recommended.label} — a good balance for most computers.`,
+    detail:
+      'We can\'t detect your graphics memory, so we suggest a model that runs well for most ' +
+      'people. Bigger models give smarter answers but need a stronger computer and a longer ' +
+      'first download; when in doubt, start small — you can always switch.' + siliconNote,
+  };
 }
