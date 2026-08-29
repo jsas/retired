@@ -664,13 +664,50 @@ describe('remember / recall', () => {
     executeToolCall(here, { id: '1', name: 'remember', args: { text: 'Plan fact for sc-1.' } });
     executeToolCall(here, { id: '2', name: 'remember', args: { text: 'User wants to retire to Nova Scotia.', scope: 'global' } });
 
-    const fromOther = executeToolCall(elsewhere, { id: '3', name: 'recall', args: { query: 'fact' } });
+    const fromOther = executeToolCall(elsewhere, { id: '3', name: 'recall', args: { query: 'plan fact' } });
     if (fromOther.kind !== 'result') throw new Error('expected result');
+    // The sc-1 plan fact is out of scope here; the global Nova Scotia memory
+    // (matching "plan"→"plans", "fact"→"facts") comes back as a fallback hit,
+    // clearly labelled as not a true match.
     expect(fromOther.content).toContain('Nothing in memory matches');
+    expect(fromOther.content).toContain('Closest memories');
+    expect(fromOther.content).toContain('Nova Scotia');
 
     const nova = executeToolCall(elsewhere, { id: '4', name: 'recall', args: { query: 'Nova Scotia' } });
     if (nova.kind !== 'result') throw new Error('expected result');
     expect(nova.content).toContain('[global] User wants to retire to Nova Scotia');
+  });
+
+  it('keyword matching: a category query finds a fact stored with hypernyms', () => {
+    const memory = new MemoryStore(new InMemoryAdapter());
+    const c = ctx({ memory, memoryScenarioId: 'sc-1' });
+    executeToolCall(c, {
+      id: '1', name: 'remember',
+      args: { text: 'User likes oranges.', scope: 'global', keywords: ['fruit', 'food', 'preference'] },
+    });
+    const out = executeToolCall(c, { id: '2', name: 'recall', args: { query: 'favorite fruit', limit: 5 } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('[global] User likes oranges.');
+    expect(out.content).not.toContain('Closest memories'); // a true hit, not the fallback
+  });
+
+  it('a miss falls back to the closest memories instead of a dead end', () => {
+    const memory = new MemoryStore(new InMemoryAdapter());
+    const c = ctx({ memory, memoryScenarioId: 'sc-1' });
+    executeToolCall(c, { id: '1', name: 'remember', args: { text: 'User likes oranges.', scope: 'global', keywords: ['fruit'] } });
+    const out = executeToolCall(c, { id: '2', name: 'recall', args: { query: 'xyzzyqqh' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('Nothing in memory matches');
+    expect(out.content).toContain('Closest memories');
+    expect(out.content).toContain('[global] User likes oranges.');
+    // Fallback is capped at 3 regardless of the requested limit.
+    executeToolCall(c, { id: '3', name: 'remember', args: { text: 'Second fact.', scope: 'global' } });
+    executeToolCall(c, { id: '4', name: 'remember', args: { text: 'Third fact.', scope: 'global' } });
+    executeToolCall(c, { id: '5', name: 'remember', args: { text: 'Fourth fact.', scope: 'global' } });
+    executeToolCall(c, { id: '6', name: 'remember', args: { text: 'Fifth fact.', scope: 'global' } });
+    const capped = executeToolCall(c, { id: '7', name: 'recall', args: { query: 'xyzzyqqh', limit: 20 } });
+    if (capped.kind !== 'result') throw new Error('expected result');
+    expect(capped.content.match(/^- \[/gm)?.length).toBe(3);
   });
 
   it('reports when memory is unavailable instead of failing silently', () => {
