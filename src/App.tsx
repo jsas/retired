@@ -758,9 +758,7 @@ function App() {
                   title="Chat with an AI that can read your plan and run the engine (bring your own API key)"
                 >
                   <Bot size={13} /> Assistant
-                  <span className="rounded-full border border-amber-300 bg-amber-50 px-1 text-[8px] font-semibold uppercase tracking-wide text-amber-700">
-                    Experimental
-                  </span>
+
                 </button>
                 <button
                   onClick={() => setView('compare')}
