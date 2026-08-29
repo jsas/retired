@@ -175,6 +175,19 @@ const recallArgs = z.object({
   limit: z.number().int().min(1).max(20).default(6),
 });
 
+const openScenarioArgs = z.object({
+  scenarioId: z.string().min(1).optional()
+    .describe('Id of the saved scenario to open (from the ids given in your context).'),
+  name: z.string().min(1).optional()
+    .describe('Alternatively, the scenario NAME — matched case-insensitively; must be unambiguous.'),
+}).refine(v => v.scenarioId != null || v.name != null, { message: 'Give scenarioId or name.' })
+  .refine(v => v.scenarioId == null || v.name == null, { message: 'Give scenarioId or name, not both.' });
+
+const saveScenarioAsArgs = z.object({
+  name: z.string().min(1).max(80)
+    .describe('Name for the new scenario (e.g. "Downsized at 65"). Duplicates are allowed.'),
+});
+
 const TOOL_SCHEMAS = {
   get_scenario: getScenarioArgs,
   run_projection: runProjectionArgs,
@@ -196,6 +209,8 @@ const TOOL_SCHEMAS = {
   manage_pension: managePensionArgs,
   remember: rememberArgs,
   recall: recallArgs,
+  open_scenario: openScenarioArgs,
+  save_scenario_as: saveScenarioAsArgs,
 } as const;
 
 export type AgentToolName = keyof typeof TOOL_SCHEMAS;
@@ -294,6 +309,12 @@ export function toolSpecs(): ToolSpec[] {
     spec('recall',
       'Search what you remember (facts saved in earlier conversations). Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.',
       recallArgs),
+    spec('open_scenario',
+      'Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.',
+      openScenarioArgs),
+    spec('save_scenario_as',
+      'Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.',
+      saveScenarioAsArgs),
   ];
 }
 
@@ -317,6 +338,12 @@ export interface ToolContext {
    *  is unavailable. `scenarioId` keys scenario-scoped memories. */
   memory?: MemoryStore;
   memoryScenarioId?: string;
+  /** Open another saved scenario (the sidebar-switch path). Optional so tests
+   *  and 'off'-mode callers can omit it — open_scenario then errors. */
+  onOpenScenario?: (id: string) => void;
+  /** Snapshot the current live inputs as a new named scenario; returns its id.
+   *  Optional for the same reason — save_scenario_as then errors. */
+  onSaveScenarioAs?: (name: string) => string;
 }
 
 export type ToolOutcome =
@@ -405,6 +432,10 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return rememberTool(ctx, parsed.data as z.infer<typeof rememberArgs>);
     case 'recall':
       return recallTool(ctx, parsed.data as z.infer<typeof recallArgs>);
+    case 'open_scenario':
+      return openScenarioTool(ctx, parsed.data as z.infer<typeof openScenarioArgs>);
+    case 'save_scenario_as':
+      return saveScenarioAsTool(ctx, parsed.data as z.infer<typeof saveScenarioAsArgs>);
   }
 }
 
@@ -931,6 +962,48 @@ function recallTool(ctx: ToolContext, args: z.infer<typeof recallArgs>): ToolOut
   const lines = hits.map(m =>
     `- [${m.scope}] ${m.text} (importance ${m.importance.toFixed(2)}, accessed ${m.accessCount}×)`);
   return { kind: 'result', content: lines.join('\n') };
+}
+
+/** open_scenario: switch the active scenario (the sidebar-switch path). A
+ *  navigation, not a plan mutation — no confirm card — but the caller must
+ *  announce the switch so the model/user stay oriented. Resolves by id first,
+ *  then by unique case-insensitive name; unsaved edits are the caller's
+ *  concern (App's onOpenScenario runs the same save-on-switch flow the
+ *  sidebar uses). */
+function openScenarioTool(ctx: ToolContext, args: z.infer<typeof openScenarioArgs>): ToolOutcome {
+  if (!ctx.onOpenScenario) {
+    return { kind: 'error', content: 'Scenario switching is unavailable in this session.' };
+  }
+  const list = ctx.scenarioList;
+  let target = args.scenarioId != null ? list.find(s => s.id === args.scenarioId) : undefined;
+  if (!target && args.name != null) {
+    const q = args.name.trim().toLowerCase();
+    const matches = list.filter(s => s.name.trim().toLowerCase() === q);
+    if (matches.length === 1) target = matches[0];
+    else if (matches.length > 1) {
+      return { kind: 'error', content: `"${args.name}" matches ${matches.length} scenarios (${matches.map(m => `"${m.name}"`).join(', ')}). Give the scenarioId instead.` };
+    }
+  }
+  if (!target) {
+    return { kind: 'error', content: `No saved scenario matches ${args.scenarioId != null ? `id "${args.scenarioId}"` : `"${args.name}"`}. Known scenarios: ${list.map(s => `"${s.name}" (${s.id})`).join(', ') || 'none'}.` };
+  }
+  ctx.onOpenScenario(target.id);
+  return { kind: 'result', content: `Opened scenario "${target.name}". The plan inputs, and any numbers you compute from now on, refer to it.` };
+}
+
+/** save_scenario_as: snapshot the CURRENT live inputs as a new named scenario
+ *  and make it active (so later agent edits land on the copy). A direct write
+ *  (no confirm card): it ADDS a scenario and touches no existing one. */
+function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioAsArgs>): ToolOutcome {
+  if (!ctx.onSaveScenarioAs) {
+    return { kind: 'error', content: 'Saving scenarios is unavailable in this session.' };
+  }
+  const name = args.name.trim();
+  if (!name) {
+    return { kind: 'error', content: 'Scenario name cannot be empty.' };
+  }
+  ctx.onSaveScenarioAs(name);
+  return { kind: 'result', content: `Saved the current plan as scenario "${name}" and opened it. The previous plan is unchanged and still in the list.` };
 }
 
 // ---------------------------------------------------------------------------
