@@ -146,6 +146,10 @@ const SECTIONS: HelpSection[] = [
         body: <P>Borrows against your home equity — proceeds are tax-free, so they don't count as income and don't touch GIS or the OAS clawback. Two ways to draw, alone or together: <strong>scheduled draws</strong> (a set $/yr from an age, CPI-indexed, for a fixed number of years) and <strong>top-up</strong> (once every account is drained, borrow just enough each year to cover spending — the true last resort). The loan compounds at the interest rate against the home, so net equity (home value − loan) erodes over time; it's shown per-year in the table and CSV. Borrowing stops once the loan hits the <strong>max loan-to-value</strong> ceiling (lenders typically cap near 55%), and the plan is "depleted" once the accounts <em>and</em> that remaining headroom are both exhausted.</P>
       },
       {
+        term: 'HELOC (interest-only mode)',
+        body: <P>Choose <strong>Product type → HELOC</strong> in the Home Equity section to model a home-equity line of credit instead of a compounding reverse mortgage. A HELOC services its interest <em>out of cash flow</em>: each year's interest charge is added to that year's spending (and funded from your accounts like any other expense), rather than being rolled into the loan balance. The loan therefore only grows when you actually draw; it isn't capped by a negative-equity floor, and lenders typically allow a higher ceiling (~65% LTV). Reverse-mortgage mode instead compounds the interest into the balance and enforces the ~55% no-negative-equity guarantee. Draws are tax-free in both modes.</P>
+      },
+      {
         term: 'Include spouse',
         body: <P>Runs a second, independent projection for your partner using their own ages, balances, contributions, CPP/OAS and spending. The two plans are combined into a household verdict: the household is SHORTFALL if either plan runs out, and the metric cards show household wealth at retirement with per-person detail.</P>
       },

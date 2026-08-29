@@ -1367,7 +1367,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
         </CollapsibleSection>
 
         {/* Reverse Mortgage */}
-        <CollapsibleSection id="rmortgage" icon={<Home size={14} />} title="Reverse Mortgage" open={isOpen('rmortgage')} onToggle={toggleSection}>
+        <CollapsibleSection id="rmortgage" icon={<Home size={14} />} title="Home Equity (Reverse Mtg / HELOC)" open={isOpen('rmortgage')} onToggle={toggleSection}>
           <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer mb-3">
             <input
               type="checkbox"
@@ -1379,6 +1379,30 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
           </label>
           {inputs.reverseMortgage?.enabled && (
             <div className="space-y-3">
+              <div>
+                <label className={LABEL_CLS}>Product type</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => updateRm({ mode: 'reverse' })}
+                    className={`px-2.5 py-1.5 rounded text-[11px] border ${!((inputs.reverseMortgage.mode ?? 'reverse') === 'heloc') ? 'bg-blue-600 border-blue-500 text-white' : 'bg-neutral-800 border-neutral-700 text-neutral-400'}`}
+                  >
+                    Reverse mortgage
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateRm({
+                      mode: 'heloc',
+                      // Move the LTV default to the HELOC-typical 65% only if the
+                      // user hasn't already set a custom ceiling (still on a default).
+                      ...(((inputs.reverseMortgage?.maxLtv ?? 0.55) === 0.55) ? { maxLtv: 0.65 } : {}),
+                    })}
+                    className={`px-2.5 py-1.5 rounded text-[11px] border ${(inputs.reverseMortgage.mode ?? 'reverse') === 'heloc' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-neutral-800 border-neutral-700 text-neutral-400'}`}
+                  >
+                    HELOC
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
                   <label className={LABEL_CLS}>Home value ($)</label>
@@ -1397,7 +1421,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Max loan-to-value (%)</label>
-                  <input type="number" step="1" min="0" max="100" value={+((inputs.reverseMortgage.maxLtv ?? 0.55) * 100).toFixed(0)}
+                  <input type="number" step="1" min="0" max="100" value={+((inputs.reverseMortgage.maxLtv ?? ((inputs.reverseMortgage.mode ?? 'reverse') === 'heloc' ? 0.65 : 0.55)) * 100).toFixed(0)}
                     onChange={(e) => updateRm({ maxLtv: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) / 100 })} className={INPUT_CLS} />
                 </div>
               </div>
@@ -1447,10 +1471,17 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
 
               <p className="text-[10px] text-neutral-500 leading-snug">
                 Draws are tax-free and land in the cash cushion (no effect on GIS or the OAS clawback).
-                The loan compounds at the interest rate against the home; net equity = home value − loan,
-                shown in the year-by-year table. Borrowing stops once the loan reaches the max
-                loan-to-value ceiling (lenders typically cap near 55%). Scheduled draws are CPI-indexed
-                like your spending target.
+                Net equity = home value − loan, shown in the year-by-year table. Scheduled draws are
+                CPI-indexed like your spending target.
+                {(inputs.reverseMortgage.mode ?? 'reverse') === 'heloc' ? (
+                  <> <strong className="text-neutral-400">HELOC:</strong> the year's interest is paid
+                  out of cash flow (added to that year's spending/expenses), so the loan doesn't compound —
+                  but there is no negative-equity guarantee, so equity can fall below zero. Typical ceiling ~65%.</>
+                ) : (
+                  <> <strong className="text-neutral-400">Reverse mortgage:</strong> interest compounds into
+                  the loan; borrowing stops once the loan reaches the max loan-to-value ceiling (lenders
+                  typically cap near 55%), and the balance never exceeds it (no-negative-equity guarantee).</>
+                )}
               </p>
             </div>
           )}

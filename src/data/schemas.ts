@@ -75,6 +75,7 @@ export const reverseMortgageSchema = z.object({
   homeValue: z.number(),
   appreciationRate: z.number(),
   interestRate: z.number(),
+  mode: z.enum(['reverse', 'heloc']).optional(),
   maxLtv: z.number().optional(),
   drawAmount: z.number().optional(),
   startAge: z.number().optional(),

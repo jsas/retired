@@ -979,6 +979,76 @@ describe('reverse mortgage', () => {
   });
 });
 
+describe('HELOC mode (interest as an annual expense)', () => {
+  const helocInputs = (over: Parameters<typeof baseInputs>[0] = {}) => baseInputs({
+    // Fund the plan so the interest expense can actually be paid from the
+    // portfolio; TFSA covers it tax-free.
+    tfsaBalance: 500000, desiredSpending: 20000, maxAge: 90,
+    reverseMortgage: {
+      enabled: true, mode: 'heloc', homeValue: 400000, appreciationRate: 0,
+      interestRate: 0.07, maxLtv: 0.65,
+      drawAmount: 50000, startAge: 65, durationYears: 1, topUp: false,
+    },
+    ...over,
+  });
+
+  it('the loan does NOT compound with interest (only draws grow it)', () => {
+    const r = calculateRetirement(helocInputs(), config);
+    // One $50k draw at 65; no appreciation. In HELOC mode interest is serviced,
+    // so the loan stays at $50k forever (no interest accrual onto the balance).
+    const loans = r.yearlyBreakdown.map(y => y.loanBalance ?? 0).filter(l => l > 0);
+    expect(loans.length).toBeGreaterThan(0);
+    for (const l of loans) expect(closeTo(l, 50000, 1)).toBe(true);
+  });
+
+  it('each year\'s interest is added to the spending target (cash-flow requirement)', () => {
+    const r = calculateRetirement(helocInputs(), config);
+    // $50k loan at 7% → $3,500/yr interest serviced. From 66 onward the
+    // spending target = desired spending + interest expense (no event outflows).
+    const y66 = yearAt(r.yearlyBreakdown, 66);
+    const base = 20000 * sf(66);
+    expect(closeTo(y66.spendingTarget, base + 3500, 2)).toBe(true);
+    expect(y66.detail?.rm?.interestExpense ?? 0).toBeCloseTo(3500, 0);
+  });
+
+  it('a reverse mortgage (default) still compounds interest into the loan', () => {
+    // Same setup but reverse mode: the loan grows by draws AND interest.
+    const r = calculateRetirement(helocInputs({
+      reverseMortgage: {
+        enabled: true, homeValue: 400000, appreciationRate: 0,
+        interestRate: 0.07, maxLtv: 0.65,
+        drawAmount: 50000, startAge: 65, durationYears: 1, topUp: false,
+      },
+    }), config);
+    const y66 = yearAt(r.yearlyBreakdown, 66);
+    // Loan = 50000 grown by 7% interest at 66 (no further draws, no clamp yet).
+    expect(closeTo(y66.loanBalance!, 50000 * 1.07, 2)).toBe(true);
+    // No interest expense line in reverse mode.
+    expect(y66.detail?.rm?.interestExpense ?? 0).toBe(0);
+    // Spending target does NOT include an interest line in reverse mode.
+    expect(closeTo(y66.spendingTarget, 20000 * sf(66), 2)).toBe(true);
+  });
+
+  it('net equity is value minus loan and can differ from the no-negative-equity floor', () => {
+    // Heavy borrowing against a non-appreciating home: HELOC lets the loan reach
+    // the full LTV headroom with no balance clamp below the ceiling floor.
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, cashCushionBalance: 0, rrspBalance: 0, desiredSpending: 100000, maxAge: 90,
+      reverseMortgage: {
+        enabled: true, mode: 'heloc', homeValue: 200000, appreciationRate: 0,
+        interestRate: 0.08, maxLtv: 0.65, topUp: true,
+      },
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      if (y.netHomeEquity === undefined) continue;
+      expect(closeTo(y.netHomeEquity, y.homeValue! - y.loanBalance!, 0.01)).toBe(true);
+    }
+    // The loan can reach the 65% ceiling via top-up draws.
+    const maxLoan = Math.max(...r.yearlyBreakdown.map(y => y.loanBalance ?? 0));
+    expect(maxLoan).toBeGreaterThan(0);
+  });
+});
+
 describe('depletion & withdrawal order', () => {
   it('reports depletion when money runs out with no other funding', () => {
     const r = calculateRetirement(baseInputs({

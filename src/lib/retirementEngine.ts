@@ -141,6 +141,14 @@ export interface ReverseMortgage {
   homeValue: number;          // current market value, today's dollars
   appreciationRate: number;   // annual home-price growth (e.g. 0.02)
   interestRate: number;       // annual rate charged on the loan (e.g. 0.065)
+  // Product type. 'reverse' (default): interest COMPOUNDS into the loan and the
+  //   balance is hard-capped at maxLtv × home value (the Canadian "no negative
+  //   equity guarantee"). 'heloc': the year's interest is PAID as a cash-flow
+  //   expense (added to spending) instead of compounding, and there is no
+  //   negative-equity guarantee — the balance is NOT clamped at the LTV ceiling
+  //   (draws still stop at it, but interest is paid so it doesn't grow past).
+  //   Absent = 'reverse' (back-compat with plans saved before the toggle).
+  mode?: 'reverse' | 'heloc';
   // Loan-to-value ceiling: borrowing (both scheduled draws and top-up) stops
   // once the loan reaches maxLtv × current home value. Lenders typically cap
   // reverse mortgages near 0.55. Defaults to 0.55 when omitted.
@@ -262,8 +270,10 @@ export interface YearDetail {
   deposit?: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number };
   // Tax decomposition for the year's withdrawals.
   tax: { oasClawback: number; capitalGains: number; registeredGross: number };
-  // Reverse mortgage, when enabled.
-  rm?: { interestAccrued: number; scheduledDraw: number; topUpDraw: number; homeValue: number; loanBalance: number };
+  // Reverse mortgage / HELOC, when enabled. interestAccrued is the year's
+  // interest; in HELOC mode that interest is PAID (interestExpense, added to
+  // spending) rather than compounded into the loan.
+  rm?: { interestAccrued: number; scheduledDraw: number; topUpDraw: number; homeValue: number; loanBalance: number; interestExpense?: number };
   // Cash events that fired this year (labelled in/out). `from`/`to` are the
   // human-readable endpoints when the event is a transfer (else undefined and
   // the row is a plain inflow/outflow).
@@ -566,15 +576,27 @@ export function calculatePerson(
     if (amt > 0) rmLoan += amt;
     return amt;
   };
-  // Apply one year's interest to the loan, then clamp the balance at the LTV
-  // ceiling. A max loan-to-value is a hard limit on what the lender will ever
-  // be owed: without the clamp, a loan near the ceiling with interest above
-  // home appreciation compounds unbounded past it, driving net equity deeply
-  // negative (no lender allows the balance to exceed the agreed share of the
-  // home's value — the "no negative equity guarantee"). Clamping here keeps
-  // net equity ≥ (1 − maxLtv) × home value.
+  // Product type: reverse mortgage (default) compounds interest into the loan
+  // and caps the balance at the LTV ceiling; a HELOC instead charges the year's
+  // interest as a cash-flow expense and carries no negative-equity guarantee.
+  const rmIsHeloc = rm?.mode === 'heloc';
+  // This year's interest charge, computed but NOT yet applied. Reverse mode:
+  // it's added to the loan below. HELOC mode: it's returned so the caller can
+  // add it to the year's spending (the interest is serviced, not deferred).
+  const rmInterestCharge = () => rmLoan * Math.max(0, rm?.interestRate ?? 0);
+  // Apply one year's interest. Reverse: accrue onto the loan, then clamp the
+  // balance at the LTV ceiling. A max loan-to-value is a hard limit on what the
+  // lender will ever be owed: without the clamp, a loan near the ceiling with
+  // interest above home appreciation compounds unbounded past it, driving net
+  // equity deeply negative (no lender allows the balance to exceed the agreed
+  // share of the home's value — the "no negative equity guarantee"). Clamping
+  // here keeps net equity ≥ (1 − maxLtv) × home value.
+  // HELOC: interest is PAID this year (handled by the caller as an expense), so
+  // it does not accrue and no clamp applies — there is no negative-equity
+  // guarantee, so net equity may go negative if draws outpace appreciation.
   const rmAccrue = () => {
-    rmLoan *= 1 + Math.max(0, rm?.interestRate ?? 0);
+    if (rmIsHeloc) return; // interest serviced annually, not compounded
+    rmLoan += rmInterestCharge();
     const ceiling = homeValue * rmMaxLtv;
     if (rmLoan > ceiling) rmLoan = ceiling;
   };
@@ -752,15 +774,20 @@ export function calculatePerson(
     taxableAcb += taxableContribution;
     cashCushion += cashGains;
 
-    // Reverse mortgage: appreciate the home, accrue interest, take any
-    // scheduled draw into the cash cushion (rare pre-retirement, but allowed).
-    // Draws are capped at the LTV headroom.
-    let accRmInterest = 0, accRmScheduled = 0;
+    // Reverse mortgage / HELOC: appreciate the home, accrue interest (reverse)
+    // or charge it as an expense (HELOC), take any scheduled draw into the cash
+    // cushion (rare pre-retirement, but allowed). Draws are capped at headroom.
+    let accRmInterest = 0, accRmScheduled = 0, accRmInterestExpense = 0;
     if (rmOn) {
       homeValue *= 1 + Math.max(0, rm?.appreciationRate ?? 0);
-      const loanBefore = rmLoan;
-      rmAccrue();
-      accRmInterest = rmLoan - loanBefore;
+      if (rmIsHeloc) {
+        accRmInterestExpense = rmInterestCharge();
+        accRmInterest = accRmInterestExpense; // reported as this year's interest
+      } else {
+        const loanBefore = rmLoan;
+        rmAccrue();
+        accRmInterest = rmLoan - loanBefore;
+      }
       const sched = rmDraw(rmScheduledAt(age));
       cashCushion += sched;
       accRmScheduled = sched;
@@ -787,6 +814,30 @@ export function calculatePerson(
     }
     const yearEvents = eventsAt(age).map(eventLine);
     let accumEventOut = 0;
+    const drawDown = (amount: number) => {
+      let remaining = amount;
+      for (const acct of order) {
+        if (remaining <= 0) break;
+        if (acct === 'taxable') {
+          const draw = Math.min(taxable, remaining);
+          // Reduce ACB by the principal portion so the gains fraction stays
+          // correct for later (post-retirement) taxable draws.
+          if (draw > 0) {
+            const f = gainsFraction();
+            taxableAcb = Math.max(0, taxableAcb - draw * (1 - f));
+            taxable -= draw;
+            remaining -= draw;
+          }
+        } else if (acct === 'tfsa') {
+          const draw = Math.min(tfsa, remaining);
+          tfsa -= draw; remaining -= draw;
+        } else if (acct === 'rrsp') {
+          const draw = Math.min(rrsp, remaining);
+          rrsp -= draw; remaining -= draw;
+        }
+      }
+      if (remaining > 0) cashCushion = Math.max(0, cashCushion - remaining);
+    };
     for (const ev of eventsAt(age)) {
       // Transfer events move money account→account; handle them separately.
       if (ev.from || ev.to) {
@@ -806,29 +857,15 @@ export function calculatePerson(
         else { taxable += ev.amount; taxableAcb += ev.amount; accumDeposit.taxable += ev.amount; }
       } else {
         accumEventOut += ev.amount;
-        let remaining = ev.amount;
-        for (const acct of order) {
-          if (remaining <= 0) break;
-          if (acct === 'taxable') {
-            const draw = Math.min(taxable, remaining);
-            // Reduce ACB by the principal portion so the gains fraction stays
-            // correct for later (post-retirement) taxable draws.
-            if (draw > 0) {
-              const f = gainsFraction();
-              taxableAcb = Math.max(0, taxableAcb - draw * (1 - f));
-              taxable -= draw;
-              remaining -= draw;
-            }
-          } else if (acct === 'tfsa') {
-            const draw = Math.min(tfsa, remaining);
-            tfsa -= draw; remaining -= draw;
-          } else if (acct === 'rrsp') {
-            const draw = Math.min(rrsp, remaining);
-            rrsp -= draw; remaining -= draw;
-          }
-        }
-        if (remaining > 0) cashCushion = Math.max(0, cashCushion - remaining);
+        drawDown(ev.amount);
       }
+    }
+    // HELOC: the year's interest is serviced as a cash-flow expense, drawn from
+    // the accounts like any other pre-retirement outflow. Counted in the year's
+    // withdrawals/spending target so the plan's cash-flow requirement is visible.
+    if (accRmInterestExpense > 0) {
+      accumEventOut += accRmInterestExpense;
+      drawDown(accRmInterestExpense);
     }
 
     // A registered transfer draw is a taxable RRSP withdrawal even before
@@ -861,7 +898,7 @@ export function calculatePerson(
         contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution },
         deposit: accumDeposit,
         tax: { oasClawback: 0, capitalGains: 0, registeredGross: accumTransferBaseGross },
-        ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan } } : {}),
+        ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: accRmInterestExpense } : {}) } } : {}),
         events: yearEvents,
         // Pre-retirement transfers: surface on the math page too. There is no
         // full YearCalc pipeline pre-retirement, so attach a minimal calc.
@@ -904,15 +941,20 @@ export function calculatePerson(
     const startingTotal = totalBalance();
     const yearConfig = configAt(age);
 
-    // Reverse mortgage: appreciate the home, accrue this year's interest, and
-    // take any scheduled draw into the cash cushion (tax-free proceeds).
-    // Draws are capped at the LTV headroom.
-    let rmInterest = 0, rmScheduled = 0;
+    // Reverse mortgage / HELOC: appreciate the home, accrue this year's interest
+    // (reverse) or charge it as an expense (HELOC), and take any scheduled draw
+    // into the cash cushion (tax-free proceeds). Draws are capped at headroom.
+    let rmInterest = 0, rmScheduled = 0, rmInterestExpense = 0;
     if (rmOn) {
       homeValue *= 1 + Math.max(0, rm?.appreciationRate ?? 0);
-      const loanBefore = rmLoan;
-      rmAccrue();
-      rmInterest = rmLoan - loanBefore;
+      if (rmIsHeloc) {
+        rmInterestExpense = rmInterestCharge();
+        rmInterest = rmInterestExpense; // reported as this year's interest
+      } else {
+        const loanBefore = rmLoan;
+        rmAccrue();
+        rmInterest = rmLoan - loanBefore;
+      }
       const sched = rmDraw(rmScheduledAt(age));
       cashCushion += sched;
       rmScheduled = sched;
@@ -945,8 +987,10 @@ export function calculatePerson(
     }
 
     // This year's spending target: today's dollars, inflated to this year when
-    // indexSpending is on (otherwise held flat in today's dollars).
-    const yearSpending = desiredSpending * spendingFactorAt(age) * spendingPctAt(age) + eventOutAt(age);
+    // indexSpending is on (otherwise held flat in today's dollars). A HELOC's
+    // annual interest is serviced out of cash flow, so it raises the year's
+    // spending need like any other expense.
+    const yearSpending = desiredSpending * spendingFactorAt(age) * spendingPctAt(age) + eventOutAt(age) + rmInterestExpense;
 
     // Gross benefit income (taxable). OAS amounts come from the (possibly
     // indexed) config; CPP is inflated manually when indexation is on.
@@ -1335,7 +1379,7 @@ export function calculatePerson(
         growth: { rrsp: rrspGains, rrif: rrifGains, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
         deposit,
         tax: { oasClawback, capitalGains, registeredGross },
-        ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan } } : {}),
+        ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: rmInterestExpense } : {}) } } : {}),
         events: yearEvents,
         calc,
       },
