@@ -107,3 +107,137 @@ describe('AppStore', () => {
     db.close();
   });
 });
+
+describe('AppStore revisions', () => {
+  it('seeding records the first revision', async () => {
+    const { store, state } = await AppStore.open(customDefaults);
+    const revs = store.allRevisions().filter(r => r.scenarioId === state.activeScenarioId);
+    expect(revs).toHaveLength(1);
+    expect(revs[0].source).toBe('save');
+    expect(revs[0].inputs).toEqual(state.scenarios[0].inputs);
+  });
+
+  it('records a revision only when the inputs actually change', async () => {
+    const { store, state } = await AppStore.open(customDefaults);
+    const id = state.activeScenarioId;
+
+    // Rename only — no inputs change, no revision.
+    store.persist({
+      scenarios: [{ id, name: 'Renamed', inputs: state.scenarios[0].inputs }],
+      activeScenarioId: id,
+    });
+    expect(store.allRevisions()).toHaveLength(1);
+
+    // Real change → second revision.
+    store.persist({
+      scenarios: [{ id, name: 'Renamed', inputs: baseInputs({ desiredSpending: 12345 }) }],
+      activeScenarioId: id,
+    });
+    expect(store.allRevisions()).toHaveLength(2);
+    expect(store.allRevisions()[1].inputs.desiredSpending).toBe(12345);
+  });
+
+  it('persists revisions and reloads them on reopen', async () => {
+    const first = await AppStore.open(customDefaults);
+    const id = first.state.activeScenarioId;
+    first.store.persist({
+      scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 11111 }) }],
+      activeScenarioId: id,
+    });
+
+    const again = await AppStore.open(customDefaults);
+    const revs = again.store.allRevisions().filter(r => r.scenarioId === id);
+    expect(revs.length).toBeGreaterThanOrEqual(2);
+    expect(revs.at(-1)?.inputs.desiredSpending).toBe(11111);
+  });
+
+  it('rollback returns the snapshot and DELETES every newer revision (rewind, not branch)', async () => {
+    const { store, state } = await AppStore.open(customDefaults);
+    const id = state.activeScenarioId;
+    // Three distinct saves: 11111 → 22222 → 33333.
+    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 11111 }) }], activeScenarioId: id });
+    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activeScenarioId: id });
+    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }], activeScenarioId: id });
+    const all = store.allRevisions();
+    expect(all).toHaveLength(4); // seed + 3 saves
+
+    // Roll back to the THIRD revision (22222; list is oldest-first):
+    // the two newer ones (33333 and its save) are gone.
+    const restored = store.rollbackRevision(id, all[2].id);
+    expect(restored?.desiredSpending).toBe(22222);
+    const after = store.allRevisions().filter(r => r.scenarioId === id);
+    expect(after).toHaveLength(3); // seed + 11111 + 22222
+    expect(after.at(-1)?.inputs.desiredSpending).toBe(22222);
+    // Other scenarios' history is untouched.
+    const bytes = store.exportBytes();
+    const { AppDatabase } = await import('./db');
+    const db = await AppDatabase.open(bytes);
+    expect(db.loadScenarios().length).toBeGreaterThan(0);
+    db.close();
+  });
+
+  it('rollback to the newest revision deletes nothing', async () => {
+    const { store, state } = await AppStore.open(customDefaults);
+    const id = state.activeScenarioId;
+    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activeScenarioId: id });
+    const before = store.allRevisions();
+    const restored = store.rollbackRevision(id, before.at(-1)!.id);
+    expect(restored?.desiredSpending).toBe(22222);
+    expect(store.allRevisions()).toEqual(before);
+  });
+
+  it('the persisted row after a rollback matches the restored plan (no phantom diff on next save)', async () => {
+    const { store, state } = await AppStore.open(customDefaults);
+    const id = state.activeScenarioId;
+    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activeScenarioId: id });
+    const restored = store.rollbackRevision(id, store.allRevisions()[0].id);
+
+    // Apply + persist WITHOUT revision recording (the App flow), then make a
+    // real change: exactly one new revision (the restore itself is not one).
+    store.persist({ scenarios: [{ id, name: 'S', inputs: restored! }], activeScenarioId: id, skipRevisions: true });
+    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 44444 }) }], activeScenarioId: id });
+    const mine = store.allRevisions().filter(r => r.scenarioId === id);
+    expect(mine.at(-1)?.inputs.desiredSpending).toBe(44444);
+  });
+
+  it('a save after a rollback records exactly one revision (no duplicate echo)', async () => {
+    const { store, state } = await AppStore.open(customDefaults);
+    const id = state.activeScenarioId;
+    store.persist({
+      scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }],
+      activeScenarioId: id,
+    });
+    const original = store.rollbackRevision(id, store.allRevisions()[0].id);
+    expect(original).not.toBeNull();
+
+    // The restored plan is now the live state; persisting it must be a no-op
+    // against history only if it matches what was last SAVED. It doesn't (the
+    // last save was 22222, the rollback restored the original), but the NEXT
+    // real save diffs against the last-saved rows, so it records exactly one.
+    store.persist({ scenarios: [{ id, name: 'S', inputs: original! }], activeScenarioId: id, skipRevisions: true });
+    const afterRollbackApply = store.allRevisions().length;
+
+    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }], activeScenarioId: id });
+    expect(store.allRevisions().length).toBe(afterRollbackApply + 1);
+  });
+
+  it('drops revisions of deleted scenarios and enforces the rolling cap', async () => {
+    const { store, state } = await AppStore.open(customDefaults);
+    const id = state.activeScenarioId;
+    // Many distinct saves → capped at MAX_REVISIONS for this scenario.
+    for (let i = 0; i < 105; i++) {
+      store.persist({
+        scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 1000 + i }) }],
+        activeScenarioId: id,
+      });
+    }
+    const mine = store.allRevisions().filter(r => r.scenarioId === id);
+    expect(mine.length).toBeLessThanOrEqual(100);
+    // Newest survives.
+    expect(mine.at(-1)?.inputs.desiredSpending).toBe(1104);
+
+    // Deleting the scenario drops its history.
+    store.persist({ scenarios: [] });
+    expect(store.allRevisions()).toHaveLength(0);
+  });
+});

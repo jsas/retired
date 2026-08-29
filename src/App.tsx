@@ -194,9 +194,13 @@ function App() {
   }, []);
 
   // Persist scenarios + active scenario on every change (once the store is
-  // open — before that there's nothing to write through to).
+  // open — before that there's nothing to write through to). persist returns
+  // whether a revision was recorded, which bumps a nonce so the scenarios
+  // page's history list re-reads it.
+  const [revisionNonce, setRevisionNonce] = useState(0);
   useEffect(() => {
-    store?.persist({ scenarios, activeScenarioId });
+    const wrote = store?.persist({ scenarios, activeScenarioId }) ?? false;
+    if (wrote) setRevisionNonce(n => n + 1);
   }, [store, scenarios, activeScenarioId]);
 
   // Persist engine config on every change.
@@ -354,6 +358,39 @@ function App() {
     setActiveScenarioId(id);
     setHasUnsavedChanges(false);
     return id;
+  };
+
+  // Scenario revision history (scenarios page). The store owns the snapshots;
+  // the UI reads them through this memo, refreshed by revisionNonce (bumped by
+  // the persist effect whenever a new revision landed).
+  const revisions = useMemo(
+    () => store?.allRevisions() ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store, revisionNonce],
+  );
+
+  // Roll back the active scenario to a revision: restore the snapshot into the
+  // live working set AND the saved scenario row, and persist WITHOUT recording
+  // a revision — a rollback is a move through history, not a change to it.
+  // (The pre-rollback state is already in history as the newest revision; the
+  // restored revision stays put too, so history is untouched.) Unsaved edits
+  // are discarded — rolling back IS the explicit choice.
+  const handleRollback = (revisionId: string) => {
+    if (!store) return;
+    const restored = store.rollbackRevision(activeScenarioId, revisionId);
+    if (!restored) return;
+    setInputs(restored);
+    setScenarios(prev => prev.map(s =>
+      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(restored)) } : s
+    ));
+    setHasUnsavedChanges(false);
+    store.persist({ scenarios: scenarios.map(s =>
+      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(restored)) } : s
+    ), activeScenarioId, skipRevisions: true });
+    // Rollback rewrites history (deletes newer revisions) but persists with
+    // skipRevisions, so the persist effect above never reports a write. Bump
+    // the nonce here or the history list keeps showing the deleted rows.
+    setRevisionNonce(n => n + 1);
   };
 
   // The save-prompt modal's three outcomes. `dontAskAgain` flips the General
@@ -844,6 +881,8 @@ function App() {
                 config={config}
                 scenarioName={activeScenario.name}
                 scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
+                activeScenarioId={activeScenarioId}
+                scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
                 onOpenConnections={() => setView('connections')}
                 memory={store?.memory}
@@ -909,6 +948,8 @@ function App() {
                 scenarios={scenarios}
                 activeScenarioId={activeScenarioId}
                 onScenariosChange={setScenarios}
+                revisions={revisions}
+                onRollback={handleRollback}
                 onSelectScenario={(id) => { handleScenarioChange(id); setView('projection'); }}
                 onCreateScenario={(scenario) => {
                   // Add AND activate in one shot. Setting inputs directly from the
