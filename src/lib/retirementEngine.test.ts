@@ -1664,3 +1664,61 @@ describe('employment income (issue #22)', () => {
     expect(closeTo(yearAt(combined, 65).employmentGross!, 40000, 1)).toBe(true);
   });
 });
+
+// "Why does tax stop at a certain age?" — a user's reported perception. The
+// engine must charge tax in EVERY year taxable income is received, right to
+// maxAge. These tests pin that down so a display quirk can't masquerade as an
+// engine bug.
+describe('tax continuity through maxAge', () => {
+  it('taxes CPP+OAS in every year through maxAge, even with no portfolio', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, rrspBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      // Taxable benefit income every year from 65 to 95.
+      cppStartAge: 65, cppMonthlyAmount: 1400, oasStartAge: 65,
+      maxAge: 95,
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      if (y.age < 65) continue;
+      // The benefits are taxable, so tax must be charged on them every year.
+      expect(y.detail!.calc!.totalNetIncome).toBeGreaterThan(0);
+      // incomeTax is the INCREMENTAL tax on withdrawals; with no withdrawals the
+      // tax on the benefits themselves lives inside netBenefits — but it is
+      // nonzero because CPP+OAS exceed the basic personal amount.
+      expect(y.detail!.calc!.taxOnBenefits).toBeGreaterThan(0);
+    }
+    // The last year (maxAge) still carries the benefit tax.
+    expect(yearAt(r.yearlyBreakdown, 95).detail!.calc!.taxOnBenefits).toBeGreaterThan(0);
+  });
+
+  it('RRIF minimums keep income tax > 0 in every year while the RRIF has money', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      rrspBalance: 1000000, desiredSpending: 20000,
+      cppStartAge: null, oasStartAge: null, maxAge: 95,
+    }), config);
+    // From the RRIF conversion age (71) onward, a mandatory minimum is forced
+    // out and taxed — so the incremental income tax is positive every year the
+    // RRIF still holds money.
+    let checkedYears = 0;
+    for (const y of r.yearlyBreakdown) {
+      if (y.age < 71) continue;
+      if (y.detail!.withdraw.rrifMin <= 0) continue; // RRIF empty this year
+      expect(y.incomeTax).toBeGreaterThan(0);
+      checkedYears++;
+    }
+    expect(checkedYears).toBeGreaterThan(0);
+  });
+
+  it('income tax is computed in the final year (maxAge) when income exists', () => {
+    const r = calculateRetirement(baseInputs({
+      rrspBalance: 500000, tfsaBalance: 0,
+      cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65,
+      maxAge: 90, desiredSpending: 30000,
+    }), config);
+    const last = yearAt(r.yearlyBreakdown, 90);
+    expect(last.detail!.calc!.totalNetIncome).toBeGreaterThan(0);
+    expect(typeof last.incomeTax).toBe('number');
+    expect(last.incomeTax).toBeGreaterThanOrEqual(0);
+  });
+});
