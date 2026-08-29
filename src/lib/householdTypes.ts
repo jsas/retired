@@ -13,7 +13,7 @@
 // Carlo, the solvers) can migrate to the unified model independently while the
 // wire/storage formats stay stable.
 
-import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, Pension, SpendingBand, ReverseMortgage } from './retirementEngine';
+import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, Pension, SpendingBand, ReverseMortgage, EmploymentIncome } from './retirementEngine';
 
 // ---------------------------------------------------------------------------
 // Accounts & transfers
@@ -66,6 +66,7 @@ export interface PersonInputs {
   withdrawalOrder: WithdrawalAccount[];
   spendingBands?: SpendingBand[];
   pensions?: Pension[];
+  employment?: EmploymentIncome[];
   events?: CashEvent[];
   reverseMortgage?: ReverseMortgage;
 }
@@ -114,6 +115,7 @@ export function legacyToPerson(inputs: RetirementInputs): PersonInputs {
     withdrawalOrder: inputs.withdrawalOrder,
     spendingBands: inputs.spendingBands,
     pensions: inputs.pensions,
+    employment: inputs.employment,
     events: inputs.events,
     reverseMortgage: inputs.reverseMortgage,
   };
@@ -182,6 +184,7 @@ export function legacySpouseToPerson(sp: SpouseInputs): PersonInputs {
     withdrawalOrder: sp.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp'],
     spendingBands: sp.spendingBands,
     pensions: sp.pensions,
+    employment: sp.employment,
     events: sp.events,
     reverseMortgage: sp.reverseMortgage,
   };
@@ -308,6 +311,7 @@ export function resolveSpouseSource(
     desiredSpending: their.desiredSpending,
     withdrawalOrder: their.withdrawalOrder,
     pensions: their.pensions,
+    employment: their.employment,
     // Full-person parity: the linked plan's own events (incl. transfers),
     // spending bands and reverse mortgage run as the spouse's, just like an
     // embedded spouse. Absent on the source = none.

@@ -58,6 +58,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
   const hasWithdrawals = totalWithdrawn > 0.5;
   const hasContrib = detail.contrib && (detail.contrib.rrsp + detail.contrib.tfsa + detail.contrib.taxable) > 0.5;
   const hasBenefits = row.cppIncome + row.oasIncome + row.gisIncome + row.pensionIncome > 0.5;
+  const hasEmployment = (row.employmentGross ?? 0) > 0.5;
   const hasTax = Math.abs(row.incomeTax) > 0.5 || detail.tax.oasClawback > 0.5;
   const rm = detail.rm;
 
@@ -107,6 +108,14 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
           <Line label="OAS" value={row.oasIncome} />
           <Line label="GIS" value={row.gisIncome} hint="Tax-free." />
           <Line label="Pension" value={row.pensionIncome} />
+        </Section>
+      )}
+
+      {hasEmployment && (
+        <Section title="Employment income">
+          <Line label="Gross pay" value={row.employmentGross ?? 0} hint="Earned income — stacks on benefits for tax, OAS clawback and GIS." />
+          <Line label="Tax on it" value={row.employmentTax ?? 0} hint="The marginal tax on this pay, on top of the tax on benefits alone." />
+          <Line label="After-tax (net)" value={row.employmentNet ?? 0} strong hint="Saved into the job's account, or used to top up spending first." />
         </Section>
       )}
 

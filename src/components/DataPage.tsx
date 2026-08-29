@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   Check, ClipboardCopy, Download, FileJson, FileSpreadsheet, FileText, Upload, Database,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import {
   COLUMN_GROUPS, METADATA_SECTIONS, buildExport,
@@ -13,6 +14,13 @@ import { migrateInputs } from '../lib/scenarioStorage';
 import type { AppDb } from '../lib/appDb';
 import { AppDatabase } from '../data/db';
 import { buildTemplateCsv, parseTemplateCsv, TEMPLATE_FILENAME } from '../lib/importTemplate';
+import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';
+import { AI_SETTINGS_STORAGE_KEY } from '../lib/aiSettings';
+
+/** Parse a raw kv value, tolerating corruption (returns undefined). */
+function safeJson(raw: string): unknown {
+  try { return JSON.parse(raw); } catch { return undefined; }
+}
 
 // What the page hands back when the user confirms a full-backup import. The
 // parent applies it (App owns all scenario/config state).
@@ -20,6 +28,10 @@ export interface FullBackupSelection {
   scenarios: Scenario[];
   activeScenarioId: string;
   config?: AppConfig; // undefined when "also apply engine settings" is off
+  /** Opt-in AI data carried in the backup file; applied only when the user
+   *  chose to include it. Undefined when the file had none / it was excluded. */
+  aiChats?: unknown;
+  aiSettings?: unknown;
 }
 
 // A projection JSON (our own export format) re-imported as a new scenario.
@@ -40,9 +52,16 @@ interface DataPageProps {
   // Full-backup export + import
   scenarios: Scenario[];
   activeScenarioId: string;
-  onExportFull: (scenarioIds: string[], includeConfig: boolean) => void;
+  onExportFull: (scenarioIds: string[], includeConfig: boolean, ai: AiBackupInclude) => void;
   onImportFull: (sel: FullBackupSelection) => void;
   onImportProjection: (req: ProjectionImportRequest) => void;
+}
+
+/** Which AI data to fold into a full backup. Both off by default — chats and
+ *  API keys stay on this device unless the user explicitly packs them. */
+export interface AiBackupInclude {
+  chats: boolean;
+  settings: boolean;
 }
 
 const FORMATS: Array<{ key: ExportFormat; label: string; icon: typeof FileJson; hint: string }> = [
@@ -101,6 +120,9 @@ function ProjectionExportSection({
   const fileBase = (nameTouched ? baseName : defaultBase) || defaultBase;
 
   const [copied, setCopied] = useState(false);
+  // The full file preview is long; keep it folded until asked for so the
+  // export/backup controls below stay within reach without scrolling.
+  const [contentsOpen, setContentsOpen] = useState(false);
   const copy = () => {
     navigator.clipboard.writeText(payload.content).then(
       () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
@@ -210,16 +232,32 @@ function ProjectionExportSection({
           </div>
         )}
 
-        {/* The FULL file, copyable — this is exactly what download writes. */}
+        {/* The FULL file, copyable — this is exactly what download writes.
+            Collapsed by default: it's long, and the export controls below are
+            the part the user usually wants. */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <div className={SECTION.replace(' mb-1.5', '')}>File contents</div>
+            <button
+              onClick={() => setContentsOpen(o => !o)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-800"
+              title={contentsOpen ? 'Hide the file preview' : 'Show the file preview'}
+            >
+              {contentsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              File contents
+              {!contentsOpen && (
+                <span className="normal-case font-normal text-slate-400">
+                  ({payload.content.split('\n').length.toLocaleString()} lines)
+                </span>
+              )}
+            </button>
             <button onClick={copy} className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline">
               {copied ? <Check size={12} /> : <ClipboardCopy size={12} />}
               {copied ? 'Copied' : 'Copy to clipboard'}
             </button>
           </div>
-          <pre className="max-h-[28rem] overflow-auto rounded border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre">{payload.content}</pre>
+          {contentsOpen && (
+            <pre className="max-h-[28rem] overflow-auto rounded border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre">{payload.content}</pre>
+          )}
         </div>
 
         {/* Filename + actions */}
@@ -262,6 +300,8 @@ function ProjectionExportSection({
 function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPageProps) {
   const [checked, setChecked] = useState<Set<string>>(() => new Set(scenarios.map(s => s.id)));
   const [includeConfig, setIncludeConfig] = useState(true);
+  const [includeChats, setIncludeChats] = useState(false);
+  const [includeAiSettings, setIncludeAiSettings] = useState(false);
 
   const toggle = (id: string) => setChecked(prev => {
     const next = new Set(prev);
@@ -291,10 +331,20 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
           <span><span className="font-medium">Include engine settings</span>
           <span className="block text-[10px] text-slate-400">Inflation, RRIF conversion age, tax tables and other engine config</span></span>
         </label>
+        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
+          <input type="checkbox" checked={includeChats} onChange={e => setIncludeChats(e.target.checked)} />
+          <span><span className="font-medium">Include AI chats</span>
+          <span className="block text-[10px] text-slate-400">The assistant conversation transcripts saved on this device</span></span>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
+          <input type="checkbox" checked={includeAiSettings} onChange={e => setIncludeAiSettings(e.target.checked)} />
+          <span><span className="font-medium">Include AI connections &amp; model settings</span>
+          <span className="block text-[10px] text-amber-600">Includes any API keys stored for cloud providers — pack this only into a backup you keep private</span></span>
+        </label>
       </div>
       <button
-        onClick={() => onExportFull([...checked], includeConfig)}
-        disabled={checked.size === 0 && !includeConfig}
+        onClick={() => onExportFull([...checked], includeConfig, { chats: includeChats, settings: includeAiSettings })}
+        disabled={checked.size === 0 && !includeConfig && !includeChats && !includeAiSettings}
         className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Download size={13} /> Save backup
@@ -307,7 +357,7 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
 // 3 · Import — a full backup (choose what to apply) or a projection JSON.
 // ---------------------------------------------------------------------------
 type ParsedFile =
-  | { kind: 'backup'; db: AppDb }
+  | { kind: 'backup'; db: AppDb; aiChats?: unknown; aiSettings?: unknown }
   | { kind: 'projection'; name: string; inputs: RetirementInputs };
 
 function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
@@ -319,6 +369,9 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
   // Backup choices
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [includeConfig, setIncludeConfig] = useState(true);
+  // AI data packed in the file (checked by default when present)
+  const [applyChats, setApplyChats] = useState(false);
+  const [applyAiSettings, setApplyAiSettings] = useState(false);
   // Projection choice
   const [projName, setProjName] = useState('');
 
@@ -349,8 +402,14 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
         try {
           const db = await AppDatabase.open(new Uint8Array(buf));
           const doc = db.toDoc();
+          // AI data rides in the kv table when the backup was made with it;
+          // read the raw values (validated on apply) before closing.
+          const aiChatsRaw = db.getKv(AI_CHATS_STORAGE_KEY);
+          const aiSettingsRaw = db.getKv(AI_SETTINGS_STORAGE_KEY);
           db.close();
           if (!doc) { setError('That SQLite file is not a RE: tired backup.'); setParsed(null); return; }
+          const aiChats = aiChatsRaw ? safeJson(aiChatsRaw) : undefined;
+          const aiSettings = aiSettingsRaw ? safeJson(aiSettingsRaw) : undefined;
           setParsed({
             kind: 'backup',
             db: {
@@ -360,9 +419,13 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
               activeScenarioId: doc.activeScenarioId,
               config: doc.config,
             },
+            aiChats,
+            aiSettings,
           });
           setChecked(new Set(doc.scenarios.map(s => s.id)));
           setIncludeConfig(true);
+          setApplyChats(aiChats !== undefined);
+          setApplyAiSettings(aiSettings !== undefined);
         } catch {
           setError('That file could not be opened as a SQLite database.');
           setParsed(null);
@@ -468,6 +531,8 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       scenarios: chosen,
       activeScenarioId: activeId,
       config: includeConfig ? parsed.db.config : undefined,
+      aiChats: applyChats ? parsed.aiChats : undefined,
+      aiSettings: applyAiSettings ? parsed.aiSettings : undefined,
     });
     reset();
   };
@@ -544,6 +609,21 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
               <input type="checkbox" checked={includeConfig} onChange={e => setIncludeConfig(e.target.checked)} />
               <span className="font-medium">Also apply engine settings from the file</span>
             </label>
+            {parsed.aiChats !== undefined && (
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
+                <input type="checkbox" checked={applyChats} onChange={e => setApplyChats(e.target.checked)} />
+                <span className="font-medium">Replace AI chats with the ones in the file</span>
+              </label>
+            )}
+            {parsed.aiSettings !== undefined && (
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
+                <input type="checkbox" checked={applyAiSettings} onChange={e => setApplyAiSettings(e.target.checked)} />
+                <span>
+                  <span className="font-medium">Replace AI connections &amp; model settings with the file's</span>
+                  <span className="block text-[10px] text-amber-600">This brings in the API keys saved in that backup</span>
+                </span>
+              </label>
+            )}
           </div>
           <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 mb-3">
             Importing <span className="font-medium">replaces</span> your current scenarios{includeConfig ? ' and settings' : ''} with the ones selected above.

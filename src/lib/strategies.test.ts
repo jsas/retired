@@ -121,3 +121,70 @@ describe('runStrategies — reverse mortgage timing', () => {
     expect(report.strategies.filter(s => s.id === 'rm-topup').length).toBe(0); // already on
   });
 });
+
+describe('work strategies (employment, issue #22)', () => {
+  // A modest plan with clear early-retirement withdrawal pressure.
+  const worker = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 90,
+    rrspBalance: 300000, tfsaBalance: 100000, taxableBalance: 0,
+    cppStartAge: 70, cppMonthlyAmount: 800, oasStartAge: 70, oasYearsInCanada: 40,
+    desiredSpending: 40000, pensions: [],
+  });
+
+  it('offers fixed part-time work variants', () => {
+    const report = runStrategies(worker(), config);
+    const jobs = report.strategies.filter(s => s.id.startsWith('work-') && !s.id.startsWith('work-gap'));
+    expect(jobs.length).toBeGreaterThanOrEqual(2);
+    // Each adds an employment row on top of the existing (empty) list.
+    for (const j of jobs) {
+      expect(Array.isArray(j.patch.employment)).toBe(true);
+      expect(j.patch.employment!.length).toBe(1);
+      expect(j.patch.employment![0].topUpSpending).toBe(true);
+    }
+  });
+
+  it('a work stint supports at least as much spending as the baseline', () => {
+    const report = runStrategies(worker(), config);
+    const jobs = report.strategies.filter(s => s.id.startsWith('work-10k'));
+    expect(jobs.length).toBe(1);
+    expect(jobs[0].sustainableSpending).toBeGreaterThanOrEqual(report.baseline.sustainableSpending);
+  });
+
+  it('suggested work stints save to taxable (no room tracking yet, issue #24)', () => {
+    const report = runStrategies(worker(), config);
+    const jobs = report.strategies.filter(s => s.id.startsWith('work-'));
+    expect(jobs.length).toBeGreaterThan(0);
+    for (const j of jobs) {
+      expect(j.patch.employment![0].destAccount).toBe('taxable');
+    }
+  });
+
+  it('skips a fixed variant already in the plan', () => {
+    const inputs = worker();
+    inputs.employment = [{
+      id: 'mine', label: 'my job', annualAmount: 10000, startAge: 65, endAge: 70,
+      destAccount: 'tfsa', topUpSpending: true, indexedToCpi: false,
+    }];
+    const report = runStrategies(inputs, config);
+    expect(report.strategies.filter(s => s.id === 'work-10k-65-70').length).toBe(0);
+  });
+
+  it('adds a gap-targeted stint when the plan runs a shortfall', () => {
+    const inputs = worker();
+    inputs.desiredSpending = 90000; // far beyond the portfolio → depletes
+    const report = runStrategies(inputs, config);
+    const gap = report.strategies.filter(s => s.id.startsWith('work-gap'));
+    expect(gap.length).toBe(1);
+    const job = gap[0].patch.employment![0];
+    expect(job.topUpSpending).toBe(true);
+    expect(job.annualAmount).toBeGreaterThan(0);
+    expect(job.startAge).toBeLessThanOrEqual(job.endAge);
+  });
+
+  it('no gap-targeted stint when the plan is healthy', () => {
+    const inputs = worker();
+    inputs.desiredSpending = 10000; // comfortably funded → never depletes
+    const report = runStrategies(inputs, config);
+    expect(report.strategies.filter(s => s.id.startsWith('work-gap')).length).toBe(0);
+  });
+});

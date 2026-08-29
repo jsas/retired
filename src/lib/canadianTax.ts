@@ -210,6 +210,11 @@ export function indexConfig(config: AppConfig, factor: number): AppConfig {
       ...config.ontarioSurtax,
       threshold1: config.ontarioSurtax.threshold1 * factor,
       threshold2: config.ontarioSurtax.threshold2 * factor
+    },
+    engine: {
+      ...config.engine,
+      tfsaAnnualLimit: (config.engine.tfsaAnnualLimit ?? 0) * factor,
+      rrspAnnualMax: (config.engine.rrspAnnualMax ?? 0) * factor
     }
   };
 }

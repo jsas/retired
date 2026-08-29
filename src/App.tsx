@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart } from 'lucide-react';
+import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -19,8 +19,12 @@ import { TimelineChart } from './components/TimelineChart';
 import { BacktestPanel } from './components/BacktestPanel';
 import { CollapsiblePanel } from './components/CollapsiblePanel';
 import { SharingPage, type SharingImportRequest } from './components/SharingPage';
-import { DataPage, type FullBackupSelection, type ProjectionImportRequest } from './components/DataPage';
+import { DataPage, type FullBackupSelection, type ProjectionImportRequest, type AiBackupInclude } from './components/DataPage';
+import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
+import { AI_SETTINGS_STORAGE_KEY } from './lib/aiSettings';
 import { OptimizeCard } from './components/OptimizeCard';
+import { AgentPage } from './components/AgentPage';
+import { ConnectionsPage } from './components/ConnectionsPage';
 import { CompareCard } from './components/CompareCard';
 import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
 import { SetupWizard, wizardDataFrom, applyWizardData, spouseWizardDataFrom, applySpouseWizardData, type WizardData } from './components/SetupWizard';
@@ -230,13 +234,28 @@ function App() {
   // scenarios (+ optionally the engine config). Openable by any SQLite tool
   // and re-importable here; the same file format a self-contained Node
   // package would use.
-  const handleExportFull = async (scenarioIds: string[], includeConfig: boolean) => {
+  // Copy one AI localStorage payload into the backup's kv table under the same
+  // key, or strip it from the file when the user didn't opt in.
+  const packAiKey = (db: AppDatabase, key: string, include: boolean) => {
+    if (!include) { db.deleteKv(key); return; }
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) db.setKv(key, raw);
+    } catch { /* storage unavailable — nothing to pack */ }
+  };
+
+  const handleExportFull = async (scenarioIds: string[], includeConfig: boolean, ai: AiBackupInclude) => {
     const chosen = scenarios.filter(s => scenarioIds.includes(s.id));
     const activeId = chosen.some(s => s.id === activeScenarioId) ? activeScenarioId : (chosen[0]?.id ?? activeScenarioId);
     const db = await AppDatabase.open();
     db.saveScenarios(chosen);
     db.saveActiveScenarioId(activeId);
     if (includeConfig) db.saveConfig(config);
+    // AI data is opt-in: pack the localStorage payload under the same kv key
+    // when the user asked for it, strip it from the file otherwise (the live
+    // store may hold it even when this backup shouldn't).
+    packAiKey(db, AI_CHATS_STORAGE_KEY, ai.chats);
+    packAiKey(db, AI_SETTINGS_STORAGE_KEY, ai.settings);
     const bytes = db.exportBytes();
     db.close();
     const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/vnd.sqlite3' });
@@ -257,6 +276,12 @@ function App() {
     const active = list.find(s => s.id === activeId) ?? list[0];
     setInputs(JSON.parse(JSON.stringify(active.inputs)));
     if (sel.config) setConfig(sel.config);
+    // AI data applies straight back to its localStorage key; the assistant /
+    // connections pages load it on next mount. The values were validated by
+    // the Data page only as parseable JSON, so a malformed payload can still
+    // fail those pages' own loaders — they fall back to empty, never crash.
+    if (sel.aiChats !== undefined) localStorage.setItem(AI_CHATS_STORAGE_KEY, JSON.stringify(sel.aiChats));
+    if (sel.aiSettings !== undefined) localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(sel.aiSettings));
     setHasUnsavedChanges(false);
     setView('projection');
   };
@@ -691,6 +716,8 @@ function App() {
                 {view === 'export' && <span className="text-slate-900">Data</span>}
                 {view === 'scenarios' && <span className="text-slate-900">Manage Scenarios</span>}
                 {view === 'sharing' && <span className="text-slate-900">Sharing</span>}
+                {view === 'agent' && <span className="text-slate-900">AI Assistant</span>}
+                {view === 'connections' && <span className="text-slate-900">AI Connections</span>}
                 {view === 'donate' && <span className="text-slate-900">Support This App</span>}
                 {view === 'welcome' && <span className="text-slate-900">Welcome</span>}
               </div>
@@ -724,6 +751,14 @@ function App() {
                   title="Explore deterministic strategy variants and AI-suggested inputs"
                 >
                   <Sparkles size={13} /> Optimize
+                </button>
+                <button
+                  onClick={() => setView('agent')}
+                  className="flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-800 hover:underline"
+                  title="Chat with an AI that can read your plan and run the engine (bring your own API key)"
+                >
+                  <Bot size={13} /> Assistant
+
                 </button>
                 <button
                   onClick={() => setView('compare')}
@@ -781,11 +816,22 @@ function App() {
               <OptimizeCard
                 inputs={resolvedInputs}
                 config={config}
-                results={results}
-                mcResults={printMc}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
               />
             )}
+
+            {view === 'agent' && (
+              <AgentPage
+                inputs={resolvedInputs}
+                config={config}
+                scenarioName={activeScenario.name}
+                scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
+                onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+                onOpenConnections={() => setView('connections')}
+              />
+            )}
+
+            {view === 'connections' && <ConnectionsPage onClose={() => setView('agent')} />}
 
             {view === 'compare' && (
               <CompareCard

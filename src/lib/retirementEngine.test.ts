@@ -1482,3 +1482,185 @@ describe('GIS holes (john feedback)', () => {
     expect(gis72).toBe(0);
   });
 });
+
+describe('employment income (issue #22)', () => {
+  const job = (over: Partial<import('./retirementEngine').EmploymentIncome> = {}): import('./retirementEngine').EmploymentIncome => ({
+    id: 'j1', label: 'part-time', annualAmount: 20000, startAge: 65, endAge: 69,
+    destAccount: 'tfsa', topUpSpending: false, indexedToCpi: false, ...over,
+  });
+
+  it('save-mode net is taxed at the marginal rate and lands in destAccount', () => {
+    const withJob = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      employment: [job()],
+    }), config);
+    const y65 = yearAt(withJob.yearlyBreakdown, 65);
+    expect(y65.employmentGross).toBe(20000);
+    // Marginal tax on $20k in ONT with no other income ≈ first-bracket rate.
+    expect(y65.employmentTax).toBeGreaterThan(0);
+    expect(y65.employmentNet).toBeCloseTo(20000 - y65.employmentTax!, 6);
+    // Net lands in the TFSA (grows at year end, so balance = net × 1.05).
+    const noJob = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+    }), config);
+    expect(closeTo(y65.tfsaBalance - yearAt(noJob.yearlyBreakdown, 65).tfsaBalance, y65.employmentNet! * 1.05, 1)).toBe(true);
+  });
+
+  it('incomeTax includes the employment tax exactly once', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      employment: [job()],
+    }), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    expect(closeTo(y65.incomeTax, y65.employmentTax!, 1)).toBe(true);
+  });
+
+  it('employment tax stacks on benefits (marginal, not standalone)', () => {
+    // $40k pension + $20k job: the job's tax must exceed what $20k alone pays.
+    const withPension = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      pensions: [{ id: 'p', label: 'db', annualAmount: 40000, startAge: 65, endAge: null, indexedToCpi: false }],
+      employment: [job()],
+    }), config);
+    const alone = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      employment: [job()],
+    }), config);
+    const tStacked = yearAt(withPension.yearlyBreakdown, 65).employmentTax!;
+    const tAlone = yearAt(alone.yearlyBreakdown, 65).employmentTax!;
+    expect(tStacked).toBeGreaterThan(tAlone);
+  });
+
+  it('top-up mode displaces withdrawals instead of depositing', () => {
+    const topUp = calculateRetirement(baseInputs({
+      tfsaBalance: 500000, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 30000, cppStartAge: null, oasStartAge: null,
+      withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
+      employment: [job({ topUpSpending: true })],
+    }), config);
+    const noJob = calculateRetirement(baseInputs({
+      tfsaBalance: 500000, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 30000, cppStartAge: null, oasStartAge: null,
+      withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
+    }), config);
+    const wd = (r: typeof topUp) => yearAt(r.yearlyBreakdown, 65).withdrawals;
+    // The top-up net covers spending, so the portfolio draw drops by that much.
+    expect(closeTo(wd(noJob) - wd(topUp), yearAt(topUp.yearlyBreakdown, 65).employmentNet!, 1)).toBe(true);
+    // Nothing deposited: the TFSA only shrank.
+    expect(yearAt(topUp.yearlyBreakdown, 65).detail!.deposit?.tfsa ?? 0).toBe(0);
+  });
+
+  it('top-up excess over the spending need is saved into destAccount', () => {
+    // Spending of $5k with a $20k top-up job: most of the net has nowhere to go.
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 5000, cppStartAge: null, oasStartAge: null,
+      employment: [job({ topUpSpending: true, destAccount: 'tfsa' })],
+    }), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    const excess = y65.employmentNet! - 5000;
+    expect(excess).toBeGreaterThan(0);
+    expect(closeTo(y65.detail!.deposit?.tfsa ?? 0, excess, 1)).toBe(true);
+  });
+
+  it('respects the start/end age window (inclusive), then stops', () => {
+    const r = calculateRetirement(baseInputs({
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      employment: [job({ startAge: 66, endAge: 68 })],
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 65).employmentGross).toBe(0);
+    expect(yearAt(r.yearlyBreakdown, 66).employmentGross).toBe(20000);
+    expect(yearAt(r.yearlyBreakdown, 68).employmentGross).toBe(20000);
+    expect(yearAt(r.yearlyBreakdown, 69).employmentGross).toBe(0);
+  });
+
+  it('indexedToCpi grows the amount when tax tables index', () => {
+    const c = testConfig();
+    c.engine.indexTaxTables = true;
+    const r = calculateRetirement(baseInputs({
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      employment: [job({ indexedToCpi: true, endAge: 75 })],
+    }), c);
+    expect(closeTo(yearAt(r.yearlyBreakdown, 70).employmentGross!, 20000 * Math.pow(1 + INFL, 5), 1)).toBe(true);
+  });
+
+  it('employment reduces single-person GIS at the reduction rate', () => {
+    const noJob = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
+    }), config);
+    const withJob = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
+      employment: [job()],
+    }), config);
+    const g0 = yearAt(noJob.yearlyBreakdown, 65).gisIncome;
+    const g1 = yearAt(withJob.yearlyBreakdown, 65).gisIncome;
+    // GIS base gains $20k → reduction = 20000 × gisReductionRate (0.5).
+    expect(closeTo(g0 - g1, 20000 * (config.oas.gisReductionRate ?? 0.5), 5)).toBe(true);
+  });
+
+  it('spouse employment counts toward couple GIS', () => {
+    const spouseInputs = {
+      currentAge: 65, cppStartAge: null as number | null, cppMonthlyAmount: 0,
+      oasStartAge: 65 as number | null, oasYearsInCanada: 40,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      pensions: [] as import('./retirementEngine').Pension[],
+      employment: [job()],
+    };
+    const without = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
+    }), config, { spouseContext: { ...spouseInputs, employment: [] } });
+    const withSpouseJob = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
+    }), config, { spouseContext: spouseInputs });
+    const g0 = yearAt(without.yearlyBreakdown, 65).gisIncome;
+    const g1 = yearAt(withSpouseJob.yearlyBreakdown, 65).gisIncome;
+    // Spouse's $20k counts against combined income: the reduction (20k × 0.5 =
+    // 10k) exceeds the entire couple entitlement (~8.1k), so GIS zeroes out.
+    expect(g0).toBeGreaterThan(0);
+    expect(g1).toBe(0);
+  });
+
+  it('save-mode splits net across jobs by gross share into each destAccount', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      employment: [
+        job({ id: 'a', annualAmount: 10000, destAccount: 'tfsa' }),
+        job({ id: 'b', annualAmount: 30000, destAccount: 'taxable' }),
+      ],
+    }), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    expect(y65.employmentGross).toBe(40000);
+    // 1:3 gross split → TFSA gets 1/4 of net, taxable 3/4 (before growth).
+    expect(closeTo(y65.detail!.deposit?.tfsa ?? 0, y65.employmentNet! * 0.25, 1)).toBe(true);
+    expect(closeTo(y65.detail!.deposit?.taxable ?? 0, y65.employmentNet! * 0.75, 1)).toBe(true);
+  });
+
+  it('household combiner sums both spouses\' employment rows', () => {
+    const inputs = baseInputs({
+      desiredSpending: 0, cppStartAge: null, oasStartAge: null,
+      employment: [job()],
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 0, pensions: [],
+        employment: [job()],
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    const combined = combineHouseholdBreakdown(r, inputs);
+    expect(closeTo(yearAt(combined, 65).employmentGross!, 40000, 1)).toBe(true);
+  });
+});

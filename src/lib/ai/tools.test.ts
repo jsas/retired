@@ -1,0 +1,329 @@
+import { describe, it, expect } from 'vitest';
+import { executeToolCall, toolSpecs, EDITABLE_FIELDS, type ToolContext } from './tools';
+import { calculateHousehold } from '../retirementEngine';
+import { baseInputs, testConfig } from '../../test/helpers';
+
+function ctx(over: Partial<ToolContext> = {}): ToolContext {
+  return {
+    inputs: baseInputs(),
+    config: testConfig(),
+    scenarioName: 'Test plan',
+    scenarioList: [{ id: 'a', name: 'Test plan' }],
+    ...over,
+  };
+}
+
+describe('toolSpecs', () => {
+  it('advertises the full tool surface with JSON schemas', () => {
+    const specs = toolSpecs();
+    expect(specs.map(s => s.name).sort()).toEqual([
+      'compare_scenarios', 'get_schedule', 'get_scenario',
+      'propose_cash_event', 'propose_employment', 'propose_patch', 'propose_pension',
+      'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
+      'run_monte_carlo', 'run_projection', 'run_strategies',
+      'set_scenario_value', 'solve_spending',
+    ].sort());
+    for (const s of specs) {
+      expect(s.jsonSchema).toHaveProperty('type', 'object');
+      expect(s.description.length).toBeGreaterThan(10);
+    }
+  });
+});
+
+describe('get_scenario', () => {
+  it('returns the full plan by default', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: {} });
+    expect(out.kind).toBe('result');
+    if (out.kind !== 'result') return;
+    expect(out.content).toContain('Test plan');
+    expect(out.content).toContain('SUMMARY');
+    expect(out.content).toContain('ACCOUNTS');
+    expect(out.content).toContain('FULL INPUTS JSON');
+  });
+
+  it('returns just the requested section', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('ACCOUNTS');
+    expect(out.content).not.toContain('FULL INPUTS JSON');
+  });
+
+  it('rejects an unknown section', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'everything' } });
+    expect(out.kind).toBe('error');
+  });
+});
+
+describe('run_projection', () => {
+  it('runs the engine on the current plan and reports the verdict', () => {
+    const c = ctx();
+    const expected = calculateHousehold(c.inputs, c.config);
+    const out = executeToolCall(c, { id: '1', name: 'run_projection', args: {} });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain(expected.status === 'ON_TRACK' ? 'ON TRACK' : 'SHORTFALL');
+    expect(out.content).toContain('lifetime tax');
+  });
+
+  it('applies valid overrides to a copy, and reports invalid ones', () => {
+    const c = ctx();
+    const out = executeToolCall(c, {
+      id: '1', name: 'run_projection',
+      args: { overrides: { desiredSpending: 40000, nonsense: 1, desiredSpending2: 5 } },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('WITH overrides');
+    expect(out.content).toContain('nonsense');
+    // The caller's inputs must not be mutated by the what-if run.
+    expect(c.inputs.desiredSpending).toBe(20000);
+  });
+
+  it('refuses structural fields in overrides', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'run_projection',
+      args: { overrides: { spouse: { enabled: true } } },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('structural field');
+  });
+});
+
+describe('compare_scenarios', () => {
+  it('runs both plans and reports deltas', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'compare_scenarios',
+      args: { overrides: { desiredSpending: 30000 } },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('CURRENT plan');
+    expect(out.content).toContain('VARIANT');
+    expect(out.content).toContain('DELTAS');
+    expect(out.content).toContain('"desiredSpending":30000');
+  });
+
+  it('errors when no override survives validation', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'compare_scenarios',
+      args: { overrides: { bogus: 1 } },
+    });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('bogus');
+  });
+});
+
+describe('set_scenario_value', () => {
+  it('proposes a mutation with a from→to preview for a valid change', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'set_scenario_value',
+      args: { field: 'cppStartAge', value: 70, rationale: 'deferral bonus' },
+    });
+    expect(out.kind).toBe('mutation');
+    if (out.kind !== 'mutation') return;
+    expect(out.patch).toEqual({ cppStartAge: 70 });
+    expect(out.preview).toEqual({ field: 'cppStartAge', from: null, to: 70 });
+    expect(out.rationale).toBe('deferral bonus');
+  });
+
+  it('rejects fields outside the editable allow-list', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'set_scenario_value',
+      args: { field: 'annualWithdrawal', value: 5 },
+    });
+    expect(out.kind).toBe('error');
+    expect(EDITABLE_FIELDS.has('annualWithdrawal')).toBe(false);
+  });
+
+  it('rejects a value that fails the scenario schema', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'set_scenario_value',
+      args: { field: 'desiredSpending', value: 'lots' },
+    });
+    expect(out.kind).toBe('error');
+  });
+
+  it('rejects unknown tool names with the available list', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'delete_everything', args: {} });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('get_scenario');
+  });
+});
+
+describe('propose_patch', () => {
+  it('batches several valid scalar changes into one patch', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_patch',
+      args: { changes: { cppStartAge: 70, oasStartAge: 70, desiredSpending: 55000 } },
+    });
+    expect(out.kind).toBe('mutation');
+    if (out.kind !== 'mutation') return;
+    expect(out.patch).toEqual({ cppStartAge: 70, oasStartAge: 70, desiredSpending: 55000 });
+    expect(out.preview).toHaveProperty('cppStartAge');
+  });
+
+  it('skips invalid entries and reports them, but still proposes the valid ones', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_patch',
+      args: { changes: { cppStartAge: 70, spouse: { enabled: true }, bogus: 1 } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.patch).toEqual({ cppStartAge: 70 });
+    expect(out.rationale).toContain('skipped invalid');
+  });
+
+  it('errors when nothing in the batch is valid', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_patch', args: { changes: { bogus: 1 } },
+    });
+    expect(out.kind).toBe('error');
+  });
+});
+
+describe('propose_spouse', () => {
+  it('proposes adding a spouse from a full block', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_spouse',
+      args: { changes: {
+        enabled: true, currentAge: 60, retirementAge: 65,
+        rrspBalance: 100000, tfsaBalance: 50000, taxableBalance: 20000, cashCushionBalance: 5000,
+        rrspContribution: 5000, tfsaContribution: 3000, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 30000,
+      } },
+    });
+    expect(out.kind).toBe('mutation');
+    if (out.kind !== 'mutation') return;
+    expect(out.label).toBe('Add spouse/partner');
+    expect((out.patch.spouse as { enabled: boolean }).enabled).toBe(true);
+  });
+
+  it('rejects an incomplete add with guidance', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_spouse', args: { changes: { enabled: true, currentAge: 60 } },
+    });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('full block');
+  });
+
+  it('proposes removing a spouse', () => {
+    const c = ctx();
+    c.inputs = { ...c.inputs, spouse: {
+      enabled: true, currentAge: 60, retirementAge: 65,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+      desiredSpending: 0,
+    } };
+    const out = executeToolCall(c, { id: '1', name: 'propose_spouse', args: { changes: { enabled: false } } });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Remove spouse');
+  });
+});
+
+describe('propose_pension / employment / cash_event', () => {
+  it('adds a pension with a generated id appended to pensions', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_pension',
+      args: { label: 'Work DB', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    const pensions = out.patch.pensions as Array<{ id: string; label: string; endAge: number | null }>;
+    expect(pensions).toHaveLength(1);
+    expect(pensions[0].label).toBe('Work DB');
+    expect(pensions[0].endAge).toBeNull();
+    expect(pensions[0].id).toBeTruthy();
+  });
+
+  it('requires endAge as an explicit null, never omitted', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_pension',
+      args: { label: 'X', annualAmount: 1, startAge: 65, indexedToCpi: false },
+    });
+    expect(out.kind).toBe('error');
+  });
+
+  it('adds an employment income block', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_employment',
+      args: { label: 'Consulting', annualAmount: 40000, startAge: 60, endAge: 65, destAccount: 'taxable', topUpSpending: false, indexedToCpi: true },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect((out.patch.employment as unknown[]).length).toBe(1);
+  });
+
+  it('adds a cash event', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_cash_event',
+      args: { label: 'Downsize', age: 70, amount: 300000, direction: 'in', account: 'taxable' },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect((out.patch.events as Array<{ label: string }>)[0].label).toBe('Downsize');
+  });
+});
+
+describe('propose_spending_bands', () => {
+  it('sorts bands and proposes the replacement set', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_spending_bands',
+      args: { bands: [{ fromAge: 80, pctOfBase: 0.7 }, { fromAge: 65, pctOfBase: 1 }] },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.patch.spendingBands).toEqual([{ fromAge: 65, pctOfBase: 1 }, { fromAge: 80, pctOfBase: 0.7 }]);
+  });
+
+  it('rejects an out-of-range pctOfBase', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_spending_bands', args: { bands: [{ fromAge: 65, pctOfBase: 9 }] },
+    });
+    expect(out.kind).toBe('error');
+  });
+});
+
+describe('propose_reverse_mortgage', () => {
+  it('proposes enabling a reverse mortgage from a full block', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_reverse_mortgage',
+      args: { changes: { enabled: true, homeValue: 800000, appreciationRate: 0.02, interestRate: 0.065, topUp: true } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Enable reverse mortgage');
+    expect((out.patch.reverseMortgage as { enabled: boolean }).enabled).toBe(true);
+  });
+
+  it('rejects an incomplete enable with guidance', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_reverse_mortgage', args: { changes: { enabled: true, homeValue: 800000 } },
+    });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('homeValue, appreciationRate, and interestRate');
+  });
+});
+
+describe('read backends', () => {
+  it('run_strategies ranks variants and suggests levers', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'run_strategies', args: {} });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('CURRENT plan');
+    expect(out.content).toContain('sustainable spending');
+    expect(out.content).toContain('Suggested levers');
+  });
+
+  it('solve_spending returns a sustainable spending figure', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'solve_spending', args: { targetSuccessRate: 0.9, runs: 100 } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('Max sustainable after-tax spending');
+    expect(out.content).toContain('90%');
+  });
+
+  it('run_monte_carlo returns a success rate', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'run_monte_carlo', args: { runs: 100 } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('success rate');
+  });
+
+  it('get_schedule returns year rows for the requested range', () => {
+    const c = ctx();
+    const out = executeToolCall(c, { id: '1', name: 'get_schedule', args: { fromAge: c.inputs.currentAge, toAge: c.inputs.currentAge + 2 } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain(`age ${c.inputs.currentAge}:`);
+    expect(out.content).toContain('withdrew');
+  });
+});

@@ -17,6 +17,21 @@ have to hold them.
 - **Preset withdrawal strategies** — one-click orderings ("RRSP meltdown",
   "TFSA last", "proportional") instead of hand-arranging the list.
 
+## Income & contribution tracking
+
+- **Full income model per profile** — today's employment income is a single
+  pre-retirement stream; expand it into a full-featured register of income
+  sources per person (multiple jobs, self-employment, rental, pensions,
+  semi-/post-retirement work) with per-source start/end ages, indexation,
+  and tax character (T4, self-employed, eligible vs other income).
+- **RRSP / TFSA room tracking** — per profile, carry forward CRA-style
+  contribution room: RRSP limit accrual (18% of earned income, pension
+  adjustments, unused carry-forward), TFSA annual accrual from eligibility
+  year with re-contribution of withdrawals landing next year, and FHSA.
+  Warn on over-contribution; surface remaining room beside the contribution
+  inputs so the projection's savings flows respect real limits. Needs the
+  income model above to compute RRSP accrual honestly.
+
 ## Model depth
 
 - **Provincial GIS variations** — GIS clawback is currently the federal
@@ -53,6 +68,37 @@ have to hold them.
   (scenarios, config, migrations) to be platform-neutral: the storage
   interface the UI backs with localStorage today is the same interface a
   Node consumer backs with SQLite/a file later.
+- **Embedded AI agent (savvy users)** — graduate the paste-based agent
+  prompts (`agentIngest.ts`, `agentQA.ts`) into an in-app chat that talks
+  to the user's own model provider: a provider array (Anthropic, OpenAI,
+  Gemini, OpenRouter, Ollama/local, OpenAI-compatible endpoints, **and
+  fully in-browser models via `@mlc-ai/web-llm`** — open weights run on the
+  user's GPU over WebGPU, no key, offline after a one-time download; a
+  curated math/reasoning list like Qwen2.5-Math and DeepSeek-R1 distills)
+  with per-provider API keys and model choices stored in the local DB
+  (OPFS/sql.js, keyed, never synced anywhere). Ship a starter prompt
+  library built on the existing QA presets, user-editable and saved per
+  scenario. Headline flow: **scenario onboarding** — a blank plan starts
+  with "tell me about your situation," the agent interviews the user in
+  plain language (ages, accounts, income, target retirement age) and
+  drafts a complete scenario for review, so new users never face an empty
+  form.
+- **Local agent API with tool calling** — expose the app to the agent
+  through a typed tool surface instead of pasted JSON: Zod schemas define
+  every callable (`getScenario`, `setScenarioValue`, `runProjection`,
+  `runMonteCarlo`, `explainYear`, `compareScenarios`, …), so the model can
+  read the current scenario, ask the engine questions, and propose changes
+  that validate against the same schemas the data layer already uses —
+  with a confirm-before-apply step so nothing mutates the plan silently.
+  For onboarding, a `createScenario` tool assembles a full inputs object
+  from the interview and renders it as a reviewable diff — the user sees
+  every proposed value before it's saved, and can correct the agent
+  conversationally ("no, the RRSP is in my spouse's name") until it's
+  right.
+  Keys and tool definitions live client-side; the app stays serverless and
+  the feature is fully optional (no key, no AI). The engine-package split
+  above is what makes this honest — the tools call the same public engine
+  API the UI does.
 - **Data layer hardening (underway)** — Zod schemas now define every
   persisted shape (`src/data/schemas.ts`), and all plan state lives in a
   real SQLite database via sql.js (`src/data/db.ts`), persisted to OPFS
@@ -72,7 +118,13 @@ Worth stating explicitly so issues don't pile up:
 - **Live CRA table updates** — the app ships with the 2026 tables, all
   editable under Settings; it will never phone home for new ones.
 - **Advice** — RE:tired is a calculator, not a planner. It will never
-  recommend a course of action, only show consequences of the inputs.
+  recommend a course of action, only show consequences of the inputs. This
+  also governs the AI features: the app supplies data and tools, and any
+  third-party model the user connects speaks for itself — RE:tired presents
+  agent output as the model's words, never as the app's recommendation.
+- **Bundled AI / first-party inference** — the app will never ship its own
+  model, host inference, or proxy keys. AI is strictly bring-your-own-key,
+  off by default, and degrades to nothing when unconfigured.
 - **Multi-tab / multi-window use** — one tab at a time. Two open tabs
   each hold their own in-memory copy and the last Save silently wins;
   coordinating them (merging, locking, live sync) is more complexity

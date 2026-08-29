@@ -112,4 +112,41 @@ describe('AppDatabase', () => {
     expect(loaded[0].inputs.spouseSource).toEqual({ kind: 'builtin' });
     db.close();
   });
+
+  it('carries raw kv values (AI chats/settings) in the backup bytes', async () => {
+    const db = await AppDatabase.open();
+    db.saveScenarios(scenarios());
+    db.saveConfig(DEFAULT_APP_CONFIG);
+    db.setKv('retirement_ai_chats', JSON.stringify({ threads: [{ id: 't1' }], activeThreadId: 't1' }));
+    db.setKv('retirement_ai_settings', JSON.stringify({ connections: [], activeConnectionId: null, prompts: [] }));
+    const bytes = db.exportBytes();
+    db.close();
+
+    const reopened = await AppDatabase.open(bytes);
+    expect(JSON.parse(reopened.getKv('retirement_ai_chats')!)).toEqual({
+      threads: [{ id: 't1' }], activeThreadId: 't1',
+    });
+    expect(reopened.getKv('retirement_ai_settings')).toBeTruthy();
+    reopened.close();
+  });
+
+  it('deleteKv strips an AI payload from a backup that excludes it', async () => {
+    const db = await AppDatabase.open();
+    db.saveScenarios(scenarios());
+    db.saveConfig(DEFAULT_APP_CONFIG);
+    db.setKv('retirement_ai_settings', JSON.stringify({ connections: [{ apiKey: 'secret' }] }));
+    db.deleteKv('retirement_ai_settings');
+    const bytes = db.exportBytes();
+    db.close();
+
+    const reopened = await AppDatabase.open(bytes);
+    expect(reopened.getKv('retirement_ai_settings')).toBeNull();
+    reopened.close();
+  });
+
+  it('getKv returns null for a key that was never written', async () => {
+    const db = await AppDatabase.open();
+    expect(db.getKv('retirement_ai_chats')).toBeNull();
+    db.close();
+  });
 });

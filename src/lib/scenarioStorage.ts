@@ -46,9 +46,14 @@ function migrateRecord(inputs: Record<string, unknown>): RetirementInputs {
   if (!Array.isArray(migrated.pensions)) {
     migrated.pensions = [];
   }
+  // Employment income added later — same treatment.
+  if (!Array.isArray(migrated.employment)) {
+    migrated.employment = [];
+  }
   const sp = migrated.spouse as Record<string, unknown> | undefined;
   if (sp && typeof sp === 'object') {
     if (!Array.isArray(sp.pensions)) sp.pensions = [];
+    if (!Array.isArray(sp.employment)) sp.employment = [];
     // Full-person parity fields (events, spending bands) — back-fill empty
     // lists so downstream code can treat them as arrays. reverseMortgage stays
     // genuinely optional (absent = no reverse mortgage).

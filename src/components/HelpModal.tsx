@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Search, X, Sparkles } from 'lucide-react';
+import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
 
 // ---------------------------------------------------------------------------
 // Help content model: every entry is a small tree of {id, title, body} so the
@@ -118,6 +119,17 @@ const SECTIONS: HelpSection[] = [
             <P>The Pensions section models employer <strong>defined-benefit</strong> income: a fixed $/yr starting at the age you choose, taxed as ordinary income and stacked with CPP/OAS — so it directly shrinks how much the portfolio must supply. Tick <em>indexed</em> if the pension grows with CPI (many DB plans do, fully or partially); leave it unticked for a flat nominal pension.</P>
             <P>Set an <strong>end age</strong> for a <strong>bridge / temporary</strong> benefit (e.g. $12k/yr from 60–65 that stops when CPP begins); leave it blank for a lifetime pension. Pension income counts toward the GIS and OAS clawbacks, exactly like CPP does. The spouse plan has its own pension list.</P>
             <P>A <strong>DC / LIRA</strong> lump sum is not entered here — it's already modelled by your RRSP/RRIF balance (it converts to a RRIF and is drawn down like registered savings).</P>
+          </>
+        )
+      },
+      {
+        term: 'Employment income (semi- / post-retirement work)',
+        body: (
+          <>
+            <P>The Employment Income section models <strong>earned income</strong> — a part-time job or consulting gig in the early retirement years. Unlike a pension this is wages: it stacks on top of CPP/OAS/pension for tax (taxed at your marginal rate), counts toward the OAS clawback, and reduces GIS. Set a gross $/yr and a start–end age window (inclusive).</P>
+            <P>Two modes per job. With <strong>tops up spending</strong> on, the after-tax pay covers spending first — so portfolio withdrawals shrink dollar-for-dollar and the savings keep compounding; any excess over the year's need is saved. With it off, the whole after-tax pay is saved. Either way the net lands in the account you pick (Taxable / TFSA / RRSP / Cash). Tick <em>indexed</em> if the pay grows with CPI.</P>
+            <P>The destination defaults to <strong>Taxable</strong>: the app doesn't track TFSA/RRSP contribution room yet, so a registered destination could silently over-contribute. If you pick TFSA or RRSP, an amber note appears when the yearly amount exceeds the annual limit ({new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit)}/yr TFSA) — only use a registered destination if you know you have the room.</P>
+            <P>The Optimize tab's Strategy Explorer suggests work stints automatically: fixed rows (e.g. "$10k/yr to 70") and, when the plan runs a shortfall, a gap-targeted stint sized to the first depleted window. The spouse plan has its own employment list, and a spouse's earnings count toward the couple's GIS.</P>
           </>
         )
       },
@@ -367,7 +379,7 @@ const SECTIONS: HelpSection[] = [
         body: (
           <P>
             The <strong>Optimize</strong> page has three tabs: ranked strategies the app computes
-            itself, a spending target solver, and an AI helper you drive manually.
+            itself, a spending target solver, and a copy-a-prompt AI tab you drive manually.
           </P>
         )
       },
@@ -380,14 +392,67 @@ const SECTIONS: HelpSection[] = [
         body: <P>Answers "how much could I spend?" instead of "will my spending last?" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures.</P>
       },
       {
-        term: 'AI helper (paste-at-your-own-discretion)',
+        term: 'Copy-a-prompt AI (paste-at-your-own-discretion)',
         body: (
           <>
-            <P>The <strong>Agent</strong> and <strong>Ask</strong> tabs build a self-contained prompt embedding your plan (Ask also embeds the computed results) for you to copy into any AI — ChatGPT, Claude, whatever you trust. Agent replies can be pasted back and applied field-by-field after validation; Ask is read-only Q&amp;A.</P>
+            <P>The <strong>Agent</strong> and <strong>Ask</strong> tabs build a self-contained prompt embedding your plan (Ask also embeds the computed results) for you to copy into any AI — ChatGPT, Claude, whatever you trust. Agent replies can be pasted back and applied field-by-field after validation; Ask is read-only Q&amp;A. For a chat that runs the engine itself, use the Assistant page instead.</P>
             <P><strong>Privacy:</strong> this app never sends anything anywhere — the copy button is the only thing that moves data, and it moves it into <em>your</em> clipboard. But once you paste the prompt into an AI service, your ages, balances, benefits and spending <strong>are read by that provider</strong>, under its terms and privacy policy. If that gives you pause, redact the numbers that identify you, or skip the feature — everything else in Optimize runs entirely on your machine.</P>
           </>
         )
       }
+    ]
+  },
+  {
+    id: 'help-assistant',
+    title: 'AI Assistant',
+    entries: [
+      {
+        term: null,
+        body: (
+          <P>
+            The <strong>Assistant</strong> page (violet link in the toolbar) is a chat that can read your
+            plan and run the projection engine itself — so it answers with your real numbers, not generic
+            advice. Ask things like "when does my RRSP run out?", "what if I retire at 62?", or "compare
+            taking CPP at 60 vs 65".
+          </P>
+        )
+      },
+      {
+        term: 'What it can see and do',
+        body: (
+          <>
+            <P>Every reply is grounded in your active scenario: the assistant is handed your inputs and the computed projection, and it can re-run the engine with what-if changes before answering.</P>
+            {ul([
+              <><strong>Read</strong> — ages, balances, benefits, spending, and the year-by-year projection. You never need to type your numbers into the chat.</>,
+              <><strong>What-if</strong> — it can run the projection with changed inputs ("spend $5k more", "retire two years later") and quote the result.</>,
+              <><strong>Propose changes</strong> — it can suggest edits to your plan, shown as a review card. Nothing is applied until you confirm it — the chat can't change your plan on its own.</>,
+            ])}
+          </>
+        )
+      },
+      {
+        term: 'Local vs online models',
+        body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download it once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter answers, but your plan details travel to that provider — see the privacy note in the Glossary). Local models are smaller, so keep questions focused; online models handle long, nuanced conversations better. Pick and download on <strong>Connections</strong>, which opens from the assistant's header.</P>
+      },
+      {
+        term: 'When answers go wrong',
+        body: (
+          <>
+            <P>Small local models sometimes ramble, repeat themselves, or lose the thread of a long conversation. If that happens:</P>
+            {ul([
+              <>Start a <strong>new chat</strong> — a fresh context is the most reliable fix.</>,
+              <>Ask a <strong>shorter, more specific</strong> question.</>,
+              <>On the Connections page, lower <strong>"How much the model reads at once"</strong> if your computer struggled to load it, or switch to a stronger model.</>,
+              <>Use the <strong>regenerate</strong> button on a reply to try again without retyping.</>,
+            ])}
+            <P>The usage bar under the chat shows how much of the model's reading room the conversation is using — when it fills up, older messages are folded into a summary so the model stays coherent.</P>
+          </>
+        )
+      },
+      {
+        term: 'Privacy',
+        body: <P>A local model never sends anything anywhere — inference happens on your GPU. An online connection sends your question (and the plan details in it) to that provider under its privacy policy; your API key is stored only in this browser and sent only to that provider. Chats are saved on this computer only, and the Data page's backup includes them only if you opt in.</P>
+      },
     ]
   },
   {
@@ -447,7 +512,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Where data lives',
-        body: <P>Your plans live in a real <strong>SQLite database</strong> (running as WebAssembly) whose bytes are stored in this browser's <strong>origin-private file system</strong> — a durable per-site store with no 5&nbsp;MB ceiling, mirrored to localStorage for compatibility. Nothing leaves your machine. Clearing the browser's site data can still erase it, so use Export to keep backups. One exception, and it's your hands on the keyboard: the Optimize tab's <strong>AI helper</strong> builds a prompt containing your plan (and results) for you to paste into an AI of your choice — once pasted, that provider reads the data under its own privacy policy.</P>
+        body: <P>Your plans live in a real <strong>SQLite database</strong> (running as WebAssembly) whose bytes are stored in this browser's <strong>origin-private file system</strong> — a durable per-site store with no 5&nbsp;MB ceiling, mirrored to localStorage for compatibility. Nothing leaves your machine. Clearing the browser's site data can still erase it, so use Export to keep backups. Two voluntary exceptions, both your hands on the keyboard: the Optimize tab's <strong>copy-a-prompt AI</strong> builds a prompt containing your plan for you to paste into an AI of your choice, and the Assistant chat's <strong>online models</strong> send your question to that provider — each reads the data under its own privacy policy.</P>
       },
       {
         term: 'One tab at a time',
@@ -533,8 +598,36 @@ const SECTIONS: HelpSection[] = [
         body: <P>The technology that lets a real database engine run inside your browser tab. Only mentioned because you might glimpse "wasm" in a downloaded file or an error message. It's on your machine doing the work; nothing is sent anywhere.</P>
       },
       {
-        term: 'AI helper disclaimer (what "read by the AI" means)',
-        body: <P>The Optimize tab can draft a question for an AI chatbot (ChatGPT, Claude, …). The app itself never contacts them — but the moment <em>you</em> paste that text into their site, the plan details in it (ages, balances, benefits, spending) are being read by that company, under its privacy policy, not ours. Don't paste anything you wouldn't hand to that company.</P>
+        term: 'AI privacy (what "read by the AI" means)',
+        body: <P>Two places involve an outside AI. The <strong>Assistant</strong> chat can use an online provider (Google, Anthropic, …): your question and the plan details in it go to that provider, under its privacy policy — pick a local model on the Connections page to keep everything on this computer. Separately, the Optimize tab can <strong>draft a prompt for you to paste</strong> into any AI site: the app itself never contacts them, but the moment <em>you</em> paste, that company reads what's in the prompt. Don't share anything you wouldn't hand to that company.</P>
+      },
+      {
+        term: 'Assistant (the chat)',
+        body: <P>The built-in chat that answers questions about your plan. It can read your scenario inputs and run the projection itself, so it answers with your real numbers — and it can suggest changes, which you always review and approve before anything is applied. It never changes your plan on its own.</P>
+      },
+      {
+        term: 'Model',
+        body: <P>The AI "brain" doing the answering. Bigger models answer better but need a stronger computer. The assistant can use a model that runs entirely on this computer (private, free, works offline — downloaded once on the Connections page) or an online model from a provider like Google or Anthropic (smarter, but your plan details travel to them — see the AI privacy entry).</P>
+      },
+      {
+        term: 'Local vs online model',
+        body: <P><strong>Local</strong> runs on your own computer: nothing leaves the machine, no account or key needed, but answers are only as good as your hardware allows. <strong>Online</strong> sends your question (and the plan details in it) to a provider's servers: generally smarter answers, but you need an API key and the privacy trade-off above applies. Pick on the Connections page.</P>
+      },
+      {
+        term: 'Tokens',
+        body: <P>How AI models measure text — roughly three-quarters of a word each. Your question, the plan summary, and the answer all count. Only matters because a model can only hold so many at once (see Context window).</P>
+      },
+      {
+        term: 'Context window',
+        body: <P>How much the model can take in at once — your plan, the conversation so far, and its answer all have to fit. Long chats with a small window make the model lose track of earlier details. Adjustable for local models on the Connections page ("How much the model reads at once"): larger needs more computer memory.</P>
+      },
+      {
+        term: 'Thinking / reasoning',
+        body: <P>Some models show a scratch-pad of their working before the final answer. It's the model thinking out loud, not part of the answer — collapse it if it's in the way. The final reply below it is what matters.</P>
+      },
+      {
+        term: 'API key',
+        body: <P>A password you get from an online AI provider to use their models. Paste it on the Connections page — it is stored only in this browser and sent only to that provider when you chat. The app's local models never need one.</P>
       },
     ]
   },
