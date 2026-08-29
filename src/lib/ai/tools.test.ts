@@ -3,7 +3,17 @@ import { executeToolCall, toolSpecs, EDITABLE_FIELDS, type ToolContext } from '.
 import { calculateHousehold } from '../retirementEngine';
 import { baseInputs, testConfig } from '../../test/helpers';
 import { captureCheckpoint, UNDEFINED_SENTINEL } from './checkpoints';
+import { MemoryStore } from '../memory/store';
+import type { MemoryAdapter, MemoryRecord } from '../memory/store';
 import type { RetirementInputs } from '../retirementEngine';
+
+/** Deterministic in-memory memory adapter (same shape the store tests use). */
+class InMemoryAdapter implements MemoryAdapter {
+  private map = new Map<string, MemoryRecord>();
+  all(): MemoryRecord[] { return [...this.map.values()]; }
+  put(record: MemoryRecord): void { this.map.set(record.id, record); }
+  delete(id: string): void { this.map.delete(id); }
+}
 
 function ctx(over: Partial<ToolContext> = {}): ToolContext {
   return {
@@ -23,6 +33,7 @@ describe('toolSpecs', () => {
       'manage_cash_event', 'manage_pension',
       'propose_cash_event', 'propose_employment', 'propose_patch', 'propose_pension',
       'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
+      'recall', 'remember',
       'run_monte_carlo', 'run_projection', 'run_strategies',
       'set_scenario_value', 'solve_spending',
     ].sort());
@@ -613,5 +624,57 @@ describe('read backends', () => {
     expect(out.content).toContain(`age ${from + 5}:`);
     expect(out.content).toContain(`age ${to}:`);
     expect(out.content).not.toContain(`age ${from + 1}:`);
+  });
+});
+
+describe('remember / recall', () => {
+  it('remember stores a fact and recall returns it', () => {
+    const memory = new MemoryStore(new InMemoryAdapter());
+    const c = ctx({ memory, memoryScenarioId: 'sc-1' });
+    const put = executeToolCall(c, {
+      id: '1', name: 'remember',
+      args: { text: 'Spouse retires at 63, not 65.', scope: 'scenario', importance: 0.8 },
+    });
+    if (put.kind !== 'result') throw new Error('expected result');
+    expect(put.content).toContain('Remembered');
+
+    const got = executeToolCall(c, { id: '2', name: 'recall', args: { query: 'spouse' } });
+    if (got.kind !== 'result') throw new Error('expected result');
+    expect(got.content).toContain('[scenario]');
+    expect(got.content).toContain('Spouse retires at 63');
+    expect(got.content).toContain('importance 0.80');
+  });
+
+  it('recall without a query lists the top memories', () => {
+    const memory = new MemoryStore(new InMemoryAdapter());
+    const c = ctx({ memory, memoryScenarioId: 'sc-1' });
+    executeToolCall(c, { id: '1', name: 'remember', args: { text: 'First fact.' } });
+    executeToolCall(c, { id: '2', name: 'remember', args: { text: 'Second fact.' } });
+    const out = executeToolCall(c, { id: '3', name: 'recall', args: {} });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('First fact.');
+    expect(out.content).toContain('Second fact.');
+  });
+
+  it('global memories are visible from any scenario, scenario ones are not', () => {
+    const memory = new MemoryStore(new InMemoryAdapter());
+    const here = ctx({ memory, memoryScenarioId: 'sc-1' });
+    const elsewhere = ctx({ memory, memoryScenarioId: 'sc-2' });
+    executeToolCall(here, { id: '1', name: 'remember', args: { text: 'Plan fact for sc-1.' } });
+    executeToolCall(here, { id: '2', name: 'remember', args: { text: 'User wants to retire to Nova Scotia.', scope: 'global' } });
+
+    const fromOther = executeToolCall(elsewhere, { id: '3', name: 'recall', args: { query: 'fact' } });
+    if (fromOther.kind !== 'result') throw new Error('expected result');
+    expect(fromOther.content).toContain('Nothing in memory matches');
+
+    const nova = executeToolCall(elsewhere, { id: '4', name: 'recall', args: { query: 'Nova Scotia' } });
+    if (nova.kind !== 'result') throw new Error('expected result');
+    expect(nova.content).toContain('[global] User wants to retire to Nova Scotia');
+  });
+
+  it('reports when memory is unavailable instead of failing silently', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'remember', args: { text: 'Nobody will save this.' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('Memory is unavailable');
   });
 });

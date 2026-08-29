@@ -24,6 +24,7 @@ import {
   cashEventSchema, reverseMortgageSchema,
 } from '../../data/schemas';
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
+import { MemoryStore } from '../memory/store';
 import type { AgentToolCall, ToolSpec } from './providers';
 
 // ---------------------------------------------------------------------------
@@ -158,6 +159,22 @@ const getScheduleArgs = z.object({
   overrides: z.record(z.string(), z.unknown()).optional(),
 });
 
+const rememberArgs = z.object({
+  text: z.string().min(1).max(500)
+    .describe('The fact to remember, one or two self-contained sentences (e.g. "Spouse\'s DB pension pays $1,200/mo from 65" — never "it pays that").'),
+  scope: z.enum(['scenario', 'global']).default('scenario')
+    .describe('scenario = about this plan (shown in chats on this scenario). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").'),
+  importance: z.number().min(0).max(1).default(0.5)
+    .describe('0..1: how important this fact is. Reserve 0.9+ for decisions and constraints ("user refuses to touch RRSP"), 0.3 for color.'),
+  rationale: z.string().optional(),
+});
+
+const recallArgs = z.object({
+  query: z.string().optional()
+    .describe('Search text. Omit for the top-ranked memories outright.'),
+  limit: z.number().int().min(1).max(20).default(6),
+});
+
 const TOOL_SCHEMAS = {
   get_scenario: getScenarioArgs,
   run_projection: runProjectionArgs,
@@ -177,6 +194,8 @@ const TOOL_SCHEMAS = {
   propose_revert: proposeRevertArgs,
   manage_cash_event: manageCashEventArgs,
   manage_pension: managePensionArgs,
+  remember: rememberArgs,
+  recall: recallArgs,
 } as const;
 
 export type AgentToolName = keyof typeof TOOL_SCHEMAS;
@@ -269,6 +288,12 @@ export function toolSpecs(): ToolSpec[] {
     spec('manage_pension',
       'PROPOSE updating or REMOVING an existing pension (by id or unique label). User confirms. Use propose_pension to add a new one.',
       managePensionArgs),
+    spec('remember',
+      'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results.',
+      rememberArgs),
+    spec('recall',
+      'Search what you remember (facts saved in earlier conversations). Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.',
+      recallArgs),
   ];
 }
 
@@ -287,6 +312,11 @@ export interface ToolContext {
    *  newest last, for propose_revert. Optional so tests and 'off'-mode callers
    *  can omit it — revert then simply reports that no checkpoints exist. */
   checkpoints?: PlanCheckpoint[];
+  /** The agent memory store (scoped + global memories). Optional so tests and
+   *  'off'-mode callers can omit it — remember/recall then report that memory
+   *  is unavailable. `scenarioId` keys scenario-scoped memories. */
+  memory?: MemoryStore;
+  memoryScenarioId?: string;
 }
 
 export type ToolOutcome =
@@ -371,6 +401,10 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return manageElement(ctx, 'events', cashEventSchema, parsed.data as z.infer<typeof manageCashEventArgs>, 'cash event');
     case 'manage_pension':
       return manageElement(ctx, 'pensions', pensionSchema, parsed.data as z.infer<typeof managePensionArgs>, 'pension');
+    case 'remember':
+      return rememberTool(ctx, parsed.data as z.infer<typeof rememberArgs>);
+    case 'recall':
+      return recallTool(ctx, parsed.data as z.infer<typeof recallArgs>);
   }
 }
 
@@ -850,6 +884,53 @@ function manageElement(
     rationale: args.rationale,
     preview: { changes: rest, result: res.data },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Memory tools (agent's long-term recall, scoped to the plan and the user)
+// ---------------------------------------------------------------------------
+
+/** remember: store a fact for later chats. Writes are DIRECT (no confirm
+ *  card): memory never changes the plan or its numbers — it's the assistant's
+ *  own notebook, bounded by the store's caps and prunable by the user. */
+function rememberTool(ctx: ToolContext, args: z.infer<typeof rememberArgs>): ToolOutcome {
+  if (!ctx.memory) {
+    return { kind: 'result', content: 'Memory is unavailable in this session — the fact was not saved.' };
+  }
+  const rec = ctx.memory.write({
+    scope: args.scope,
+    scopeKey: ctx.memoryScenarioId ?? '',
+    text: args.text,
+    importance: args.importance,
+  });
+  if (!rec) {
+    return { kind: 'result', content: 'Memory is full of higher-ranked items; this fact was not saved. Tell the user they can ask you to forget something less important.' };
+  }
+  return {
+    kind: 'result',
+    content: `Remembered (${args.scope}): "${rec.text}".`,
+  };
+}
+
+/** recall: search memory (substring, ranked by importance × recency) or list
+ *  the top-ranked memories with no query. Returns the memories' text + scope
+ *  so the model can cite what it knows and from where. */
+function recallTool(ctx: ToolContext, args: z.infer<typeof recallArgs>): ToolOutcome {
+  if (!ctx.memory) {
+    return { kind: 'result', content: 'Memory is unavailable in this session.' };
+  }
+  const hits = ctx.memory.recall(args.query ?? '', {
+    limit: args.limit,
+    scopeKey: ctx.memoryScenarioId ?? '',
+  });
+  if (hits.length === 0) {
+    return { kind: 'result', content: args.query
+      ? `Nothing in memory matches "${args.query}".`
+      : 'Memory is empty.' };
+  }
+  const lines = hits.map(m =>
+    `- [${m.scope}] ${m.text} (importance ${m.importance.toFixed(2)}, accessed ${m.accessCount}×)`);
+  return { kind: 'result', content: lines.join('\n') };
 }
 
 // ---------------------------------------------------------------------------

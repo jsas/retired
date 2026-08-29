@@ -165,6 +165,34 @@ export class AppDatabase {
     this.backend = null;
   }
 
+  // ---- raw access for companion tables (agent memories) ---------------------
+  // The memory store (lib/memory) manages its own table inside this database
+  // file — same backup, same tooling — but owns its schema. These pass-throughs
+  // keep that module's SQL in the memory module instead of growing AppDatabase
+  // per feature.
+
+  /** Run a statement (CREATE TABLE, INSERT, DELETE) with bound params. */
+  run(sql: string, params?: Array<string | number>): void {
+    this.db.run(sql, params);
+  }
+
+  /** Execute a query and return sql.js result sets verbatim. */
+  exec(sql: string, params?: Array<string | number>): ReturnType<Database['exec']> {
+    return this.db.exec(sql, params);
+  }
+
+  /** Run `body` inside BEGIN/COMMIT, rolling back on throw. */
+  withTransaction(body: () => void): void {
+    this.db.run('BEGIN');
+    try {
+      body();
+      this.db.run('COMMIT');
+    } catch (err) {
+      this.db.run('ROLLBACK');
+      throw err;
+    }
+  }
+
   /** The raw SQLite file — this is what "save a backup to disk" downloads. */
   exportBytes(): Uint8Array {
     return this.db.export();

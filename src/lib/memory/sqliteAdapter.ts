@@ -18,9 +18,11 @@ const TABLE = 'memories';
 
 export class SqliteMemoryAdapter implements MemoryAdapter {
   private db: AppDatabase;
+  private persist: () => void;
 
-  constructor(db: AppDatabase) {
+  constructor(db: AppDatabase, persist: () => void = () => {}) {
     this.db = db;
+    this.persist = persist;
     db.withTransaction(() => {
       db.run(`CREATE TABLE IF NOT EXISTS ${TABLE} (
         id TEXT PRIMARY KEY,
@@ -62,10 +64,12 @@ export class SqliteMemoryAdapter implements MemoryAdapter {
       [record.id, record.scope, record.scopeKey, record.text, record.createdAt,
        record.lastAccessedAt, record.importance, record.accessCount],
     );
+    this.persist();
   }
 
   delete(id: string): void {
     this.db.run(`DELETE FROM ${TABLE} WHERE id = ?`, [id]);
+    this.persist();
   }
 
   /** Substring search used by the tool layer: escapes LIKE wildcards so the

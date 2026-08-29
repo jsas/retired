@@ -828,6 +828,8 @@ function App() {
                 scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
                 onOpenConnections={() => setView('connections')}
+                memory={store?.memory}
+                memoryScenarioId={activeScenarioId}
               />
             )}
 
