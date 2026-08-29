@@ -131,6 +131,12 @@ function YearWorksheet({ row, inputs, isCouple }: {
               <Line label={`embedded-gain fraction ${pct(c.gainsFraction)} → gain realized`} value={d.tax.capitalGains} indent />
             </>
           )}
+          {(w.rdsp ?? 0) > 0.5 && (
+            <>
+              <Line label="RDSP (grant/bond/growth portion taxable)" value={w.rdsp ?? 0} />
+              <Line label={`taxable portion ${pct(d.rdsp?.taxableFraction ?? 0)} of the draw`} value={d.rdsp?.taxablePortion ?? 0} indent />
+            </>
+          )}
           <Eq parts="total withdrawn" result={row.withdrawals} strong />
           <Eq parts="remaining need after account draws" result={c.needAfterDraws} />
         </Step>
@@ -207,6 +213,11 @@ function YearWorksheet({ row, inputs, isCouple }: {
             />
           )}
           <Eq parts="income tax on this year's withdrawals" result={row.incomeTax} strong />
+          <Line label="total tax on ALL income (what a return would show)" value={row.totalTaxPaid ?? 0} />
+          <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+            Income tax above is only the incremental tax on withdrawals; Total tax adds the tax on the
+            benefits themselves. Both run every year — neither stops at any age while income is received.
+          </div>
           {(row.splitTransferred ?? 0) !== 0 && (
             <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
               includes the effect of pension-income splitting — tax here can be non-zero even with no
@@ -224,6 +235,7 @@ function YearWorksheet({ row, inputs, isCouple }: {
         <Line label="TFSA growth" value={d.growth.tfsa} />
         <Line label="Taxable growth" value={d.growth.taxable} />
         <Line label="Cash growth (cushion rate)" value={d.growth.cash} />
+        {(d.growth.rdsp ?? 0) > 0.5 && <Line label="RDSP growth (tax-sheltered)" value={d.growth.rdsp ?? 0} />}
         <Eq parts="market gains" result={row.marketGains} strong />
         <Eq parts="ending balance" result={row.endingBalance} strong />
       </Step>

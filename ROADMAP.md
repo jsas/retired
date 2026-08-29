@@ -45,6 +45,13 @@ have to hold them.
   in money; currently modelled as plain RRIF.
 - **CPP2 / enhanced CPP accrual** — for users still contributing pre-
   retirement, the enhanced-tier benefit build-up isn't modelled.
+- **RDSP assistance holdback (AHA) clawback** — a withdrawal (or plan
+  closure / DTC loss) within 10 years of a grant/bond payment triggers
+  repayment of the lesser of 3× the withdrawal or the holdback amount. The
+  RDSP model tracks grants and bonds going in but never claws them back, so
+  early withdrawals look cheaper than CRA would make them. Grant/bond
+  carry-forward (claiming up to 10 years of unused entitlements in a lump
+  contribution) is likewise unmodelled.
 
 ## Bigger swings
 

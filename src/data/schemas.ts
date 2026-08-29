@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type {
   RetirementInputs, SpouseInputs, CashEvent, Pension, SpendingBand,
-  ReverseMortgage, WithdrawalAccount, EmploymentIncome,
+  ReverseMortgage, WithdrawalAccount, EmploymentIncome, RdspInputs,
 } from '../lib/retirementEngine';
 import type { AppConfig, TaxTable } from '../lib/appConfig';
 import type { Scenario } from '../lib/scenarioStorage';
@@ -22,7 +22,7 @@ import { migrateInputs } from '../lib/scenarioStorage';
 // Engine input shapes
 // ---------------------------------------------------------------------------
 
-const withdrawalAccount = z.enum(['rrsp', 'tfsa', 'taxable']) satisfies z.ZodType<WithdrawalAccount>;
+const withdrawalAccount = z.enum(['rrsp', 'tfsa', 'taxable', 'rdsp']) satisfies z.ZodType<WithdrawalAccount>;
 
 const transferEndpoint = z.union([
   z.object({ kind: z.literal('external') }),
@@ -75,12 +75,22 @@ export const reverseMortgageSchema = z.object({
   homeValue: z.number(),
   appreciationRate: z.number(),
   interestRate: z.number(),
+  mode: z.enum(['reverse', 'heloc']).optional(),
   maxLtv: z.number().optional(),
   drawAmount: z.number().optional(),
   startAge: z.number().optional(),
   durationYears: z.number().optional(),
   topUp: z.boolean().optional(),
 }) satisfies z.ZodType<ReverseMortgage>;
+
+export const rdspSchema = z.object({
+  enabled: z.boolean(),
+  balance: z.number(),
+  contribution: z.number(),
+  familyIncome: z.number(),
+  contributionBasis: z.number().optional(),
+  dtcEligible: z.boolean(),
+}) satisfies z.ZodType<RdspInputs>;
 
 const spouseSourceSchema = z.union([
   z.object({ kind: z.literal('builtin') }),
@@ -109,6 +119,7 @@ export const spouseSchema = z.object({
   events: z.array(cashEventSchema).optional(),
   spendingBands: z.array(spendingBandSchema).optional(),
   reverseMortgage: reverseMortgageSchema.optional(),
+  rdsp: rdspSchema.optional(),
 }) satisfies z.ZodType<SpouseInputs>;
 
 export const retirementInputsSchema = z.object({
@@ -141,6 +152,7 @@ export const retirementInputsSchema = z.object({
   pensions: z.array(pensionSchema).optional(),
   employment: z.array(employmentIncomeSchema).optional(),
   reverseMortgage: reverseMortgageSchema.optional(),
+  rdsp: rdspSchema.optional(),
 }) satisfies z.ZodType<RetirementInputs>;
 
 export const scenarioSchema = z.object({
@@ -199,6 +211,18 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
     pensionSplitMaxRate: z.number(),
     tfsaAnnualLimit: z.number(),
     rrspAnnualMax: z.number(),
+  }),
+  rdsp: z.object({
+    grantThreshold: z.number(),
+    grantAnnualMax: z.number(),
+    grantLifetimeMax: z.number(),
+    grantEndAge: z.number(),
+    bondThresholdLower: z.number(),
+    bondThresholdUpper: z.number(),
+    bondAnnualMax: z.number(),
+    bondLifetimeMax: z.number(),
+    contributionLifetimeMax: z.number(),
+    contributionEndAge: z.number(),
   }),
   qcFederalAbatement: z.number(),
   ontarioSurtax: z.object({
