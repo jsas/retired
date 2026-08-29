@@ -3,7 +3,7 @@ import {
   streamChat, listModels, testConnection, ProviderError,
   type StreamEvent, type ChatMessage,
 } from './providers';
-import type { AiConnection } from '../aiSettings';
+import { DEFAULT_MAX_TOKENS, type AiConnection } from '../aiSettings';
 
 /** Build a fake fetch returning an SSE stream of the given `data:` payloads. */
 function sseFetch(payloads: string[], status = 200, capture?: (url: string, init: RequestInit) => void) {
@@ -358,5 +358,71 @@ describe('testConnection', () => {
     await expect(
       testConnection({ ...compatBase, baseUrl: 'http://localhost:1234/v1' }, fn),
     ).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-connection generation settings (Connections page "Generation" block)
+// ---------------------------------------------------------------------------
+
+describe('generation settings', () => {
+  const done = () => sseFetch(['[DONE]']);
+
+  it('defaults anthropic max_tokens to the generous DEFAULT_MAX_TOKENS', async () => {
+    let body = '';
+    await collect(streamChat(anthropic, { system: 's', messages: userTurn },
+      sseFetch([], 200, (_u, init) => { body = String(init.body); })));
+    expect(JSON.parse(body).max_tokens).toBe(DEFAULT_MAX_TOKENS);
+  });
+
+  it('honors a connection maxTokens override (openai-compatible)', async () => {
+    const tuned: AiConnection = { ...openai, generation: { maxTokens: 32768 } };
+    let body = '';
+    await collect(streamChat(tuned, { system: 's', messages: userTurn },
+      sseFetch(['[DONE]'], 200, (_u, init) => { body = String(init.body); })));
+    expect(JSON.parse(body).max_tokens).toBe(32768);
+  });
+
+  it('lets a per-call maxTokens beat the connection default (digest call stays cheap)', async () => {
+    let body = '';
+    await collect(streamChat(openai, { system: 's', messages: userTurn, maxTokens: 400 },
+      sseFetch(['[DONE]'], 200, (_u, init) => { body = String(init.body); })));
+    expect(JSON.parse(body).max_tokens).toBe(400);
+  });
+
+  it('sends temperature only when the connection sets one (openai-compatible)', async () => {
+    let unset = '';
+    await collect(streamChat(openai, { system: 's', messages: userTurn },
+      done() && sseFetch(['[DONE]'], 200, (_u, init) => { unset = String(init.body); })));
+    expect('temperature' in JSON.parse(unset)).toBe(false);
+
+    const tuned: AiConnection = { ...openai, generation: { temperature: 0.7 } };
+    let set = '';
+    await collect(streamChat(tuned, { system: 's', messages: userTurn },
+      sseFetch(['[DONE]'], 200, (_u, init) => { set = String(init.body); })));
+    expect(JSON.parse(set).temperature).toBe(0.7);
+  });
+
+  it('sends temperature to Anthropic only when set', async () => {
+    let unset = '';
+    await collect(streamChat(anthropic, { system: 's', messages: userTurn },
+      sseFetch([], 200, (_u, init) => { unset = String(init.body); })));
+    expect('temperature' in JSON.parse(unset)).toBe(false);
+
+    const tuned: AiConnection = { ...anthropic, generation: { temperature: 1 } };
+    let set = '';
+    await collect(streamChat(tuned, { system: 's', messages: userTurn },
+      sseFetch([], 200, (_u, init) => { set = String(init.body); })));
+    expect(JSON.parse(set).temperature).toBe(1);
+  });
+
+  it('maps generation settings into Gemini generationConfig', async () => {
+    const tuned: AiConnection = { ...gemini, generation: { maxTokens: 8192, temperature: 0.2 } };
+    let body = '';
+    await collect(streamChat(tuned, { system: 's', messages: userTurn },
+      sseFetch([], 200, (_u, init) => { body = String(init.body); })));
+    const gc = JSON.parse(body).generationConfig;
+    expect(gc.maxOutputTokens).toBe(8192);
+    expect(gc.temperature).toBe(0.2);
   });
 });

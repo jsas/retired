@@ -24,7 +24,8 @@ import {
 import {
   AI_PROVIDERS, connectionReady, defaultBaseUrlFor, defaultModelFor,
   loadAiSettings, newConnectionId, saveAiSettings,
-  type AiConnection, type AiSettings,
+  DEFAULT_MAX_TOKENS, DEFAULT_LOCAL_REPETITION_PENALTY, DEFAULT_LOCAL_PRESENCE_PENALTY,
+  type AiConnection, type AiGenerationSettings, type AiSettings,
 } from '../lib/aiSettings';
 import { listModels, testConnection, type ModelInfo } from '../lib/ai/providers';
 import { WEBLLM_MODELS, fmtSize, webGpuAvailable } from '../lib/ai/webLlmModels';
@@ -377,6 +378,16 @@ function ModelsSection({ onChange, webllmConn }: {
                 If loading fails, lower the number or pick a smaller model.
               </div>
             )}
+            <div className="mt-3 pt-2 border-t border-emerald-100">
+              <GenerationFields
+                conn={webllmConn}
+                isLocal
+                onPatch={p => onChange(s => {
+                  const c = s.connections.find(x => x.id === webllmConn.id);
+                  if (c) Object.assign(c, p);
+                })}
+              />
+            </div>
           </div>
         );
       })()}
@@ -402,6 +413,91 @@ function ModelsSection({ onChange, webllmConn }: {
         </div>
       )}
     </section>
+  );
+}
+
+/** Generation tuning shared by the local (Models) card and cloud connection
+ *  cards. Blank = the app default, shown in the placeholder; values are stored
+ *  on the connection so each model/provider can be tuned independently. */
+function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
+  conn: AiConnection;
+  onPatch: (patch: Partial<AiConnection>) => void;
+  isLocal: boolean;
+  compact?: boolean;
+}) {
+  const gen = conn.generation ?? {};
+  const setGen = (p: Partial<AiGenerationSettings>) =>
+    onPatch({ generation: { ...gen, ...p } });
+
+  const num = (v: number | undefined) => (v === undefined ? '' : String(v));
+  // Blank → undefined (fall back to the default); a number → store it.
+  const parse = (raw: string, min: number, max: number) =>
+    raw.trim() === '' ? undefined : Math.min(max, Math.max(min, Number(raw)));
+
+  const label = compact
+    ? 'text-[10px] text-slate-500 mb-0.5'
+    : 'text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1';
+
+  return (
+    <div className={compact ? '' : 'mt-3 pt-2 border-t border-slate-100'}>
+      {!compact && (
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+          Generation — how the model writes
+        </div>
+      )}
+      <div className={`grid gap-2 ${isLocal ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
+        <label className="block">
+          <span className={`block ${label}`}>Max tokens per reply</span>
+          <input
+            type="number" min={256} step={512}
+            value={num(gen.maxTokens)}
+            onChange={e => setGen({ maxTokens: parse(e.target.value, 256, 200000) })}
+            placeholder={String(DEFAULT_MAX_TOKENS)}
+            className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+          />
+        </label>
+        <label className="block">
+          <span className={`block ${label}`}>Temperature</span>
+          <input
+            type="number" min={0} max={2} step={0.1}
+            value={num(gen.temperature)}
+            onChange={e => setGen({ temperature: parse(e.target.value, 0, 2) })}
+            placeholder={isLocal ? '0.3' : 'provider'}
+            className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+          />
+        </label>
+        {isLocal && (
+          <>
+            <label className="block">
+              <span className={`block ${label}`}>Repeat penalty</span>
+              <input
+                type="number" min={0} max={2} step={0.05}
+                value={num(gen.repetitionPenalty)}
+                onChange={e => setGen({ repetitionPenalty: parse(e.target.value, 0, 2) })}
+                placeholder={String(DEFAULT_LOCAL_REPETITION_PENALTY)}
+                className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+              />
+            </label>
+            <label className="block">
+              <span className={`block ${label}`}>Presence penalty</span>
+              <input
+                type="number" min={-2} max={2} step={0.1}
+                value={num(gen.presencePenalty)}
+                onChange={e => setGen({ presencePenalty: parse(e.target.value, -2, 2) })}
+                placeholder={String(DEFAULT_LOCAL_PRESENCE_PENALTY)}
+                className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+              />
+            </label>
+          </>
+        )}
+      </div>
+      <p className="text-[9px] text-slate-400 mt-1 leading-snug">
+        Blank = the default shown. <strong>Max tokens</strong> is the reply budget —
+        reasoning models spend it on thinking <em>and</em> the answer, so a small
+        value cuts long answers off mid-thought. Higher temperature = more creative,
+        lower = more literal.
+      </p>
+    </div>
   );
 }
 
@@ -752,6 +848,8 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
           </span>
         </label>
       </div>
+
+      <GenerationFields conn={c} isLocal={false} onPatch={p => onPatch(c.id, p)} />
 
       {/* Reachability + model discovery */}
       <div className="flex flex-wrap items-center gap-2 mt-2">

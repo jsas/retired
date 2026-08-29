@@ -13,7 +13,7 @@
 // support them). The plan digest goes into the conversation via the system
 // prompt instead — the model still answers from real numbers.
 
-import type { AiConnection } from '../aiSettings';
+import { DEFAULT_LOCAL_TEMPERATURE, effectiveGeneration, type AiConnection } from '../aiSettings';
 import { ProviderError, type ChatMessage, type StreamEvent, type StreamChatRequest } from './providers';
 
 /** Engine handle; one per loaded model, reused across chats. */
@@ -290,28 +290,31 @@ export async function* streamWebLlm(
 
   let stream: AsyncIterable<unknown>;
   try {
+    const gen = effectiveGeneration(conn);
     stream = await engine.chat.completions.create({
       messages: toMessages(req.system, req.messages),
       stream: true,
       // Reasoning models (Qwen3 "thinking", DeepSeek-R1) spend their chain of
       // thought INSIDE this same budget before writing a word of the visible
-      // answer — a 1024 cap let a long thought consume the whole turn and stop
+      // answer — a small cap let a long thought consume the whole turn and stop
       // with finish_reason 'length' and no answer at all (the "it thought,
       // then quit; 'continue' then cut off mid-sentence" bug). Give local
       // turns room to think AND answer; the caller can still cap lower.
-      max_tokens: req.maxTokens ?? 4096,
+      max_tokens: req.maxTokens ?? gen.maxTokens,
       // Bound the context: the plan digest + tool catalog + a long user answer
       // can exceed the KV cache a small model was compiled for, which is the
       // main cause of mid-generation GPU crashes (mapAsync / device lost).
       // Clamp the compile window so an over-large user value can't blow VRAM.
       context_window_size: Math.min(req.contextSize ?? 16384, 32768),
-      temperature: 0.3, // math/reasoning models: keep them deterministic-ish
+      // math/reasoning models: keep them deterministic-ish by default; the
+      // user can loosen this per connection on the Connections page.
+      temperature: gen.temperature ?? DEFAULT_LOCAL_TEMPERATURE,
       // A degenerate reply is a REPEATED sentence, not a single token, so
       // penalize whole n-gram repeats (repetition_penalty) rather than per-
       // token frequency — and a streaming circuit-breaker below cuts it off
       // entirely once it's clearly looping.
-      repetition_penalty: 1.15,
-      presence_penalty: 0.3,
+      repetition_penalty: gen.repetitionPenalty,
+      presence_penalty: gen.presencePenalty,
     });
   } catch (err) {
     throw translateLocalError(err);

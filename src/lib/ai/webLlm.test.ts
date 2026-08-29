@@ -180,6 +180,35 @@ describe('streamWebLlm', () => {
     expect(lastRequest?.max_tokens).toBe(512);
   });
 
+  it('uses the connection generation block when set (and the local defaults otherwise)', async () => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+
+    // No generation block → the deterministic-ish local defaults apply.
+    await unloadWebLlmEngine();
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    for await (const _ of streamWebLlm(conn, {
+      system: 'sys', messages: [{ role: 'user', content: 'hi' }], tools: [],
+    })) void _;
+    expect(lastRequest?.temperature).toBe(0.3);
+    expect(lastRequest?.repetition_penalty).toBe(1.15);
+    expect(lastRequest?.presence_penalty).toBe(0.3);
+    expect(lastRequest?.max_tokens).toBeGreaterThanOrEqual(4096);
+
+    // A tuned connection overrides each of them.
+    await unloadWebLlmEngine();
+    const tuned: AiConnection = {
+      ...conn,
+      generation: { maxTokens: 8192, temperature: 0.9, repetitionPenalty: 1.4, presencePenalty: 0.1 },
+    };
+    for await (const _ of streamWebLlm(tuned, {
+      system: 'sys', messages: [{ role: 'user', content: 'hi' }], tools: [],
+    })) void _;
+    expect(lastRequest?.max_tokens).toBe(8192);
+    expect(lastRequest?.temperature).toBe(0.9);
+    expect(lastRequest?.repetition_penalty).toBe(1.4);
+    expect(lastRequest?.presence_penalty).toBe(0.1);
+  });
+
   it('aborting interrupts the engine and reports aborted', async () => {
     interruptCalls = 0;
     const controller = new AbortController();

@@ -20,6 +20,22 @@ export const AI_PROVIDERS = [
 
 export type AiProviderId = (typeof AI_PROVIDERS)[number];
 
+/** Per-connection generation tuning. Every field is optional — when omitted
+ *  the provider's DEFAULT_* constant applies, so a connection the user never
+ *  tunes behaves exactly as before. Surfaced on the Connections page. */
+export interface AiGenerationSettings {
+  /** Max tokens the model may generate per turn (chain-of-thought included).
+   *  Anthropic/OpenAI-compatible REQUIRE the field, so "no limit" isn't
+   *  possible — the default is generous instead (DEFAULT_MAX_TOKENS). */
+  maxTokens?: number;
+  /** Sampling temperature (0 = deterministic). Provider default when unset. */
+  temperature?: number;
+  /** Local (web-llm) only: whole-n-gram repeat penalty, the anti-ramble guard. */
+  repetitionPenalty?: number;
+  /** Local (web-llm) only: presence penalty (encourages new topics). */
+  presencePenalty?: number;
+}
+
 export interface AiConnection {
   id: string;
   provider: AiProviderId;
@@ -31,6 +47,7 @@ export interface AiConnection {
   /** Context window in tokens, for the usage indicator + compaction trigger.
    *  When omitted a provider default is assumed (small for local models). */
   contextSize?: number;
+  generation?: AiGenerationSettings;
 }
 
 export interface AiPromptPreset {
@@ -49,6 +66,13 @@ export interface AiSettings {
   systemPromptOverride?: string;
 }
 
+const generationSchema = z.object({
+  maxTokens: z.number().int().positive().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  repetitionPenalty: z.number().min(0).max(2).optional(),
+  presencePenalty: z.number().min(-2).max(2).optional(),
+});
+
 const connectionSchema = z.object({
   id: z.string().min(1),
   provider: z.enum(AI_PROVIDERS),
@@ -57,6 +81,7 @@ const connectionSchema = z.object({
   model: z.string().min(1),
   baseUrl: z.string().optional(),
   contextSize: z.number().int().positive().optional(),
+  generation: generationSchema.optional(),
 });
 
 const promptSchema = z.object({
@@ -194,6 +219,36 @@ export function saveAiSettings(settings: AiSettings, kv: KV = defaultKV()): void
 
 export function newConnectionId(): string {
   return `conn-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Generation defaults. max_tokens is deliberately generous: reasoning models
+ *  (DeepSeek-R1, Qwen3-thinking, GLM) spend their chain of thought INSIDE the
+ *  same budget before writing the visible answer, so a small cap yields a
+ *  thought-then-nothing turn or a mid-sentence cutoff. 16384 leaves room for
+ *  both; the user can raise or lower it per connection on the Connections
+ *  page. Temperature defaults differ by tier: cloud providers get their own
+ *  (omit the field); local math/reasoning models stay deterministic-ish. */
+export const DEFAULT_MAX_TOKENS = 16384;
+export const DEFAULT_LOCAL_TEMPERATURE = 0.3;
+export const DEFAULT_LOCAL_REPETITION_PENALTY = 1.15;
+export const DEFAULT_LOCAL_PRESENCE_PENALTY = 0.3;
+
+/** Resolve a connection's effective generation settings: the user's override
+ *  when present, the provider default otherwise. Cloud temperature stays
+ *  undefined (the provider's own default applies — omitting the field is
+ *  different from sending one). */
+export function effectiveGeneration(c: AiConnection): {
+  maxTokens: number;
+  temperature: number | undefined;
+  repetitionPenalty: number;
+  presencePenalty: number;
+} {
+  return {
+    maxTokens: c.generation?.maxTokens ?? DEFAULT_MAX_TOKENS,
+    temperature: c.generation?.temperature,
+    repetitionPenalty: c.generation?.repetitionPenalty ?? DEFAULT_LOCAL_REPETITION_PENALTY,
+    presencePenalty: c.generation?.presencePenalty ?? DEFAULT_LOCAL_PRESENCE_PENALTY,
+  };
 }
 
 /** The default model id a provider gets when a connection is first added, so

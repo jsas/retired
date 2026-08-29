@@ -16,7 +16,7 @@
 // from prose so the UI can show the model's thinking collapsibly instead of
 // mixing it into the answer (gpt-oss, DeepSeek-R1, Qwen3 all emit one).
 
-import type { AiConnection } from '../aiSettings';
+import { effectiveGeneration, type AiConnection } from '../aiSettings';
 
 export interface AgentToolCall {
   id: string;
@@ -219,9 +219,12 @@ async function* streamAnthropic(
   req: StreamChatRequest,
   fetchFn: FetchFn,
 ): AsyncGenerator<StreamEvent> {
+  const gen = effectiveGeneration(conn);
   const body: Record<string, unknown> = {
     model: conn.model,
-    max_tokens: req.maxTokens ?? 4096,
+    // Anthropic REQUIRES max_tokens; the connection's setting (or the generous
+    // default) applies unless the caller pinned a smaller budget for this call.
+    max_tokens: req.maxTokens ?? gen.maxTokens,
     system: req.system,
     stream: true,
     messages: req.messages.map(m => {
@@ -256,6 +259,7 @@ async function* streamAnthropic(
       input_schema: t.jsonSchema,
     }));
   }
+  if (gen.temperature !== undefined) body.temperature = gen.temperature;
 
   const res = await fetchFn('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -325,10 +329,13 @@ async function* streamOpenAICompatible(
   fetchFn: FetchFn,
 ): AsyncGenerator<StreamEvent> {
   const base = (conn.baseUrl ?? '').replace(/\/+$/, '');
+  const gen = effectiveGeneration(conn);
   const body: Record<string, unknown> = {
     model: conn.model,
     stream: true,
-    max_tokens: req.maxTokens ?? 4096,
+    // The connection's token budget (generous default so reasoning models
+    // aren't cut off mid-thought) unless the caller pinned this call lower.
+    max_tokens: req.maxTokens ?? gen.maxTokens,
     messages: [
       { role: 'system', content: req.system },
       ...req.messages.flatMap((m): Array<Record<string, unknown>> => {
@@ -363,6 +370,7 @@ async function* streamOpenAICompatible(
       function: { name: t.name, description: t.description, parameters: t.jsonSchema },
     }));
   }
+  if (gen.temperature !== undefined) body.temperature = gen.temperature;
 
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (conn.apiKey) headers.authorization = `Bearer ${conn.apiKey}`;
@@ -435,8 +443,14 @@ async function* streamGemini(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(conn.model)}` +
     `:streamGenerateContent?alt=sse&key=${encodeURIComponent(conn.apiKey)}`;
 
+  const gen = effectiveGeneration(conn);
   const body: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: req.system }] },
+    // Gemini defaults to a small output cap on some models — set it explicitly.
+    generationConfig: {
+      maxOutputTokens: req.maxTokens ?? gen.maxTokens,
+      ...(gen.temperature !== undefined ? { temperature: gen.temperature } : {}),
+    },
     contents: req.messages.flatMap(m => {
       const parts: Array<Record<string, unknown>> = [];
       if (m.role === 'assistant') {
