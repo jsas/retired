@@ -4,6 +4,7 @@
 // say, we recommend the smallest model and say so.
 
 import { WEBLLM_MODELS, webGpuAvailable, type WebLlmModelChoice } from './webLlmModels';
+import { browserLabel, detectBrowser, isLikelyAppleSilicon } from './browserDetect';
 
 export interface MachineGuide {
   /** Can this browser even try local models? */
@@ -26,10 +27,14 @@ export async function detectGpuMemoryGB(): Promise<number | null> {
     const nav = navigator as unknown as { gpu?: { requestAdapter(): Promise<unknown> } };
     const adapter = await nav.gpu?.requestAdapter();
     if (!adapter) return null;
-    // maxBufferSize is a decent proxy for usable VRAM on most adapters.
-    const limits = (adapter as { limits?: { maxBufferSize?: number } }).limits;
-    const bytes = limits?.maxBufferSize;
-    if (typeof bytes === 'number' && bytes > 0) return bytes / 1e9;
+    // maxBufferSize is a decent proxy for usable VRAM on most adapters. On
+    // Apple Silicon it's often clamped low, so take the larger of the buffer
+    // limits to avoid under-reading unified memory.
+    const limits = (adapter as {
+      limits?: { maxBufferSize?: number; maxStorageBufferBindingSize?: number };
+    }).limits;
+    const bytes = Math.max(limits?.maxBufferSize ?? 0, limits?.maxStorageBufferBindingSize ?? 0);
+    if (bytes > 0) return bytes / 1e9;
     return null;
   } catch {
     return null;
@@ -47,15 +52,31 @@ export function buildMachineGuide(webgpu: boolean, gpuMemoryGB: number | null): 
   const smallest = byVram[0];
 
   if (!webgpu) {
+    const browser = detectBrowser();
+    const name = browserLabel(browser);
+    // Name the actual browser and the one concrete fix. On a Mac the answer is
+    // always Chrome/Edge (WebGPU→Metal); we never imply the Mac can't do it.
+    const fix = browser === 'safari'
+      ? 'Safari doesn\'t turn WebGPU on yet. Open this page in Chrome or Edge on your Mac — local ' +
+        'models run great on Apple Silicon — or use an online provider instead (the "advanced" ' +
+        'option below).'
+      : browser === 'firefox'
+        ? 'Firefox keeps WebGPU off by default. Open this page in Chrome or Edge on your Mac — ' +
+          'local models run great on Apple Silicon — or use an online provider instead (the ' +
+          '"advanced" option below).'
+        : isLikelyAppleSilicon()
+          ? 'This Mac can run local models — it just needs a browser with WebGPU on. Open this ' +
+            'page in the latest Chrome or Edge, or use an online provider instead (the "advanced" ' +
+            'option below).'
+          : 'Try the latest Chrome or Edge on a computer (not a phone), or use an online provider ' +
+            'instead (the "advanced" option below).';
     return {
       webgpu: false,
       gpuMemoryGB: null,
       recommended: smallest,
-      headline: 'Local models won\'t run in this browser.',
-      detail:
-        'Running a model on your own computer needs a browser feature called WebGPU, which this browser ' +
-        'doesn\'t have. Try the latest Chrome or Edge on a computer (not a phone), or use an online ' +
-        'provider instead (the "advanced" option below).',
+      headline: `Local models won't run in ${name}.`,
+      detail: `Running a model on your own computer needs a browser feature called WebGPU, which ${name} ` +
+        `isn't exposing. ${fix}`,
     };
   }
 
@@ -77,14 +98,22 @@ export function buildMachineGuide(webgpu: boolean, gpuMemoryGB: number | null): 
     ? `Start with ${pick.label} — a good balance for most computers.`
     : `Your computer can likely run ${pick.label}.`;
 
+  // Apple Silicon shares memory between CPU and GPU, so the reported figure is
+  // a conservative ceiling, not a hard wall — a Mac can usually run a size up.
+  const siliconNote = isLikelyAppleSilicon()
+    ? ' On Apple Silicon the CPU and GPU share one memory pool, so you can usually run a larger ' +
+      'model than the number suggests.'
+    : '';
+
   const detail = gpuMemoryGB == null
     ? 'Your browser didn\'t tell us how much graphics memory you have, so we picked a model ' +
       'that works well for most people. Bigger models give smarter answers but need a stronger ' +
-      'computer and a longer first download; when in doubt, start with the suggested one.'
+      'computer and a longer first download; when in doubt, start with the suggested one.' +
+      siliconNote
     : `We detected roughly ${gpuMemoryGB.toFixed(1)} GB of graphics memory. The model we picked fits ` +
       'with room to spare. Bigger models give smarter answers but take longer to download the first ' +
       'time and can feel slow on a weaker computer. When in doubt, start smaller — you can always ' +
-      'switch.';
+      'switch.' + siliconNote;
 
   return { webgpu: true, gpuMemoryGB, recommended: pick, headline, detail };
 }

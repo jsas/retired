@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { buildMachineGuide } from './machineGuide';
 import { WEBLLM_MODELS } from './webLlmModels';
 
@@ -6,6 +6,26 @@ import { WEBLLM_MODELS } from './webLlmModels';
 const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
 const smallest = byVram[0];
 const biggest = byVram[byVram.length - 1];
+
+// Swap navigator.userAgent per test, then restore (the guide reads it via
+// browserDetect). jsdom exposes it as a getter, so redefine the property.
+const realNavigator = globalThis.navigator;
+function setUA(ua: string) {
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { userAgent: ua },
+    configurable: true,
+    writable: true,
+  });
+}
+afterEach(() => {
+  Object.defineProperty(globalThis, 'navigator', {
+    value: realNavigator,
+    configurable: true,
+    writable: true,
+  });
+});
+const SAFARI_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
+const FIREFOX_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0';
 
 describe('buildMachineGuide', () => {
   it('steers no-WebGPU browsers away from local models, plainly', () => {
@@ -53,5 +73,35 @@ describe('buildMachineGuide', () => {
         expect(g.recommended).toBe(smallest);
       }
     }
+  });
+
+  it('names Safari and points a Mac user at Chrome/Edge (never blames the Mac)', () => {
+    setUA(SAFARI_MAC);
+    const g = buildMachineGuide(false, null);
+    expect(g.headline).toContain('Safari');
+    expect(g.detail).toMatch(/Chrome or Edge/);
+    expect(g.detail).toMatch(/Apple Silicon/);
+    expect(g.detail).not.toMatch(/not a phone/); // Mac-specific copy, not generic
+  });
+
+  it('names Firefox and points a Mac user at Chrome/Edge', () => {
+    setUA(FIREFOX_MAC);
+    const g = buildMachineGuide(false, null);
+    expect(g.headline).toContain('Firefox');
+    expect(g.detail).toMatch(/Chrome or Edge/);
+    expect(g.detail).toMatch(/Apple Silicon/);
+  });
+
+  it('adds a unified-memory note on Apple Silicon when WebGPU works', () => {
+    setUA(SAFARI_MAC); // any mac UA marks it Apple Silicon for the note
+    const g = buildMachineGuide(true, 24);
+    expect(g.detail).toMatch(/share one memory pool/);
+    expect(g.detail).toMatch(/larger\s+model/);
+  });
+
+  it('omits the unified-memory note off-Mac', () => {
+    setUA('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+    const g = buildMachineGuide(true, 24);
+    expect(g.detail).not.toMatch(/share one memory pool/);
   });
 });
