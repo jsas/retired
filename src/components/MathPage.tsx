@@ -131,6 +131,12 @@ function YearWorksheet({ row, inputs, isCouple }: {
               <Line label={`embedded-gain fraction ${pct(c.gainsFraction)} → gain realized`} value={d.tax.capitalGains} indent />
             </>
           )}
+          {(w.rdsp ?? 0) > 0.5 && (
+            <>
+              <Line label="RDSP (grant/bond/growth portion taxable)" value={w.rdsp ?? 0} />
+              <Line label={`taxable portion ${pct(d.rdsp?.taxableFraction ?? 0)} of the draw`} value={d.rdsp?.taxablePortion ?? 0} indent />
+            </>
+          )}
           <Eq parts="total withdrawn" result={row.withdrawals} strong />
           <Eq parts="remaining need after account draws" result={c.needAfterDraws} />
         </Step>
@@ -229,6 +235,7 @@ function YearWorksheet({ row, inputs, isCouple }: {
         <Line label="TFSA growth" value={d.growth.tfsa} />
         <Line label="Taxable growth" value={d.growth.taxable} />
         <Line label="Cash growth (cushion rate)" value={d.growth.cash} />
+        {(d.growth.rdsp ?? 0) > 0.5 && <Line label="RDSP growth (tax-sheltered)" value={d.growth.rdsp ?? 0} />}
         <Eq parts="market gains" result={row.marketGains} strong />
         <Eq parts="ending balance" result={row.endingBalance} strong />
       </Step>

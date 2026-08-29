@@ -12,7 +12,7 @@ interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
 }
 
-type Section = 'general' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains';
+type Section = 'general' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp';
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'general', label: 'General' },
@@ -22,7 +22,8 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'oas', label: 'OAS' },
   { id: 'cpp', label: 'CPP' },
   { id: 'engine', label: 'Engine' },
-  { id: 'gains', label: 'Capital Gains' }
+  { id: 'gains', label: 'Capital Gains' },
+  { id: 'rdsp', label: 'RDSP' }
 ];
 
 const PROVINCE_NAMES: Record<string, string> = {
@@ -342,6 +343,44 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 100% = the whole taxable balance is principal (no embedded gains). Lower it if the
                 account has grown — e.g. 60% means 40¢ of every dollar withdrawn is a taxable gain.
                 Contributions raise the ACB; growth does not.
+              </p>
+            </div>
+          )}
+
+          {section === 'rdsp' && (
+            <div className="space-y-3 max-w-sm">
+              <p className="text-[11px] text-slate-500 leading-snug">
+                Canada Disability Savings Grant (CDSG) matches contributions; the Bond (CDSB) is
+                income-tested and needs no contribution. Both stop at the end-age; contributions have a
+                lifetime cap. On withdrawal the grant/bond/growth portion is taxable. 2026 values.
+              </p>
+              <NumberField label="Grant income threshold ($/yr)" value={draft.rdsp.grantThreshold}
+                onChange={v => update(c => { c.rdsp.grantThreshold = v; })} step="1000" />
+              <NumberField label="Grant annual max ($)" value={draft.rdsp.grantAnnualMax}
+                onChange={v => update(c => { c.rdsp.grantAnnualMax = v; })} step="100" />
+              <NumberField label="Grant lifetime max ($)" value={draft.rdsp.grantLifetimeMax}
+                onChange={v => update(c => { c.rdsp.grantLifetimeMax = v; })} step="1000" />
+              <NumberField label="Grant/bond end age" value={draft.rdsp.grantEndAge}
+                onChange={v => update(c => { c.rdsp.grantEndAge = v; })} />
+              <div className="grid grid-cols-2 gap-2">
+                <NumberField label="Bond lower threshold ($)" value={draft.rdsp.bondThresholdLower}
+                  onChange={v => update(c => { c.rdsp.bondThresholdLower = v; })} step="500" />
+                <NumberField label="Bond upper threshold ($)" value={draft.rdsp.bondThresholdUpper}
+                  onChange={v => update(c => { c.rdsp.bondThresholdUpper = v; })} step="500" />
+              </div>
+              <NumberField label="Bond annual max ($)" value={draft.rdsp.bondAnnualMax}
+                onChange={v => update(c => { c.rdsp.bondAnnualMax = v; })} step="100" />
+              <NumberField label="Bond lifetime max ($)" value={draft.rdsp.bondLifetimeMax}
+                onChange={v => update(c => { c.rdsp.bondLifetimeMax = v; })} step="1000" />
+              <NumberField label="Contribution lifetime max ($)" value={draft.rdsp.contributionLifetimeMax}
+                onChange={v => update(c => { c.rdsp.contributionLifetimeMax = v; })} step="5000" />
+              <NumberField label="Contribution end age" value={draft.rdsp.contributionEndAge}
+                onChange={v => update(c => { c.rdsp.contributionEndAge = v; })} />
+              <p className="text-[11px] text-slate-500 leading-snug border-t border-slate-200 pt-2">
+                Family income at/below the grant threshold earns 300% on the first $500 + 200% on the next
+                $1,000 contributed; above it, 100% on the first $1,000. The bond pays in full at/below the
+                lower threshold, phases out linearly to $0 at the upper. The 10-year AHA clawback and the
+                grant/bond carry-forward are not modelled.
               </p>
             </div>
           )}

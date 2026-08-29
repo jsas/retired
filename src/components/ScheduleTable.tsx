@@ -79,6 +79,14 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
             </>
           )}
           {w.cash > 0.5 && <Line label={`Cash cushion${pct(w.cash)}`} value={w.cash} hint="After-tax cash reserve, used as a last resort." />}
+          {(w.rdsp ?? 0) > 0.5 && (
+            <>
+              <Line label={`RDSP${pct(w.rdsp ?? 0)}`} value={w.rdsp ?? 0} hint="Disability-plan withdrawal. The grant/bond/growth portion is taxable; the contribution principal is a tax-free return of capital." />
+              {(detail.rdsp?.taxablePortion ?? 0) > 0.5 && (
+                <Line label="↳ taxable portion" value={detail.rdsp!.taxablePortion ?? 0} indent hint="The grant/bond/growth part of this draw, added to taxable income. The rest is tax-free contribution principal." />
+              )}
+            </>
+          )}
           {w.rmDraw > 0.5 && <Line label={`Reverse mortgage${pct(w.rmDraw)}`} value={w.rmDraw} hint="Tax-free borrowing against home equity; the loan grows by this amount." />}
           {registeredTotal > 0.5 && (
             <div className="pt-1 text-[10px] text-slate-400">Registered draws are grossed up for tax.</div>
@@ -91,6 +99,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
           <Line label="RRSP" value={detail.contrib!.rrsp} />
           <Line label="TFSA" value={detail.contrib!.tfsa} />
           <Line label="Taxable" value={detail.contrib!.taxable} />
+          {(detail.contrib!.rdsp ?? 0) > 0.5 && <Line label="RDSP" value={detail.contrib!.rdsp ?? 0} hint="Not deductible (like a TFSA); attracts grants/bonds at lower incomes." />}
         </Section>
       )}
 
@@ -100,7 +109,17 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
         <Line label="TFSA" value={detail.growth.tfsa} />
         <Line label="Taxable" value={detail.growth.taxable} />
         <Line label="Cash cushion" value={detail.growth.cash} hint="Cash earns the lower cushion rate." />
+        {(detail.growth.rdsp ?? 0) > 0.5 && <Line label="RDSP" value={detail.growth.rdsp ?? 0} hint="Tax-sheltered growth; taxable only when withdrawn." />}
       </Section>
+
+      {detail.rdsp && (detail.rdsp.contribution > 0.5 || detail.rdsp.grant > 0.5 || detail.rdsp.bond > 0.5) && (
+        <Section title="RDSP grants & bonds">
+          {detail.rdsp.contribution > 0.5 && <Line label="Your contribution" value={detail.rdsp.contribution} />}
+          {detail.rdsp.grant > 0.5 && <Line label="CDSG (grant)" value={detail.rdsp.grant} hint="Canada Disability Savings Grant — matches contributions up to 300%/200% at lower incomes." />}
+          {detail.rdsp.bond > 0.5 && <Line label="CDSB (bond)" value={detail.rdsp.bond} hint="Canada Disability Savings Bond — income-tested; no contribution needed." />}
+          <Line label="Balance" value={detail.rdsp.balance} strong />
+        </Section>
+      )}
 
       {hasBenefits && (
         <Section title="Benefits (gross)">
@@ -171,8 +190,10 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
 
   // Reverse-mortgage columns appear only when the feature produced them.
   const hasRm = breakdown.some(r => r.netHomeEquity !== undefined);
-  // Number of columns the detail row must span (base 19 + optional RM column).
-  const colCount = 19 + (hasRm ? 1 : 0);
+  // RDSP balance column appears only when a person has an RDSP.
+  const hasRdsp = breakdown.some(r => r.rdspBalance !== undefined);
+  // Number of columns the detail row must span (base 19 + optional RM/RDSP columns).
+  const colCount = 19 + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0);
   const anyDetail = household || breakdown.some(r => r.detail);
 
   return (
@@ -201,6 +222,9 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
               <th className="text-right px-3 py-2 font-semibold text-slate-700">TFSA</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Taxable</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Cash Cushion</th>
+              {hasRdsp && (
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>
+              )}
               {hasRm && (
                 <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Home value minus reverse-mortgage loan balance. The loan compounds with interest and draws, eroding equity over time.">Home Equity</th>
               )}
@@ -286,6 +310,12 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
                     <td className="px-3 py-1.5 text-right font-mono text-slate-600">
                       {formatCurrency(row.cashCushionBalance)}
                     </td>
+                    {hasRdsp && (
+                      <td className="px-3 py-1.5 text-right font-mono text-slate-600"
+                        title={row.detail?.rdsp ? `Contribution basis ${formatCurrency(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
+                        {row.rdspBalance !== undefined ? formatCurrency(row.rdspBalance) : '—'}
+                      </td>
+                    )}
                     {hasRm && (
                       <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
                         title={row.homeValue !== undefined ? `Home ${formatCurrency(row.homeValue)} − loan ${formatCurrency(row.loanBalance ?? 0)}` : undefined}>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X, Briefcase } from 'lucide-react';
-import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage, EmploymentIncome } from '../lib/retirementEngine';
+import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Landmark, Home, X, Briefcase, HeartHandshake } from 'lucide-react';
+import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, Pension, ReverseMortgage, EmploymentIncome, RdspInputs } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
 import { baselineSpouse } from '../lib/householdTypes';
 import type { AppConfig } from '../lib/appConfig';
@@ -569,6 +569,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
   // (The field is set to `undefined` when off, which would otherwise lose them.)
   const spouseStash = useRef<NonNullable<RetirementInputs['spouse']> | null>(null);
   const rmStash = useRef<ReverseMortgage | null>(null);
+  const rdspStash = useRef<RdspInputs | null>(null);
 
   // Single source of truth for a baseline spouse (shared with the setup
   // wizard's "add a spouse" path) so the two ways of adding a spouse don't
@@ -700,6 +701,29 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
     } else {
       if (inputs.reverseMortgage) rmStash.current = inputs.reverseMortgage;
       updateField('reverseMortgage', undefined);
+    }
+  };
+
+  // RDSP helpers — the primary person's plan. The spouse's RDSP edits go through
+  // updateSpouse (embedded) like their other fields.
+  const updateRdsp = (patch: Partial<RdspInputs>) => {
+    if (!inputs.rdsp) return;
+    updateField('rdsp', { ...inputs.rdsp, ...patch });
+  };
+  const toggleRdsp = (on: boolean) => {
+    if (on) {
+      const base = rdspStash.current ?? {
+        enabled: true as const,
+        balance: 0,
+        contribution: 1500,
+        familyIncome: 50000,
+        contributionBasis: undefined,
+        dtcEligible: true,
+      };
+      updateField('rdsp', { ...base, enabled: true });
+    } else {
+      if (inputs.rdsp) rdspStash.current = inputs.rdsp;
+      updateField('rdsp', undefined);
     }
   };
 
@@ -869,6 +893,62 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
               />
             </div>
           </div>
+        </CollapsibleSection>
+
+        {/* RDSP (Registered Disability Savings Plan) */}
+        <CollapsibleSection id="rdsp" icon={<HeartHandshake size={14} />} title="RDSP (Disability Savings)" open={isOpen('rdsp')} onToggle={toggleSection}>
+          <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer mb-3">
+            <input
+              type="checkbox"
+              checked={inputs.rdsp?.enabled === true}
+              onChange={(e) => toggleRdsp(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>This person holds an RDSP (DTC-eligible beneficiary)</span>
+          </label>
+          {inputs.rdsp?.enabled && (
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={inputs.rdsp.dtcEligible === true}
+                  onChange={(e) => updateRdsp({ dtcEligible: e.target.checked })}
+                  className="mt-0.5"
+                />
+                <span>Eligible for the Disability Tax Credit (required for grants/bonds)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <label className={LABEL_CLS}>Current balance ($)</label>
+                  <input type="number" step="1000" value={inputs.rdsp.balance}
+                    onChange={(e) => updateRdsp({ balance: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Contribution ($/yr)</label>
+                  <input type="number" step="500" value={inputs.rdsp.contribution}
+                    onChange={(e) => updateRdsp({ contribution: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Family income ($/yr)</label>
+                  <input type="number" step="1000" value={inputs.rdsp.familyIncome}
+                    onChange={(e) => updateRdsp({ familyIncome: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Contribution basis ($)</label>
+                  <input type="number" step="1000" value={inputs.rdsp.contributionBasis ?? inputs.rdsp.balance}
+                    onChange={(e) => updateRdsp({ contributionBasis: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+              </div>
+              <p className="text-[10px] text-neutral-500 leading-snug">
+                Grants (CDSG) match contributions up to 300%/200% at lower incomes and bonds (CDSB) pay up to
+                $1,000/yr at the lowest incomes — both to age 49; contributions to age 59. Growth is tax-sheltered.
+                On withdrawal the <strong className="text-neutral-400">grant/bond/growth</strong> portion is taxable;
+                only the contribution principal comes back tax-free. <em>Basis</em> is how much of the current balance
+                is contributed principal (defaults to the full balance). Thresholds &amp; caps are editable in Settings.
+                The 10-year AHA clawback and grant/bond carry-forward are not modelled.
+              </p>
+            </div>
+          )}
         </CollapsibleSection>
 
         {/* Benefits */}
@@ -1274,6 +1354,48 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                   inputs.spouse.spendingBands ?? [],
                   (next) => updateSpouse({ spendingBands: next }),
                   inputs.spouse.desiredSpending,
+                )}
+              </div>
+              <div className="border-t border-neutral-800 pt-2">
+                <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={inputs.spouse.rdsp?.enabled === true}
+                    onChange={(e) => updateSpouse(e.target.checked
+                      ? { rdsp: { enabled: true, balance: 0, contribution: 1500, familyIncome: 50000, dtcEligible: true, ...(inputs.spouse?.rdsp ?? {}) } }
+                      : { rdsp: undefined })}
+                    className="mt-0.5"
+                  />
+                  <span>Spouse holds an RDSP (DTC beneficiary)</span>
+                </label>
+                {inputs.spouse.rdsp?.enabled && (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className={LABEL_CLS}>RDSP balance $</label>
+                      <input type="number" step="1000" value={inputs.spouse.rdsp.balance}
+                        onChange={(e) => updateSpouse({ rdsp: { ...inputs.spouse!.rdsp!, balance: Math.max(0, parseInt(e.target.value) || 0) } })} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Contrib $/yr</label>
+                      <input type="number" step="500" value={inputs.spouse.rdsp.contribution}
+                        onChange={(e) => updateSpouse({ rdsp: { ...inputs.spouse!.rdsp!, contribution: Math.max(0, parseInt(e.target.value) || 0) } })} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Family income $/yr</label>
+                      <input type="number" step="1000" value={inputs.spouse.rdsp.familyIncome}
+                        onChange={(e) => updateSpouse({ rdsp: { ...inputs.spouse!.rdsp!, familyIncome: Math.max(0, parseInt(e.target.value) || 0) } })} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Contrib basis $</label>
+                      <input type="number" step="1000" value={inputs.spouse.rdsp.contributionBasis ?? inputs.spouse.rdsp.balance}
+                        onChange={(e) => updateSpouse({ rdsp: { ...inputs.spouse!.rdsp!, contributionBasis: Math.max(0, parseInt(e.target.value) || 0) } })} className={INPUT_CLS} />
+                    </div>
+                    <label className="col-span-2 flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer">
+                      <input type="checkbox" checked={inputs.spouse.rdsp.dtcEligible === true}
+                        onChange={(e) => updateSpouse({ rdsp: { ...inputs.spouse!.rdsp!, dtcEligible: e.target.checked } })} className="mt-0.5" />
+                      <span>DTC-eligible (required for grants/bonds)</span>
+                    </label>
+                  </div>
                 )}
               </div>
               <p className="text-[10px] text-neutral-500 leading-snug">

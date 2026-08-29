@@ -9,7 +9,7 @@ import type { RetirementInputs, RetirementResults, YearlyBreakdown } from './ret
 
 export type ExportFormat = 'csv' | 'json' | 'yaml';
 export type Subject = 'household' | 'you' | 'spouse';
-export type ColumnGroup = 'balances' | 'flows' | 'benefits' | 'withdrawalSources' | 'growth' | 'tax' | 'reverseMortgage' | 'events';
+export type ColumnGroup = 'balances' | 'flows' | 'benefits' | 'withdrawalSources' | 'growth' | 'tax' | 'reverseMortgage' | 'rdsp' | 'events';
 export type MetaSection = 'profile' | 'options' | 'settings';
 
 export interface ProjectionExportOptions {
@@ -29,6 +29,7 @@ export const COLUMN_GROUPS: Array<{ key: ColumnGroup; label: string; hint: strin
   { key: 'growth', label: 'Growth per account', hint: 'Interest/growth earned by each account' },
   { key: 'tax', label: 'Tax detail', hint: 'Income tax, OAS clawback portion, cumulative tax' },
   { key: 'reverseMortgage', label: 'Reverse mortgage', hint: 'Home value, loan, equity, interest accrued, scheduled vs top-up draws' },
+  { key: 'rdsp', label: 'RDSP', hint: 'Balance, contribution, grant (CDSG), bond (CDSB), growth, withdrawal + taxable portion' },
   { key: 'events', label: 'Cash events', hint: 'One column per labelled event' },
 ];
 
@@ -142,6 +143,16 @@ function rowToRecord(row: YearlyBreakdown, groups: ColumnGroup[], eventKeys: str
     rec.rmInterestAccrued = d?.rm?.interestAccrued ?? 0;
     rec.rmScheduledDraw = d?.rm?.scheduledDraw ?? 0;
     rec.rmTopUpDraw = d?.rm?.topUpDraw ?? 0;
+  }
+  if (groups.includes('rdsp') && row.rdspBalance !== undefined) {
+    rec.rdspBalance = row.rdspBalance;
+    rec.rdspContribution = d?.rdsp?.contribution ?? 0;
+    rec.rdspGrant = d?.rdsp?.grant ?? 0;
+    rec.rdspBond = d?.rdsp?.bond ?? 0;
+    rec.rdspGrowth = d?.rdsp?.growth ?? 0;
+    rec.rdspWithdrawal = d?.rdsp?.withdrawal ?? 0;
+    rec.rdspTaxablePortion = d?.rdsp?.taxablePortion ?? 0;
+    rec.rdspContributionBasis = d?.rdsp?.contributionBasis ?? 0;
   }
   if (groups.includes('events')) {
     for (const key of eventKeys) {
