@@ -279,6 +279,13 @@ export interface YearlyBreakdown {
   marketGains: number;
   withdrawals: number;
   incomeTax: number;
+  // Total tax on ALL of the year's income (benefits + employment + registered
+  // draws + included capital gains), plus the OAS clawback. Contrasts with
+  // incomeTax, which is only the INCREMENTAL tax on withdrawals (tax on total
+  // minus tax on benefits alone) — incomeTax legitimately reads $0 late in
+  // life once the portfolio is drained, which can look like "tax stopped".
+  // Optional so older fixtures compile; the engine sets it on decumulation rows.
+  totalTaxPaid?: number;
   cumulativeTax: number;
   spendingTarget: number; // this year's after-tax income goal, in nominal dollars of that year
   // Unfunded spending gap this year (0 until the portfolio depletes; afterwards
@@ -1301,6 +1308,7 @@ export function calculatePerson(
       marketGains: rrspGains + rrifGains + tfsaGains + taxableGains + cashGains,
       withdrawals: actualWithdrawals,
       incomeTax,
+      totalTaxPaid: calculateTax(totalNetIncome, provinceCode, yearConfig).totalTax + oasClawback,
       cumulativeTax,
       spendingTarget: yearSpending,
       endingBalance: Math.max(0, endingTotal),
@@ -1596,6 +1604,7 @@ export function combineHouseholdBreakdown(
       marketGains: py.marketGains + sy.marketGains,
       withdrawals: py.withdrawals + sy.withdrawals - internal,
       incomeTax: py.incomeTax + sy.incomeTax,
+      totalTaxPaid: (py.totalTaxPaid ?? 0) + (sy.totalTaxPaid ?? 0),
       cumulativeTax: py.cumulativeTax + sy.cumulativeTax,
       spendingTarget: py.spendingTarget + sy.spendingTarget,
       shortfall: (py.shortfall ?? 0) + (sy.shortfall ?? 0),
@@ -1761,6 +1770,10 @@ function applyPensionSplitting(
     const sOldBurden = burden(sNet, sOas, yearConfig);
     py.incomeTax += pNewBurden - pOldBurden;
     sy.incomeTax += sNewBurden - sOldBurden;
+    // Total tax on all income moves by the same delta as the incremental figure
+    // (the split reallocates income; total burden changes identically).
+    py.totalTaxPaid = (py.totalTaxPaid ?? 0) + (pNewBurden - pOldBurden);
+    sy.totalTaxPaid = (sy.totalTaxPaid ?? 0) + (sNewBurden - sOldBurden);
     py.splitTransferred = bestT;       // + = primary gave to spouse
     sy.splitTransferred = -bestT;      // spouse's view (received if bestT > 0)
   }

@@ -59,7 +59,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
   const hasContrib = detail.contrib && (detail.contrib.rrsp + detail.contrib.tfsa + detail.contrib.taxable) > 0.5;
   const hasBenefits = row.cppIncome + row.oasIncome + row.gisIncome + row.pensionIncome > 0.5;
   const hasEmployment = (row.employmentGross ?? 0) > 0.5;
-  const hasTax = Math.abs(row.incomeTax) > 0.5 || detail.tax.oasClawback > 0.5;
+  const hasTax = Math.abs(row.incomeTax) > 0.5 || detail.tax.oasClawback > 0.5 || (row.totalTaxPaid ?? 0) > 0.5;
   const rm = detail.rm;
 
   return (
@@ -122,6 +122,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
       {hasTax && (
         <Section title="Tax on withdrawals">
           <Line label="Income tax" value={row.incomeTax} strong hint="Tax on registered draws and realized gains beyond the tax on benefits alone, plus OAS clawback." />
+          <Line label="Total tax (all income)" value={row.totalTaxPaid ?? 0} hint="Tax on the year's ENTIRE income (benefits + employment + withdrawals + gains) plus OAS clawback — what a tax return would show. Charged every year taxable income is received." />
           {detail.tax.oasClawback > 0.5 && <Line label="↳ OAS clawback" value={detail.tax.oasClawback} indent hint="OAS recovery tax: net income above the threshold is clawed back at 15¢/$." />}
           <Line label="Cumulative tax" value={row.cumulativeTax} hint="Total income tax since retirement." />
         </Section>
@@ -187,7 +188,8 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Market Gains</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700" title="After-tax income goal for the year (desired spending inflated to that year)">Spending Target</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Withdrawals</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Income Tax</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Incremental tax on this year's withdrawals (registered draws + realized gains) beyond the tax on benefits alone, plus OAS clawback. Reads $0 late in life once the portfolio is drained — that does NOT mean tax stopped; see Total Tax.">Income Tax</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Total tax on ALL of the year's income (CPP, OAS, pension, employment, withdrawals) plus OAS clawback. Charged every year taxable income is received, right to the final year.">Total Tax</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Running total of income tax paid since retirement">Tax Burden</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">CPP</th>
               <th className="text-right px-3 py-2 font-semibold text-slate-700">OAS</th>
@@ -247,6 +249,9 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
                     </td>
                     <td className="px-3 py-1.5 text-right font-mono text-amber-700">
                       {formatCurrency(row.incomeTax)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-amber-800">
+                      {formatCurrency(row.totalTaxPaid ?? 0)}
                     </td>
                     <td className="px-3 py-1.5 text-right font-mono text-amber-900">
                       {formatCurrency(row.cumulativeTax)}

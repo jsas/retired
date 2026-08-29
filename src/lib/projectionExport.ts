@@ -131,6 +131,7 @@ function rowToRecord(row: YearlyBreakdown, groups: ColumnGroup[], eventKeys: str
   }
   if (groups.includes('tax')) {
     rec.incomeTax = row.incomeTax;
+    rec.totalTaxPaid = row.totalTaxPaid ?? 0;
     rec.oasClawback = d?.tax.oasClawback ?? 0;
     rec.cumulativeTax = row.cumulativeTax;
   }

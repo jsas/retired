@@ -207,6 +207,11 @@ function YearWorksheet({ row, inputs, isCouple }: {
             />
           )}
           <Eq parts="income tax on this year's withdrawals" result={row.incomeTax} strong />
+          <Line label="total tax on ALL income (what a return would show)" value={row.totalTaxPaid ?? 0} />
+          <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+            Income tax above is only the incremental tax on withdrawals; Total tax adds the tax on the
+            benefits themselves. Both run every year — neither stops at any age while income is received.
+          </div>
           {(row.splitTransferred ?? 0) !== 0 && (
             <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
               includes the effect of pension-income splitting — tax here can be non-zero even with no

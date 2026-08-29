@@ -1722,3 +1722,58 @@ describe('tax continuity through maxAge', () => {
     expect(last.incomeTax).toBeGreaterThanOrEqual(0);
   });
 });
+
+// Total-tax visibility: the per-year "Income Tax" column is the INCREMENTAL tax
+// on withdrawals, which legitimately reads $0 once the portfolio is drained —
+// the "tax stopped" perception. totalTaxPaid is the year's FULL tax on all
+// income, and must stay positive whenever taxable income is received.
+describe('totalTaxPaid (total tax on all income)', () => {
+  it('keeps totalTaxPaid > 0 on CPP+OAS alone, even when incomeTax is $0', () => {
+    const r = calculateRetirement(baseInputs({
+      tfsaBalance: 0, taxableBalance: 0, rrspBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      cppStartAge: 65, cppMonthlyAmount: 1400, oasStartAge: 65, maxAge: 90,
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      if (y.age < 65) continue;
+      // No withdrawals → incremental incomeTax is $0, but the year's FULL tax
+      // (on the benefits) is positive because CPP+OAS exceed the exemption.
+      expect(y.totalTaxPaid).toBeGreaterThan(0);
+      expect(y.totalTaxPaid!).toBeGreaterThanOrEqual(y.incomeTax);
+    }
+  });
+
+  it('totalTaxPaid >= incomeTax in every year of a funded plan', () => {
+    const r = calculateRetirement(baseInputs({
+      rrspBalance: 500000, tfsaBalance: 100000,
+      cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65,
+      desiredSpending: 40000, maxAge: 90,
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      if (y.totalTaxPaid === undefined) continue;
+      // Total tax covers benefits + withdrawals, so it's ≥ the withdrawal-only
+      // incremental figure (small tolerance for the pension-split path / cents).
+      expect(y.totalTaxPaid).toBeGreaterThanOrEqual(y.incomeTax - 0.51);
+    }
+  });
+
+  it('household combined rows sum both spouses\' totalTaxPaid', () => {
+    const inputs = baseInputs({
+      rrspBalance: 300000, tfsaBalance: 0,
+      cppStartAge: 65, cppMonthlyAmount: 900, oasStartAge: 65, desiredSpending: 30000,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 20000, pensions: [],
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    const combined = combineHouseholdBreakdown(r, inputs);
+    const cy = yearAt(combined, 70);
+    const py = yearAt(r.yearlyBreakdown, 70);
+    const sy = yearAt(r.spouse!.yearlyBreakdown, 70);
+    expect(closeTo(cy.totalTaxPaid!, (py.totalTaxPaid ?? 0) + (sy.totalTaxPaid ?? 0), 0.02)).toBe(true);
+  });
+});
