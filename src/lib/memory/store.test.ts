@@ -1,7 +1,7 @@
 // Tests for the memory store: bounded size, access weighting, recency decay,
-// search ranking, and the write-refusal semantics that keep the store from
-// churning. The store is deliberately standalone (no app imports) so these
-// exercise it exactly as a future library consumer would.
+// keyword search ranking, and the write-refusal semantics that keep the store
+// from churning. The store is deliberately standalone (no app imports) so
+// these exercise it exactly as a future library consumer would.
 import { describe, it, expect } from 'vitest';
 import {
   MemoryStore, rank, recencyFactor, MAX_PER_SCOPE,
@@ -50,6 +50,17 @@ describe('write', () => {
     expect(store.list().length).toBe(1);
   });
 
+  it('stores keywords: the fact\'s own words plus writer-supplied hypernyms', () => {
+    const { store } = makeStore();
+    const m = store.write({
+      scope: 'global', text: 'User likes oranges.',
+      keywords: ['fruit', 'Food', 'fruit', ''],  // deduped, case-folded, empty dropped
+    })!;
+    // "likes" is kept (not in the stopword list); "user" and "oranges" come
+    // from the text itself, then the writer's hypernyms, deduped, folded.
+    expect(m.keywords).toEqual(['user', 'likes', 'oranges', 'fruit', 'food']);
+  });
+
   it('evicts the lowest-ranked memory when the scope is full', () => {
     const { store, tick } = makeStore();
     for (let i = 0; i < MAX_PER_SCOPE; i++) {
@@ -89,31 +100,76 @@ describe('write', () => {
 });
 
 describe('recall + weighting', () => {
-  it('searches by substring and ranks by weight × recency', () => {
+  it('matches by keyword: a category query finds the specific fact', () => {
     const { store } = makeStore();
-    store.write({ scope: 'global', text: 'User plans to retire to Nova Scotia', importance: 0.9 });
-    store.write({ scope: 'global', text: 'User prefers plain language', importance: 0.3 });
-    store.write({ scope: 'scenario', scopeKey: 's1', text: 'Spouse pension: Nova Scotia plan, $1,200/mo', importance: 0.6 });
-    const hits = store.recall('nova scotia', { scopeKey: 's1' });
-    // Both Nova-Scotia memories match, higher rank first; the unrelated one is out.
-    expect(hits.length).toBe(2);
-    expect(hits[0]!.text).toContain('retire to Nova Scotia');
+    // The exact repro from the field: stored "likes oranges", asked for fruit.
+    store.write({ scope: 'global', text: 'User likes oranges.', keywords: ['fruit', 'food', 'preference'] });
+    store.write({ scope: 'global', text: 'User drives a blue coupe.', keywords: ['car', 'vehicle'] });
+    const hits = store.recall('favorite fruit', { scopeKey: undefined });
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.text).toBe('User likes oranges.');
   });
 
-  it('an access strengthens the memory (weighting by use)', () => {
-    const { store, tick, time } = makeStore();
-    store.write({ scope: 'global', text: 'often useful', importance: 0.5 });
-    store.write({ scope: 'global', text: 'rarely useful', importance: 0.5 });
-    // Recall one of them repeatedly over time; its access count climbs and its
-    // lastAccessedAt stays fresh.
-    for (let i = 0; i < 5; i++) { tick(DAY); store.recall('often'); }
-    const all = store.list();
-    const often = all.find(m => m.text === 'often useful')!;
-    const rarely = all.find(m => m.text === 'rarely useful')!;
-    expect(often.accessCount).toBe(5);
-    expect(rarely.accessCount).toBe(0);
-    expect(often.lastAccessedAt).toBe(time()); // refreshed by the last recall
-    expect(rank(often, time())).toBeGreaterThan(rank(rarely, time()));
+  it('indexes the fact\'s own words without stored keywords', () => {
+    const { store } = makeStore();
+    store.write({ scope: 'global', text: 'Spouse pension pays $1,200/mo from age 65' });
+    const hits = store.recall('pension 65');
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.text).toContain('pension');
+  });
+
+  it('records written before keywords still match (backfill from text)', () => {
+    const { store } = makeStore();
+    store.write({ scope: 'global', text: 'Wants to retire to Nova Scotia', importance: 0.9 });
+    // Simulate a pre-keywords record: the field is absent, as it is for rows
+    // written before the column existed (the adapter yields keywords: [] for
+    // them, and the store derives from text when the list is empty).
+    const legacy: MemoryRecord = { ...store.list()[0]!, keywords: undefined };
+    const adapter = store['adapter' as keyof MemoryStore] as unknown as MemoryAdapter;
+    adapter.put(legacy);
+    const hits = store.recall('retire');
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.text).toContain('Nova Scotia');
+  });
+
+  it('prefix tokens match longer keywords both ways', () => {
+    const { store } = makeStore();
+    // "downsizing" → keyword "downsizing"; query "downsize" is a ≥4-char
+    // prefix of it, so it matches. "at"/"the" are stopwords, "70" is numeric.
+    store.write({ scope: 'global', text: 'Downsizing the house at 70' });
+    expect(store.recall('downsize').length).toBe(1);
+    // The reverse: keyword "returns" is a prefix of query "investments"? no —
+    // "investments" matches the keyword "investment" (its own text token) via
+    // the query being the longer side.
+    store.write({ scope: 'global', text: 'Tracking investment returns yearly' });
+    expect(store.recall('investments').length).toBe(1);
+    // Short tokens don't prefix-match: "age" must not hit "agent".
+    store.write({ scope: 'global', text: 'The agent suggested RRSP meltdown' });
+    expect(store.recall('age').length).toBe(0);
+  });
+
+  it('ranks by relevance first, importance × recency as tiebreak', () => {
+    const { store } = makeStore();
+    // Both match the query's single token, so scores tie (1.0) — rank decides.
+    store.write({ scope: 'global', text: 'meh pension note', importance: 0.2 });
+    store.write({ scope: 'global', text: 'vital pension decision', importance: 0.95 });
+    const hits = store.recall('pension');
+    expect(hits[0]!.text).toBe('vital pension decision');
+    // Now a partial match scores below a full match even at higher importance:
+    // "fruit colour" hits "Fruit, fruit…" on "fruit" (1/2 tokens) but the
+    // oranges fact only on its "fruit" keyword (also 1/2) — tie → rank
+    // decides → importance 1.0 wins. Give the full match a 2-of-2 query
+    // instead: it must beat a 1-of-2 keyword-only match at importance 1.0.
+    store.write({ scope: 'global', text: 'User likes oranges.', keywords: ['fruit'], importance: 1.0 });
+    store.write({ scope: 'global', text: 'Fruit salad recipe', keywords: ['fruit', 'recipe'], importance: 0.5 });
+    const fruit = store.recall('fruit recipe', { limit: 2 });
+    expect(fruit[0]!.text).toBe('Fruit salad recipe'); // 2/2 relevance beats 1/2
+  });
+
+  it('a query of only stopwords matches nothing (no blanket recall)', () => {
+    const { store } = makeStore();
+    store.write({ scope: 'global', text: 'User likes oranges.', keywords: ['fruit'] });
+    expect(store.recall('what is my')).toEqual([]);
   });
 
   it('empty query returns the top-ranked memories outright', () => {
@@ -133,6 +189,22 @@ describe('recall + weighting', () => {
     store.write({ scope: 'scenario', scopeKey: 's2', text: 's2 fact' });
     const hits = store.recall('', { scopeKey: 's1' });
     expect(hits.map(h => h.text).sort()).toEqual(['s1 fact', 'user fact']);
+  });
+
+  it('an access strengthens the memory (weighting by use)', () => {
+    const { store, tick, time } = makeStore();
+    store.write({ scope: 'global', text: 'often useful', importance: 0.5 });
+    store.write({ scope: 'global', text: 'rarely useful', importance: 0.5 });
+    // Recall one of them repeatedly over time; its access count climbs and its
+    // lastAccessedAt stays fresh.
+    for (let i = 0; i < 5; i++) { tick(DAY); store.recall('often'); }
+    const all = store.list();
+    const often = all.find(m => m.text === 'often useful')!;
+    const rarely = all.find(m => m.text === 'rarely useful')!;
+    expect(often.accessCount).toBe(5);
+    expect(rarely.accessCount).toBe(0);
+    expect(often.lastAccessedAt).toBe(time()); // refreshed by the last recall
+    expect(rank(often, time())).toBeGreaterThan(rank(rarely, time()));
   });
 });
 

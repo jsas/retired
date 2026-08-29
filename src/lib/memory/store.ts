@@ -12,10 +12,13 @@
 //     use. Count per scope is capped (MAX_PER_SCOPE); when full, the LOWEST-
 //     ranked memory is evicted. Rank = weight × recency decay; every access
 //     (recall hit) strengthens a memory, every idle day weakens it.
-//   - SEARCHABLE. Text query finds candidates; the store ranks matches by the
-//     same rank. Backed by SQLite LIKE (the bundled sql.js has no FTS5) over
-//     the text column — memory sets are small (hundreds at most), so LIKE is
-//     plenty and keeps the store dependency-free.
+//   - SEARCHABLE. A query is TOKENIZED and matched against each memory's
+//     keywords — the words of the fact itself, plus hypernyms captured at
+//     write time ("fruit" for "likes oranges"). Matches score by the fraction
+//     of query tokens hit, ranked by score then weight × recency. Lexical
+//     only (no FTS5 in the bundled sql.js, no embeddings) — memory sets are
+//     small (hundreds at most), so token overlap is plenty and keeps the
+//     store dependency-free.
 //   - STANDALONE. This module knows nothing about retirement, scenarios-as-
 //     storage, or the agent loop. It's a generic weighted-memory store over a
 //     persistence adapter, deliberately cleavable as a library later. The ONLY
@@ -32,6 +35,10 @@ export interface MemoryRecord {
   /** The fact itself, one or two sentences, self-contained ("Spouse's DB
    *  pension pays $1,200/mo from age 65" — not "it pays that"). */
   text: string;
+  /** Search indicators: words of the fact plus hypernyms a future question
+   *  might use ("fruit", "city", "preference"). Optional so records written
+   *  before keywords existed still load — recall backfills them from text. */
+  keywords?: string[];
   /** When the fact was captured (epoch ms). */
   createdAt: number;
   /** Last access (recall hit or write); drives recency ranking. */
@@ -79,6 +86,9 @@ export interface MemoryWrite {
   scopeKey?: string;   // required when scope === 'scenario'
   text: string;
   importance?: number; // default 0.5
+  /** Extra search words beyond the fact's own (hypernyms: "fruit" for
+   *  "likes oranges"). Merged with the auto-extracted ones at write. */
+  keywords?: string[];
 }
 
 export interface RecallOptions {
@@ -87,6 +97,72 @@ export interface RecallOptions {
   /** Only this scope; omit for scope + global together (the usual chat need:
    *  "what's true about this plan AND about the user"). */
   scopeKey?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Keywords — the search indicators a recall query is matched against
+// ---------------------------------------------------------------------------
+
+/** Common English glue words: never useful as search keys (a query of "what
+ *  is my favourite fruit" would otherwise match everything via "what"/"is").
+ *  Generic, deliberately small — this module knows nothing about retirement. */
+const STOPWORDS = new Set([
+  'a', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'been', 'but', 'by', 'can',
+  'did', 'do', 'does', 'for', 'from', 'had', 'has', 'have', 'he', 'her', 'his',
+  'how', 'i', 'if', 'in', 'is', 'it', 'its', 'me', 'my', 'no', 'not', 'of',
+  'on', 'or', 'our', 'she', 'so', 'that', 'the', 'their', 'them', 'then',
+  'there', 'these', 'they', 'this', 'to', 'was', 'we', 'were', 'what', 'when',
+  'where', 'which', 'who', 'why', 'will', 'with', 'would', 'you', 'your',
+]);
+
+/** Cap on stored keywords per memory: enough room for the fact's own words
+ *  plus the model-supplied hypernyms, without letting keywords bloat rows. */
+const MAX_KEYWORDS = 24;
+
+/** Lowercase word tokens worth indexing: split on non-word characters
+ *  (keeping $ and digits so "$1,200" yields "$1" and "200"), drop glue words
+ *  and single characters, dedupe. Order is stable, source text first. */
+export function extractKeywords(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.toLowerCase().split(/[^a-z0-9$]+/)) {
+    if (raw.length < 2 || STOPWORDS.has(raw)) continue;
+    if (!out.includes(raw)) out.push(raw);
+    if (out.length >= MAX_KEYWORDS) break;
+  }
+  return out;
+}
+
+/** Conservative stem: strips common English inflections so "pensions" matches
+ *  "pension" and "downsizing" matches "downsize" without a real stemmer.
+ *  Deliberately cautious — each rule requires a comfortable remainder, so
+ *  "gas" stays "gas" and "ness" stays "ness". Applied to BOTH query tokens
+ *  and keywords at match time; the stored form stays verbatim. */
+function normalizeToken(t: string): string {
+  if (t.length > 5 && t.endsWith('ing')) return t.slice(0, -3);
+  if (t.length > 5 && t.endsWith('ies')) return `${t.slice(0, -3)}y`;
+  if (t.length > 4 && t.endsWith('es')) return t.slice(0, -2);
+  if (t.length > 3 && t.endsWith('s') && !t.endsWith('ss')) return t.slice(0, -1);
+  if (t.length > 4 && t.endsWith('ed')) return t.slice(0, -2);
+  return t;
+}
+
+/** A query token T hits keyword K when their normalized forms are equal, or
+ *  one is a prefix of the other and the overlap is long enough to be
+ *  meaningful ("downsize" ↔ "downsizing", "retire" ↔ "retirement") rather
+ *  than accidental ("age" must not hit "agent"). */
+function tokenHits(token: string, keyword: string): boolean {
+  const t = normalizeToken(token);
+  const k = normalizeToken(keyword);
+  if (t === k) return true;
+  const short = Math.min(t.length, k.length);
+  return short >= 4 && (k.startsWith(t) || t.startsWith(k));
+}
+
+/** The indexed keywords for a record: stored ones if present, else derived
+ *  from the text — so memories written before keywords existed (and any
+ *  adapter that drops the field) keep matching without a data migration. */
+function keywordsOf(record: MemoryRecord): string[] {
+  return record.keywords?.length ? record.keywords : extractKeywords(record.text);
 }
 
 // ---------------------------------------------------------------------------
@@ -147,11 +223,21 @@ export class MemoryStore {
       return refreshed;
     }
 
+    // The fact's own words are indexed automatically; anything the writer
+    // supplied on top (hypernyms like "fruit" for "likes oranges") is merged
+    // in, deduped, capped.
+    const keywords = [...extractKeywords(text)];
+    for (const k of input.keywords ?? []) {
+      const norm = k.trim().toLowerCase();
+      if (norm && !keywords.includes(norm)) keywords.push(norm);
+    }
+
     const record: MemoryRecord = {
       id: `mem-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       scope: input.scope,
       scopeKey,
       text,
+      keywords: keywords.slice(0, MAX_KEYWORDS),
       createdAt: now,
       lastAccessedAt: now,
       importance: Math.min(1, Math.max(0, input.importance ?? 0.5)),
@@ -170,14 +256,22 @@ export class MemoryStore {
     return record;
   }
 
-  /** Text search over memory text, ranked. SQLite LIKE under the adapter's
-   *  hood already filters; here we score and order. Empty query returns the
-   *  highest-ranked memories outright (the "remind me what matters" path).
-   *  Every returned record has its access stamped — recall IS use. */
+  /** Keyword search over memory text, ranked. The query is tokenized; a
+   *  memory matches when at least one query token hits one of its keywords,
+   *  and scores by the FRACTION of query tokens hit (relevance first) with
+   *  weight × recency as the tiebreak — a partial match on an important,
+   *  recently-used memory beats an every-word match on a stale trivial one
+   *  only when the fractions are equal, which is the right bias. A literally
+   *  empty query returns the highest-ranked memories outright (the "remind
+   *  me what matters" path); a NON-empty query with no usable tokens ("what
+   *  is my") matches nothing — it's a real question, just unmatchable, and
+   *  the tool layer answers with its closest-memories fallback. Every
+   *  returned record has its access stamped — recall IS use. */
   recall(query: string, opts: RecallOptions = {}): MemoryRecord[] {
     const now = this.clock();
     const limit = opts.limit ?? 6;
-    const q = query.trim().toLowerCase();
+    const tokens = extractKeywords(query);
+    const listAll = query.trim() === '';
 
     const pool = this.adapter.all().filter(m => {
       if (opts.scopeKey !== undefined) {
@@ -187,13 +281,16 @@ export class MemoryStore {
       return true;
     });
 
-    const matches = q
-      ? pool.filter(m => m.text.toLowerCase().includes(q))
-      : pool;
+    const scored = listAll
+      ? pool.map(m => ({ m, score: 1 }))
+      : pool.map(m => {
+          const keywords = keywordsOf(m);
+          const hit = tokens.filter(t => keywords.some(k => tokenHits(t, k))).length;
+          return { m, score: hit / tokens.length };
+        }).filter(({ score }) => score > 0);
 
-    const ranked = matches
-      .map(m => ({ m, r: rank(m, now) }))
-      .sort((a, b) => b.r - a.r)
+    const ranked = scored
+      .sort((a, b) => (b.score - a.score) || (rank(b.m, now) - rank(a.m, now)))
       .slice(0, limit);
 
     // Stamp access on what we returned: strengthens frequently-useful

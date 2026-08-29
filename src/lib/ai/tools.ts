@@ -166,12 +166,14 @@ const rememberArgs = z.object({
     .describe('scenario = about this plan (shown in chats on this scenario). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").'),
   importance: z.number().min(0).max(1).default(0.5)
     .describe('0..1: how important this fact is. Reserve 0.9+ for decisions and constraints ("user refuses to touch RRSP"), 0.3 for color.'),
+  keywords: z.array(z.string().min(1)).max(12).optional()
+    .describe('Category words a future question might use that are NOT in the text itself — the hypernyms of what the fact is about (text "likes oranges" → ["fruit", "food", "preference"]; "wants to retire to Nova Scotia" → ["location", "province", "move"]). The fact\'s own words are indexed automatically; only add what a later query would say differently.'),
   rationale: z.string().optional(),
 });
 
 const recallArgs = z.object({
   query: z.string().optional()
-    .describe('Search text. Omit for the top-ranked memories outright.'),
+    .describe('Search words — single keywords work best (they match by word, not phrase; "fruit" finds "likes oranges" if it was saved with that keyword). Omit for the top-ranked memories outright.'),
   limit: z.number().int().min(1).max(20).default(6),
 });
 
@@ -304,10 +306,10 @@ export function toolSpecs(): ToolSpec[] {
       'PROPOSE updating or REMOVING an existing pension (by id or unique label). User confirms. Use propose_pension to add a new one.',
       managePensionArgs),
     spec('remember',
-      'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results.',
+      'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.',
       rememberArgs),
     spec('recall',
-      'Search what you remember (facts saved in earlier conversations). Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.',
+      'Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don\'t know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.',
       recallArgs),
     spec('open_scenario',
       'Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.',
@@ -933,6 +935,7 @@ function rememberTool(ctx: ToolContext, args: z.infer<typeof rememberArgs>): Too
     scopeKey: ctx.memoryScenarioId ?? '',
     text: args.text,
     importance: args.importance,
+    keywords: args.keywords,
   });
   if (!rec) {
     return { kind: 'result', content: 'Memory is full of higher-ranked items; this fact was not saved. Tell the user they can ask you to forget something less important.' };
@@ -943,25 +946,32 @@ function rememberTool(ctx: ToolContext, args: z.infer<typeof rememberArgs>): Too
   };
 }
 
-/** recall: search memory (substring, ranked by importance × recency) or list
- *  the top-ranked memories with no query. Returns the memories' text + scope
- *  so the model can cite what it knows and from where. */
+/** recall: search memory by keyword (ranked by relevance, then importance ×
+ *  recency) or list the top-ranked memories with no query. A query that
+ *  matches nothing is NOT a dead end: the top-ranked memories come back as
+ *  "closest" so the model can answer from what it does know instead of
+ *  claiming ignorance. Returns text + scope so the model can cite where a
+ *  fact came from. */
 function recallTool(ctx: ToolContext, args: z.infer<typeof recallArgs>): ToolOutcome {
   if (!ctx.memory) {
     return { kind: 'result', content: 'Memory is unavailable in this session.' };
   }
-  const hits = ctx.memory.recall(args.query ?? '', {
-    limit: args.limit,
-    scopeKey: ctx.memoryScenarioId ?? '',
-  });
-  if (hits.length === 0) {
-    return { kind: 'result', content: args.query
-      ? `Nothing in memory matches "${args.query}".`
-      : 'Memory is empty.' };
+  const scopeOpts = { scopeKey: ctx.memoryScenarioId ?? '' };
+  let hits = ctx.memory.recall(args.query ?? '', { limit: args.limit, ...scopeOpts });
+  let header: string | null = null;
+  if (hits.length === 0 && args.query) {
+    // Fallback, not failure: hand back what IS remembered (top-ranked) so
+    // the model can still answer — labelled so it knows these didn't match.
+    hits = ctx.memory.recall('', { limit: 3, ...scopeOpts });
+    header = hits.length
+      ? `Nothing in memory matches "${args.query}". Closest memories:`
+      : `Nothing in memory matches "${args.query}", and memory is empty.`;
+  } else if (hits.length === 0) {
+    return { kind: 'result', content: 'Memory is empty.' };
   }
   const lines = hits.map(m =>
     `- [${m.scope}] ${m.text} (importance ${m.importance.toFixed(2)}, accessed ${m.accessCount}×)`);
-  return { kind: 'result', content: lines.join('\n') };
+  return { kind: 'result', content: header ? `${header}\n${lines.join('\n')}` : lines.join('\n') };
 }
 
 /** open_scenario: switch the active scenario (the sidebar-switch path). A
