@@ -34,6 +34,7 @@ describe('toolSpecs', () => {
       'propose_cash_event', 'propose_employment', 'propose_patch', 'propose_pension',
       'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
+      'open_scenario', 'save_scenario_as',
       'run_monte_carlo', 'run_projection', 'run_strategies',
       'set_scenario_value', 'solve_spending',
     ].sort());
@@ -676,5 +677,74 @@ describe('remember / recall', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'remember', args: { text: 'Nobody will save this.' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('Memory is unavailable');
+  });
+});
+
+describe('open_scenario / save_scenario_as', () => {
+  it('opens by id and announces the switch', () => {
+    const opened: string[] = [];
+    const c = ctx({
+      scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
+      onOpenScenario: (id) => opened.push(id),
+    });
+    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { scenarioId: 'sc-2' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(opened).toEqual(['sc-2']);
+    expect(out.content).toContain('Downsized');
+  });
+
+  it('opens by unique case-insensitive name', () => {
+    const opened: string[] = [];
+    const c = ctx({
+      scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
+      onOpenScenario: (id) => opened.push(id),
+    });
+    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { name: '  downsized ' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(opened).toEqual(['sc-2']);
+  });
+
+  it('refuses an ambiguous name, listing the matches', () => {
+    const opened: string[] = [];
+    const c = ctx({
+      scenarioList: [{ id: 'a', name: 'Plan' }, { id: 'b', name: 'plan' }, { id: 'c', name: 'Other' }],
+      onOpenScenario: (id) => opened.push(id),
+    });
+    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { name: 'plan' } });
+    expect(out.kind).toBe('error');
+    if (out.kind !== 'error') return;
+    expect(out.content).toContain('matches 2 scenarios');
+    expect(opened).toEqual([]);
+  });
+
+  it('errors on an unknown id and lists what exists', () => {
+    const c = ctx({
+      scenarioList: [{ id: 'sc-1', name: 'Base' }],
+      onOpenScenario: () => {},
+    });
+    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { scenarioId: 'nope' } });
+    expect(out.kind).toBe('error');
+    if (out.kind !== 'error') return;
+    expect(out.content).toContain('No saved scenario matches');
+    expect(out.content).toContain('"Base" (sc-1)');
+  });
+
+  it('errors when scenario switching is unavailable', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'open_scenario', args: { scenarioId: 'sc-1' } });
+    expect(out.kind).toBe('error');
+  });
+
+  it('save_scenario_as hands the name to the callback and reports success', () => {
+    const names: string[] = [];
+    const c = ctx({ onSaveScenarioAs: (name) => { names.push(name); return 'sc-new'; } });
+    const out = executeToolCall(c, { id: '1', name: 'save_scenario_as', args: { name: ' Downsize at 65 ' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(names).toEqual(['Downsize at 65']);
+    expect(out.content).toContain('Downsize at 65');
+  });
+
+  it('save_scenario_as errors when unavailable', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'save_scenario_as', args: { name: 'x' } });
+    expect(out.kind).toBe('error');
   });
 });

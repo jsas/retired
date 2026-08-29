@@ -338,6 +338,24 @@ function App() {
     setHasUnsavedChanges(false);
   };
 
+  // Agent scenario tools (open_scenario / save_scenario_as). Both mirror the
+  // sidebar paths: open saves the current plan first (nothing the user typed
+  // is lost), save-as snapshots the live inputs into a NEW scenario and
+  // switches to it, leaving the original untouched.
+  const agentOpenScenario = (id: string) => {
+    if (id === activeScenarioId) return;
+    if (hasUnsavedChanges) handleSaveScenario();
+    applyScenarioSwitch(id);
+  };
+
+  const agentSaveScenarioAs = (name: string) => {
+    const id = `scenario-${Date.now().toString(36)}`;
+    setScenarios(prev => [...prev, { id, name, inputs: JSON.parse(JSON.stringify(inputs)) }]);
+    setActiveScenarioId(id);
+    setHasUnsavedChanges(false);
+    return id;
+  };
+
   // The save-prompt modal's three outcomes. `dontAskAgain` flips the General
   // setting off (persisted), so the prompt stops appearing.
   const resolvePendingSwitch = (action: 'save' | 'discard' | 'cancel', dontAskAgain: boolean) => {
@@ -830,6 +848,8 @@ function App() {
                 onOpenConnections={() => setView('connections')}
                 memory={store?.memory}
                 memoryScenarioId={activeScenarioId}
+                onOpenScenario={agentOpenScenario}
+                onSaveScenarioAs={agentSaveScenarioAs}
               />
             )}
 

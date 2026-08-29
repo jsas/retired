@@ -63,6 +63,9 @@ interface AgentPageProps {
   memory?: MemoryStore;
   /** Active scenario id at render time — reads stay live via the ref below. */
   memoryScenarioId?: string;
+  /** Agent scenario navigation: switch active scenario / save-current-as-new. */
+  onOpenScenario?: (id: string) => void;
+  onSaveScenarioAs?: (name: string) => string;
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +204,7 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply, onOpenConnections, memory, memoryScenarioId }: AgentPageProps) {
+export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -451,6 +454,8 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
               checkpoints={activeThread.checkpoints ?? []}
               memory={memory}
               memoryScenarioId={memoryScenarioId}
+              onOpenScenario={onOpenScenario}
+              onSaveScenarioAs={onSaveScenarioAs}
             />
           )}
         </div>
@@ -528,7 +533,7 @@ function buildSystemBody(
   return buildSystemPrompt(scenarioName, { basePrompt, config });
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -546,6 +551,8 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   checkpoints: PlanCheckpoint[];
   memory?: MemoryStore;
   memoryScenarioId?: string;
+  onOpenScenario?: (id: string) => void;
+  onSaveScenarioAs?: (name: string) => string;
 }) {
   const turns = thread.turns as Turn[];
   const [running, setRunning] = useState(false);
@@ -602,7 +609,8 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     get checkpoints() { return checkpointsRef.current; },
     config, scenarioName, scenarioList, memory,
     get memoryScenarioId() { return memoryScenarioIdRef.current; },
-  }), [config, scenarioName, scenarioList, memory]);
+    onOpenScenario, onSaveScenarioAs,
+  }), [config, scenarioName, scenarioList, memory, onOpenScenario, onSaveScenarioAs]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
