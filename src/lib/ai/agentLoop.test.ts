@@ -122,6 +122,51 @@ describe('runAgentTurn', () => {
     expect(toolResultBack?.content).toContain('APPROVED');
   });
 
+  it('reads the LIVE inputs after an approved change, not the stale snapshot', async () => {
+    // Regression: the UI hands the loop a context whose `inputs` is read
+    // through a getter (it re-renders with the applied patch while the loop is
+    // parked on the confirm card). A read tool called AFTER approval must see
+    // the new value — otherwise the model thinks the change never landed and
+    // re-proposes it (the duplicate Applied card / stale-answer bug).
+    const live = { inputs: baseInputs() };
+    const liveCtx: ToolContext = {
+      get inputs() { return live.inputs; },
+      config: testConfig(),
+      scenarioName: 'Test plan',
+      scenarioList: [{ id: 'a', name: 'Test plan' }],
+    };
+    const { chat } = scripted([
+      // Round 1: propose lowering spending.
+      [
+        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 42000 } } },
+        { type: 'done', stopReason: 'tool_use' },
+      ],
+      // Round 2 (after approval): the model re-reads the plan, then answers.
+      [
+        { type: 'tool_use', call: { id: 'g1', name: 'get_scenario', args: { section: 'summary' } } },
+        { type: 'done', stopReason: 'tool_use' },
+      ],
+      [
+        { type: 'text', text: 'Spending is now set to the sustainable level.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: liveCtx, history: [], userMessage: 'lower spending', system: 's', chat,
+      onMutation: async () => {
+        // The parent applies the patch, so the live inputs change before the
+        // loop's next tool executes.
+        live.inputs = { ...live.inputs, desiredSpending: 42000 };
+        return { approved: true };
+      },
+    }));
+    const summaryResult = events.find(
+      e => e.type === 'tool_result' && (e as { call?: { id?: string } }).call?.id === 'g1',
+    ) as { content: string } | undefined;
+    expect(summaryResult?.content).toContain('"desiredSpending": 42000');
+    expect(summaryResult?.content).not.toContain('"desiredSpending": 20000');
+  });
+
   it('tells the model when the user rejects a change', async () => {
     const { chat, requests } = scripted([
       [

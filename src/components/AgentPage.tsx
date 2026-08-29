@@ -497,9 +497,19 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     return result;
   };
 
+  // The loop runs async across renders, and approving a change updates `inputs`
+  // in the PARENT — so a memoized snapshot would leave a resumed turn reading
+  // the pre-approval plan (the model then thinks the change never landed and
+  // re-proposes it). Keep a ref to the live inputs, updated every render, and
+  // hand the loop a context whose `inputs` reads through it at tool-execution
+  // time. The rest of the context (config/name/list) only changes with the
+  // scenario, so a plain memo is fine for those.
+  const inputsRef = useRef(inputs);
+  inputsRef.current = inputs;
   const toolContext: ToolContext = useMemo(() => ({
-    inputs, config, scenarioName, scenarioList,
-  }), [inputs, config, scenarioName, scenarioList]);
+    get inputs() { return inputsRef.current; },
+    config, scenarioName, scenarioList,
+  }), [config, scenarioName, scenarioList]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
@@ -552,8 +562,14 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     if (!resuming) {
       patchTurns(prev => userTurn ? [...prev, userTurn, assistantTurn] : [...prev, assistantTurn]);
     } else {
-      // Flip the paused bubble back to actively-working.
-      patchTurns(prev => prev.map(t => (t.id === resumeTurnId ? { ...t, state: 'streaming' } : t)));
+      // Flip the paused bubble back to actively-working, and CLEAR its streamed
+      // state. In prompt mode the pre-approval prose was buffered into this same
+      // bubble; leaving it (and the old tool chips / the resolved change card)
+      // in place makes the continued reply append on top — re-sending the old
+      // answer and stacking a duplicate Applied card next to the decided one.
+      patchTurns(prev => prev.map(t => (t.id === resumeTurnId
+        ? { ...t, text: '', reasoning: undefined, tools: [], changes: [], state: 'streaming' }
+        : t)));
     }
 
     const abort = new AbortController();
