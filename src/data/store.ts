@@ -3,6 +3,8 @@ import type { AppConfig } from '../lib/appConfig';
 import { validateAppConfig } from '../lib/appConfig';
 import { AppDatabase, DB_STORAGE_KEY } from './db';
 import type { AppDbDoc } from './schemas';
+import { MemoryStore } from '../lib/memory/store';
+import { SqliteMemoryAdapter } from '../lib/memory/sqliteAdapter';
 
 /**
  * The data layer the UI talks to: one opened SQLite store holding scenarios,
@@ -26,6 +28,7 @@ export interface AppState {
 
 export class AppStore {
   private db: AppDatabase;
+  private memoryStore: MemoryStore | null = null;
   private constructor(db: AppDatabase) {
     this.db = db;
   }
@@ -88,6 +91,16 @@ export class AppStore {
 
   exportBytes(): Uint8Array {
     return this.db.exportBytes();
+  }
+
+  /** Agent memory — scenario + global records in the same SQL store, so they
+   *  export/import with the rest of the app. Built lazily; shared per store.
+   *  The persist hook mirrors every write to localStorage/OPFS. */
+  get memory(): MemoryStore {
+    this.memoryStore ??= new MemoryStore(
+      new SqliteMemoryAdapter(this.db, () => this.db.save()),
+    );
+    return this.memoryStore;
   }
 
   loadDoc(doc: AppDbDoc): void {

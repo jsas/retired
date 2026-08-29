@@ -88,6 +88,44 @@ describe('chatStore persistence', () => {
     expect(t.changes[0].resolved).toBeUndefined();
     expect(t.changes[0].patch).toEqual({ cppStartAge: 70 });
   });
+
+  it('normalizes a turn persisted mid-stream to done (the stuck-reply fix)', () => {
+    // A 'streaming' state can only be persisted by a page dying mid-reply; the
+    // abort/finalize that would have flipped it never ran. Loading it as
+    // 'streaming' leaves a permanently busy bubble and a cut-off conversation.
+    const stuck: StoredTurn = {
+      id: 'a1', role: 'assistant', text: 'partial answ…',
+      tools: [], changes: [], state: 'streaming',
+    };
+    const store: ChatStore = {
+      threads: [{ ...newThread('Plan', 1000), turns: [turn('hi'), stuck] }],
+      activeThreadId: null,
+    };
+    store.activeThreadId = store.threads[0].id;
+    const mem = kv();
+    saveChats(store, mem);
+    const loaded = loadChats(mem);
+    expect(loaded.threads[0].turns[1].state).toBe('done');
+  });
+
+  it('round-trips checkpoints on a thread', () => {
+    const store: ChatStore = {
+      threads: [{
+        ...newThread('Plan', 1000),
+        checkpoints: [{
+          id: 'cp-1', label: 'Set cppStartAge', at: 1234,
+          inputs: { currentAge: 65 } as never,
+        }],
+      }],
+      activeThreadId: null,
+    };
+    store.activeThreadId = store.threads[0].id;
+    const mem = kv();
+    saveChats(store, mem);
+    const loaded = loadChats(mem);
+    expect(loaded.threads[0].checkpoints).toHaveLength(1);
+    expect(loaded.threads[0].checkpoints?.[0]).toMatchObject({ id: 'cp-1', label: 'Set cppStartAge' });
+  });
 });
 
 describe('thread helpers', () => {

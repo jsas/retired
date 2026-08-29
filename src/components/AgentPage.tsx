@@ -38,6 +38,11 @@ import {
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
+import type { MemoryStore } from '../lib/memory/store';
+import {
+  captureCheckpoint, appendCheckpoint, decodeRevertPatch,
+  type PlanCheckpoint,
+} from '../lib/ai/checkpoints';
 import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '../lib/retirementEngine';
@@ -45,6 +50,7 @@ import {
   loadChats, saveChats, newThread, titleFromFirstMessage,
   type ChatThread,
 } from '../lib/ai/chatStore';
+import { Markdown } from './Markdown';
 
 interface AgentPageProps {
   inputs: RetirementInputs;
@@ -53,6 +59,13 @@ interface AgentPageProps {
   scenarioList: Array<{ id: string; name: string }>;
   onApply: (patch: Partial<RetirementInputs>) => void;
   onOpenConnections: () => void;
+  /** Agent memory (scenario + global); absent only if the store failed to open. */
+  memory?: MemoryStore;
+  /** Active scenario id at render time — reads stay live via the ref below. */
+  memoryScenarioId?: string;
+  /** Agent scenario navigation: switch active scenario / save-current-as-new. */
+  onOpenScenario?: (id: string) => void;
+  onSaveScenarioAs?: (name: string) => string;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,7 +204,7 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply, onOpenConnections }: AgentPageProps) {
+export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -264,6 +277,22 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
       return {
         ...prev,
         threads: prev.threads.map(t => (t.id === id ? { ...t, ...patch } : t)),
+      };
+    });
+  };
+
+  /** Record an automatic checkpoint for the active thread: the plan as it was
+   *  JUST BEFORE an approved change landed. Ring-buffered per thread; kept in
+   *  the chat store so revert history survives a reload. */
+  const recordCheckpoint = (label: string, inputsBefore: RetirementInputs) => {
+    setChatState(prev => {
+      const id = prev.activeThreadId;
+      if (!id) return prev;
+      return {
+        ...prev,
+        threads: prev.threads.map(t => (t.id === id
+          ? { ...t, checkpoints: appendCheckpoint(t.checkpoints ?? [], captureCheckpoint(label, inputsBefore)) }
+          : t)),
       };
     });
   };
@@ -421,6 +450,12 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
               onApply={onApply}
               patchTurns={patchTurns}
               patchThread={patchThread}
+              recordCheckpoint={recordCheckpoint}
+              checkpoints={activeThread.checkpoints ?? []}
+              memory={memory}
+              memoryScenarioId={memoryScenarioId}
+              onOpenScenario={onOpenScenario}
+              onSaveScenarioAs={onSaveScenarioAs}
             />
           )}
         </div>
@@ -498,7 +533,7 @@ function buildSystemBody(
   return buildSystemPrompt(scenarioName, { basePrompt, config });
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -512,6 +547,12 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   onApply: (patch: Partial<RetirementInputs>) => void;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
   patchThread: (patch: Partial<ChatThread>) => void;
+  recordCheckpoint: (label: string, inputsBefore: RetirementInputs) => void;
+  checkpoints: PlanCheckpoint[];
+  memory?: MemoryStore;
+  memoryScenarioId?: string;
+  onOpenScenario?: (id: string) => void;
+  onSaveScenarioAs?: (name: string) => string;
 }) {
   const turns = thread.turns as Turn[];
   const [running, setRunning] = useState(false);
@@ -556,10 +597,20 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   // scenario, so a plain memo is fine for those.
   const inputsRef = useRef(inputs);
   inputsRef.current = inputs;
+  // Same trick for checkpoints: the loop is long-lived across renders, and a
+  // revert proposal must read the checkpoint list AS OF execution time (it
+  // grows as changes are approved mid-conversation).
+  const checkpointsRef = useRef(checkpoints);
+  checkpointsRef.current = checkpoints;
+  const memoryScenarioIdRef = useRef(memoryScenarioId);
+  memoryScenarioIdRef.current = memoryScenarioId;
   const toolContext: ToolContext = useMemo(() => ({
     get inputs() { return inputsRef.current; },
-    config, scenarioName, scenarioList,
-  }), [config, scenarioName, scenarioList]);
+    get checkpoints() { return checkpointsRef.current; },
+    config, scenarioName, scenarioList, memory,
+    get memoryScenarioId() { return memoryScenarioIdRef.current; },
+    onOpenScenario, onSaveScenarioAs,
+  }), [config, scenarioName, scenarioList, memory, onOpenScenario, onSaveScenarioAs]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
@@ -779,7 +830,17 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       ...t,
       changes: t.changes.map(c => c.callId === change.callId ? { ...c, resolved: approved ? 'approved' : 'rejected' } : c),
     })));
-    if (approved) onApply(changePatch(change) as Partial<RetirementInputs>);
+    if (approved) {
+      // Snapshot the plan BEFORE the patch lands — the automatic checkpoint
+      // propose_revert rolls back to. The label is the card's, so the model
+      // (and the user) can name the checkpoint later.
+      recordCheckpoint(change.label ?? 'Plan change', inputs);
+      // Revert patches carry encoded undefined-removals; decode them here so
+      // the spread in App's onApply actually deletes the keys.
+      const raw = changePatch(change);
+      const decoded = change.revert ? decodeRevertPatch(raw) : raw;
+      onApply(decoded as Partial<RetirementInputs>);
+    }
     const live = pendingDecisions.current.get(change.callId);
     if (live) {
       // The loop that proposed this is parked on the promise — resolve it and
@@ -940,7 +1001,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                           message part — the bubble must never depend on the
                           runtime's content conversion, so it can't vanish
                           while the assistant reply streams below it. */}
-                      <div className="max-w-[85%] px-3 py-2 rounded-lg bg-violet-600 text-white text-xs whitespace-pre-wrap">
+                      <div className="max-w-[85%] min-w-0 px-3 py-2 rounded-lg bg-violet-600 text-white text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
                         {turn?.text ?? <MessagePrimitive.Content />}
                       </div>
                     </div>
@@ -985,36 +1046,43 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                 const historicalCards = resumedWithCards ? turn.changes.filter(c => c.resolved) : [];
                 return (
                   <div className="group flex justify-start items-start gap-1">
-                    <div className="max-w-[85%] space-y-2">
+                    <div className="max-w-[85%] min-w-0 space-y-2">
                       {historicalCards.map(change => (
                         <ChangeCard key={change.callId} change={change} onDecide={decideChange} />
                       ))}
-                      {showBubble && (
-                        <div className="px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs whitespace-pre-wrap leading-relaxed">
-                          {thinking ? (
-                            <span className="flex items-center gap-1.5 text-slate-400 italic">
-                              <Loader2 size={11} className="animate-spin" /> Thinking…
-                            </span>
-                          ) : working ? (
-                            <span className="flex items-center gap-1.5 text-slate-400 italic">
-                              <Loader2 size={11} className="animate-spin" /> Working…
-                            </span>
-                          ) : (
-                            turn?.text ?? null
-                          )}
-                        </div>
-                      )}
                       {turn?.reasoning && (
-                        // Keyed on the turn so each reply's block starts open
-                        // while it streams and the user folds it once done. The
-                        // spinner clears the moment the answer text arrives OR
-                        // the turn pauses on an approval — not just when the
-                        // whole turn ends.
+                        // Reasoning sits ABOVE the answer (chronological: the
+                        // model thought first). Keyed on the turn so each
+                        // reply's block starts open while it streams and the
+                        // user folds it once done. The spinner clears the
+                        // moment the answer text arrives OR the turn pauses on
+                        // an approval — not just when the whole turn ends.
                         <ReasoningBlock
                           key={turn.id}
                           reasoning={turn.reasoning}
                           streaming={streaming && !turn.text && !needsDecision}
                         />
+                      )}
+                      {showBubble && (
+                        <div className="relative px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
+                          {/* Activity spinner in the bubble's top-right corner
+                              while it's a placeholder (thinking / working) —
+                              same treatment as the reasoning block. */}
+                          {(thinking || working) && (
+                            <Loader2 size={11} className="animate-spin absolute top-1.5 right-1.5 text-slate-400 pointer-events-none" />
+                          )}
+                          {thinking ? (
+                            <span className="text-slate-400 italic">Thinking…</span>
+                          ) : working ? (
+                            <span className="text-slate-400 italic">Working…</span>
+                          ) : (
+                            // Assistant prose renders as markdown (headings,
+                            // lists, tables, code fences) — parsed by `marked`
+                            // and sanitized by DOMPurify (see lib/ai/markdown).
+                            // User bubbles and reasoning stay plain text.
+                            <Markdown text={turn?.text ?? ''} />
+                          )}
+                        </div>
                       )}
                       {stuckPaused && (
                         <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-snug">
@@ -1118,12 +1186,14 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   );
 }
 
-/** Lives inside the thread viewport so it can reach the viewport store. Two
- *  jobs: hand the store's scrollToBottom up to the page via `register` (so
- *  send() can snap a new exchange into view), and render a small "back to
- *  latest" cue ONLY when the user has scrolled well up from the bottom. The
- *  threshold (SHOW_AFTER_PX) keeps it out of the way during normal reading at
- *  or near the latest message. */
+/** Lives inside the thread viewport so it can reach the viewport store. Three
+ *  jobs: stick-to-bottom (while the user is at the bottom, content growth —
+ *  streaming text, growing reasoning blocks — keeps the view pinned; scrolling
+ *  up releases the pin, scrolling back re-pins it), hand the store's
+ *  scrollToBottom up to the page via `register` (so send() can snap a new
+ *  exchange into view AND re-pin), and render a small "back to latest" cue
+ *  ONLY when the user has scrolled well up from the bottom. The threshold
+ *  (SCROLL_UP_SHOW_PX) keeps it out of the way during normal reading. */
 const SCROLL_UP_SHOW_PX = 240;
 function ScrollControls({ register }: { register: React.MutableRefObject<(() => void) | null> }) {
   const store = useThreadViewportStore();
@@ -1134,24 +1204,55 @@ function ScrollControls({ register }: { register: React.MutableRefObject<(() => 
     return () => { register.current = null; };
   }, [store, register]);
 
-  // Watch the scrollable element; show the cue only when far enough from the
-  // bottom. The element arrives after mount, so poll once via rAF rather than
-  // assume it's there. Re-checks on scroll and on content growth (resize).
+  // Watch the scrollable element for stick-to-bottom AND the jump cue. The
+  // element arrives after mount, so poll once via rAF rather than assume it's
+  // there. The library's own auto-scroll hooks are off (see the Viewport
+  // props): they re-pinned on every streaming update and blocked reading
+  // history. This is the same pin/unpin contract as useStickToBottom, spelled
+  // against the store's element because the hook's callback-ref attach doesn't
+  // fit an element assistant-ui owns.
   useEffect(() => {
     let raf = 0;
     let cleanup: (() => void) | null = null;
     const attach = () => {
       const el = store.getState().element.viewport;
       if (!el) { raf = requestAnimationFrame(attach); return; }
-      const update = () => {
-        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-        setShowJump(dist > SCROLL_UP_SHOW_PX);
+
+      // Pin state lives in a ref (stream-frequency updates, no re-renders).
+      // A "self-scroll" guard marks our own programmatic scrolls so they can't
+      // read as user scrolls and unpin the view.
+      let pinned = true;
+      let selfScrolling = false;
+      let selfScrollTimer = 0;
+      const dist = () => el.scrollHeight - el.scrollTop - el.clientHeight;
+      const snap = () => {
+        selfScrolling = true;
+        clearTimeout(selfScrollTimer);
+        el.scrollTop = el.scrollHeight;
+        selfScrollTimer = window.setTimeout(() => { selfScrolling = false; }, 150);
       };
-      update();
-      el.addEventListener('scroll', update, { passive: true });
-      const ro = new ResizeObserver(update);
+      const update = () => {
+        const d = dist();
+        setShowJump(d > SCROLL_UP_SHOW_PX);
+      };
+      const onScroll = () => {
+        if (selfScrolling) return;
+        pinned = dist() <= NEAR_BOTTOM_PX;
+        update();
+      };
+      // Content growth is what we follow: streaming text swaps and new blocks.
+      const mo = new MutationObserver(() => { if (pinned) snap(); update(); });
+      mo.observe(el, { childList: true, subtree: true, characterData: true });
+      const ro = new ResizeObserver(() => { if (pinned) snap(); update(); });
       ro.observe(el);
-      cleanup = () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+
+      el.addEventListener('scroll', onScroll, { passive: true });
+      cleanup = () => {
+        mo.disconnect();
+        ro.disconnect();
+        el.removeEventListener('scroll', onScroll);
+        clearTimeout(selfScrollTimer);
+      };
     };
     attach();
     return () => { cancelAnimationFrame(raf); cleanup?.(); };
@@ -1169,24 +1270,136 @@ function ScrollControls({ register }: { register: React.MutableRefObject<(() => 
   );
 }
 
+/**
+ * Stick-to-bottom scrolling for one scroller element, with user override.
+ *
+ * While the user is "at the bottom" (within NEAR_BOTTOM_PX), any content
+ * growth — streaming text, a growing reasoning block — keeps the view pinned
+ * to the latest line. The moment they scroll up past that threshold the pin
+ * releases and the view stops following; scrolling back to the bottom re-pins
+ * it. "Scrolled up" always means the USER did it: the pin's own programmatic
+ * scrolls are marked and never unpin themselves.
+ *
+ * Returns pin() to force the view back to the bottom (re-pins), and a ref to
+ * hand the element to. Attach by passing the ref to the scroller.
+ */
+const NEAR_BOTTOM_PX = 48;
+function useStickToBottom() {
+  // Refs, not state: the scroll handler runs at stream frequency and a state
+  // flip would re-render every line. Closures below read these live.
+  const pinnedRef = useRef(true);
+  const selfScrollingRef = useRef(false);
+  const selfScrollTimer = useRef(0);
+  // The detach fn for whichever element is currently attached (callback-ref
+  // pattern: the scroller may mount/unmount as blocks expand/collapse), and
+  // the element itself so pin() can reach it.
+  const detachRef = useRef<(() => void) | null>(null);
+  const elementRef = useRef<HTMLElement | null>(null);
+
+  const attach = (el: HTMLElement | null) => {
+    detachRef.current?.();
+    detachRef.current = null;
+    elementRef.current = el;
+    if (!el) return;
+    // A freshly mounted scroller starts pinned (its content is at the top,
+    // which IS the bottom when empty).
+    pinnedRef.current = true;
+
+    const distanceFromBottom = () => el.scrollHeight - el.scrollTop - el.clientHeight;
+    const snap = () => {
+      selfScrollingRef.current = true;
+      clearTimeout(selfScrollTimer.current);
+      el.scrollTop = el.scrollHeight;
+      // The instant scroll emits one scroll event; hold the guard until it has
+      // passed so the pin never unpins itself.
+      selfScrollTimer.current = window.setTimeout(() => { selfScrollingRef.current = false; }, 150);
+    };
+
+    const onScroll = () => {
+      if (selfScrollingRef.current) return; // our own pin-scroll: never unpins
+      pinnedRef.current = distanceFromBottom() <= NEAR_BOTTOM_PX;
+    };
+
+    // Content growth is what we follow: text updates, new blocks, everything.
+    const ro = new ResizeObserver(() => { if (pinnedRef.current) snap(); });
+    ro.observe(el);
+    const mo = new MutationObserver(() => { if (pinnedRef.current) snap(); });
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    detachRef.current = () => {
+      ro.disconnect();
+      mo.disconnect();
+      el.removeEventListener('scroll', onScroll);
+      clearTimeout(selfScrollTimer.current);
+    };
+  };
+
+  useEffect(() => () => detachRef.current?.(), []);
+
+  const pin = () => {
+    pinnedRef.current = true;
+    const el = elementRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
+
+  // Handed to the scroller as a callback ref so attach runs exactly when the
+  // element enters/leaves the DOM.
+  const elRef = (el: HTMLElement | null) => { attach(el); };
+
+  return { elRef, pin };
+}
+
 /** The model's chain-of-thought, shown collapsibly so it never clutters the
  *  answer. Open while it streams (so the thinking is visible live); the user
- *  folds it away once the answer arrives. */
+ *  folds it away once the answer arrives.
+ *
+ *  While STREAMING the collapsed header shows the CURRENT last line of the
+ *  reasoning (updating live — the lines scroll by) with a spinner; when
+ *  finished it settles back to the static "Reasoning" label. The block's own
+ *  body sticks to the bottom the same way the thread does. */
 function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
   const [open, setOpen] = useState(true);
+  const { elRef, pin } = useStickToBottom();
+  // The tail of the reasoning for the collapsed header: the LAST non-empty
+  // line, trimmed to a reasonable width. Recomputed per render — reasoning
+  // streams in as text chunks, so this updates live and the header reads like
+  // the lines are scrolling by.
+  const lastLine = (() => {
+    const lines = reasoning.split('\n').map(l => l.trim()).filter(Boolean);
+    const tail = lines[lines.length - 1] ?? '';
+    return tail.length > 90 ? `${tail.slice(0, 90)}…` : tail;
+  })();
+  // A brand-new stream may not have a readable line yet — fall back to the
+  // static label rather than a blank header.
+  const headerText = streaming ? (lastLine || 'Thinking…') : 'Reasoning';
+  // Re-pin whenever the block is (re)opened or the stream state flips, so a
+  // freshly mounted body starts at the latest line. Ongoing growth is pinned
+  // by the stick-to-bottom observer inside the hook.
+  useEffect(() => { if (open) pin(); }, [open, streaming, pin]);
   return (
-    <div className="border border-violet-200 rounded bg-violet-50/60">
+    <div className="relative border border-violet-200 rounded bg-violet-50/60 min-w-0">
+      {/* Activity spinner pinned to the block's top-right corner while the
+          stream is live — visible whether the body is open or collapsed. */}
+      {streaming && (
+        <Loader2 size={10} className="animate-spin absolute top-1.5 right-1.5 text-violet-500 pointer-events-none" />
+      )}
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 w-full px-2 py-1 text-[10px] font-semibold text-violet-700 hover:text-violet-900"
+        className="flex items-center gap-1.5 w-full px-2 py-1 pr-6 text-[10px] font-semibold text-violet-700 hover:text-violet-900 text-left"
       >
-        {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-        <Brain size={11} />
-        {streaming ? 'Thinking…' : 'Reasoning'}
-        {streaming && <Loader2 size={10} className="animate-spin ml-auto" />}
+        {open ? <ChevronDown size={11} className="shrink-0" /> : <ChevronRight size={11} className="shrink-0" />}
+        <Brain size={11} className="shrink-0" />
+        <span className="truncate flex-1" title={streaming ? lastLine : undefined}>
+          {headerText}
+          {streaming && !lastLine ? '…' : ''}
+        </span>
       </button>
       {open && (
-        <div className="px-2 pb-2 text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto italic">
+        <div
+          ref={elRef as unknown as React.Ref<HTMLDivElement>}
+          className="px-2 pb-2 text-[11px] text-slate-600 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto italic [overflow-wrap:anywhere]"
+        >
           {reasoning}
         </div>
       )}
@@ -1426,10 +1639,10 @@ function ChangeCard({ change, onDecide }: {
   onDecide: (change: PendingChange, approved: boolean) => void;
 }) {
   return (
-    <div className="border border-violet-200 bg-violet-50 rounded-lg p-2.5 text-xs">
+    <div className="border border-violet-200 bg-violet-50 rounded-lg p-2.5 text-xs min-w-0">
       <div className="font-semibold text-violet-900 mb-1">{change.label ?? (change.field ? `Set ${change.field}` : 'Proposed change')}</div>
-      {change.rationale && <div className="text-violet-800/80 mb-1">{change.rationale}</div>}
-      <div className="text-slate-600 mb-2 space-y-0.5">
+      {change.rationale && <div className="text-violet-800/80 mb-1 [overflow-wrap:anywhere]">{change.rationale}</div>}
+      <div className="text-slate-600 mb-2 space-y-0.5 [overflow-wrap:anywhere]">
         <PreviewLines preview={change.preview} />
       </div>
       {change.resolved ? (

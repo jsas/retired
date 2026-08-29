@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { solveSustainableSpending } from './spendingSolver';
 import { mulberry32, generateSequences, simulate, runMonteCarlo } from './monteCarlo';
-import { calculateHousehold } from './retirementEngine';
+import { calculateHousehold, householdOutcome } from './retirementEngine';
+import { runStrategies } from './strategies';
 import { testConfig, baseInputs } from '../test/helpers';
 
 const config = testConfig();
@@ -96,5 +97,66 @@ describe('solveSustainableSpending', () => {
   it('respects the iteration budget', () => {
     const res = solveSustainableSpending({ inputs, config, targetSuccessRate: 0.9, volatility: 0.15, runs: 300, seed: 21, maxIterations: 10 });
     expect(res.iterations).toBeLessThanOrEqual(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Household-first verdict (issue #33): the solver, the strategies table and the
+// Monte Carlo screen must all agree on what "the plan survived" means.
+// ---------------------------------------------------------------------------
+
+// A couple where the PRIMARY's own silo runs dry mid-plan but the household
+// combined balance never does (the spouse holds plenty). The old primary-silo
+// verdict called this plan failed; the household-first one (what the MC screen
+// shows) calls it funded. The two verdicts must now agree everywhere.
+const coupleInputs = baseInputs({
+  currentAge: 65, retirementAge: 65, maxAge: 90,
+  // Primary: lean — a bad return year empties the silo well before maxAge.
+  rrspBalance: 30000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+  cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
+  desiredSpending: 60000,
+  // Spouse: flush — carries the household.
+  spouse: {
+    enabled: true, currentAge: 65, retirementAge: 65,
+    rrspBalance: 0, tfsaBalance: 1200000, taxableBalance: 0, cashCushionBalance: 0,
+    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+    cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 20000,
+  },
+});
+
+describe('household-first success verdict (issue #33)', () => {
+  // Premise check: the primary's silo DOES deplete on the deterministic plan,
+  // while the household survives — otherwise the tests below prove nothing.
+  it('fixture premise: primary silo depletes, household survives', () => {
+    const r = calculateHousehold(coupleInputs, config);
+    expect(r.depletionAge).not.toBeNull();          // primary-silo verdict: failed
+    const ho = householdOutcome(r, coupleInputs);
+    expect(ho.depletionAge).toBeNull();             // household verdict: funded
+    expect(ho.status).toBe('ON_TRACK');
+  });
+
+  it('simulate() scores survival like runMonteCarlo (householdOutcome), not the primary silo', () => {
+    const seqs = generateSequences(50, coupleInputs.currentAge, coupleInputs.maxAge, coupleInputs.investmentReturn, 0.15, 7);
+    const sim = simulate(coupleInputs, config, seqs);
+    // Same 50 futures through runMonteCarlo must land on the same verdict.
+    const mc = runMonteCarlo({ inputs: coupleInputs, config, runs: 50, volatility: 0.15, seed: 7 });
+    expect(sim.successCount).toBe(mc.successCount);
+    expect(sim.successRate).toBe(mc.successRate);
+  });
+
+  it('the solver does not understate sustainable spending for a flush-spouse couple', () => {
+    const res = solveSustainableSpending({ inputs: coupleInputs, config, targetSuccessRate: 0.9, volatility: 0.15, runs: 200, seed: 3 });
+    expect(res.feasible).toBe(true);
+    // The spouse's $1.2M TFSA carries the household: sustainable spending must
+    // be far above what the primary's $30k silo alone could fund.
+    expect(res.spending).toBeGreaterThan(20000);
+  });
+
+  it('run_strategies marks a flush-spouse couple survived with a household ending balance', () => {
+    const report = runStrategies(coupleInputs, config);
+    expect(report.baseline.survived).toBe(true);
+    // Household combined ending balance, not the primary's own (which hits 0).
+    expect(report.baseline.endingBalance).toBeGreaterThan(100000);
   });
 });

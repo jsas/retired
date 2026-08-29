@@ -25,12 +25,16 @@ export type AgentEvent =
 
 export interface MutationProposal {
   callId: string;
-  /** The proposed change as a partial inputs patch, applied on approval. */
+  /** The proposed change as a partial inputs patch, applied on approval.
+   *  Revert proposals (revert: true) encode absent-at-checkpoint fields with
+   *  UNDEFINED_SENTINEL — the UI decodes them before applying. */
   patch: Record<string, unknown>;
   /** Short card label ("Add spouse", "Set CPP start age"). */
   label: string;
   rationale?: string;
   preview: Record<string, unknown>;
+  /** True when this proposal rolls the plan back to a checkpoint. */
+  revert?: boolean;
 }
 
 export interface MutationDecision {
@@ -145,12 +149,27 @@ export function buildSystemPrompt(
           ].join('\n')
         : [
             'Tools: use get_scenario to read the plan and run_projection / compare_scenarios /',
-            'run_monte_carlo for numbers. Use run_strategies to compare levers and',
-            'solve_spending for "how much can I safely spend?". Change the plan only through',
-            'the propose_* / set_scenario_value tools — the user confirms every one. For a',
-            'batch of related scalar edits prefer propose_patch; for a spouse, pension, work',
-            'income, spending phases, a cash event, or a reverse mortgage use its dedicated',
-            'propose_* tool.',
+            'run_monte_carlo for numbers (all accept overrides for what-ifs). Use',
+            'run_strategies to compare levers and solve_spending for "how much can I safely',
+            'spend?". Change the plan only through the propose_* / set_scenario_value tools —',
+            'the user confirms every one. For a batch of related scalar edits prefer',
+            'propose_patch; for a spouse, pension, work income, spending phases, a cash event,',
+            'or a reverse mortgage use its dedicated propose_* tool. To change or remove a',
+            'cash event or pension that already exists use manage_cash_event /',
+            'manage_pension. To undo a change the user approved earlier, propose_revert',
+            'restores the automatic snapshot taken just before it landed.',
+            'Memory: at the START of a conversation, recall your memories so you know what',
+            'the user told you before. When the user shares something durable and important',
+            '(a decision, a constraint, a preference, a life plan), remember it — scope',
+            '"scenario" for plan facts, "global" for facts about the user. When you remember',
+            'something, also pass keywords: the category words a later question might use',
+            '(a note about oranges needs "fruit", "food") — recall matches by keyword. If a',
+            'recall query returns only "closest memories", those did NOT match; use them as',
+            'a hint, and say honestly when nothing recorded covers the question. Never',
+            'memorize numbers that are already in the plan.',
+            'Scenarios: open_scenario switches to another saved plan; save_scenario_as',
+            'keeps the current plan under a new name and opens the copy — use it when the',
+            'user wants to keep a variant ("save this as its own plan") before editing.',
           ].join('\n'),
     ...(rules ? ['', rules] : []),
     '',
@@ -248,6 +267,7 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
             label: outcome.label,
             rationale: outcome.rationale,
             preview: outcome.preview,
+            revert: outcome.revert,
           };
           yield { type: 'mutation', proposal };
           const decision = await opts.onMutation(proposal);

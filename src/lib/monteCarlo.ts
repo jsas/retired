@@ -1,4 +1,5 @@
 import { calculateHousehold, householdOutcome, type RetirementInputs } from './retirementEngine';
+
 import type { AppConfig } from './appConfig';
 
 /**
@@ -176,7 +177,13 @@ export interface SimulationSummary {
   medianFinalBalance: number;
 }
 
-/** Run the household projection against each pre-generated return sequence. */
+/** Run the household projection against each pre-generated return sequence.
+ *  Success is scored with the SAME household-first verdict the Monte Carlo
+ *  screen uses (householdOutcome): the COMBINED household money runs out with
+ *  an unfunded shortfall. The raw engine `depletionAge` alone would miscount
+ *  couples (it watches only the primary's silo) and singles whose late CPP/OAS/
+ *  GIS fully covers spending after the portfolio hits zero — which is exactly
+ *  how the solver steered to 75% while the MC screen said 100% (issue #33). */
 export function simulate(
   inputs: RetirementInputs,
   config: AppConfig,
@@ -186,10 +193,10 @@ export function simulate(
   const finalBalances: number[] = [];
   for (const seq of sequences) {
     const result = calculateHousehold(inputs, config, { returnSequence: seq });
-    const depleted = result.depletionAge !== null;
+    const ho = householdOutcome(result, inputs);
+    const depleted = ho.depletionAge !== null;
     if (!depleted) successCount++;
-    const last = result.yearlyBreakdown[result.yearlyBreakdown.length - 1];
-    finalBalances.push(depleted ? 0 : Math.max(0, last?.endingBalance ?? 0));
+    finalBalances.push(depleted ? 0 : ho.endingBalance);
   }
   finalBalances.sort((a, b) => a - b);
   return {

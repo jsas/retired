@@ -188,3 +188,52 @@ describe('work strategies (employment, issue #22)', () => {
     expect(report.strategies.filter(s => s.id.startsWith('work-gap')).length).toBe(0);
   });
 });
+
+describe('runStrategies filtering', () => {
+  it('narrowing to cpp drops other families but keeps the defer-both flagship', () => {
+    const report = runStrategies(gisSensitive(), config, { categories: ['cpp'] });
+    for (const s of report.strategies) {
+      expect(s.categories).toContain('cpp');
+    }
+    expect(report.strategies.some(s => s.id === 'defer-all-70')).toBe(true);
+    expect(report.strategies.some(s => s.id.startsWith('order-'))).toBe(false);
+    expect(report.strategies.some(s => s.id.startsWith('work-'))).toBe(false);
+  });
+
+  it('category filter touches only the variant list, never the baseline', () => {
+    const unfiltered = runStrategies(gisSensitive(), config);
+    const filtered = runStrategies(gisSensitive(), config, { categories: ['withdrawal_order'] });
+    expect(filtered.baseline.sustainableSpending).toBe(unfiltered.baseline.sustainableSpending);
+    for (const s of filtered.strategies) {
+      expect(s.id.startsWith('order-')).toBe(true);
+    }
+  });
+
+  it('maxVariants caps the shown list but keeps the full ranked list', () => {
+    const report = runStrategies(gisSensitive(), config, { maxVariants: 2 });
+    expect(report.shown).toHaveLength(2);
+    expect(report.strategies.length).toBeGreaterThan(2);
+    // Best-first order is preserved in the shown slice.
+    expect(report.shown[0].sustainableSpending).toBeGreaterThanOrEqual(report.shown[1].sustainableSpending);
+    expect(report.filteredFrom).toBe(report.strategies.length);
+  });
+
+  it('no filter → shown equals strategies and filteredFrom reports the build count', () => {
+    const report = runStrategies(gisSensitive(), config);
+    expect(report.shown).toBe(report.strategies);
+    expect(report.filteredFrom).toBe(report.strategies.length);
+  });
+
+  it('an unknown category throws (never silently narrows)', () => {
+    expect(() => runStrategies(gisSensitive(), config, { categories: ['cppp' as never] }))
+      .toThrow(/Unknown strategy categor/);
+  });
+
+  it('combining categories and maxVariants works together', () => {
+    const report = runStrategies(gisSensitive(), config, { categories: ['cpp', 'oas'], maxVariants: 2 });
+    expect(report.shown).toHaveLength(2);
+    for (const s of report.shown) {
+      expect(s.categories.some(c => c === 'cpp' || c === 'oas')).toBe(true);
+    }
+  });
+});

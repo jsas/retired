@@ -14,7 +14,7 @@
 // Ranked primarily on sustainableSpending (a lifestyle measure), with tax and
 // ending balance shown for context.
 
-import { calculateHousehold } from './retirementEngine';
+import { calculateHousehold, householdOutcome } from './retirementEngine';
 import type { RetirementInputs, RetirementResults, WithdrawalAccount, EmploymentIncome } from './retirementEngine';
 import type { AppConfig } from './appConfig';
 
@@ -23,6 +23,9 @@ export interface StrategyResult {
   name: string;
   description: string;
   patch: Partial<RetirementInputs>;
+  /** Lever family this variant belongs to, so callers can scope the explorer
+   *  ("just CPP/OAS timing"). The defer-both flagship counts as cpp AND oas. */
+  categories: StrategyCategory[];
   survived: boolean;
   depletionAge: number | null;
   endingBalance: number;
@@ -32,11 +35,27 @@ export interface StrategyResult {
   deltaSpending: number; // vs baseline sustainable spending
 }
 
+export type StrategyCategory =
+  | 'cpp' | 'oas' | 'withdrawal_order' | 'reverse_mortgage' | 'work';
+
+export interface StrategyFilter {
+  /** Keep only variants in these lever families. */
+  categories?: StrategyCategory[];
+  /** Cap the returned variant list (best first, after ranking). */
+  maxVariants?: number;
+}
+
 export interface StrategyReport {
   baseline: StrategyResult;
   strategies: StrategyResult[]; // sorted best-first by sustainableSpending
   best: StrategyResult;
   suggestedActions: string[];
+  /** What to present to the caller: `strategies` unless maxVariants capped it.
+   *  Kept separate so the OptimizeCard (unfiltered) and the agent tool (capped)
+  *   share one report shape. */
+  shown: StrategyResult[];
+  /** How many variants were built before filtering/capping (for a note). */
+  filteredFrom: number;
 }
 
 const ORDERINGS: WithdrawalAccount[][] = [
@@ -52,10 +71,13 @@ const orderLabel = (o: WithdrawalAccount[]) =>
   o.map(a => (a === 'tfsa' ? 'TFSA' : a === 'taxable' ? 'Taxable' : 'RRSP')).join(' → ');
 
 // Highest flat after-tax yearly spending (today's $) that survives to maxAge.
-// Binary search on desiredSpending; spending is floored at 0.
+// Binary search on desiredSpending; spending is floored at 0. Survival is the
+// household-first verdict (combined money exhausted with an unfunded shortfall)
+// — the raw primary-only depletionAge would call a couple "failed" because the
+// primary's own silo ran dry while the household was fine.
 function sustainableSpending(inputs: RetirementInputs, config: AppConfig): number {
   const survives = (spend: number) =>
-    calculateHousehold({ ...inputs, desiredSpending: spend }, config).depletionAge === null;
+    householdOutcome(calculateHousehold({ ...inputs, desiredSpending: spend }, config), inputs).depletionAge === null;
   if (!survives(0)) return 0; // runs out even at zero spending (huge fixed events)
   let lo = 0, hi = 500000;
   // Expand hi until it fails (caps runaway plans) or we hit an absolute ceiling.
@@ -73,6 +95,7 @@ interface StrategySpec {
   name: string;
   description: string;
   patch: Partial<RetirementInputs>;
+  categories: StrategyCategory[];
 }
 
 function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategySpec[] {
@@ -89,6 +112,7 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
         ? `Start CPP early at ${age} (reduced ${Math.round((65 - age) * 12 * 0.6)}%).`
         : `Defer CPP to ${age} (+${Math.round((age - 65) * 12 * 0.7)}% bonus).`,
       patch: { cppStartAge: age },
+      categories: ['cpp'],
     });
   }
   for (const age of [65, 70] as const) {
@@ -98,6 +122,7 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
       name: `Take OAS at ${age}`,
       description: age > 65 ? `Defer OAS to 70 (+${Math.round((age - 65) * 12 * 0.6)}% bonus).` : `Start OAS at 65.`,
       patch: { oasStartAge: age },
+      categories: ['oas'],
     });
   }
   const currentOrder = (inputs.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp']).join(',');
@@ -108,15 +133,18 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
       name: `Withdraw ${orderLabel(order)}`,
       description: 'Change the account drawdown sequence.',
       patch: { withdrawalOrder: order },
+      categories: ['withdrawal_order'],
     });
   }
-  // Combined flagship: CPP 70 + OAS 70 + a tax-efficient order.
+  // Combined flagship: CPP 70 + OAS 70 + a tax-efficient order. Categorized as
+  // both cpp and oas so filtering to either lever family still surfaces it.
   if (cppNow !== 70 || oasNow !== 70) {
     specs.push({
       id: 'defer-all-70',
       name: 'Defer CPP & OAS to 70',
       description: 'Max out both government benefits; bridge the gap from the portfolio.',
       patch: { cppStartAge: 70, oasStartAge: 70 },
+      categories: ['cpp', 'oas'],
     });
   }
 
@@ -149,6 +177,7 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
           name: `Reverse mortgage ${Math.round(frac * 100)}% from age ${startAge}`,
           description: `Draw $${draw.toLocaleString()}/yr (tax-free, CPI-indexed) from ${startAge} onward; portfolio draws shrink by the same amount and keep compounding. Loan interest accrues against the home.`,
           patch: { reverseMortgage: { ...baseRm, drawAmount: draw, startAge, topUp: rm?.topUp ?? false } },
+          categories: ['reverse_mortgage'],
         });
       }
     }
@@ -158,6 +187,7 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
         name: 'Add RM top-up backstop',
         description: 'After every account is drained, borrow just enough each year to cover the remaining spending need — an insurance layer, not new spending money.',
         patch: { reverseMortgage: { ...rm, topUp: true } },
+        categories: ['reverse_mortgage'],
       });
     }
   }
@@ -179,7 +209,7 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
   const addJob = (specId: string, name: string, description: string, job: EmploymentIncome) => {
     // Skip if an identical stint is already in the plan.
     if (existingJobs.some(e => e.annualAmount === job.annualAmount && e.startAge === job.startAge && e.endAge === job.endAge)) return;
-    specs.push({ id: specId, name, description, patch: { employment: [...existingJobs, job] } });
+    specs.push({ id: specId, name, description, patch: { employment: [...existingJobs, job] }, categories: ['work'] });
   };
   if (retire + 5 <= inputs.maxAge) {
     addJob(
@@ -226,18 +256,21 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
 function runOne(inputs: RetirementInputs, config: AppConfig, spec: StrategySpec): StrategyResult {
   const merged: RetirementInputs = { ...inputs, ...spec.patch };
   const r: RetirementResults = calculateHousehold(merged, config);
-  const last = r.yearlyBreakdown[r.yearlyBreakdown.length - 1];
   const lifetimeTax = r.yearlyBreakdown.reduce((s, y) => s + (y.incomeTax ?? 0), 0);
   const lifetimeGis = r.yearlyBreakdown.reduce((s, y) => s + (y.gisIncome ?? 0), 0);
   const sustainable = sustainableSpending(merged, config);
+  // Household-first verdict (combined money + shortfall), matching the Monte
+  // Carlo screen and the dashboard — not the primary's own depletionAge.
+  const ho = householdOutcome(r, inputs);
   return {
     id: spec.id,
     name: spec.name,
     description: spec.description,
     patch: spec.patch,
-    survived: r.depletionAge === null,
-    depletionAge: r.depletionAge,
-    endingBalance: last?.endingBalance ?? 0,
+    categories: spec.categories,
+    survived: ho.depletionAge === null,
+    depletionAge: ho.depletionAge,
+    endingBalance: ho.endingBalance,
     lifetimeTax,
     lifetimeGis,
     sustainableSpending: sustainable,
@@ -245,12 +278,39 @@ function runOne(inputs: RetirementInputs, config: AppConfig, spec: StrategySpec)
   };
 }
 
-export function runStrategies(inputs: RetirementInputs, config: AppConfig): StrategyReport {
+/** Validate and apply the caller's filter. Unknown categories throw (not skip)
+ *  — a silent empty result would read as "no levers help" when the caller
+ *  really misspelled 'cpp'. */
+function applyFilter(specs: StrategySpec[], filter?: StrategyFilter): { specs: StrategySpec[]; built: number } {
+  if (!filter || (filter.categories == null && filter.maxVariants == null)) {
+    return { specs, built: specs.length };
+  }
+  let list = specs;
+  if (filter.categories) {
+    const allowed = new Set(filter.categories);
+    list = list.filter(s => s.categories.some(c => allowed.has(c)));
+  }
+  return { specs: list, built: specs.length };
+}
+
+export function runStrategies(inputs: RetirementInputs, config: AppConfig, filter?: StrategyFilter): StrategyReport {
+  if (filter?.categories) {
+    const KNOWN: StrategyCategory[] = ['cpp', 'oas', 'withdrawal_order', 'reverse_mortgage', 'work'];
+    const unknown = filter.categories.filter(c => !KNOWN.includes(c));
+    if (unknown.length) {
+      throw new Error(`Unknown strategy categor${unknown.length > 1 ? 'ies' : 'y'}: ${unknown.join(', ')}. Known: ${KNOWN.join(', ')}.`);
+    }
+  }
   const baseline = runOne(inputs, config, {
-    id: 'baseline', name: 'Current plan', description: 'Your settings as entered.', patch: {},
+    id: 'baseline', name: 'Current plan', description: 'Your settings as entered.', patch: {}, categories: [],
   });
 
-  const strategies = buildStrategies(inputs, config).map(spec => runOne(inputs, config, spec));
+  const allSpecs = buildStrategies(inputs, config);
+  const built = allSpecs.length;
+  const kept = applyFilter(allSpecs, filter).specs;
+  // Cap AFTER the full pipeline's own ranking order is applied below — maxVariants
+  // means "best N", so it must slice the ranked list, not the build list.
+  const strategies = kept.map(spec => runOne(inputs, config, spec));
   for (const s of strategies) s.deltaSpending = s.sustainableSpending - baseline.sustainableSpending;
   baseline.deltaSpending = 0;
 
@@ -259,6 +319,14 @@ export function runStrategies(inputs: RetirementInputs, config: AppConfig): Stra
     a.lifetimeTax - b.lifetimeTax ||
     b.endingBalance - a.endingBalance
   );
+
+  // Cap the ranked list last: "maxVariants" is best-N, not first-N built. The
+  // report still carries the FULL ranked list in `strategies` (callers like the
+  // OptimizeCard render everything); the cap only affects what the agent tool
+  // prints, so it's applied there via `shown`.
+  const shown = filter?.maxVariants != null && filter.maxVariants >= 0
+    ? strategies.slice(0, filter.maxVariants)
+    : strategies;
 
   const best = strategies[0] ?? baseline;
 
@@ -287,5 +355,5 @@ export function runStrategies(inputs: RetirementInputs, config: AppConfig): Stra
     );
   }
 
-  return { baseline, strategies, best, suggestedActions };
+  return { baseline, strategies, best, suggestedActions, shown, filteredFrom: built };
 }
