@@ -1064,15 +1064,17 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                         />
                       )}
                       {showBubble && (
-                        <div className="px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
+                        <div className="relative px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
+                          {/* Activity spinner in the bubble's top-right corner
+                              while it's a placeholder (thinking / working) —
+                              same treatment as the reasoning block. */}
+                          {(thinking || working) && (
+                            <Loader2 size={11} className="animate-spin absolute top-1.5 right-1.5 text-slate-400 pointer-events-none" />
+                          )}
                           {thinking ? (
-                            <span className="flex items-center gap-1.5 text-slate-400 italic">
-                              <Loader2 size={11} className="animate-spin" /> Thinking…
-                            </span>
+                            <span className="text-slate-400 italic">Thinking…</span>
                           ) : working ? (
-                            <span className="flex items-center gap-1.5 text-slate-400 italic">
-                              <Loader2 size={11} className="animate-spin" /> Working…
-                            </span>
+                            <span className="text-slate-400 italic">Working…</span>
                           ) : (
                             // Assistant prose renders as markdown (headings,
                             // lists, tables, code fences) — parsed by `marked`
@@ -1376,10 +1378,15 @@ function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming
   // by the stick-to-bottom observer inside the hook.
   useEffect(() => { if (open) pin(); }, [open, streaming, pin]);
   return (
-    <div className="border border-violet-200 rounded bg-violet-50/60 min-w-0">
+    <div className="relative border border-violet-200 rounded bg-violet-50/60 min-w-0">
+      {/* Activity spinner pinned to the block's top-right corner while the
+          stream is live — visible whether the body is open or collapsed. */}
+      {streaming && (
+        <Loader2 size={10} className="animate-spin absolute top-1.5 right-1.5 text-violet-500 pointer-events-none" />
+      )}
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 w-full px-2 py-1 text-[10px] font-semibold text-violet-700 hover:text-violet-900 text-left"
+        className="flex items-center gap-1.5 w-full px-2 py-1 pr-6 text-[10px] font-semibold text-violet-700 hover:text-violet-900 text-left"
       >
         {open ? <ChevronDown size={11} className="shrink-0" /> : <ChevronRight size={11} className="shrink-0" />}
         <Brain size={11} className="shrink-0" />
@@ -1387,7 +1394,6 @@ function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming
           {headerText}
           {streaming && !lastLine ? '…' : ''}
         </span>
-        {streaming && <Loader2 size={10} className="animate-spin shrink-0" />}
       </button>
       {open && (
         <div
