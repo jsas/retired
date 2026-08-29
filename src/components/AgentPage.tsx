@@ -7,7 +7,7 @@
 // auto-scroll, and the composer. Connecting/switching models lives on the
 // separate Connections page.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AssistantRuntimeProvider,
   ThreadPrimitive,
@@ -57,6 +57,10 @@ interface AgentPageProps {
   config: AppConfig;
   scenarioName: string;
   scenarioList: Array<{ id: string; name: string }>;
+  /** Which scenario is active (list_scenarios marks it in the listing). */
+  activeScenarioId?: string;
+  /** Saved inputs of any scenario by id (list_scenarios withDetails). */
+  scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
   onOpenConnections: () => void;
   /** Agent memory (scenario + global); absent only if the store failed to open. */
@@ -76,6 +80,9 @@ interface ToolActivity {
   id: string;
   name: string;
   state: 'running' | 'done' | 'error';
+  /** Input arguments the model sent (pretty-printed on demand). */
+  args?: Record<string, unknown>;
+  /** Result content (truncated to 4000 chars by the event handler). */
   summary?: string;
 }
 
@@ -204,7 +211,7 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -447,6 +454,8 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, onApply,
               config={config}
               scenarioName={scenarioName}
               scenarioList={scenarioList}
+              activeScenarioId={activeScenarioId}
+              scenarioInputsById={scenarioInputsById}
               onApply={onApply}
               patchTurns={patchTurns}
               patchThread={patchThread}
@@ -533,7 +542,7 @@ function buildSystemBody(
   return buildSystemPrompt(scenarioName, { basePrompt, config });
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -544,6 +553,8 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   config: AppConfig;
   scenarioName: string;
   scenarioList: Array<{ id: string; name: string }>;
+  activeScenarioId?: string;
+  scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
   patchThread: (patch: Partial<ChatThread>) => void;
@@ -609,8 +620,9 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     get checkpoints() { return checkpointsRef.current; },
     config, scenarioName, scenarioList, memory,
     get memoryScenarioId() { return memoryScenarioIdRef.current; },
+    activeScenarioId, scenarioInputsById,
     onOpenScenario, onSaveScenarioAs,
-  }), [config, scenarioName, scenarioList, memory, onOpenScenario, onSaveScenarioAs]);
+  }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
@@ -769,7 +781,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
             patchAssistant(t => { t.reasoning = (t.reasoning ?? '') + evt.text; });
             break;
           case 'tool_start':
-            patchAssistant(t => { t.tools.push({ id: evt.call.id, name: evt.call.name, state: 'running' }); });
+            patchAssistant(t => { t.tools.push({ id: evt.call.id, name: evt.call.name, state: 'running', args: evt.call.args }); });
             break;
           case 'tool_result':
             patchAssistant(t => {
@@ -1046,7 +1058,11 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                 const historicalCards = resumedWithCards ? turn.changes.filter(c => c.resolved) : [];
                 return (
                   <div className="group flex justify-start items-start gap-1">
-                    <div className="max-w-[85%] min-w-0 space-y-2">
+                    {/* Fixed 85% (not max-width): the column doesn't hug its
+                        content, so a collapsed reasoning block or the
+                        Thinking/Working placeholder keeps the same width a
+                        full reply has — blocks never shrink to a pill. */}
+                    <div className="w-[85%] min-w-0 space-y-2">
                       {historicalCards.map(change => (
                         <ChangeCard key={change.callId} change={change} onDecide={decideChange} />
                       ))}
@@ -1241,9 +1257,14 @@ function ScrollControls({ register }: { register: React.MutableRefObject<(() => 
         update();
       };
       // Content growth is what we follow: streaming text swaps and new blocks.
-      const mo = new MutationObserver(() => { if (pinned) snap(); update(); });
+      // rAF-deferred for the same reason as useStickToBottom: observer
+      // callbacks fire pre-layout and a same-tick scrollHeight is stale.
+      const scheduleSnap = () => {
+        requestAnimationFrame(() => { if (pinned) snap(); update(); });
+      };
+      const mo = new MutationObserver(scheduleSnap);
       mo.observe(el, { childList: true, subtree: true, characterData: true });
-      const ro = new ResizeObserver(() => { if (pinned) snap(); update(); });
+      const ro = new ResizeObserver(scheduleSnap);
       ro.observe(el);
 
       el.addEventListener('scroll', onScroll, { passive: true });
@@ -1321,9 +1342,15 @@ function useStickToBottom() {
     };
 
     // Content growth is what we follow: text updates, new blocks, everything.
-    const ro = new ResizeObserver(() => { if (pinnedRef.current) snap(); });
+    // MutationObserver callbacks run BEFORE layout settles, so scrollHeight
+    // read in the same tick is stale — snap() would land short of the true
+    // bottom and the pane visibly lags the stream. Requesting an animation
+    // frame defers the scroll until after layout, landing exactly at the
+    // bottom every time.
+    const scheduleSnap = () => { if (pinnedRef.current) requestAnimationFrame(snap); };
+    const ro = new ResizeObserver(scheduleSnap);
     ro.observe(el);
-    const mo = new MutationObserver(() => { if (pinnedRef.current) snap(); });
+    const mo = new MutationObserver(scheduleSnap);
     mo.observe(el, { childList: true, subtree: true, characterData: true });
 
     el.addEventListener('scroll', onScroll, { passive: true });
@@ -1344,8 +1371,13 @@ function useStickToBottom() {
   };
 
   // Handed to the scroller as a callback ref so attach runs exactly when the
-  // element enters/leaves the DOM.
-  const elRef = (el: HTMLElement | null) => { attach(el); };
+  // element enters/leaves the DOM. STABLE across renders (useCallback, no
+  // deps): React re-invokes an inline callback ref on every re-render —
+  // attach(null) + attach(el) — and attach resets the pin to true, which
+  // silently re-pinned the pane after the user had scrolled away (streaming
+  // re-renders every chunk). Stable identity means attach runs on real
+  // mounts/unmounts only, so the pin survives re-renders.
+  const elRef = useCallback((el: HTMLElement | null) => { attach(el); }, []);
 
   return { elRef, pin };
 }
@@ -1354,29 +1386,34 @@ function useStickToBottom() {
  *  answer. Open while it streams (so the thinking is visible live); the user
  *  folds it away once the answer arrives.
  *
- *  While STREAMING the collapsed header shows the CURRENT last line of the
- *  reasoning (updating live — the lines scroll by) with a spinner; when
- *  finished it settles back to the static "Reasoning" label. The block's own
- *  body sticks to the bottom the same way the thread does. */
+ *  Header shows the static label ("Thinking" while streaming, "Reasoning"
+ *  after) when EXPANDED; when COLLAPSED and streaming it appends the CURRENT
+ *  last line (updating live — the lines scroll by). A spinner sits in the
+ *  block's top-right corner either way. The body sticks to the bottom the
+ *  same way the thread does. */
 function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
   const [open, setOpen] = useState(true);
   const { elRef, pin } = useStickToBottom();
-  // The tail of the reasoning for the collapsed header: the LAST non-empty
+  // The tail of the reasoning for the COLLAPSED header: the LAST non-empty
   // line, trimmed to a reasonable width. Recomputed per render — reasoning
-  // streams in as text chunks, so this updates live and the header reads like
-  // the lines are scrolling by.
+  // streams in as text chunks, so this updates live and the collapsed header
+  // reads like the lines are scrolling by.
   const lastLine = (() => {
     const lines = reasoning.split('\n').map(l => l.trim()).filter(Boolean);
     const tail = lines[lines.length - 1] ?? '';
     return tail.length > 90 ? `${tail.slice(0, 90)}…` : tail;
   })();
-  // A brand-new stream may not have a readable line yet — fall back to the
-  // static label rather than a blank header.
-  const headerText = streaming ? (lastLine || 'Thinking…') : 'Reasoning';
-  // Re-pin whenever the block is (re)opened or the stream state flips, so a
-  // freshly mounted body starts at the latest line. Ongoing growth is pinned
-  // by the stick-to-bottom observer inside the hook.
-  useEffect(() => { if (open) pin(); }, [open, streaming, pin]);
+  // Header text: EXPANDED shows the static label only (the body carries the
+  // content); COLLAPSED appends the live last line while streaming.
+  const headerText = streaming
+    ? open ? 'Thinking' : lastLine ? `Thinking — ${lastLine}` : 'Thinking…'
+    : 'Reasoning';
+  // Re-pin ONLY on a real (re)open — a freshly expanded body starts at the
+  // latest line. NOT on the streaming flip: that re-pins mid-conversation
+  // after the user has deliberately scrolled up, yanking them back down.
+  // Ongoing growth is pinned by the stick-to-bottom observer in the hook
+  // (whose pin state now survives re-renders — see elRef there).
+  useEffect(() => { if (open) pin(); }, [open]);
   return (
     <div className="relative border border-violet-200 rounded bg-violet-50/60 min-w-0">
       {/* Activity spinner pinned to the block's top-right corner while the
@@ -1392,7 +1429,6 @@ function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming
         <Brain size={11} className="shrink-0" />
         <span className="truncate flex-1" title={streaming ? lastLine : undefined}>
           {headerText}
-          {streaming && !lastLine ? '…' : ''}
         </span>
       </button>
       {open && (
@@ -1424,18 +1460,7 @@ function AssistantExtras({ turn, onDecide, tokensPerSecond, hideResolvedCards = 
       {turn.tools.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {turn.tools.map(tool => (
-            <span
-              key={tool.id}
-              title={tool.summary}
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                tool.state === 'running' ? 'bg-violet-100 text-violet-700'
-                : tool.state === 'error' ? 'bg-red-100 text-red-700'
-                : 'bg-slate-200 text-slate-600'
-              }`}
-            >
-              {tool.state === 'running' ? <Loader2 size={9} className="animate-spin" /> : <Wrench size={9} />}
-              {tool.name}
-            </span>
+            <ToolChip key={tool.id} tool={tool} />
           ))}
         </div>
       )}
@@ -1454,6 +1479,51 @@ function AssistantExtras({ turn, onDecide, tokensPerSecond, hideResolvedCards = 
         <div className="text-[10px] text-slate-400">~{tokensPerSecond.toFixed(1)} tok/s</div>
       )}
     </>
+  );
+}
+
+/** One tool call in the activity row: a compact chip that expands ON CLICK
+ *  (not hover — hover expands are easy to trigger accidentally and impossible
+ *  to keep open while moving to the text) into its inputs and output. Same
+ *  collapsed size as the old plain chips; click again to fold it back. */
+function ToolChip({ tool }: { tool: ToolActivity }) {
+  const [open, setOpen] = useState(false);
+  const hasDetail = tool.args != null || tool.summary != null;
+  return (
+    <div className="min-w-0">
+      <button
+        onClick={() => hasDetail && setOpen(o => !o)}
+        disabled={!hasDetail}
+        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+          tool.state === 'running' ? 'bg-violet-100 text-violet-700'
+          : tool.state === 'error' ? 'bg-red-100 text-red-700'
+          : 'bg-slate-200 text-slate-600'
+        } ${hasDetail ? 'hover:brightness-95 cursor-pointer' : 'cursor-default'}`}
+        title={hasDetail ? 'Click to see the call details' : undefined}
+      >
+        {tool.state === 'running' ? <Loader2 size={9} className="animate-spin" /> : <Wrench size={9} />}
+        {tool.name}
+        {hasDetail && (open ? <ChevronDown size={9} className="shrink-0" /> : <ChevronRight size={9} className="shrink-0" />)}
+      </button>
+      {open && (
+        <div className="mt-1 p-2 rounded bg-slate-50 border border-slate-200 text-[10px] leading-snug space-y-1.5 max-h-64 overflow-y-auto [overflow-wrap:anywhere]">
+          {tool.args != null && (
+            <div>
+              <div className="font-semibold text-slate-500 uppercase tracking-wide text-[9px] mb-0.5">Input</div>
+              <pre className="text-slate-700 whitespace-pre-wrap font-mono">{JSON.stringify(tool.args, null, 2)}</pre>
+            </div>
+          )}
+          {tool.summary != null && (
+            <div>
+              <div className="font-semibold text-slate-500 uppercase tracking-wide text-[9px] mb-0.5">
+                {tool.state === 'error' ? 'Error' : 'Output'}
+              </div>
+              <pre className={`whitespace-pre-wrap font-mono ${tool.state === 'error' ? 'text-red-700' : 'text-slate-700'}`}>{tool.summary}</pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

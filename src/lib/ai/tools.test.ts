@@ -30,6 +30,7 @@ describe('toolSpecs', () => {
     const specs = toolSpecs();
     expect(specs.map(s => s.name).sort()).toEqual([
       'compare_scenarios', 'get_schedule', 'get_scenario',
+      'list_scenarios',
       'manage_cash_event', 'manage_pension',
       'propose_cash_event', 'propose_employment', 'propose_patch', 'propose_pension',
       'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
@@ -783,5 +784,69 @@ describe('open_scenario / save_scenario_as', () => {
   it('save_scenario_as errors when unavailable', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'save_scenario_as', args: { name: 'x' } });
     expect(out.kind).toBe('error');
+  });
+});
+
+describe('list_scenarios', () => {
+  it('lists every scenario and marks the active one', () => {
+    const c = ctx({
+      scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
+      activeScenarioId: 'sc-2',
+    });
+    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: {} });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('2 saved scenarios');
+    expect(out.content).toContain('Base');
+    expect(out.content).toContain('Downsized (ACTIVE — currently open)');
+    expect(out.content).toContain('[id: sc-1]');
+    // Compact form: no plan numbers.
+    expect(out.content).not.toContain('spending');
+  });
+
+  it('withDetails adds the active plan\'s numbers without opening anything', () => {
+    const c = ctx({
+      scenarioList: [{ id: 'a', name: 'Test plan' }],
+      activeScenarioId: 'a',
+    });
+    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('spending');
+    expect(out.content).toContain('RRSP');
+    expect(out.content).toContain('single');
+  });
+
+  it('withDetails uses scenarioInputsById for non-active plans', () => {
+    const c = ctx({
+      inputs: baseInputs({ desiredSpending: 99999 }),
+      scenarioList: [{ id: 'a', name: 'Test plan' }, { id: 'b', name: 'Other' }],
+      activeScenarioId: 'a',
+      scenarioInputsById: (id) => (id === 'b' ? baseInputs({ desiredSpending: 12345, currentAge: 71 }) : undefined),
+    });
+    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    // Currency-formatted: the OTHER plan's number appears, and both plans show.
+    expect(out.content).toContain('$12,345/yr');
+    expect(out.content).toContain('$99,999/yr');
+    expect(out.content).toContain('ages 71→');
+  });
+
+  it('falls back to a compact line when details are unavailable for a plan', () => {
+    const c = ctx({
+      inputs: baseInputs({ desiredSpending: 50000 }),
+      scenarioList: [{ id: 'a', name: 'Test plan' }, { id: 'b', name: 'Other' }],
+      activeScenarioId: 'a',
+      // no scenarioInputsById
+    });
+    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    // 'a' detailed, 'b' compact (id line only, no numbers).
+    expect(out.content).toContain('spending');
+    expect(out.content).toContain('- Other [id: b]');
+  });
+
+  it('handles an empty scenario list', () => {
+    const out = executeToolCall(ctx({ scenarioList: [] }), { id: '1', name: 'list_scenarios', args: {} });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('no saved scenarios');
   });
 });
