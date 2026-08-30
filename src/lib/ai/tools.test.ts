@@ -33,7 +33,7 @@ describe('toolSpecs', () => {
       'list_scenarios',
       'manage_cash_event', 'manage_pension',
       'propose_cash_event', 'propose_employment', 'propose_patch', 'propose_pension',
-      'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
+      'propose_rdsp', 'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
       'open_scenario', 'save_scenario_as',
       'run_monte_carlo', 'run_projection', 'run_strategies',
@@ -403,6 +403,88 @@ describe('propose_reverse_mortgage', () => {
     });
     expect(out.kind).toBe('error');
     if (out.kind === 'error') expect(out.content).toContain('homeValue, appreciationRate, and interestRate');
+  });
+});
+
+describe('propose_rdsp', () => {
+  it('proposes enabling an RDSP from a full block', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_rdsp',
+      args: { changes: { enabled: true, balance: 15000, contribution: 500, familyIncome: 35000, dtcEligible: true } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Enable RDSP');
+    const rdsp = out.patch.rdsp as { enabled: boolean; balance: number; contribution: number; familyIncome: number; dtcEligible: boolean };
+    expect(rdsp.enabled).toBe(true);
+    expect(rdsp.balance).toBe(15000);
+    expect(rdsp.contribution).toBe(500);
+    expect(rdsp.familyIncome).toBe(35000);
+    expect(rdsp.dtcEligible).toBe(true);
+  });
+
+  it('rejects an incomplete enable with guidance', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_rdsp', args: { changes: { enabled: true, balance: 10000 } },
+    });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('balance, contribution, familyIncome, and dtcEligible');
+  });
+
+  it('proposes disabling an RDSP', () => {
+    const c = ctx({
+      inputs: baseInputs({
+        rdsp: { enabled: true, balance: 20000, contribution: 1000, familyIncome: 40000, dtcEligible: true },
+      }),
+    });
+    const out = executeToolCall(c, {
+      id: '1', name: 'propose_rdsp', args: { changes: { enabled: false } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Disable RDSP');
+    expect((out.patch.rdsp as { enabled: boolean }).enabled).toBe(false);
+  });
+
+  it('proposes updating an existing RDSP', () => {
+    const c = ctx({
+      inputs: baseInputs({
+        rdsp: { enabled: true, balance: 20000, contribution: 1000, familyIncome: 40000, dtcEligible: true },
+      }),
+    });
+    const out = executeToolCall(c, {
+      id: '1', name: 'propose_rdsp', args: { changes: { contribution: 1500 } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Update RDSP');
+    const rdsp = out.patch.rdsp as { contribution: number; balance: number };
+    expect(rdsp.contribution).toBe(1500);
+    expect(rdsp.balance).toBe(20000); // untouched fields survive
+  });
+
+  it('rejects rdsp as a flat override — points to the structural tool', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'run_projection',
+      args: { overrides: { rdsp: { enabled: true } } },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('structural field');
+  });
+
+  it('shows rdsp in the accounts section when enabled', () => {
+    const c = ctx({
+      inputs: baseInputs({
+        rdsp: { enabled: true, balance: 25000, contribution: 500, familyIncome: 30000, dtcEligible: true },
+      }),
+    });
+    const out = executeToolCall(c, { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('rdsp');
+    expect(out.content).toContain('25000');
+  });
+
+  it('omits rdsp from the accounts section when not configured', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).not.toContain('"rdsp"');
   });
 });
 
