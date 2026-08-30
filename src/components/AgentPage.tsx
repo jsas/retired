@@ -119,6 +119,19 @@ interface Turn {
 let turnSeq = 0;
 const newTurnId = () => `turn-${++turnSeq}`;
 
+/** The context window to plan around for a connection. An explicit setting
+ *  wins. For a LOCAL model on auto (no setting), plan against the model's own
+ *  ceiling rather than the small default — the engine loads as big as the GPU
+ *  holds and the per-request window is clamped to what actually loaded, so a
+ *  slightly-optimistic plan here just compacts a touch early on a weak GPU. */
+function effectiveContextLimit(connection: AiConnection): number {
+  if (connection.contextSize) return connection.contextSize;
+  if (connection.provider === 'webllm') {
+    return WEBLLM_MODELS.find(m => m.id === connection.model)?.maxWindow ?? defaultContextSize('webllm');
+  }
+  return defaultContextSize(connection.provider);
+}
+
 /** Fold the transcript into the provider-facing chat history. */
 function toHistory(turns: Turn[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
@@ -709,7 +722,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     // model the proposal was already answered. The decision rides as the user
     // message instead ("I accepted/declined the change you proposed…").
     const historyTurns = resuming ? priorTurns.filter(t => t.id !== resumeTurnId) : priorTurns;
-    const contextSize = connection.contextSize ?? defaultContextSize(connection.provider);
+    const contextSize = effectiveContextLimit(connection);
     const fullHistory = toHistory(historyTurns);
     const compaction = planCompaction({
       system,
@@ -1187,7 +1200,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
               {connection && (
                 <ContextMeter
                   used={contextUsed}
-                  limit={connection.contextSize ?? defaultContextSize(connection.provider)}
+                  limit={effectiveContextLimit(connection)}
                   compacted={Boolean(thread.contextSummary)}
                 />
               )}

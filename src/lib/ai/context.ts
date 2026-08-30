@@ -31,12 +31,13 @@ export function estimateTokens(system: string, messages: ChatMessage[]): number 
 }
 
 /** The context window a connection gets when the user hasn't set one. Local
- *  models default to 16384: every model in the curated list (Phi-3/4, Qwen3,
- *  Llama-3.x) supports at least that, and the plan digest + tool catalog alone
- *  is several thousand tokens — at 8192 the history was compacted so hard the
- *  model lost the thread and rambled. The KV cache is clamped separately so an
- *  over-large value can't blow GPU memory. Cloud endpoints default to a large
- *  window the user can narrow in Connections if their model is smaller. */
+ *  (web-llm) models are normally on AUTO — the engine loads at the model's own
+ *  ceiling and backs off on OOM (see webLlmProvider.loadWebLlmEngine and
+ *  AgentPage.effectiveContextLimit), so this 16384 is only the fallback for an
+ *  unlisted custom model and the seed for a manual override. 16384 because the
+ *  plan digest + tool catalog alone is several thousand tokens — at 8192 the
+ *  history was compacted so hard the model lost the thread and rambled. Cloud
+ *  endpoints default to a large window the user can narrow in Connections. */
 export function defaultContextSize(provider: string): number {
   return provider === 'webllm' ? 16384 : 128000;
 }

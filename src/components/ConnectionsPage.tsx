@@ -340,9 +340,10 @@ function ModelsSection({ onChange, webllmConn }: {
           the estimated total and warn when it won't fit. */}
       {webllmConn && (() => {
         const modelMeta = WEBLLM_MODELS.find(m => m.id === webllmConn.model);
-        const tokens = webllmConn.contextSize ?? defaultContextSize('webllm');
-        // No real VRAM available (WebGPU hides it), so pass null: we show the
-        // honest "needs ≈X" estimate but never a fake "your computer has Y".
+        const isAuto = webllmConn.contextSize == null;
+        // Auto aims for the model's ceiling; the engine backs off on OOM and we
+        // can't know real VRAM (WebGPU hides it), so show the target not a fit.
+        const tokens = webllmConn.contextSize ?? modelMeta?.maxWindow ?? defaultContextSize('webllm');
         const fit = modelMeta ? estimateContextFit(modelMeta.vramMB, tokens, null) : null;
         return (
           <div className="mt-3 pt-2 border-t border-emerald-100">
@@ -357,6 +358,7 @@ function ModelsSection({ onChange, webllmConn }: {
                 max={MAX_LOCAL_CONTEXT}
                 step={1024}
                 value={webllmConn.contextSize ?? ''}
+                disabled={isAuto}
                 onChange={e => onChange(s => {
                   const c = s.connections.find(x => x.id === webllmConn.id);
                   if (!c) return;
@@ -364,20 +366,39 @@ function ModelsSection({ onChange, webllmConn }: {
                     ? Math.min(MAX_LOCAL_CONTEXT, Math.max(2048, Math.round(Number(e.target.value))))
                     : undefined;
                 })}
-                placeholder={String(defaultContextSize('webllm'))}
-                className="w-24 px-2 py-1 border border-emerald-200 rounded text-xs font-mono bg-white"
+                placeholder={isAuto ? 'Auto' : String(defaultContextSize('webllm'))}
+                className="w-24 px-2 py-1 border border-emerald-200 rounded text-xs font-mono bg-white disabled:bg-slate-50 disabled:text-slate-400"
               />
-              <span className="text-[10px] text-emerald-900/70">
-                Leave blank for the default. Larger needs more memory; smaller runs on weaker computers.
-              </span>
+              <label className="flex items-center gap-1 text-[11px] text-emerald-900">
+                <input
+                  type="checkbox"
+                  checked={isAuto}
+                  onChange={e => onChange(s => {
+                    const c = s.connections.find(x => x.id === webllmConn.id);
+                    if (!c) return;
+                    // Auto = unset; unchecking seeds the current target as a manual value.
+                    c.contextSize = e.target.checked ? undefined : tokens;
+                  })}
+                />
+                Auto (as big as your GPU allows)
+              </label>
             </div>
-            {fit && (
-              <div className="text-[10px] mt-1 leading-snug text-emerald-900/60">
-                Needs ≈{fmtMB(fit.neededMB)} of graphics memory at this setting
-                ({fmtMB(modelMeta!.vramMB)} for the model + ≈{fmtMB(fit.cacheMB)} for the window).
-                If loading fails, lower the number or pick a smaller model.
-              </div>
-            )}
+            <div className="text-[10px] mt-1 leading-snug text-emerald-900/60">
+              {isAuto ? (
+                <>
+                  Auto tries the model's largest window{modelMeta ? ` (${modelMeta.maxWindow.toLocaleString()} tokens)` : ''} and
+                  steps down if your graphics memory can't hold it — no setting to tune.
+                </>
+              ) : (
+                fit && (
+                  <>
+                    Needs ≈{fmtMB(fit.neededMB)} of graphics memory at this setting
+                    ({fmtMB(modelMeta!.vramMB)} for the model + ≈{fmtMB(fit.cacheMB)} for the window).
+                    If loading fails, lower the number or switch back to Auto.
+                  </>
+                )
+              )}
+            </div>
             <div className="mt-3 pt-2 border-t border-emerald-100">
               <GenerationFields
                 conn={webllmConn}
