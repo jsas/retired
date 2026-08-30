@@ -348,6 +348,11 @@ export interface YearDetail {
   // the account's remaining room ran out. Only present when room tracking is
   // on (tfsaRoom/rrspRoom set) and an overflow actually occurred.
   overflow?: { tfsa: number; rrsp: number };
+  // Remaining contribution room at year END (after this year's accrual and all
+  // capped deposits), for each account being tracked. Absent for an account
+  // whose room is unlimited (null). Lets the agent/UI answer "room left in
+  // year X" without re-deriving the ledger.
+  roomRemaining?: { tfsa?: number; rrsp?: number };
   // Tax decomposition for the year's withdrawals.
   tax: { oasClawback: number; capitalGains: number; registeredGross: number };
   // Reverse mortgage / HELOC, when enabled. interestAccrued is the year's
@@ -1230,6 +1235,7 @@ export function calculatePerson(
         contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution, ...(rdspOn ? { rdsp: rdspContribution } : {}) },
         deposit: accumDeposit,
         ...(yearOverflow.tfsa > 0 || yearOverflow.rrsp > 0 ? { overflow: { tfsa: yearOverflow.tfsa, rrsp: yearOverflow.rrsp } } : {}),
+        ...((tfsaRoom !== null || rrspRoom !== null) ? { roomRemaining: { ...(tfsaRoom !== null ? { tfsa: Math.max(0, tfsaRoom) } : {}), ...(rrspRoom !== null ? { rrsp: Math.max(0, rrspRoom) } : {}) } } : {}),
         tax: { oasClawback: 0, capitalGains: 0, registeredGross: accumTransferBaseGross },
         ...(rdspOn ? { rdsp: { contribution: rdspContribution, grant: rdspGrant, bond: rdspBond, growth: rdspGains, balance: rdspBal, contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction() } } : {}),
         ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: accRmInterestExpense } : {}) } } : {}),
@@ -1774,6 +1780,7 @@ export function calculatePerson(
         growth: { rrsp: rrspGains, rrif: rrifGains, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains, ...(rdspOn ? { rdsp: rdspGains } : {}) },
         deposit,
         ...(yearOverflow.tfsa > 0 || yearOverflow.rrsp > 0 ? { overflow: { tfsa: yearOverflow.tfsa, rrsp: yearOverflow.rrsp } } : {}),
+        ...((tfsaRoom !== null || rrspRoom !== null) ? { roomRemaining: { ...(tfsaRoom !== null ? { tfsa: Math.max(0, tfsaRoom) } : {}), ...(rrspRoom !== null ? { rrsp: Math.max(0, rrspRoom) } : {}) } } : {}),
         tax: { oasClawback, capitalGains, registeredGross },
         ...(rdspOn ? { rdsp: { contribution: 0, grant: 0, bond: 0, growth: rdspGains, balance: Math.max(0, rdspBal), contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction(), withdrawal: rdspWithdrawn, taxablePortion: rdspTaxable } } : {}),
         ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: rmInterestExpense } : {}) } } : {}),

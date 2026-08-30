@@ -201,3 +201,29 @@ describe('blank room = unlimited (enforcement off)', () => {
     expect(yearAt(r.yearlyBreakdown, 60).contributions).toBe(50000);
   });
 });
+
+describe('room remaining (year-end ledger)', () => {
+  it('reports remaining room per tracked account, omitting unlimited ones', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 60, retirementAge: 63, maxAge: 65,
+      tfsaBalance: 0, tfsaContribution: 0, taxableBalance: 0,
+      tfsaRoom: 10000, rrspRoom: null, // track TFSA only
+      events: [{ id: 'a', age: 60, label: 'in', amount: 4000, direction: 'in', account: 'tfsa' }],
+    }), config);
+    // Age 60: room was 10000 + 7000 accrued = 17000; 4000 landed → 13000 left.
+    const room60 = yearAt(r.yearlyBreakdown, 60).detail?.roomRemaining;
+    expect(closeTo(room60?.tfsa ?? 0, 13000)).toBe(true);
+    expect(room60?.rrsp).toBeUndefined(); // unlimited → omitted
+    // Age 61: 13000 + 7000 accrued = 20000 left (no deposit).
+    expect(closeTo(yearAt(r.yearlyBreakdown, 61).detail?.roomRemaining?.tfsa ?? 0, 20000)).toBe(true);
+  });
+
+  it('omits roomRemaining entirely when no account is tracked', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 60, retirementAge: 63, maxAge: 65,
+      tfsaBalance: 0, tfsaContribution: 0, taxableBalance: 0,
+      tfsaRoom: null, rrspRoom: null,
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 60).detail?.roomRemaining).toBeUndefined();
+  });
+});
