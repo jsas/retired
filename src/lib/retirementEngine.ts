@@ -540,6 +540,26 @@ export function calculatePerson(
       ? withdrawalOrder
       : ['tfsa', 'taxable', 'rrsp'];
 
+  // RDSP drawdown opt-in (E-01): the 'rdsp' slot only draws when it appears in
+  // the order, but nothing in the UI/ingest ever puts it there — so without this
+  // an enabled RDSP accumulated and was never spent. When an RDSP is active and
+  // the order doesn't mention it, inject it ahead of the taxable account: an
+  // RDSP dollar is partly a tax-free return of contribution principal, so it's
+  // cheaper to spend than a fully-taxable-gain dollar but (unlike a TFSA dollar)
+  // not wholly tax-free. An explicit order that already places 'rdsp' is honoured
+  // as-is; one that deliberately omits it can only be produced by hand-editing.
+  const rdspActiveForOrder =
+    person.rdsp?.enabled === true && person.rdsp?.dtcEligible === true && (person.rdsp?.balance ?? 0) > 0;
+  const effectiveOrder: WithdrawalAccount[] =
+    rdspActiveForOrder && !order.includes('rdsp')
+      ? (() => {
+          const idx = order.indexOf('taxable');
+          const next = [...order];
+          next.splice(idx === -1 ? next.length : idx, 0, 'rdsp');
+          return next;
+        })()
+      : order;
+
   const pensionList: Pension[] = Array.isArray(pensions) ? pensions : [];
   const employmentList: EmploymentIncome[] = Array.isArray(employment) ? employment : [];
 
@@ -1379,7 +1399,7 @@ export function calculatePerson(
       }
     };
 
-    for (const account of order) {
+    for (const account of effectiveOrder) {
       drawFrom(account);
     }
     calc.needAfterDraws = remainingAfterTaxNeed;

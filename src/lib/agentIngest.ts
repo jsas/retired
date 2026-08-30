@@ -17,7 +17,7 @@ export interface IngestResult {
   error?: string;      // fatal: nothing applied
 }
 
-const VALID_ACCOUNTS: WithdrawalAccount[] = ['tfsa', 'taxable', 'rrsp'];
+const VALID_ACCOUNTS: WithdrawalAccount[] = ['tfsa', 'taxable', 'rrsp', 'rdsp'];
 
 // The editable levers we let an agent suggest. Maps JSON key -> applier with
 // range validation. Each returns the applied value or throws a reason string.
@@ -35,11 +35,15 @@ const FIELDS: Record<string, (v: unknown, cur: RetirementInputs) => number | str
   withdrawalOrder: (v) => {
     if (!Array.isArray(v)) throw 'withdrawalOrder must be an array';
     const order = v.map(String) as WithdrawalAccount[];
+    // 3 or 4 distinct accounts drawn from the valid set (RDSP included — the
+    // schema and engine both accept it; the order need not contain every
+    // account, but each may appear at most once).
     const okShape =
-      order.length === 3 &&
-      new Set(order).size === 3 &&
+      order.length >= 3 &&
+      order.length <= 4 &&
+      new Set(order).size === order.length &&
       order.every(a => VALID_ACCOUNTS.includes(a));
-    if (!okShape) throw 'withdrawalOrder must be a permutation of ["tfsa","taxable","rrsp"]';
+    if (!okShape) throw 'withdrawalOrder must be 3–4 distinct accounts from ["tfsa","taxable","rrsp","rdsp"]';
     return order;
   },
 };
@@ -72,7 +76,7 @@ ${JSON.stringify(inputs, null, 2)}
 
 RULES:
 - Reply with a single JSON object containing only the fields you want to change, chosen from: ${Object.keys(FIELDS).join(', ')}.
-- investmentReturn and returnVolatility are decimals (0.06 = 6%). Ages are integers. withdrawalOrder is a permutation of ["tfsa","taxable","rrsp"].
+- investmentReturn and returnVolatility are decimals (0.06 = 6%). Ages are integers. withdrawalOrder is 3–4 distinct accounts from ["tfsa","taxable","rrsp","rdsp"].
 - Constraints: retirementAge 45-75, cppStartAge 60-70, oasStartAge 65-70, non-negative dollar amounts.
 - CPP at 65 is cppMonthlyAmount; the engine applies -0.6%/month before 65 and +0.7%/month after (cap 70). OAS deferral adds 0.6%/month to 70.
 - Do not invent new fields. If unsure, omit the field.

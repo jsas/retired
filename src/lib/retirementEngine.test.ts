@@ -2047,3 +2047,53 @@ describe('RDSP withdrawals (decumulation)', () => {
     expect(closeTo(cy.rdspBalance!, (py.rdspBalance ?? 0) + (sy.rdspBalance ?? 0), 0.02)).toBe(true);
   });
 });
+
+describe('RDSP auto-injection into the drawdown order (E-01)', () => {
+  // Regression for the blocker: an enabled RDSP must be drawn down even when
+  // the configured withdrawal order never mentions 'rdsp' (the production
+  // default — every UI/default order is a 3-account permutation).
+  const rdspNoOrder = (over: Parameters<typeof baseInputs>[0] = {}) => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 80,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    desiredSpending: 20000,
+    withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], // the default — NO 'rdsp'
+    rdsp: { enabled: true, balance: 100000, contribution: 0, familyIncome: 0, contributionBasis: 40000, dtcEligible: true },
+    ...over,
+  });
+
+  it('draws from the RDSP even when the order omits it', () => {
+    const r = calculateRetirement(rdspNoOrder(), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    expect((y65.detail?.withdraw.rdsp ?? 0)).toBeGreaterThan(0);
+    expect(y65.detail?.rdsp?.withdrawal!).toBeGreaterThan(0);
+  });
+
+  it('depletes the RDSP over the horizon instead of letting it accumulate untouched', () => {
+    const r = calculateRetirement(rdspNoOrder(), config);
+    // $100k RDSP vs $20k/yr spending → fully spent well before age 80.
+    const last = r.yearlyBreakdown[r.yearlyBreakdown.length - 1];
+    expect(last.rdspBalance ?? 0).toBeCloseTo(0, 0);
+  });
+
+  it('leaves the RDSP untouched when it is disabled or DTC-ineligible', () => {
+    const r = calculateRetirement(rdspNoOrder({
+      rdsp: { enabled: true, balance: 100000, contribution: 0, familyIncome: 0, contributionBasis: 40000, dtcEligible: false },
+    }), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    expect(y65.rdspBalance).toBeUndefined();
+    expect(y65.detail?.withdraw.rdsp ?? 0).toBe(0);
+  });
+
+  it('honours an explicit order that places rdsp last (no double-injection)', () => {
+    const r = calculateRetirement(rdspNoOrder({
+      withdrawalOrder: ['tfsa', 'taxable', 'rrsp', 'rdsp'],
+      // Give the earlier accounts enough to cover spending so rdsp, now last,
+      // is barely touched — proving the explicit position is respected.
+      tfsaBalance: 500000,
+    }), config);
+    const y65 = yearAt(r.yearlyBreakdown, 65);
+    // TFSA (tax-free, first) covers the year; RDSP is not drawn at 65.
+    expect(y65.detail?.withdraw.tfsa ?? 0).toBeGreaterThan(0);
+    expect(y65.detail?.withdraw.rdsp ?? 0).toBe(0);
+  });
+});
