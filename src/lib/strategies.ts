@@ -15,7 +15,7 @@
 // ending balance shown for context.
 
 import { calculateHousehold, householdOutcome } from './retirementEngine';
-import type { RetirementInputs, RetirementResults, WithdrawalAccount, EmploymentIncome } from './retirementEngine';
+import type { RetirementInputs, RetirementResults, WithdrawalAccount, IncomeSource } from './retirementEngine';
 import type { AppConfig } from './appConfig';
 
 export interface StrategyResult {
@@ -170,12 +170,14 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
   // so the move also shifts lifetime GIS — the existing report columns already
   // score it. We sweep ONE pension at a time (combos multiply fast), then add
   // a small pairwise flagship: start the smaller pension early, defer the
-  // larger one. Applies to the primary's pensions AND the spouse's (whose list
-  // lives under `spouse.pensions`, patched via the whole spouse object).
+  // larger one. Applies to the primary's pensions AND the spouse's — pensions
+  // are the kind-'pension' entries of each person's single `income[]` register;
+  // a patch rebuilds that register with the non-pension entries preserved.
   const PENSION_AGES = [55, 60, 65, 70] as const;
   const pensionLabel = (p: { label: string; annualAmount: number; indexedToCpi: boolean }) =>
     `${p.label} ($${Math.round(p.annualAmount).toLocaleString()}/yr${p.indexedToCpi ? ', indexed' : ''})`;
   // Collect every pension across both people, tagged with how to patch it back.
+  // `index` is the pension's position within the person's income register.
   type PensionRef = {
     who: 'primary' | 'spouse';
     index: number;
@@ -183,23 +185,25 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
     withStartAge: (age: number) => Partial<RetirementInputs>;
   };
   const pensionRefs: PensionRef[] = [];
-  (inputs.pensions ?? []).forEach((p, index) => {
+  (inputs.income ?? []).forEach((s, index) => {
+    if (s.kind !== 'pension') return;
     pensionRefs.push({
-      who: 'primary', index, pension: p,
+      who: 'primary', index, pension: s,
       withStartAge: (age) => ({
-        pensions: (inputs.pensions ?? []).map((q, i) => (i === index ? { ...q, startAge: age } : q)),
+        income: (inputs.income ?? []).map((q, i) => (i === index ? { ...q, startAge: age } : q)),
       }),
     });
   });
   if (inputs.spouse?.enabled) {
     const sp = inputs.spouse;
-    (sp.pensions ?? []).forEach((p, index) => {
+    (sp.income ?? []).forEach((s, index) => {
+      if (s.kind !== 'pension') return;
       pensionRefs.push({
-        who: 'spouse', index, pension: p,
+        who: 'spouse', index, pension: s,
         withStartAge: (age) => ({
           spouse: {
             ...sp,
-            pensions: (sp.pensions ?? []).map((q, i) => (i === index ? { ...q, startAge: age } : q)),
+            income: (sp.income ?? []).map((q, i) => (i === index ? { ...q, startAge: age } : q)),
           },
         }),
       });
@@ -239,17 +243,24 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
         ...small.withStartAge(early),
         ...large.withStartAge(defer),
       };
-      // If both pensions belong to the same person, merge their two list patches
-      // into one (spread of two `pensions`/`spouse` keys would clobber one).
+      // If both pensions belong to the same person, merge their two register
+      // patches into one (spreading two `income`/`spouse` keys would clobber
+      // one) — non-pension register entries pass through untouched.
       if (small.who === large.who) {
-        const key = small.who === 'primary' ? 'pensions' : 'spouse';
-        const mergedList = (small.who === 'primary' ? inputs.pensions : inputs.spouse!.pensions) ?? [];
-        const next = mergedList.map((q, i) =>
-          i === small.index ? { ...q, startAge: early }
-            : i === large.index ? { ...q, startAge: defer }
-              : q);
-        if (key === 'pensions') patch.pensions = next;
-        else patch.spouse = { ...inputs.spouse!, pensions: next };
+        if (small.who === 'primary') {
+          patch.income = (inputs.income ?? []).map((q, i) =>
+            i === small.index ? { ...q, startAge: early }
+              : i === large.index ? { ...q, startAge: defer }
+                : q);
+        } else {
+          patch.spouse = {
+            ...inputs.spouse!,
+            income: (inputs.spouse!.income ?? []).map((q, i) =>
+              i === small.index ? { ...q, startAge: early }
+                : i === large.index ? { ...q, startAge: defer }
+                  : q),
+          };
+        }
       }
       specs.push({
         id: 'pension-pair-early-small-defer-large',
@@ -334,18 +345,20 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
   // (and counts for OAS clawback / GIS), which is exactly the trade-off worth
   // surfacing. Fixed rows plus, when the plan runs a shortfall, a gap-targeted
   // stint sized to the first depleted window.
-  const existingJobs = inputs.employment ?? [];
+  const existingJobs = (inputs.income ?? []).filter(s => s.kind === 'employment');
   const retire = inputs.retirementAge;
   // Save to taxable by default: the app doesn't track TFSA/RRSP room yet
   // (issue #24), so a registered destination could silently over-contribute.
-  const mkJob = (id: string, label: string, amount: number, startAge: number, endAge: number): EmploymentIncome => ({
-    id, label, annualAmount: amount, startAge, endAge,
+  const mkJob = (id: string, label: string, amount: number, startAge: number, endAge: number): IncomeSource => ({
+    id, label, kind: 'employment', annualAmount: amount, startAge, endAge,
     destAccount: 'taxable', topUpSpending: true, indexedToCpi: false,
   });
-  const addJob = (specId: string, name: string, description: string, job: EmploymentIncome) => {
+  const addJob = (specId: string, name: string, description: string, job: IncomeSource) => {
     // Skip if an identical stint is already in the plan.
     if (existingJobs.some(e => e.annualAmount === job.annualAmount && e.startAge === job.startAge && e.endAge === job.endAge)) return;
-    specs.push({ id: specId, name, description, patch: { employment: [...existingJobs, job] }, categories: ['work'] });
+    // Append to the person's income register, preserving any existing entries
+    // (pensions, other jobs) ahead of the new one.
+    specs.push({ id: specId, name, description, patch: { income: [...(inputs.income ?? []), job] }, categories: ['work'] });
   };
   if (retire + 5 <= inputs.maxAge) {
     addJob(

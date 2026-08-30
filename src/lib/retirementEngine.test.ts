@@ -218,15 +218,15 @@ describe('transfer events (RRSP meltdown)', () => {
     // registered meltdown for someone still drawing wages was taxed from the
     // bottom brackets instead of on top of their salary. The same $50k draw
     // must cost MORE tax when the year has employment income under it.
-    const job = (over: Partial<import('./retirementEngine').EmploymentIncome> = {}): import('./retirementEngine').EmploymentIncome => ({
-      id: 'j', label: 'salary', annualAmount: 80000, startAge: 55, endAge: 59,
+    const job = (over: Partial<import('./retirementEngine').IncomeSource> = {}): import('./retirementEngine').IncomeSource => ({
+      id: 'j', label: 'salary', kind: 'employment', annualAmount: 80000, startAge: 55, endAge: 59,
       destAccount: 'tfsa', topUpSpending: false, indexedToCpi: false, ...over,
     });
-    const mk = (employment: import('./retirementEngine').EmploymentIncome[]) => calculateRetirement(baseInputs({
+    const mk = (employment: import('./retirementEngine').IncomeSource[]) => calculateRetirement(baseInputs({
       currentAge: 55, retirementAge: 60, maxAge: 61,
       rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
       desiredSpending: 0, // isolate the transfer: no spending draws
-      employment,
+      income: employment,
       events: [{
         id: 'm', age: 55, label: 'm', amount: 50000, direction: 'out',
         from: { kind: 'account', person: 'primary', account: 'rrsp' },
@@ -248,7 +248,7 @@ describe('transfer events (RRSP meltdown)', () => {
       currentAge: 55, retirementAge: 60, maxAge: 61,
       rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
       desiredSpending: 0,
-      pensions: [{ id: 'p', label: 'DB', annualAmount: 40000, startAge: 55, endAge: null, indexedToCpi: false }],
+      income: [{ id: 'p', label: 'DB', kind: 'pension', annualAmount: 40000, startAge: 55, endAge: null, indexedToCpi: false }],
       events: [{
         id: 'm', age: 55, label: 'm', amount: 50000, direction: 'out',
         from: { kind: 'account', person: 'primary', account: 'rrsp' },
@@ -425,7 +425,7 @@ describe('inter-spousal transfers (household conservation)', () => {
       rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-      desiredSpending: 0, pensions: [],
+      desiredSpending: 0,
     },
   });
 
@@ -515,7 +515,7 @@ describe('inter-spousal transfers (household conservation)', () => {
         rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 0, pensions: [],
+        desiredSpending: 0,
       },
     });
     inputs.events = [{
@@ -560,8 +560,7 @@ describe('household re-run convergence (E-02)', () => {
       oasStartAge: sp.oasStartAge,
       oasYearsInCanada: sp.oasYearsInCanada,
       currentAge: sp.currentAge,
-      pensions: sp.pensions,
-      employment: sp.employment,
+      income: sp.income,
     };
     const rehome = (
       ownerEvents: CashEvent[] | undefined,
@@ -673,7 +672,7 @@ describe('household re-run convergence (E-02)', () => {
         rrspBalance: 260000, tfsaBalance: 10000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 16000, pensions: [],
+        desiredSpending: 16000,
       },
     });
     inputs.events = [melt('primary', 12000), melt('spouse', 8000)];
@@ -705,7 +704,7 @@ describe('household re-run convergence (E-02)', () => {
         rrspBalance: 60000, tfsaBalance: 10000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: 65, cppMonthlyAmount: 50, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 8000, pensions: [],
+        desiredSpending: 8000,
       },
     });
     inputs.events = [melt('primary', 2000), melt('spouse', 2000)];
@@ -731,7 +730,7 @@ describe('spouse toggle / unlink (regression)', () => {
       rrspBalance: 100000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
-      desiredSpending: 18000, pensions: [],
+      desiredSpending: 18000,
     },
   });
 
@@ -776,7 +775,7 @@ describe('spouse full-person parity', () => {
       rrspBalance: 0, tfsaBalance: 100000, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-      desiredSpending: 20000, pensions: [],
+      desiredSpending: 20000,
     },
   });
 
@@ -856,7 +855,7 @@ describe('re-homed transfer events (authored on the wrong person)', () => {
       rrspBalance: 0, tfsaBalance: 100000, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-      desiredSpending: 0, pensions: [],
+      desiredSpending: 0,
     },
   });
 
@@ -929,7 +928,7 @@ describe('re-homed transfer events (authored on the wrong person)', () => {
         rrspBalance: 0, tfsaBalance: 100000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 0, pensions: [],
+        desiredSpending: 0,
       },
     });
     // Authored on the primary at 63 (in the primary's own past — a saved or
@@ -964,7 +963,7 @@ describe('re-homed transfer events (authored on the wrong person)', () => {
         rrspBalance: 0, tfsaBalance: 200000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 0, pensions: [],
+        desiredSpending: 0,
       },
     });
     inputs.events = [{
@@ -1001,7 +1000,7 @@ describe('baseline plan (New Scenario defaults)', () => {
       rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: 65, cppMonthlyAmount: 900, oasStartAge: 65, oasYearsInCanada: 40,
-      desiredSpending: Math.round(inputs.desiredSpending / 2), pensions: [],
+      desiredSpending: Math.round(inputs.desiredSpending / 2),
     };
     const r = calculateHousehold(inputs, config);
     expect(r.spouse).toBeDefined();
@@ -1013,7 +1012,7 @@ describe('pensions', () => {
   it('lifetime pension pays every year from startAge', () => {
     const r = calculateRetirement(baseInputs({
       cppStartAge: 65, cppMonthlyAmount: 0, oasStartAge: null,
-      pensions: [{ id: 'p1', label: 'DB', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: false }],
+      income: [{ id: 'p1', label: 'DB', kind: 'pension', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: false }],
     }), config);
     expect(yearAt(r.yearlyBreakdown, 65).pensionIncome).toBeCloseTo(12000, 6);
     expect(yearAt(r.yearlyBreakdown, 80).pensionIncome).toBeCloseTo(12000, 6);
@@ -1021,7 +1020,7 @@ describe('pensions', () => {
 
   it('bridge pension stops after endAge', () => {
     const r = calculateRetirement(baseInputs({
-      pensions: [{ id: 'b', label: 'bridge', annualAmount: 10000, startAge: 65, endAge: 69, indexedToCpi: false }],
+      income: [{ id: 'b', label: 'bridge', kind: 'pension', annualAmount: 10000, startAge: 65, endAge: 69, indexedToCpi: false }],
     }), config);
     expect(yearAt(r.yearlyBreakdown, 69).pensionIncome).toBeCloseTo(10000, 6);
     expect(yearAt(r.yearlyBreakdown, 70).pensionIncome).toBe(0);
@@ -1030,9 +1029,9 @@ describe('pensions', () => {
   it('non-indexed pension stays flat; indexed grows with CPI when tables index', () => {
     const c = testConfig();
     c.engine.indexTaxTables = true;
-    const r = calculateRetirement(baseInputs({ pensions: [
-      { id: 'f', label: 'flat', annualAmount: 10000, startAge: 65, endAge: null, indexedToCpi: false },
-      { id: 'i', label: 'idx', annualAmount: 10000, startAge: 65, endAge: null, indexedToCpi: true },
+    const r = calculateRetirement(baseInputs({ income: [
+      { id: 'f', label: 'flat', kind: 'pension', annualAmount: 10000, startAge: 65, endAge: null, indexedToCpi: false },
+      { id: 'i', label: 'idx', kind: 'pension', annualAmount: 10000, startAge: 65, endAge: null, indexedToCpi: true },
     ]}), c);
     const total70 = yearAt(r.yearlyBreakdown, 70).pensionIncome;
     expect(closeTo(total70, 10000 + 10000 * Math.pow(1 + INFL, 5), 1)).toBe(true);
@@ -1050,7 +1049,7 @@ describe('projection continues past depletion (issue #5)', () => {
     desiredSpending: 40000,
     cppStartAge: 70, cppMonthlyAmount: 1000, cppAdjustedAmount: false,
     oasStartAge: null,
-    pensions: [{ id: 'db', label: 'DB', annualAmount: 8000, startAge: 72, endAge: null, indexedToCpi: false }],
+    income: [{ id: 'db', label: 'DB', kind: 'pension', annualAmount: 8000, startAge: 72, endAge: null, indexedToCpi: false }],
   });
 
   it('projects rows through maxAge even after the portfolio is depleted', () => {
@@ -1121,7 +1120,7 @@ describe('couple GIS', () => {
       rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
-      desiredSpending: 20000, pensions: [],
+      desiredSpending: 20000,
     },
   });
 
@@ -1156,7 +1155,7 @@ describe('couple GIS', () => {
         rrspBalance: spouseRrsp, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 20000, pensions: [],
+        desiredSpending: 20000,
       },
     });
     const soloDrawer = calculateHousehold(mk(0), config);
@@ -1196,7 +1195,7 @@ describe('couple GIS', () => {
         rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 20000, pensions: [],
+        desiredSpending: 20000,
         withdrawalOrder: ['rrsp', 'tfsa'],
       },
     });
@@ -1472,7 +1471,7 @@ describe('pension income splitting', () => {
       rrspBalance: 0, tfsaBalance: 30000, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-      desiredSpending: 10000, pensions: [],
+      desiredSpending: 10000,
     },
   });
 
@@ -1527,7 +1526,7 @@ describe('pension income splitting', () => {
         rrspBalance: 300000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 40000, pensions: [],
+        desiredSpending: 40000,
       },
     });
     const r = calculateHousehold(even, config);
@@ -1547,7 +1546,7 @@ describe('pension income splitting', () => {
         rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 5000, pensions: [],
+        desiredSpending: 5000,
       },
     });
     const withSplit = calculateHousehold(inputs, config);
@@ -1586,7 +1585,7 @@ describe('combineHouseholdBreakdown (household display)', () => {
       rrspBalance: 200000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
-      desiredSpending: 25000, pensions: [],
+      desiredSpending: 25000,
     },
   });
 
@@ -1632,7 +1631,7 @@ describe('combineHouseholdBreakdown (household display)', () => {
         rrspBalance: 0, tfsaBalance: 30000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 10000, pensions: [],
+        desiredSpending: 10000,
       },
     });
     const r = calculateHousehold(inputs, config);
@@ -1663,7 +1662,7 @@ describe('combineHouseholdBreakdown (household display)', () => {
         rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 0, pensions: [],
+        desiredSpending: 0,
       },
     });
     inputs.events = [{
@@ -1690,7 +1689,7 @@ describe('householdOutcome (household-first verdict)', () => {
       rrspBalance: 200000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
-      desiredSpending: 25000, pensions: [],
+      desiredSpending: 25000,
     },
   });
 
@@ -1711,7 +1710,7 @@ describe('householdOutcome (household-first verdict)', () => {
         rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 60000, pensions: [],
+        desiredSpending: 60000,
       },
     });
     const r = calculateHousehold(inputs, config);
@@ -1957,7 +1956,7 @@ describe('year detail (drill-down)', () => {
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0,
         oasStartAge: null, oasYearsInCanada: 40, desiredSpending: 15000,
-        withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+        withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
       },
     });
     const r = calculateHousehold(inputs, config);
@@ -2013,8 +2012,8 @@ describe('GIS holes (john feedback)', () => {
 });
 
 describe('employment income (issue #22)', () => {
-  const job = (over: Partial<import('./retirementEngine').EmploymentIncome> = {}): import('./retirementEngine').EmploymentIncome => ({
-    id: 'j1', label: 'part-time', annualAmount: 20000, startAge: 65, endAge: 69,
+  const job = (over: Partial<import('./retirementEngine').IncomeSource> = {}): import('./retirementEngine').IncomeSource => ({
+    id: 'j1', label: 'part-time', kind: 'employment', annualAmount: 20000, startAge: 65, endAge: 69,
     destAccount: 'tfsa', topUpSpending: false, indexedToCpi: false, ...over,
   });
 
@@ -2022,7 +2021,7 @@ describe('employment income (issue #22)', () => {
     const withJob = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      employment: [job()],
+      income: [job()],
     }), config);
     const y65 = yearAt(withJob.yearlyBreakdown, 65);
     expect(y65.employmentGross).toBe(20000);
@@ -2041,7 +2040,7 @@ describe('employment income (issue #22)', () => {
     const r = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      employment: [job()],
+      income: [job()],
     }), config);
     const y65 = yearAt(r.yearlyBreakdown, 65);
     expect(closeTo(y65.incomeTax, y65.employmentTax!, 1)).toBe(true);
@@ -2052,13 +2051,12 @@ describe('employment income (issue #22)', () => {
     const withPension = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      pensions: [{ id: 'p', label: 'db', annualAmount: 40000, startAge: 65, endAge: null, indexedToCpi: false }],
-      employment: [job()],
+      income: [{ id: 'p', label: 'db', kind: 'pension', annualAmount: 40000, startAge: 65, endAge: null, indexedToCpi: false }, job()],
     }), config);
     const alone = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      employment: [job()],
+      income: [job()],
     }), config);
     const tStacked = yearAt(withPension.yearlyBreakdown, 65).employmentTax!;
     const tAlone = yearAt(alone.yearlyBreakdown, 65).employmentTax!;
@@ -2070,7 +2068,7 @@ describe('employment income (issue #22)', () => {
       tfsaBalance: 500000, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 30000, cppStartAge: null, oasStartAge: null,
       withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
-      employment: [job({ topUpSpending: true })],
+      income: [job({ topUpSpending: true })],
     }), config);
     const noJob = calculateRetirement(baseInputs({
       tfsaBalance: 500000, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
@@ -2089,7 +2087,7 @@ describe('employment income (issue #22)', () => {
     const r = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 5000, cppStartAge: null, oasStartAge: null,
-      employment: [job({ topUpSpending: true, destAccount: 'tfsa' })],
+      income: [job({ topUpSpending: true, destAccount: 'tfsa' })],
     }), config);
     const y65 = yearAt(r.yearlyBreakdown, 65);
     const excess = y65.employmentNet! - 5000;
@@ -2100,7 +2098,7 @@ describe('employment income (issue #22)', () => {
   it('respects the start/end age window (inclusive), then stops', () => {
     const r = calculateRetirement(baseInputs({
       desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      employment: [job({ startAge: 66, endAge: 68 })],
+      income: [job({ startAge: 66, endAge: 68 })],
     }), config);
     expect(yearAt(r.yearlyBreakdown, 65).employmentGross).toBe(0);
     expect(yearAt(r.yearlyBreakdown, 66).employmentGross).toBe(20000);
@@ -2113,7 +2111,7 @@ describe('employment income (issue #22)', () => {
     c.engine.indexTaxTables = true;
     const r = calculateRetirement(baseInputs({
       desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      employment: [job({ indexedToCpi: true, endAge: 75 })],
+      income: [job({ indexedToCpi: true, endAge: 75 })],
     }), c);
     expect(closeTo(yearAt(r.yearlyBreakdown, 70).employmentGross!, 20000 * Math.pow(1 + INFL, 5), 1)).toBe(true);
   });
@@ -2126,7 +2124,7 @@ describe('employment income (issue #22)', () => {
     const withJob = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 0, cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
-      employment: [job()],
+      income: [job()],
     }), config);
     const g0 = yearAt(noJob.yearlyBreakdown, 65).gisIncome;
     const g1 = yearAt(withJob.yearlyBreakdown, 65).gisIncome;
@@ -2140,13 +2138,12 @@ describe('employment income (issue #22)', () => {
       oasStartAge: 65 as number | null, oasYearsInCanada: 40,
       rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-      pensions: [] as import('./retirementEngine').Pension[],
-      employment: [job()],
+      income: [job()],
     };
     const without = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 0, cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
-    }), config, { spouseContext: { ...spouseInputs, employment: [] } });
+    }), config, { spouseContext: { ...spouseInputs, income: [] } });
     const withSpouseJob = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 0, cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40,
@@ -2163,7 +2160,7 @@ describe('employment income (issue #22)', () => {
     const r = calculateRetirement(baseInputs({
       tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0, rrspBalance: 0,
       desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      employment: [
+      income: [
         job({ id: 'a', annualAmount: 10000, destAccount: 'tfsa' }),
         job({ id: 'b', annualAmount: 30000, destAccount: 'taxable' }),
       ],
@@ -2178,14 +2175,14 @@ describe('employment income (issue #22)', () => {
   it('household combiner sums both spouses\' employment rows', () => {
     const inputs = baseInputs({
       desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      employment: [job()],
+      income: [job()],
       spouse: {
         enabled: true, currentAge: 65, retirementAge: 65,
         rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 0, pensions: [],
-        employment: [job()],
+        desiredSpending: 0,
+        income: [job()],
       },
     });
     const r = calculateHousehold(inputs, config);
@@ -2295,7 +2292,7 @@ describe('totalTaxPaid (total tax on all income)', () => {
         rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 20000, pensions: [],
+        desiredSpending: 20000,
       },
     });
     const r = calculateHousehold(inputs, config);
@@ -2494,7 +2491,7 @@ describe('RDSP withdrawals (decumulation)', () => {
         rrspBalance: 100000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 15000, pensions: [],
+        desiredSpending: 15000,
         rdsp: { enabled: true, balance: 30000, contribution: 0, familyIncome: 0, contributionBasis: 30000, dtcEligible: true },
       },
     });

@@ -357,7 +357,7 @@ describe('DB pension interactions', () => {
   const withPension = () => baseInputs({
     tfsaBalance: 0, rrspBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
     cppStartAge: null, oasStartAge: 65, oasYearsInCanada: 40, desiredSpending: 30000,
-    pensions: [{ id: 'p1', label: 'DB', annualAmount: 20000, startAge: 65, endAge: null, indexedToCpi: false }],
+    income: [{ id: 'p1', label: 'DB', kind: 'pension', annualAmount: 20000, startAge: 65, endAge: null, indexedToCpi: false }],
   });
 
   it('a DB pension is gross taxable income and reduces GIS', () => {
@@ -377,7 +377,7 @@ describe('DB pension interactions', () => {
   it('a bridge pension stops at its endAge', () => {
     const r = calculateRetirement(baseInputs({
       tfsaBalance: 100000, desiredSpending: 0, cppStartAge: null, oasStartAge: null,
-      pensions: [{ id: 'b', label: 'bridge', annualAmount: 12000, startAge: 60, endAge: 65, indexedToCpi: false }],
+      income: [{ id: 'b', label: 'bridge', kind: 'pension', annualAmount: 12000, startAge: 60, endAge: 65, indexedToCpi: false }],
       currentAge: 60, retirementAge: 60, maxAge: 67,
     }), config);
     expect(yearAt(r.yearlyBreakdown, 64).pensionIncome).toBe(12000);
@@ -541,7 +541,7 @@ describe('household & splitting interactions', () => {
         rrspBalance: 0, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 10000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+        desiredSpending: 10000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], income: [],
       },
     });
     const r = calculateHousehold(inputs, config);
@@ -572,7 +572,7 @@ describe('household & splitting interactions', () => {
         rrspBalance: 0, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 10000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+        desiredSpending: 10000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], income: [],
       },
     });
     const r = calculateHousehold(inputs, config);
@@ -603,7 +603,7 @@ describe('household & splitting interactions', () => {
         rrspBalance: 0, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 10000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+        desiredSpending: 10000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], income: [],
       },
     });
     const r = calculateHousehold(inputs, config);

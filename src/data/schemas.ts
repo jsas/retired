@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type {
-  RetirementInputs, SpouseInputs, CashEvent, Pension, SpendingBand,
-  ReverseMortgage, WithdrawalAccount, EmploymentIncome, RdspInputs,
+  RetirementInputs, SpouseInputs, CashEvent, IncomeSource, SpendingBand,
+  ReverseMortgage, WithdrawalAccount, RdspInputs,
 } from '../lib/retirementEngine';
 import type { AppConfig, TaxTable } from '../lib/appConfig';
 import type { Scenario } from '../lib/types';
@@ -45,30 +45,28 @@ export const cashEventSchema = z.object({
   to: transferEndpoint.optional(),
 }) satisfies z.ZodType<CashEvent>;
 
-export const pensionSchema = z.object({
+// One entry in a person's income register (kind 'pension' / 'employment' read
+// by the engine in Phase 1; 'selfEmployment' / 'rental' accepted so the
+// register's shape is final). Replaces the legacy pensionSchema /
+// employmentIncomeSchema pair.
+export const incomeSourceSchema = z.object({
   id: z.string(),
   label: z.string(),
+  kind: z.enum(['employment', 'pension', 'selfEmployment', 'rental']),
   annualAmount: z.number(),
   startAge: z.number(),
   endAge: z.number().nullable(),
   indexedToCpi: z.boolean(),
-}) satisfies z.ZodType<Pension>;
+  destAccount: z.enum(['rrsp', 'tfsa', 'taxable', 'cash']).optional(),
+  topUpSpending: z.boolean().optional(),
+  rrspEligible: z.boolean().optional(),
+  pensionAdjustment: z.number().optional(),
+}) satisfies z.ZodType<IncomeSource>;
 
 export const spendingBandSchema = z.object({
   fromAge: z.number(),
   pctOfBase: z.number(),
 }) satisfies z.ZodType<SpendingBand>;
-
-export const employmentIncomeSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  annualAmount: z.number(),
-  startAge: z.number(),
-  endAge: z.number(),
-  destAccount: z.enum(['rrsp', 'tfsa', 'taxable', 'cash']),
-  topUpSpending: z.boolean(),
-  indexedToCpi: z.boolean(),
-}) satisfies z.ZodType<EmploymentIncome>;
 
 export const reverseMortgageSchema = z.object({
   enabled: z.boolean(),
@@ -114,8 +112,7 @@ export const spouseSchema = z.object({
   oasYearsInCanada: z.number(),
   desiredSpending: z.number(),
   withdrawalOrder: z.array(withdrawalAccount).optional(),
-  pensions: z.array(pensionSchema).optional(),
-  employment: z.array(employmentIncomeSchema).optional(),
+  income: z.array(incomeSourceSchema).optional(),
   events: z.array(cashEventSchema).optional(),
   spendingBands: z.array(spendingBandSchema).optional(),
   reverseMortgage: reverseMortgageSchema.optional(),
@@ -149,8 +146,7 @@ export const retirementInputsSchema = z.object({
   spendingBands: z.array(spendingBandSchema).optional(),
   spouse: spouseSchema.optional(),
   spouseSource: spouseSourceSchema.optional(),
-  pensions: z.array(pensionSchema).optional(),
-  employment: z.array(employmentIncomeSchema).optional(),
+  income: z.array(incomeSourceSchema).optional(),
   reverseMortgage: reverseMortgageSchema.optional(),
   rdsp: rdspSchema.optional(),
 }) satisfies z.ZodType<RetirementInputs>;

@@ -50,9 +50,9 @@ describe('checkpoints', () => {
   });
 
   it('diffInputs ignores key ORDER in nested objects/arrays-of-objects', () => {
-    const before = baseInputs({ pensions: [{ id: 'p1', label: 'A', annualAmount: 1, startAge: 65, endAge: null, indexedToCpi: true }] });
-    const reordered = { id: 'p1', startAge: 65, endAge: null, annualAmount: 1, label: 'A', indexedToCpi: true };
-    const after = { ...before, pensions: [reordered] };
+    const before = baseInputs({ income: [{ id: 'p1', label: 'A', kind: 'pension', annualAmount: 1, startAge: 65, endAge: null, indexedToCpi: true }] });
+    const reordered = { id: 'p1', startAge: 65, endAge: null, annualAmount: 1, label: 'A', kind: 'pension' as const, indexedToCpi: true };
+    const after = { ...before, income: [reordered] };
     expect(diffInputs(before, after)).toHaveLength(0);
   });
 

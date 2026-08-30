@@ -75,7 +75,7 @@ describe('buildQAPrompt', () => {
         rrspBalance: 200000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 25000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+        desiredSpending: 25000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], income: [],
       },
     });
     const hr = calculateHousehold(withSpouse, config);
@@ -114,13 +114,13 @@ describe('buildQAPrompt', () => {
       currentAge: 65, retirementAge: 65, maxAge: 90,
       rrspBalance: 100000, tfsaBalance: 0, taxableBalance: 0,
       cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
-      desiredSpending: 20000, pensions: [],
+      desiredSpending: 20000, income: [],
       spouse: {
         enabled: true, currentAge: 65, retirementAge: 65,
         rrspBalance: 900000, tfsaBalance: 200000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 25000, pensions: [],
+        desiredSpending: 25000, income: [],
       },
     });
     const hr = calculateHousehold(inputs, config);

@@ -30,7 +30,7 @@ export function baselineInputs(): RetirementInputs {
     oasYearsInCanada: 40,
     desiredSpending: 40000,
     withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
-    pensions: [],
+    income: [],
     events: [],
     spendingBands: [],
     spouseSource: { kind: 'builtin' },

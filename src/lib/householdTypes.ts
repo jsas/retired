@@ -13,7 +13,7 @@
 // Carlo, the solvers) can migrate to the unified model independently while the
 // wire/storage formats stay stable.
 
-import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, Pension, SpendingBand, ReverseMortgage, EmploymentIncome, RdspInputs } from './retirementEngine';
+import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, IncomeSource, SpendingBand, ReverseMortgage, RdspInputs } from './retirementEngine';
 
 // ---------------------------------------------------------------------------
 // Accounts & transfers
@@ -65,8 +65,10 @@ export interface PersonInputs {
   desiredSpending: number;       // after-tax income goal, today's dollars
   withdrawalOrder: WithdrawalAccount[];
   spendingBands?: SpendingBand[];
-  pensions?: Pension[];
-  employment?: EmploymentIncome[];
+  // The person's income register (kind 'pension' DB/bridge pensions, kind
+  // 'employment' semi-/post-retirement work) — replaces the legacy separate
+  // pensions[]/employment[] arrays.
+  income?: IncomeSource[];
   events?: CashEvent[];
   reverseMortgage?: ReverseMortgage;
   rdsp?: RdspInputs;
@@ -115,8 +117,7 @@ export function legacyToPerson(inputs: RetirementInputs): PersonInputs {
     desiredSpending: inputs.desiredSpending,
     withdrawalOrder: inputs.withdrawalOrder,
     spendingBands: inputs.spendingBands,
-    pensions: inputs.pensions,
-    employment: inputs.employment,
+    income: inputs.income,
     events: inputs.events,
     reverseMortgage: inputs.reverseMortgage,
     rdsp: inputs.rdsp,
@@ -185,8 +186,7 @@ export function legacySpouseToPerson(sp: SpouseInputs): PersonInputs {
     desiredSpending: sp.desiredSpending,
     withdrawalOrder: sp.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp'],
     spendingBands: sp.spendingBands,
-    pensions: sp.pensions,
-    employment: sp.employment,
+    income: sp.income,
     events: sp.events,
     reverseMortgage: sp.reverseMortgage,
     rdsp: sp.rdsp,
@@ -313,8 +313,7 @@ export function resolveSpouseSource(
     oasYearsInCanada: their.oasYearsInCanada,
     desiredSpending: their.desiredSpending,
     withdrawalOrder: their.withdrawalOrder,
-    pensions: their.pensions,
-    employment: their.employment,
+    income: their.income,
     // Full-person parity: the linked plan's own events (incl. transfers),
     // spending bands and reverse mortgage run as the spouse's, just like an
     // embedded spouse. Absent on the source = none.

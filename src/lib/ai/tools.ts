@@ -20,7 +20,7 @@ import { runStrategies, type StrategyFilter } from '../strategies';
 import { solveSustainableSpending } from '../spendingSolver';
 import { runMonteCarlo } from '../monteCarlo';
 import {
-  retirementInputsSchema, spouseSchema, pensionSchema, employmentIncomeSchema,
+  retirementInputsSchema, spouseSchema, incomeSourceSchema,
   cashEventSchema, reverseMortgageSchema, rdspSchema,
 } from '../../data/schemas';
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
@@ -76,15 +76,19 @@ const proposeSpouseArgs = z.object({
   rationale: z.string().optional(),
 });
 
-const proposePensionArgs = pensionSchema
+const proposeIncomeArgs = incomeSourceSchema
   .omit({ id: true })
   .extend({ rationale: z.string().optional() })
-  .describe('A DB/bridge pension to add. Set endAge to a number for a bridge (pays through that age); null for lifetime.');
+  .describe('An income source to add: kind "pension" for a DB/bridge pension (set endAge to a number for a bridge, null for lifetime), kind "employment" for semi-/post-retirement work.');
 
-const proposeEmploymentArgs = employmentIncomeSchema
-  .omit({ id: true })
-  .extend({ rationale: z.string().optional() })
-  .describe('Semi-/post-retirement work income to add.');
+const manageIncomeArgs = z.object({
+  action: z.enum(['update', 'remove']),
+  target: z.string().min(1)
+    .describe('Which income source: its id, or its label if unique (e.g. "Work DB").'),
+  changes: z.record(z.string(), z.unknown()).optional()
+    .describe('For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending). endAge must be a number or explicit null.'),
+  rationale: z.string().optional(),
+});
 
 const proposeSpendingBandsArgs = z.object({
   bands: z.array(z.object({ fromAge: z.number(), pctOfBase: z.number() }))
@@ -124,14 +128,6 @@ const manageCashEventArgs = z.object({
   rationale: z.string().optional(),
 });
 
-const managePensionArgs = z.object({
-  action: z.enum(['update', 'remove']),
-  target: z.string().min(1)
-    .describe('Which pension: its id, or its label if unique (e.g. "Work DB").'),
-  changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the pension fields to change (annualAmount, startAge, endAge, indexedToCpi, label). endAge must be a number or explicit null.'),
-  rationale: z.string().optional(),
-});
 
 const runStrategiesArgs = z.object({
   categories: z.array(z.enum(['cpp', 'oas', 'pension_timing', 'withdrawal_order', 'reverse_mortgage', 'work'])).optional()
@@ -212,15 +208,14 @@ const TOOL_SCHEMAS = {
   set_scenario_value: setScenarioValueArgs,
   propose_patch: proposePatchArgs,
   propose_spouse: proposeSpouseArgs,
-  propose_pension: proposePensionArgs,
-  propose_employment: proposeEmploymentArgs,
+  propose_income: proposeIncomeArgs,
   propose_spending_bands: proposeSpendingBandsArgs,
   propose_cash_event: proposeCashEventArgs,
   propose_reverse_mortgage: proposeReverseMortgageArgs,
   propose_rdsp: proposeRdspArgs,
   propose_revert: proposeRevertArgs,
   manage_cash_event: manageCashEventArgs,
-  manage_pension: managePensionArgs,
+  manage_income: manageIncomeArgs,
   remember: rememberArgs,
   recall: recallArgs,
   open_scenario: openScenarioArgs,
@@ -235,8 +230,8 @@ export function isAgentToolName(name: string): name is AgentToolName {
 }
 
 /** Top-level scalar fields the agent may propose changing (via set_scenario_value
- *  or propose_patch). Structural blocks (spouse, events, pensions, employment,
- *  spendingBands, reverseMortgage) go through their own propose_* tools. */
+ *  or propose_patch). Structural blocks (spouse, events, income, spendingBands,
+ *  reverseMortgage) go through their own propose_* tools. */
 export const EDITABLE_FIELDS = new Set([
   'currentAge', 'retirementAge', 'maxAge',
   'rrspBalance', 'tfsaBalance', 'taxableBalance', 'cashCushionBalance',
@@ -250,7 +245,7 @@ export const EDITABLE_FIELDS = new Set([
 /** Structural top-level keys that are refused in flat override patches — they
  *  have dedicated propose_* tools with element-level validation. */
 const STRUCTURAL_FIELDS = new Set([
-  'spouse', 'spouseSource', 'events', 'pensions', 'employment', 'spendingBands', 'reverseMortgage', 'rdsp',
+  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -265,7 +260,7 @@ export function toolSpecs(): ToolSpec[] {
   });
   return [
     spec('get_scenario',
-      'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, pensions, employment, reverse mortgage).',
+      'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).',
       getScenarioArgs),
     spec('run_projection',
       'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.',
@@ -294,12 +289,9 @@ export function toolSpecs(): ToolSpec[] {
     spec('propose_spouse',
       'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.',
       proposeSpouseArgs),
-    spec('propose_pension',
-      'PROPOSE adding a DB/bridge pension (taxable income stacked with CPP/OAS). User confirms.',
-      proposePensionArgs),
-    spec('propose_employment',
-      'PROPOSE adding semi-/post-retirement work income. User confirms.',
-      proposeEmploymentArgs),
+    spec('propose_income',
+      'PROPOSE adding an income source: kind "pension" for a DB/bridge pension (taxable income stacked with CPP/OAS), kind "employment" for semi-/post-retirement work. User confirms.',
+      proposeIncomeArgs),
     spec('propose_spending_bands',
       'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.',
       proposeSpendingBandsArgs),
@@ -318,9 +310,9 @@ export function toolSpecs(): ToolSpec[] {
     spec('manage_cash_event',
       'PROPOSE updating or REMOVING an existing cash event (by id or unique label). User confirms. Use propose_cash_event to add a new one.',
       manageCashEventArgs),
-    spec('manage_pension',
-      'PROPOSE updating or REMOVING an existing pension (by id or unique label). User confirms. Use propose_pension to add a new one.',
-      managePensionArgs),
+    spec('manage_income',
+      'PROPOSE updating or REMOVING an existing income source (pension or employment, by id or unique label). User confirms. Use propose_income to add a new one.',
+      manageIncomeArgs),
     spec('remember',
       'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.',
       rememberArgs),
@@ -466,10 +458,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return proposePatch(ctx, parsed.data as z.infer<typeof proposePatchArgs>);
     case 'propose_spouse':
       return proposeSpouse(ctx, parsed.data as z.infer<typeof proposeSpouseArgs>);
-    case 'propose_pension':
-      return proposeElement(ctx, 'pensions', pensionSchema, parsed.data, 'pension');
-    case 'propose_employment':
-      return proposeElement(ctx, 'employment', employmentIncomeSchema, parsed.data, 'employment income');
+    case 'propose_income':
+      return proposeElement(ctx, 'income', incomeSourceSchema, parsed.data, 'income source');
     case 'propose_spending_bands':
       return proposeSpendingBands(ctx, parsed.data as z.infer<typeof proposeSpendingBandsArgs>);
     case 'propose_cash_event':
@@ -482,8 +472,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return proposeRevert(ctx, parsed.data as z.infer<typeof proposeRevertArgs>);
     case 'manage_cash_event':
       return manageElement(ctx, 'events', cashEventSchema, parsed.data as z.infer<typeof manageCashEventArgs>, 'cash event');
-    case 'manage_pension':
-      return manageElement(ctx, 'pensions', pensionSchema, parsed.data as z.infer<typeof managePensionArgs>, 'pension');
+    case 'manage_income':
+      return manageElement(ctx, 'income', incomeSourceSchema, parsed.data as z.infer<typeof manageIncomeArgs>, 'income source');
     case 'remember':
       return rememberTool(ctx, parsed.data as z.infer<typeof rememberArgs>);
     case 'recall':
@@ -524,13 +514,15 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
     } : {}),
     withdrawalOrder: i.withdrawalOrder,
   };
+  const describeIncome = (list: RetirementInputs['income']) =>
+    (list ?? []).map(s =>
+      `${s.label} [${s.kind}]: ${money(s.annualAmount)}/yr from ${s.startAge}${s.endAge != null ? ` to ${s.endAge}` : ''}${s.indexedToCpi ? ' (indexed)' : ''}`);
   const benefits = {
     cpp: i.cppStartAge == null ? 'not taken'
       : `${money(i.cppMonthlyAmount)}/mo from age ${i.cppStartAge}${i.cppAdjustedAmount ? ' (already adjusted)' : ''}`,
     oas: i.oasStartAge == null ? 'not taken'
       : `from age ${i.oasStartAge}, ${i.oasYearsInCanada} years in Canada`,
-    pensions: (i.pensions ?? []).map(p =>
-      `${p.label}: ${money(p.annualAmount)}/yr from ${p.startAge}${p.endAge != null ? ` to ${p.endAge}` : ''}${p.indexedToCpi ? ' (indexed)' : ''}`),
+    income: describeIncome(i.income),
   };
   const spending = {
     desiredSpending: i.desiredSpending,
@@ -542,6 +534,7 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
     rrsp: i.spouse.rrspBalance, tfsa: i.spouse.tfsaBalance, taxable: i.spouse.taxableBalance,
     cpp: i.spouse.cppStartAge == null ? 'not taken' : `${money(i.spouse.cppMonthlyAmount)}/mo from ${i.spouse.cppStartAge}`,
     oasStartAge: i.spouse.oasStartAge, desiredSpending: i.spouse.desiredSpending,
+    income: describeIncome(i.spouse.income),
   } : 'none (single plan)';
 
   const emit = (title: string, value: unknown) => {
@@ -568,7 +561,7 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
 
 /** Validate a flat overrides patch against the input schema; returns the
  *  applied patch plus human-readable rejections. Structural fields (spouse,
- *  events, pensions…) are refused here — overrides are for scalar levers. */
+ *  events, income…) are refused here — overrides are for scalar levers. */
 function validateOverrides(
   overrides: Record<string, unknown>,
 ): { patch: Partial<RetirementInputs>; rejected: string[] } {
@@ -803,12 +796,12 @@ function proposeSpouse(
   };
 }
 
-/** Shared helper for the append-to-array structural tools (pension, employment,
+/** Shared helper for the append-to-array structural tools (income source,
  *  cash event). Validates the element (minus its id), generates an id, and
  *  proposes the array with the new element appended. */
 function proposeElement(
   ctx: ToolContext,
-  key: 'pensions' | 'employment' | 'events',
+  key: 'income' | 'events',
   schema: z.ZodType,
   rawArgs: unknown,
   noun: string,
@@ -956,12 +949,12 @@ function proposeRevert(ctx: ToolContext, args: z.infer<typeof proposeRevertArgs>
   };
 }
 
-/** Shared helper for manage_cash_event / manage_pension: update (merge fields
+/** Shared helper for manage_cash_event / manage_income: update (merge fields
  *  over the matched element, re-validated) or remove. Target matches by exact
  *  id first, then by unique case-insensitive label. */
 function manageElement(
   ctx: ToolContext,
-  key: 'events' | 'pensions',
+  key: 'events' | 'income',
   schema: z.ZodType,
   args: { action: 'update' | 'remove'; target: string; changes?: Record<string, unknown>; rationale?: string },
   noun: string,

@@ -36,9 +36,9 @@ export interface ScenarioRevision {
 }
 
 /** Two values are history-equivalent: JSON-equal, or both "empty", or the
- *  spouse-source pair (absent, {kind:'builtin'}) — the scenarioStorage
- *  migrator back-fills `events: []`, `pensions: []` and
- *  `spouseSource: {kind:'builtin'}` onto rows loaded from SQL, so older
+ *  spouse-source pair (absent, {kind:'builtin'}) — the migrator back-fills
+ *  `events: []` and `spouseSource: {kind:'builtin'}` onto rows loaded from
+ *  SQL (and folds legacy pensions/employment into `income[]`), so older
  *  snapshots that omit those keys would otherwise read as changed on every
  *  diff (fabricating revisions and "N changes" rows that aren't changes). */
 function equivalent(a: unknown, b: unknown): boolean {

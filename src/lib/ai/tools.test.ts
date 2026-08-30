@@ -31,8 +31,8 @@ describe('toolSpecs', () => {
     expect(specs.map(s => s.name).sort()).toEqual([
       'compare_scenarios', 'get_schedule', 'get_scenario',
       'list_scenarios',
-      'manage_cash_event', 'manage_pension',
-      'propose_cash_event', 'propose_employment', 'propose_patch', 'propose_pension',
+      'manage_cash_event', 'manage_income',
+      'propose_cash_event', 'propose_income', 'propose_patch',
       'propose_rdsp', 'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
       'open_scenario', 'save_scenario_as',
@@ -110,13 +110,13 @@ describe('run_projection', () => {
       currentAge: 65, retirementAge: 65, maxAge: 90,
       rrspBalance: 100000, tfsaBalance: 0, taxableBalance: 0,
       cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
-      desiredSpending: 20000, pensions: [],
+      desiredSpending: 20000, income: [],
       spouse: {
         enabled: true, currentAge: 65, retirementAge: 65,
         rrspBalance: 900000, tfsaBalance: 200000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 25000, pensions: [],
+        desiredSpending: 25000, income: [],
       },
     });
     const hr = calculateHousehold(inputs, testConfig());
@@ -362,35 +362,38 @@ describe('propose_spouse', () => {
   });
 });
 
-describe('propose_pension / employment / cash_event', () => {
-  it('adds a pension with a generated id appended to pensions', () => {
+describe('propose_income / cash_event', () => {
+  it('adds a pension with a generated id appended to the income register', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_pension',
-      args: { label: 'Work DB', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true },
+      id: '1', name: 'propose_income',
+      args: { label: 'Work DB', kind: 'pension', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
-    const pensions = out.patch.pensions as Array<{ id: string; label: string; endAge: number | null }>;
-    expect(pensions).toHaveLength(1);
-    expect(pensions[0].label).toBe('Work DB');
-    expect(pensions[0].endAge).toBeNull();
-    expect(pensions[0].id).toBeTruthy();
+    const income = out.patch.income as Array<{ id: string; label: string; kind: string; endAge: number | null }>;
+    expect(income).toHaveLength(1);
+    expect(income[0].label).toBe('Work DB');
+    expect(income[0].kind).toBe('pension');
+    expect(income[0].endAge).toBeNull();
+    expect(income[0].id).toBeTruthy();
   });
 
   it('requires endAge as an explicit null, never omitted', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_pension',
-      args: { label: 'X', annualAmount: 1, startAge: 65, indexedToCpi: false },
+      id: '1', name: 'propose_income',
+      args: { label: 'X', kind: 'pension', annualAmount: 1, startAge: 65, indexedToCpi: false },
     });
     expect(out.kind).toBe('error');
   });
 
   it('adds an employment income block', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_employment',
-      args: { label: 'Consulting', annualAmount: 40000, startAge: 60, endAge: 65, destAccount: 'taxable', topUpSpending: false, indexedToCpi: true },
+      id: '1', name: 'propose_income',
+      args: { label: 'Consulting', kind: 'employment', annualAmount: 40000, startAge: 60, endAge: 65, destAccount: 'taxable', topUpSpending: false, indexedToCpi: true },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
-    expect((out.patch.employment as unknown[]).length).toBe(1);
+    const income = out.patch.income as Array<{ kind: string }>;
+    expect(income.length).toBe(1);
+    expect(income[0].kind).toBe('employment');
   });
 
   it('adds a cash event', () => {
@@ -595,7 +598,7 @@ describe('propose_revert', () => {
   });
 });
 
-describe('manage_cash_event / manage_pension', () => {
+describe('manage_cash_event / manage_income', () => {
   it('updates a cash event by unique label, re-validated', () => {
     const c = ctx({ inputs: baseInputs({ events: [{ id: 'e1', label: 'Downsize', age: 70, amount: 300000, direction: 'in', account: 'taxable' }] }) });
     const out = executeToolCall(c, {
@@ -611,24 +614,24 @@ describe('manage_cash_event / manage_pension', () => {
   });
 
   it('updates a pension by exact id, including an explicit null endAge', () => {
-    const c = ctx({ inputs: baseInputs({ pensions: [{ id: 'p1', label: 'Work DB', annualAmount: 12000, startAge: 65, endAge: 75, indexedToCpi: true }] }) });
+    const c = ctx({ inputs: baseInputs({ income: [{ id: 'p1', label: 'Work DB', kind: 'pension', annualAmount: 12000, startAge: 65, endAge: 75, indexedToCpi: true }] }) });
     const out = executeToolCall(c, {
-      id: '1', name: 'manage_pension',
+      id: '1', name: 'manage_income',
       args: { action: 'update', target: 'p1', changes: { endAge: null } },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
-    const pensions = out.patch.pensions as Array<{ id: string; endAge: number | null }>;
-    expect(pensions[0].endAge).toBeNull();
+    const income = out.patch.income as Array<{ id: string; endAge: number | null }>;
+    expect(income[0].endAge).toBeNull();
   });
 
   it('rejects an update that fails the element schema', () => {
-    const c = ctx({ inputs: baseInputs({ pensions: [{ id: 'p1', label: 'Work DB', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true }] }) });
+    const c = ctx({ inputs: baseInputs({ income: [{ id: 'p1', label: 'Work DB', kind: 'pension', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true }] }) });
     const out = executeToolCall(c, {
-      id: '1', name: 'manage_pension',
+      id: '1', name: 'manage_income',
       args: { action: 'update', target: 'p1', changes: { annualAmount: 'lots' } },
     });
     expect(out.kind).toBe('error');
-    if (out.kind === 'error') expect(out.content).toContain('Invalid pension update');
+    if (out.kind === 'error') expect(out.content).toContain('Invalid income source update');
   });
 
   it('removes a cash event by id', () => {
@@ -664,8 +667,8 @@ describe('manage_cash_event / manage_pension', () => {
   });
 
   it('rejects an update with no changes given', () => {
-    const c = ctx({ inputs: baseInputs({ pensions: [{ id: 'p1', label: 'Work DB', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true }] }) });
-    const out = executeToolCall(c, { id: '1', name: 'manage_pension', args: { action: 'update', target: 'p1' } });
+    const c = ctx({ inputs: baseInputs({ income: [{ id: 'p1', label: 'Work DB', kind: 'pension', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: true }] }) });
+    const out = executeToolCall(c, { id: '1', name: 'manage_income', args: { action: 'update', target: 'p1' } });
     expect(out.kind).toBe('error');
     if (out.kind === 'error') expect(out.content).toContain('no fields were given');
   });

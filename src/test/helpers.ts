@@ -32,7 +32,7 @@ export function baseInputs(overrides: Partial<RetirementInputs> = {}): Retiremen
     oasYearsInCanada: 40,
     desiredSpending: 20000,
     withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
-    pensions: [],
+    income: [],
     ...overrides,
   };
 }
