@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AppStore } from './store';
-import { AppDatabase, DB_STORAGE_KEY } from './db';
+import { AppDatabase } from './db';
 import { baseInputs } from '../test/helpers';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
 import { buildDefaultScenarios } from './exampleScenarios';
