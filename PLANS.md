@@ -882,8 +882,12 @@ legacy localStorage path alive (blocks #21).
 
 ---
 
-## [ ] PLAN D-04 · Remove legacy localStorage dual-source (== #21, refactor)
-**Maps to:** open issue **#21** · REVIEW.md **D-04** · Severity MEDIUM (refactor)
+## [x] PLAN D-04 · Remove legacy localStorage dual-source (== #21, refactor)
+**Maps to:** issue **#21** (closed) · REVIEW.md **D-04** · Severity MEDIUM (refactor)
+**Done (2026-08-30):** PR #97 — legacy dual-read/dual-write removed outright;
+OPFS SQL store is the single source of truth, mirrored to localStorage as the
+store's own compatibility copy. `scenarioStorage.ts`/`appDb.ts` deleted,
+`importLegacyKeys`/`LEGACY_*` gone, `getSyncSeed` reads the store's mirror.
 **Files:** `src/App.tsx` (`getSyncSeed`), `src/data/store.ts` (`importLegacyKeys`),
 `src/lib/scenarioStorage.ts`, `src/lib/appConfig.ts`
 
@@ -1001,7 +1005,8 @@ loop-termination condition.
 3. **S-01** → **S-03** / **S-02** — strategies. ✅
 4. **Quick wins:** U-15, A-03, D-02 (#19), X-04, D-05, D-07. ✅
 5. **Verify-first:** E-04, E-02, T-02, T-03 (may close as Info). ✅
-6. **Refactor:** D-03 + D-04 (#20/#21) together. ← next
-7. **Features:** #24, #40. (#40 landed via PR #100.)
+6. **Refactor:** D-03 (#20, PR #102) + D-04 (#21, PR #97). ✅
+7. **Features:** #24 (contribution room) — the only plan left. #40 landed via PR #100.
 
-Optional remainder: **H-02** (backtest primary-only — household run or a UI label).
+Optional remainder: **H-02** (backtest primary-only — household run or a UI label)
+and **E-MC-01** (the couple `simulate()`/`runMonteCarlo()` regression test).
