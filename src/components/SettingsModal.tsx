@@ -4,7 +4,7 @@ import {
   type AppConfig,
   type TaxTable,
   validateAppConfig,
-  resetAppConfig
+  defaultAppConfig
 } from '../lib/appConfig';
 import { DB_STORAGE_KEY } from '../data/db';
 import { AsyncOpfsBackend } from '../data/opfs';
@@ -84,7 +84,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
 
   const handleReset = () => {
     if (!window.confirm('Reset all settings to the built-in defaults?')) return;
-    const defaults = resetAppConfig();
+    const defaults = defaultAppConfig();
     setDraft(structuredClone(defaults));
     setError(null);
   };

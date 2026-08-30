@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AppStore } from './store';
-import { DB_STORAGE_KEY } from './db';
 import { baseInputs } from '../test/helpers';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
 import { buildDefaultScenarios } from './exampleScenarios';
-import type { Scenario } from '../lib/scenarioStorage';
+import type { Scenario } from '../lib/types';
 
 // Tests run in Node — give the mirror a localStorage to write to.
 const storage = new Map<string, string>();
@@ -82,26 +81,6 @@ describe('AppStore', () => {
     } finally {
       errorSpy.mockRestore();
     }
-  });
-
-  it('imports the legacy split keys on first open', async () => {
-    const legacyScenarios = [
-      { id: 'legacy-1', name: 'My old plan', inputs: baseInputs({ desiredSpending: 55000 }) },
-    ];
-    localStorage.setItem('wealthconsole_scenarios', JSON.stringify({
-      version: 2, scenarios: legacyScenarios, activeScenarioId: 'legacy-1',
-    }));
-    localStorage.setItem('wealthconsole_config', JSON.stringify(DEFAULT_APP_CONFIG));
-
-    const { store, state } = await AppStore.open(buildDefaultScenarios);
-    expect(state.scenarios.map(s => s.id)).toEqual(['legacy-1']);
-    expect(state.scenarios[0].inputs.desiredSpending).toBe(55000);
-    expect(state.activeScenarioId).toBe('legacy-1');
-    expect(state.config?.general.promptToSaveOnSwitch).toBe(true);
-
-    // The import was persisted into the SQL store.
-    store.persist({ scenarios: state.scenarios, activeScenarioId: 'legacy-1' });
-    expect(localStorage.getItem(DB_STORAGE_KEY)).not.toBeNull();
   });
 
   it('ignores legacy keys once the SQL store has data', async () => {

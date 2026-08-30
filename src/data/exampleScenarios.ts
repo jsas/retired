@@ -1,4 +1,41 @@
-import type { Scenario } from '../lib/scenarioStorage';
+import type { Scenario } from '../lib/types';
+import type { RetirementInputs } from '../lib/retirementEngine';
+
+/**
+ * A clean baseline plan for a BRAND-NEW scenario. Deliberately modest, neutral
+ * defaults — NOT a copy of whatever scenario is active (that's "Duplicate").
+ * New Scenario should give the user a fresh starting point they can shape,
+ * independent of what they were last editing.
+ */
+export function baselineInputs(): RetirementInputs {
+  return {
+    currentAge: 55,
+    retirementAge: 65,
+    maxAge: 95,
+    rrspBalance: 0,
+    tfsaBalance: 0,
+    taxableBalance: 0,
+    cashCushionBalance: 0,
+    rrspContribution: 0,
+    tfsaContribution: 0,
+    taxableContribution: 0,
+    annualWithdrawal: 0,
+    investmentReturn: 0.05,
+    returnVolatility: 0.10,
+    provinceCode: 'ONT',
+    cppStartAge: 65,
+    cppMonthlyAmount: 900,
+    cppAdjustedAmount: false,
+    oasStartAge: 65,
+    oasYearsInCanada: 40,
+    desiredSpending: 40000,
+    withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
+    pensions: [],
+    events: [],
+    spendingBands: [],
+    spouseSource: { kind: 'builtin' },
+  };
+}
 
 /**
  * First-run example scenarios: three realistic, mutually distinct starting

@@ -1,7 +1,8 @@
 // Global application configuration: tax tables, RRIF rates, OAS parameters,
 // and engine assumptions. Everything here is user-editable via the Settings
-// modal and persisted to localStorage under 'wealthconsole_config'.
-// Defaults are the Canadian values ported from the retirement-drawdown engine.
+// modal; persistence lives in the SQL store (issue #21) — this module is pure
+// types, defaults and validation. Defaults are the Canadian values ported from
+// the retirement-drawdown engine.
 
 export interface TaxTable {
   brackets: number[];
@@ -211,8 +212,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   general: { showWelcomeOnLoad: false, promptToSaveOnSwitch: true }
 };
 
-const CONFIG_STORAGE_KEY = 'wealthconsole_config';
-
 function isValidTaxTable(t: unknown): t is TaxTable {
   if (!t || typeof t !== 'object') return false;
   const table = t as TaxTable;
@@ -304,27 +303,8 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   return c as AppConfig;
 }
 
-export function loadAppConfig(): AppConfig {
-  try {
-    const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
-    if (!raw) return structuredClone(DEFAULT_APP_CONFIG);
-    const validated = validateAppConfig(JSON.parse(raw));
-    return validated ?? structuredClone(DEFAULT_APP_CONFIG);
-  } catch {
-    return structuredClone(DEFAULT_APP_CONFIG);
-  }
-}
-
-export function saveAppConfig(config: AppConfig): void {
-  try {
-    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
-  } catch (err) {
-    console.warn('Failed to persist config to localStorage:', err);
-  }
-}
-
-export function resetAppConfig(): AppConfig {
-  const fresh = structuredClone(DEFAULT_APP_CONFIG);
-  saveAppConfig(fresh);
-  return fresh;
+/** A fresh copy of the built-in defaults. Pure — persistence is the caller's
+ *  job (the SQL store), so this never touches storage. */
+export function defaultAppConfig(): AppConfig {
+  return structuredClone(DEFAULT_APP_CONFIG);
 }

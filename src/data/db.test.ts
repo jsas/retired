@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { AppDatabase, DB_STORAGE_KEY } from './db';
 import { baseInputs } from '../test/helpers';
 import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
-import type { Scenario } from '../lib/scenarioStorage';
+import type { Scenario } from '../lib/types';
 
 // Tests run in Node — give the mirror a localStorage to write to.
 const storage = new Map<string, string>();

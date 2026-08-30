@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { GitCompareArrows, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import type { AppConfig } from '../lib/appConfig';
-import type { Scenario } from '../lib/scenarioStorage';
+import type { Scenario } from '../lib/types';
 import { compareScenarios, type MetricDiff, type ScenarioComparison } from '../lib/compareMetrics';
 
 const MAX_COMPARE = 3;

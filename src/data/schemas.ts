@@ -4,8 +4,8 @@ import type {
   ReverseMortgage, WithdrawalAccount, EmploymentIncome, RdspInputs,
 } from '../lib/retirementEngine';
 import type { AppConfig, TaxTable } from '../lib/appConfig';
-import type { Scenario } from '../lib/scenarioStorage';
-import { migrateInputs } from '../lib/scenarioStorage';
+import type { Scenario } from '../lib/types';
+import { migrateInputs } from './migrations';
 
 /**
  * Zod schemas — the single source of truth for every shape the app PERSISTS

@@ -4,7 +4,7 @@
 // UI so the verdict-derivation and diff logic is unit-testable.
 import { calculateHousehold, householdOutcome, type RetirementResults, type RetirementInputs } from './retirementEngine';
 import { resolveSpouseSource } from './householdTypes';
-import type { Scenario } from './scenarioStorage';
+import type { Scenario } from './types';
 import type { AppConfig } from './appConfig';
 
 /** The verdict metrics for one scenario, flattened across spouses like MetricCards. */
