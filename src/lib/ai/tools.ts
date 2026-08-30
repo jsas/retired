@@ -391,6 +391,31 @@ function zodIssues(error: z.ZodError): string {
   return error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
 }
 
+/** Tolerate stringified scalars from the model ("65", "null", "true"): parse
+ *  as-given first, and only if the schema rejects a STRING, retry with the
+ *  obvious scalar forms coerced. Raw-first ordering means legitimate string
+ *  fields (labels, province codes) are never mangled — coercion only rescues
+ *  values the schema already rejected. Used on the top-level scalar paths
+ *  (set_scenario_value, propose_patch, flat overrides). */
+function safeParseTolerant(schema: z.ZodType, value: unknown) {
+  const raw = schema.safeParse(value);
+  if (raw.success || typeof value !== 'string') return raw;
+  return schema.safeParse(coerceScalar(value));
+}
+
+/** The coercion side of safeParseTolerant: a numeric string becomes a number,
+ *  "null"/"true"/"false" become their scalars; anything else passes through
+ *  untouched so the retry fails the same way the raw attempt did. */
+function coerceScalar(value: string): unknown {
+  const s = value.trim();
+  if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(s)) return Number(s);
+  const lower = s.toLowerCase();
+  if (lower === 'null') return null;
+  if (lower === 'true') return true;
+  if (lower === 'false') return false;
+  return value;
+}
+
 // ---------------------------------------------------------------------------
 // Executor
 // ---------------------------------------------------------------------------
@@ -538,7 +563,7 @@ function validateOverrides(
       rejected.push(`${key}: structural field — use its propose_* tool`);
       continue;
     }
-    const res = (shape as Record<string, z.ZodType>)[key].safeParse(value);
+    const res = safeParseTolerant((shape as Record<string, z.ZodType>)[key], value);
     if (!res.success) {
       rejected.push(`${key}: ${res.error.issues[0]?.message ?? 'invalid value'}`);
       continue;
@@ -677,7 +702,7 @@ function proposeSet(
     return { kind: 'error', content: `"${field}" is not changeable through the agent. Changeable scalar fields: ${known}. Structural blocks use their propose_* tool.` };
   }
   const shape = retirementInputsSchema.shape as Record<string, z.ZodType>;
-  const res = shape[field].safeParse(value);
+  const res = safeParseTolerant(shape[field], value);
   if (!res.success) {
     return { kind: 'error', content: `Invalid value for ${field}: ${zodIssues(res.error)}` };
   }
@@ -705,7 +730,7 @@ function proposePatch(
       rejected.push(`${field}: not a changeable scalar field${STRUCTURAL_FIELDS.has(field) ? ' (use its propose_* tool)' : ''}`);
       continue;
     }
-    const res = shape[field].safeParse(value);
+    const res = safeParseTolerant(shape[field], value);
     if (!res.success) { rejected.push(`${field}: ${res.error.issues[0]?.message ?? 'invalid'}`); continue; }
     (patch as Record<string, unknown>)[field] = res.data;
     preview[field] = { from: (ctx.inputs as unknown as Record<string, unknown>)[field], to: res.data };

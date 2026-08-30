@@ -207,6 +207,37 @@ describe('set_scenario_value', () => {
     expect(out.kind).toBe('error');
   });
 
+  it('coerces a stringified number ("65") instead of rejecting it', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'set_scenario_value',
+      args: { field: 'oasStartAge', value: '65' },
+    });
+    expect(out.kind).toBe('mutation');
+    if (out.kind !== 'mutation') return;
+    expect(out.patch).toEqual({ oasStartAge: 65 });
+    expect(out.preview).toEqual({ field: 'oasStartAge', from: null, to: 65 });
+  });
+
+  it('coerces "null" for a nullable age field', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'set_scenario_value',
+      args: { field: 'cppStartAge', value: 'null' },
+    });
+    expect(out.kind).toBe('mutation');
+    if (out.kind !== 'mutation') return;
+    expect(out.patch).toEqual({ cppStartAge: null });
+  });
+
+  it('leaves a real string field untouched (no coercion needed)', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'set_scenario_value',
+      args: { field: 'provinceCode', value: 'BC' },
+    });
+    expect(out.kind).toBe('mutation');
+    if (out.kind !== 'mutation') return;
+    expect(out.patch).toEqual({ provinceCode: 'BC' });
+  });
+
   it('rejects unknown tool names with the available list', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'delete_everything', args: {} });
     expect(out.kind).toBe('error');
@@ -241,6 +272,17 @@ describe('propose_patch', () => {
       id: '1', name: 'propose_patch', args: { changes: { bogus: 1 } },
     });
     expect(out.kind).toBe('error');
+  });
+
+  it('coerces stringified scalars in a batch instead of dropping them', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_patch',
+      args: { changes: { cppStartAge: '70', oasStartAge: '65' } },
+    });
+    expect(out.kind).toBe('mutation');
+    if (out.kind !== 'mutation') return;
+    expect(out.patch).toEqual({ cppStartAge: 70, oasStartAge: 65 });
+    expect(out.rationale).not.toContain('skipped invalid');
   });
 });
 
