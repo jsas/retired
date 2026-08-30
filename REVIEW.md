@@ -350,7 +350,7 @@ with D-01 (OPFS write is fire-and-forget). **Needed:** export via the *existing*
 current. Covered by a store.test.ts test proving `exportBytes` reflects the most recent
 persist immediately.
 
-**U-02 · MEDIUM · Persist effects are fire-and-forget; no durability feedback.**
+~~**U-02 · MEDIUM · Persist effects are fire-and-forget; no durability feedback.**~~ ✅ **FIXED 2026-08-30** (`fix/u02-durability-feedback`)
 App.tsx:202 `store?.persist({ scenarios, activeScenarioId })` and :208 `persist({ config })`
 don't await `db.save()`'s OPFS write (which is itself fire-and-forget — D-01). A user who
 saves and closes the tab within the OPFS write window can lose the save (mitigated by the
@@ -359,6 +359,11 @@ localStorage mirror makes this low-probability, but the app gives no "saving…/
 signal, so a failed persist is invisible. Related to #18. **Needed:** surface a save
 indicator; consider awaiting the OPFS write for the explicit Save action (vs the
 auto-persist).
+**Fix:** `AppDatabase.save()` now reports every durable-write outcome through an
+`onSaveOutcome` listener channel (failure → err, later success → null); `AppStore`
+re-exposes it and App.tsx drives a dismissible amber banner ("Changes may not be saved")
+that clears itself on the next durable write. Covered by three store tests (OPFS failure,
+failure→success recovery, localStorage-only failure). 776/776 tests, `tsc` clean.
 
 **U-03 · LOW · `getSyncSeed` reads legacy localStorage for first paint** (App.tsx:61-68) —
 this is the legacy dual-source #21 targets. Known/tracked; not a new bug.
@@ -589,7 +594,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | ~~D-01~~ | Data | ~~MEDIUM~~ ✅ | OPFS-write failure → one-session rollback (== #18) — **FIXED** (`issue/18-opfs-rollback`, mirror sequenced behind OPFS) | **Fixed** |
 | D-04 | Data | MEDIUM | Legacy localStorage dual-source still live (== #21) | Actionable (refactor) |
 | ~~U-01~~ | UI (App) | ~~MEDIUM~~ ✅ | Full export opened a 2nd SQLite connection, could snapshot stale bytes — **FIXED** (`fix/u01-stale-export`, seeds from live `store.exportBytes()`) | **Fixed** |
-| U-02 | UI (App) | MEDIUM | Persist effects fire-and-forget; no durability feedback | Actionable |
+| ~~U-02~~ | UI (App) | ~~MEDIUM~~ ✅ | Persist effects fire-and-forget; no durability feedback — **FIXED** (`fix/u02-durability-feedback`, save-outcome channel + dismissible banner) | **Fixed** |
 | ~~U-07~~ | UI (display) | ~~MEDIUM~~ ✅ | MetricCards + ScheduleTable formatted money as `en-US`/`USD` — **FIXED** (`fix/currency-cad`) | **Fixed** |
 | ~~U-09~~ | UI (TimelineChart) | ~~MEDIUM~~ ✅ | Base-spending handle subtracted events on draw, ignored on write — **FIXED** (`fix/timeline-band-drag`) | **Fixed** |
 | ~~A-02~~ | AI | ~~MEDIUM~~ ✅ | `withdrawalOrder` agent boundary inconsistent — **FIXED** with E-01 (ingest accepts `'rdsp'`) | **Fixed** |
@@ -662,7 +667,7 @@ Everything not struck through above. These are the items that still need doing.
 
 ### UI
 - ~~**U-01 · MEDIUM** — Full export opens a 2nd SQLite connection; can snapshot stale bytes.~~ ✅ FIXED (`fix/u01-stale-export`)
-- **U-02 · MEDIUM** — Persist effects are fire-and-forget; no durability feedback.
+- ~~**U-02 · MEDIUM** — Persist effects are fire-and-forget; no durability feedback.~~ ✅ FIXED (`fix/u02-durability-feedback`)
 - **U-15 · LOW** — PrintSummary detailed table omits the RDSP column.
 
 ### Tax (verify-before-fix)
@@ -713,14 +718,18 @@ Everything not struck through above. These are the items that still need doing.
   seeds the throwaway export DB from `store.exportBytes()` (live in-memory state)
   instead of letting `AppDatabase.open()` read potentially-stale OPFS/localStorage.
   762/762 tests, `tsc` clean.
+- **2026-08-30** — **U-02** fixed on `fix/u02-durability-feedback`: `AppDatabase.save()`
+  reports durable-write outcomes through an `onSaveOutcome` channel; App.tsx shows a
+  dismissible "Changes may not be saved" banner on failure that clears on the next
+  durable write. 776/776 tests, `tsc` clean.
 
 ---
 
 ## Where to start (suggested priority — remaining)
 
 1. **Engine money-correctness MEDIUMs** — all fixed (E-06 #26, E-07 #25, E-08 #27).
-2. **Data-durability MEDIUMs** — U-02 (no durability feedback).
-   D-01 (#18 OPFS rollback) fixed & merged (PR #76); U-01 (stale export) fixed & merged (PR #79).
+2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
+   U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — strategy scoring vs `merged`.
 4. **Quick wins** — U-15 (RDSP print column), A-03 (household verdict strings), D-02
    (#19 warning), X-04 (comment).

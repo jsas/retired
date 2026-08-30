@@ -127,6 +127,70 @@ describe('AppStore', () => {
     expect(db.loadScenarios()[0].inputs.desiredSpending).toBe(99999);
     db.close();
   });
+
+  it('reports a save failure through onSaveOutcome (U-02)', async () => {
+    // persist() is synchronous and the OPFS write resolves later, so a failed
+    // durable write can't be a return value — the store exposes it through the
+    // outcome channel the UI's banner subscribes to.
+    const { store } = await AppStore.open(customDefaults);
+    const outcomes: Array<unknown | null> = [];
+    const unsub = store.onSaveOutcome(err => outcomes.push(err));
+
+    // Force the OPFS-backed path with a backend whose write fails.
+    const failingBackend = { read: () => Promise.resolve(null), write: () => Promise.reject(new Error('OPFS down')) };
+    (store as unknown as { db: { backend: unknown } }).db.backend = failingBackend;
+
+    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1' });
+    await new Promise(r => setTimeout(r, 0)); // let the rejected write land
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toBeInstanceOf(Error);
+    unsub();
+  });
+
+  it('reports a durable-write success through onSaveOutcome, clearing a prior failure (U-02)', async () => {
+    const { store } = await AppStore.open(customDefaults);
+    const outcomes: Array<unknown | null> = [];
+    store.onSaveOutcome(err => outcomes.push(err));
+
+    // Fail once...
+    const backend: { read: () => Promise<null>; write: () => Promise<void> } = {
+      read: () => Promise.resolve(null),
+      write: () => Promise.reject(new Error('OPFS down')),
+    };
+    (store as unknown as { db: { backend: unknown } }).db.backend = backend;
+    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1' });
+    await new Promise(r => setTimeout(r, 0));
+
+    // ...then recover: the next persist's durable write reports success (null),
+    // which the UI uses to clear its "changes may not be saved" banner.
+    backend.write = () => Promise.resolve();
+    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1' });
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(outcomes).toHaveLength(2);
+    expect(outcomes[0]).toBeInstanceOf(Error);
+    expect(outcomes[1]).toBeNull();
+  });
+
+  it('reports localStorage-only save failures through onSaveOutcome (U-02)', async () => {
+    // No OPFS backend: localStorage is the only mirror, so its failure IS the
+    // save failing — the banner must show for quota/storage errors too.
+    const { store } = await AppStore.open(customDefaults);
+    const outcomes: Array<unknown | null> = [];
+    store.onSaveOutcome(err => outcomes.push(err));
+
+    const original = localStorage.setItem;
+    localStorage.setItem = () => { throw new Error('quota exceeded'); };
+    try {
+      store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1' });
+    } finally {
+      localStorage.setItem = original;
+    }
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toBeInstanceOf(Error);
+  });
 });
 
 describe('AppStore revisions', () => {
