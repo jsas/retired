@@ -589,14 +589,18 @@ changed during this review (only `REVIEW.md` added; two throwaway `__probe*.test
 files were created to confirm E-02/E-03 and deleted). The committed probe in X-01 is
 the only test-suite smell.
 
-**X-04 · LOW · `Pension.endAge` / RM `startAge`/`durationYears` null-vs-omitted
-convention is load-bearing and only documented in CLAUDE.md.** The schemas and engine
+~~**X-04 · LOW · `Pension.endAge` / RM `startAge`/`durationYears` null-vs-omitted
+convention is load-bearing and only documented in CLAUDE.md.**~~ ✅ **FIXED 2026-08-30** (`fix/x04-null-convention-comments`) The schemas and engine
 rely on `endAge` being explicit `null` (never omitted) for lifetime pensions, and RM
 timing fields being `undefined` (never `null`). This is exactly the kind of invariant
 a future contributor (or the agent, A-01/A-02) can violate silently. It's currently
 held everywhere I checked (propose_pension strips `id`, manage_pension re-validates
 the merged element). **Needed (optional):** a code comment at the schema definitions
 pointing at the convention, so it isn't only in CLAUDE.md.
+**Fix:** doc comments added at both type definitions in `retirementEngine.ts` —
+`Pension.endAge` (required, explicit `null` = lifetime, never omit) and the RM
+`startAge`/`durationYears` block (optional, omit entirely, never `null`) — each
+cross-referencing the other. Pure comments; 790/790 tests, `tsc` clean.
 
 ---
 
@@ -659,7 +663,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | ~~X-01~~ | Cross-cutting | ~~LOW~~ ✅ | Leftover probe `src/test/tmp/bug2.test.ts` — **DELETED** (was untracked, not committed) | **Fixed** |
 | X-02 | Cross-cutting | INFO | `.status` consumers consistent (E-09 resolved) | Info |
 | X-03 | Cross-cutting | INFO | Tree green: tsc 0 errors, 735/735 tests post-merge | Info |
-| X-04 | Cross-cutting | LOW | endAge/RM null-vs-omitted convention only in CLAUDE.md | Actionable (comment) |
+| ~~X-04~~ | Cross-cutting | ~~LOW~~ ✅ | endAge/RM null-vs-omitted convention only in CLAUDE.md — **FIXED** (`fix/x04-null-convention-comments`, comments at the types) | **Fixed** |
 
 ---
 
@@ -703,7 +707,7 @@ Everything not struck through above. These are the items that still need doing.
 ### AI / other
 - ~~**A-03 · LOW** — Agent verdict strings use per-person status, not household.~~ ✅ FIXED (`fix/a03-agent-household-verdict`)
 - **H-02 · LOW (optional)** — Backtest is primary-only (spouse stripped).
-- **X-04 · LOW** — endAge/RM null-vs-omitted convention documented only in CLAUDE.md.
+- ~~**X-04 · LOW** — endAge/RM null-vs-omitted convention documented only in CLAUDE.md.~~ ✅ FIXED (`fix/x04-null-convention-comments`)
 
 ### Feature work (open issues, not bugs)
 - **#24** — Track TFSA/RRSP contribution room; overflow deposits to taxable.
@@ -769,8 +773,8 @@ Everything not struck through above. These are the items that still need doing.
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
-4. **Quick wins** — U-15, A-03, D-02 (#19) fixed. Remaining: X-04 (comment),
-   D-05 (revSeq), D-07 (toDoc null).
+4. **Quick wins** — U-15, A-03, D-02 (#19), X-04 fixed. Remaining: D-05 (revSeq),
+   D-07 (toDoc null).
 5. **Verify-before-fix** — E-02 (fixed-point oracle), E-04, T-02, T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 

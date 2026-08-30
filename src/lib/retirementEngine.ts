@@ -160,6 +160,10 @@ export interface ReverseMortgage {
   maxLtv?: number;
   // Scheduled draws: amount/yr (today's dollars, CPI-indexed like spending)
   // from startAge for durationYears. Optional — combine with top-up or use alone.
+  // Convention: `startAge`/`durationYears` are OPTIONAL — omit them entirely
+  // (never pass an explicit `null`, which the schema rejects) when no schedule
+  // is wanted. Contrast with Pension.endAge below, which is the opposite
+  // contract: required, with an explicit `null` meaning "lifetime".
   drawAmount?: number;
   startAge?: number;
   durationYears?: number;
@@ -173,6 +177,10 @@ export interface Pension {
   label: string;
   annualAmount: number;   // $/yr at startAge, in today's dollars
   startAge: number;
+  // Convention (X-04): endAge is REQUIRED — pass an explicit `null` for a
+  // lifetime pension; never omit the field (that fails validation). This is
+  // the opposite of the ReverseMortgage schedule fields above, which are
+  // optional and must be OMITTED rather than set to null.
   endAge: number | null;  // null = lifetime; set = bridge/temporary (pays through endAge)
   indexedToCpi: boolean;  // grow with CPI (when indexTaxTables is on) vs flat nominal
 }
