@@ -188,6 +188,10 @@ function App() {
         return dirty;
       });
       if (state.config) setConfig(state.config);
+      // Issue #19: a stored config that failed wholesale validation was reset
+      // to defaults — don't let that pass silently; the user's custom tax
+      // tables need re-entering.
+      if (state.configLoadWarning) setConfigLoadWarning(state.configLoadWarning);
     }).catch(err => console.warn('SQL store failed to open; running in-memory:', err));
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,6 +217,11 @@ function App() {
     if (!store) return;
     return store.onSaveOutcome((err) => setSaveError(err != null));
   }, [store]);
+
+  // Issue #19: a stored config that failed wholesale validation was reset to
+  // defaults. Surface that — custom tax tables silently vanishing is a data
+  // loss the user must know about. Stays until dismissed.
+  const [configLoadWarning, setConfigLoadWarning] = useState<string | null>(null);
 
   // Persist engine config on every change.
   useEffect(() => {
@@ -720,6 +729,25 @@ function App() {
         onOpenDonate={() => setView('donate')}
         onOpenHelp={() => setView('help')}
       />
+
+      {/* Config-reset warning (issue #19): the stored engine config failed
+          validation and was replaced by defaults — the user's custom tax
+          tables didn't survive the load and need re-entering. Dismissible;
+          it does not re-fire this session. */}
+      {configLoadWarning && (
+        <div className="no-print flex items-center gap-2 bg-amber-50 border-b border-amber-300 px-3 md:px-6 py-2 text-xs text-amber-900" role="alert">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span className="flex-1">{configLoadWarning}</span>
+          <button
+            onClick={() => setConfigLoadWarning(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-amber-100"
+            title="Dismiss this warning"
+            aria-label="Dismiss settings warning"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Durability warning (issue U-02): shown when a persist write failed
           (OPFS unavailable/full, or localStorage full with no OPFS). Clears

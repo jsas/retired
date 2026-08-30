@@ -562,7 +562,7 @@ first.
 
 ---
 
-## [ ] PLAN D-02 · Hand-corrupted config silently resets to defaults
+## [x] PLAN D-02 · Hand-corrupted config silently resets to defaults
 **Maps to:** open issue **#19** · REVIEW.md **D-02** · Severity LOW
 **Files:** `src/data/store.ts`, `src/lib/appConfig.ts`
 

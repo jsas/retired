@@ -32,6 +32,11 @@ export interface AppState {
   scenarios: Scenario[];
   activeScenarioId: string;
   config: AppConfig | null;
+  /** Set when a stored config existed but failed wholesale validation and was
+   *  replaced by defaults (issue #19). Absent when the config loaded cleanly
+   *  (or there was never one) — the UI can banner this so the user knows their
+   *  custom tax tables didn't survive the load. */
+  configLoadWarning?: string;
 }
 
 export class AppStore {
@@ -80,12 +85,33 @@ export class AppStore {
       db.save();
     }
 
-    const config = configRaw ? validateAppConfig(configRaw) : null;
+    // Corrupted/invalid stored config: we fall back to defaults. Make it loud —
+    // silently resetting the user's custom tax tables would lose real edits
+    // (issue #19). Only the wholesale-invalid case warns; a config that
+    // validates but is missing newer fields is back-filled by
+    // validateAppConfig on purpose and stays silent.
+    let config: AppConfig | null = null;
+    let configLoadWarning: string | undefined;
+    if (configRaw) {
+      config = validateAppConfig(configRaw);
+      if (!config) {
+        const shape = configRaw && typeof configRaw === 'object'
+          ? `keys [${Object.keys(configRaw as object).join(', ')}]`
+          : typeof configRaw;
+        configLoadWarning =
+          'Your saved engine settings could not be read and were reset to defaults. '
+          + 'Any custom tax tables or engine settings need to be re-entered (or restored from a backup).';
+        console.error(
+          '[RE:tired] Stored config failed validation and was reset to defaults.',
+          `Raw payload: ${shape}, length ${JSON.stringify(configRaw).length} chars.`,
+        );
+      }
+    }
     const resolvedActive = activeScenarioId && scenarios.some(s => s.id === activeScenarioId)
       ? activeScenarioId
       : scenarios[0].id;
 
-    return { store, state: { scenarios, activeScenarioId: resolvedActive, config } };
+    return { store, state: { scenarios, activeScenarioId: resolvedActive, config, configLoadWarning } };
   }
 
   /** True when the SQL store is already mirrored locally (sync checks for

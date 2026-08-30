@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AppStore } from './store';
 import { DB_STORAGE_KEY } from './db';
 import { baseInputs } from '../test/helpers';
-import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
+import { DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
 import { buildDefaultScenarios } from './exampleScenarios';
 import type { Scenario } from '../lib/scenarioStorage';
 
@@ -35,6 +35,52 @@ describe('AppStore', () => {
     ]);
     expect(state.activeScenarioId).toBe(state.scenarios[0].id);
     expect(state.config).toBeNull(); // no config until the app writes one
+    expect(state.configLoadWarning).toBeUndefined();
+  });
+
+  it('flags a hand-corrupted config instead of silently resetting it (#19)', async () => {
+    // Seed a store with a config, then corrupt it wholesale — validateAppConfig
+    // returns null and the app would fall back to defaults with no signal, so
+    // the user's custom tax tables would silently vanish (issue #19).
+    const { store } = await AppStore.open(customDefaults);
+    store.persist({
+      scenarios: customDefaults(), activeScenarioId: 'seed-1',
+      config: { completely: { wrong: { shape: true } } } as unknown as AppConfig,
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { state } = await AppStore.open(customDefaults);
+      // Falls back to null (the app's defaults take over)…
+      expect(state.config).toBeNull();
+      // …but LOUDLY: a console.error naming what failed…
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(String(errorSpy.mock.calls[0][0])).toMatch(/failed validation and was reset/);
+      expect(String(errorSpy.mock.calls[0].join(' '))).toContain('completely'); // raw keys surfaced
+      // …and a user-facing warning string for the UI to banner.
+      expect(state.configLoadWarning).toMatch(/reset to defaults/);
+              expect(state.configLoadWarning).toMatch(/custom tax tables/);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('does not warn when the config validates (back-fill stays silent)', async () => {
+    // A config that validates — including one relying on newer-field
+    // back-fill — must load without the #19 warning; only wholesale-invalid
+    // blobs are the bug.
+    const { store } = await AppStore.open(customDefaults);
+    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1', config: DEFAULT_APP_CONFIG });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { state } = await AppStore.open(customDefaults);
+      expect(state.config?.general.promptToSaveOnSwitch).toBe(true);
+      expect(state.configLoadWarning).toBeUndefined();
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('imports the legacy split keys on first open', async () => {

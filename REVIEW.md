@@ -303,10 +303,16 @@ then writes the same bytes to the localStorage mirror synchronously" — accurat
 from PLAN D-01). On OPFS failure the mirror is skipped, so localStorage can never be
 newer than OPFS — no silent rollback. Branch `issue/18-opfs-rollback`.
 
-**D-02 · LOW · Silent config reset on corruption.** (== issue #19, confirmed) On load,
+~~**D-02 · LOW · Silent config reset on corruption.**~~ ✅ **FIXED 2026-08-30** (`fix/d02-config-corrupt-warning`, closes #19) (== issue #19, confirmed) On load,
 `validateAppConfig` replaces any failing block with defaults (store.ts:83, db.ts:302) with
 no user-facing note. A hand-corrupted `kv.config` silently loses tax-table customizations.
 Tracked by open issue #19.
+**Fix:** `AppStore.open` now distinguishes wholesale-invalid config (a present blob that
+fails validation) from the intended newer-field back-fill: the former logs a loud
+`console.error` with the raw payload's keys/length, adds `configLoadWarning` to the
+returned `AppState`, and App.tsx banners it ("Your saved engine settings could not be
+read and were reset to defaults…"). Tests: corrupted blob → error spy + warning + null
+config; valid config (incl. back-fill) → no warning. 790/790 tests, `tsc` clean.
 
 **D-03 · LOW · UI-preference keys bypass the store.** (== issue #20, confirmed) Five
 modules still read/write raw `localStorage` (printOptions, projectionExport, eqStorage,
@@ -628,7 +634,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | S-03 | Strategies | LOW | Strategy orderings omit RDSP (== #40 family) | Actionable |
 | S-04 | Strategies | INFO | Gap-targeted work stint uses flat 30% marginal — documented approx | Info |
 | S-05 | Strategies | INFO | Extra `calculateHousehold` pass for gap — perf note only | Info |
-| D-02 | Data | LOW | Silent config reset on corruption (== #19) | Actionable |
+| ~~D-02~~ | Data | ~~LOW~~ ✅ | Silent config reset on corruption (== #19) — **FIXED** (`fix/d02-config-corrupt-warning`, closes #19) | **Fixed** |
 | D-03 | Data | LOW | UI-pref keys bypass the store (== #20) | Actionable |
 | D-05 | Data | LOW | `revSeq` resets per session; revision-id collision theoretical | Actionable |
 | D-06 | Data | INFO | Full DELETE+re-INSERT per persist — acceptable at this scale | Info |
@@ -680,7 +686,7 @@ Everything not struck through above. These are the items that still need doing.
 
 ### Data layer (== open issues #18–#21)
 - **D-04 · MEDIUM · == #21** — Legacy localStorage dual-source still live (refactor).
-- **D-02 · LOW · == #19** — Hand-corrupted config silently resets to defaults, no warning.
+- ~~**D-02 · LOW · == #19** — Hand-corrupted config silently resets to defaults, no warning.~~ ✅ FIXED (`fix/d02-config-corrupt-warning`)
 - **D-03 · LOW · == #20** — UI-preference keys bypass the store's kv table.
 - **D-05 · LOW** — `revSeq` resets per session (revision-id collision, theoretical).
 - **D-07 · LOW** — `toDoc()` returns null on invalid config, dropping config silently.
@@ -750,6 +756,10 @@ Everything not struck through above. These are the items that still need doing.
   `summarizeResults` headline and both agentQA digest builders now lead with the
   `householdOutcome` verdict; per-person statuses are demoted to labeled detail lines.
   788/788 tests, `tsc` clean.
+- **2026-08-30** — **D-02** (#19) fixed on `fix/d02-config-corrupt-warning`: a
+  wholesale-invalid stored config now logs a loud console.error and banners the user
+  (`configLoadWarning` on AppState) instead of silently resetting to defaults.
+  790/790 tests, `tsc` clean.
 
 ---
 
@@ -759,8 +769,8 @@ Everything not struck through above. These are the items that still need doing.
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
-4. **Quick wins** — U-15 (`fix/u15-print-rdsp-column`) and A-03
-   (`fix/a03-agent-household-verdict`) fixed. Remaining: D-02 (#19 warning), X-04 (comment).
+4. **Quick wins** — U-15, A-03, D-02 (#19) fixed. Remaining: X-04 (comment),
+   D-05 (revSeq), D-07 (toDoc null).
 5. **Verify-before-fix** — E-02 (fixed-point oracle), E-04, T-02, T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 
