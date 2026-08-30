@@ -149,9 +149,16 @@ case where transfers drain the RRIF below the Jan-1 figure. Golden master unaffe
 (age 72, $500k→RRIF, $50k meltdown → min = 27,000 Jan-1, not 24,300). ~~MEDIUM~~ → resolved.
 
 **E-04 · MEDIUM · RRIF-minimum excess redeposit ignores the mandatory minimum's ACB-free nature — verify.**
-The RRIF-min excess (net above need) is redeposited into taxable and added to ACB
+~~The RRIF-min excess (net above need) is redeposited into taxable and added to ACB
 (engine:1260-1263). That's correct (after-tax money in = principal). No bug; noted only
-to confirm the redeposit is *not* double-taxed. Verified OK.
+to confirm the redeposit is *not* double-taxed. Verified OK.~~ ✅ **VERIFIED OK 2026-08-30**
+(`verify/e04-rrif-redeposit`) — locked with a regression test. Fixture: age 72,
+$500k RRSP→RRIF, spending 0, so the whole minimum ($27,000) becomes excess. Asserts
+(1) the year's unified `incomeTax` equals `tax(minimum)` exactly once — no second hit
+on the redeposited principal; (2) the redeposit carries full ACB (`taxableAcb` rises by
+`rrifMinExcess`, `gainsFraction` stays 0); (3) at 73 the taxable account's embedded
+gain is exactly one year's growth on the first redeposit — the principal never
+re-enters income. Verdict: correct by design, now pinned.
 
 **E-05 · LOW → ✅ FIXED 2026-08-29 · `grossTaxableWithdrawal` upper-bound loop was
 unbounded.** (== issue #28; branch `fix/grossup-loop-caps`, commit `6f71317`)
@@ -634,7 +641,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | E-06 | Engine | MEDIUM | Couple GIS counts own draws in-year, partner's never (== #26) | Actionable |
 | ~~E-07~~ | Engine | ~~MEDIUM~~ ✅ | Pre-retirement registered transfer taxed from $0 — **FIXED** (`fix/preretirement-transfer-tax-floor`) | **Fixed** |
 | ~~E-08~~ | Engine | ~~MEDIUM~~ ✅ | Re-homed past-dated transfer silently dropped — **FIXED** (`fix/rehome-pastdated-transfer`, clamps to fire now) | **Fixed** |
-| E-04 | Engine | MEDIUM | RRIF-min excess redeposit / ACB-free handling — verify | Actionable (verify) |
+| ~~E-04~~ | Engine | ~~MEDIUM~~ ✅ | RRIF-min excess redeposit — verified not double-taxed, pinned by test (`verify/e04-rrif-redeposit`) | **Verified OK** |
 | E-02 | Engine | MEDIUM (plausible) | Inter-spousal transfer re-run may be one oscillation stale | Verify |
 | ~~S-01~~ | Strategies | ~~MEDIUM~~ ✅ | `runOne` scored household outcome vs `inputs`, not `merged` — **FIXED** (`fix/s01-strategy-scoring`) | **Fixed** |
 | ~~D-01~~ | Data | ~~MEDIUM~~ ✅ | OPFS-write failure → one-session rollback (== #18) — **FIXED** (`issue/18-opfs-rollback`, mirror sequenced behind OPFS) | **Fixed** |
@@ -694,8 +701,8 @@ Everything not struck through above. These are the items that still need doing.
 - **E-06 · MEDIUM · == #26** — Couple GIS counts the person's own discretionary draws
   in-year but never the partner's. Needs a household fixed-point for GIS, or a
   documented simplification.
-- **E-04 · MEDIUM (verify)** — Confirm the RRIF-min excess redeposit isn't double-taxed
-  (believed OK; needs a confirm pass, not a fix).
+- ~~**E-04 · MEDIUM (verify)** — Confirm the RRIF-min excess redeposit isn't double-taxed
+  (believed OK; needs a confirm pass, not a fix).~~ ✅ VERIFIED OK (`verify/e04-rrif-redeposit`)
 - **E-02 · MEDIUM (verify)** — Two-way inter-spousal transfer re-run may sit one
   oscillation stale; build a fixed-point oracle to confirm.
 
@@ -792,6 +799,12 @@ Everything not struck through above. These are the items that still need doing.
   surfaces. Previously a backup exported with "include engine settings" unchecked (or
   from a corrupt config) was rejected wholesale as "not a RE: tired backup", throwing
   away every valid scenario. 792/792 tests, `tsc` clean.
+- **2026-08-30** — **E-04** verified OK on `verify/e04-rrif-redeposit`: the RRIF-minimum
+  excess redeposit is NOT double-taxed. New regression test (age 72, $500k→RRIF, zero
+  spending) pins all three consequences — `incomeTax` equals `tax(minimum)` exactly
+  once, the redeposit carries full ACB (`gainsFraction` 0), and the taxable account's
+  embedded gain after a second year is exactly the first redeposit's growth.
+  796/796 tests, `tsc` clean.
 
 ---
 
@@ -802,7 +815,8 @@ Everything not struck through above. These are the items that still need doing.
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
 4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05, D-07 fixed. Remaining: none.
-5. **Verify-before-fix** — E-02 (fixed-point oracle), E-04, T-02, T-03.
+5. **Verify-before-fix** — E-04 verified OK; remaining: E-02 (fixed-point oracle),
+   T-02, T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 
 ---
