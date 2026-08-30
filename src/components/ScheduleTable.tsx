@@ -192,9 +192,12 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
   const hasRm = breakdown.some(r => r.netHomeEquity !== undefined);
   // RDSP balance column appears only when a person has an RDSP.
   const hasRdsp = breakdown.some(r => r.rdspBalance !== undefined);
-  // Number of columns the detail row must span (base 19 + optional RM/RDSP columns).
-  const colCount = 19 + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0);
   const anyDetail = household || breakdown.some(r => r.detail);
+  // Number of columns the detail row must span: base 19 + the expand chevron
+  // (when any row is expandable) + optional RM/RDSP columns. The chevron column
+  // was previously left out, so an expandable table's detail row spanned one
+  // column too few and the panel didn't reach the table's right edge.
+  const colCount = 19 + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0);
 
   return (
     <div className="bg-white border border-slate-200 rounded overflow-hidden">
