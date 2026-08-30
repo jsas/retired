@@ -34,6 +34,10 @@ export interface AiGenerationSettings {
   repetitionPenalty?: number;
   /** Local (web-llm) only: presence penalty (encourages new topics). */
   presencePenalty?: number;
+  /** Local (web-llm) only: frequency penalty (discourages re-using the same
+   *  words). web-llm pairs this with presence — whichever is unset gets
+   *  zeroed — so setting both is what makes either one bite. */
+  frequencyPenalty?: number;
 }
 
 export interface AiConnection {
@@ -71,6 +75,7 @@ const generationSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   repetitionPenalty: z.number().min(0).max(2).optional(),
   presencePenalty: z.number().min(-2).max(2).optional(),
+  frequencyPenalty: z.number().min(-2).max(2).optional(),
 });
 
 const connectionSchema = z.object({
@@ -232,9 +237,38 @@ export const DEFAULT_MAX_TOKENS = 16384;
 export const DEFAULT_LOCAL_TEMPERATURE = 0.3;
 export const DEFAULT_LOCAL_REPETITION_PENALTY = 1.15;
 export const DEFAULT_LOCAL_PRESENCE_PENALTY = 0.3;
+export const DEFAULT_LOCAL_FREQUENCY_PENALTY = 0.3;
+
+/** Sampler tuning keyed by web-llm model id. Models loop differently —
+ *  Phi-4-mini's failure is the diverse word-salad, which the generic
+ *  defaults don't restrain — so a loop-prone model carries its own
+ *  defaults here, applied only when the user hasn't set an explicit value
+ *  on the connection. Kept in this module (not webLlmModels) so
+ *  effectiveGeneration has no import cycle. */
+export const MODEL_SAMPLER_DEFAULTS: Record<string, {
+  temperature?: number;
+  repetitionPenalty?: number;
+  presencePenalty?: number;
+  /** web-llm pairs frequency with presence (zeroing whichever is unset), so
+   *  a presence-only setting under-delivers — set both for the intended bite. */
+  frequencyPenalty?: number;
+}> = {
+  // Phi-4-mini's failure mode is the diverse word-salad: hundreds of
+  // mostly-unique jargon tokens at a runaway pace. The generic defaults
+  // (rep 1.15, presence-only 0.3) don't restrain it — and web-llm zeroes an
+  // unpaired presence penalty, halving what bite it had. Give this model a
+  // stronger, frequency-backed anti-repeat profile.
+  'Phi-4-mini-instruct-q4f16_1-MLC': {
+    temperature: 0.6,
+    repetitionPenalty: 1.3,
+    presencePenalty: 0.5,
+    frequencyPenalty: 0.5,
+  },
+};
 
 /** Resolve a connection's effective generation settings: the user's override
- *  when present, the provider default otherwise. Cloud temperature stays
+ *  when present, then the MODEL's own sampler defaults (loop-prone local
+ *  models above), then the generic provider default. Cloud temperature stays
  *  undefined (the provider's own default applies — omitting the field is
  *  different from sending one). */
 export function effectiveGeneration(c: AiConnection): {
@@ -242,12 +276,18 @@ export function effectiveGeneration(c: AiConnection): {
   temperature: number | undefined;
   repetitionPenalty: number;
   presencePenalty: number;
+  frequencyPenalty: number;
 } {
+  const sampler = c.provider === 'webllm' ? MODEL_SAMPLER_DEFAULTS[c.model] : undefined;
   return {
     maxTokens: c.generation?.maxTokens ?? DEFAULT_MAX_TOKENS,
-    temperature: c.generation?.temperature,
-    repetitionPenalty: c.generation?.repetitionPenalty ?? DEFAULT_LOCAL_REPETITION_PENALTY,
-    presencePenalty: c.generation?.presencePenalty ?? DEFAULT_LOCAL_PRESENCE_PENALTY,
+    temperature: c.generation?.temperature ?? sampler?.temperature,
+    repetitionPenalty: c.generation?.repetitionPenalty
+      ?? sampler?.repetitionPenalty ?? DEFAULT_LOCAL_REPETITION_PENALTY,
+    presencePenalty: c.generation?.presencePenalty
+      ?? sampler?.presencePenalty ?? DEFAULT_LOCAL_PRESENCE_PENALTY,
+    frequencyPenalty: c.generation?.frequencyPenalty
+      ?? sampler?.frequencyPenalty ?? DEFAULT_LOCAL_FREQUENCY_PENALTY,
   };
 }
 

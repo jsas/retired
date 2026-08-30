@@ -453,6 +453,46 @@ describe('isTokenEcho (word-salad circuit breaker)', () => {
     const dump = Array.from({ length: 240 }, (_, i) => `transcendentalization${i}`).join(' ');
     expect(isTokenEcho(dump)).toBe(true);
   });
+
+  it('fires on a high-diversity salad hammering one content word (the Phi-4 screenshot failure)', async () => {
+    const { isTokenEcho } = await import('./webLlmProvider');
+    // Mostly-UNIQUE jargon words (vocabulary stays rich, so the collapsed-
+    // vocabulary check passes) but one token hammered dozens of times,
+    // interleaved so it isn't one verbatim block — exactly the "…explicitly
+    // attributed explicitly scoring explicitly thresholds…" tail in the report.
+    const words: string[] = [];
+    for (let i = 0; i < 40; i++) {
+      words.push('explicitly', `concept${i}`, `metric${i}`, `factor${i}`, `aspect${i}`, `detail${i}`);
+    }
+    const text = words.join(' ');
+    expect(isTokenEcho(text)).toBe(true);
+  });
+
+  it('does not fire on a long healthy answer that reuses domain terms', async () => {
+    const { isTokenEcho } = await import('./webLlmProvider');
+    // A genuinely long, coherent retirement answer with varied sentences:
+    // "rrsp"/"withdrawal" appear often (they're the topic) but far under the
+    // loop threshold, and the vocabulary stays rich.
+    const sentences = [
+      'At age 65 your RRSP converts to a RRIF and the minimum withdrawal begins.',
+      'Each withdrawal is taxed as ordinary income in the calendar year received.',
+      'A larger withdrawal can push part of it into a higher bracket.',
+      'The TFSA withdrawal is tax-free and never affects OAS or GIS.',
+      'Order matters: spend taxable dollars first, then RRIF, then TFSA last.',
+      'CPP taken before 65 is reduced by 0.6 percent per month early.',
+      'Deferring OAS to 70 raises it by 0.6 percent per month delayed.',
+      'Your plan stays funded to age 95 under the current assumptions.',
+      'Inflation runs at 2.1 percent with a 5 percent nominal portfolio return.',
+      'The taxable account triggers capital gains only when units are sold.',
+      'A surviving spouse inherits the RRIF rollover without immediate tax.',
+      'Monte Carlo shows an 87 percent success rate across 1000 trials.',
+      'Sequence risk matters most in the first decade of drawdown.',
+      'A reverse mortgage can supplement cash flow without selling the home.',
+    ];
+    // ~220+ words, coherent and varied; each domain term repeats only a few times.
+    const text = Array.from({ length: 16 }, (_, i) => sentences[i % sentences.length]).join(' ');
+    expect(isTokenEcho(text)).toBe(false);
+  });
 });
 
 describe('web-llm model cache management', () => {

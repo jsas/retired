@@ -24,7 +24,9 @@ import {
 import {
   AI_PROVIDERS, connectionReady, defaultBaseUrlFor, defaultModelFor,
   loadAiSettings, newConnectionId, saveAiSettings,
-  DEFAULT_MAX_TOKENS, DEFAULT_LOCAL_REPETITION_PENALTY, DEFAULT_LOCAL_PRESENCE_PENALTY,
+  DEFAULT_MAX_TOKENS, DEFAULT_LOCAL_TEMPERATURE,
+  DEFAULT_LOCAL_REPETITION_PENALTY, DEFAULT_LOCAL_PRESENCE_PENALTY,
+  DEFAULT_LOCAL_FREQUENCY_PENALTY, MODEL_SAMPLER_DEFAULTS,
   type AiConnection, type AiGenerationSettings, type AiSettings,
 } from '../lib/aiSettings';
 import { listModels, testConnection, type ModelInfo } from '../lib/ai/providers';
@@ -438,6 +440,14 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
     ? 'text-[10px] text-slate-500 mb-0.5'
     : 'text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1';
 
+  // Loop-prone local models (Phi-4-mini) carry their own sampler defaults;
+  // show those as the placeholder so the user sees what blank actually means.
+  const sampler = isLocal ? MODEL_SAMPLER_DEFAULTS[conn.model] : undefined;
+  const tempDefault = sampler?.temperature ?? DEFAULT_LOCAL_TEMPERATURE;
+  const repDefault = sampler?.repetitionPenalty ?? DEFAULT_LOCAL_REPETITION_PENALTY;
+  const presDefault = sampler?.presencePenalty ?? DEFAULT_LOCAL_PRESENCE_PENALTY;
+  const freqDefault = sampler?.frequencyPenalty ?? DEFAULT_LOCAL_FREQUENCY_PENALTY;
+
   return (
     <div className={compact ? '' : 'mt-3 pt-2 border-t border-slate-100'}>
       {!compact && (
@@ -445,7 +455,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
           Generation — how the model writes
         </div>
       )}
-      <div className={`grid gap-2 ${isLocal ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
+      <div className={`grid gap-2 ${isLocal ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2'}`}>
         <label className="block">
           <span className={`block ${label}`}>Max tokens per reply</span>
           <input
@@ -462,7 +472,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
             type="number" min={0} max={2} step={0.1}
             value={num(gen.temperature)}
             onChange={e => setGen({ temperature: parse(e.target.value, 0, 2) })}
-            placeholder={isLocal ? '0.3' : 'provider'}
+            placeholder={isLocal ? String(tempDefault) : 'provider'}
             className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
           />
         </label>
@@ -474,7 +484,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
                 type="number" min={0} max={2} step={0.05}
                 value={num(gen.repetitionPenalty)}
                 onChange={e => setGen({ repetitionPenalty: parse(e.target.value, 0, 2) })}
-                placeholder={String(DEFAULT_LOCAL_REPETITION_PENALTY)}
+                placeholder={String(repDefault)}
                 className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
               />
             </label>
@@ -484,7 +494,17 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
                 type="number" min={-2} max={2} step={0.1}
                 value={num(gen.presencePenalty)}
                 onChange={e => setGen({ presencePenalty: parse(e.target.value, -2, 2) })}
-                placeholder={String(DEFAULT_LOCAL_PRESENCE_PENALTY)}
+                placeholder={String(presDefault)}
+                className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+              />
+            </label>
+            <label className="block">
+              <span className={`block ${label}`}>Frequency penalty</span>
+              <input
+                type="number" min={-2} max={2} step={0.1}
+                value={num(gen.frequencyPenalty)}
+                onChange={e => setGen({ frequencyPenalty: parse(e.target.value, -2, 2) })}
+                placeholder={String(freqDefault)}
                 className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-mono"
               />
             </label>

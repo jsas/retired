@@ -307,8 +307,40 @@ export function isTokenEcho(text: string): boolean {
   // listing jargon), which normal sentences never are.
   const long = window.filter(w => w.length >= 9).length;
   if (long / window.length > 0.55) return true;
+  // A HIGH-diversity salad: the vocabulary stays rich (mostly-unique jargon),
+  // but one content word is hammered far past what prose ever does — Phi-4's
+  // actual screenshot failure was "explicitly" 60+ times in one reply. Count
+  // over CONTENT words only (stopwords repeat heavily in healthy prose).
+  const counts = new Map<string, number>();
+  for (const w of window) {
+    if (STOPWORDS.has(w)) continue;
+    counts.set(w, (counts.get(w) ?? 0) + 1);
+  }
+  for (const n of counts.values()) {
+    if (n >= 24) return true;
+  }
   return false;
 }
+
+/** Common English function words, excluded from the over-repetition check —
+ *  these legitimately repeat dozens of times in any long answer. */
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'are', 'but', 'not', 'you', 'your', 'yours', 'all',
+  'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must', 'shall',
+  'has', 'have', 'had', 'was', 'were', 'been', 'being', 'is', 'be', 'am',
+  'do', 'does', 'did', 'done', 'a', 'an', 'as', 'at', 'by', 'from', 'in',
+  'into', 'of', 'on', 'onto', 'or', 'so', 'to', 'too', 'up', 'upon', 'with',
+  'within', 'without', 'it', 'its', 'itself', 'this', 'that', 'these',
+  'those', 'there', 'their', 'theirs', 'them', 'they', 'he', 'she', 'his',
+  'her', 'hers', 'him', 'we', 'our', 'ours', 'us', 'i', 'me', 'my', 'mine',
+  'if', 'then', 'than', 'when', 'while', 'where', 'which', 'who', 'whom',
+  'what', 'how', 'why', 'because', 'since', 'until', 'before', 'after',
+  'about', 'above', 'below', 'between', 'under', 'over', 'again', 'once',
+  'also', 'just', 'only', 'very', 'more', 'most', 'less', 'least', 'much',
+  'many', 'few', 'each', 'every', 'any', 'some', 'such', 'no', 'nor', 'own',
+  'same', 'other', 'another', 'both', 'either', 'neither', 'one', 'two',
+  'out', 'off', 'per', 'via', 'etc', 'age', 'year', 'years',
+]);
 
 /** Translate engine failures into plain, actionable language. Raw WebGPU
  *  errors ("mapAsync", "device lost") mean nothing to a non-technical user. */
@@ -406,6 +438,9 @@ export async function* streamWebLlm(
       // entirely once it's clearly looping.
       repetition_penalty: gen.repetitionPenalty,
       presence_penalty: gen.presencePenalty,
+      // web-llm pairs presence with frequency (an unpaired one is zeroed
+      // upstream), so send both — a presence-only setting under-delivers.
+      frequency_penalty: gen.frequencyPenalty,
     });
   } catch (err) {
     throw translateLocalError(err);

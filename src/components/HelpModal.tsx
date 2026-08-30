@@ -447,11 +447,11 @@ const SECTIONS: HelpSection[] = [
         term: 'When answers go wrong',
         body: (
           <>
-            <P>Small local models sometimes ramble, repeat themselves, or lose the thread of a long conversation. If that happens:</P>
+            <P>Small local models sometimes ramble, repeat themselves, or lose the thread of a long conversation. The app watches for the worst cases — a repeated sentence or a runaway word salad — and cuts the reply short rather than letting it burn the whole budget, and loop-prone models ship with stronger anti-repeat settings out of the box. If it still happens:</P>
             {ul([
               <>Start a <strong>new chat</strong> — a fresh context is the most reliable fix.</>,
               <>Ask a <strong>shorter, more specific</strong> question.</>,
-              <>On the Connections page, lower <strong>"How much the model reads at once"</strong> if your computer struggled to load it, or switch to a stronger model.</>,
+              <>On the Connections page, raise the <strong>repeat / presence / frequency penalties</strong> for that model (or switch to a stronger model).</>,
               <>Use the <strong>regenerate</strong> button on a reply to try again without retyping.</>,
             ])}
             <P>The usage bar under the chat shows how much of the model's reading room the conversation is using — when it fills up, older messages are folded into a summary so the model stays coherent.</P>
