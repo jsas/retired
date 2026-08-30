@@ -296,7 +296,7 @@ Model it on the existing couple-GIS tests (grep `gisAnnualCouple` /
 
 ---
 
-## [ ] PLAN E-08 · Re-homed past-dated transfer silently dropped
+## [x] PLAN E-08 · Re-homed past-dated transfer silently dropped
 **Maps to:** open issue **#27** · REVIEW.md **E-08** · Severity MEDIUM
 **File:** `src/lib/retirementEngine.ts`
 

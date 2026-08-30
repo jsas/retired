@@ -1703,13 +1703,22 @@ export function calculateHousehold(
     selfCurrentAge: number,
   ): CashEvent[] => (ownerEvents ?? [])
     .filter(e => e.from && e.from.kind === 'account' && e.from.person === selfRef)
-    .map(e => ({
-      ...e,
+    .map(e => {
+      const shift = ownerCurrentAge - selfCurrentAge;
       // owner-age → calendar-year → self-age (same convention as `translate`).
-      age: e.age - (ownerCurrentAge - selfCurrentAge),
-      // Recurring events carry endAge on the same axis; shift it too.
-      ...(e.endAge != null ? { endAge: e.endAge - (ownerCurrentAge - selfCurrentAge) } : {}),
-    }));
+      const age = e.age - shift;
+      // When the partners are different ages, the same calendar year can land
+      // BEFORE the receiver's current age. calculatePerson drops past-dated
+      // events (e.age >= currentAge), so this would vanish silently. Clamp it
+      // to fire as soon as possible instead (issue #27); clamp endAge to the
+      // same floor so a recurring window stays valid.
+      const clamped = Math.max(age, selfCurrentAge);
+      return {
+        ...e,
+        age: clamped,
+        ...(e.endAge != null ? { endAge: Math.max(e.endAge - shift, clamped) } : {}),
+      };
+    });
 
   const primaryRun: PersonInputs = sp
     ? { ...primaryPerson, events: [...(primaryPerson.events ?? []), ...rehome(sp.events, sp.currentAge, 'primary', primaryPerson.currentAge)] }

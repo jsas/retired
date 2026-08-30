@@ -724,6 +724,72 @@ describe('re-homed transfer events (authored on the wrong person)', () => {
     // ...and the primary receives the net on its age-66 row.
     expect(yearAt(r.yearlyBreakdown, 66).detail?.deposit?.taxable).toBeCloseTo(30000, 0);
   });
+
+  it('a re-homed transfer dated before the receiver’s current age fires now, not never (E-08 / #27)', () => {
+    // Regression: with a 7-year age gap, a transfer authored on the primary at
+    // primary-age 63 re-homes to spouse-age 56 — BEFORE the spouse's current
+    // age of 58. calculatePerson's `e.age >= currentAge` filter silently
+    // dropped it, so the transfer never fired anywhere. It must clamp to the
+    // receiver's current age and fire immediately.
+    const inputs = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      spouse: {
+        enabled: true, currentAge: 58, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 100000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 0, pensions: [],
+      },
+    });
+    // Authored on the primary at 63 (in the primary's own past — a saved or
+    // imported scenario can carry this even though the UI clamps new entries);
+    // the money leaves the spouse's TFSA.
+    inputs.events = [{
+      id: 'past', age: 63, label: 'late meltdown', amount: 40000, direction: 'out',
+      from: { kind: 'account', person: 'spouse', account: 'tfsa' },
+      to: { kind: 'account', person: 'primary', account: 'taxable' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    // Fires on the spouse's FIRST year (age 58), clamped from 56. Age 58 is
+    // the spouse's accumulation phase: growth applies before events, so the
+    // TFSA grows to 105k, then the 40k transfer leaves → 65k.
+    const srow = yearAt(r.spouse!.yearlyBreakdown, 58);
+    expect(srow.detail?.calc?.transfers?.[0]?.gross).toBeCloseTo(40000, 0);
+    expect(srow.tfsaBalance).toBeCloseTo(100000 * 1.05 - 40000, 0);
+    // ...and the net lands on the primary's current-age row (same calendar year).
+    expect(yearAt(r.yearlyBreakdown, 65).detail?.deposit?.taxable).toBeCloseTo(40000, 0);
+  });
+
+  it('a recurring re-homed transfer keeps a valid window after clamping (E-08 / #27)', () => {
+    // Same geometry, but recurring: authored age 63..endAge 66 on the primary's
+    // axis → spouse-axis 56..59. Clamp age to 58; endAge clamps to >= 58, so
+    // the window is 58..59 and the transfer fires in BOTH of those years.
+    const inputs = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 66,
+      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      spouse: {
+        enabled: true, currentAge: 58, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 200000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 0, pensions: [],
+      },
+    });
+    inputs.events = [{
+      id: 'past-recur', age: 63, endAge: 66, label: 'late recurring', amount: 10000, direction: 'out',
+      from: { kind: 'account', person: 'spouse', account: 'tfsa' },
+      to: { kind: 'account', person: 'primary', account: 'taxable' },
+    }];
+    const r = calculateHousehold(inputs, config);
+    const fired = r.spouse!.yearlyBreakdown.filter(y => (y.detail?.calc?.transfers?.length ?? 0) > 0);
+    expect(fired.map(y => y.age)).toEqual([58, 59]);
+    // Two $10k draws total left the TFSA.
+    const totalGross = fired.flatMap(y => y.detail?.calc?.transfers ?? []).reduce((s, t) => s + t.gross, 0);
+    expect(totalGross).toBeCloseTo(20000, 0);
+  });
 });
 
 describe('baseline plan (New Scenario defaults)', () => {
