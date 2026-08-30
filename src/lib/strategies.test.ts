@@ -387,7 +387,7 @@ describe('RDSP withdrawal-order variants (S-03)', () => {
     cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
     desiredSpending: 24000,
     rdsp: { enabled: true, balance: 60000, contribution: 0, familyIncome: 40000, dtcEligible: true },
-    pensions: [],
+    income: [],
   });
 
   it('order variants place rdsp explicitly when the RDSP is active (S-03)', () => {
@@ -452,7 +452,7 @@ describe('sustainableSpending ceiling edge (S-02)', () => {
   const runaway = () => baseInputs({
     currentAge: 65, retirementAge: 65, maxAge: 90,
     tfsaBalance: 100000000, rrspBalance: 0, taxableBalance: 0,
-    desiredSpending: 100000, pensions: [],
+    desiredSpending: 100000, income: [],
   });
 
   it('a plan that survives the ceiling returns the ceiling, not an overshoot', () => {
@@ -470,7 +470,7 @@ describe('sustainableSpending ceiling edge (S-02)', () => {
     const broke = baseInputs({
       currentAge: 65, retirementAge: 65, maxAge: 90,
       tfsaBalance: 0, rrspBalance: 0, taxableBalance: 0,
-      desiredSpending: 50000, pensions: [],
+      desiredSpending: 50000, income: [],
     });
     // No CPP/OAS and no assets: every year is unfunded → never survives.
     expect(sustainableSpending(broke, config)).toBe(0);
