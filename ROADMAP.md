@@ -45,13 +45,6 @@ have to hold them.
   in money; currently modelled as plain RRIF.
 - **CPP2 / enhanced CPP accrual** — for users still contributing pre-
   retirement, the enhanced-tier benefit build-up isn't modelled.
-- **RDSP assistance holdback (AHA) clawback** — a withdrawal (or plan
-  closure / DTC loss) within 10 years of a grant/bond payment triggers
-  repayment of the lesser of 3× the withdrawal or the holdback amount. The
-  RDSP model tracks grants and bonds going in but never claws them back, so
-  early withdrawals look cheaper than CRA would make them. Grant/bond
-  carry-forward (claiming up to 10 years of unused entitlements in a lump
-  contribution) is likewise unmodelled.
 
 ## Bigger swings
 
@@ -75,47 +68,14 @@ have to hold them.
   (scenarios, config, migrations) to be platform-neutral: the storage
   interface the UI backs with localStorage today is the same interface a
   Node consumer backs with SQLite/a file later.
-- **Embedded AI agent (savvy users)** — graduate the paste-based agent
-  prompts (`agentIngest.ts`, `agentQA.ts`) into an in-app chat that talks
-  to the user's own model provider: a provider array (Anthropic, OpenAI,
-  Gemini, OpenRouter, Ollama/local, OpenAI-compatible endpoints, **and
-  fully in-browser models via `@mlc-ai/web-llm`** — open weights run on the
-  user's GPU over WebGPU, no key, offline after a one-time download; a
-  curated math/reasoning list like Qwen2.5-Math and DeepSeek-R1 distills)
-  with per-provider API keys and model choices stored in the local DB
-  (OPFS/sql.js, keyed, never synced anywhere). Ship a starter prompt
-  library built on the existing QA presets, user-editable and saved per
-  scenario. Headline flow: **scenario onboarding** — a blank plan starts
-  with "tell me about your situation," the agent interviews the user in
-  plain language (ages, accounts, income, target retirement age) and
-  drafts a complete scenario for review, so new users never face an empty
-  form.
-- **Local agent API with tool calling** — expose the app to the agent
-  through a typed tool surface instead of pasted JSON: Zod schemas define
-  every callable (`getScenario`, `setScenarioValue`, `runProjection`,
-  `runMonteCarlo`, `explainYear`, `compareScenarios`, …), so the model can
-  read the current scenario, ask the engine questions, and propose changes
-  that validate against the same schemas the data layer already uses —
-  with a confirm-before-apply step so nothing mutates the plan silently.
-  For onboarding, a `createScenario` tool assembles a full inputs object
-  from the interview and renders it as a reviewable diff — the user sees
-  every proposed value before it's saved, and can correct the agent
-  conversationally ("no, the RRSP is in my spouse's name") until it's
-  right.
-  Keys and tool definitions live client-side; the app stays serverless and
-  the feature is fully optional (no key, no AI). The engine-package split
-  above is what makes this honest — the tools call the same public engine
-  API the UI does.
-- **Data layer hardening (underway)** — Zod schemas now define every
-  persisted shape (`src/data/schemas.ts`), and all plan state lives in a
-  real SQLite database via sql.js (`src/data/db.ts`), persisted to OPFS
-  (origin-private file system — no 5 MB ceiling, mirrored to localStorage
-  for compatibility) and exportable as a .sqlite file. The app is
-  single-tab by design (see Non-goals). Remaining: a Node SQLite backend
-  behind the same store interface for the engine package, moving the DB
+- **Data layer hardening (remaining)** — the data layer is in place: Zod
+  schemas define every persisted shape (`src/data/schemas.ts`) and all plan
+  state lives in a real SQLite database via sql.js (`src/data/db.ts`),
+  persisted to OPFS and exportable as a .sqlite file, with UI-preference keys
+  folded into the store's `kv` table (#20). Remaining: a Node SQLite backend
+  behind the same store interface for the engine package, and moving the DB
   onto a worker with the synchronous OPFS VFS for incremental (not
-  whole-file) writes, and folding UI-preference keys (print options,
-  panel collapse state, …) into the store's `kv` table.
+  whole-file) writes. The app is single-tab by design (see Non-goals).
 
 ## Non-goals
 
