@@ -263,6 +263,26 @@ describe('set_scenario_value', () => {
     expect(out.patch).toEqual({ cppStartAge: null });
   });
 
+  it('sets and clears contribution room (issue #24)', () => {
+    // Room fields are editable scalars: a number turns tracking on, null clears.
+    expect(EDITABLE_FIELDS.has('tfsaRoom')).toBe(true);
+    expect(EDITABLE_FIELDS.has('rrspRoom')).toBe(true);
+    const on = executeToolCall(ctx(), {
+      id: '1', name: 'set_scenario_value',
+      args: { field: 'tfsaRoom', value: 40000 },
+    });
+    expect(on.kind).toBe('mutation');
+    if (on.kind !== 'mutation') return;
+    expect(on.patch).toEqual({ tfsaRoom: 40000 });
+    const off = executeToolCall(ctx(), {
+      id: '2', name: 'set_scenario_value',
+      args: { field: 'tfsaRoom', value: 'null' },
+    });
+    expect(off.kind).toBe('mutation');
+    if (off.kind !== 'mutation') return;
+    expect(off.patch).toEqual({ tfsaRoom: null });
+  });
+
   it('leaves a real string field untouched (no coercion needed)', () => {
     const out = executeToolCall(ctx(), {
       id: '1', name: 'set_scenario_value',
