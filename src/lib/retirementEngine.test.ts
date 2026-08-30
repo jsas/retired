@@ -954,6 +954,76 @@ describe('couple GIS', () => {
     expect(c).toBeLessThan(s);
   });
 
+  it("couple GIS is reduced by BOTH partners' discretionary registered draws (E-06 / #26)", () => {
+    // Both partners on OAS+GIS, same age, both holding registered money their
+    // plans must draw (desiredSpending > benefits forces RRIF/RRSP draws from
+    // age 65). The partner's draws must count in the combined GIS base just
+    // like the person's own draws do.
+    const mk = (spouseRrsp: number) => baseInputs({
+      tfsaBalance: 0, cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: spouseRrsp, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 20000, pensions: [],
+      },
+    });
+    const soloDrawer = calculateHousehold(mk(0), config);
+    const bothDraw = calculateHousehold(mk(200000), config);
+
+    // With two drawers the combined non-OAS income is strictly higher, so each
+    // spouse's GIS must be strictly lower than in the one-drawer case.
+    const gisSolo = yearAt(soloDrawer.yearlyBreakdown, 66).gisIncome;
+    const gisBoth = yearAt(bothDraw.yearlyBreakdown, 66).gisIncome;
+    const gisSoloS = yearAt(soloDrawer.spouse!.yearlyBreakdown, 66).gisIncome;
+    const gisBothS = yearAt(bothDraw.spouse!.yearlyBreakdown, 66).gisIncome;
+    expect(gisBoth).toBeLessThan(gisSolo);
+    expect(gisBothS).toBeLessThan(gisSoloS);
+
+    // And the reported GIS matches the couple rule evaluated on the CONVERGED
+    // combined base: both CPPs + both sides' actual draw income. (Draw amounts
+    // are endogenous — they shift with GIS — so the identity is checked against
+    // the runs' own captured draws, not a hand-computed constant.)
+    const pDraws = bothDraw.householdDraws?.[66] ?? 0;
+    const sDraws = bothDraw.spouse!.householdDraws?.[66] ?? 0;
+    const combined = 4800 + 4800 + pDraws + sDraws;
+    const expected = Math.max(0, config.oas.gisMaxAnnualCouple - combined * (config.oas.gisReductionRate ?? 0.5));
+    expect(closeTo(gisBoth, expected, 2)).toBe(true);
+  });
+
+  it('converges: couple GIS matches an independently-computed fixed point (E-06 / #26)', () => {
+    // Analytic check of the fixed point, independent of the iteration: with
+    // both partners identical, GIS draws are symmetric, so each person's
+    // reported GIS must equal what gisAnnualCouple says for the combined base
+    // built from BOTH sides' actual draw rows.
+    const inputs = baseInputs({
+      tfsaBalance: 0, cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000,
+      rrspBalance: 100000, withdrawalOrder: ['rrsp', 'tfsa'],
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 20000, pensions: [],
+        withdrawalOrder: ['rrsp', 'tfsa'],
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    // The combined base each side was assessed on: both CPPs (4800 each) +
+    // both sides' draw income (from the converged householdDraws records).
+    const ownP = r.householdDraws?.[66] ?? 0;
+    const partnerP = r.spouse!.householdDraws?.[66] ?? 0;
+    const expectedGis = (own: number, partner: number) => {
+      const combined = 4800 + 4800 + own + partner;
+      return Math.max(0, config.oas.gisMaxAnnualCouple - combined * (config.oas.gisReductionRate ?? 0.5));
+    };
+    expect(closeTo(yearAt(r.yearlyBreakdown, 66).gisIncome, expectedGis(ownP, partnerP), 2)).toBe(true);
+    expect(closeTo(yearAt(r.spouse!.yearlyBreakdown, 66).gisIncome, expectedGis(partnerP, ownP), 2)).toBe(true);
+  });
+
   it('household is SHORTFALL if the spouse plan depletes', () => {
     const inputs = mkCouple();
     // Force the spouse plan to actually run out of money: high spend, no
