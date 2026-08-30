@@ -102,6 +102,15 @@ export function TopHeader({
       <div className="flex items-center gap-2 font-semibold text-sm mr-1 md:mr-2">
         <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold">RE:</div>
         <span>tired</span>
+        {/* Build revision (short commit hash) — inconspicuous on purpose; it
+            only exists so a user can tell whether the page they're looking at
+            is running the latest deploy. */}
+        <span
+          className="text-[10px] font-normal text-neutral-600 select-text"
+          title={`Build revision ${__APP_REVISION__}`}
+        >
+          {__APP_REVISION__}
+        </span>
       </div>
 
       {/* Project selector */}
