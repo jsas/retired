@@ -1410,6 +1410,36 @@ describe('year detail (drill-down)', () => {
     )).toBe(true);
   });
 
+  it('computes the RRIF minimum on the Jan-1 balance, not the post-transfer balance (E-03)', () => {
+    // Regression: the transfer loop ran before the RRIF-minimum block and
+    // `acct.take('rrsp')` drains the RRIF first, so a same-year RRSP-meltdown
+    // transfer shrank the balance the minimum was computed on. CRA bases the
+    // mandatory minimum on the Jan-1 balance; a discretionary transfer later
+    // in the year must not reduce it.
+    // Age 72 (past conversion): $500k converts to RRIF at the top of the year,
+    // then a $50k meltdown transfer moves registered → TFSA. Jan-1 min =
+    // 500000 × 0.0540 = 27000; the buggy post-transfer figure was
+    // 450000 × 0.0540 = 24300.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 72, retirementAge: 72, maxAge: 73,
+      rrspBalance: 500000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0, // isolate the transfer + minimum: no spending draws
+      events: [{
+        id: 'meltdown', age: 72, label: 'RRSP meltdown', amount: 50000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'rrsp' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), config);
+    const row = yearAt(r.yearlyBreakdown, 72);
+    // The minimum is on the Jan-1 (pre-transfer) $500k, not the post-transfer $450k.
+    expect(row.detail!.withdraw.rrifMin).toBeCloseTo(500000 * 0.0540, 0);
+    expect(row.detail!.withdraw.rrifMin).toBeGreaterThan(450000 * 0.0540);
+    // The transfer still fired for its full gross.
+    const tr = row.detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    expect(tr!.gross).toBeCloseTo(50000, 0);
+  });
+
   it('respects the withdrawal order: TFSA-first year draws only from TFSA', () => {
     const r = calculateRetirement(baseInputs({
       rrspBalance: 300000, tfsaBalance: 500000, taxableBalance: 200000,
