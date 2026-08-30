@@ -1,7 +1,7 @@
 import initSqlJs, { type Database } from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
-import type { Scenario } from '../lib/scenarioStorage';
-import { migrateInputs } from '../lib/scenarioStorage';
+import type { Scenario } from '../lib/types';
+import { migrateInputs } from './migrations';
 import { validateAppConfig, DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
 import { appDbDocSchema, type AppDbDoc } from './schemas';
 import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './opfs';
@@ -71,6 +71,57 @@ function base64ToBytes(b64: string): Uint8Array {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
+}
+
+/**
+ * Synchronous first-paint seed: read the scenario rows straight out of the
+ * localStorage mirror of the SQL blob, without waiting for the wasm to load.
+ * The mirror is the SQL store's own compatibility copy (written on every
+ * persist), so this is a cache read of the same source of truth — not a fork.
+ * Returns null when there's no mirror or it can't be decoded (the caller then
+ * seeds first-run examples). Rows are NOT migrated here — that's the async
+ * open path's job; this seed is swapped for the authoritative store contents
+ * the moment it opens.
+ */
+export function readSeedScenariosFromMirror(): { scenarios: Scenario[]; activeScenarioId: string } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const bytes = base64ToBytes(raw);
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+
+    const scenarios: Scenario[] = [];
+    // Scenario inputs are JSON with no NUL bytes; the row layout is
+    //   <id>\x00<name>\x00<inputs-json>\x00<updated_at>
+    // so each "…{json}\x00" capture is one row's inputs.
+    const rowRe = /(\{[^\x00]*?\})\x00/g;
+    let m: RegExpExecArray | null;
+    let i = 0;
+    while ((m = rowRe.exec(text)) !== null) {
+      const inputs = JSON.parse(m[1]) as Scenario['inputs'];
+      scenarios.push({ id: `seed-${i}`, name: `Scenario ${i + 1}`, inputs });
+      i++;
+    }
+    if (scenarios.length === 0) return null;
+
+    // The active id is stored under meta key 'active_scenario_id'. We can't
+    // recover real scenario ids from this positional scan (they'd need full
+    // SQLite page decoding), so match the active row by its position among the
+    // text columns: meta rows precede the scenario rows, and
+    // 'active_scenario_id' is the id's column index within the meta block.
+    let activeScenarioId = scenarios[0].id;
+    const metaIdx = text.indexOf('active_scenario_id');
+    if (metaIdx !== -1) {
+      const nulBefore = text.slice(0, metaIdx).split('\x00').length - 1;
+      const activeIdx = nulBefore - 1; // columns before it: 'schema_version','1', key itself
+      if (activeIdx >= 0 && activeIdx < scenarios.length) {
+        activeScenarioId = scenarios[activeIdx].id;
+      }
+    }
+    return { scenarios, activeScenarioId };
+  } catch {
+    return null;
+  }
 }
 
 /** Apply schema migrations in order. Each entry runs inside the caller's

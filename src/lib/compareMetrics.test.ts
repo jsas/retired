@@ -4,7 +4,7 @@ import {
 } from './compareMetrics';
 import { calculateHousehold } from './retirementEngine';
 import { testConfig, baseInputs } from '../test/helpers';
-import type { Scenario } from './scenarioStorage';
+import type { Scenario } from './types';
 
 const config = testConfig();
 

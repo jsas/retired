@@ -7,10 +7,10 @@ import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
 import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson } from './lib/householdTypes';
-import { loadScenarioState, type Scenario } from './lib/scenarioStorage';
-import { loadAppConfig, type AppConfig } from './lib/appConfig';
+import type { Scenario } from './lib/types';
+import { DEFAULT_APP_CONFIG, type AppConfig } from './lib/appConfig';
 import { AppStore } from './data/store';
-import { AppDatabase } from './data/db';
+import { AppDatabase, readSeedScenariosFromMirror } from './data/db';
 import { SettingsModal } from './components/SettingsModal';
 import { SavePromptModal } from './components/SavePromptModal';
 import { HelpModal } from './components/HelpModal';
@@ -53,13 +53,14 @@ import type { MonteCarloRequest } from './lib/monteCarlo';
 
 // The SQL store loads asynchronously (the wasm binary has to be fetched/decoded
 // first — near-instant after the first visit). To keep first paint synchronous
-// we seed state from the legacy split-key snapshot (or first-run examples) and
-// then swap in the store's authoritative contents the moment it opens; the two
-// formats are kept in sync by the persist path, so this is a cache read, not a
-// fork. The swap is skipped while the user holds unsaved edits so in-flight
-// work is never clobbered.
+// we seed state from the localStorage mirror of the SQL blob (or first-run
+// examples) and then swap in the store's authoritative contents the moment it
+// opens. The mirror is the SQL store's own compatibility copy, written on every
+// persist, so this is a cache read of the same source of truth — not a fork.
+// The swap is skipped while the user holds unsaved edits so in-flight work is
+// never clobbered.
 const getSyncSeed = () => {
-  const stored = loadScenarioState();
+  const stored = readSeedScenariosFromMirror();
   if (stored) {
     return { scenarios: stored.scenarios, activeScenarioId: stored.activeScenarioId };
   }
@@ -72,7 +73,9 @@ function App() {
 
   const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
   const [activeScenarioId, setActiveScenarioId] = useState<string>(initialState.activeScenarioId);
-  const [config, setConfig] = useState<AppConfig>(loadAppConfig);
+  // Config seed: defaults until the store opens and adopts the stored config
+  // (setConfig(state.config) below). No legacy config read — issue #21.
+  const [config, setConfig] = useState<AppConfig>(() => structuredClone(DEFAULT_APP_CONFIG));
   const [store, setStore] = useState<AppStore | null>(null);
   // Default landing: the Welcome page unless the user checked "don't show this
   // again" (or General settings forces it on every load); otherwise the

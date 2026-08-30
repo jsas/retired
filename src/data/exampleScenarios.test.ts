@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildDefaultScenarios } from './exampleScenarios';
 import { calculateHousehold } from '../lib/retirementEngine';
 import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
-import { migrateInputs } from '../lib/scenarioStorage';
+import { migrateInputs } from './migrations';
 
 /**
  * The first-run examples are the app's front door — a broken or unrealistic

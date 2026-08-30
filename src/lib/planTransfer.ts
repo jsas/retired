@@ -15,9 +15,27 @@
 // app versions import cleanly.
 
 import type { RetirementInputs } from './retirementEngine';
-import { migrateInputs } from './scenarioStorage';
+import type { AppConfig } from './appConfig';
+import type { Scenario } from './types';
+import { migrateInputs } from '../data/migrations';
 
 export const PLAN_TRANSFER_VERSION = 1;
+
+/**
+ * Whole-app database document: scenarios + active scenario + engine config in a
+ * single JSON object. This is the shape a legacy whole-app JSON backup parses
+ * into on the Data page (issue #21: legacy *reads* stay supported even though
+ * nothing writes this format anymore — the SQL store is the source of truth).
+ * The Zod-validated twin is `AppDbDoc` in data/schemas.ts; the two are kept in
+ * lockstep — this one exists so the import path doesn't pull in the schema lib.
+ */
+export interface AppDb {
+  version: number;
+  exportedAt: string;
+  scenarios: Scenario[];
+  activeScenarioId: string;
+  config: AppConfig;
+}
 
 /** The envelope a plan travels in. `tool` is a fixed sentinel so a pasted
  *  blob can be recognized as one of ours before anything is applied. */

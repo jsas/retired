@@ -1,6 +1,7 @@
 // Shared fixtures for engine tests. `baseInputs()` returns a complete, valid
 // RetirementInputs the caller overrides per-test; `testConfig()` is a deep copy
-// of DEFAULT_APP_CONFIG (loadAppConfig needs localStorage, absent under Node).
+// of DEFAULT_APP_CONFIG (config persistence lives in the SQL store, so tests
+// build their own from the shipped defaults rather than read storage).
 import type { RetirementInputs, YearlyBreakdown } from '../lib/retirementEngine';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
 

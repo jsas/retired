@@ -1,4 +1,4 @@
-import type { Scenario } from '../lib/scenarioStorage';
+import type { Scenario } from '../lib/types';
 import type { AppConfig } from '../lib/appConfig';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import { validateAppConfig } from '../lib/appConfig';
@@ -15,15 +15,10 @@ import {
  * The data layer the UI talks to: one opened SQLite store holding scenarios,
  * the active selection and the engine config, mirrored to localStorage.
  *
- * Bootstrap order on first run with an empty store:
- *   1. legacy split keys ('wealthconsole_scenarios' / 'wealthconsole_config')
- *      — imported, then left in place (harmless; the SQL store wins from
- *      then on, and a user can still roll back to an older build);
- *   2. nothing → the caller seeds the first-run examples.
+ * Bootstrap order on first run with an empty store: nothing → the caller seeds
+ * the first-run examples. The SQL store is the single source of truth; there is
+ * no legacy import path (issue #21).
  */
-
-const LEGACY_SCENARIOS_KEY = 'wealthconsole_scenarios';
-const LEGACY_CONFIG_KEY = 'wealthconsole_config';
 
 /** Revision-id sequence — Date.now() alone can collide within one ms. Seeded
  *  from the loaded history on every open (see seedRevSeq) so a fresh session
@@ -78,24 +73,7 @@ export class AppStore {
     let configRaw = db.loadConfig();
     let activeScenarioId = db.loadActiveScenarioId();
 
-    // First run on this store: try importing the legacy split-key format.
-    if (scenarios.length === 0) {
-      const legacy = importLegacyKeys();
-      if (legacy) {
-        scenarios = legacy.scenarios;
-        activeScenarioId = legacy.activeScenarioId;
-        configRaw ??= legacy.configRaw;
-        // Record BEFORE saving so the (empty) DB rows are the diff baseline —
-        // the import becomes revision #1.
-        store.recordRevisions(scenarios);
-        db.saveScenarios(scenarios);
-        if (activeScenarioId) db.saveActiveScenarioId(activeScenarioId);
-        if (configRaw) db.saveConfig(configRaw);
-        db.save();
-      }
-    }
-
-    // Still nothing — brand-new user: seed the first-run examples.
+    // Brand-new user: seed the first-run examples.
     if (scenarios.length === 0) {
       scenarios = buildDefaults();
       activeScenarioId = scenarios[0].id;
@@ -249,34 +227,5 @@ export class AppStore {
   loadDoc(doc: AppDbDoc): void {
     this.db.loadDoc(doc);
     this.db.save();
-  }
-}
-
-/** Read the pre-SQLite split localStorage keys, if they exist. */
-function importLegacyKeys(): { scenarios: Scenario[]; activeScenarioId: string; configRaw: unknown } | null {
-  try {
-    const raw = localStorage.getItem(LEGACY_SCENARIOS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const scenarios: Scenario[] | undefined = Array.isArray(parsed) ? parsed : parsed?.scenarios;
-    if (!Array.isArray(scenarios) || scenarios.length === 0) return null;
-    const activeScenarioId: string | undefined = parsed?.activeScenarioId;
-    const configRaw = (() => {
-      try {
-        const c = localStorage.getItem(LEGACY_CONFIG_KEY);
-        return c ? JSON.parse(c) : null;
-      } catch {
-        return null;
-      }
-    })();
-    return {
-      scenarios,
-      activeScenarioId: activeScenarioId && scenarios.some(s => s.id === activeScenarioId)
-        ? activeScenarioId
-        : scenarios[0].id,
-      configRaw,
-    };
-  } catch {
-    return null;
   }
 }

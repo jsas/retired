@@ -9,9 +9,9 @@ import {
 } from '../lib/projectionExport';
 import type { RetirementInputs, RetirementResults } from '../lib/retirementEngine';
 import type { AppConfig } from '../lib/appConfig';
-import type { Scenario } from '../lib/scenarioStorage';
-import { migrateInputs } from '../lib/scenarioStorage';
-import type { AppDb } from '../lib/appDb';
+import type { Scenario } from '../lib/types';
+import { migrateInputs } from '../data/migrations';
+import type { AppDb } from '../lib/planTransfer';
 import { AppDatabase } from '../data/db';
 import { buildTemplateCsv, parseTemplateCsv, TEMPLATE_FILENAME } from '../lib/importTemplate';
 import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';

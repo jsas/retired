@@ -17,7 +17,7 @@
 // backs up with everything else.
 
 import type { RetirementInputs } from './retirementEngine';
-import { migrateInputs } from './scenarioStorage';
+import { migrateInputs } from '../data/migrations';
 import type { AppDatabase } from '../data/db';
 
 /** Revisions kept per scenario. Oldest dropped first (rolling window). */
