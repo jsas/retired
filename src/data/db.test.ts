@@ -92,6 +92,7 @@ describe('AppDatabase', () => {
     const doc = db.toDoc();
     expect(doc).not.toBeNull();
     expect(doc!.scenarios).toHaveLength(2);
+    expect(doc!.configWarning).toBeUndefined(); // healthy config: no warning
 
     // Write the doc into a fresh store.
     const other = await AppDatabase.open();
@@ -100,6 +101,34 @@ describe('AppDatabase', () => {
     expect(other.toDoc()!.activeScenarioId).toBe('a');
     other.close();
     db.close();
+  });
+
+  it('toDoc keeps the scenarios when the config is unreadable and flags it (D-07)', async () => {
+    // A backup exported without engine settings (or from a store whose config
+    // was corrupt) used to null the whole doc — the importer then told the
+    // user "not a RE: tired backup" and threw away every valid scenario.
+    const db = await AppDatabase.open();
+    db.saveScenarios(scenarios());
+    db.saveActiveScenarioId('a');
+    db.saveConfig({ broken: true } as unknown); // wholesale-invalid blob
+    const doc = db.toDoc();
+    expect(doc).not.toBeNull();
+    expect(doc!.scenarios.map(s => s.id)).toEqual(['a', 'b']);
+    expect(doc!.configWarning).toMatch(/could not be read/);
+    expect(doc!.configWarning).toMatch(/Custom tax tables/);
+    // The doc still validates as a loadable document — with defaults in place
+    // of the unreadable blob.
+    expect(doc!.config).toEqual(DEFAULT_APP_CONFIG);
+
+    // A store with NO config row at all behaves the same.
+    const db2 = await AppDatabase.open();
+    db2.saveScenarios(scenarios());
+    const doc2 = db2.toDoc();
+    expect(doc2).not.toBeNull();
+    expect(doc2!.configWarning).toMatch(/could not be read/);
+    expect(doc2!.config).toEqual(DEFAULT_APP_CONFIG);
+    db.close();
+    db2.close();
   });
 
   it('migrates stale scenario inputs on read (fields added later appear)', async () => {

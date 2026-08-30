@@ -441,6 +441,9 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           db.close();
           const aiChats = aiChatsRaw ? safeJson(aiChatsRaw) : undefined;
           const aiSettings = aiSettingsRaw ? safeJson(aiSettingsRaw) : undefined;
+          // A backup whose config blob is absent/unreadable still imports its
+          // scenarios — the doc carries defaults + a warning (issue D-07).
+          if (doc.configWarning) setError(doc.configWarning);
           setParsed({
             kind: 'backup',
             db: {
