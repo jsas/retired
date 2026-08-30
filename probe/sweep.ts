@@ -57,3 +57,17 @@ export const SWEEP_PROFILES: SamplerProfile[] = [
  *  tractable, large enough that a looping model hits the cap and we see where
  *  the loop starts (loopOnset needs a long tail to be meaningful). */
 export const SWEEP_MAX_TOKENS = 1024;
+
+/** The short persona to A/B against the full one. Mirrors the production
+ *  SIMPLE_SYSTEM_PROMPT proposed in #108 — the probe deliberately carries its
+ *  own copy so it can measure whether the tier choice earns its keep BEFORE
+ *  (and independent of) that PR landing. Keep in sync until #108 merges, then
+ *  import the real one. */
+export const PROBE_SIMPLE_PERSONA = [
+  'You are the retirement assistant in RE:tired, a Canadian retirement planner.',
+  '',
+  'Rules:',
+  '- Use only numbers from the plan summary or the tool results.',
+  '- Keep answers short: a few sentences, plain words.',
+  '- To change the plan, call a tool. The user confirms every change.',
+].join('\n');

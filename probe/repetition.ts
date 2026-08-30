@@ -73,19 +73,19 @@ export function longTokenRatio(tokens: string[], window = 220): number {
 
 /** Index (0..1) where degeneration begins: the first token position after
  *  which the trailing-window TTR collapses below `floor` and stays there.
- *  1 = never looped (the whole reply is healthy); 0.2 = it went bad 20% in.
- *  Lets the summary distinguish "clean then looped" from "looped throughout". */
+ *  1 = never looped (the reply ENDS healthy); 0.2 = it went bad 20% in; 0 =
+ *  degenerate from the very start. Lets the summary distinguish "clean then
+ *  looped" from "looped throughout". */
 export function loopOnset(tokens: string[], floor = 0.30, window = 120): number {
   if (tokens.length < window * 2) return 1;
-  // Scan from the end backwards while the local window stays degenerate; the
-  // first healthy window from the right is the onset.
-  for (let end = tokens.length; end - window >= window; end--) {
-    const w = new Set(tokens.slice(end - window, end));
-    if (w.size / window >= floor) {
-      return (end - window) / tokens.length;
-    }
-  }
-  return 0; // degenerate from the very start
+  const ttrAt = (end: number) => new Set(tokens.slice(end - window, end)).size / window;
+  // Ends healthy → no loop to locate.
+  if (ttrAt(tokens.length) >= floor) return 1;
+  // Walk the tail boundary left while the window stays degenerate.
+  let end = tokens.length;
+  while (end - window >= window && ttrAt(end) < floor) end--;
+  if (end - window < window) return 0; // degenerate from the very start
+  return (end - window) / tokens.length;
 }
 
 /** Composite 0..1 degeneracy score for a reply. Weights are judgement calls

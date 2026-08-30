@@ -12,6 +12,8 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "probe": "vite --config probe/vite.config.ts",
+    "probe:test": "vitest run --config vitest.probe.config.ts",
     "preview": "vite preview"
   },
   "dependencies": {
