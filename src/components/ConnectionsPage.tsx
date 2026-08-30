@@ -16,10 +16,10 @@
 // assistant page stays focused on chatting. Keys and settings are stored only
 // in this browser and never touch our servers.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Plug, Plus, Trash2, X, Check, ChevronDown, ChevronRight, Lock, Download, Loader2,
-  RefreshCw, Zap, Sparkles,
+  RefreshCw, Zap,
 } from 'lucide-react';
 import {
   AI_PROVIDERS, connectionReady, defaultBaseUrlFor, defaultModelFor,
@@ -195,13 +195,11 @@ function ModelsSection({ onChange, webllmConn }: {
     ? byVram
     : byVram.filter(m => m.id === recommended || m.id === chosenId || byVram.indexOf(m) < 3);
 
-  const [wizardOpen, setWizardOpen] = useState(false);
-
   // The probe resolves after mount. While it's pending (guide === null) show a
   // brief placeholder rather than the full catalog; once it says this browser
   // CAN'T run local models, collapse the whole section to just the explanation
-  // and a pointer to the online path — no catalog, context control, or wizard
-  // that can't work here.
+  // and a pointer to the online path — no catalog or context control that
+  // can't work here.
   if (guide == null) {
     return (
       <section className="border border-emerald-200 bg-emerald-50/60 rounded p-3">
@@ -232,26 +230,7 @@ function ModelsSection({ onChange, webllmConn }: {
     <section className="border border-emerald-200 bg-emerald-50/60 rounded p-3">
       <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900">
         <Lock size={12} /> Models on this computer — free, private, works offline
-        <button
-          onClick={() => setWizardOpen(true)}
-          className="ml-auto flex items-center gap-1 px-2 py-0.5 bg-violet-600 text-white text-[10px] font-semibold rounded hover:bg-violet-700"
-          title="Guided setup — pick and set up a model step by step"
-        >
-          <Sparkles size={11} /> Setup wizard
-        </button>
       </div>
-      {wizardOpen && (
-        <ModelWizard
-          guide={guide}
-          cached={cached}
-          webllmConn={webllmConn}
-          downloading={downloading}
-          progress={progress}
-          onDownload={download}
-          onClose={() => setWizardOpen(false)}
-          onChange={onChange}
-        />
-      )}
       <p className="text-[11px] text-emerald-900/80 leading-snug mt-1">
         Download once, then the model runs here and nothing you type leaves the device.
         <> We suggest <strong>{guide.recommended.label}</strong> for this computer.</>
@@ -885,267 +864,5 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
         </div>
       )}
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// SETUP WIZARD — guided first-run for non-technical users
-// ---------------------------------------------------------------------------
-//
-// A short, two-path walkthrough that gets the user to a working connection
-// without reading the whole page:
-//   • "On this computer" — the GPU probe already recommends a model; the
-//     wizard just says which one and downloads it.
-//   • "Online" — pick a provider, paste a key, test, done.
-// It never picks anything the user didn't confirm, and closing it leaves the
-// page exactly as it was.
-
-function ModelWizard({ guide, cached, webllmConn, downloading, progress, onDownload, onClose, onChange }: {
-  guide: MachineGuide | null;
-  cached: Record<string, boolean>;
-  webllmConn: AiConnection | null;
-  downloading: string | null;
-  progress: { progress: number; text: string } | null;
-  onDownload: (id: string) => void;
-  onClose: () => void;
-  onChange: (mutate: (s: AiSettings) => void) => void;
-}) {
-  // 'pick' chooses a path; 'local' / 'online' run it; 'done' celebrates.
-  const [step, setStep] = useState<'pick' | 'local' | 'online' | 'done'>('pick');
-  const rec = guide?.recommended ?? WEBLLM_MODELS[0];
-  const recDownloaded = Boolean(cached[rec.id]);
-  const localBusy = downloading != null;
-
-  // --- online path state ---
-  const [provider, setProvider] = useState<(typeof AI_PROVIDERS)[number]>('gemini');
-  const [apiKey, setApiKey] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const help = PROVIDER_HELP[provider];
-
-  const ensureLocal = () => {
-    if (webllmConn) {
-      onChange(s => {
-        s.activeConnectionId = webllmConn.id;
-        const c = s.connections.find(x => x.id === webllmConn.id);
-        if (c) c.model = rec.id;
-      });
-      return;
-    }
-    const id = newConnectionId();
-    onChange(s => {
-      s.connections.push({ id, provider: 'webllm', label: 'On this computer', apiKey: '', model: rec.id });
-      s.activeConnectionId = id;
-    });
-  };
-
-  const startLocal = () => {
-    ensureLocal();
-    if (!recDownloaded && !localBusy) onDownload(rec.id);
-  };
-
-  const finishOnline = async () => {
-    setTesting(true);
-    setTestMsg(null);
-    const id = newConnectionId();
-    const conn: AiConnection = {
-      id, provider, label: '', apiKey,
-      model: defaultModelFor(provider),
-      baseUrl: baseUrl || defaultBaseUrlFor(provider),
-    };
-    try {
-      await testConnection(conn);
-      onChange(s => { s.connections.push(conn); s.activeConnectionId = id; });
-      setStep('done');
-    } catch (err) {
-      setTestMsg({ ok: false, text: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const card = (children: ReactNode) => (
-    <div className="mt-2 border border-violet-300 bg-white rounded-lg p-4 shadow-sm relative">
-      <button onClick={onClose} className="absolute top-2 right-2 text-slate-400 hover:text-slate-700" title="Close the wizard">
-        <X size={15} />
-      </button>
-      {children}
-    </div>
-  );
-
-  if (step === 'done') {
-    return card(
-      <div className="text-center py-2">
-        <Check size={22} className="mx-auto text-emerald-600" />
-        <div className="text-sm font-bold text-slate-900 mt-1">You&apos;re set up</div>
-        <p className="text-[11px] text-slate-500 mt-1">
-          The assistant will use this connection. Close the wizard and head back to the chat.
-        </p>
-        <button onClick={onClose} className="mt-3 px-4 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700">
-          Done
-        </button>
-      </div>,
-    );
-  }
-
-  if (step === 'local') {
-    return card(
-      <div>
-        <div className="text-sm font-bold text-slate-900">Set up the on-computer model</div>
-        <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-          {guide?.webgpu === false
-            ? 'This browser cannot run local models (it needs a feature called WebGPU). Go back and choose the online path instead.'
-            : <>We suggest <strong>{rec.label}</strong> — a good balance for most computers.
-              It is a one-time {fmtSize(rec.sizeGB)} download, then it runs here — nothing you type leaves the device.
-              Bigger models are smarter but need a stronger computer.</>}
-        </p>
-        {progress && (
-          <div className="mt-2">
-            <div className="flex justify-between text-[10px] text-slate-500 mb-0.5">
-              <span>{progress.text}</span>
-              <span>{Math.round(progress.progress * 100)}%</span>
-            </div>
-            <div className="h-2 bg-slate-200 rounded overflow-hidden">
-              <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.round(progress.progress * 100)}%` }} />
-            </div>
-          </div>
-        )}
-        <div className="flex items-center gap-2 mt-3">
-          {recDownloaded ? (
-            <button
-              onClick={() => { ensureLocal(); setStep('done'); }}
-              className="px-4 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
-            >
-              Use {rec.label}
-            </button>
-          ) : (
-            <button
-              onClick={startLocal}
-              disabled={localBusy || guide?.webgpu === false}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {localBusy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-              {localBusy ? 'Downloading…' : `Download ${rec.label}`}
-            </button>
-          )}
-          <button onClick={() => setStep('pick')} className="text-[11px] text-slate-500 hover:underline">Back</button>
-        </div>
-        {recDownloaded && !localBusy && (
-          <p className="text-[10px] text-emerald-700 mt-1.5">Already downloaded — just make it active.</p>
-        )}
-      </div>,
-    );
-  }
-
-  if (step === 'online') {
-    return card(
-      <div>
-        <div className="text-sm font-bold text-slate-900">Connect an online provider</div>
-        <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-          Smarter answers, but your questions travel to the provider. You will need a key from them —
-          it is stored only in this browser.
-        </p>
-        <div className="mt-2 space-y-2">
-          <label className="block">
-            <span className="block text-[10px] text-slate-500 mb-0.5">Provider</span>
-            <select
-              value={provider}
-              onChange={e => { setProvider(e.target.value as (typeof AI_PROVIDERS)[number]); setTestMsg(null); }}
-              className="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white"
-            >
-              {AI_PROVIDERS.filter(p => p !== 'webllm').map(p => (
-                <option key={p} value={p}>{PROVIDER_HELP[p]?.name ?? p}{PROVIDER_HELP[p]?.easiest ? ' — easiest' : ''}</option>
-              ))}
-            </select>
-          </label>
-          {help && (
-            <p className="text-[11px] text-slate-500 leading-snug">
-              {help.howTo}
-              {help.keyUrl && (
-                <> <a href={help.keyUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Get a key ↗</a></>
-              )}
-              <span className="block text-[10px] text-slate-400 mt-0.5">{help.cost}</span>
-            </p>
-          )}
-          {provider !== 'ollama' && (
-            <label className="block">
-              <span className="block text-[10px] text-slate-500 mb-0.5">API key</span>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                placeholder="Paste the key here"
-                autoComplete="off"
-                className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-mono"
-              />
-            </label>
-          )}
-          {(provider === 'ollama' || provider === 'openai-compatible') && (
-            <label className="block">
-              <span className="block text-[10px] text-slate-500 mb-0.5">Address (base URL)</span>
-              <input
-                value={baseUrl}
-                onChange={e => setBaseUrl(e.target.value)}
-                placeholder={defaultBaseUrlFor(provider) ?? 'http://localhost:1234/v1'}
-                className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-mono"
-              />
-            </label>
-          )}
-          {testMsg && !testMsg.ok && (
-            <p className="text-[11px] text-red-700 leading-snug">{testMsg.text}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 mt-3">
-          <button
-            onClick={() => void finishOnline()}
-            disabled={testing || (provider !== 'ollama' && provider !== 'openai-compatible' && !apiKey)}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700 disabled:opacity-50"
-          >
-            {testing ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
-            {testing ? 'Checking…' : 'Connect'}
-          </button>
-          <button onClick={() => setStep('pick')} className="text-[11px] text-slate-500 hover:underline">Back</button>
-        </div>
-      </div>,
-    );
-  }
-
-  // step === 'pick'
-  return card(
-    <div>
-      <div className="text-sm font-bold text-slate-900">How should the assistant think?</div>
-      <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-        Two ways — pick one. You can change it any time.
-      </p>
-      <div className="grid sm:grid-cols-2 gap-2 mt-3">
-        <button
-          onClick={() => setStep('local')}
-          className="text-left border border-emerald-300 bg-emerald-50 rounded-lg p-3 hover:border-emerald-500"
-        >
-          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
-            <Lock size={13} /> On this computer
-          </div>
-          <p className="text-[11px] text-emerald-900/80 mt-1 leading-snug">
-            Free and private — nothing leaves the device. Downloads a model once.
-            {guide?.webgpu !== false && <> We suggest <strong>{rec.label}</strong> for you.</>}
-          </p>
-          <span className="inline-block mt-2 text-[10px] font-bold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">
-            RECOMMENDED
-          </span>
-        </button>
-        <button
-          onClick={() => setStep('online')}
-          className="text-left border border-slate-300 bg-slate-50 rounded-lg p-3 hover:border-violet-400"
-        >
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-            <Zap size={13} /> Online provider
-          </div>
-          <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-            Smarter answers from a service like Google or Anthropic. Needs a key; your questions go to them.
-          </p>
-        </button>
-      </div>
-    </div>,
   );
 }
