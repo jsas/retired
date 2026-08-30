@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Compare plans</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* tiny caps labels — the only decoration is the type itself */
+  .cap {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; color: #6b6b6b;
+  }
+  .hair  { border-top: 1px solid #d6d6d6; }
+  .hairb { border-top: 2px solid #111; }
+
+  /* ---------- sliders: square ink thumb on a hairline track ---------- */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px; background: transparent; cursor: pointer; margin: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 2px; background: #111;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; margin-top: -5.5px;
+    background: #fff; border: 2px solid #111; border-radius: 0;
+  }
+  input[type=range]::-moz-range-track { height: 2px; background: #111; }
+  input[type=range]::-moz-range-thumb {
+    width: 11px; height: 11px; background: #fff;
+    border: 2px solid #111; border-radius: 0;
+  }
+  input[type=range]:focus-visible { outline: 2px solid #111; outline-offset: 4px; }
+
+  /* locked Plan A slider — same shape, greyed, no pointer */
+  input[type=range][disabled] { cursor: not-allowed; }
+  input[type=range][disabled]::-webkit-slider-runnable-track { background: #d6d6d6; }
+  input[type=range][disabled]::-webkit-slider-thumb { border-color: #d6d6d6; background: #f5f5f5; }
+  input[type=range][disabled]::-moz-range-track { background: #d6d6d6; }
+  input[type=range][disabled]::-moz-range-thumb { border-color: #d6d6d6; background: #f5f5f5; }
+
+  /* ---------- the divider ---------- */
+  #divider {
+    position: absolute; top: 0; bottom: 0; width: 3px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(17,17,17,.06), rgba(17,17,17,.3), rgba(17,17,17,.06));
+    z-index: 30;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  #divider::after {
+    content: '';
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px; height: 40px; border-radius: 999px;
+    background-color: #ffffff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l-4 6 4 6'/><path d='M15 6l4 6-4 6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 20px 20px;
+    box-shadow: 0 2px 10px rgba(17,17,17,.25), 0 0 0 1px rgba(17,17,17,.1);
+  }
+  #divider:hover::after { box-shadow: 0 3px 14px rgba(17,17,17,.35), 0 0 0 2px rgba(17,17,17,.3); }
+  #divider:focus-visible { outline: none; }
+  #divider:focus-visible::after { box-shadow: 0 0 0 3px rgba(17,17,17,.4); }
+
+  /* ---------- winner pill ---------- */
+  .pill { border-radius: 999px; padding: 5px 14px 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .pill-good { background: #111; color: #fff; }
+  .pill-bad  { background: #d92b21; color: #fff; }
+  .pill-even { background: #e5e5e5; color: #525252; }
+
+  /* ---------- nav buttons (not-implemented chrome) ---------- */
+  .chrome-btn {
+    background: none; border: none; padding: 4px 8px; border-radius: 4px;
+    font: inherit; font-size: 11.5px; letter-spacing: .04em; color: #6b6b6b;
+    cursor: default;
+  }
+  .chrome-btn:hover { color: #111; background: rgba(17,17,17,.04); }
+
+  /* Details dropdown */
+  .details-panel { display: none; }
+  .details-host:focus-within .details-panel,
+  .details-host:hover .details-panel { display: block; }
+
+  ::selection { background: #111; color: #fff; }
+
+  @media (max-width: 900px) {
+    #divider { display: none; }
+  }
+</style>
+</head>
+<body class="min-h-screen bg-white text-[#111] antialiased">
+
+<!-- ═══ APP CHROME ═══ -->
+<header class="border-b border-[#d6d6d6]">
+  <div class="mx-auto flex max-w-[1500px] flex-wrap items-center gap-1 px-4 py-2.5 sm:px-6">
+    <div class="flex items-center gap-2 mr-3">
+      <div class="flex h-6 w-6 items-center justify-center rounded bg-[#111] text-[9px] font-bold text-white">RE:</div>
+      <span class="text-sm font-semibold tracking-tight">tired</span>
+    </div>
+
+    <!-- scenario switcher — natural home in a compare-native design -->
+    <select class="mr-2 cursor-pointer appearance-none rounded border border-[#d6d6d6] bg-white px-2.5 py-1.5 pr-7 text-[11.5px] text-[#111]"
+            style="background-image:url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%236b6b6b' stroke-width='1.5' stroke-linecap='round'/></svg>&quot;);background-repeat:no-repeat;background-position:right 8px center;">
+      <option>Plan A vs Plan B — working longer</option>
+      <option>Base plan</option>
+      <option>Spend less, retire earlier</option>
+      <option>+ New scenario…</option>
+    </select>
+
+    <div class="flex-1"></div>
+
+    <!-- Details ▾ — home for the 13 input sections -->
+    <div class="details-host relative">
+      <button type="button" class="chrome-btn font-semibold text-[#111]" aria-haspopup="true">Details ▾</button>
+      <div class="details-panel absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-[#d6d6d6] bg-white p-3 shadow-xl">
+        <div class="cap mb-2">All plan inputs</div>
+        <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11.5px] leading-relaxed text-[#525252]">
+          <span>Personal Profile</span><span>Account Balances</span>
+          <span>Contribution Rates</span><span>RDSP</span>
+          <span>Government Benefits</span><span>Pensions</span>
+          <span>Employment Income</span><span>Cash Events</span>
+          <span>Spending Phases</span><span>Spouse</span>
+          <span>Withdrawal Strategy</span><span>Home Equity</span>
+          <span>Market Hypotheses</span><span></span>
+        </div>
+        <div class="hair mt-2 pt-2 text-[10.5px] text-[#9a9a9a]">The three dials below are a shortcut over all of this.</div>
+      </div>
+    </div>
+
+    <button type="button" class="chrome-btn" title="AI assistant — in-browser, reads your plan, shows its work">Assistant</button>
+    <button type="button" class="chrome-btn" title="Backup, restore, import, share links">Data</button>
+    <button type="button" class="chrome-btn" title="Print &amp; export — one-page plan, CSV, PDF">Print / Export</button>
+    <button type="button" class="chrome-btn" title="Engine settings, help">Settings</button>
+  </div>
+</header>
+
+<!-- ═══ WINNER PILL BAR ═══ -->
+<div class="border-b border-[#d6d6d6] bg-[#fafafa]">
+  <div class="mx-auto flex max-w-[1500px] items-center justify-center gap-3 px-4 py-2 sm:px-6">
+    <span id="pill" class="pill pill-even">—</span>
+    <span id="pillSub" class="num hidden text-[11px] text-[#6b6b6b] sm:inline"></span>
+  </div>
+</div>
+
+<!-- ═══ COMPARE STAGE ═══ -->
+<div id="stage" class="relative mx-auto max-w-[1500px]" style="min-height: 560px;">
+
+  <!-- ── PLAN A (baseline, locked) ── -->
+  <section id="sideA" class="absolute inset-y-0 left-0 overflow-y-auto border-r border-[#e5e5e5]" style="width:50%">
+    <div class="mx-auto max-w-[560px] px-5 py-6 sm:px-8">
+
+      <div class="flex items-baseline justify-between gap-3">
+        <div class="flex items-baseline gap-2.5">
+          <h2 class="text-[17px] font-extrabold tracking-[-.01em]">Plan A</h2>
+          <span class="rounded border border-[#d6d6d6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[.14em] text-[#9a9a9a]">Baseline</span>
+        </div>
+        <span class="num text-[11px] text-[#9a9a9a]" data-a-sum>retire 62 · spend $85,000 · $850,000</span>
+      </div>
+
+      <!-- verdict hero -->
+      <div class="mt-5">
+        <div class="cap">Your money lasts to</div>
+        <div class="num -ml-[2px] mt-1 font-extrabold leading-[.85] tracking-[-.045em]"
+             style="font-size:clamp(64px,7.5vw,110px);" data-a-lasts>89</div>
+        <div class="num mt-2 text-[15px] font-semibold leading-snug" data-a-verdict>Runs out at 89 — 6 years short of 95.</div>
+        <div class="num mt-1 text-[12.5px] leading-relaxed text-[#6b6b6b]" data-a-fix>Working 3 more years would close the gap.</div>
+      </div>
+
+      <!-- storm test -->
+      <div class="mt-5 flex items-center gap-3 border-t border-[#111] pt-3">
+        <span class="cap">Storm test</span>
+        <span class="num text-[13px] font-bold" data-a-storm-lasts>80</span>
+        <span class="text-[11.5px] text-[#6b6b6b]" data-a-storm-word>fails in stormy markets</span>
+      </div>
+
+      <!-- timeline -->
+      <div class="mt-5">
+        <div class="flex items-baseline justify-between">
+          <span class="cap">The pot, year by year</span>
+          <span class="num text-[10.5px] text-[#9a9a9a]" data-a-peak></span>
+        </div>
+        <svg data-a-chart viewBox="0 0 320 120" preserveAspectRatio="none" class="mt-2 h-[120px] w-full" role="img" aria-label="Plan A balance over your lifetime"></svg>
+        <div class="flex items-baseline justify-between pt-1">
+          <span class="num text-[10.5px] text-[#9a9a9a]" data-a-age0>55</span>
+          <span class="num text-[10.5px] text-[#9a9a9a]">95</span>
+        </div>
+      </div>
+
+      <!-- numbers underneath -->
+      <div class="mt-6 grid grid-cols-3 gap-4 border-t-2 border-[#111] pt-4">
+        <div>
+          <div class="cap">Left at 95</div>
+          <div class="num mt-1 text-[22px] font-extrabold leading-none tracking-[-.02em]" data-a-left>$0</div>
+        </div>
+        <div>
+          <div class="cap">Spent, in total</div>
+          <div class="num mt-1 text-[22px] font-extrabold leading-none tracking-[-.02em]" data-a-spent>$0</div>
+        </div>
+        <div>
+          <div class="cap">Shortfall</div>
+          <div class="num mt-1 text-[22px] font-extrabold leading-none tracking-[-.02em]" data-a-gap>6 yrs</div>
+        </div>
+      </div>
+
+      <!-- locked dials (display only) -->
+      <div class="mt-6 border-t border-[#d6d6d6] pt-4 opacity-60">
+        <div class="cap mb-3">Baseline assumptions — locked</div>
+        <div class="space-y-3">
+          <div>
+            <div class="flex items-baseline justify-between">
+              <span class="cap">Stop working at</span>
+              <span class="num text-[16px] font-extrabold" data-a-v-retire>62</span>
+            </div>
+            <input type="range" min="50" max="75" step="1" value="62" disabled aria-label="Plan A retirement age (locked)" />
+          </div>
+          <div>
+            <div class="flex items-baseline justify-between">
+              <span class="cap">Spend a year</span>
+              <span class="num text-[16px] font-extrabold" data-a-v-spend>$85,000</span>
+            </div>
+            <input type="range" min="40000" max="150000" step="2500" value="85000" disabled aria-label="Plan A spending (locked)" />
+          </div>
+          <div>
+            <div class="flex items-baseline justify-between">
+              <span class="cap">Saved so far</span>
+              <span class="num text-[16px] font-extrabold" data-a-v-saved>$850k</span>
+            </div>
+            <input type="range" min="100000" max="2500000" step="25000" value="850000" disabled aria-label="Plan A savings (locked)" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PLAN B (editable) ── -->
+  <section id="sideB" class="absolute inset-y-0 right-0 overflow-y-auto" style="width:50%">
+    <div class="mx-auto max-w-[560px] px-5 py-6 sm:px-8">
+
+      <div class="flex items-baseline justify-between gap-3">
+        <div class="flex items-baseline gap-2.5">
+          <h2 class="text-[17px] font-extrabold tracking-[-.01em]">Plan B</h2>
+          <span class="rounded bg-[#111] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[.14em] text-white">Your edit</span>
+        </div>
+        <span class="num text-[11px] text-[#9a9a9a]" data-b-sum>retire 65 · spend $85,000 · $850,000</span>
+      </div>
+
+      <!-- verdict hero -->
+      <div class="mt-5">
+        <div class="cap">Your money lasts to</div>
+        <div class="num -ml-[2px] mt-1 font-extrabold leading-[.85] tracking-[-.045em]"
+             style="font-size:clamp(64px,7.5vw,110px);" data-b-lasts>96</div>
+        <div class="num mt-2 text-[15px] font-semibold leading-snug" data-b-verdict>Lasts to 96 — past the 95 you planned for.</div>
+        <div class="num mt-1 text-[12.5px] leading-relaxed text-[#6b6b6b]" data-b-fix></div>
+      </div>
+
+      <!-- storm test -->
+      <div class="mt-5 flex items-center gap-3 border-t border-[#111] pt-3">
+        <span class="cap">Storm test</span>
+        <span class="num text-[13px] font-bold" data-b-storm-lasts>86</span>
+        <span class="text-[11.5px] text-[#6b6b6b]" data-b-storm-word>fails in stormy markets</span>
+      </div>
+
+      <!-- timeline -->
+      <div class="mt-5">
+        <div class="flex items-baseline justify-between">
+          <span class="cap">The pot, year by year</span>
+          <span class="num text-[10.5px] text-[#9a9a9a]" data-b-peak></span>
+        </div>
+        <svg data-b-chart viewBox="0 0 320 120" preserveAspectRatio="none" class="mt-2 h-[120px] w-full" role="img" aria-label="Plan B balance over your lifetime"></svg>
+        <div class="flex items-baseline justify-between pt-1">
+          <span class="num text-[10.5px] text-[#9a9a9a]" data-b-age0>55</span>
+          <span class="num text-[10.5px] text-[#9a9a9a]">95</span>
+        </div>
+      </div>
+
+      <!-- numbers underneath -->
+      <div class="mt-6 grid grid-cols-3 gap-4 border-t-2 border-[#111] pt-4">
+        <div>
+          <div class="cap">Left at 95</div>
+          <div class="num mt-1 text-[22px] font-extrabold leading-none tracking-[-.02em]" data-b-left>$0</div>
+        </div>
+        <div>
+          <div class="cap">Spent, in total</div>
+          <div class="num mt-1 text-[22px] font-extrabold leading-none tracking-[-.02em]" data-b-spent>$0</div>
+        </div>
+        <div>
+          <div class="cap">Margin</div>
+          <div class="num mt-1 text-[22px] font-extrabold leading-none tracking-[-.02em]" data-b-gap>+1 yr</div>
+        </div>
+      </div>
+
+      <!-- shared dials — these morph Plan B live -->
+      <div class="mt-6 border-t border-[#d6d6d6] pt-4">
+        <div class="cap mb-3">Move these — Plan B follows, Plan A stays put</div>
+        <div class="space-y-3">
+          <div>
+            <div class="flex items-baseline justify-between">
+              <label for="d-retire" class="cap">Stop working at</label>
+              <span class="num text-[16px] font-extrabold" id="v-retire">65</span>
+            </div>
+            <input id="d-retire" type="range" min="50" max="75" step="1" value="65" />
+          </div>
+          <div>
+            <div class="flex items-baseline justify-between">
+              <label for="d-spend" class="cap">Spend a year</label>
+              <span class="num text-[16px] font-extrabold" id="v-spend">$85,000</span>
+            </div>
+            <input id="d-spend" type="range" min="40000" max="150000" step="2500" value="85000" />
+          </div>
+          <div>
+            <div class="flex items-baseline justify-between">
+              <label for="d-saved" class="cap">Saved so far</label>
+              <span class="num text-[16px] font-extrabold" id="v-saved">$850k</span>
+            </div>
+            <input id="d-saved" type="range" min="100000" max="2500000" step="25000" value="850000" />
+          </div>
+        </div>
+        <div class="mt-3 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="cap">Markets</span>
+            <div class="flex gap-2">
+              <button type="button" data-sky="storm"  class="rounded border border-[#d6d6d6] px-2 py-0.5 text-[11px] text-[#6b6b6b]" aria-pressed="false">stormy</button>
+              <button type="button" data-sky="normal" class="rounded border border-[#111] px-2 py-0.5 text-[11px] font-semibold text-[#111]" aria-pressed="true">ordinary</button>
+              <button type="button" data-sky="sun"    class="rounded border border-[#d6d6d6] px-2 py-0.5 text-[11px] text-[#6b6b6b]" aria-pressed="false">kind</button>
+            </div>
+          </div>
+          <button id="resetB" type="button" class="text-[11px] text-[#9a9a9a] underline decoration-[#d6d6d6] underline-offset-2 hover:text-[#111]">reset to suggestion</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="divider" role="separator" aria-orientation="vertical" aria-label="Drag to change how the screen is split" tabindex="0" style="left:50%"></div>
+</div>
+
+<!-- ═══ PRINT PREVIEW HINT ═══ -->
+<div class="mx-auto max-w-[1500px] px-4 pb-2 sm:px-6">
+  <div class="flex items-center justify-between rounded-lg border border-[#e5e5e5] bg-[#fafafa] px-4 py-2.5">
+    <div class="flex items-center gap-3">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6b6b6b" stroke-width="1.5"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      <span class="text-[11.5px] text-[#6b6b6b]">The one-page printable plan is typeset in this same grid — <button type="button" class="font-semibold text-[#111] underline decoration-[#d6d6d6] underline-offset-2">preview it</button></span>
+    </div>
+    <span class="num hidden text-[10.5px] text-[#9a9a9a] sm:inline">A — runs out at <span data-foot-a>89</span> · B — lasts to <span data-foot-b>96</span></span>
+  </div>
+</div>
+
+<footer class="mx-auto max-w-[1500px] px-4 py-4 sm:px-6">
+  <div class="hairb pt-3 flex flex-wrap items-baseline justify-between gap-2">
+    <span class="text-[11px] text-[#9a9a9a]">RE:tired — compare two futures, decide which one to live.</span>
+    <span class="text-[11px] text-[#9a9a9a]">Not financial, tax, or investment advice. Data stays in this browser.</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  function el(id) { return document.getElementById(id); }
+  function q(root, sel) { return root.querySelector(sel); }
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+  function shortMoney(v) {
+    if (Math.abs(v) >= 1000000) return '$' + (Math.round(v / 100000) / 10).toFixed(1).replace(/\.0$/, '') + 'M';
+    return '$' + Math.round(v / 1000) + 'k';
+  }
+
+  /* ---------- Plan A: defaults, locked, fails at 89 ---------- */
+  var A = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  /* ---------- Plan B: suggestion applied (works 3 more years → passes) ---------- */
+  function suggestedState() {
+    var s = Object.assign({}, A);
+    /* walk the same ladder suggest() does: +1..+5 years of work, then spending cuts */
+    for (var d = 1; d <= 5; d++) {
+      var t = Object.assign({}, s, { retireAge: s.retireAge + d });
+      if (simulate(t).ok) return t;
+    }
+    for (var cut = 5000; cut <= 30000; cut += 5000) {
+      var t2 = Object.assign({}, s, { spending: s.spending - cut });
+      if (simulate(t2).ok) return t2;
+    }
+    return s;
+  }
+  var B = suggestedState();
+
+  var stage = el('stage'), sideA = el('sideA'), sideB = el('sideB'), divider = el('divider');
+  var pill = el('pill'), pillSub = el('pillSub');
+  var split = 50;
+
+  /* ============ shared rendering ============ */
+  function spentTotal(st, res) {
+    var t = 0;
+    res.rows.forEach(function (r) {
+      if (r.age > st.maxAge || r.age < st.retireAge) return;
+      t += st.spending;
+    });
+    return t;
+  }
+
+  function renderSide(side, st, tag) {
+    var root = el(side);
+    var res = simulate(st);
+    var storm = simulate(Object.assign({}, st, { sky: 'storm' }));
+    var lasts = lastsLabel(res);
+    var gap = res.ok ? 0 : Math.max(0, st.maxAge - (res.depletionAge != null ? res.depletionAge : st.maxAge));
+    var margin = res.ok ? Math.max(0, (res.depletionAge != null ? res.depletionAge : 110) - st.maxAge) : 0;
+
+    /* verdict */
+    var lastsEl = q(root, '[data-' + tag + '-lasts]');
+    lastsEl.textContent = lasts;
+    lastsEl.style.color = res.ok ? '#111' : '#d92b21';
+    q(root, '[data-' + tag + '-verdict]').textContent = res.ok
+      ? 'Lasts to ' + lasts + ' — past the ' + st.maxAge + ' you planned for.'
+      : 'Runs out at ' + lasts + ' — ' + gap + ' ' + yearWord(gap) + ' short of ' + st.maxAge + '.';
+    q(root, '[data-' + tag + '-verdict]').style.color = res.ok ? '#111' : '#d92b21';
+
+    var fixEl = q(root, '[data-' + tag + '-fix]');
+    if (res.ok) {
+      fixEl.textContent = storm.ok
+        ? 'Holds even in stormy markets.'
+        : 'In a storm it runs out at ' + lastsLabel(storm) + ' — worth knowing.';
+    } else {
+      fixEl.textContent = suggest(st) || 'Nothing small repairs this; something larger has to give.';
+    }
+
+    /* storm test */
+    var stormLasts = lastsLabel(storm);
+    q(root, '[data-' + tag + '-storm-lasts]').textContent = stormLasts;
+    q(root, '[data-' + tag + '-storm-lasts]').style.color = storm.ok ? '#111' : '#d92b21';
+    q(root, '[data-' + tag + '-storm-word]').textContent = storm.ok
+      ? 'holds in stormy markets'
+      : 'runs out at ' + stormLasts + ' in a storm';
+
+    /* summary */
+    q(root, '[data-' + tag + '-sum]').textContent =
+      'retire ' + st.retireAge + ' · spend ' + fmtMoney(st.spending) + ' · ' + fmtMoney(st.savings);
+
+    /* numbers */
+    q(root, '[data-' + tag + '-left]').textContent = res.ok ? fmtMoney(res.leftAtMax) : '$0';
+    q(root, '[data-' + tag + '-spent]').textContent = shortMoney(spentTotal(st, res));
+    var gapEl = q(root, '[data-' + tag + '-gap]');
+    if (res.ok) {
+      gapEl.textContent = margin > 0 ? '+' + margin + ' ' + yearWord(margin) : 'on the line';
+      gapEl.style.color = '#111';
+    } else {
+      gapEl.textContent = gap + ' ' + yearWord(gap);
+      gapEl.style.color = '#d92b21';
+    }
+
+    /* chart */
+    var svg = q(root, '[data-' + tag + '-chart]');
+    var rows = res.rows;
+    var peak = 0;
+    rows.forEach(function (r) { if (r.bal > peak) peak = r.bal; });
+    if (peak <= 0) peak = 1;
+    var W = 320, H = 120, pad = 4;
+    function X(a) { return pad + ((a - st.currentAge) / (st.maxAge - st.currentAge)) * (W - pad * 2); }
+    function Y(b) { return H - pad - (b / peak) * (H - pad * 2); }
+    var pts = rows.filter(function (r) { return r.age <= st.maxAge; })
+                  .map(function (r) { return X(r.age).toFixed(1) + ',' + Y(r.bal).toFixed(1); }).join(' ');
+    var lastRow = rows[rows.length - 1];
+    var endAge = Math.min(lastRow.age, st.maxAge);
+    var fill = pts + ' ' + X(endAge).toFixed(1) + ',' + (H - pad) + ' ' + X(st.currentAge).toFixed(1) + ',' + (H - pad);
+    var mark = '';
+    if (res.depletionAge != null && res.depletionAge <= st.maxAge) {
+      mark = '<line x1="' + X(res.depletionAge).toFixed(1) + '" y1="' + pad + '" x2="' +
+             X(res.depletionAge).toFixed(1) + '" y2="' + (H - pad) +
+             '" stroke="#d92b21" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/>' +
+             '<circle cx="' + X(res.depletionAge).toFixed(1) + '" cy="' + (H - pad) + '" r="2.5" fill="#d92b21"/>';
+    }
+    svg.innerHTML =
+      '<rect x="0" y="' + (H - pad) + '" width="' + W + '" height="1" fill="#111"/>' +
+      '<polygon points="' + fill + '" fill="rgba(17,17,17,.05)"/>' +
+      '<polyline points="' + pts + '" fill="none" stroke="' + (res.ok ? '#111' : '#d92b21') + '" stroke-width="1.5" ' +
+      'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' + mark;
+    q(root, '[data-' + tag + '-peak]').textContent = 'peaks at ' + fmtMoney(peak);
+    q(root, '[data-' + tag + '-age0]').textContent = String(st.currentAge);
+  }
+
+  /* ============ winner pill ============ */
+  function renderPill() {
+    var ra = simulate(A), rb = simulate(B);
+    var la = ra.depletionAge == null ? 999 : ra.depletionAge;
+    var lb = rb.depletionAge == null ? 999 : rb.depletionAge;
+    var diff = lb - la;
+
+    pill.className = 'pill';
+    if (diff === 0) {
+      pill.classList.add('pill-even');
+      pill.textContent = 'Dead even — both last to ' + lastsLabel(ra) + '.';
+      pillSub.textContent = '';
+      return;
+    }
+    var win = diff > 0 ? 'B' : 'A';
+    var n = Math.abs(diff);
+    if (la === 999 || lb === 999) {
+      pill.classList.add('pill-good');
+      if (la === 999) {
+        pill.textContent = 'Plan A holds past 95; Plan B runs out at ' + lastsLabel(rb) + '.';
+      } else {
+        pill.textContent = 'Plan B holds past 95; Plan A runs out at ' + lastsLabel(ra) + '.';
+      }
+      pillSub.textContent = 'Drag the dials to close the gap.';
+      return;
+    }
+    pill.classList.add(diff > 0 ? 'pill-good' : 'pill-bad');
+    pill.textContent = 'Plan ' + win + ' lasts ' + n + ' ' + yearWord(n) + ' longer.';
+    pillSub.textContent = diff > 0
+      ? 'retire ' + A.retireAge + ' vs ' + B.retireAge + ' · spend ' + fmtMoney(A.spending) + ' vs ' + fmtMoney(B.spending)
+      : 'Plan A is still ahead — keep moving Plan B.';
+  }
+
+  function renderAll() {
+    renderSide('sideA', A, 'a');
+    renderSide('sideB', B, 'b');
+    renderPill();
+
+    /* footer hint numbers */
+    document.querySelectorAll('[data-foot-a]').forEach(function (n) { n.textContent = lastsLabel(simulate(A)); });
+    document.querySelectorAll('[data-foot-b]').forEach(function (n) { n.textContent = lastsLabel(simulate(B)); });
+
+    /* Plan A locked display values */
+    q(sideA, '[data-a-v-retire]').textContent = String(A.retireAge);
+    q(sideA, '[data-a-v-spend]').textContent = fmtMoney(A.spending);
+    q(sideA, '[data-a-v-saved]').textContent = shortMoney(A.savings);
+
+    /* Plan B dial readouts */
+    el('v-retire').textContent = String(B.retireAge);
+    el('v-spend').textContent = fmtMoney(B.spending);
+    el('v-saved').textContent = shortMoney(B.savings);
+  }
+
+  /* ============ Plan B dials ============ */
+  el('d-retire').addEventListener('input', function () { B.retireAge = Number(this.value); renderAll(); });
+  el('d-spend').addEventListener('input', function () { B.spending = Number(this.value); renderAll(); });
+  el('d-saved').addEventListener('input', function () { B.savings = Number(this.value); renderAll(); });
+
+  /* sky buttons */
+  var skyBtns = document.querySelectorAll('[data-sky]');
+  skyBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      B.sky = b.getAttribute('data-sky');
+      skyBtns.forEach(function (o) {
+        var on = o === b;
+        o.setAttribute('aria-pressed', String(on));
+        o.className = on
+          ? 'rounded border border-[#111] px-2 py-0.5 text-[11px] font-semibold text-[#111]'
+          : 'rounded border border-[#d6d6d6] px-2 py-0.5 text-[11px] text-[#6b6b6b]';
+      });
+      renderAll();
+    });
+  });
+
+  /* reset Plan B to the suggestion */
+  el('resetB').addEventListener('click', function () {
+    B = suggestedState();
+    el('d-retire').value = String(B.retireAge);
+    el('d-spend').value = String(B.spending);
+    el('d-saved').value = String(B.savings);
+    skyBtns.forEach(function (o) {
+      var on = o.getAttribute('data-sky') === B.sky;
+      o.setAttribute('aria-pressed', String(on));
+      o.className = on
+        ? 'rounded border border-[#111] px-2 py-0.5 text-[11px] font-semibold text-[#111]'
+        : 'rounded border border-[#d6d6d6] px-2 py-0.5 text-[11px] text-[#6b6b6b]';
+    });
+    renderAll();
+  });
+
+  /* ============ divider drag ============ */
+  function setSplit(pct) {
+    split = Math.round(Math.min(76, Math.max(24, pct)) * 10) / 10;
+    sideA.style.width = split + '%';
+    sideB.style.width = (100 - split) + '%';
+    divider.style.left = split + '%';
+  }
+
+  var dragging = false;
+  divider.addEventListener('pointerdown', function (e) {
+    dragging = true;
+    divider.setPointerCapture && divider.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  divider.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var r = stage.getBoundingClientRect();
+    setSplit(((e.clientX - r.left) / r.width) * 100);
+  });
+  divider.addEventListener('pointerup', function (e) {
+    dragging = false;
+    if (divider.releasePointerCapture) {
+      try { divider.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+  });
+  divider.addEventListener('pointercancel', function () { dragging = false; });
+  divider.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') { setSplit(split - 3); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { setSplit(split + 3); e.preventDefault(); }
+  });
+
+  setSplit(50);
+  renderAll();
+})();
+</script>
+</body>
+</html>

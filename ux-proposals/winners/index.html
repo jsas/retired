@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 5 winning designs</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .tile:hover .arrow { transform: translateX(3px); }
+  .tile .arrow { transition: transform .15s; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+<div class="max-w-5xl mx-auto px-6 py-12">
+
+  <div class="flex items-center gap-2 font-semibold text-sm mb-8">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired — five composites from your ratings</span>
+    <a href="../index.html" class="ml-auto text-xs text-slate-400 hover:text-slate-600">← back to the 40</a>
+  </div>
+
+  <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Five winning designs</h1>
+  <p class="text-slate-600 text-sm leading-relaxed mb-4 max-w-2xl">
+    Each pair is a landing page (Site 1 — marketing, no app chrome) plus a dashboard (Site 2 — the app),
+    built from your keeps and your "steal pieces" notes. Every app page shows where the full app surface
+    lives — inputs, plans, assistant, data, print — so nothing is a bolt-on (per REQUIREMENTS.md §8).
+  </p>
+  <p class="text-slate-500 text-xs mb-4">
+    Same engine as the 40: three dials + market mood; the sample plan runs short on purpose.
+  </p>
+
+  <div class="bg-white/95 backdrop-blur border border-slate-200 rounded-xl p-3 mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" style="position:sticky;top:0;z-index:40;">
+    <span class="font-semibold text-slate-700">Narrow it down:</span>
+    <span class="text-slate-400">rate each page —</span>
+    <span class="inline-flex items-center gap-1"><b class="text-blue-600">Keep</b> worth building</span>
+    <span class="inline-flex items-center gap-1"><b class="text-amber-600">Meh</b> has a piece</span>
+    <span class="inline-flex items-center gap-1"><b class="text-red-600">No</b> drop it</span>
+    <span class="ml-auto">
+      <button id="copy-wratings" class="px-2.5 py-1 rounded-md border border-blue-200 bg-blue-50 text-blue-700 font-semibold hover:border-blue-400">Copy ratings for Claude</button>
+    </span>
+    <div id="wrate-summary" class="w-full text-slate-500"></div>
+  </div>
+
+  <!-- ═══ W1 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">1 · Editorial night</h2>
+      <span class="text-xs text-slate-400">KEEP 02 dark editorial landing + steal 01 verdict hero (no 2006 cards) + steal 04 persistent gauge</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w1-editorial-verdict.html" class="tile group bg-slate-900 text-white rounded-xl border border-slate-700 p-5 hover:border-slate-500 transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">Dark editorial welcome</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-300 leading-relaxed">"Will your money outlast you?" — three steps, privacy strip, one door into the app.</p>
+        <span class="arrow inline-block mt-2 text-xs text-slate-300">Open →</span>
+      </a>
+      <a href="w1-editorial-verdict-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold group-hover:text-slate-700">Verdict hero, not a card wall</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">One answer line + evidence timeline + always-on mini gauge top-right. Full app chrome (details, plans, assistant, data, print) as named homes.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W2 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">2 · Honest score</h2>
+      <span class="text-xs text-slate-400">KEEP 12 plan score landing + KEEP 03 steering room with smaller faders</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w2-score-steering.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">"How good is this plan, honestly?"</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Big score dial with three ingredients, calling you to set up a profile.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="w2-score-steering-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Drag pad + small faders</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">XY pad dominant, score pinned top, compact faders with consequence lines — controls smaller than the original steering room, as asked.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W3 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">3 · Conversation to plan</h2>
+      <span class="text-xs text-slate-400">KEEP 17 conversation replaces the wizard + KEEP 10 split answer + steal 08 timeline</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w3-conversation-split.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">A conversation, not a form</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Five questions build the plan; the chat hands off into the app — and later, into the real assistant.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="w3-conversation-split-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Split answer + life timeline</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Four editable rows on the left; verdict + sleek 55→95 timeline + success indicator on the right. Assistant stays present.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W4 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">4 · Two futures</h2>
+      <span class="text-xs text-slate-400">MEH 40 split worlds as compare-with-numbers + KEEP 12 score + steal 22 Swiss poster print style</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w4-worlds.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">"Your plan has more than one future."</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Draggable split: retire at 62 vs 65, side by side before you ever open the app.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="w4-worlds-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Compare-native dashboard</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A/B split with numbers underneath (end balance, tax, depletion), winner pill, shared sliders morph Plan B live. Swiss grid; print preview shares the style.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W5 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">5 · The living sheet</h2>
+      <span class="text-xs text-slate-400">KEEP 25 spreadsheet (export-leaning) + KEEP 03 small steering + steal 01 verdict banner</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w5-sheet.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">"In a grid you already trust."</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Spreadsheet-native pitch: live formulas, real answers, export to Excel anytime.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="w5-sheet-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Live projection grid</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Age-row grid with per-account columns, formula bar in plain English, verdict banner, editable cells, compact steering, prominent export.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W6 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">6 · The calm sentence</h2>
+      <span class="text-xs text-slate-400">MEH 05 sentence calmed down + MEH 04 small intuitive gauge</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w6-sentence.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">One sentence that ends honestly</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Editable numbers inside one sentence; the ending rewrites itself. Nothing else moves.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="w6-sentence-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Sentence as the live header</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Same sentence drives the app; evidence row + a gauge that's actually readable when small.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W7 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">7 · Contour steering</h2>
+      <span class="text-xs text-slate-400">MEH 08 timeline + MEH 16 contour map simplified + KEEP 03 small controls</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w7-contour.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">"Your whole life on one line."</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A sleek 55→95 timeline strip with the honest run-out point marked.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="w7-contour-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Success terrain + you-are-here dot</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Simplified contour bands over retire-age × spending, timeline below, small faders beside.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W8 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">8 · Three rings, explained</h2>
+      <span class="text-xs text-slate-400">MEH 28 rings done right (clarity first) + KEEP 12 honest scoring + KEEP 02 dark visual language</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w8-rings.html" class="tile group bg-slate-900 text-white rounded-xl border border-slate-700 p-5 hover:border-slate-500 transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">"Three numbers tell you if you're ready."</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-300 leading-relaxed">Outlast · Cushion · Weatherproof — each ring named and explained.</p>
+        <span class="arrow inline-block mt-2 text-xs text-slate-300">Open →</span>
+      </a>
+      <a href="w8-rings-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Rings with explanation rows</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Every ring gets a name, a percent, and a plain-English line about what moves it. Sliders animate them live.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W9 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">9 · The console</h2>
+      <span class="text-xs text-slate-400">MEH 14 CLI as first-class citizen beside the GUI + KEEP 12 verdict language</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w9-terminal.html" class="tile group bg-slate-900 text-white rounded-xl border border-slate-700 p-5 hover:border-slate-500 transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">"Ask it anything. It answers in English."</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-300 leading-relaxed">A terminal that only speaks plain words: <code class="text-slate-300">> retire 65</code> → "now it lasts until 96 ✓"</p>
+        <span class="arrow inline-block mt-2 text-xs text-slate-300">Open →</span>
+      </a>
+      <a href="w9-terminal-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">GUI and CLI, always in sync</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Dashboard on the left, live terminal on the right — typing moves sliders; dragging echoes commands. The CLI-on-the-library idea, proven.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ W10 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">10 · Swiss poster</h2>
+      <span class="text-xs text-slate-400">MEH 22 Swiss grid as the whole design language (screen AND print) + KEEP 12 score + KEEP 03 controls</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="w10-swiss.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">"KNOW. WHEN YOUR MONEY ENDS."</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Massive type, strict grid, one red accent — the honest number as the poster.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="w10-swiss-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">The app as a poster grid</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Giant verdict type, score fraction, precise small controls, minimal balance table. Print preview = this page, on paper.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="text-slate-500 text-xs leading-relaxed border-t border-slate-200 pt-6 space-y-2 max-w-2xl">
+    <p>Every app page shows named homes for the full surface (13 input sections, plans, assistant,
+    data/backup, print) per the bolt-on test in <code class="bg-slate-100 px-1.5 py-0.5 rounded">../REQUIREMENTS.md</code> §8.7.
+    Landings carry the privacy promise and the not-advice line per §8.8.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var KEY = 'retired_winners_v1'; // { file: { rate: 'keep'|'meh'|'no', note: string } }
+  var data = {};
+  try { data = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { data = {}; }
+
+  // inject rating CSS
+  var st = document.createElement('style');
+  st.textContent =
+    '.wratebar { display: flex; gap: 4px; margin-top: 10px; align-items: center; flex-wrap: wrap; }' +
+    '.wratebar button { min-width: 30px; height: 24px; border-radius: 6px; border: 1px solid #e2e8f0;' +
+    ' background: #f8fafc; font-size: 11px; font-weight: 600; color: #94a3b8; cursor: pointer; padding: 0 6px; }' +
+    '.wratebar button:hover { border-color: #94a3b8; color: #475569; }' +
+    '.wratebar button.on[data-rate="keep"] { background: #2563eb; border-color: #2563eb; color: #fff; }' +
+    '.wratebar button.on[data-rate="meh"] { background: #d97706; border-color: #d97706; color: #fff; }' +
+    '.wratebar button.on[data-rate="no"] { background: #dc2626; border-color: #dc2626; color: #fff; }' +
+    '.dark-tile .wratebar button { background: #1e293b; border-color: #475569; color: #94a3b8; }' +
+    '.wnote { display: none; margin-top: 8px; flex-basis: 100%; }' +
+    '.wnote.show { display: block; }' +
+    '.wnote textarea { width: 100%; box-sizing: border-box; border: 1px solid #e2e8f0; border-radius: 6px;' +
+    ' padding: 6px 8px; font-size: 12px; font-family: inherit; color: #334155; resize: vertical; min-height: 40px; background: #f8fafc; }' +
+    '.wnote textarea:focus { outline: none; border-color: #94a3b8; background: #fff; }' +
+    '.wnote .wl { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8; display: block; margin-bottom: 3px; }' +
+    '.tile.hidden-weak { display: none; }';
+  document.head.appendChild(st);
+
+  // inject ratebars into every tile card
+  var cards = document.querySelectorAll('a.tile');
+  var titles = {};
+  cards.forEach(function (a) {
+    var href = a.getAttribute('href') || '';
+    if (!/^w\d/.test(href)) return;
+    titles[href] = ((a.querySelector('h3') || {}).textContent || '').trim();
+    if (a.classList.contains('bg-slate-900')) a.classList.add('dark-tile');
+    var bar = document.createElement('div');
+    bar.className = 'wratebar';
+    bar.dataset.file = href;
+    bar.innerHTML =
+      '<button data-rate="keep" title="worth building">Keep</button>' +
+      '<button data-rate="meh" title="has a piece worth stealing">Meh</button>' +
+      '<button data-rate="no" title="drop it">No</button>' +
+      '<div class="wnote"><span class="wl">Why?</span>' +
+      '<textarea placeholder="what works, what to change, what to steal…" rows="2"></textarea></div>';
+    a.appendChild(bar);
+  });
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
+  function entry(f) { return data[f] || null; }
+
+  function refreshCard(f) {
+    var d = entry(f) || {};
+    cards.forEach(function (a) {
+      var bar = a.querySelector('.wratebar');
+      if (!bar || bar.dataset.file !== f) return;
+      bar.querySelectorAll('button').forEach(function (btn) {
+        btn.classList.toggle('on', d.rate === btn.dataset.rate);
+      });
+      var wn = bar.querySelector('.wnote');
+      var ta = wn.querySelector('textarea');
+      if (document.activeElement !== ta) ta.value = d.note || '';
+      wn.classList.toggle('show', d.rate === 'keep' || d.rate === 'meh');
+    });
+  }
+
+  document.querySelectorAll('.wratebar').forEach(function (bar) {
+    var f = bar.dataset.file;
+    refreshCard(f);
+    bar.querySelectorAll('button').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var d = entry(f) || {};
+        if (d.rate === btn.dataset.rate) delete data[f];
+        else data[f] = { rate: btn.dataset.rate, note: d.note || '' };
+        save();
+        refreshCard(f);
+        updateSummary();
+        if (data[f] && (data[f].rate === 'keep' || data[f].rate === 'meh')) {
+          var ta = bar.querySelector('.wnote textarea');
+          if (ta) ta.focus();
+        }
+      });
+    });
+  });
+
+  document.addEventListener('input', function (ev) {
+    var ta = ev.target;
+    if (!ta.matches || !ta.matches('.wnote textarea')) return;
+    var bar = ta.closest('.wratebar');
+    var f = bar && bar.dataset.file;
+    if (f && data[f]) { data[f].note = ta.value; save(); }
+  });
+
+  document.addEventListener('click', function (ev) {
+    if (ev.target && ev.target.matches && ev.target.matches('.wnote textarea')) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }, true);
+
+  function updateSummary() {
+    var el = document.getElementById('wrate-summary');
+    if (!el) return;
+    var k = 0, m = 0, n = 0;
+    Object.keys(data).forEach(function (f) {
+      var r = data[f] && data[f].rate;
+      if (r === 'keep') k++; else if (r === 'meh') m++; else if (r === 'no') n++;
+    });
+    var total = k + m + n;
+    el.textContent = total === 0
+      ? '0 of 20 rated — keep the winners, meh the maybes, no the rest'
+      : k + ' keep · ' + m + ' meh · ' + n + ' no — ' + (20 - total) + ' left';
+  }
+
+  function copyText(text, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+    } else fallbackCopy(text, done);
+  }
+  function fallbackCopy(text, done) {
+    var t = document.createElement('textarea');
+    t.value = text;
+    document.body.appendChild(t);
+    t.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(t);
+  }
+
+  var copyBtn = document.getElementById('copy-wratings');
+  if (copyBtn) copyBtn.addEventListener('click', function () {
+    var lines = ['# My ratings of the 10 winner pairs (20 pages)', ''];
+    Object.keys(titles).sort().forEach(function (f) {
+      var d = entry(f);
+      if (!d) return;
+      var label = f.replace('.html', '') + ' — ' + titles[f];
+      if (d.rate === 'keep') lines.push('**KEEP** — ' + label);
+      else if (d.rate === 'meh') lines.push('**MEH** — ' + label + ' (steal pieces)');
+      else lines.push('**NO** — ' + label);
+      if (d.note) lines.push('> ' + d.note);
+      lines.push('');
+    });
+    if (lines.length === 2) lines.push('(no ratings yet)');
+    copyText(lines.join('\n'), function () {
+      var old = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(function () { copyBtn.textContent = old; }, 1500);
+    });
+  });
+
+  updateSummary();
+})();
+</script>
+</body>
+</html>

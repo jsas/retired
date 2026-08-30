@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — plan.xlsx</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ═══ the grid ═══ */
+  table.xl { border-collapse: separate; border-spacing: 0; }
+  table.xl th, table.xl td {
+    border-right: 1px solid #dcdcdc; border-bottom: 1px solid #dcdcdc;
+    height: 24px; padding: 0 8px; font-size: 12px; white-space: nowrap;
+  }
+  table.xl thead th {
+    background: #f1f1f1; color: #6b7280; font-weight: 500; text-align: center;
+    font-size: 11px; height: 20px; position: sticky; top: 0; z-index: 5;
+  }
+  table.xl thead tr.hdrlabels td { position: sticky; top: 20px; z-index: 5; }
+  td.gut {
+    background: #f1f1f1; color: #8a8a8a; text-align: center; font-size: 11px;
+    min-width: 34px; padding: 0 4px; position: sticky; left: 0; z-index: 2;
+  }
+  td.a { text-align: center; color: #374151; position: sticky; left: 34px; background: #fff; z-index: 2; min-width: 52px; }
+  td.m { text-align: right; color: #1f2937; }
+  td.z { text-align: right; color: #c4c4c4; }
+  td.bal { text-align: right; font-weight: 600; color: #14532d; }
+  tr.dry td    { background: #fdecec; }
+  tr.dry td.a  { background: #fdecec; }
+  tr.dry td.bal{ background: #ffc7ce; color: #9c0006; font-weight: 700; }
+  tr.dry td.gut{ background: #ffc7ce; color: #9c0006; font-weight: 700; }
+  tr.ret td    { background: #fdf6e5; }
+  tr.ret td.a  { background: #fdf6e5; }
+  tr.sel td    { box-shadow: inset 2.5px 0 0 #217346; }
+  tr.sel td.gut{ background: #217346; color: #fff; font-weight: 700; }
+  tr.sel td.a  { color: #14532d; font-weight: 700; }
+  td.hdr { background: #e8f2ec; color: #217346; font-weight: 700; text-align: center; font-size: 11px; }
+  td.editable { background: #fff9e6; cursor: text; }
+  td.editable:hover { background: #fff3d0; }
+  td.editable input {
+    width: 100%; height: 100%; border: none; background: transparent; text-align: center;
+    font-size: 12px; color: #92400e; font-weight: 700; outline: none; padding: 0;
+  }
+  tr.totalrow td {
+    background: #f1f1f1; font-weight: 700; color: #1f2937;
+    border-top: 2px solid #9ca3af; font-size: 11.5px;
+  }
+  tr.totalrow td.gut, tr.totalrow td.a { background: #f1f1f1; }
+  tbody tr:hover td:not(.gut):not(.a) { background: #f4faf6; }
+  tbody tr.dry:hover td { background: #fdecec; }
+  tbody tr.dry:hover td.bal { background: #ffc7ce; }
+  tbody tr.ret:hover td { background: #fdf6e5; }
+
+  /* formula bar */
+  .fbadge { background: #f1f1f1; border-right: 1px solid #dcdcdc; color: #8a8a8a;
+            font-size: 10px; padding: 0 8px; display: flex; align-items: center; min-width: 44px; justify-content: center; }
+
+  /* steering sliders (from 03, compact & light) */
+  input[type=range].fader { -webkit-appearance:none; appearance:none; height:5px; border-radius:3px; background:#d7e0da; outline:none; width:100%; cursor:pointer; }
+  input[type=range].fader::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%;
+    background:#fff; border:2.5px solid #217346; box-shadow:0 1px 3px rgba(0,0,0,.25); cursor:grab;
+  }
+  input[type=range].fader::-moz-range-thumb {
+    width:14px; height:14px; border-radius:50%; background:#fff; border:2.5px solid #217346;
+    box-shadow:0 1px 3px rgba(0,0,0,.25); cursor:grab;
+  }
+
+  /* Details dropdown */
+  details.menu { position: relative; }
+  details.menu > summary { list-style: none; cursor: pointer; }
+  details.menu > summary::-webkit-details-marker { display: none; }
+  details.menu[open] > summary { background: #e8f2ec; color: #14532d; }
+  details.menu .panel { position: absolute; top: 100%; left: 0; z-index: 40; }
+
+  .chromebtn {
+    display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px;
+    font-size: 12px; border-radius: 6px; color: #4b5563; border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .chromebtn:hover { background: #f3f4f6; color: #111827; }
+</style>
+</head>
+<body class="bg-[#f4f4f4] text-gray-900 min-h-screen flex flex-col">
+
+<!-- ═══════════ APP CHROME — the named homes for the full app surface ═══════════ -->
+<header class="bg-white border-b border-gray-300 sticky top-0 z-50">
+  <div class="px-4 h-12 flex items-center gap-1.5">
+    <a href="w5-sheet.html" class="flex items-center gap-2 font-semibold text-sm text-gray-800 mr-1 shrink-0" title="Back to the landing page">
+      <div class="w-6 h-6 bg-[#217346] rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+      <span class="hidden sm:inline">tired</span>
+    </a>
+
+    <!-- scenario switcher -->
+    <select class="px-2 py-1.5 bg-white border border-gray-300 rounded-md text-xs text-gray-700 max-w-[170px] shrink-0" title="Scenario switcher — your saved plans">
+      <option>Martin &amp; Sasha — base plan</option>
+      <option>Retire at 60 (what-if)</option>
+      <option>+ New scenario…</option>
+    </select>
+    <button class="chromebtn" title="Save (unsaved changes)" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      <span class="hidden md:inline">Save</span>
+    </button>
+
+    <span class="w-px h-5 bg-gray-300 mx-1 hidden sm:block"></span>
+
+    <!-- Details: home of the 13 input sections -->
+    <details class="menu">
+      <summary class="chromebtn font-medium">
+        Details
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div class="panel mt-1 w-72 bg-white border border-gray-300 rounded-lg shadow-xl py-1.5 text-[12.5px] text-gray-700">
+        <p class="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-wider text-gray-400">All 13 input sections</p>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Personal Profile</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Account Balances</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Contribution Rates</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">RDSP</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Government Benefits <span class="text-gray-400">(CPP/OAS/GIS)</span></a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Pensions</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Employment Income</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Cash Events</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Spending Phases</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Spouse</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Withdrawal Strategy</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Home Equity</a>
+        <a class="block px-3 py-1.5 hover:bg-[#e8f2ec]" href="#">Market Hypotheses</a>
+        <div class="border-t border-gray-200 mt-1.5 pt-1.5">
+          <a class="block px-3 py-1.5 hover:bg-[#e8f2ec] text-gray-500" href="#">Engine settings…</a>
+        </div>
+      </div>
+    </details>
+
+    <!-- AI assistant entry -->
+    <button class="chromebtn" title="AI assistant — runs in your browser, reads this sheet">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+      <span class="hidden md:inline">Assistant</span>
+    </button>
+
+    <div class="flex-1"></div>
+
+    <!-- storm-test indicator lives in chrome too, right of center -->
+    <span id="skyChip" class="hidden sm:inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border mr-1"></span>
+
+    <!-- EXPORT — the star of this theme -->
+    <div class="flex items-stretch rounded-md border border-[#217346] overflow-hidden shrink-0" title="Export — take the whole sheet with you">
+      <button class="px-2.5 py-1.5 bg-[#217346] text-white text-[12px] font-semibold flex items-center gap-1.5 hover:bg-[#1a5c39]">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        .xlsx
+      </button>
+      <button class="px-2.5 py-1.5 bg-white text-[#217346] text-[12px] font-semibold hover:bg-[#e8f2ec] border-l border-[#217346]">.csv</button>
+    </div>
+
+    <!-- data / backup -->
+    <button class="chromebtn" title="Data — full backup, restore, import">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      <span class="hidden lg:inline">Data</span>
+    </button>
+
+    <!-- print / one-page plan -->
+    <button class="chromebtn" title="Print — the one-page plan">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      <span class="hidden lg:inline">Print</span>
+    </button>
+
+    <!-- help -->
+    <button class="chromebtn" title="Help & docs">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="flex-1 w-full max-w-[1240px] mx-auto px-4 pt-4 pb-10">
+
+  <!-- ═══════════ VERDICT BANNER (stolen from 01, sheet-flavored) ═══════════ -->
+  <section id="verdictBanner" class="mb-3 bg-white border border-gray-300 shadow-sm rounded-sm overflow-hidden">
+    <div class="flex flex-col md:flex-row md:items-center gap-3 md:gap-6 px-4 py-3.5">
+      <div class="flex items-center gap-3 min-w-0">
+        <span id="verdictDot" class="relative flex h-3.5 w-3.5 shrink-0">
+          <span id="verdictPing" class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"></span>
+          <span id="verdictDotCore" class="relative inline-flex rounded-full h-3.5 w-3.5"></span>
+        </span>
+        <div class="min-w-0">
+          <h1 id="verdictText" class="text-lg md:text-xl font-bold tracking-tight text-gray-900 leading-snug">…</h1>
+          <p id="verdictSub" class="text-[12.5px] text-gray-600 leading-snug"></p>
+        </div>
+      </div>
+      <div class="flex-1"></div>
+      <div class="flex items-center gap-4 md:gap-5 shrink-0 text-right">
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.12em] text-gray-400">left at 95</p>
+          <p id="outLeft" class="num text-base font-bold text-gray-900">—</p>
+        </div>
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.12em] text-gray-400">storm test</p>
+          <p id="outStorm" class="num text-base font-bold">—</p>
+        </div>
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.12em] text-gray-400">taxes, lifetime</p>
+          <p class="num text-base font-bold text-gray-400" title="Per-account tax detail lives under Details → Withdrawal Strategy in the full engine">in grid ↓</p>
+        </div>
+      </div>
+    </div>
+    <!-- fix strip: shown when the plan fails -->
+    <div id="fixStrip" class="hidden px-4 py-2 bg-red-50 border-t border-red-200 text-[12.5px] text-red-900 items-center gap-2">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span id="fixText"></span>
+    </div>
+  </section>
+
+  <div class="grid lg:grid-cols-[1fr_268px] gap-4 items-start">
+
+    <!-- ═══════════ THE SHEET ═══════════ -->
+    <section class="bg-white border border-gray-300 shadow-sm min-w-0">
+
+      <!-- workbook title bar -->
+      <div class="h-8 bg-[#217346] flex items-center px-3 gap-3">
+        <span class="text-white text-[12px] font-semibold tracking-wide">plan.xlsx — My retirement</span>
+        <div class="flex-1"></div>
+        <span id="statusCell" class="num text-[11px] font-semibold text-white px-2 py-0.5 rounded bg-black/25">calculating…</span>
+      </div>
+
+      <!-- formula bar -->
+      <div class="flex items-stretch border-b border-gray-300">
+        <span class="fbadge num shrink-0" id="fbRef">fx</span>
+        <div id="formula" class="flex-1 px-3 py-2 text-[13px] text-gray-700 min-h-[38px] flex items-center leading-snug">
+          click any row to see its math in words.
+        </div>
+      </div>
+
+      <!-- the grid: ages as rows, per-account balances as columns -->
+      <div class="overflow-auto max-h-[62vh]">
+        <table class="xl w-full">
+          <thead>
+            <tr>
+              <th class="w-[34px]"></th>
+              <th class="min-w-[52px]">A</th>
+              <th class="min-w-[76px]">B</th>
+              <th class="min-w-[108px]">C</th>
+              <th class="min-w-[108px]">D</th>
+              <th class="min-w-[108px]">E</th>
+              <th class="min-w-[118px]">F</th>
+              <th class="min-w-[96px]">G</th>
+              <th class="min-w-[96px]">H</th>
+            </tr>
+            <tr class="hdrlabels">
+              <td class="gut"></td>
+              <td class="hdr">age</td>
+              <td class="hdr" title="Retire age is editable — type in the yellow cell">retire?</td>
+              <td class="hdr">RRSP</td>
+              <td class="hdr">TFSA</td>
+              <td class="hdr">taxable</td>
+              <td class="hdr">total balance</td>
+              <td class="hdr" title="Spending is editable — type in the yellow cell">spending</td>
+              <td class="hdr">benefits</td>
+            </tr>
+          </thead>
+          <tbody id="grid"></tbody>
+        </table>
+      </div>
+
+      <!-- sheet tabs -->
+      <div class="flex items-center gap-2 px-3 py-1.5 border-t border-gray-300 bg-[#fafafa] text-[11px] flex-wrap">
+        <span class="px-2 py-0.5 bg-white border border-gray-300 rounded-t text-[#217346] font-semibold">plan</span>
+        <span class="px-2 py-0.5 text-gray-400" title="Per-year receipts — one level under a stat">year math</span>
+        <span class="px-2 py-0.5 text-gray-400" title="What would a machine do — the optimizer">optimize</span>
+        <span class="px-2 py-0.5 text-gray-400" title="Side-by-side scenario comparison">compare</span>
+        <div class="flex-1"></div>
+        <span class="text-gray-400 hidden sm:inline">yellow cells are editable · click a row for its formula</span>
+      </div>
+    </section>
+
+    <!-- ═══════════ STEERING — compact sliders (from 03, shrunk) ═══════════ -->
+    <aside class="space-y-3">
+      <h2 class="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 px-1">Steering — the three dials</h2>
+
+      <div class="bg-white border border-gray-300 rounded-sm p-3.5">
+        <div class="flex items-baseline justify-between mb-1">
+          <label for="slRetire" class="text-[12.5px] font-medium text-gray-700">Stop working at</label>
+          <span id="vRetire" class="text-base font-bold num text-gray-900">62</span>
+        </div>
+        <input id="slRetire" type="range" class="fader" min="55" max="72" step="1" value="62" />
+        <div class="flex justify-between text-[10px] text-gray-400 num mt-1"><span>55</span><span>72</span></div>
+        <p id="cRetire" class="mt-2 text-[11px] text-gray-500 leading-snug border-t border-gray-200 pt-2"></p>
+      </div>
+
+      <div class="bg-white border border-gray-300 rounded-sm p-3.5">
+        <div class="flex items-baseline justify-between mb-1">
+          <label for="slSpend" class="text-[12.5px] font-medium text-gray-700">Spend a year</label>
+          <span id="vSpend" class="text-base font-bold num text-gray-900">$85k</span>
+        </div>
+        <input id="slSpend" type="range" class="fader" min="40000" max="160000" step="1000" value="85000" />
+        <div class="flex justify-between text-[10px] text-gray-400 num mt-1"><span>$40k</span><span>$160k</span></div>
+        <p id="cSpend" class="mt-2 text-[11px] text-gray-500 leading-snug border-t border-gray-200 pt-2"></p>
+      </div>
+
+      <div class="bg-white border border-gray-300 rounded-sm p-3.5">
+        <div class="flex items-baseline justify-between mb-1">
+          <label for="slSaved" class="text-[12.5px] font-medium text-gray-700">Saved so far</label>
+          <span id="vSaved" class="text-base font-bold num text-gray-900">$850k</span>
+        </div>
+        <input id="slSaved" type="range" class="fader" min="100000" max="3000000" step="10000" value="850000" />
+        <div class="flex justify-between text-[10px] text-gray-400 num mt-1"><span>$100k</span><span>$3.0M</span></div>
+        <p id="cSaved" class="mt-2 text-[11px] text-gray-500 leading-snug border-t border-gray-200 pt-2"></p>
+      </div>
+
+      <!-- weather -->
+      <div class="bg-white border border-gray-300 rounded-sm p-3.5">
+        <p class="text-[12.5px] font-medium text-gray-700 mb-2">Market mood</p>
+        <div class="grid grid-cols-3 gap-1.5" id="skyBtns">
+          <button data-sky="storm" class="sky px-2 py-1.5 text-[11.5px] font-medium rounded border border-gray-300 text-gray-600 hover:border-gray-400">stormy</button>
+          <button data-sky="normal" class="sky px-2 py-1.5 text-[11.5px] font-medium rounded border border-gray-300 text-gray-600 hover:border-gray-400">ordinary</button>
+          <button data-sky="sun" class="sky px-2 py-1.5 text-[11.5px] font-medium rounded border border-gray-300 text-gray-600 hover:border-gray-400">kind</button>
+        </div>
+        <p class="mt-2 text-[11px] text-gray-500 leading-snug border-t border-gray-200 pt-2">
+          The layperson's Monte Carlo — <span class="font-medium text-gray-700">stormy</span> is the stress test the verdict shows up top.
+        </p>
+      </div>
+
+      <div class="rounded-sm border border-[#217346]/30 bg-[#e8f2ec]/60 p-3 text-[11.5px] text-[#14532d] leading-snug">
+        Every drag recalculates the whole sheet instantly — the same numbers
+        the <strong>.xlsx export</strong> would carry.
+      </div>
+    </aside>
+  </div>
+</main>
+
+<footer class="px-5 py-4 text-center text-[11px] text-gray-500 border-t border-gray-300 bg-white">
+  The Spreadsheet — winner mashup of 25 + 03 + 01's verdict hero.
+  For education and exploration only — not financial, tax, or investment advice.
+</footer>
+
+<script src="../model.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    spending: DEMO_DEFAULTS.spending,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var SELECTED = 66;
+
+  var money = function (v) { return '$' + Math.round(v).toLocaleString('en-CA'); };
+  var kfmt = function (v) {
+    if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+    return '$' + Math.round(v / 1000) + 'k';
+  };
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /* ── Per-account split ──────────────────────────────────────────────
+     The demo engine is one pot; the UI's promise is per-account columns.
+     Deterministic static allocation of the total — RRSP 55%, TFSA 25%,
+     taxable 20% — matching how the real engine reports the same rows.
+     Everything still sums to simulate()'s authoritative balance. */
+  function splitAccounts(total) {
+    var rrsp = total * 0.55, tfsa = total * 0.25;
+    return { rrsp: rrsp, tfsa: tfsa, taxable: total - rrsp - tfsa };
+  }
+
+  /* plain-English formula for the selected row */
+  function rowFormula(rowIdxExcel, age, prevBal, bal) {
+    var ref = 'F' + rowIdxExcel;
+    if (bal <= 0) {
+      return { ref: ref, words: 'F' + rowIdxExcel + ' = 0 — started the year with ' + kfmt(prevBal) +
+        ', spent ' + kfmt(state.spending) + ', and that was the end of the money.' };
+    }
+    var working = age < state.retireAge;
+    var inflow = working ? state.contrib : (age >= state.benefitAge ? state.benefits : 0);
+    var outflow = working ? 0 : state.spending;
+    var growth = bal - (prevBal + inflow - outflow);
+    var rateTxt = state.sky === 'storm' ? '1.012' : state.sky === 'sun' ? '1.045' : '1.03';
+    var sym = 'F' + rowIdxExcel + ' = F' + (rowIdxExcel - 1) + ' × ' + rateTxt;
+    if (working) sym += ' + savings ' + kfmt(inflow);
+    else {
+      if (inflow > 0) sym += ' + benefits ' + kfmt(inflow);
+      sym += ' − spending ' + kfmt(outflow);
+    }
+    var words = sym + '  ·  in words: started with ' + kfmt(prevBal);
+    if (working) words += ', you added ' + kfmt(inflow);
+    else {
+      if (inflow > 0) words += ', benefits added ' + kfmt(inflow);
+      words += ', you spent ' + kfmt(outflow);
+    }
+    if (growth >= 1) words += ', growth added ' + kfmt(growth);
+    else if (growth <= -1) words += ', growth took ' + kfmt(-growth);
+    words += ' — so you had ' + kfmt(bal) + '.';
+    return { ref: ref, words: words };
+  }
+
+  function buildGrid(res) {
+    var html = '', excelRow = 3; /* header rows occupy 1–2 */
+    var totSpend = 0, totBen = 0;
+    var prev = state.savings;
+
+    for (var i = 0; i < res.rows.length; i++) {
+      var r = res.rows[i];
+      if (r.age > state.maxAge) break;
+      var working = r.age < state.retireAge;
+      var inflow = working ? state.contrib : (r.age >= state.benefitAge ? state.benefits : 0);
+      var outflow = working ? 0 : state.spending;
+      var dry = res.depletionAge != null && r.age >= res.depletionAge;
+      var isRetire = r.age === state.retireAge;
+      var acct = splitAccounts(r.bal);
+
+      if (!working) totSpend += outflow;
+      if (!working && r.age >= state.benefitAge) totBen += inflow;
+
+      var cls = [];
+      if (dry) cls.push('dry');
+      if (isRetire) cls.push('ret');
+      if (r.age === SELECTED) cls.push('sel');
+
+      html += '<tr data-age="' + r.age + '"' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>';
+      html += '<td class="gut num">' + excelRow + '</td>';
+      html += '<td class="a num">' + r.age + '</td>';
+
+      /* B: retire-age marker — editable on the retirement row */
+      if (isRetire && !dry) {
+        html += '<td class="editable" title="Type a new retire age and press Enter">' +
+          '<input id="cellRetire" type="text" inputmode="numeric" value="' + state.retireAge + '" aria-label="retire age"></td>';
+      } else {
+        html += '<td class="z text-center">' + (working ? '' : '·') + '</td>';
+      }
+
+      html += '<td class="num ' + (dry ? 'z' : 'm') + '">' + (dry ? '—' : money(acct.rrsp)) + '</td>';
+      html += '<td class="num ' + (dry ? 'z' : 'm') + '">' + (dry ? '—' : money(acct.tfsa)) + '</td>';
+      html += '<td class="num ' + (dry ? 'z' : 'm') + '">' + (dry ? '—' : money(acct.taxable)) + '</td>';
+      html += '<td class="num bal">' + (dry ? '$0' : money(r.bal)) + '</td>';
+
+      /* G: spending — editable on every retired, non-dry row */
+      if (!working && !dry) {
+        html += '<td class="editable" title="Type a new yearly spending and press Enter">' +
+          '<input class="cellSpend" type="text" inputmode="numeric" value="' + state.spending + '" aria-label="yearly spending"></td>';
+      } else {
+        html += '<td class="num ' + (outflow > 0 && !dry ? 'm' : 'z') + '">' + (outflow > 0 && !dry ? money(outflow) : '—') + '</td>';
+      }
+
+      html += '<td class="num ' + (inflow > 0 && !working ? 'm' : 'z') + '">' + (inflow > 0 && !working ? money(inflow) : '—') + '</td>';
+      html += '</tr>';
+
+      prev = r.bal;
+      excelRow++;
+      if (dry) break;
+    }
+
+    /* totals row */
+    var lastBal = res.rows.length ? res.rows[res.rows.length - 1].bal : 0;
+    html += '<tr class="totalrow">' +
+      '<td class="gut"></td>' +
+      '<td class="a text-center" style="position:sticky;left:34px">Σ</td>' +
+      '<td></td>' +
+      '<td colspan="3" style="text-align:right;padding-right:8px;color:#6b7280;font-weight:500">per-account detail in full engine →</td>' +
+      '<td class="num">' + money(lastBal) + ' end</td>' +
+      '<td class="num">' + kfmt(totSpend) + '</td>' +
+      '<td class="num">' + kfmt(totBen) + '</td>' +
+      '</tr>';
+
+    $('grid').innerHTML = html;
+
+    /* formula bar for selected row */
+    var selPrev = state.savings, selBal = null, p = state.savings, selExcel = 3;
+    for (var q = 0; q < res.rows.length; q++) {
+      if (res.rows[q].age === SELECTED) { selPrev = p; selBal = res.rows[q].bal; break; }
+      p = res.rows[q].bal;
+      selExcel++;
+    }
+    if (selBal != null) {
+      var f = rowFormula(selExcel, SELECTED, selPrev, selBal);
+      $('fbRef').textContent = f.ref;
+      $('formula').textContent = f.words;
+    } else {
+      $('fbRef').textContent = 'F—';
+      $('formula').textContent = 'no row at ' + SELECTED + ' — the money is gone before then.';
+    }
+
+    /* wire editable cells */
+    var cr = $('cellRetire');
+    if (cr) {
+      cr.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        var v = Math.round(parseFloat(cr.value));
+        if (!isNaN(v)) { state.retireAge = Math.min(72, Math.max(55, v)); SELECTED = state.retireAge + 4; render(); }
+        e.target.blur();
+      });
+      cr.addEventListener('click', function (e) { e.stopPropagation(); });
+    }
+    var spends = document.querySelectorAll('.cellSpend');
+    for (var s = 0; s < spends.length; s++) {
+      (function (inp) {
+        inp.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter') return;
+          var v = Math.round(parseFloat(String(inp.value).replace(/[$,\s]/g, '')));
+          if (!isNaN(v)) { state.spending = Math.min(400000, Math.max(10000, v)); render(); }
+          e.target.blur();
+        });
+        inp.addEventListener('click', function (e) { e.stopPropagation(); });
+      })(spends[s]);
+    }
+  }
+
+  function render() {
+    var res = simulate(state);
+    var storm = simulate({ ...state, sky: 'storm' });
+    buildGrid(res);
+
+    /* verdict banner */
+    var vt = $('verdictText'), vs = $('verdictSub'), dot = $('verdictDotCore'), ping = $('verdictPing');
+    if (res.ok) {
+      vt.innerHTML = 'Your money lasts until <span class="text-[#217346]">' + lastsLabel(res) + '</span> — it outlasts you.';
+      vs.textContent = 'Retiring at ' + state.retireAge + ' on ' + kfmt(state.spending) + '/yr, with ' + kfmt(state.savings) + ' saved, the sheet never hits zero.';
+      dot.style.background = '#10b981'; ping.style.background = '#34d399';
+    } else {
+      vt.innerHTML = 'Your money lasts until <span class="text-red-700">' + res.depletionAge + '</span> — that’s short of ' + state.maxAge + '.';
+      vs.textContent = 'Retiring at ' + state.retireAge + ' on ' + kfmt(state.spending) + '/yr, the sheet hits $0 at age ' + res.depletionAge + ' — the red row below.';
+      dot.style.background = '#dc2626'; ping.style.background = '#f87171';
+    }
+
+    /* fix strip */
+    var fix = suggest(state);
+    if (!res.ok && fix) {
+      $('fixStrip').classList.remove('hidden');
+      $('fixStrip').classList.add('flex');
+      $('fixText').textContent = fix;
+    } else {
+      $('fixStrip').classList.add('hidden');
+      $('fixStrip').classList.remove('flex');
+    }
+
+    /* status cell in the title bar */
+    var st = $('statusCell');
+    if (res.ok) { st.textContent = 'lasts to ' + lastsLabel(res); st.style.background = '#0f5132'; }
+    else { st.textContent = 'runs out at ' + res.depletionAge; st.style.background = '#a4262c'; }
+
+    /* side stats */
+    $('outLeft').textContent = money(res.leftAtMax);
+    var os = $('outStorm');
+    if (storm.ok) { os.textContent = 'holds (' + lastsLabel(storm) + ')'; os.style.color = '#14532d'; }
+    else { os.textContent = 'fails at ' + storm.depletionAge; os.style.color = '#9c0006'; }
+
+    /* chrome sky chip */
+    var chip = $('skyChip');
+    var skyName = state.sky === 'storm' ? 'stormy' : state.sky === 'sun' ? 'kind' : 'ordinary';
+    chip.textContent = 'market: ' + skyName;
+    chip.className = 'hidden sm:inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border mr-1 ' +
+      (state.sky === 'storm' ? 'bg-red-50 text-red-800 border-red-200'
+       : state.sky === 'sun' ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+       : 'bg-gray-50 text-gray-600 border-gray-300');
+
+    /* sky buttons */
+    var btns = document.querySelectorAll('#skyBtns .sky');
+    for (var b = 0; b < btns.length; b++) {
+      var on = btns[b].getAttribute('data-sky') === state.sky;
+      btns[b].style.background = on ? '#217346' : '';
+      btns[b].style.color = on ? '#fff' : '';
+      btns[b].style.borderColor = on ? '#217346' : '';
+    }
+
+    /* sliders + consequence lines */
+    $('slRetire').value = String(state.retireAge);
+    $('slSpend').value = String(state.spending);
+    $('slSaved').value = String(state.savings);
+    $('vRetire').textContent = String(state.retireAge);
+    $('vSpend').textContent = kfmt(state.spending);
+    $('vSaved').textContent = kfmt(state.savings);
+
+    var later = simulate({ ...state, retireAge: state.retireAge + 1 });
+    var earlier = simulate({ ...state, retireAge: state.retireAge - 1 });
+    $('cRetire').innerHTML = state.retireAge >= 72
+      ? 'At the top of the range.'
+      : 'One year later: lasts to <b class="text-gray-800">' + lastsLabel(later) + '</b>' +
+        (state.retireAge > 55 ? ' · one earlier: <b class="text-gray-800">' + (earlier.ok ? lastsLabel(earlier) : earlier.depletionAge) + '</b>' : '') + '.';
+
+    var lessSpend = simulate({ ...state, spending: state.spending - 5000 });
+    $('cSpend').innerHTML = '$5k less a year: lasts to <b class="text-gray-800">' +
+      (lessSpend.ok ? lastsLabel(lessSpend) : lessSpend.depletionAge) + '</b>.';
+
+    var moreSaved = simulate({ ...state, savings: state.savings + 100000 });
+    $('cSaved').innerHTML = '$100k more saved: lasts to <b class="text-gray-800">' +
+      (moreSaved.ok ? lastsLabel(moreSaved) : moreSaved.depletionAge) + '</b>.';
+  }
+
+  /* steering */
+  $('slRetire').addEventListener('input', function (e) { state.retireAge = +e.target.value; render(); });
+  $('slSpend').addEventListener('input', function (e) { state.spending = +e.target.value; render(); });
+  $('slSaved').addEventListener('input', function (e) { state.savings = +e.target.value; render(); });
+
+  var skyWrap = $('skyBtns');
+  skyWrap.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('button[data-sky]') : null;
+    if (!b) return;
+    state.sky = b.getAttribute('data-sky');
+    render();
+  });
+
+  /* row select */
+  $('grid').addEventListener('click', function (e) {
+    var tr = e.target && e.target.closest ? e.target.closest('tr[data-age]') : null;
+    if (!tr) return;
+    SELECTED = +tr.getAttribute('data-age');
+    render();
+  });
+
+  /* close Details menu when clicking elsewhere */
+  document.addEventListener('click', function (e) {
+    var d = document.querySelector('details.menu[open]');
+    if (d && !d.contains(e.target)) d.removeAttribute('open');
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Will your money outlast you?</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .serif-display { font-family: Georgia, 'Times New Roman', serif; letter-spacing: -0.02em; }
+  .num { font-variant-numeric: tabular-nums; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .fu { animation: fadeUp .7s cubic-bezier(.2,.7,.3,1) both; }
+  .fu-1 { animation-delay:.08s } .fu-2 { animation-delay:.18s } .fu-3 { animation-delay:.28s }
+  .fu-4 { animation-delay:.38s } .fu-5 { animation-delay:.48s } .fu-6 { animation-delay:.58s }
+  @keyframes glow { 0%,100% { opacity:.5 } 50% { opacity:.9 } }
+  .glow { animation: glow 5s ease-in-out infinite; }
+</style>
+</head>
+<body class="bg-[#0c0f14] text-slate-200 min-h-screen antialiased">
+
+<!-- ═══ SITE 1: pure marketing. No app chrome. One door to the app. ═══ -->
+<header class="flex items-center justify-between px-6 md:px-10 h-16 border-b border-white/5">
+  <div class="flex items-center gap-2 font-semibold text-sm text-white">
+    <div class="w-6 h-6 bg-blue-500 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <nav class="flex items-center gap-5 text-xs text-slate-400">
+    <a href="#how" class="hover:text-white transition-colors hidden sm:block">How it works</a>
+    <a href="#privacy" class="hover:text-white transition-colors hidden sm:block">Privacy</a>
+    <a href="#legal" class="hover:text-white transition-colors hidden sm:block">Legal</a>
+    <a href="w1-editorial-verdict-app.html" class="px-3 py-1.5 rounded-md bg-white/10 text-white hover:bg-white/15 transition-colors">Open the app →</a>
+  </nav>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 md:px-10">
+
+  <!-- ═══ HERO — the question, huge ═══ -->
+  <section class="pt-16 md:pt-24 pb-14 md:pb-20 text-center relative">
+    <div class="glow absolute left-1/2 top-24 -translate-x-1/2 w-[560px] h-[280px] rounded-full bg-blue-600/20 blur-[110px] pointer-events-none"></div>
+
+    <p class="fu fu-1 relative text-[11px] font-semibold uppercase tracking-[0.28em] text-blue-400 mb-6">
+      A Canadian retirement drawdown planner
+    </p>
+    <h1 class="fu fu-2 relative serif-display text-5xl md:text-7xl text-white leading-[1.05]">
+      Will your money<br/>outlast <em class="text-blue-400 not-italic">you?</em>
+    </h1>
+    <p class="fu fu-3 relative mt-7 text-base md:text-lg text-slate-400 leading-relaxed max-w-xl mx-auto">
+      Project your savings year by year through retirement — taxes, CPP, OAS, GIS
+      and all — and see the exact age your money lasts to.
+    </p>
+
+    <div class="fu fu-4 relative mt-10 flex flex-col items-center gap-4">
+      <a href="w1-editorial-verdict-app.html"
+         class="group px-8 py-4 bg-blue-500 text-white text-base font-semibold rounded-full hover:bg-blue-400 transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2">
+        See your answer
+        <span class="transition-transform group-hover:translate-x-0.5">→</span>
+      </a>
+      <p class="text-[11px] text-slate-500">Free · No account · Runs entirely in your browser</p>
+    </div>
+  </section>
+
+  <!-- ═══ THREE STEPS ═══ -->
+  <section id="how" class="grid md:grid-cols-3 gap-10 md:gap-12 pb-16 md:pb-24">
+    <div class="fu fu-4">
+      <div class="serif-display text-5xl text-white/10 mb-3">01</div>
+      <h3 class="text-base font-semibold text-white mb-2">Tell it your life</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        Ages, balances, contributions, CPP/OAS and your spending goal. A partner gets
+        their own pass. Everything stays editable afterwards, live as you type.
+      </p>
+    </div>
+    <div class="fu fu-5">
+      <div class="serif-display text-5xl text-white/10 mb-3">02</div>
+      <h3 class="text-base font-semibold text-white mb-2">Read the answer</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        One plain-English verdict — "your money lasts until you're 96" — with the
+        timeline and the year-by-year math behind it, one click down when you want it.
+      </p>
+    </div>
+    <div class="fu fu-6">
+      <div class="serif-display text-5xl text-white/10 mb-3">03</div>
+      <h3 class="text-base font-semibold text-white mb-2">Make it better</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        Drag retirement age or spending and watch the answer change live. If the plan
+        falls short, it tells you the one change that closes the gap.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══ PRIVACY STRIP ═══ -->
+  <section id="privacy" class="fu fu-6 border-t border-white/5 py-10 md:py-14 flex flex-col md:flex-row items-start md:items-center gap-5 md:gap-8">
+    <div class="w-11 h-11 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+    </div>
+    <div class="flex-1">
+      <h3 class="text-sm font-semibold text-white mb-1">Your data never leaves this device.</h3>
+      <p class="text-[13px] text-slate-400 leading-relaxed max-w-2xl">
+        No servers, no accounts. Scenarios, settings and results live only in this
+        browser's local storage — nothing is uploaded, nothing is tracked. Keep a
+        backup file if you switch devices.
+      </p>
+    </div>
+    <a href="w1-editorial-verdict-app.html" class="px-5 py-2.5 bg-white text-slate-900 text-sm font-semibold rounded-full hover:bg-slate-200 transition-colors shrink-0">
+      See your answer →
+    </a>
+  </section>
+
+  <!-- ═══ FOOTER / LEGAL ═══ -->
+  <footer id="legal" class="border-t border-white/5 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-[11px] text-slate-600">
+    <span class="max-w-xl leading-relaxed">
+      For education and exploration only — simplified estimates, not financial, tax,
+      or investment advice. Rules are Canadian tax &amp; benefit approximations.
+    </span>
+    <span class="flex items-center gap-4">
+      <a href="#" class="hover:text-slate-400 transition-colors">Open source</a>
+      <a href="#" class="hover:text-slate-400 transition-colors">Donate</a>
+      <a href="#" class="hover:text-slate-400 transition-colors">Help</a>
+    </span>
+  </footer>
+</main>
+
+</body>
+</html>

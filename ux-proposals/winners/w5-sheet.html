@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Your retirement, in a grid you already trust</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .fu { animation: fadeUp .7s cubic-bezier(.2,.7,.3,1) both; }
+  .fu-1 { animation-delay:.08s } .fu-2 { animation-delay:.18s } .fu-3 { animation-delay:.28s }
+  .fu-4 { animation-delay:.38s } .fu-5 { animation-delay:.48s } .fu-6 { animation-delay:.58s }
+
+  /* spreadsheet hero grid */
+  table.xl { border-collapse: separate; border-spacing: 0; }
+  table.xl th, table.xl td {
+    border-right: 1px solid #dcdcdc; border-bottom: 1px solid #dcdcdc;
+    height: 26px; padding: 0 10px; font-size: 12.5px; white-space: nowrap;
+  }
+  table.xl thead th {
+    background: #f1f1f1; color: #6b7280; font-weight: 500; text-align: center;
+    font-size: 11px; height: 22px;
+  }
+  td.gut { background: #f1f1f1; color: #8a8a8a; text-align: center; font-size: 11px; min-width: 38px; padding: 0 6px; }
+  td.a   { text-align: center; color: #374151; }
+  td.m   { text-align: right; color: #1f2937; }
+  td.z   { text-align: right; color: #c4c4c4; }
+  td.bal { text-align: right; font-weight: 600; color: #14532d; }
+  tr.dry td     { background: #fdecec; }
+  tr.dry td.bal { background: #ffc7ce; color: #9c0006; font-weight: 700; }
+  tr.dry td.gut { background: #ffc7ce; color: #9c0006; font-weight: 700; }
+  tr.sel td     { box-shadow: inset 2.5px 0 0 #217346; }
+  tr.sel td.gut { background: #217346; color: #fff; font-weight: 700; }
+  td.hdr { background: #e8f2ec; color: #217346; font-weight: 700; text-align: center; font-size: 11px; }
+  tr.ret td { background: #fdf6e5; }
+</style>
+</head>
+<body class="bg-white text-slate-900 min-h-screen antialiased">
+
+<!-- ═══ SITE 1: landing. Marketing only — no app chrome. One door to the app. ═══ -->
+<header class="flex items-center justify-between px-6 md:px-10 h-16 border-b border-slate-200">
+  <div class="flex items-center gap-2 font-semibold text-sm text-slate-900">
+    <div class="w-6 h-6 bg-[#217346] rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <nav class="flex items-center gap-5 text-xs text-slate-500">
+    <a href="#how" class="hover:text-slate-900 transition-colors hidden sm:block">How it works</a>
+    <a href="#privacy" class="hover:text-slate-900 transition-colors hidden sm:block">Privacy</a>
+    <a href="#legal" class="hover:text-slate-900 transition-colors hidden sm:block">Legal</a>
+    <a href="w5-sheet-app.html" class="px-3 py-1.5 rounded-md bg-[#217346] text-white hover:bg-[#1a5c39] transition-colors font-medium">Open your sheet →</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ═══ HERO — headline + live grid side by side ═══ -->
+  <section class="max-w-6xl mx-auto px-6 md:px-10 pt-14 md:pt-20 pb-16 md:pb-24 grid lg:grid-cols-[1fr_1.15fr] gap-12 lg:gap-14 items-center">
+
+    <div>
+      <p class="fu fu-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#217346] mb-5">
+        A Canadian retirement drawdown planner
+      </p>
+      <h1 class="fu fu-2 text-4xl md:text-[52px] font-bold leading-[1.08] tracking-tight text-slate-900">
+        Your retirement, in a grid you already <span class="text-[#217346]">trust.</span>
+      </h1>
+      <p class="fu fu-3 mt-6 text-base md:text-lg text-slate-600 leading-relaxed max-w-lg">
+        Live formulas, real answers — export it to Excel anytime. Every year's
+        balance is a row; every row shows its math in plain English. No black box.
+      </p>
+      <div class="fu fu-4 mt-9 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <a href="w5-sheet-app.html"
+           class="group px-7 py-3.5 bg-[#217346] text-white text-sm font-semibold rounded-lg hover:bg-[#1a5c39] transition-all shadow-lg shadow-[#217346]/25 flex items-center gap-2">
+          Open your sheet
+          <span class="transition-transform group-hover:translate-x-0.5">→</span>
+        </a>
+        <span class="text-[11px] text-slate-500">Free · No account · Runs entirely in your browser</span>
+      </div>
+      <div class="fu fu-5 mt-9 flex items-center gap-2.5 text-[12px] text-slate-500">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#217346" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Download as <strong class="text-slate-700">.xlsx</strong> or <strong class="text-slate-700">.csv</strong> whenever you like — it's your data.</span>
+      </div>
+    </div>
+
+    <!-- the live demo grid — computed by model.js, not a picture -->
+    <div class="fu fu-3 relative">
+      <div class="absolute -inset-6 bg-gradient-to-br from-[#217346]/10 via-transparent to-amber-100/40 rounded-3xl pointer-events-none"></div>
+      <div class="relative bg-white border border-slate-300 shadow-xl shadow-slate-200/70 rounded-sm overflow-hidden">
+        <!-- fake window title bar -->
+        <div class="h-8 bg-[#217346] flex items-center px-3 gap-2">
+          <span class="flex gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-white/30"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-white/30"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-white/30"></span>
+          </span>
+          <span class="text-white text-[12px] font-semibold tracking-wide ml-1">plan.xlsx — My retirement</span>
+          <div class="flex-1"></div>
+          <span id="heroVerdict" class="num text-[11px] font-semibold text-white px-2 py-0.5 rounded bg-black/25">…</span>
+        </div>
+        <!-- formula bar -->
+        <div class="flex items-stretch border-b border-slate-300">
+          <span class="bg-slate-100 border-r border-slate-300 text-slate-400 text-[10px] px-2 flex items-center num" id="heroFxRef">B14</span>
+          <div id="heroFx" class="flex-1 px-3 py-1.5 text-[12px] text-slate-600 min-h-[30px] flex items-center leading-snug"></div>
+        </div>
+        <!-- grid -->
+        <div class="overflow-hidden">
+          <table class="xl w-full">
+            <thead>
+              <tr>
+                <th class="w-[38px]"></th>
+                <th>A</th><th>B</th><th>C</th><th>D</th>
+              </tr>
+              <tr>
+                <td class="gut"></td>
+                <td class="hdr">age</td>
+                <td class="hdr">balance</td>
+                <td class="hdr">money in</td>
+                <td class="hdr">money out</td>
+              </tr>
+            </thead>
+            <tbody id="heroGrid"></tbody>
+          </table>
+        </div>
+        <!-- sheet tabs -->
+        <div class="flex items-center gap-2 px-3 py-1.5 border-t border-slate-300 bg-slate-50 text-[11px]">
+          <span class="px-2 py-0.5 bg-white border border-slate-300 rounded-t text-[#217346] font-semibold">plan</span>
+          <span class="px-2 py-0.5 text-slate-400">assumptions</span>
+          <span class="px-2 py-0.5 text-slate-400">notes</span>
+          <div class="flex-1"></div>
+          <span class="text-slate-400">every cell recalculates live</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ WHY A SPREADSHEET ═══ -->
+  <section id="how" class="border-t border-slate-200 bg-slate-50/60">
+    <div class="max-w-6xl mx-auto px-6 md:px-10 py-16 md:py-20">
+      <h2 class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 mb-10 text-center">Why a spreadsheet?</h2>
+      <div class="grid md:grid-cols-3 gap-10 md:gap-12">
+        <div class="fu fu-4">
+          <div class="text-4xl font-bold text-slate-200 mb-3 num">01</div>
+          <h3 class="text-base font-semibold text-slate-900 mb-2">No black box</h3>
+          <p class="text-[13.5px] text-slate-600 leading-relaxed">
+            Click any year and the formula bar says its math in words:
+            "started with $1.2M, growth added $35k, you spent $85k."
+            If you can't check it, you shouldn't trust it.
+          </p>
+        </div>
+        <div class="fu fu-5">
+          <div class="text-4xl font-bold text-slate-200 mb-3 num">02</div>
+          <h3 class="text-base font-semibold text-slate-900 mb-2">Honest answers</h3>
+          <p class="text-[13.5px] text-slate-600 leading-relaxed">
+            If the money runs out, the row turns red and the verdict says so —
+            then tells you the one change that closes the gap. No hedging,
+            no forty-page PDF.
+          </p>
+        </div>
+        <div class="fu fu-6">
+          <div class="text-4xl font-bold text-slate-200 mb-3 num">03</div>
+          <h3 class="text-base font-semibold text-slate-900 mb-2">Take it with you</h3>
+          <p class="text-[13.5px] text-slate-600 leading-relaxed">
+            A lot of people like spreadsheets. Export the whole projection —
+            every year, every account — to .xlsx or .csv and keep playing in
+            Excel. It's your plan.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ PRIVACY ═══ -->
+  <section id="privacy" class="border-t border-slate-200">
+    <div class="max-w-6xl mx-auto px-6 md:px-10 py-12 md:py-16 flex flex-col md:flex-row items-start md:items-center gap-5 md:gap-8">
+      <div class="w-11 h-11 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#217346" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      </div>
+      <div class="flex-1">
+        <h3 class="text-sm font-semibold text-slate-900 mb-1">Your data never leaves this device.</h3>
+        <p class="text-[13px] text-slate-600 leading-relaxed max-w-2xl">
+          No servers, no accounts. Scenarios, settings and results live only in this
+          browser's local storage — nothing is uploaded, nothing is tracked. Export a
+          backup or a spreadsheet any time; it works offline too.
+        </p>
+      </div>
+      <a href="w5-sheet-app.html" class="px-5 py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors shrink-0">
+        Open your sheet →
+      </a>
+    </div>
+  </section>
+
+  <!-- ═══ FOOTER / LEGAL ═══ -->
+  <footer id="legal" class="border-t border-slate-200">
+    <div class="max-w-6xl mx-auto px-6 md:px-10 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-[11px] text-slate-500">
+      <span class="max-w-xl leading-relaxed">
+        For education and exploration only — simplified estimates, not financial, tax,
+        or investment advice. Rules are Canadian tax &amp; benefit approximations.
+      </span>
+      <span class="flex items-center gap-4">
+        <a href="#" class="hover:text-slate-800 transition-colors">Open source</a>
+        <a href="#" class="hover:text-slate-800 transition-colors">Donate</a>
+        <a href="#" class="hover:text-slate-800 transition-colors">Help</a>
+      </span>
+    </div>
+  </footer>
+</main>
+
+<script src="../model.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* Hero grid: run the real model at demo defaults and render a slice.
+     Defaults intentionally FAIL at 89 — the landing shows honesty too. */
+  var o = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    spending: DEMO_DEFAULTS.spending,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+  var res = simulate(o);
+
+  var money = function (v) { return '$' + Math.round(v).toLocaleString('en-CA'); };
+
+  /* show ages 55–90 (all rows, they're few) */
+  var html = '', rowNum = 2;
+  for (var i = 0; i < res.rows.length; i++) {
+    var r = res.rows[i];
+    if (r.age > 90) break;
+    var working = r.age < o.retireAge;
+    var inflow = working ? o.contrib : (r.age >= o.benefitAge ? o.benefits : 0);
+    var outflow = working ? 0 : o.spending;
+    var dry = res.depletionAge != null && r.age >= res.depletionAge;
+    var isRetire = r.age === o.retireAge;
+    var cls = [];
+    if (dry) cls.push('dry');
+    if (isRetire) cls.push('ret');
+    if (r.age === 66) cls.push('sel');
+    html += '<tr' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>' +
+      '<td class="gut num">' + rowNum++ + '</td>' +
+      '<td class="a num">' + r.age + '</td>' +
+      '<td class="num bal">' + (dry ? '$0' : money(r.bal)) + '</td>' +
+      '<td class="num ' + (inflow > 0 ? 'm' : 'z') + '">' + (inflow > 0 ? money(inflow) : '—') + '</td>' +
+      '<td class="num ' + (outflow > 0 ? 'm' : 'z') + '">' + (outflow > 0 ? money(outflow) : '—') + '</td>' +
+      '</tr>';
+    if (dry) break;
+  }
+  document.getElementById('heroGrid').innerHTML = html;
+
+  /* verdict chip in the fake title bar — honest, from the model */
+  var v = document.getElementById('heroVerdict');
+  if (res.ok) {
+    v.textContent = 'lasts to ' + lastsLabel(res);
+    v.style.background = '#0f5132';
+  } else {
+    v.textContent = 'runs out at ' + res.depletionAge;
+    v.style.background = '#a4262c';
+  }
+
+  /* formula bar: the selected row (66) said in words */
+  var prev = o.savings, selPrev = o.savings, selBal = null;
+  for (var q = 0; q < res.rows.length; q++) {
+    if (res.rows[q].age === 66) { selPrev = prev; selBal = res.rows[q].bal; break; }
+    prev = res.rows[q].bal;
+  }
+  var fx = document.getElementById('heroFx');
+  if (selBal != null && selBal > 0) {
+    var growth = selBal - (selPrev + o.benefits - o.spending);
+    fx.textContent = 'B14 = B13 + growth ' + fmtMoney(Math.max(0, growth)) +
+      ' + benefits ' + fmtMoney(o.benefits) + ' − spending ' + fmtMoney(o.spending) +
+      '  ·  in words: the year quietly shrinks the pot.';
+  } else {
+    fx.textContent = 'the money is gone by 66 — change an assumption.';
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — your plan</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range].sl { -webkit-appearance:none; appearance:none; height:3px; background:#e7e2d8; border-radius:2px; outline:none; }
+  input[type=range].sl::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:15px; height:15px; border-radius:50%; margin-top:-6px;
+    background:#b45309; border:3px solid #fff; box-shadow:0 0 0 1px #d6cdbd, 0 1px 3px rgba(0,0,0,.15);
+  }
+  input[type=range].sl::-moz-range-thumb {
+    width:15px; height:15px; border-radius:50%; background:#b45309; border:3px solid #fff;
+    box-shadow:0 0 0 1px #d6cdbd, 0 1px 3px rgba(0,0,0,.15);
+  }
+  .row { transition: background .15s; }
+  .row:hover { background:#fdfbf7; }
+  .seg { transition: all .15s; }
+  .seg.on { background:#fff; color:#1c1917; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  #verdict { letter-spacing:-.03em; }
+  .chrome-item { transition: background .15s, color .15s; }
+  .chrome-item:hover { background:#f5f1e9; }
+  @keyframes dockIn { from { transform:translateX(24px); opacity:0; } to { transform:none; opacity:1; } }
+  #dock.open { animation: dockIn .25s cubic-bezier(.2,.7,.3,1) both; }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  .msg { animation: rise .35s cubic-bezier(.2,.7,.3,1) both; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+</style>
+</head>
+<body class="bg-[#faf8f4] text-stone-800 antialiased min-h-screen flex flex-col">
+
+<!--
+  ══════════════════════════════════════════════════════════════════
+  W3 · CONVERSATION SPLIT — SITE 2: THE APP (dashboard)
+  Split-answer body (10) + life-timeline strip (08) + success
+  indicator, with full app chrome. The assistant from the landing
+  is a continued presence (dock, top right).
+  Bolt-on test: every surface has a visible, named home —
+    · 13 input sections ......... "Details ▾" in the top bar
+    · scenario switcher ......... "Plan: My plan ▾" in the top bar
+    · AI assistant .............. "Ask RE" top-bar entry → dock
+    · data / backup ............. "Data" in the top bar
+    · print / export ............ "Print" in the top bar
+    · storm test ................ success indicator, right column
+    · per-account balances ...... "the pot, year by year" chart
+                                  (this demo model is one combined pot;
+                                   per-account detail lives in Details)
+  ══════════════════════════════════════════════════════════════════
+-->
+
+<!-- ═══════════ APP CHROME ═══════════ -->
+<header class="bg-white border-b border-stone-200/80 sticky top-0 z-30">
+  <div class="flex items-center gap-1 px-4 lg:px-6 h-12">
+
+    <div class="flex items-center gap-2 pr-3 mr-1 border-r border-stone-200/80">
+      <div class="w-6 h-6 bg-amber-700 rounded flex items-center justify-center text-[9px] font-bold text-white">RE:</div>
+      <span class="font-semibold text-sm tracking-tight">tired</span>
+    </div>
+
+    <!-- scenario switcher -->
+    <div class="relative">
+      <button id="btnScenarios" class="chrome-item flex items-center gap-1.5 px-3 h-8 rounded-lg text-[13px] text-stone-700">
+        <span class="text-stone-400">Plan:</span>
+        <span class="font-medium">My plan</span>
+        <span class="text-stone-400 text-[10px]">▾</span>
+      </button>
+      <div id="menuScenarios" class="hidden absolute left-0 top-10 w-64 bg-white border border-stone-200 rounded-xl shadow-lg py-1.5 text-[13px]">
+        <button class="w-full text-left px-3.5 py-2 hover:bg-stone-50 flex items-center justify-between">My plan <span class="text-[10px] text-emerald-700 font-semibold">ACTIVE</span></button>
+        <button class="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-600">Work to 65</button>
+        <button class="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-600">Spend less, travel more</button>
+        <div class="border-t border-stone-100 mt-1 pt-1">
+          <button class="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-500">+ New scenario…</button>
+          <button class="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-500">Compare scenarios · revisions…</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details: the 13 input sections -->
+    <div class="relative">
+      <button id="btnDetails" class="chrome-item flex items-center gap-1.5 px-3 h-8 rounded-lg text-[13px] text-stone-700">
+        Details <span class="text-stone-400 text-[10px]">▾</span>
+      </button>
+      <div id="menuDetails" class="hidden absolute left-0 top-10 w-72 bg-white border border-stone-200 rounded-xl shadow-lg py-1.5 text-[13px] max-h-[70vh] overflow-y-auto">
+        <p class="px-3.5 pt-1.5 pb-1 text-[10.5px] uppercase tracking-wider text-stone-400">the full input surface</p>
+        <!-- each of the 13 SidebarForm sections has a named home here -->
+        <div id="detailsList"></div>
+        <div class="border-t border-stone-100 mt-1 pt-1">
+          <button class="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-500">Engine settings (tax, RRIF, volatility)…</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="chrome-item px-3 h-8 rounded-lg text-[13px] text-stone-700" title="Backup, restore, import, share links">Data</button>
+    <button class="chrome-item px-3 h-8 rounded-lg text-[13px] text-stone-700" title="The one-page printable plan, CSV/PDF export">Print</button>
+
+    <div class="flex-1"></div>
+
+    <span id="saveState" class="text-[11px] text-stone-400 mr-2">Saved · just now</span>
+
+    <!-- assistant presence: continued from the landing conversation -->
+    <button id="btnAssistant" class="flex items-center gap-2 h-8 pl-1.5 pr-3 rounded-full bg-amber-700 text-white text-[13px] font-medium shadow-sm hover:bg-amber-800 transition-colors">
+      <span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[9px] font-bold">RE</span>
+      Ask RE
+    </button>
+  </div>
+</header>
+
+<!-- ═══════════ SPLIT BODY ═══════════ -->
+<div class="flex-1 lg:grid lg:grid-cols-[minmax(0,1fr)_440px] xl:grid-cols-[minmax(0,1fr)_480px]">
+
+  <!-- ─────── LEFT · THE FOUR LEVERS ─────── -->
+  <div class="order-2 lg:order-1 px-6 lg:px-10 py-8 lg:border-r border-stone-200/70">
+    <p class="text-[11px] uppercase tracking-[0.14em] text-stone-400 mb-1">what you can change</p>
+    <h1 class="text-[16px] font-semibold text-stone-900">Four things decide the answer</h1>
+
+    <div id="rows" class="mt-5 divide-y divide-stone-200/70 border-y border-stone-200/70"></div>
+
+    <!-- weather is lever #4 -->
+    <div class="row mt-0 py-4 px-1 -mx-1 border-b border-stone-200/70">
+      <div class="flex items-baseline justify-between">
+        <span class="text-[14px] text-stone-700">If the markets are</span>
+      </div>
+      <div class="inline-flex rounded-lg bg-stone-100 p-0.5 text-[12.5px] mt-2.5">
+        <button class="seg rounded-md px-3.5 py-1.5 text-stone-500" data-sky="storm">stormy</button>
+        <button class="seg on rounded-md px-3.5 py-1.5 text-stone-500" data-sky="normal">ordinary</button>
+        <button class="seg rounded-md px-3.5 py-1.5 text-stone-500" data-sky="sun">kind</button>
+      </div>
+      <p class="mt-2 text-[12px] text-stone-400" id="weatherNote">a lifetime of ordinary markets</p>
+    </div>
+
+    <p class="mt-7 text-[12.5px] leading-relaxed text-stone-400 max-w-lg">
+      These are the four from our conversation. Everything else — accounts one by one, pensions,
+      part-time work, spending phases, the withdrawal order — is under <strong class="text-stone-500">Details ▾</strong> up top,
+      exactly as we left it.
+    </p>
+
+    <footer class="mt-10 pt-4 border-t border-stone-200/70 text-[11px] text-stone-400">
+      w3 · conversation split — app · Not financial advice. Educational model, Canadian approximations.
+    </footer>
+  </div>
+
+  <!-- ─────── RIGHT · THE ANSWER ─────── -->
+  <div class="order-1 lg:order-2 lg:sticky lg:top-12 lg:h-[calc(100vh-3rem)] bg-white lg:border-l border-stone-200/70 flex flex-col px-6 lg:px-8 py-7 overflow-y-auto">
+
+    <!-- verdict line -->
+    <p class="text-[11px] uppercase tracking-[0.14em] text-stone-400">your money lasts until you're</p>
+    <div class="flex items-baseline gap-3">
+      <div id="verdict" class="num text-[64px] leading-[0.95] font-semibold mt-1.5">—</div>
+      <span id="badge" class="text-[11px] font-semibold px-2 py-1 rounded-full"></span>
+    </div>
+    <p id="verdictSub" class="text-[13.5px] leading-relaxed text-stone-500 mt-2.5"></p>
+    <p id="sugg" class="text-[13px] leading-relaxed mt-1.5 text-amber-700 font-medium"></p>
+
+    <!-- life-timeline strip (08's sleek axis, colored by plan health) -->
+    <div class="mt-6 border-t border-stone-200/70 pt-5">
+      <div class="flex items-baseline justify-between">
+        <span class="text-[11px] uppercase tracking-[0.14em] text-stone-400">your life on one line</span>
+        <span class="text-[11px] text-stone-400 num">55 → 95</span>
+      </div>
+      <svg id="strip" viewBox="0 0 460 92" class="w-full block mt-3 select-none" aria-label="Timeline of your plan from 55 to 95"></svg>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-stone-500">
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500/80"></span>working, saving</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-600/80"></span>retired, money holding</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-500/80"></span>shortfall</span>
+      </div>
+    </div>
+
+    <!-- success indicator: the "graph success thing", storm-tested -->
+    <div class="mt-6 border-t border-stone-200/70 pt-5">
+      <div class="flex items-baseline justify-between">
+        <span class="text-[11px] uppercase tracking-[0.14em] text-stone-400">does it reach 95?</span>
+        <span id="stormNote" class="text-[11px] text-stone-400"></span>
+      </div>
+      <div class="mt-3">
+        <div class="h-2.5 rounded-full bg-stone-100 overflow-hidden flex">
+          <div id="barOk" class="h-full bg-emerald-600 transition-all duration-300" style="width:0%"></div>
+          <div id="barBad" class="h-full bg-rose-500 transition-all duration-300" style="width:0%"></div>
+        </div>
+        <div class="flex justify-between mt-1.5 text-[11px] text-stone-400 num">
+          <span>55</span><span>65</span><span>75</span><span>85</span><span>95</span>
+        </div>
+        <p id="successLine" class="text-[12.5px] text-stone-500 mt-2 leading-relaxed"></p>
+      </div>
+    </div>
+
+    <!-- the pot, year by year (engine's balance-over-age output) -->
+    <div class="mt-6 border-t border-stone-200/70 pt-5">
+      <div class="flex items-baseline justify-between">
+        <span class="text-[11px] uppercase tracking-[0.14em] text-stone-400">the pot, year by year</span>
+        <span class="text-[11px] text-stone-400 num" id="chartNote"></span>
+      </div>
+      <svg id="chart" viewBox="0 0 1000 170" preserveAspectRatio="none" class="w-full h-[140px] mt-3 block"></svg>
+      <p class="text-[11px] text-stone-400 mt-2 leading-relaxed">
+        All accounts combined — RRSP, TFSA, taxable and RDSP are tracked separately under
+        <strong class="text-stone-500">Details ▾ · Account Balances</strong>, with the same curve for each.
+      </p>
+    </div>
+
+    <!-- numbers behind it -->
+    <div class="mt-6 border-t border-stone-200/70 pt-5 grid grid-cols-3 gap-4">
+      <div>
+        <div class="text-[11px] text-stone-400 leading-snug">left at <span id="hMax">95</span></div>
+        <div class="num text-[17px] font-semibold text-stone-900 mt-1" id="sum1">—</div>
+      </div>
+      <div>
+        <div class="text-[11px] text-stone-400 leading-snug">CPP + OAS from 65</div>
+        <div class="num text-[17px] font-semibold text-stone-900 mt-1" id="sum2">—</div>
+      </div>
+      <div>
+        <div class="text-[11px] text-stone-400 leading-snug">most you could spend</div>
+        <div class="num text-[17px] font-semibold text-stone-900 mt-1" id="sum3">—</div>
+      </div>
+    </div>
+
+    <div class="mt-auto pt-5 text-[11px] text-stone-300">
+      Assumes $25,000 a year still going in until work ends. Year-by-year receipts and the math behind
+      any number: one click from the stat.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ ASSISTANT DOCK (the conversation, continued) ═══════════ -->
+<aside id="dock" class="hidden fixed right-0 top-12 bottom-0 w-[380px] max-w-[92vw] bg-white border-l border-stone-200 shadow-xl z-40 flex flex-col">
+  <div class="flex items-center gap-2.5 px-4 h-11 border-b border-stone-200/80">
+    <div class="w-6 h-6 rounded-full bg-amber-700 flex items-center justify-center text-[9px] font-bold text-white">RE</div>
+    <div class="text-[13px] font-semibold">RE — still here</div>
+    <div class="flex-1"></div>
+    <button id="dockClose" class="text-stone-400 hover:text-stone-600 text-lg leading-none px-1" aria-label="close">×</button>
+  </div>
+  <div id="dockThread" class="flex-1 overflow-y-auto px-4 py-4 space-y-3"></div>
+  <form id="dockSay" class="border-t border-stone-200/80 p-3 flex gap-2">
+    <input id="dockInput" type="text" autocomplete="off" placeholder="Ask about your plan…"
+      class="flex-1 bg-stone-50 border border-stone-200 rounded-full px-4 py-2 text-[13.5px] focus:outline-none focus:border-amber-700" />
+    <button class="w-9 h-9 rounded-full bg-amber-700 text-white font-bold hover:bg-amber-800 transition-colors" aria-label="send">↑</button>
+  </form>
+</aside>
+
+<script src="../model.js"></script>
+<script>
+const state = { ...DEMO_DEFAULTS };
+const $ = id => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const AMBER = '#b45309', GOOD = '#047857', BAD = '#e11d48';
+
+/* ─────────── Details menu: the 13 input sections, by name ─────────── */
+const SECTIONS = [
+  ['Personal Profile', 'age 55 · planning to 95'],
+  ['Account Balances', 'RRSP · TFSA · taxable · RDSP, one by one'],
+  ['Contribution Rates', '$25,000 a year while working'],
+  ['RDSP', 'grants, bonds, rollover rules'],
+  ['Government Benefits', 'CPP · OAS · GIS, start ages, clawback'],
+  ['Pensions', 'windows and indexation, multiple pensions'],
+  ['Employment Income', 'part-time work after retirement'],
+  ['Cash Events', 'one-time and recurring, transfers'],
+  ['Spending Phases', 'go-go / slow-go / no-go bands'],
+  ['Spouse', 'full second set + household baseline'],
+  ['Withdrawal Strategy', 'which account empties first'],
+  ['Home Equity', 'reverse mortgage · HELOC'],
+  ['Market Hypotheses', 'returns, volatility, inflation'],
+];
+$('detailsList').innerHTML = SECTIONS.map(([name, sub]) =>
+  '<button class="w-full text-left px-3.5 py-2 hover:bg-stone-50">'
+  + '<div class="text-stone-700">' + name + '</div>'
+  + '<div class="text-[11px] text-stone-400">' + sub + '</div>'
+  + '</button>').join('');
+
+/* dropdown open/close */
+function dropdown(btnId, menuId) {
+  const btn = $(btnId), menu = $(menuId);
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    document.querySelectorAll('[id^="menu"]').forEach(m => { if (m !== menu) m.classList.add('hidden'); });
+    menu.classList.toggle('hidden');
+  });
+}
+dropdown('btnScenarios', 'menuScenarios');
+dropdown('btnDetails', 'menuDetails');
+document.addEventListener('click', () => document.querySelectorAll('[id^="menu"]').forEach(m => m.classList.add('hidden')));
+
+/* ─────────── the four levers ─────────── */
+const ROWS = [
+  { key:'retireAge', label:'I stop working at',      min:55,     max:75,      step:1,     fmt:v => v },
+  { key:'spending',  label:'I spend a year after',   min:40000,  max:200000,  step:1000,  fmt:fmtMoney },
+  { key:'savings',   label:"I've saved so far",      min:100000, max:3000000, step:10000, fmt:fmtMoney },
+];
+
+function idleText(key) {
+  if (key === 'retireAge') return 'pay keeps going in for ' + Math.max(0, state.retireAge - state.currentAge) + ' more years';
+  if (key === 'spending')  return 'about ' + fmtMoney(Math.round(state.spending / 12)) + ' a month, before tax';
+  return 'about ' + Math.floor(state.savings / Math.max(state.spending, 1)) + ' years of spending banked';
+}
+
+$('rows').innerHTML = ROWS.map(r =>
+  '<div class="row py-4 px-1 -mx-1">'
+  + '<div class="flex items-baseline justify-between">'
+  +   '<label for="s_' + r.key + '" class="text-[14px] text-stone-700">' + r.label + '</label>'
+  +   '<span id="v_' + r.key + '" class="num text-[14px] font-semibold text-stone-900"></span>'
+  + '</div>'
+  + '<input id="s_' + r.key + '" type="range" class="sl w-full mt-2.5" min="' + r.min + '" max="' + r.max + '" step="' + r.step + '">'
+  + '<p id="c_' + r.key + '" class="mt-2 text-[12px] text-stone-400 num"></p>'
+  + '</div>').join('');
+
+ROWS.forEach(r => {
+  const el = $('s_' + r.key);
+  el.value = state[r.key];
+  el.addEventListener('input', () => { state[r.key] = +el.value; render(); markDirty(); });
+});
+document.querySelectorAll('[data-sky]').forEach(b => b.addEventListener('click', () => {
+  state.sky = b.dataset.sky; render(); markDirty();
+}));
+
+function markDirty() {
+  $('saveState').textContent = 'Unsaved changes';
+  clearTimeout(markDirty.t);
+  markDirty.t = setTimeout(() => $('saveState').textContent = 'Saved · just now', 1800);
+}
+
+/* ─────────── engine helpers ─────────── */
+function safeSpend() {
+  if (!simulate({ ...state, spending: 0 }).ok) return 0;
+  let lo = 0, hi = 900000;
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    if (simulate({ ...state, spending: mid }).ok) lo = mid; else hi = mid;
+  }
+  return Math.floor(lo / 100) * 100;
+}
+
+/* ─────────── the life-timeline strip (08's axis, health-colored) ─────────── */
+function drawStrip(res) {
+  const W = 460, Lp = 14, Rp = 446, Y = 40, A0 = 55, A1 = 95;
+  const x = a => Lp + (clamp(a, A0, A1) - A0) / (A1 - A0) * (Rp - Lp);
+  const ret = state.retireAge, dep = res.depletionAge;
+  const fundedTo = dep != null ? Math.min(dep, A1) : A1;
+
+  let out = '';
+  /* base track */
+  out += '<rect x="' + Lp + '" y="' + Y + '" width="' + (Rp - Lp) + '" height="7" rx="3.5" fill="#efe9df"/>';
+  /* working segment */
+  out += '<rect x="' + x(A0) + '" y="' + Y + '" width="' + Math.max(0, x(ret) - x(A0)) + '" height="7" fill="#d97706" fill-opacity="0.8"'
+       + (ret <= A0 ? '' : ' rx="3.5"') + '/>';
+  /* funded-retirement segment */
+  if (fundedTo > ret) {
+    out += '<rect x="' + x(ret) + '" y="' + Y + '" width="' + (x(fundedTo) - x(ret)) + '" height="7" fill="' + GOOD + '" fill-opacity="0.8"/>';
+  }
+  /* shortfall segment */
+  if (dep != null && dep <= A1) {
+    out += '<rect x="' + x(dep) + '" y="' + Y + '" width="' + (x(A1) - x(dep)) + '" height="7" rx="3.5" fill="' + BAD + '" fill-opacity="0.8"/>';
+  }
+  /* ticks + numbers */
+  for (let a = A0; a <= A1; a += 5) {
+    out += '<text x="' + x(a) + '" y="' + (Y + 24) + '" font-size="10" fill="#a8a29e" text-anchor="middle" class="num">' + a + '</text>';
+  }
+  /* milestone pins: work ends, benefits, money out */
+  out += '<line x1="' + x(ret) + '" y1="' + (Y - 12) + '" x2="' + x(ret) + '" y2="' + (Y + 7) + '" stroke="' + AMBER + '" stroke-width="1.2"/>'
+       + '<circle cx="' + x(ret) + '" cy="' + (Y - 15) + '" r="3.4" fill="' + AMBER + '" stroke="#fff" stroke-width="1.6"/>'
+       + '<text x="' + x(ret) + '" y="' + (Y - 23) + '" font-size="10" fill="' + AMBER + '" text-anchor="middle" font-weight="600">work ends · ' + ret + '</text>';
+  out += '<circle cx="' + x(state.benefitAge) + '" cy="' + (Y + 3.5) + '" r="3" fill="#fff" stroke="#78716c" stroke-width="1.5"/>';
+  if (dep != null && dep <= A1) {
+    out += '<line x1="' + x(dep) + '" y1="' + (Y - 12) + '" x2="' + x(dep) + '" y2="' + (Y + 7) + '" stroke="' + BAD + '" stroke-width="1.2"/>'
+         + '<circle cx="' + x(dep) + '" cy="' + (Y - 15) + '" r="3.4" fill="' + BAD + '" stroke="#fff" stroke-width="1.6"/>'
+         + '<text x="' + x(dep) + '" y="' + (Y - 23) + '" font-size="10" fill="' + BAD + '" text-anchor="middle" font-weight="600">money out · ' + dep + '</text>';
+  } else {
+    out += '<text x="' + Rp + '" y="' + (Y - 12) + '" font-size="10" fill="' + GOOD + '" text-anchor="end" font-weight="600">never runs out</text>';
+  }
+  /* "you are here" */
+  out += '<text x="' + x(state.currentAge) + '" y="' + (Y + 38) + '" font-size="10" fill="#57534e" text-anchor="middle" font-weight="600">you are here</text>';
+  $('strip').innerHTML = out;
+}
+
+/* ─────────── balance curve ─────────── */
+function drawChart(res) {
+  const rows = res.rows.filter(r => r.age <= 100);
+  if (rows.length < 2) { $('chart').innerHTML = ''; return; }
+  const w = 1000, h = 170, top = 8, bot = h - 6, L = 2, Rr = w - 2;
+  const A0 = rows[0].age, A1 = 100;
+  const max = Math.max(...rows.map(r => r.bal), 1);
+  const xFor = age => L + (age - A0) / (A1 - A0) * (Rr - L);
+  const yFor = v => bot - (v / max) * (bot - top);
+
+  let d = '';
+  rows.forEach((r, i) => { d += (i ? ' L ' : 'M ') + xFor(r.age).toFixed(1) + ' ' + yFor(r.bal).toFixed(1); });
+  const last = rows[rows.length - 1];
+  const area = d + ' L ' + xFor(last.age).toFixed(1) + ' ' + bot + ' L ' + xFor(A0).toFixed(1) + ' ' + bot + ' Z';
+
+  const dry = res.depletionAge != null && res.depletionAge <= state.maxAge;
+  const col = dry ? BAD : AMBER;
+  let out = '<path d="' + area + '" fill="' + col + '" fill-opacity="0.10"/>'
+          + '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round"/>'
+          + '<line x1="' + xFor(state.maxAge).toFixed(1) + '" y1="' + top + '" x2="' + xFor(state.maxAge).toFixed(1) + '" y2="' + bot + '" stroke="#d6d3d1" stroke-width="1" stroke-dasharray="4 4"/>'
+          + '<circle cx="' + xFor(last.age).toFixed(1) + '" cy="' + yFor(last.bal).toFixed(1) + '" r="3.5" fill="' + col + '"/>';
+  if (dry) {
+    out += '<text x="' + xFor(res.depletionAge).toFixed(1) + '" y="' + (top + 12) + '" font-size="20" fill="' + BAD + '" text-anchor="middle" font-weight="600" class="num">' + res.depletionAge + '</text>';
+  }
+  $('chart').innerHTML = out;
+  $('chartNote').textContent = 'ages ' + A0 + ' to 100';
+}
+
+/* ─────────── render everything ─────────── */
+function render() {
+  const res = simulate(state);
+  const ok = res.ok;
+
+  /* verdict + badge */
+  const v = $('verdict');
+  v.textContent = lastsLabel(res);
+  v.style.color = ok ? '#1c1917' : BAD;
+  const badge = $('badge');
+  if (ok) {
+    badge.textContent = 'ON TRACK';
+    badge.className = 'text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700';
+    $('verdictSub').innerHTML = res.leftAtMax > 25000
+      ? 'past the ' + state.maxAge + " you're planning for, with about " + fmtMoney(res.leftAtMax) + ' to spare.'
+      : 'past the ' + state.maxAge + " you're planning for.";
+    $('sugg').textContent = '';
+  } else {
+    badge.textContent = 'RUNS SHORT';
+    badge.className = 'text-[11px] font-semibold px-2 py-1 rounded-full bg-rose-50 text-rose-700';
+    $('verdictSub').innerHTML = 'your money runs out at ' + res.depletionAge + ' — '
+      + (state.maxAge - res.depletionAge) + ' years short of ' + state.maxAge + '.';
+    $('sugg').textContent = suggest(state) ?? '';
+  }
+
+  /* levers */
+  ROWS.forEach(r => {
+    $('v_' + r.key).textContent = r.fmt(state[r.key]);
+    $('c_' + r.key).textContent = idleText(r.key);
+  });
+  document.querySelectorAll('[data-sky]').forEach(b => b.classList.toggle('on', b.dataset.sky === state.sky));
+  $('weatherNote').textContent = state.sky === 'storm' ? 'a rough decade for markets, on repeat'
+                              : state.sky === 'sun'   ? 'markets keep being generous'
+                              : 'a lifetime of ordinary markets';
+
+  /* success indicator: funded fraction of 55→95, plus storm check */
+  const span = state.maxAge - state.currentAge;
+  const fundedYears = res.depletionAge == null ? span : Math.max(0, res.depletionAge - state.currentAge);
+  const pct = Math.round(fundedYears / span * 100);
+  $('barOk').style.width = pct + '%';
+  $('barBad').style.width = (100 - pct) + '%';
+
+  const storm = simulate({ ...state, sky: 'storm' });
+  $('stormNote').innerHTML = storm.ok
+    ? 'holds up <strong class="text-emerald-700">even in stormy markets</strong>'
+    : 'in stormy markets it runs out at <strong class="text-rose-700 num">' + storm.depletionAge + '</strong>';
+  $('successLine').innerHTML = ok
+    ? 'The plan reaches ' + state.maxAge + ' as it stands — ' + pct + '% of the way funded by your own numbers, all the way.'
+    : 'Your own numbers fund <strong class="num">' + pct + '%</strong> of the way to ' + state.maxAge + '. The gap is the red part above — it\'s closable.';
+
+  /* summary numbers */
+  $('hMax').textContent = state.maxAge;
+  $('sum1').textContent = res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) : 'nothing';
+  $('sum2').textContent = fmtMoney(state.benefits) + '/yr';
+  $('sum3').textContent = fmtMoney(safeSpend());
+
+  drawStrip(res);
+  drawChart(res);
+}
+
+/* ─────────── assistant dock: the conversation, continued ─────────── */
+const dock = $('dock'), dockThread = $('dockThread');
+let dockOpened = false;
+
+function dockBubble(html, me) {
+  const row = document.createElement('div');
+  row.className = 'msg flex ' + (me ? 'justify-end' : 'items-start gap-2');
+  row.innerHTML = me
+    ? '<div class="max-w-[85%] bg-amber-700 text-white text-[13.5px] leading-relaxed rounded-2xl rounded-br-md px-3.5 py-2">' + html + '</div>'
+    : '<div class="w-6 h-6 rounded-full bg-amber-700 flex items-center justify-center text-[8px] font-bold text-white shrink-0 mt-0.5">RE</div>'
+    + '<div class="max-w-[85%] bg-stone-50 border border-stone-200/70 text-[13.5px] leading-relaxed rounded-2xl rounded-bl-md px-3.5 py-2 text-stone-800">' + html + '</div>';
+  dockThread.appendChild(row);
+  dockThread.scrollTop = dockThread.scrollHeight;
+}
+
+function openDock() {
+  dock.classList.remove('hidden');
+  dock.classList.add('open');
+  if (!dockOpened) {
+    dockOpened = true;
+    const res = simulate(state);
+    dockBubble('Same me as before. Your plan as we left it: money lasts to <strong class="num">'
+      + lastsLabel(res) + '</strong>'
+      + (res.ok ? '.' : ' — still short, but you saw the fix: <em>' + (suggest(state) || '').replace(/\.$/, '') + '.</em>')
+      + ' Ask me anything, or tell me to change something.');
+  }
+  $('dockInput').focus();
+}
+$('btnAssistant').addEventListener('click', openDock);
+$('dockClose').addEventListener('click', () => dock.classList.add('hidden'));
+
+$('dockSay').addEventListener('submit', e => {
+  e.preventDefault();
+  const text = $('dockInput').value.trim();
+  if (!text) return;
+  $('dockInput').value = '';
+  dockBubble(text, true);
+
+  /* a small, honest repertoire: storm test, suggest, "what if I work longer" */
+  setTimeout(() => {
+    const t = text.toLowerCase();
+    if (/storm|crash|market|bad year/.test(t)) {
+      const s = simulate({ ...state, sky: 'storm' });
+      dockBubble(s.ok
+        ? 'In stormy markets you\'re still fine — money lasts to <strong class="num">' + lastsLabel(s) + '</strong>. The storm test is on the right side of the page, too.'
+        : 'Honestly? In stormy markets it runs out at <strong class="num">' + s.depletionAge + '</strong>. Worth closing the gap first.');
+    } else if (/work|retire|longer|earlier/.test(t)) {
+      const m = t.match(/(\d{2})/);
+      if (m) {
+        state.retireAge = clamp(+m[1], 55, 75);
+        $('s_retireAge').value = state.retireAge;
+        render(); markDirty();
+        const r = simulate(state);
+        dockBubble('Done — I set "stop working" to <strong class="num">' + state.retireAge + '</strong>. Now your money lasts to <strong class="num">' + lastsLabel(r) + '</strong>. You can see it move on the timeline.');
+      } else {
+        dockBubble('Tell me an age — "what if I work to 64?" — and I\'ll move the lever for you.');
+      }
+    } else if (/fix|help|short|gap/.test(t)) {
+      dockBubble(suggest(state) || 'At these numbers the plan already reaches ' + state.maxAge + ' — nothing to fix.');
+    } else {
+      dockBubble('I can run the storm test, move the levers ("work to 64"), or tell you the one fix that closes the gap. The full toolset lives on the Assistant page.');
+    }
+  }, 550);
+});
+
+render();
+</script>
+</body>
+</html>

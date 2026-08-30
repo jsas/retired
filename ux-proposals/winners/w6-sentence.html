@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Say your plan out loud</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; }
+  .ui { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* calm entrance — the only motion on the page */
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .fi { animation: fadeIn .9s ease-out both; }
+  .fi-2 { animation-delay: .25s; }
+  .fi-3 { animation-delay: .5s; }
+
+  /* an editable value inside the sentence: a quiet underline, nothing more */
+  .field {
+    display: inline-block;
+    border-bottom: 1.5px solid #cbd5e1;
+    color: #334155;
+    cursor: text;
+    padding: 0 2px;
+    transition: border-color .2s, background .2s, color .2s;
+    white-space: nowrap;
+  }
+  .field:hover { border-bottom-color: #94a3b8; background: #f8fafc; }
+  .field:focus { outline: none; border-bottom-color: #64748b; background: #f1f5f9; color: #0f172a; }
+
+  #ending { transition: color .4s; }
+  .ok   { color: #166534; }
+  .short { color: #b91c1c; }
+
+  ::selection { background: #e2e8f0; }
+</style>
+</head>
+<body class="bg-[#fbfbfa] text-slate-800 min-h-screen flex flex-col antialiased">
+
+<!-- ═══ SITE 1 — LANDING. Pure marketing: the sentence, one door, the footer.
+     No app chrome here — Details / Plans / Assistant / Data / Print all live in the app. ═══ -->
+
+<main class="flex-1 flex flex-col items-center justify-center px-6 py-16">
+  <div class="w-full max-w-2xl">
+
+    <p class="fi ui text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400 mb-14 text-center">
+      RE:tired — a retirement planner that speaks first
+    </p>
+
+    <!-- ═══ THE SENTENCE ═══
+         The whole plan, said out loud once. Each underlined number is editable —
+         click, type, and the ending below rewrites itself. Nothing else moves. -->
+    <p class="fi fi-2 text-[27px] md:text-[36px] leading-[1.65] text-slate-800 text-center">
+      I'm <span class="field num" id="fCurrent" contenteditable spellcheck="false" role="textbox" aria-label="Your age today">55</span>.
+      I've saved <span class="field num" id="fSavings" contenteditable spellcheck="false" role="textbox" aria-label="Saved so far">$850,000</span>.
+      I want to stop working at <span class="field num" id="fRetire" contenteditable spellcheck="false" role="textbox" aria-label="The age you stop working">62</span>
+      and spend <span class="field num" id="fSpend" contenteditable spellcheck="false" role="textbox" aria-label="Spending per year after that">$85,000</span> a year.
+    </p>
+
+    <!-- ═══ THE ENDING — the verdict, rewritten live by the model ═══ -->
+    <p class="fi fi-3 mt-12 text-[22px] md:text-[27px] leading-[1.6] text-center">
+      <span id="ending" class="num"></span>
+    </p>
+    <p id="advice" class="fi fi-3 ui mt-4 text-[13.5px] text-slate-500 text-center leading-relaxed h-5"></p>
+
+    <!-- ═══ THE ONE DOOR ═══ -->
+    <div class="fi fi-3 ui mt-16 flex flex-col items-center gap-3">
+      <a href="w6-sentence-app.html"
+         class="group inline-flex items-center gap-2.5 rounded-full bg-slate-900 px-8 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-slate-700">
+        Make the sentence true
+        <span class="transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>
+      </a>
+      <span class="text-[12px] text-slate-400">Opens the planner — the sentence comes with you.</span>
+    </div>
+
+    <p class="fi fi-3 ui mt-14 text-[12px] text-slate-400 text-center leading-relaxed">
+      Click any underlined number to change it. The ending keeps up.
+    </p>
+  </div>
+</main>
+
+<!-- ═══ FOOTER — privacy + legal, the whole marketing footer ═══ -->
+<footer class="ui border-t border-slate-200/80 px-6 py-4">
+  <div class="mx-auto flex max-w-3xl flex-col items-center gap-1.5 text-center text-[11.5px] text-slate-400 sm:flex-row sm:justify-between sm:text-left">
+    <span>No servers, no accounts — your numbers never leave this browser.</span>
+    <span class="flex items-center gap-4">
+      <span>Not financial, tax, or investment advice.</span>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Open source</a>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Donate</a>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Help</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* The landing uses the real model, honestly: at the default sentence the
+     plan runs out at 89 — so that's what the ending says, with the fix. */
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  function el(id) { return document.getElementById(id); }
+
+  /* editable span ↔ state key, with parse + format */
+  var FIELDS = [
+    { id: 'fCurrent', key: 'currentAge', parse: function (v) { return clampInt(v, 30, 75); },    fmt: function (v) { return String(v); } },
+    { id: 'fSavings', key: 'savings',    parse: function (v) { return clampMoney(v, 0, 2e7); },  fmt: fmtMoney },
+    { id: 'fRetire',  key: 'retireAge',  parse: function (v) { return clampInt(v, 40, 80); },    fmt: function (v) { return String(v); } },
+    { id: 'fSpend',   key: 'spending',   parse: function (v) { return clampMoney(v, 10000, 1e6); }, fmt: fmtMoney }
+  ];
+
+  function clampInt(v, lo, hi) {
+    var n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+    return isNaN(n) ? null : Math.min(hi, Math.max(lo, n));
+  }
+  function clampMoney(v, lo, hi) {
+    var s = String(v).replace(/[$,\s]/g, '').toLowerCase(), mult = 1;
+    if (s.endsWith('k')) { mult = 1e3; s = s.slice(0, -1); }
+    if (s.endsWith('m')) { mult = 1e6; s = s.slice(0, -1); }
+    var n = parseFloat(s) * mult;
+    return isNaN(n) ? null : Math.min(hi, Math.max(lo, Math.round(n)));
+  }
+
+  function render() {
+    if (state.retireAge < state.currentAge) state.retireAge = state.currentAge;
+    var res = simulate(state);
+    var end = el('ending'), adv = el('advice');
+
+    end.classList.remove('ok', 'short');
+    if (res.ok) {
+      end.classList.add('ok');
+      end.textContent = res.leftAtMax > 25000
+        ? '— your money lasts until you’re ' + lastsLabel(res) + ', with ' + fmtMoney(res.leftAtMax) + ' to spare.'
+        : '— your money lasts until you’re ' + lastsLabel(res) + '.';
+      adv.textContent = '';
+    } else {
+      var gap = state.maxAge - res.depletionAge;
+      end.classList.add('short');
+      end.textContent = '— your money lasts until you’re ' + res.depletionAge + '.';
+      adv.textContent = 'That’s ' + gap + (gap === 1 ? ' year' : ' years') + ' short of the ' + state.maxAge +
+        ' you’re planning for. ' + (suggest(state) || '');
+    }
+  }
+
+  FIELDS.forEach(function (f) {
+    var node = el(f.id);
+    function commit(reformat) {
+      var n = f.parse(node.textContent);
+      if (n == null) { node.textContent = f.fmt(state[f.key]); return; }
+      state[f.key] = n;
+      if (reformat) node.textContent = f.fmt(state[f.key]);
+      render();
+    }
+    node.addEventListener('input', function () { commit(false); });
+    node.addEventListener('blur', function () { commit(true); });
+    node.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); node.blur(); }
+    });
+    node.addEventListener('paste', function (e) {
+      e.preventDefault();
+      var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, text);
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — How good is your plan, honestly?</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  #ring-fg { transition: stroke-dashoffset 1s cubic-bezier(.22,.8,.3,1), stroke .4s ease; }
+  .ing-fill { transition: width .8s cubic-bezier(.22,.8,.3,1); }
+</style>
+</head>
+<body class="min-h-screen bg-[#f8f9f7] text-slate-900 antialiased flex flex-col">
+
+<!-- ═══ SITE 1 · LANDING — pure marketing, no app chrome ═══ -->
+
+<header class="mx-auto w-full max-w-5xl px-6 pt-7">
+  <div class="flex items-center gap-2.5">
+    <div class="flex h-7 w-7 items-center justify-center rounded bg-blue-600 text-[10px] font-bold text-white">RE:</div>
+    <span class="text-[15px] font-semibold tracking-tight">tired</span>
+    <span class="ml-auto text-[12px] text-slate-400">A retirement plan that answers one question first.</span>
+  </div>
+</header>
+
+<main class="mx-auto w-full max-w-5xl flex-1 px-6">
+
+  <!-- HERO: the honest score -->
+  <section class="mt-14 grid items-center gap-10 sm:mt-20 lg:grid-cols-[auto_1fr] lg:gap-16">
+
+    <!-- the number / dial -->
+    <div class="mx-auto">
+      <div class="relative">
+        <svg width="232" height="232" viewBox="0 0 232 232" class="block" aria-hidden="true">
+          <circle cx="116" cy="116" r="96" fill="none" stroke="#e8ebe8" stroke-width="15" />
+          <circle id="ring-fg" cx="116" cy="116" r="96" fill="none" stroke="#d97706" stroke-width="15"
+                  stroke-linecap="round" stroke-dasharray="603.19" stroke-dashoffset="603.19"
+                  transform="rotate(-90 116 116)" />
+        </svg>
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+          <div class="num text-[58px] font-bold leading-none tracking-tight" id="score-num">0</div>
+          <div class="mt-1.5 text-[10.5px] font-semibold uppercase tracking-[.18em] text-slate-400">plan score / 100</div>
+        </div>
+      </div>
+      <p class="num mt-3 text-center text-[12px] text-slate-400" id="score-caption">…for a plan like the demo's</p>
+    </div>
+
+    <!-- the question + answer -->
+    <div>
+      <h1 class="text-[32px] font-bold leading-tight tracking-tight sm:text-[44px]">
+        How good is this plan,<br class="hidden sm:block" /> honestly?
+      </h1>
+      <p class="mt-4 max-w-xl text-[15.5px] leading-relaxed text-slate-600">
+        RE:tired scores your retirement plan out of 100 and tells you, in plain words, the age your
+        money lasts to — and the one change that would fix it. No jargon, no black box:
+        every point in the score is accounted for.
+      </p>
+      <p class="num mt-3 max-w-xl text-[15.5px] leading-relaxed text-slate-600" id="honest-line">
+        The demo plan — yours will differ — lasts until you're <strong id="honest-age">89</strong>,
+        which is <strong id="honest-gap">6 years short</strong> of the 95 it was planning to.
+      </p>
+
+      <!-- three ingredient lines -->
+      <ul class="mt-6 space-y-2.5 text-[14px] text-slate-700">
+        <li class="flex items-baseline gap-2.5">
+          <span class="num inline-block w-14 shrink-0 text-[12px] font-semibold text-slate-400" id="ing1-val">–</span>
+          <span><strong class="font-semibold text-slate-900">Time</strong> — does the money outlast the age you're planning to?</span>
+        </li>
+        <li class="flex items-baseline gap-2.5">
+          <span class="num inline-block w-14 shrink-0 text-[12px] font-semibold text-slate-400" id="ing2-val">–</span>
+          <span><strong class="font-semibold text-slate-900">Buffer</strong> — what's still left at the end, for the surprises.</span>
+        </li>
+        <li class="flex items-baseline gap-2.5">
+          <span class="num inline-block w-14 shrink-0 text-[12px] font-semibold text-slate-400" id="ing3-val">–</span>
+          <span><strong class="font-semibold text-slate-900">Weather</strong> — does the plan still hold in stormy markets, not just kind ones?</span>
+        </li>
+      </ul>
+
+      <div class="mt-8 flex flex-wrap items-center gap-4">
+        <a href="w2-score-steering-app.html"
+           class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-[15px] font-semibold text-white shadow-sm transition hover:bg-blue-500">
+          Set up your profile
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+        <span class="text-[12.5px] text-slate-400">Two minutes. No account, no email.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- how the number is made -->
+  <section class="mt-20 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+    <h2 class="text-[11px] font-semibold uppercase tracking-[.18em] text-slate-400">Where the number comes from</h2>
+    <div class="mt-5 grid gap-6 sm:grid-cols-3">
+      <div>
+        <div class="flex items-baseline justify-between">
+          <span class="text-[13.5px] font-semibold">Time</span>
+          <span class="num text-[11px] text-slate-400">40% of the score</span>
+        </div>
+        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div id="ing1-fill" class="ing-fill h-full rounded-full bg-amber-500" style="width:0%"></div></div>
+        <p class="mt-2 text-[12.5px] leading-relaxed text-slate-500">Full marks if the money lasts past your planned age; partial credit for how far short it falls.</p>
+      </div>
+      <div>
+        <div class="flex items-baseline justify-between">
+          <span class="text-[13.5px] font-semibold">Buffer</span>
+          <span class="num text-[11px] text-slate-400">35%</span>
+        </div>
+        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div id="ing2-fill" class="ing-fill h-full rounded-full bg-rose-500" style="width:0%"></div></div>
+        <p class="mt-2 text-[12.5px] leading-relaxed text-slate-500">What's left at the end. Leftovers are room for care bills, a bad year, or help for the kids.</p>
+      </div>
+      <div>
+        <div class="flex items-baseline justify-between">
+          <span class="text-[13.5px] font-semibold">Weather</span>
+          <span class="num text-[11px] text-slate-400">25%</span>
+        </div>
+        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div id="ing3-fill" class="ing-fill h-full rounded-full bg-amber-500" style="width:0%"></div></div>
+        <p class="mt-2 text-[12.5px] leading-relaxed text-slate-500">The same plan re-run in stormy markets. A plan that only works with luck scores lower.</p>
+      </div>
+    </div>
+    <p class="mt-6 border-t border-slate-100 pt-4 text-[12.5px] leading-relaxed text-slate-500">
+      It never rewards luck, and it never hides a failing plan: if the money runs short, the page says so,
+      with the one change that would close the gap.
+    </p>
+  </section>
+
+  <!-- the promise -->
+  <section class="mt-6 grid gap-6 sm:grid-cols-3">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-[13.5px] font-semibold">Private by design</h3>
+      <p class="mt-1.5 text-[12.5px] leading-relaxed text-slate-500">No servers, no accounts. Your numbers never leave your browser — you can unplug the internet and it still works.</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-[13.5px] font-semibold">Honest about limits</h3>
+      <p class="mt-1.5 text-[12.5px] leading-relaxed text-slate-500">Canadian tax &amp; benefit rules, approximated. Educational modeling — not financial, tax, or investment advice.</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-[13.5px] font-semibold">Open</h3>
+      <p class="mt-1.5 text-[12.5px] leading-relaxed text-slate-500">Open source, free to use. <span class="underline decoration-slate-300 underline-offset-2">Read the code</span>, <span class="underline decoration-slate-300 underline-offset-2">donate</span>, or <span class="underline decoration-slate-300 underline-offset-2">get help</span>.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="mt-16 border-t border-slate-200 bg-white/60">
+  <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-5 text-[11.5px] text-slate-400">
+    <span>RE:tired knows if your money outlasts you.</span>
+    <span class="hidden sm:inline">·</span>
+    <span>Not financial, tax, or investment advice. Educational modeling only; Canadian tax &amp; benefit rules are approximations.</span>
+    <span class="hidden sm:inline">·</span>
+    <span>No servers · no accounts · your data stays in your browser.</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* The landing hero shows the demo plan's honest score — computed live
+     from ../model.js, never hardcoded. Defaults fail at 89 on purpose. */
+  var state = Object.assign({}, DEMO_DEFAULTS);
+
+  function scoreOutlast(o, res) {
+    if (res.ok) return 100;
+    var span = Math.max(1, o.maxAge - o.currentAge);
+    return Math.max(0, Math.round(100 * ((res.depletionAge - o.currentAge) / span)));
+  }
+  function scoreCushion(o, res) {
+    return Math.min(100, Math.round(100 * res.leftAtMax / (3 * o.spending)));
+  }
+
+  function bandColor(v) {
+    if (v < 45) return '#e11d48';
+    if (v < 70) return '#d97706';
+    return '#059669';
+  }
+
+  var res = simulate(state);
+  var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+
+  var s1 = scoreOutlast(state, res);
+  var s2 = scoreCushion(state, res);
+  var s3 = scoreOutlast(state, storm);
+  var total = Math.max(0, Math.min(100, Math.round(0.40 * s1 + 0.35 * s2 + 0.25 * s3)));
+
+  var R = 96, C = 2 * Math.PI * R;
+  var ring = document.getElementById('ring-fg');
+  ring.setAttribute('stroke-dashoffset', String(C));
+  ring.setAttribute('stroke', bandColor(total));
+
+  /* verdict line, honest */
+  document.getElementById('honest-age').textContent = lastsLabel(res);
+  var gapEl = document.getElementById('honest-gap');
+  if (res.ok) {
+    gapEl.textContent = 'past';
+    document.getElementById('honest-line').innerHTML =
+      'The demo plan — yours will differ — lasts until you’re <strong>' + lastsLabel(res) +
+      '</strong>, with <strong>' + fmtMoney(res.leftAtMax) + '</strong> still there at ' + state.maxAge + '.';
+  } else {
+    var gap = state.maxAge - res.depletionAge;
+    gapEl.textContent = gap + (gap === 1 ? ' year short' : ' years short');
+  }
+
+  /* ingredient values */
+  document.getElementById('ing1-val').textContent = s1 + ' / 100';
+  document.getElementById('ing2-val').textContent = s2 + ' / 100';
+  document.getElementById('ing3-val').textContent = s3 + ' / 100';
+
+  /* animate: empty ring first, then fill + count up */
+  var numEl = document.getElementById('score-num');
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      ring.setAttribute('stroke-dashoffset', String(C * (1 - total / 100)));
+      document.getElementById('ing1-fill').style.width = s1 + '%';
+      document.getElementById('ing2-fill').style.width = s2 + '%';
+      document.getElementById('ing3-fill').style.width = s3 + '%';
+    });
+  });
+  var t0 = null;
+  function step(t) {
+    if (t0 === null) t0 = t;
+    var p = Math.min(1, (t - t0) / 900);
+    var eased = 1 - Math.pow(1 - p, 3);
+    numEl.textContent = String(Math.round(total * eased));
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

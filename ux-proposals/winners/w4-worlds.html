@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Your plan has more than one future</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* two worlds, two papers */
+  .worldA { background: #f7f4ec; }
+  .worldB { background: #eef2f8; }
+  .tintA { color: #b45309; }
+  .tintB { color: #1d4ed8; }
+
+  /* ---------- the divider ---------- */
+  #divider {
+    position: absolute; top: 0; bottom: 0; width: 3px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(15,23,42,.08), rgba(15,23,42,.34), rgba(15,23,42,.08));
+    z-index: 30;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  #divider::after {
+    content: '';
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px; height: 44px; border-radius: 999px;
+    background-color: #ffffff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l-4 6 4 6'/><path d='M15 6l4 6-4 6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 22px 22px;
+    box-shadow: 0 2px 12px rgba(15,23,42,.3), 0 0 0 1px rgba(15,23,42,.1);
+  }
+  #divider:hover::after { box-shadow: 0 3px 16px rgba(15,23,42,.4), 0 0 0 2px rgba(29,78,216,.35); }
+  #divider:focus-visible { outline: none; }
+  #divider:focus-visible::after { box-shadow: 0 0 0 3px rgba(29,78,216,.45); }
+
+  .focusA { filter: brightness(1.035) saturate(1.03); }
+  .focusB { filter: brightness(1.035) saturate(1.03); }
+
+  /* ---------- verdict cards ---------- */
+  .verdict-card {
+    border-radius: 12px; border: 1px solid rgba(15,23,42,.1);
+    background: rgba(255,255,255,.72);
+    padding: 14px 16px;
+  }
+  .cap {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; color: #6b6b6b;
+  }
+  .hair  { border-top: 1px solid #d6d6d6; }
+  .hairb { border-top: 2px solid #111; }
+
+  ::selection { background: rgba(29,78,216,.16); }
+</style>
+</head>
+<body class="h-screen overflow-hidden text-slate-900 antialiased">
+
+<!-- LANDING: pure marketing. No app chrome. One door to the app. -->
+<div id="stage" class="absolute inset-0">
+
+  <!-- WORLD A -->
+  <section id="sideA" class="worldA tintA absolute inset-y-0 left-0 overflow-y-auto" style="width:50%">
+    <div class="mx-auto flex h-full max-w-[540px] flex-col justify-center px-5 py-8 sm:px-7">
+      <div class="verdict-card">
+        <div class="cap">Retire at 62</div>
+        <div class="num mt-2 text-[42px] font-extrabold leading-none tracking-[-.03em]" data-a-lasts>89</div>
+        <div class="num mt-1 text-[15px] font-semibold leading-snug" data-a-verdict>Your money runs out at 89</div>
+        <div class="num mt-2 text-[13px] leading-relaxed text-slate-600" data-a-sub>
+          That's 6 years short of the 95 you're planning for, and nothing is left over.
+        </div>
+      </div>
+      <p class="mt-4 text-[11px] leading-relaxed text-slate-400">
+        The plan you have today.
+      </p>
+    </div>
+  </section>
+
+  <!-- WORLD B -->
+  <section id="sideB" class="worldB tintB absolute inset-y-0 right-0 overflow-y-auto" style="width:50%">
+    <div class="mx-auto flex h-full max-w-[540px] flex-col justify-center px-5 py-8 sm:px-7">
+      <div class="verdict-card">
+        <div class="cap">Retire at 65</div>
+        <div class="num mt-2 text-[42px] font-extrabold leading-none tracking-[-.03em]" data-b-lasts>96</div>
+        <div class="num mt-1 text-[15px] font-semibold leading-snug" data-b-verdict>Your money lasts to 96</div>
+        <div class="num mt-2 text-[13px] leading-relaxed text-slate-600" data-b-sub>
+          Past the 95 you're planning for, with room to spare.
+        </div>
+      </div>
+      <p class="mt-4 text-[11px] leading-relaxed text-slate-400">
+        The same plan, with one change.
+      </p>
+    </div>
+  </section>
+
+  <div id="divider" role="separator" aria-orientation="vertical" aria-label="Drag to change how the screen is split" tabindex="0" style="left:50%"></div>
+
+  <!-- CENTER OVERLAY: headline + CTA -->
+  <div class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+    <div class="pointer-events-auto mx-4 max-w-lg rounded-2xl border border-slate-200/80 bg-white/90 px-8 py-8 text-center shadow-xl backdrop-blur-sm">
+      <div class="cap">RE:tired</div>
+      <h1 class="mt-3 text-[28px] font-extrabold leading-tight tracking-[-.02em] sm:text-[34px]">
+        Your plan has more than one future.
+      </h1>
+      <p class="mt-3 text-[14px] leading-relaxed text-slate-600">
+        Drag the divider. See two versions of the same life — one where the money runs out,
+        one where it doesn't. The difference is smaller than you think.
+      </p>
+      <a href="w4-worlds-app.html"
+         class="mt-6 inline-flex items-center gap-2 rounded-full bg-slate-900 px-7 py-3.5 text-[15px] font-semibold text-white shadow-lg transition-all hover:bg-slate-800 hover:shadow-xl">
+        Explore yours
+        <span aria-hidden="true">→</span>
+      </a>
+      <p class="mt-4 text-[11px] text-slate-400">Free · No account · Runs entirely in your browser</p>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER: privacy + legal -->
+<footer class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/70 bg-white/85 px-4 py-2 backdrop-blur">
+  <div class="mx-auto flex max-w-[1700px] flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-slate-400">
+    <span>No servers, no accounts — your data never leaves this browser.</span>
+    <span class="flex items-center gap-4">
+      <span>Not financial, tax, or investment advice.</span>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Open source</a>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Donate</a>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Help</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  function el(id) { return document.getElementById(id); }
+  function q(root, sel) { return root.querySelector(sel); }
+
+  var stage = el('stage'), sideA = el('sideA'), sideB = el('sideB'), divider = el('divider');
+  var split = 50;
+
+  /* ============ compute both worlds from the model ============ */
+  var base = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  var A = Object.assign({}, base, { retireAge: 62 });
+  var B = Object.assign({}, base, { retireAge: 65 });
+
+  var resA = simulate(A);
+  var resB = simulate(B);
+
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+
+  /* World A — the plan as it stands */
+  var lastsA = lastsLabel(resA);
+  var gapA = resA.ok ? 0 : Math.max(0, A.maxAge - (resA.depletionAge != null ? resA.depletionAge : A.maxAge));
+  q(sideA, '[data-a-lasts]').textContent = lastsA;
+  q(sideA, '[data-a-verdict]').textContent = resA.ok
+    ? 'Your money lasts to ' + lastsA
+    : 'Your money runs out at ' + lastsA;
+  q(sideA, '[data-a-sub]').textContent = resA.ok
+    ? 'That\'s past the ' + A.maxAge + ' you\'re planning for, with ' + fmtMoney(resA.leftAtMax) + ' left over.'
+    : 'That\'s ' + gapA + ' ' + yearWord(gapA) + ' short of the ' + A.maxAge + ' you\'re planning for, and nothing is left over.';
+
+  /* World B — the same plan, one change */
+  var lastsB = lastsLabel(resB);
+  var gapB = resB.ok ? 0 : Math.max(0, B.maxAge - (resB.depletionAge != null ? resB.depletionAge : B.maxAge));
+  q(sideB, '[data-b-lasts]').textContent = lastsB;
+  q(sideB, '[data-b-verdict]').textContent = resB.ok
+    ? 'Your money lasts to ' + lastsB
+    : 'Your money runs out at ' + lastsB;
+  q(sideB, '[data-b-sub]').textContent = resB.ok
+    ? 'Past the ' + B.maxAge + ' you\'re planning for, with ' + fmtMoney(resB.leftAtMax) + ' left over.'
+    : 'That\'s ' + gapB + ' ' + yearWord(gapB) + ' short of the ' + B.maxAge + ' you\'re planning for.';
+
+  /* ============ divider drag ============ */
+  function setSplit(pct) {
+    split = Math.round(Math.min(78, Math.max(22, pct)) * 10) / 10;
+    sideA.style.width = split + '%';
+    sideB.style.width = (100 - split) + '%';
+    divider.style.left = split + '%';
+  }
+
+  var dragging = false;
+  divider.addEventListener('pointerdown', function (e) {
+    dragging = true;
+    divider.setPointerCapture && divider.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  divider.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var r = stage.getBoundingClientRect();
+    setSplit(((e.clientX - r.left) / r.width) * 100);
+  });
+  divider.addEventListener('pointerup', function (e) {
+    dragging = false;
+    if (divider.releasePointerCapture) {
+      try { divider.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+  });
+  divider.addEventListener('pointercancel', function () { dragging = false; });
+  divider.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') { setSplit(split - 3); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { setSplit(split + 3); e.preventDefault(); }
+  });
+
+  /* clicking anywhere on the stage focuses that side */
+  stage.addEventListener('pointermove', function (e) {
+    if (dragging) return;
+    var r = stage.getBoundingClientRect();
+    var left = (e.clientX - r.left) / r.width * 100;
+    var onA = left < split;
+    sideA.classList.toggle('focusA', onA);
+    sideB.classList.toggle('focusB', !onA);
+  });
+  stage.addEventListener('pointerleave', function () {
+    sideA.classList.remove('focusA');
+    sideB.classList.remove('focusB');
+  });
+
+  setSplit(50);
+})();
+</script>
+</body>
+</html>
