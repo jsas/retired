@@ -180,6 +180,21 @@ describe('findGrossIncomeForTakeHome (reverse-tax solver)', () => {
       expect(closeTo(calculateTax(gross, code, config).takeHome, 50000, 1)).toBe(true);
     }
   });
+
+  it('never hangs on a pathological config with a ≥100% marginal rate (E-05 / #28)', () => {
+    // The upper-bound expansion loop used to be unbounded: with a user-edited
+    // table whose marginal rate is ≥ 100%, takeHome never rises, so the bound
+    // was never bracketed and the loop spun forever. The cap must make it
+    // terminate and return a finite (if meaningless) number instead of hanging.
+    const flat100 = { brackets: [], rates: [1], exemption: 0 };
+    const broken = {
+      ...config,
+      federal: flat100,
+      provinces: { ...config.provinces, ONT: flat100 },
+    };
+    const gross = findGrossIncomeForTakeHome(50000, 'ONT', broken);
+    expect(Number.isFinite(gross)).toBe(true);
+  });
 });
 
 describe('oasDeferralMultiplier', () => {
