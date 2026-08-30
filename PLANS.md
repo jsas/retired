@@ -738,7 +738,7 @@ one; this brings print to parity.)
 
 ---
 
-## [ ] PLAN A-03 · Agent verdict strings use per-person status, not household
+## [x] PLAN A-03 · Agent verdict strings use per-person status, not household
 **Maps to:** REVIEW.md **A-03** · Severity LOW
 **File:** `src/lib/ai/tools.ts`
 

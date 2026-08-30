@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { executeToolCall, toolSpecs, EDITABLE_FIELDS, type ToolContext } from './tools';
-import { calculateHousehold } from '../retirementEngine';
+import { calculateHousehold, householdOutcome } from '../retirementEngine';
 import { baseInputs, testConfig } from '../../test/helpers';
 import { captureCheckpoint, UNDEFINED_SENTINEL } from './checkpoints';
 import { MemoryStore } from '../memory/store';
@@ -100,6 +100,41 @@ describe('run_projection', () => {
     });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('structural field');
+  });
+
+  it('headline verdict is the HOUSEHOLD one for a couple, per-person stays as detail (A-03)', () => {
+    // The primary's silo depletes; the funded spouse covers the gap. The old
+    // per-person headline would read SHORTFALL while householdOutcome (the
+    // dashboard/MC verdict, #33) says the household is fine.
+    const inputs = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 90,
+      rrspBalance: 100000, tfsaBalance: 0, taxableBalance: 0,
+      cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000, pensions: [],
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 900000, tfsaBalance: 200000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 25000, pensions: [],
+      },
+    });
+    const hr = calculateHousehold(inputs, testConfig());
+    // Fixture sanity: the primary's own silo really does deplete, and the
+    // household verdict really is ON_TRACK — otherwise this proves nothing.
+    expect(hr.status).toBe('SHORTFALL');
+    const ho = householdOutcome(hr, inputs);
+    expect(ho.status).toBe('ON_TRACK');
+
+    const out = executeToolCall(ctx({ inputs, config: testConfig() }), {
+      id: '1', name: 'run_projection', args: {},
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    // Headline = household verdict…
+    expect(out.content).toMatch(/Result: ON TRACK — household funded to age 90\+/);
+    // …and the per-person verdicts are demoted to a labeled detail line.
+    expect(out.content).toContain('per-person (detail): you deplete at');
+    expect(out.content).toContain('spouse on track');
   });
 });
 

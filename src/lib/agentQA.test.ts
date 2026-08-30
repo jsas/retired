@@ -1,6 +1,6 @@
 // Tests for the paste-based "Ask an AI" question prompts.
 import { describe, it, expect } from 'vitest';
-import { QA_PRESETS, buildQAPrompt } from './agentQA';
+import { QA_PRESETS, buildQAPrompt, buildPlanDigest } from './agentQA';
 import { calculateRetirement, calculateHousehold } from './retirementEngine';
 import { testConfig, baseInputs } from '../test/helpers';
 
@@ -102,5 +102,46 @@ describe('buildQAPrompt', () => {
     const qIdx = out.lastIndexOf('QUESTION:');
     expect(qIdx).toBeGreaterThan(-1);
     expect(qIdx).toBeGreaterThan(out.indexOf('COMPUTED PROJECTION'));
+  });
+
+  it('leads with the HOUSEHOLD verdict even when the primary silo depletes (A-03)', () => {
+    // A couple whose primary runs dry but whose funded spouse covers the gap:
+    // the per-person "You" digest reads SHORTFALL, while householdOutcome (the
+    // dashboard/MC verdict, #33) says the household is fine. The prompt must
+    // lead with the household verdict so the model doesn't conclude SHORTFALL
+    // from the primary's line alone.
+    const inputs = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 90,
+      rrspBalance: 100000, tfsaBalance: 0, taxableBalance: 0,
+      cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000, pensions: [],
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 900000, tfsaBalance: 200000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 25000, pensions: [],
+      },
+    });
+    const hr = calculateHousehold(inputs, config);
+    // Fixture sanity: the primary DOES deplete (per-person SHORTFALL) while the
+    // household verdict is ON_TRACK — otherwise the test proves nothing.
+    expect(hr.status).toBe('SHORTFALL');
+    const out = buildQAPrompt(inputs, { results: hr }, QA_PRESETS[0]);
+    expect(out).toContain('HOUSEHOLD VERDICT: ON TRACK');
+    // The household verdict must appear BEFORE the per-person digests.
+    expect(out.indexOf('HOUSEHOLD VERDICT')).toBeLessThan(out.indexOf('You:'));
+  });
+
+  it('buildPlanDigest carries the same household verdict line', () => {
+    const single = baseInputs({
+      rrspBalance: 400000, tfsaBalance: 100000,
+      cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 55000, maxAge: 95,
+    });
+    const r = calculateRetirement(single, config);
+    const digest = buildPlanDigest(single, { results: r });
+    expect(digest).toContain('HOUSEHOLD VERDICT:');
+    expect(digest.indexOf('HOUSEHOLD VERDICT')).toBeLessThan(digest.indexOf('Plan:'));
   });
 });
