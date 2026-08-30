@@ -827,7 +827,7 @@ this understates/overstates the historical outcome. Optional enhancement, not a 
 
 ---
 
-## [ ] PLAN X-04 · endAge / RM null-vs-omitted convention only in CLAUDE.md
+## [x] PLAN X-04 · endAge / RM null-vs-omitted convention only in CLAUDE.md
 **Maps to:** REVIEW.md **X-04** · Severity LOW
 **Files:** `src/lib/retirementEngine.ts` (types) / `CLAUDE.md`
 
