@@ -106,6 +106,27 @@ describe('AppStore', () => {
     expect(db.toDoc()?.scenarios[0].name).toBe('Seeded plan');
     db.close();
   });
+
+  it('exportBytes reflects the most recent persist, not stale bytes (U-01)', async () => {
+    // The export handler seeds its throwaway DB from store.exportBytes() — the
+    // live in-memory state — not from OPFS/localStorage. This test proves the
+    // bytes are current: persist a change, export immediately, and the fresh
+    // database must contain the edit (not the pre-persist state).
+    const { store } = await AppStore.open(customDefaults);
+    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1', config: DEFAULT_APP_CONFIG });
+
+    // Make a change and persist it synchronously (as the persist effect does).
+    const edited = [{ id: 'seed-1', name: 'Edited just now', inputs: baseInputs({ desiredSpending: 99999 }) }];
+    store.persist({ scenarios: edited, activeScenarioId: 'seed-1' });
+
+    // Export immediately — no waiting for OPFS to flush.
+    const bytes = store.exportBytes();
+    const { AppDatabase } = await import('./db');
+    const db = await AppDatabase.open(bytes);
+    expect(db.loadScenarios()[0].name).toBe('Edited just now');
+    expect(db.loadScenarios()[0].inputs.desiredSpending).toBe(99999);
+    db.close();
+  });
 });
 
 describe('AppStore revisions', () => {

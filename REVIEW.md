@@ -334,7 +334,7 @@ _(pending)_
 
 ### B.7 UI — `App.tsx` + `src/components/*`
 
-**U-01 · MEDIUM · Two SQLite connections can be open at once during full export.**
+~~**U-01 · MEDIUM · Two SQLite connections can be open at once during full export.**~~ ✅ **FIXED 2026-08-30** (`fix/u01-stale-export`)
 `handleExportFull` (App.tsx:254) calls `AppDatabase.open()` — a *fresh* connection that
 re-opens OPFS/localStorage — while the main `store` already holds an open `AppDatabase`.
 sql.js is in-memory per connection, so the export snapshot is built from a *second* DB
@@ -345,6 +345,10 @@ with D-01 (OPFS write is fire-and-forget). **Needed:** export via the *existing*
 `store.exportBytes()` (which serializes the live in-memory db), not a fresh
 `AppDatabase.open()`. The chosen-scenario subset filtering can still run against the live
 `scenarios` state for the scenario rows.
+**Fix:** `handleExportFull` now seeds the throwaway export DB with `store.exportBytes()`
+(the live in-memory bytes) via `AppDatabase.open(seed)`, so the starting point is always
+current. Covered by a store.test.ts test proving `exportBytes` reflects the most recent
+persist immediately.
 
 **U-02 · MEDIUM · Persist effects are fire-and-forget; no durability feedback.**
 App.tsx:202 `store?.persist({ scenarios, activeScenarioId })` and :208 `persist({ config })`
@@ -584,7 +588,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | S-01 | Strategies | MEDIUM | `runOne` scores household outcome vs `inputs`, not `merged` | Actionable |
 | ~~D-01~~ | Data | ~~MEDIUM~~ ✅ | OPFS-write failure → one-session rollback (== #18) — **FIXED** (`issue/18-opfs-rollback`, mirror sequenced behind OPFS) | **Fixed** |
 | D-04 | Data | MEDIUM | Legacy localStorage dual-source still live (== #21) | Actionable (refactor) |
-| U-01 | UI (App) | MEDIUM | Full export opens a 2nd SQLite connection, can snapshot stale bytes | Actionable |
+| ~~U-01~~ | UI (App) | ~~MEDIUM~~ ✅ | Full export opened a 2nd SQLite connection, could snapshot stale bytes — **FIXED** (`fix/u01-stale-export`, seeds from live `store.exportBytes()`) | **Fixed** |
 | U-02 | UI (App) | MEDIUM | Persist effects fire-and-forget; no durability feedback | Actionable |
 | ~~U-07~~ | UI (display) | ~~MEDIUM~~ ✅ | MetricCards + ScheduleTable formatted money as `en-US`/`USD` — **FIXED** (`fix/currency-cad`) | **Fixed** |
 | ~~U-09~~ | UI (TimelineChart) | ~~MEDIUM~~ ✅ | Base-spending handle subtracted events on draw, ignored on write — **FIXED** (`fix/timeline-band-drag`) | **Fixed** |
@@ -657,7 +661,7 @@ Everything not struck through above. These are the items that still need doing.
 - **D-07 · LOW** — `toDoc()` returns null on invalid config, dropping config silently.
 
 ### UI
-- **U-01 · MEDIUM** — Full export opens a 2nd SQLite connection; can snapshot stale bytes.
+- ~~**U-01 · MEDIUM** — Full export opens a 2nd SQLite connection; can snapshot stale bytes.~~ ✅ FIXED (`fix/u01-stale-export`)
 - **U-02 · MEDIUM** — Persist effects are fire-and-forget; no durability feedback.
 - **U-15 · LOW** — PrintSummary detailed table omits the RDSP column.
 
@@ -705,14 +709,18 @@ Everything not struck through above. These are the items that still need doing.
   sequences the localStorage mirror behind the OPFS write, so a failed OPFS write
   can never leave localStorage newer than OPFS (the silent-rollback trigger).
   761/761 tests, `tsc` clean.
+- **2026-08-30** — **U-01** fixed on `fix/u01-stale-export`: `handleExportFull` now
+  seeds the throwaway export DB from `store.exportBytes()` (live in-memory state)
+  instead of letting `AppDatabase.open()` read potentially-stale OPFS/localStorage.
+  762/762 tests, `tsc` clean.
 
 ---
 
 ## Where to start (suggested priority — remaining)
 
 1. **Engine money-correctness MEDIUMs** — all fixed (E-06 #26, E-07 #25, E-08 #27).
-2. **Data-durability MEDIUMs** — U-01 (stale export), U-02 (no durability feedback).
-   D-01 (#18 OPFS rollback) fixed on `issue/18-opfs-rollback` (PR pending).
+2. **Data-durability MEDIUMs** — U-02 (no durability feedback).
+   D-01 (#18 OPFS rollback) and U-01 (stale export) fixed on `fix/u01-stale-export`.
 3. **S-01** — strategy scoring vs `merged`.
 4. **Quick wins** — U-15 (RDSP print column), A-03 (household verdict strings), D-02
    (#19 warning), X-04 (comment).
