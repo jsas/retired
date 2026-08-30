@@ -68,7 +68,29 @@ const ORDERINGS: WithdrawalAccount[][] = [
 ];
 
 const orderLabel = (o: WithdrawalAccount[]) =>
-  o.map(a => (a === 'tfsa' ? 'TFSA' : a === 'taxable' ? 'Taxable' : 'RRSP')).join(' → ');
+  o.map(a => (a === 'tfsa' ? 'TFSA' : a === 'taxable' ? 'Taxable' : a === 'rdsp' ? 'RDSP' : 'RRSP')).join(' → ');
+
+// Withdrawal-order variants (S-03). With an ACTIVE RDSP (same predicate as the
+// engine's auto-inject — retirementEngine's rdspActiveForOrder), the three-
+// account permutations are not the real alternative space: the engine silently
+// inserts 'rdsp' ahead of taxable when the order omits it, so every base
+// ordering already runs in that shape. The interesting variants are those that
+// place 'rdsp' EXPLICITLY somewhere else — first (spend the partly-tax-free
+// dollar before TFSA) or last (preserve it longest). Each 3-account ordering
+// therefore yields two RDSP variants; without an RDSP the list is plain
+// ORDERINGS and nothing changes.
+function orderingsFor(inputs: RetirementInputs): WithdrawalAccount[][] {
+  const rdsp = inputs.rdsp;
+  const active = rdsp?.enabled === true && rdsp?.dtcEligible === true && (rdsp.balance ?? 0) > 0;
+  if (!active) return ORDERINGS;
+  const withRdsp: WithdrawalAccount[][] = [];
+  for (const base of ORDERINGS) {
+    const noTaxable = base.filter(a => a !== 'taxable');
+    withRdsp.push(['rdsp', ...noTaxable]);
+    withRdsp.push([...noTaxable, 'rdsp']);
+  }
+  return withRdsp;
+}
 
 // Highest flat after-tax yearly spending (today's $) that survives to maxAge.
 // Binary search on desiredSpending; spending is floored at 0. Survival is the
@@ -240,7 +262,7 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
   }
 
   const currentOrder = (inputs.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp']).join(',');
-  for (const order of ORDERINGS) {
+  for (const order of orderingsFor(inputs)) {
     if (order.join(',') === currentOrder) continue;
     specs.push({
       id: `order-${order.join('-')}`,

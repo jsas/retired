@@ -284,10 +284,18 @@ proved discriminating: with the old unclamped behavior it returns 5,397,285), pl
 guards for the normal interior case and the zero-asset 0 case. 804/804 tests, `tsc`
 clean.
 
-**S-03 · LOW · Strategy withdrawal-order variants omit RDSP.** `ORDERINGS` (strategies.ts:61-68)
-is the 6 permutations of tfsa/taxable/rrsp — no `'rdsp'`, consistent with E-01. Once E-01
-is fixed (RDSP enters the order), the explorer's order variants should include RDSP
-positions or it will silently never test drawing the RDSP. Tracked with E-01.
+~~**S-03 · LOW · Strategy withdrawal-order variants omit RDSP.**~~ ✅ **FIXED 2026-08-30**
+(`fix/s03-rdsp-orderings`) strategies.ts: new `orderingsFor(inputs)` returns plain
+`ORDERINGS` when no RDSP is active, and when one is (same predicate as the engine's
+auto-inject: enabled + dtcEligible + balance > 0) yields two explicit-RDSP variants
+per 3-account ordering — `'rdsp'` first (spend the partly-tax-free dollar earliest)
+and `'rdsp'` last (preserve it longest). The base permutations aren't offered in that
+case because the engine silently inserts `'rdsp'` ahead of taxable when the order
+omits it, so every base ordering already runs in that one RDSP shape. `orderLabel`
+labels RDSP. Tests: explicit-rdsp placements appear and cover both extremes, no
+account is dropped or duplicated, non-active RDSPs (disabled / zero balance /
+not DTC-eligible) keep the plain 5 base order variants, and the variants run the
+engine cleanly. 805/805 tests, `tsc` clean.
 
 **S-04 · INFO · Gap-targeted work stint gross-up uses a flat 30% marginal.** strategies.ts:242
 `worst / 0.7`. Fine as a heuristic for a *suggestion*, clearly labelled approximate. No bug.
@@ -676,7 +684,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | ~~T-03~~ | Tax | ~~LOW~~ ✅ | OAS residency pro-rating — verified correct incl. deferral combo (`verify/t03-oas-residency`) | **Verified OK** |
 | T-04 | Tax | INFO | GIS single-vs-couple reduction base — documented, correct | Info |
 | ~~S-02~~ | Strategies | ~~LOW~~ ✅ | `sustainableSpending` ceiling overshoot — **FIXED** (`fix/s02-spending-ceiling`) | **Fixed** |
-| S-03 | Strategies | LOW | Strategy orderings omit RDSP (== #40 family) | Actionable |
+| ~~S-03~~ | Strategies | ~~LOW~~ ✅ | Order variants include explicit RDSP placements — **FIXED** (`fix/s03-rdsp-orderings`) | **Fixed** |
 | S-04 | Strategies | INFO | Gap-targeted work stint uses flat 30% marginal — documented approx | Info |
 | S-05 | Strategies | INFO | Extra `calculateHousehold` pass for gap — perf note only | Info |
 | ~~D-02~~ | Data | ~~LOW~~ ✅ | Silent config reset on corruption (== #19) — **FIXED** (`fix/d02-config-corrupt-warning`, closes #19) | **Fixed** |
@@ -727,7 +735,7 @@ Everything not struck through above. These are the items that still need doing.
 ### Strategies / solvers
 - ~~**S-01 · MEDIUM** — `runOne` scores household outcome against `inputs`, not `merged`.~~ ✅ FIXED (`fix/s01-strategy-scoring`)
 - ~~**S-02 · LOW** — `sustainableSpending` hi-expansion edge.~~ ✅ FIXED (`fix/s02-spending-ceiling`)
-- **S-03 · LOW · == #40 family** — Strategy orderings omit RDSP.
+- ~~**S-03 · LOW · == #40 family** — Strategy orderings omit RDSP.~~ ✅ FIXED (`fix/s03-rdsp-orderings`)
 
 ### Data layer (== open issues #18–#21)
 - **D-04 · MEDIUM · == #21** — Legacy localStorage dual-source still live (refactor).
@@ -849,6 +857,12 @@ Everything not struck through above. These are the items that still need doing.
   unconstrained handling), and `hi` is clamped at the ceiling during expansion. Old
   behavior returned the unclamped ×1.5 overshoot (5,397,285 on the regression fixture)
   instead of the ceiling. 804/804 tests, `tsc` clean.
+- **2026-08-30** — **S-03** fixed on `fix/s03-rdsp-orderings`: when the plan has an
+  active RDSP (engine auto-inject predicate), the strategy explorer's order variants
+  become explicit-RDSP placements — `rdsp` first and `rdsp` last per 3-account
+  ordering — instead of the base permutations (which the engine would silently reshape
+  by inserting `rdsp` ahead of taxable anyway). Non-active RDSPs keep the plain
+  orderings. 805/805 tests, `tsc` clean.
 
 ---
 
@@ -858,6 +872,7 @@ Everything not struck through above. These are the items that still need doing.
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`). **S-02** — fixed (`fix/s02-spending-ceiling`).
+   **S-03** — fixed (`fix/s03-rdsp-orderings`).
 4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05, D-07 fixed. Remaining: none.
 5. **Verify-before-fix** — E-04, E-02, T-02, T-03 all verified OK. Remaining: none.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
