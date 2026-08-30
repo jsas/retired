@@ -24,3 +24,6 @@ dist-ssr
 *.sln
 *.sw?
 src/test/tmp/
+
+# Claude Code worktree scratch (nested git repos — never commit)
+.claude/worktrees/
