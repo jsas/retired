@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Ask it anything. It only answers in English.</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .term { background:#0b0e11; }
+  .term .prompt { color:#4ade80; opacity:.75; }
+  .term .cmd    { color:#e5e7eb; }
+  .term .ans    { color:#9ca3af; }
+  .term .ans strong { color:#4ade80; font-weight:600; }
+  .term .ans em { color:#fbbf24; font-style:normal; }
+  .term .mut    { color:#4b5563; }
+  .line { white-space: pre-wrap; word-break: break-word; }
+
+  .cursor {
+    display:inline-block; width:8px; height:1.05em;
+    background:#4ade80; vertical-align:text-bottom;
+    animation: blink 1.05s steps(1,end) infinite;
+  }
+  @keyframes blink { 0%,49% { opacity:1; } 50%,100% { opacity:0; } }
+
+  /* typed lines appear one after another */
+  .type-in { animation: ti .25s ease-out both; }
+  @keyframes ti { from { opacity:0; transform:translateY(3px);} to { opacity:1; transform:none;} }
+</style>
+</head>
+<body class="min-h-screen bg-[#0d1015] text-slate-200 antialiased flex flex-col">
+
+<!-- ═══ SITE 1 · LANDING — pure marketing, no app chrome ═══ -->
+
+<header class="mx-auto w-full max-w-5xl px-6 pt-7">
+  <div class="flex items-center gap-2.5">
+    <div class="flex h-7 w-7 items-center justify-center rounded bg-blue-600 text-[10px] font-bold text-white">RE:</div>
+    <span class="text-[15px] font-semibold tracking-tight text-slate-100">tired</span>
+    <span class="ml-auto text-[12px] text-slate-500">A retirement plan you can talk to.</span>
+  </div>
+</header>
+
+<main class="mx-auto w-full max-w-5xl flex-1 px-6">
+
+  <!-- HERO: the terminal window -->
+  <section class="mt-12 grid items-center gap-10 sm:mt-16 lg:grid-cols-[1fr_1.05fr] lg:gap-12">
+
+    <!-- headline + CTA -->
+    <div>
+      <h1 class="text-[32px] font-bold leading-tight tracking-tight text-slate-50 sm:text-[44px]">
+        Ask it anything.<br />
+        It only answers<br class="hidden sm:block" /> in English.
+      </h1>
+      <p class="mt-4 max-w-md text-[15.5px] leading-relaxed text-slate-400">
+        RE:tired is a retirement plan with a console. Type <span class="mono text-[13.5px] text-slate-300">plan</span>
+        and it tells you the age your money lasts to — honestly, even when the answer stings.
+        Type <span class="mono text-[13.5px] text-slate-300">retire 64</span> and the whole plan re-computes on the spot.
+      </p>
+      <p class="mt-3 max-w-md text-[15.5px] leading-relaxed text-slate-400">
+        Prefer buttons? The same plan lives behind sliders too — the console and the dashboard
+        are two faces of one engine. Move either, both stay in sync.
+      </p>
+
+      <div class="mt-8 flex flex-wrap items-center gap-4">
+        <a href="w9-terminal-app.html"
+           class="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-3.5 text-[15px] font-semibold text-neutral-950 shadow-sm transition hover:bg-emerald-400">
+          Open the console
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+        <span class="text-[12.5px] text-slate-500">Two minutes. No account, no email.</span>
+      </div>
+    </div>
+
+    <!-- the terminal -->
+    <div class="term mono overflow-hidden rounded-xl border border-neutral-800 text-[13px] leading-relaxed shadow-2xl shadow-black/50" aria-label="Demo of the RE:tired console">
+      <!-- window chrome -->
+      <div class="flex items-center gap-1.5 border-b border-neutral-800/80 px-4 py-2.5">
+        <span class="h-2.5 w-2.5 rounded-full bg-[#3f4750]"></span>
+        <span class="h-2.5 w-2.5 rounded-full bg-[#3f4750]"></span>
+        <span class="h-2.5 w-2.5 rounded-full bg-[#3f4750]"></span>
+        <span class="mut ml-2 text-[11px]">retired — console</span>
+      </div>
+      <div class="px-4 py-4 sm:px-5">
+        <div class="line mut">&gt; plan</div>
+        <div class="line ans" id="ans-plan">…</div>
+        <div class="line mt-3 mut">&gt; retire 64</div>
+        <div class="line ans" id="ans-retire">…</div>
+        <div class="line mt-3 mut">&gt; storm on</div>
+        <div class="line ans" id="ans-storm">…</div>
+        <div class="mt-4 flex items-center gap-2">
+          <span class="prompt">plan&gt;</span>
+          <span class="cursor" aria-hidden="true"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- what makes it different -->
+  <section class="mt-20 grid gap-5 sm:grid-cols-3">
+    <div class="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
+      <h3 class="mono text-[13px] font-semibold text-emerald-400">&gt; honest by default</h3>
+      <p class="mt-2 text-[12.5px] leading-relaxed text-slate-400">
+        If the money runs short, the first answer says so — with the one change that would close the gap.
+        The demo plan above is failing on purpose; yours gets the same treatment.
+      </p>
+    </div>
+    <div class="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
+      <h3 class="mono text-[13px] font-semibold text-emerald-400">&gt; one engine, two faces</h3>
+      <p class="mt-2 text-[12.5px] leading-relaxed text-slate-400">
+        The console and the dashboard read and write the same plan. Type
+        <span class="mono text-slate-300">spend 75000</span> and the slider moves. Drag the slider
+        and the command echoes back. Power users get a CLI; everyone else gets sliders.
+      </p>
+    </div>
+    <div class="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
+      <h3 class="mono text-[13px] font-semibold text-emerald-400">&gt; storm-tested</h3>
+      <p class="mt-2 text-[12.5px] leading-relaxed text-slate-400">
+        Every answer comes with its bad-weather twin: the same plan re-run in stormy markets.
+        A plan that only works with luck says so.
+      </p>
+    </div>
+  </section>
+
+  <!-- the promise -->
+  <section class="mt-5 grid gap-5 sm:grid-cols-3">
+    <div class="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
+      <h3 class="text-[13.5px] font-semibold text-slate-200">Private by design</h3>
+      <p class="mt-1.5 text-[12.5px] leading-relaxed text-slate-400">No servers, no accounts. Your numbers never leave your browser — you can unplug the internet and it still works.</p>
+    </div>
+    <div class="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
+      <h3 class="text-[13.5px] font-semibold text-slate-200">Honest about limits</h3>
+      <p class="mt-1.5 text-[12.5px] leading-relaxed text-slate-400">Canadian tax &amp; benefit rules, approximated. Educational modeling — not financial, tax, or investment advice.</p>
+    </div>
+    <div class="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
+      <h3 class="text-[13.5px] font-semibold text-slate-200">Open</h3>
+      <p class="mt-1.5 text-[12.5px] leading-relaxed text-slate-400">Open source, free to use. <span class="underline decoration-neutral-700 underline-offset-2">Read the code</span>, <span class="underline decoration-neutral-700 underline-offset-2">donate</span>, or <span class="underline decoration-neutral-700 underline-offset-2">get help</span>.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="mt-16 border-t border-neutral-800/80 bg-black/20">
+  <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-5 text-[11.5px] text-slate-500">
+    <span>RE:tired knows if your money outlasts you.</span>
+    <span class="hidden sm:inline">·</span>
+    <span>Not financial, tax, or investment advice. Educational modeling only; Canadian tax &amp; benefit rules are approximations.</span>
+    <span class="hidden sm:inline">·</span>
+    <span>No servers · no accounts · your data stays in your browser.</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* The hero terminal's three answers are computed live from ../model.js.
+     Defaults fail at 89 on purpose — the first `plan` output must say so,
+     plus the suggest() fix. Nothing here is hardcoded. */
+  var state = Object.assign({}, DEMO_DEFAULTS);
+  var res = simulate(state);
+
+  /* `plan` — the honest verdict, with the suggest() fix */
+  var planHtml;
+  if (res.ok) {
+    planHtml = 'money lasts until <strong>' + lastsLabel(res) + '</strong> — past the ' +
+      state.maxAge + ' you planned for, with <strong>' + fmtMoney(res.leftAtMax) + '</strong> still there.';
+  } else {
+    var gap = state.maxAge - res.depletionAge;
+    planHtml = 'money lasts until <em>' + lastsLabel(res) + '</em> — ' + gap +
+      (gap === 1 ? ' year' : ' years') + ' short of ' + state.maxAge + '.';
+    var s = suggest(state);
+    if (s) planHtml += ' ' + s.charAt(0).toLowerCase() + s.slice(1);
+  }
+  document.getElementById('ans-plan').innerHTML = planHtml;
+
+  /* `retire 64` — the same plan, retirement pushed out; never hardcode the result */
+  var later = simulate(Object.assign({}, state, { retireAge: 64 }));
+  var laterHtml = 'now it lasts until <strong>' + lastsLabel(later) + '</strong>' + (later.ok ? ' ✓' : '');
+  document.getElementById('ans-retire').innerHTML = laterHtml;
+
+  /* `storm on` — bad-weather twin of the original plan */
+  var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+  var stormHtml;
+  if (storm.ok) {
+    stormHtml = 'even in stormy markets it holds past ' + state.maxAge + '.';
+  } else {
+    stormHtml = 'in stormy markets it runs out at <em>' + lastsLabel(storm) + '</em>' +
+      (res.depletionAge != null && storm.depletionAge < res.depletionAge
+        ? ' — ' + (res.depletionAge - storm.depletionAge) + ' years sooner.'
+        : '.');
+  }
+  document.getElementById('ans-storm').innerHTML = stormHtml;
+
+  /* gentle stagger for the three answers */
+  ['ans-plan', 'ans-retire', 'ans-storm'].forEach(function (id, i) {
+    var el = document.getElementById(id);
+    el.style.opacity = '0';
+    setTimeout(function () {
+      el.classList.add('type-in');
+      el.style.opacity = '';
+    }, 500 + i * 650);
+  });
+})();
+</script>
+</body>
+</html>

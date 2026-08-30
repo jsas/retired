@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Three numbers tell you if you're ready</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .serif-display { font-family: Georgia, 'Times New Roman', serif; letter-spacing: -0.02em; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .fu { animation: fadeUp .7s cubic-bezier(.2,.7,.3,1) both; }
+  .fu-1 { animation-delay:.06s } .fu-2 { animation-delay:.16s } .fu-3 { animation-delay:.26s }
+  .fu-4 { animation-delay:.36s } .fu-5 { animation-delay:.46s } .fu-6 { animation-delay:.56s }
+
+  @keyframes glow { 0%,100% { opacity:.45 } 50% { opacity:.8 } }
+  .glow { animation: glow 6s ease-in-out infinite; }
+
+  /* rings draw themselves in once, on load — calm, not bouncy */
+  .ring { transition: stroke-dashoffset 1.4s cubic-bezier(.2,.7,.3,1); }
+</style>
+</head>
+<body class="bg-[#0c0f14] text-slate-200 min-h-screen antialiased flex flex-col">
+
+<!-- ═══ SITE 1 — LANDING. Pure marketing: three rings, one door, the footer.
+     No app chrome here — Details / Plans / Assistant / Data / Print all live in the app. ═══ -->
+
+<!-- thin top bar — brand + quiet links only -->
+<header class="flex items-center justify-between px-6 md:px-10 h-16 border-b border-white/5">
+  <div class="flex items-center gap-2 font-semibold text-sm text-white">
+    <div class="w-6 h-6 bg-blue-500 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <div class="flex items-center gap-5 text-xs text-slate-400">
+    <a href="#" class="hover:text-white transition-colors hidden sm:block">How it works</a>
+    <a href="#" class="hover:text-white transition-colors hidden sm:block">Open source</a>
+    <a href="w8-rings-app.html" class="px-3 py-1.5 rounded-md bg-white/10 text-white hover:bg-white/15 transition-colors">Open the app →</a>
+  </div>
+</header>
+
+<main class="flex-1 max-w-5xl mx-auto w-full px-6 md:px-10">
+
+  <!-- ═══ HERO — three clean rings, the headline, the door ═══ -->
+  <section class="pt-14 md:pt-20 pb-12 text-center relative">
+    <div class="glow absolute left-1/2 top-20 -translate-x-1/2 w-[560px] h-[300px] rounded-full bg-blue-600/15 blur-[110px] pointer-events-none"></div>
+
+    <p class="fu fu-1 relative text-[11px] font-semibold uppercase tracking-[0.28em] text-blue-400 mb-5">
+      A Canadian retirement drawdown planner
+    </p>
+    <h1 class="fu fu-2 relative serif-display text-4xl md:text-6xl text-white leading-[1.08]">
+      Three numbers tell you<br/>if you're <em class="text-blue-400 not-italic">ready.</em>
+    </h1>
+    <p class="fu fu-3 relative mt-5 text-base md:text-lg text-slate-400 leading-relaxed max-w-xl mx-auto">
+      Not a wall of tables. Three rings — each one a plain question about your plan,
+      answered honestly by the math underneath.
+    </p>
+
+    <!-- ═══ THE RINGS — computed live from the sample plan, labels always visible.
+         This is the rings idea done right: no floating circles without names.
+         At the sample defaults the plan fails at 89 — the rings say so. ═══ -->
+    <div class="fu fu-3 relative mt-12 flex flex-col items-center">
+      <svg viewBox="0 0 320 320" class="w-72 h-72 md:w-[340px] md:h-[340px]" role="img"
+           aria-label="Three plan rings: Outlast, Cushion, Weatherproof">
+        <!-- Outlast: outer -->
+        <circle cx="160" cy="160" r="128" fill="none" stroke="#1e2430" stroke-width="16"/>
+        <circle id="ring1" class="ring" cx="160" cy="160" r="128" fill="none" stroke="#f43f5e" stroke-width="16"
+                stroke-linecap="round" stroke-dasharray="804.25" stroke-dashoffset="804.25"
+                transform="rotate(-90 160 160)"/>
+        <!-- Cushion: middle -->
+        <circle cx="160" cy="160" r="100" fill="none" stroke="#1e2430" stroke-width="16"/>
+        <circle id="ring2" class="ring" cx="160" cy="160" r="100" fill="none" stroke="#fbbf24" stroke-width="16"
+                stroke-linecap="round" stroke-dasharray="628.32" stroke-dashoffset="628.32"
+                transform="rotate(-90 160 160)"/>
+        <!-- Weatherproof: inner -->
+        <circle cx="160" cy="160" r="72" fill="none" stroke="#1e2430" stroke-width="16"/>
+        <circle id="ring3" class="ring" cx="160" cy="160" r="72" fill="none" stroke="#34d399" stroke-width="16"
+                stroke-linecap="round" stroke-dasharray="452.39" stroke-dashoffset="452.39"
+                transform="rotate(-90 160 160)"/>
+        <!-- center readout: the verdict number, honestly -->
+        <text id="centerAge" x="160" y="156" text-anchor="middle" font-size="46" font-weight="800" fill="#f8fafc" class="num">—</text>
+        <text id="centerLabel" x="160" y="182" text-anchor="middle" font-size="12" fill="#8b94a7">money lasts to</text>
+      </svg>
+
+      <!-- named ring legend — every ring has a name and its score, right beside it -->
+      <div class="grid grid-cols-3 gap-5 md:gap-8 mt-7 w-full max-w-lg text-left">
+        <div class="flex items-start gap-3">
+          <span class="mt-1.5 w-3 h-3 rounded-full bg-rose-500 shrink-0"></span>
+          <div>
+            <div class="text-[13px] font-semibold text-white">Outlast</div>
+            <div id="pct1" class="num text-lg font-bold text-rose-400">—</div>
+            <div class="text-[11.5px] text-slate-500 leading-snug mt-0.5">Does the money reach the age you're planning for?</div>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="mt-1.5 w-3 h-3 rounded-full bg-amber-400 shrink-0"></span>
+          <div>
+            <div class="text-[13px] font-semibold text-white">Cushion</div>
+            <div id="pct2" class="num text-lg font-bold text-amber-400">—</div>
+            <div class="text-[11.5px] text-slate-500 leading-snug mt-0.5">How much is left over at the end?</div>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="mt-1.5 w-3 h-3 rounded-full bg-emerald-400 shrink-0"></span>
+          <div>
+            <div class="text-[13px] font-semibold text-white">Weatherproof</div>
+            <div id="pct3" class="num text-lg font-bold text-emerald-400">—</div>
+            <div class="text-[11.5px] text-slate-500 leading-snug mt-0.5">Does it survive stormy markets?</div>
+          </div>
+        </div>
+      </div>
+
+      <p id="sampleNote" class="mt-7 text-[12.5px] text-slate-500 max-w-md leading-relaxed"></p>
+    </div>
+
+    <!-- ═══ THE ONE DOOR ═══ -->
+    <div class="fu fu-4 relative mt-11 flex flex-col items-center gap-3">
+      <a href="w8-rings-app.html"
+         class="group inline-flex items-center gap-2.5 rounded-full bg-blue-500 px-8 py-4 text-[15px] font-semibold text-white transition-all hover:bg-blue-400 shadow-lg shadow-blue-500/25">
+        Close your rings
+        <span class="transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>
+      </a>
+      <span class="text-[12px] text-slate-500">Opens the planner — free, no account, 2 minutes.</span>
+    </div>
+  </section>
+
+  <!-- ═══ WHAT EACH RING MEANS — marketing copy, no app weight ═══ -->
+  <section class="fu fu-5 grid md:grid-cols-3 gap-10 md:gap-12 pb-14 border-t border-white/5 pt-12">
+    <div>
+      <div class="serif-display text-5xl text-white/10 mb-3">01</div>
+      <h3 class="text-base font-semibold text-white mb-2">Outlast</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        The big one. If you're planning to 95, the money should get there too.
+        This ring closes only when it does — and tells you exactly how far short
+        it falls when it doesn't.
+      </p>
+    </div>
+    <div>
+      <div class="serif-display text-5xl text-white/10 mb-3">02</div>
+      <h3 class="text-base font-semibold text-white mb-2">Cushion</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        Reaching 95 with nothing left is cutting it fine. This ring fills as your
+        leftover grows — three years of spending in reserve closes it.
+      </p>
+    </div>
+    <div>
+      <div class="serif-display text-5xl text-white/10 mb-3">03</div>
+      <h3 class="text-base font-semibold text-white mb-2">Weatherproof</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        The same plan, replayed in stormy markets. If the plan only works when
+        the weather is kind, this ring refuses to close.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══ PRIVACY STRIP ═══ -->
+  <section class="fu fu-6 border-t border-white/5 py-10 flex flex-col md:flex-row items-start md:items-center gap-5 md:gap-8">
+    <div class="w-11 h-11 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+    </div>
+    <div class="flex-1">
+      <h3 class="text-sm font-semibold text-white mb-1">Your data never leaves this device.</h3>
+      <p class="text-[13px] text-slate-400 leading-relaxed max-w-2xl">
+        No servers, no accounts, nothing uploaded. Your plan lives only in this
+        browser's local storage — export a backup file if you switch devices.
+      </p>
+    </div>
+    <a href="w8-rings-app.html" class="px-5 py-2.5 bg-white text-slate-900 text-sm font-semibold rounded-full hover:bg-slate-200 transition-colors shrink-0">
+      Open the app →
+    </a>
+  </section>
+</main>
+
+<!-- ═══ FOOTER — privacy + legal, the whole marketing footer ═══ -->
+<footer class="border-t border-white/5 px-6 py-5">
+  <div class="mx-auto max-w-5xl flex flex-col items-center gap-1.5 text-center text-[11.5px] text-slate-600 sm:flex-row sm:justify-between sm:text-left">
+    <span>For education and exploration only — simplified estimates, not financial, tax, or investment advice.</span>
+    <span class="flex items-center gap-4">
+      <a href="#" class="hover:text-slate-400 transition-colors">Open source</a>
+      <a href="#" class="hover:text-slate-400 transition-colors">Donate</a>
+      <a href="#" class="hover:text-slate-400 transition-colors">Help</a>
+      <span>W8 · The rings, done right</span>
+    </span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* The landing uses the real model, honestly: at the sample defaults the plan
+     runs out at 89 — so the rings show that, not a polished 100%. */
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  function el(id) { return document.getElementById(id); }
+  var C = { r1: 2 * Math.PI * 128, r2: 2 * Math.PI * 100, r3: 2 * Math.PI * 72 };
+
+  function scores(s) {
+    var res = simulate(s);
+    var storm = simulate(Object.assign({}, s, { sky: 'storm' }));
+    var outlast = res.ok ? 100 : Math.max(0, Math.round(100 * (1 - (s.maxAge - res.depletionAge) / 10)));
+    var target = 3 * s.spending;
+    var cushion = Math.max(0, Math.min(100, Math.round(100 * res.leftAtMax / target)));
+    var weather = storm.ok ? 100 : Math.max(0, Math.round(100 * (1 - (s.maxAge - storm.depletionAge) / 10)));
+    return { res: res, storm: storm, outlast: outlast, cushion: cushion, weather: weather };
+  }
+
+  function setRing(elm, frac, circ) {
+    elm.setAttribute('stroke-dashoffset', String(circ * (1 - Math.max(0, Math.min(1, frac)))));
+  }
+
+  function render() {
+    var sc = scores(state);
+    /* start fully open, then close to the honest fraction on the next frame —
+       the one calm motion on the page */
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        setRing(el('ring1'), sc.outlast / 100, C.r1);
+        setRing(el('ring2'), sc.cushion / 100, C.r2);
+        setRing(el('ring3'), sc.weather / 100, C.r3);
+      });
+    });
+
+    el('pct1').textContent = sc.outlast + '%';
+    el('pct2').textContent = sc.cushion + '%';
+    el('pct3').textContent = sc.weather + '%';
+
+    el('centerAge').textContent = lastsLabel(sc.res);
+    el('centerLabel').textContent = sc.res.ok ? 'money lasts to' : 'runs out at';
+    el('centerAge').setAttribute('fill', sc.res.ok ? '#f8fafc' : '#fda4af');
+
+    if (sc.res.ok) {
+      el('sampleNote').textContent = 'This sample plan holds to ' + lastsLabel(sc.res) +
+        (sc.weather < 100 ? ' — but stormy markets open the inner ring.' : ', with all three rings closed.');
+    } else {
+      var gap = state.maxAge - sc.res.depletionAge;
+      el('sampleNote').textContent = 'This sample plan runs out at ' + sc.res.depletionAge + ' — ' + gap +
+        (gap === 1 ? ' year' : ' years') + ' short of ' + state.maxAge +
+        '. The rings show it plainly. Yours will too, whatever the answer.';
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

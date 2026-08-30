@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Console &amp; dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* small faders */
+  input[type=range].fader {
+    -webkit-appearance:none; appearance:none; width:100%; height:16px;
+    background:transparent; cursor:pointer; outline:none;
+  }
+  input[type=range].fader::-webkit-slider-runnable-track {
+    height:6px; border-radius:999px; background:#e2e8f0;
+  }
+  input[type=range].fader::-moz-range-track {
+    height:6px; border-radius:999px; background:#e2e8f0;
+  }
+  input[type=range].fader::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none;
+    width:14px; height:14px; margin-top:-4px; border-radius:999px;
+    background:#fff; border:2px solid #059669;
+    box-shadow:0 1px 3px rgba(15,23,42,.22);
+  }
+  input[type=range].fader::-moz-range-thumb {
+    width:12px; height:12px; border-radius:999px;
+    background:#fff; border:2px solid #059669;
+    box-shadow:0 1px 3px rgba(15,23,42,.22);
+  }
+
+  /* terminal pane */
+  .term { background:#0b0e11; }
+  .term .line { white-space: pre-wrap; word-break: break-word; }
+  .term .prompt { color:#4ade80; opacity:.75; }
+  .term .typed  { color:#e5e7eb; }
+  .term .ans    { color:#9ca3af; }
+  .term .ans strong { color:#4ade80; font-weight:600; }
+  .term .ans em { color:#fbbf24; font-style:normal; }
+  .term .err    { color:#f87171; }
+  .term .mut    { color:#4b5563; }
+  .term .echo   { color:#64748b; }
+  .term .echo .prompt { color:#64748b; opacity:1; }
+
+  .cursor {
+    display:inline-block; width:8px; height:1.05em;
+    background:#4ade80; vertical-align:text-bottom;
+    animation: blink 1.05s steps(1,end) infinite;
+  }
+  @keyframes blink { 0%,49% { opacity:1; } 50%,100% { opacity:0; } }
+
+  #term-in {
+    background:transparent; border:none; outline:none;
+    color:#e5e7eb; caret-color:#4ade80;
+    font-family:inherit; font-size:inherit;
+  }
+  #term-in::placeholder { color:#4b5563; }
+
+  .hint {
+    cursor:pointer;
+    border:1px solid #26313a;
+    padding:1px 7px;
+    color:#9ca3af;
+    background:transparent;
+    transition: color .12s ease, border-color .12s ease;
+  }
+  .hint:hover { color:#4ade80; border-color:#4ade80; }
+
+  .seg-active { background:#059669 !important; color:#fff !important; }
+  .fade-in { animation: fi .3s ease-out both; }
+  @keyframes fi { from { opacity:0; transform:translateY(4px);} to { opacity:1; transform:none;} }
+</style>
+</head>
+<body class="flex min-h-screen flex-col bg-slate-100 text-slate-900 antialiased">
+
+<!-- ═══════════ SITE 2 · APP CHROME ═══════════ -->
+<header class="sticky top-0 z-40 border-b border-neutral-800 bg-neutral-900 text-white">
+  <div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 md:px-6">
+
+    <a href="w9-terminal.html" class="flex items-center gap-2 text-sm font-semibold" title="Back to the landing page">
+      <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-xs font-bold">RE:</div>
+      <span>tired</span>
+    </a>
+
+    <!-- scenario switcher -->
+    <select class="cursor-pointer appearance-none rounded bg-neutral-800 py-1.5 pl-2.5 pr-7 text-xs hover:bg-neutral-700"
+            style="background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 3l3 3 3-3' fill='none' stroke='%239ca3af' stroke-width='1.5'/%3E%3C/svg%3E&quot;);background-repeat:no-repeat;background-position:right .55rem center;"
+            title="Scenarios — switch, compare, roll back revisions">
+      <option>Martin &amp; Sasha — base plan</option>
+      <option>Retire at 60, leaner</option>
+      <option>+ New scenario…</option>
+    </select>
+
+    <!-- save / dirty state -->
+    <button id="save-btn" class="flex items-center gap-1.5 rounded bg-emerald-600 px-2.5 py-1.5 text-xs font-medium hover:bg-emerald-700" title="Save changes to this scenario">
+      Save<span id="save-dot" class="hidden h-1.5 w-1.5 rounded-full bg-white"></span>
+    </button>
+
+    <div class="flex-1"></div>
+
+    <!-- AI assistant entry -->
+    <button class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800" title="Ask the in-browser assistant — it reads your plan and shows its work">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Assistant
+    </button>
+
+    <!-- data / backup entry -->
+    <button class="hidden items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 sm:flex" title="Your data: full backup, restore, import, share links">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      Data
+    </button>
+
+    <!-- print / export entry -->
+    <button class="hidden items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 sm:flex" title="Print the one-page plan, or export projections (CSV / PDF)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print / Export
+    </button>
+
+    <span class="hidden text-[11px] text-neutral-500 lg:inline">winner W9 · console + dashboard</span>
+  </div>
+</header>
+
+<main class="mx-auto w-full max-w-7xl flex-1 px-4 py-5 md:px-6">
+
+  <div class="grid items-start gap-5 lg:grid-cols-[1.15fr_1fr]">
+
+    <!-- ═══ LEFT: the GUI ═══ -->
+    <div class="space-y-5">
+
+      <!-- verdict hero -->
+      <section class="fade-in rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div id="verdict-badge" class="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+              RUNS SHORT
+            </div>
+            <h1 id="verdict-line" class="num mt-2.5 text-[24px] font-bold leading-tight tracking-tight sm:text-[30px]">
+              Your money lasts until you're 89.
+            </h1>
+            <p id="verdict-sub" class="mt-1 text-[13px] text-slate-500">
+              That's 6 years short of the 95 you planned for.
+            </p>
+            <p id="fix-line" class="mt-3 inline-block rounded-lg bg-slate-50 px-3 py-1.5 text-[12.5px] font-medium text-slate-700"></p>
+          </div>
+
+          <!-- storm-test indicator -->
+          <div id="storm-chip" class="flex shrink-0 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11.5px] font-medium text-rose-700" title="The same plan re-run in stormy markets">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 16.9A5 5 0 0 0 18 7a7 7 0 0 0-11.9 1.6A4.5 4.5 0 0 0 5.5 17H18"/><polyline points="13 11 9 17 15 17 11 23"/></svg>
+            <span id="storm-label">In a storm: runs out at 80</span>
+          </div>
+        </div>
+
+        <!-- timeline -->
+        <div class="mt-5">
+          <svg id="timeline" viewBox="0 0 640 190" class="w-full" aria-label="Savings balance by age">
+            <g id="tl-area"></g>
+            <line id="tl-retire" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 4"/>
+            <text id="tl-retire-label" font-size="10" fill="#94a3b8" class="num"></text>
+            <line id="tl-depl" stroke="#e11d48" stroke-width="1.5" stroke-dasharray="3 3" opacity="0"/>
+            <text id="tl-depl-label" font-size="10" fill="#e11d48" font-weight="600" class="num" opacity="0"></text>
+            <g font-size="10" fill="#94a3b8" class="num">
+              <text x="40" y="184" id="tl-x0">55</text>
+              <text x="624" y="184" id="tl-x1" text-anchor="end">95</text>
+            </g>
+          </svg>
+          <div class="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-[11.5px] text-slate-500">
+            <span>Money left at <span class="num font-semibold text-slate-700" id="stat-leftage">95</span>: <span class="num font-semibold text-slate-700" id="stat-left">–</span></span>
+            <span>Adding <span class="num font-semibold text-slate-700" id="stat-contrib">–</span>/yr until <span class="num font-semibold text-slate-700" id="stat-retire">62</span></span>
+            <span>CPP + OAS <span class="num font-semibold text-slate-700" id="stat-benefits">–</span>/yr from 65</span>
+          </div>
+        </div>
+
+        <!-- small sliders -->
+        <div class="mt-6 grid gap-x-8 gap-y-5 border-t border-slate-100 pt-5 sm:grid-cols-3">
+          <div>
+            <div class="mb-1 flex items-baseline justify-between">
+              <label for="f-retire" class="text-[12.5px] font-medium text-slate-600">Stop working at</label>
+              <span id="f-retire-val" class="num text-[12.5px] font-semibold">62</span>
+            </div>
+            <input id="f-retire" type="range" class="fader" min="55" max="75" step="1" value="62" />
+          </div>
+          <div>
+            <div class="mb-1 flex items-baseline justify-between">
+              <label for="f-spend" class="text-[12.5px] font-medium text-slate-600">Spending a year</label>
+              <span id="f-spend-val" class="num text-[12.5px] font-semibold">$85,000</span>
+            </div>
+            <input id="f-spend" type="range" class="fader" min="30000" max="200000" step="1000" value="85000" />
+          </div>
+          <div>
+            <div class="mb-1 flex items-baseline justify-between">
+              <label for="f-saved" class="text-[12.5px] font-medium text-slate-600">Saved so far</label>
+              <span id="f-saved-val" class="num text-[12.5px] font-semibold">$850,000</span>
+            </div>
+            <input id="f-saved" type="range" class="fader" min="50000" max="3000000" step="10000" value="850000" />
+          </div>
+        </div>
+
+        <!-- weather -->
+        <div class="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4">
+          <span class="text-[11px] text-slate-400">Markets</span>
+          <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Market weather">
+            <button data-sky="storm"  class="sky rounded-md px-2.5 py-1 text-[11.5px] font-medium text-slate-500">stormy</button>
+            <button data-sky="normal" class="sky seg-active rounded-md px-2.5 py-1 text-[11.5px] font-medium text-slate-500">ordinary</button>
+            <button data-sky="sun"    class="sky rounded-md px-2.5 py-1 text-[11.5px] font-medium text-slate-500">kind</button>
+          </div>
+          <span class="ml-auto text-[11px] text-slate-400">same knobs as the console →</span>
+        </div>
+      </section>
+
+      <!-- per-account balances over time -->
+      <section class="fade-in rounded-2xl border border-slate-200 bg-white p-5">
+        <h2 class="text-[11px] font-semibold uppercase tracking-[.14em] text-slate-400">Your accounts over time</h2>
+        <svg id="acct-chart" viewBox="0 0 640 190" class="mt-2 w-full" aria-label="Per-account balances over time: RRSP, TFSA, taxable">
+          <g id="acct-lines" fill="none" stroke-width="2" stroke-linejoin="round"></g>
+          <line id="acct-depl" stroke="#e11d48" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+          <g font-size="10" fill="#94a3b8" class="num">
+            <text x="2" y="184" id="acct-x0">55</text>
+            <text x="636" y="184" id="acct-x1" text-anchor="end">95</text>
+          </g>
+        </svg>
+        <ul class="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[12px]" id="acct-legend">
+          <li class="flex items-center gap-2"><span class="h-0.5 w-3.5 rounded bg-blue-600"></span><span class="text-slate-600">RRSP</span><span class="num font-semibold" id="leg-rrsp">–</span></li>
+          <li class="flex items-center gap-2"><span class="h-0.5 w-3.5 rounded bg-emerald-600"></span><span class="text-slate-600">TFSA</span><span class="num font-semibold" id="leg-tfsa">–</span></li>
+          <li class="flex items-center gap-2"><span class="h-0.5 w-3.5 rounded bg-amber-500"></span><span class="text-slate-600">Taxable</span><span class="num font-semibold" id="leg-tax">–</span></li>
+        </ul>
+        <p class="mt-2 text-[10.5px] leading-snug text-slate-400">Demo model: one pot split illustratively 50 / 30 / 20. The full engine tracks each account's own tax rules.</p>
+      </section>
+
+      <!-- Details ▾ : the 13 input sections -->
+      <section class="fade-in rounded-2xl border border-slate-200 bg-white">
+        <button id="details-toggle" class="flex w-full items-center justify-between px-4 py-3 text-left" aria-expanded="false">
+          <span class="text-[13px] font-semibold">Details</span>
+          <span class="flex items-center gap-2 text-[11px] text-slate-400">
+            the full plan inputs — 13 sections
+            <svg id="details-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+          </span>
+        </button>
+        <div id="details-body" class="hidden border-t border-slate-100 px-2 py-1.5">
+          <ul class="text-[12.5px] sm:columns-2" id="details-list"></ul>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ RIGHT: the live terminal ═══ -->
+    <div class="lg:sticky lg:top-[4.5rem]">
+      <section class="term mono fade-in overflow-hidden rounded-2xl border border-neutral-800 text-[12.5px] leading-relaxed shadow-xl shadow-black/20">
+        <!-- window chrome -->
+        <div class="flex items-center gap-1.5 border-b border-neutral-800/80 px-4 py-2.5">
+          <span class="h-2.5 w-2.5 rounded-full bg-[#3f4750]"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-[#3f4750]"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-[#3f4750]"></span>
+          <span class="mut ml-2 text-[11px]">the same plan, as a console</span>
+        </div>
+
+        <!-- output -->
+        <div id="term-out" class="h-[380px] overflow-y-auto px-4 py-3"></div>
+
+        <!-- prompt -->
+        <div class="flex items-center gap-2 border-t border-neutral-800/80 px-4 py-3">
+          <span class="prompt">plan&gt;</span>
+          <input id="term-in" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                 class="min-w-0 flex-1" placeholder="plan · retire 64 · spend 75k · storm on · help" aria-label="Console command input" />
+          <span class="cursor" aria-hidden="true"></span>
+        </div>
+
+        <!-- hints -->
+        <div class="flex flex-wrap items-center gap-2 border-t border-neutral-800/80 px-4 py-2.5 text-[11px]">
+          <span class="mut">try:</span>
+          <button class="hint" data-cmd="plan">plan</button>
+          <button class="hint" data-cmd="retire 64">retire 64</button>
+          <button class="hint" data-cmd="spend 75000">spend 75000</button>
+          <button class="hint" data-cmd="saved 1.2M">saved 1.2M</button>
+          <button class="hint" data-cmd="storm on">storm on</button>
+          <button class="hint" data-cmd="help">help</button>
+        </div>
+      </section>
+
+      <p class="mt-3 text-center text-[11px] text-slate-400">
+        Two faces, one plan — type a command and the sliders move; drag a slider and the command echoes here.
+      </p>
+    </div>
+  </div>
+
+  <footer class="mt-8 pb-6 text-center text-[11px] text-slate-400">
+    Console and dashboard read and write the same plan through the same engine — the CLI is a first-class citizen, not a toy.
+  </footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── shared state: demo plan (defaults fail at 89 — shown honestly) ── */
+  var state = Object.assign({}, DEMO_DEFAULTS);
+
+  var $ = function (id) { return document.getElementById(id); };
+  var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+
+  /* ═══════════════ terminal plumbing ═══════════════ */
+
+  var out = $('term-out');
+  var input = $('term-in');
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function span(cls, text) { return '<span class="' + cls + '">' + esc(text) + '</span>'; }
+  function scrollTerm() { out.scrollTop = out.scrollHeight; }
+
+  function println(html, cls) {
+    var div = document.createElement('div');
+    div.className = 'line' + (cls ? ' ' + cls : '');
+    div.innerHTML = html || '&nbsp;';
+    out.appendChild(div);
+    return div;
+  }
+  function blank() { println('&nbsp;'); }
+
+  /* money for the terminal: 75000 → "75k", 1200000 → "1.2M" (command-style) */
+  function termMoney(v) {
+    if (Math.abs(v) >= 1000000) {
+      var m = v / 1000000;
+      return (Math.round(m * 10) / 10) + 'M';
+    }
+    return Math.round(v / 1000) + 'k';
+  }
+
+  /* ── verdict sentence (shared by both faces, always computed) ── */
+  function verdictParts(res, o) {
+    if (res.ok) {
+      return {
+        badge: 'HOLDS',
+        badgeCls: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+        line: 'Your money lasts until you’re ' + lastsLabel(res) + '.',
+        sub: 'Past the ' + o.maxAge + ' you planned for, with ' + fmtMoney(res.leftAtMax) + ' still there.',
+        term: 'money lasts until <strong>' + lastsLabel(res) + '</strong> — past the ' +
+          o.maxAge + ' you planned for, with <strong>' + fmtMoney(res.leftAtMax) + '</strong> still there.'
+      };
+    }
+    var gap = o.maxAge - res.depletionAge;
+    return {
+      badge: 'RUNS SHORT',
+      badgeCls: 'border-amber-300 bg-amber-50 text-amber-800',
+      line: 'Your money lasts until you’re ' + lastsLabel(res) + '.',
+      sub: 'That’s ' + gap + ' ' + yearWord(gap) + ' short of the ' + o.maxAge + ' you planned for.',
+      term: 'money lasts until <em>' + lastsLabel(res) + '</em> — ' + gap + ' ' + yearWord(gap) +
+        ' short of ' + o.maxAge + '.'
+    };
+  }
+
+  /* ── terminal commands ── */
+
+  function parseNum(raw) {
+    if (raw == null) return null;
+    var s = String(raw).trim().toLowerCase().replace(/[$,\s]/g, '');
+    var m = /^([0-9]*\.?[0-9]+)(k|m)?$/.exec(s);
+    if (!m) return null;
+    var v = parseFloat(m[1]);
+    if (m[2] === 'k') v *= 1000;
+    if (m[2] === 'm') v *= 1000000;
+    return v;
+  }
+
+  var SKY_WORD = { stormy: 'storm', storm: 'storm', normal: 'normal', ordinary: 'normal',
+                   sun: 'sun', kind: 'sun', sunny: 'sun' };
+
+  function deltaNote(before, after) {
+    if (before.depletionAge == null && after.depletionAge == null) return '';
+    var b = before.depletionAge == null ? 110 : before.depletionAge;
+    var a = after.depletionAge == null ? 110 : after.depletionAge;
+    var d = a - b;
+    if (d === 0) return '';
+    return ' <span class="mut">(' + (d > 0 ? '+' : '−') + Math.abs(d) + ' ' + yearWord(Math.abs(d)) + ')</span>';
+  }
+
+  function setSky(sky) { state.sky = sky; render('gui'); }
+
+  var commands = {
+    plan: function () {
+      var res = simulate(state);
+      println('  ' + verdictParts(res, state).term, 'ans');
+      if (!res.ok) {
+        var s = suggest(state);
+        if (s) println('  ' + span('mut', 'fix: ') + '<strong>' + esc(s) + '</strong>', 'ans');
+      }
+      var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+      println('  ' + (storm.ok
+        ? span('mut', 'storm test: holds past ' + state.maxAge + ' even in bad markets.')
+        : span('mut', 'storm test: runs out at ') + '<em>' + esc(lastsLabel(storm)) + '</em>' + span('mut', ' in bad markets.')), 'ans');
+      return null;
+    },
+    retire: function (args) {
+      var v = parseNum(args[0]);
+      if (v == null) return 'retire takes an age, like <strong>retire 65</strong>';
+      var age = Math.round(v);
+      if (age < 50 || age > 75) return span('err', 'out of range.') + span('mut', ' try 50 to 75.');
+      if (age <= state.currentAge) return span('err', 'you’re ' + state.currentAge + ' already.') + span('mut', ' the dashboard sliders go down to 55.');
+      var before = simulate(state);
+      state.retireAge = age;
+      var after = simulate(state);
+      render('gui');
+      return 'retire at <strong>' + age + '</strong> — lasts until <strong>' + lastsLabel(after) + '</strong>' +
+        (after.ok ? ' ✓' : '') + deltaNote(before, after);
+    },
+    spend: function (args) {
+      var v = parseNum(args[0]);
+      if (v == null) return 'spend takes a number, like <strong>spend 75k</strong>';
+      var amt = Math.round(v);
+      if (amt < 10000 || amt > 400000) return span('err', 'that looks off.') + span('mut', ' try 10k to 400k.');
+      var before = simulate(state);
+      state.spending = amt;
+      var after = simulate(state);
+      render('gui');
+      return 'spending <strong>' + esc(fmtMoney(amt)) + '</strong> a year — lasts until <strong>' + lastsLabel(after) + '</strong>' +
+        (after.ok ? ' ✓' : '') + deltaNote(before, after);
+    },
+    saved: function (args) {
+      var v = parseNum(args[0]);
+      if (v == null) return 'saved takes a number, like <strong>saved 1.2M</strong>';
+      var amt = Math.round(v);
+      if (amt < 0 || amt > 20000000) return span('err', 'that looks off.') + span('mut', ' try under 20M.');
+      var before = simulate(state);
+      state.savings = amt;
+      var after = simulate(state);
+      render('gui');
+      return 'starting from <strong>' + esc(fmtMoney(amt)) + '</strong> — lasts until <strong>' + lastsLabel(after) + '</strong>' +
+        (after.ok ? ' ✓' : '') + deltaNote(before, after);
+    },
+    contrib: function (args) {
+      var v = parseNum(args[0]);
+      if (v == null) return 'contrib takes a number, like <strong>contrib 30k</strong>';
+      var amt = Math.round(v);
+      if (amt < 0 || amt > 500000) return span('err', 'that looks off.') + span('mut', ' try 0 to 500k.');
+      var before = simulate(state);
+      state.contrib = amt;
+      var after = simulate(state);
+      render('gui');
+      return 'adding <strong>' + esc(fmtMoney(amt)) + '</strong> a year while working — lasts until <strong>' + lastsLabel(after) + '</strong>' +
+        (after.ok ? ' ✓' : '') + deltaNote(before, after);
+    },
+    storm: function (args) {
+      var w = (args[0] || '').toLowerCase();
+      if (w !== 'on' && w !== 'off') return 'storm takes <strong>on</strong> or <strong>off</strong>';
+      if (w === 'on') {
+        setSky('storm');
+        var res = simulate(state);
+        return 'markets turned stormy — lasts until <strong>' + lastsLabel(res) + '</strong>' + (res.ok ? ' ✓' : '');
+      }
+      setSky('normal');
+      var res2 = simulate(state);
+      return 'back to ordinary markets — lasts until <strong>' + lastsLabel(res2) + '</strong>' + (res2.ok ? ' ✓' : '');
+    },
+    markets: function (args) {
+      var w = (args[0] || '').toLowerCase();
+      if (!w) return 'markets takes <strong>stormy</strong>, <strong>ordinary</strong> or <strong>kind</strong>';
+      var sky = SKY_WORD[w];
+      if (!sky) return span('err', 'don’t know that weather.') + span('mut', ' use stormy, ordinary or kind.');
+      setSky(sky);
+      var res = simulate(state);
+      return 'markets are <strong>' + esc(w) + '</strong> — lasts until <strong>' + lastsLabel(res) + '</strong>' + (res.ok ? ' ✓' : '');
+    },
+    show: function () {
+      var w = { storm: 'stormy', normal: 'ordinary', sun: 'kind' };
+      println('  ' + span('mut', 'your plan, right now'), 'ans');
+      println('  ' + span('mut', 'age          ') + state.currentAge + ' now, planning to ' + state.maxAge, 'ans');
+      println('  ' + span('mut', 'saved        ') + fmtMoney(state.savings), 'ans');
+      println('  ' + span('mut', 'adding       ') + fmtMoney(state.contrib) + ' a year until ' + state.retireAge, 'ans');
+      println('  ' + span('mut', 'spending     ') + fmtMoney(state.spending) + ' a year after that', 'ans');
+      println('  ' + span('mut', 'government   ') + fmtMoney(state.benefits) + ' a year from ' + state.benefitAge, 'ans');
+      println('  ' + span('mut', 'markets      ') + w[state.sky], 'ans');
+      return null;
+    },
+    help: function () {
+      println('  ' + span('mut', 'commands — each one moves the sliders too'), 'ans');
+      println('  <strong>plan</strong>            the verdict, honestly', 'ans');
+      println('  <strong>retire 64</strong>       stop working at 64', 'ans');
+      println('  <strong>spend 75k</strong>       yearly spending (k / M ok)', 'ans');
+      println('  <strong>saved 1.2M</strong>      what you have today', 'ans');
+      println('  <strong>contrib 30k</strong>     added each year while working', 'ans');
+      println('  <strong>storm on/off</strong>    bad-market test', 'ans');
+      println('  <strong>show</strong>            every input, listed', 'ans');
+      println('  <strong>clear</strong>           wipe the screen', 'ans');
+      return null;
+    }
+  };
+
+  function echoCommand(cmd) {
+    println(span('prompt', 'plan>') + ' ' + span('typed', cmd));
+  }
+
+  /* echo a GUI move as the equivalent command (greyed = system, not typed) */
+  function echoGui(cmd, answerHtml) {
+    var div = println(span('prompt', 'plan>') + ' ' + span('echo', cmd), 'echo');
+    div.title = 'Echoed from the dashboard';
+    if (answerHtml) println('  ' + answerHtml, 'ans');
+    scrollTerm();
+  }
+
+  function runCommand(raw, fromGui) {
+    var trimmed = raw.trim();
+    if (!fromGui) echoCommand(trimmed);
+    if (!trimmed) { scrollTerm(); return; }
+
+    var parts = trimmed.split(/\s+/);
+    var name = parts[0].toLowerCase();
+    var args = parts.slice(1);
+
+    if (name === 'clear' || name === 'cls') {
+      out.innerHTML = '';
+      bootLines();
+      scrollTerm();
+      return;
+    }
+
+    var fn = commands[name];
+    if (!fn) {
+      println(span('err', 'don’t know “' + esc(name) + '”.') + ' ' + span('mut', 'type ') + '<strong>help</strong>' + span('mut', ' for the list.'));
+      scrollTerm();
+      return;
+    }
+    var resp = fn(args);
+    if (resp) println('  ' + resp, 'ans');
+    scrollTerm();
+  }
+
+  /* ═══════════════ GUI rendering ═══════════════ */
+
+  function drawTimeline(res) {
+    var g = $('tl-area');
+    while (g.firstChild) g.removeChild(g.firstChild);
+    var W = 640, x0 = 40, x1 = 624, yTop = 8, yBot = 168;
+    var maxBal = 1;
+    for (var i = 0; i < res.rows.length; i++) maxBal = Math.max(maxBal, res.rows[i].bal);
+    var a0 = res.rows.length ? res.rows[0].age : state.currentAge;
+    var a1 = state.maxAge;
+    $('tl-x0').textContent = a0; $('tl-x1').textContent = a1;
+
+    function XY(row) {
+      var x = x0 + (row.age - a0) / Math.max(1, a1 - a0) * (x1 - x0);
+      var y = yTop + (1 - row.bal / maxBal) * (yBot - yTop);
+      return [x, y];
+    }
+    var pts = res.rows.map(function (r) { var p = XY(r); return p[0].toFixed(1) + ',' + p[1].toFixed(1); });
+    if (pts.length) {
+      var area = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      area.setAttribute('points', x0 + ',' + yBot + ' ' + pts.join(' ') + ' ' + pts[pts.length - 1].split(',')[0] + ',' + yBot);
+      area.setAttribute('fill', res.ok ? '#059669' : '#d97706');
+      area.setAttribute('opacity', '0.14');
+      g.appendChild(area);
+      var pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      pl.setAttribute('points', pts.join(' '));
+      pl.setAttribute('fill', 'none');
+      pl.setAttribute('stroke', res.ok ? '#059669' : '#d97706');
+      pl.setAttribute('stroke-width', '2.5');
+      pl.setAttribute('stroke-linejoin', 'round');
+      g.appendChild(pl);
+    }
+
+    /* retirement marker */
+    var rx = x0 + (state.retireAge - a0) / Math.max(1, a1 - a0) * (x1 - x0);
+    var rl = $('tl-retire');
+    rl.setAttribute('x1', rx); rl.setAttribute('x2', rx);
+    rl.setAttribute('y1', yTop); rl.setAttribute('y2', yBot);
+    var rt = $('tl-retire-label');
+    rt.setAttribute('x', rx + 4); rt.setAttribute('y', yTop + 10);
+    rt.textContent = 'stop working ' + state.retireAge;
+
+    /* depletion marker */
+    var dl = $('tl-depl'), dt = $('tl-depl-label');
+    if (res.depletionAge != null && res.depletionAge <= a1) {
+      var dx = x0 + (res.depletionAge - a0) / Math.max(1, a1 - a0) * (x1 - x0);
+      dl.setAttribute('x1', dx); dl.setAttribute('x2', dx);
+      dl.setAttribute('y1', yTop); dl.setAttribute('y2', yBot);
+      dl.setAttribute('opacity', '1');
+      dt.setAttribute('x', Math.min(dx + 4, x1 - 86)); dt.setAttribute('y', yBot - 6);
+      dt.textContent = 'runs out at ' + lastsLabel(res);
+      dt.setAttribute('opacity', '1');
+    } else {
+      dl.setAttribute('opacity', '0');
+      dt.setAttribute('opacity', '0');
+    }
+  }
+
+  var ACCT_SPLIT = [['RRSP', 0.50, '#2563eb', 'leg-rrsp'], ['TFSA', 0.30, '#059669', 'leg-tfsa'], ['Taxable', 0.20, '#f59e0b', 'leg-tax']];
+  function drawAccounts(res) {
+    var g = $('acct-lines');
+    while (g.firstChild) g.removeChild(g.firstChild);
+    var W = 640, x0 = 2, x1 = 636, yTop = 4, yBot = 172;
+    var maxBal = 1;
+    for (var i = 0; i < res.rows.length; i++) maxBal = Math.max(maxBal, res.rows[i].bal);
+    var a0 = res.rows.length ? res.rows[0].age : state.currentAge;
+    var a1 = state.maxAge;
+    $('acct-x0').textContent = a0; $('acct-x1').textContent = a1;
+    ACCT_SPLIT.forEach(function (acct) {
+      var pts = res.rows.map(function (row) {
+        var x = x0 + (row.age - a0) / Math.max(1, a1 - a0) * (x1 - x0);
+        var y = yTop + (1 - (row.bal * acct[1]) / maxBal) * (yBot - yTop);
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+      var pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      pl.setAttribute('points', pts);
+      pl.setAttribute('stroke', acct[2]);
+      g.appendChild(pl);
+    });
+    var dl = $('acct-depl');
+    if (res.depletionAge != null && res.depletionAge <= a1) {
+      var dx = x0 + (res.depletionAge - a0) / Math.max(1, a1 - a0) * (x1 - x0);
+      dl.setAttribute('x1', dx); dl.setAttribute('x2', dx);
+      dl.setAttribute('y1', yTop); dl.setAttribute('y2', yBot);
+      dl.setAttribute('opacity', '1');
+    } else {
+      dl.setAttribute('opacity', '0');
+    }
+    $('leg-rrsp').textContent = fmtMoney(res.leftAtMax * 0.50) + ' left at ' + state.maxAge;
+    $('leg-tfsa').textContent = fmtMoney(res.leftAtMax * 0.30) + ' left at ' + state.maxAge;
+    $('leg-tax').textContent = fmtMoney(res.leftAtMax * 0.20) + ' left at ' + state.maxAge;
+  }
+
+  /* render GUI from state. origin: 'term' means the terminal drove it (no echo back). */
+  function render(origin) {
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var v = verdictParts(res, state);
+
+    /* verdict hero */
+    var badge = $('verdict-badge');
+    badge.textContent = v.badge;
+    badge.className = 'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ' + v.badgeCls;
+    $('verdict-line').textContent = v.line;
+    $('verdict-sub').textContent = v.sub;
+
+    var fix = $('fix-line');
+    if (res.ok) {
+      fix.textContent = storm.ok ? 'This plan holds — even in stormy markets.' : 'This plan holds in these markets. Try “storm on” to stress it.';
+      fix.className = 'mt-3 inline-block rounded-lg bg-emerald-50 px-3 py-1.5 text-[12.5px] font-medium text-emerald-800';
+    } else {
+      fix.textContent = suggest(state) || 'Nothing small fixes this — something bigger has to give.';
+      fix.className = 'mt-3 inline-block rounded-lg bg-amber-50 px-3 py-1.5 text-[12.5px] font-medium text-amber-900';
+    }
+
+    /* storm chip */
+    var chip = $('storm-chip');
+    if (storm.ok) {
+      $('storm-label').textContent = 'Holds in a storm too';
+      chip.className = 'flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11.5px] font-medium text-emerald-700';
+    } else {
+      $('storm-label').textContent = 'In a storm: runs out at ' + lastsLabel(storm);
+      chip.className = 'flex shrink-0 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11.5px] font-medium text-rose-700';
+    }
+
+    /* stats under the timeline */
+    $('stat-leftage').textContent = state.maxAge;
+    $('stat-left').textContent = fmtMoney(res.leftAtMax);
+    $('stat-contrib').textContent = fmtMoney(state.contrib);
+    $('stat-retire').textContent = state.retireAge;
+    $('stat-benefits').textContent = fmtMoney(state.benefits);
+
+    /* weather toggle */
+    var skyBtns = document.querySelectorAll('.sky');
+    for (var i = 0; i < skyBtns.length; i++) {
+      skyBtns[i].classList.toggle('seg-active', skyBtns[i].getAttribute('data-sky') === state.sky);
+    }
+
+    /* slider labels + positions (moved by terminal commands too) */
+    $('f-retire-val').textContent = String(state.retireAge);
+    $('f-spend-val').textContent = fmtMoney(state.spending);
+    $('f-saved-val').textContent = fmtMoney(state.savings);
+    if (parseInt($('f-retire').value, 10) !== state.retireAge) $('f-retire').value = state.retireAge;
+    if (parseInt($('f-spend').value, 10) !== state.spending) $('f-spend').value = state.spending;
+    if (parseInt($('f-saved').value, 10) !== state.savings) $('f-saved').value = state.savings;
+
+    drawTimeline(res);
+    drawAccounts(res);
+
+    /* dirty dot on Save */
+    $('save-dot').classList.remove('hidden');
+
+    /* GUI drove it → echo the equivalent command in the terminal.
+       Slider drags fire continuously, so echoes are coalesced: only the
+       settled value (500ms after the last move) is printed. */
+    if (origin === 'gui' && render.lastGui) {
+      var g = render.lastGui;
+      var cmd = null;
+      if (g.retireAge !== state.retireAge) cmd = 'retire ' + state.retireAge;
+      else if (g.spending !== state.spending) cmd = 'spend ' + termMoney(state.spending);
+      else if (g.savings !== state.savings) cmd = 'saved ' + termMoney(state.savings);
+      else if (g.sky !== state.sky) cmd = (state.sky === 'storm') ? 'storm on'
+        : (g.sky === 'storm' ? 'storm off'
+        : 'markets ' + ({ normal: 'ordinary', sun: 'kind', storm: 'stormy' })[state.sky]);
+      if (cmd) {
+        if (echoTimer) clearTimeout(echoTimer);
+        echoTimer = setTimeout(function () {
+          echoTimer = null;
+          var r = simulate(state);
+          echoGui(cmd, 'lasts until <strong>' + lastsLabel(r) + '</strong>' + (r.ok ? ' ✓' : ''));
+        }, 500);
+      }
+    }
+    render.lastGui = { retireAge: state.retireAge, spending: state.spending, savings: state.savings, sky: state.sky };
+  }
+  render.lastGui = null;
+  var echoTimer = null;
+
+  /* ═══════════════ wiring ═══════════════ */
+
+  /* sliders → state → render (and echo to terminal) */
+  $('f-retire').addEventListener('input', function () { state.retireAge = parseInt(this.value, 10); render('gui'); });
+  $('f-spend').addEventListener('input', function () { state.spending = parseInt(this.value, 10); render('gui'); });
+  $('f-saved').addEventListener('input', function () { state.savings = parseInt(this.value, 10); render('gui'); });
+
+  /* weather toggle → state (and echo) */
+  var skyBtns = document.querySelectorAll('.sky');
+  for (var i = 0; i < skyBtns.length; i++) {
+    skyBtns[i].addEventListener('click', function () {
+      state.sky = this.getAttribute('data-sky');
+      render('gui');
+    });
+  }
+
+  /* terminal input */
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      var v = input.value;
+      input.value = '';
+      runCommand(v, false);
+    }
+  });
+
+  /* hint chips */
+  document.querySelectorAll('.hint').forEach(function (b) {
+    b.addEventListener('click', function () {
+      runCommand(b.getAttribute('data-cmd'), false);
+      input.focus();
+    });
+  });
+
+  /* Details ▾ : named homes for the 13 input sections */
+  var SECTIONS = [
+    ['Personal Profile', 'age 55 · planning to 95'],
+    ['Account Balances', 'RRSP · TFSA · taxable · RDSP'],
+    ['Contribution Rates', fmtMoney(DEMO_DEFAULTS.contrib) + '/yr while working'],
+    ['RDSP', 'none set up'],
+    ['Government Benefits', 'CPP + OAS ' + fmtMoney(DEMO_DEFAULTS.benefits) + '/yr from ' + DEMO_DEFAULTS.benefitAge],
+    ['Pensions', 'none entered'],
+    ['Employment Income', 'part-time work, top-up spending'],
+    ['Cash Events', 'one-time & recurring, transfers'],
+    ['Spending Phases', 'steady ' + fmtMoney(DEMO_DEFAULTS.spending) + '/yr'],
+    ['Spouse', 'full second set of inputs'],
+    ['Withdrawal Strategy', 'which account empties first'],
+    ['Home Equity', 'reverse mortgage / HELOC'],
+    ['Market Hypotheses', 'returns · volatility · inflation']
+  ];
+  var list = $('details-list');
+  SECTIONS.forEach(function (s) {
+    var li = document.createElement('li');
+    li.className = 'flex items-baseline justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50 break-inside-avoid';
+    li.innerHTML = '<span class="font-medium text-slate-700">' + s[0] + '</span>' +
+                   '<span class="num truncate text-[11px] text-slate-400">' + s[1] + '</span>';
+    list.appendChild(li);
+  });
+  $('details-toggle').addEventListener('click', function () {
+    var body = $('details-body');
+    var open = body.classList.toggle('hidden');
+    this.setAttribute('aria-expanded', String(!open));
+    $('details-chev').style.transform = open ? '' : 'rotate(180deg)';
+  });
+
+  /* save button clears the dirty dot */
+  $('save-btn').addEventListener('click', function () { $('save-dot').classList.add('hidden'); });
+
+  /* ── boot ── */
+  function bootLines() {
+    println(span('mut', 'RE:tired console — the same plan as the dashboard on the left.'));
+    println(span('mut', 'type ') + '<strong>help</strong>' + span('mut', ' for commands, or just move a slider.'));
+    blank();
+  }
+
+  bootLines();
+  /* honest first answer: defaults fail at 89 — say so, with the fix */
+  echoCommand('plan');
+  commands.plan();
+  scrollTerm();
+
+  render('term');
+  render.lastGui = { retireAge: state.retireAge, spending: state.spending, savings: state.savings, sky: state.sky };
+  input.focus();
+})();
+</script>
+</body>
+</html>

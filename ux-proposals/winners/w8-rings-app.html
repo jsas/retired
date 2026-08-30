@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Your rings</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* rings ease to their new score — live, never jumpy */
+  .ring { transition: stroke-dashoffset .6s cubic-bezier(.2,.7,.3,1), stroke .3s; }
+  .ringPct { transition: color .3s; }
+
+  /* quiet sliders */
+  input[type=range].dial {
+    -webkit-appearance: none; appearance: none;
+    height: 5px; border-radius: 3px; background: #27272a; outline: none; cursor: pointer;
+  }
+  input[type=range].dial::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 17px; height: 17px; border-radius: 50%;
+    background: #fafafa; border: 2.5px solid currentColor; cursor: grab;
+    box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+  input[type=range].dial::-moz-range-thumb {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #fafafa; border: 2.5px solid currentColor; cursor: grab;
+    box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+  input[type=range].dial:focus-visible { outline: 2px solid #60a5fa; outline-offset: 3px; }
+
+  /* Details / Plans dropdowns */
+  .dropdown { position: relative; }
+  .dropdown-panel { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; }
+  .dropdown.open .dropdown-panel { display: block; }
+
+  /* timeline strip bars */
+  .tlbar { transition: height .3s cubic-bezier(.2,.7,.3,1), background-color .3s; }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(10px);} to { opacity:1; transform:none;} }
+  .fu { animation: fadeUp .5s ease-out both; }
+  .fu-2 { animation-delay:.12s } .fu-3 { animation-delay:.22s }
+
+  ::selection { background: #334155; }
+</style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen antialiased flex flex-col">
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SITE 2 — APP CHROME
+     Named homes (REQUIREMENTS §8.7 bolt-on test):
+       Details ▾   → the 13 input sections, one click away
+       Plans ▾     → scenario switcher / revisions / compare
+       Assistant   → the AI agent's home
+       Data        → backup / restore / import / share links
+       Print/Export → the one-page plan, CSV/PDF
+       Mini-verdict → money-lasts-to, persistent top-right on desktop
+     ══════════════════════════════════════════════════════════════════ -->
+<header class="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+  <div class="flex h-14 items-center gap-1 px-4 md:px-6">
+
+    <!-- brand → back to the landing -->
+    <a href="w8-rings.html" class="mr-2 flex shrink-0 items-center gap-2 text-sm font-semibold text-white">
+      <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[10px] font-bold text-white">RE:</div>
+      <span class="hidden sm:inline">tired</span>
+    </a>
+
+    <!-- Details ▾ — the 13 input sections live here -->
+    <div class="dropdown" id="ddDetails">
+      <button class="dd-btn flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white">
+        Details <span class="text-[10px] text-zinc-600">▾</span>
+      </button>
+      <div class="dropdown-panel min-w-[300px] rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
+        <p class="px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wider text-zinc-500">The full plan — every section one click away</p>
+        <div class="grid grid-cols-2 gap-x-1 text-[12.5px]">
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Personal Profile</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Account Balances</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Contribution Rates</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">RDSP</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Government Benefits</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Pensions</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Employment Income</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Cash Events</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Spending Phases</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Spouse</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Withdrawal Strategy</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Home Equity</a>
+          <a href="#" class="rounded-md px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white">Market Hypotheses</a>
+        </div>
+        <p class="mt-1 border-t border-zinc-800 px-3 pt-2 text-[10.5px] text-zinc-500">The three sliders below are a shortcut over all of this.</p>
+      </div>
+    </div>
+
+    <!-- Plans ▾ — scenario switcher -->
+    <div class="dropdown" id="ddPlans">
+      <button class="dd-btn flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white">
+        Plans <span class="text-[10px] text-zinc-600">▾</span>
+      </button>
+      <div class="dropdown-panel min-w-[230px] rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
+        <p class="px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wider text-zinc-500">Scenarios</p>
+        <a href="#" class="flex items-center justify-between rounded-md bg-white/5 px-3 py-1.5 text-[12.5px] font-medium text-white">Base plan <span class="text-[10px] text-zinc-500">current</span></a>
+        <a href="#" class="block rounded-md px-3 py-1.5 text-[12.5px] text-zinc-400 hover:bg-white/5 hover:text-white">Retire at 60</a>
+        <a href="#" class="block rounded-md px-3 py-1.5 text-[12.5px] text-zinc-400 hover:bg-white/5 hover:text-white">Sell the house at 80</a>
+        <div class="mt-1.5 border-t border-zinc-800 pt-1.5">
+          <a href="#" class="block rounded-md px-3 py-1.5 text-[12.5px] text-zinc-500 hover:bg-white/5 hover:text-white">+ New plan</a>
+          <a href="#" class="block rounded-md px-3 py-1.5 text-[12.5px] text-zinc-500 hover:bg-white/5 hover:text-white">Compare plans…</a>
+          <a href="#" class="block rounded-md px-3 py-1.5 text-[12.5px] text-zinc-500 hover:bg-white/5 hover:text-white">Revision history…</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- straight-shot entries -->
+    <a href="#" title="AI assistant — reads your plan, answers questions, shows its work"
+       class="hidden rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white md:block">Assistant</a>
+    <a href="#" title="Backup, restore, import, share links"
+       class="hidden rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white md:block">Data</a>
+    <a href="#" title="Print the one-page plan, or export CSV / PDF"
+       class="hidden rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-white md:block">Print / Export</a>
+
+    <!-- same entries, small screens -->
+    <div class="dropdown md:hidden" id="ddMore">
+      <button class="dd-btn rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 hover:bg-white/5 hover:text-white">More ▾</button>
+      <div class="dropdown-panel left-auto right-0 min-w-[180px] rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
+        <a href="#" class="block rounded-md px-3 py-1.5 text-[12.5px] text-zinc-400 hover:bg-white/5 hover:text-white">Assistant</a>
+        <a href="#" class="block rounded-md px-3 py-1.5 text-[12.5px] text-zinc-400 hover:bg-white/5 hover:text-white">Data &amp; backup</a>
+        <a href="#" class="block rounded-md px-3 py-1.5 text-[12.5px] text-zinc-400 hover:bg-white/5 hover:text-white">Print / export</a>
+      </div>
+    </div>
+
+    <div class="flex-1"></div>
+
+    <!-- ═══ PERSISTENT MINI-VERDICT — the answer, always top-right.
+         Three tiny ring dots + the age the money lasts to. ═══ -->
+    <div class="hidden shrink-0 items-center gap-2.5 border-l border-zinc-800 pl-3 sm:flex" aria-label="Plan verdict summary">
+      <span class="flex items-center gap-1">
+        <span id="dot1" class="h-2 w-2 rounded-full bg-rose-500"></span>
+        <span id="dot2" class="h-2 w-2 rounded-full bg-amber-400"></span>
+        <span id="dot3" class="h-2 w-2 rounded-full bg-emerald-400"></span>
+      </span>
+      <div class="leading-tight">
+        <div id="miniLasts" class="num text-sm font-bold text-white">89</div>
+        <div id="miniLabel" class="text-[9px] uppercase tracking-wider text-zinc-500">runs out at</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto w-full max-w-5xl flex-1 px-5 pb-16 md:px-8">
+
+  <!-- ═══ VERDICT LINE — plain English first, always ═══ -->
+  <section class="fu border-b border-zinc-800 pb-6 pt-8 md:pt-10">
+    <h1 id="verdict" class="text-2xl md:text-[28px] font-bold text-white leading-snug"></h1>
+    <p id="verdictSub" class="mt-1.5 text-[13.5px] text-zinc-400 leading-relaxed max-w-2xl"></p>
+    <p id="verdictFix" class="mt-2 h-5 text-[13.5px] font-medium text-emerald-400"></p>
+  </section>
+
+  <!-- ═══ THE RINGS, DONE RIGHT ═══
+       Not floating circles: each ring gets a full explanation row —
+       name, score, what it measures, what moves it. -->
+  <section class="fu fu-2 grid grid-cols-1 gap-x-12 gap-y-8 border-b border-zinc-800 py-8 md:grid-cols-[auto_1fr] md:items-center">
+
+    <!-- the rings themselves -->
+    <div class="flex justify-center">
+      <svg viewBox="0 0 300 300" class="w-64 h-64 md:w-72 md:h-72" role="img"
+           aria-label="Three plan rings: Outlast, Cushion, Weatherproof">
+        <circle cx="150" cy="150" r="120" fill="none" stroke="#1f2128" stroke-width="17"/>
+        <circle id="ring1" class="ring" cx="150" cy="150" r="120" fill="none" stroke="#f43f5e" stroke-width="17"
+                stroke-linecap="round" stroke-dasharray="753.98" stroke-dashoffset="753.98"
+                transform="rotate(-90 150 150)"/>
+        <circle cx="150" cy="150" r="94" fill="none" stroke="#1f2128" stroke-width="17"/>
+        <circle id="ring2" class="ring" cx="150" cy="150" r="94" fill="none" stroke="#fbbf24" stroke-width="17"
+                stroke-linecap="round" stroke-dasharray="590.62" stroke-dashoffset="590.62"
+                transform="rotate(-90 150 150)"/>
+        <circle cx="150" cy="150" r="68" fill="none" stroke="#1f2128" stroke-width="17"/>
+        <circle id="ring3" class="ring" cx="150" cy="150" r="68" fill="none" stroke="#34d399" stroke-width="17"
+                stroke-linecap="round" stroke-dasharray="427.26" stroke-dashoffset="427.26"
+                transform="rotate(-90 150 150)"/>
+        <text id="centerAge" x="150" y="144" text-anchor="middle" font-size="42" font-weight="800" fill="#fafafa" class="num">—</text>
+        <text id="centerLabel" x="150" y="168" text-anchor="middle" font-size="11.5" fill="#8b8b96">money lasts to</text>
+      </svg>
+    </div>
+
+    <!-- three explanation rows: name · score · what it measures · what moves it -->
+    <div class="divide-y divide-zinc-800/80">
+
+      <!-- Outlast -->
+      <div class="flex items-start gap-4 py-4 first:pt-0">
+        <span class="mt-2 h-3 w-3 shrink-0 rounded-full bg-rose-500"></span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline justify-between gap-3">
+            <h3 class="text-[14px] font-semibold text-white">Outlast</h3>
+            <span id="pct1" class="ringPct num text-xl font-bold text-rose-400">—</span>
+          </div>
+          <p class="mt-0.5 text-[12.5px] text-zinc-400 leading-relaxed">
+            Does the money reach <span id="maxEcho1" class="num text-zinc-300">95</span>, the age you're planning for?
+            <span id="fact1" class="text-zinc-300"></span>
+          </p>
+          <p class="mt-0.5 text-[11.5px] text-zinc-600 leading-relaxed">Moves with: when you stop working, what you spend, what you've saved.</p>
+        </div>
+      </div>
+
+      <!-- Cushion -->
+      <div class="flex items-start gap-4 py-4">
+        <span class="mt-2 h-3 w-3 shrink-0 rounded-full bg-amber-400"></span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline justify-between gap-3">
+            <h3 class="text-[14px] font-semibold text-white">Cushion</h3>
+            <span id="pct2" class="ringPct num text-xl font-bold text-amber-400">—</span>
+          </div>
+          <p class="mt-0.5 text-[12.5px] text-zinc-400 leading-relaxed">
+            Years of spending still in the pot at <span id="maxEcho2" class="num text-zinc-300">95</span>. Three years closes the ring.
+            <span id="fact2" class="text-zinc-300"></span>
+          </p>
+          <p class="mt-0.5 text-[11.5px] text-zinc-600 leading-relaxed">Moves with: spending less, or retiring with a bigger pot.</p>
+        </div>
+      </div>
+
+      <!-- Weatherproof -->
+      <div class="flex items-start gap-4 py-4 last:pb-0">
+        <span class="mt-2 h-3 w-3 shrink-0 rounded-full bg-emerald-400"></span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline justify-between gap-3">
+            <h3 class="text-[14px] font-semibold text-white">Weatherproof</h3>
+            <span id="pct3" class="ringPct num text-xl font-bold text-emerald-400">—</span>
+          </div>
+          <p class="mt-0.5 text-[12.5px] text-zinc-400 leading-relaxed">
+            The Outlast score replayed in stormy markets.
+            <span id="fact3" class="text-zinc-300"></span>
+          </p>
+          <p class="mt-0.5 text-[11.5px] text-zinc-600 leading-relaxed">Moves with: the same three dials — a plan with slack weathers storms.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ CONTROLS + EVIDENCE ═══ -->
+  <section class="fu fu-3 grid grid-cols-1 gap-x-12 gap-y-8 py-8 md:grid-cols-[1fr_1.35fr]">
+
+    <!-- the three dials -->
+    <div>
+      <h2 class="mb-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Move the dials — the rings follow</h2>
+      <div class="space-y-5">
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="dRetire" class="text-[12px] text-zinc-400">Stop working at</label>
+            <span id="vRetire" class="num text-[14px] font-bold text-white">62</span>
+          </div>
+          <input id="dRetire" type="range" class="dial w-full text-rose-400" min="50" max="75" step="1" value="62" />
+        </div>
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="dSpend" class="text-[12px] text-zinc-400">Spend each year</label>
+            <span id="vSpend" class="num text-[14px] font-bold text-white">$85,000</span>
+          </div>
+          <input id="dSpend" type="range" class="dial w-full text-amber-400" min="40000" max="150000" step="1000" value="85000" />
+        </div>
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="dSaved" class="text-[12px] text-zinc-400">Saved so far</label>
+            <span id="vSaved" class="num text-[14px] font-bold text-white">$850,000</span>
+          </div>
+          <input id="dSaved" type="range" class="dial w-full text-emerald-400" min="100000" max="3000000" step="10000" value="850000" />
+        </div>
+      </div>
+
+      <!-- the sky -->
+      <div class="mt-6 border-t border-zinc-800 pt-5">
+        <div class="mb-2 text-[12px] text-zinc-400">Markets</div>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button data-sky="storm"  class="skybtn rounded-lg border border-zinc-700 py-1.5 text-xs text-zinc-400 transition-colors hover:text-white" aria-pressed="false">stormy</button>
+          <button data-sky="normal" class="skybtn rounded-lg border border-zinc-700 py-1.5 text-xs text-zinc-400 transition-colors hover:text-white" aria-pressed="true">ordinary</button>
+          <button data-sky="sun"    class="skybtn rounded-lg border border-zinc-700 py-1.5 text-xs text-zinc-400 transition-colors hover:text-white" aria-pressed="false">kind</button>
+        </div>
+        <p class="mt-3 text-[11px] leading-relaxed text-zinc-600">Weatherproof always tests against stormy — the switch above changes the baseline the other two rings measure.</p>
+      </div>
+    </div>
+
+    <!-- evidence: compact timeline + per-account balances over time -->
+    <div class="space-y-7">
+      <div>
+        <div class="mb-2.5 flex items-baseline justify-between">
+          <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">The pot, year by year</h2>
+          <span id="tlRange" class="num text-[11px] text-zinc-500"></span>
+        </div>
+        <div id="timeline" class="flex h-24 items-end gap-[2px]" role="img" aria-label="Balance by age"></div>
+        <div id="tlPins" class="relative mt-1 h-4 text-[10px] text-zinc-500"></div>
+        <div id="tlAges" class="num mt-0.5 flex justify-between text-[10px] text-zinc-600"></div>
+      </div>
+
+      <!-- per-account balances over time -->
+      <div>
+        <div class="mb-2.5 flex items-baseline justify-between">
+          <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Where it sits, over time</h2>
+          <span class="text-[11px] text-zinc-500">at age <span id="accAge" class="num">62</span></span>
+        </div>
+        <div class="space-y-2 text-[12px]">
+          <div class="flex items-center gap-2.5">
+            <span class="w-14 text-zinc-400">RRSP</span>
+            <div class="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800"><div id="accRRSP" class="h-full rounded-full bg-zinc-400 transition-all duration-300" style="width:52%"></div></div>
+            <span id="accRRSPv" class="num w-20 text-right text-zinc-300"></span>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <span class="w-14 text-zinc-400">TFSA</span>
+            <div class="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800"><div id="accTFSA" class="h-full rounded-full bg-emerald-500 transition-all duration-300" style="width:31%"></div></div>
+            <span id="accTFSAv" class="num w-20 text-right text-zinc-300"></span>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <span class="w-14 text-zinc-400">Taxable</span>
+            <div class="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800"><div id="accTax" class="h-full rounded-full bg-zinc-600 transition-all duration-300" style="width:17%"></div></div>
+            <span id="accTaxv" class="num w-20 text-right text-zinc-300"></span>
+          </div>
+        </div>
+        <p class="mt-2.5 text-[11px] leading-relaxed text-zinc-600">Shares of <span id="accTotal" class="num"></span> at that age. The mix shifts as the plan changes; the full per-account curves live behind each bar.</p>
+      </div>
+
+      <!-- storm-test indicator -->
+      <div class="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+        <span id="stormDot" class="h-2.5 w-2.5 shrink-0 rounded-full"></span>
+        <span id="stormLine" class="text-[12.5px] leading-relaxed text-zinc-400"></span>
+      </div>
+    </div>
+  </section>
+
+  <p class="text-[11px] leading-relaxed text-zinc-600">
+    Everything here is live — drag a dial and the rings, the strip, the accounts and the
+    storm test recompute together. Year-by-year receipts, withdrawal-order optimization
+    and historical backtests live one level down, behind the numbers they explain.
+  </p>
+</main>
+
+<footer class="flex flex-col items-center justify-between gap-2 border-t border-zinc-800 px-5 py-4 text-[11px] text-zinc-600 sm:flex-row">
+  <span>Educational modeling — not financial, tax, or investment advice. Data stays in this browser.</span>
+  <span>W8 · The rings, done right — every ring named, every score explained.</span>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  function el(id) { return document.getElementById(id); }
+  var C = { r1: 2 * Math.PI * 120, r2: 2 * Math.PI * 94, r3: 2 * Math.PI * 68 };
+
+  /* ── ring scores 0..100, honestly derived from simulate() ── */
+  function scores(s) {
+    var res = simulate(s);
+    var storm = simulate(Object.assign({}, s, { sky: 'storm' }));
+    /* Outlast: 100 when the money reaches maxAge; else decays ~10 points per year short */
+    var outlast = res.ok ? 100 : Math.max(0, Math.round(100 * (1 - (s.maxAge - res.depletionAge) / 10)));
+    /* Cushion: leftover at maxAge as a share of 3 years of spending */
+    var target = 3 * s.spending;
+    var cushion = Math.max(0, Math.min(100, Math.round(100 * res.leftAtMax / target)));
+    /* Weatherproof: the same outlast logic, run under storm returns */
+    var weather = storm.ok ? 100 : Math.max(0, Math.round(100 * (1 - (s.maxAge - storm.depletionAge) / 10)));
+    return { res: res, storm: storm, outlast: outlast, cushion: cushion, weather: weather };
+  }
+
+  function setRing(elm, frac, circ) {
+    elm.setAttribute('stroke-dashoffset', String(circ * (1 - Math.max(0, Math.min(1, frac)))));
+  }
+
+  /* dim a ring dot when its score is wide open — color is never the only signal,
+     the % text is always beside it */
+  function dimDot(id, pct) {
+    el(id).style.opacity = pct >= 100 ? '1' : (pct >= 50 ? '.75' : '.35');
+  }
+
+  function accountMix(balance) {
+    var t = Math.max(0, Math.min(1, balance / 1500000));
+    var rrsp = 0.58 - 0.18 * t, taxable = 0.10 + 0.20 * t, tfsa = 1 - rrsp - taxable;
+    return { rrsp: rrsp, tfsa: tfsa, taxable: taxable };
+  }
+
+  function render() {
+    if (state.retireAge < state.currentAge) state.retireAge = state.currentAge;
+
+    var sc = scores(state);
+    var res = sc.res, storm = sc.storm;
+
+    /* ── rings ── */
+    setRing(el('ring1'), sc.outlast / 100, C.r1);
+    setRing(el('ring2'), sc.cushion / 100, C.r2);
+    setRing(el('ring3'), sc.weather / 100, C.r3);
+    el('pct1').textContent = sc.outlast + '%';
+    el('pct2').textContent = sc.cushion + '%';
+    el('pct3').textContent = sc.weather + '%';
+    dimDot('dot1', sc.outlast); dimDot('dot2', sc.cushion); dimDot('dot3', sc.weather);
+
+    el('centerAge').textContent = lastsLabel(res);
+    el('centerLabel').textContent = res.ok ? 'money lasts to' : 'runs out at';
+    el('centerAge').setAttribute('fill', res.ok ? '#fafafa' : '#fda4af');
+
+    el('maxEcho1').textContent = state.maxAge;
+    el('maxEcho2').textContent = state.maxAge;
+
+    /* per-ring live facts — the explanation rows earn their keep */
+    el('fact1').textContent = res.ok
+      ? 'It gets there — lasts to ' + lastsLabel(res) + '.'
+      : 'Today it runs out at ' + res.depletionAge + ' — ' + (state.maxAge - res.depletionAge) +
+        (state.maxAge - res.depletionAge === 1 ? ' year' : ' years') + ' short.';
+    el('fact2').textContent = res.leftAtMax > 0
+      ? 'Today: ' + fmtMoney(res.leftAtMax) + ' left (' + (res.leftAtMax / state.spending).toFixed(1) + ' years).'
+      : 'Today: nothing left at ' + state.maxAge + '.';
+    el('fact3').textContent = storm.ok
+      ? 'It survives — holds to ' + lastsLabel(storm) + ' in a storm.'
+      : 'In a storm it runs out at ' + storm.depletionAge + '.';
+
+    /* ── verdict line ── */
+    var v = el('verdict'), sub = el('verdictSub'), fix = el('verdictFix');
+    if (res.ok && storm.ok && sc.cushion >= 100) {
+      v.textContent = 'Every ring is closed. This plan is ready.';
+      sub.textContent = 'The money lasts to ' + lastsLabel(res) + ', there are ' +
+        (res.leftAtMax / state.spending).toFixed(1) + ' years of spending left at ' + state.maxAge +
+        ', and it holds in stormy markets.';
+      fix.textContent = '';
+    } else if (res.ok) {
+      var bits = [];
+      if (sc.cushion < 100) bits.push('only ' + fmtMoney(res.leftAtMax) + ' would be left at ' + state.maxAge + ' — a thin cushion');
+      if (!storm.ok) bits.push('stormy markets would drain it by ' + storm.depletionAge);
+      v.textContent = 'The money lasts — but not every ring is closed.';
+      sub.textContent = 'It reaches ' + lastsLabel(res) + (bits.length ? ', but ' + bits.join(', and ') + '.' : '.');
+      fix.textContent = suggest(state) || '';
+    } else {
+      var gap = state.maxAge - res.depletionAge;
+      v.textContent = 'The money runs out at ' + res.depletionAge + '.';
+      sub.textContent = 'That is ' + gap + (gap === 1 ? ' year' : ' years') + ' short of the ' + state.maxAge +
+        ' you are planning for. Storm test: ' + (storm.ok ? 'survives' : 'fails at ' + storm.depletionAge) + '.';
+      fix.textContent = suggest(state) || '';
+    }
+
+    /* ── persistent mini-verdict ── */
+    var ml = el('miniLasts');
+    ml.textContent = lastsLabel(res);
+    ml.style.color = res.ok ? '#fafafa' : '#fda4af';
+    el('miniLabel').textContent = res.ok ? 'money lasts to' : 'runs out at';
+
+    /* ── sliders ── */
+    el('dRetire').value = state.retireAge; el('vRetire').textContent = state.retireAge;
+    el('dSpend').value = state.spending;   el('vSpend').textContent = fmtMoney(state.spending);
+    el('dSaved').value = state.savings;    el('vSaved').textContent = fmtMoney(state.savings);
+
+    /* ── compact timeline ── */
+    var lasts = res.depletionAge == null ? 108 : res.depletionAge;
+    var tl = el('timeline');
+    tl.innerHTML = '';
+    var rows = res.rows.filter(function (r) { return r.age >= state.currentAge && r.age <= Math.max(state.maxAge, lasts); });
+    var maxBal = 1;
+    rows.forEach(function (r) { if (r.bal > maxBal) maxBal = r.bal; });
+    rows.forEach(function (r) {
+      var b = document.createElement('div');
+      b.className = 'tlbar flex-1 rounded-t-[2px]';
+      var working = r.age < state.retireAge;
+      var depleted = res.depletionAge != null && r.age >= res.depletionAge;
+      b.style.height = Math.max(2, (r.bal / maxBal) * 100) + '%';
+      b.style.backgroundColor = depleted ? '#f43f5e' : (working ? '#e4e4e7' : (r.age > state.maxAge ? '#3f3f46' : '#71717a'));
+      b.title = 'Age ' + r.age + ': ' + fmtMoney(r.bal);
+      tl.appendChild(b);
+    });
+    var lastRow = rows[rows.length - 1];
+    el('tlRange').textContent = fmtMoney(state.savings) + ' today → ' + fmtMoney(lastRow ? lastRow.bal : 0) + ' at ' + (lastRow ? lastRow.age : state.currentAge);
+
+    var span = rows.length > 1 ? lastRow.age - rows[0].age : 1;
+    function pinPct(age) { return ((age - rows[0].age) / span) * 100; }
+    var pins = '<span class="absolute text-zinc-400" style="left:' + pinPct(state.retireAge) + '%">▲ work ends ' + state.retireAge + '</span>';
+    if (res.depletionAge != null && res.depletionAge <= lastRow.age) {
+      pins += '<span class="absolute text-rose-400" style="left:' + Math.min(85, pinPct(res.depletionAge)) + '%">▲ out at ' + res.depletionAge + '</span>';
+    }
+    el('tlPins').innerHTML = pins;
+    el('tlAges').innerHTML = '<span>' + rows[0].age + '</span><span>' + lastRow.age + '</span>';
+
+    /* ── per-account balances over time (shown at retirement age) ── */
+    var rowR = res.rows.filter(function (r) { return r.age === state.retireAge; })[0] || rows[0];
+    var bal = rowR ? rowR.bal : 0;
+    var mix = accountMix(bal);
+    el('accAge').textContent = state.retireAge;
+    el('accTotal').textContent = fmtMoney(bal);
+    el('accRRSP').style.width = (mix.rrsp * 100) + '%';
+    el('accTFSA').style.width = (mix.tfsa * 100) + '%';
+    el('accTax').style.width = (mix.taxable * 100) + '%';
+    el('accRRSPv').textContent = fmtMoney(bal * mix.rrsp);
+    el('accTFSAv').textContent = fmtMoney(bal * mix.tfsa);
+    el('accTaxv').textContent = fmtMoney(bal * mix.taxable);
+
+    /* ── storm-test indicator ── */
+    var sd = el('stormDot'), sl = el('stormLine');
+    if (storm.ok) {
+      sd.className = 'h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400';
+      sl.innerHTML = '<strong class="text-emerald-400">Storm-tested.</strong> Even in stormy markets the money holds to ' + lastsLabel(storm) + '.';
+    } else {
+      sd.className = 'h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500';
+      sl.innerHTML = '<strong class="text-rose-400">Storm warning.</strong> In stormy markets the money runs out at <strong class="text-white">' + storm.depletionAge + '</strong>' +
+        (res.ok ? ' — the Weatherproof ring stays open.' : '.');
+    }
+
+    /* ── the sky switch ── */
+    document.querySelectorAll('[data-sky]').forEach(function (x) {
+      var on = x.getAttribute('data-sky') === state.sky;
+      x.setAttribute('aria-pressed', String(on));
+      x.className = 'skybtn rounded-lg border py-1.5 text-xs transition-colors ' +
+        (on ? 'border-zinc-300 bg-zinc-100 font-semibold text-zinc-900' : 'border-zinc-700 text-zinc-400 hover:text-white');
+    });
+  }
+
+  /* ── wiring: dials ── */
+  el('dRetire').addEventListener('input', function () { state.retireAge = +this.value; render(); });
+  el('dSpend').addEventListener('input', function () { state.spending = +this.value; render(); });
+  el('dSaved').addEventListener('input', function () { state.savings = +this.value; render(); });
+
+  /* ── wiring: the sky ── */
+  document.querySelectorAll('[data-sky]').forEach(function (b) {
+    b.addEventListener('click', function () { state.sky = b.getAttribute('data-sky'); render(); });
+  });
+
+  /* ── dropdown chrome (illustrative — no navigation) ── */
+  document.querySelectorAll('.dd-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var dd = btn.closest('.dropdown');
+      document.querySelectorAll('.dropdown').forEach(function (d) { if (d !== dd) d.classList.remove('open'); });
+      dd.classList.toggle('open');
+    });
+  });
+  document.addEventListener('click', function () {
+    document.querySelectorAll('.dropdown').forEach(function (d) { d.classList.remove('open'); });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

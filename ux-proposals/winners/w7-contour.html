@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — See your whole life on one line</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* calm entrance — the only motion on the page */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .fu  { animation: fadeUp .8s ease-out both; }
+  .fu2 { animation: fadeUp .8s ease-out .2s both; }
+  .fu3 { animation: fadeUp .8s ease-out .45s both; }
+
+  /* the red flag at the end of the money, breathing once */
+  @keyframes flagIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .flag-in { animation: flagIn .7s ease-out .8s both; }
+
+  ::selection { background: #e2e8f0; }
+</style>
+</head>
+<body class="bg-[#fcfcfb] text-slate-800 min-h-screen flex flex-col antialiased">
+
+<!-- ═══ SITE 1 — LANDING. Pure marketing: one line, one door, the footer.
+     No app chrome here — Details / Plans / Assistant / Data / Print all live in the app. ═══ -->
+
+<main class="flex-1 flex flex-col items-center justify-center px-6 py-16">
+  <div class="w-full max-w-3xl">
+
+    <p class="fu text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400 mb-12 text-center">
+      RE:tired — a retirement planner that answers first
+    </p>
+
+    <!-- ═══ HEADLINE ═══ -->
+    <h1 class="fu text-[34px] md:text-[44px] leading-[1.2] font-semibold text-slate-900 text-center tracking-tight">
+      See your whole life<br class="hidden sm:block" /> on one line.
+    </h1>
+    <p class="fu2 mt-5 text-[15px] md:text-[16px] leading-relaxed text-slate-500 text-center max-w-xl mx-auto">
+      The working years, the retired years, and — honestly — the point the money runs out,
+      if it does. This is one real plan, drawn to scale. Yours will be different.
+    </p>
+
+    <!-- ═══ THE LIFE TIMELINE — hero visual ═══
+         A horizontal 55→95 strip: working years, retirement years, and the point the
+         money runs out, marked honestly. Computed live from the demo defaults
+         (which fail at 89 — that's the truth of this plan, so that's what's drawn). -->
+    <div class="fu2 mt-14 w-full">
+      <svg id="life" viewBox="0 0 920 190" class="w-full block select-none" role="img"
+           aria-label="A life timeline from 55 to 95 showing working years, retirement years, and the age the money runs out">
+        <!-- drawn by script -->
+      </svg>
+      <p class="mt-3 text-[12px] text-slate-400 text-center leading-relaxed" id="lifeCaption"></p>
+    </div>
+
+    <!-- ═══ THE ONE DOOR ═══ -->
+    <div class="fu3 mt-14 flex flex-col items-center gap-3">
+      <a href="w7-contour-app.html"
+         class="group inline-flex items-center gap-2.5 rounded-full bg-slate-900 px-8 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-slate-700">
+        Walk yours
+        <span class="transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>
+      </a>
+      <span class="text-[12px] text-slate-400">Opens the planner — drag the map until the ground holds you.</span>
+    </div>
+
+  </div>
+</main>
+
+<!-- ═══ FOOTER — privacy + legal, the whole marketing footer ═══ -->
+<footer class="border-t border-slate-200/80 px-6 py-4">
+  <div class="mx-auto flex max-w-3xl flex-col items-center gap-1.5 text-center text-[11.5px] text-slate-400 sm:flex-row sm:justify-between sm:text-left">
+    <span>No servers, no accounts — your numbers never leave this browser.</span>
+    <span class="flex items-center gap-4">
+      <span>Not financial, tax, or investment advice.</span>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Open source</a>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Donate</a>
+      <a href="#" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600">Help</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* The hero strip is the demo plan, simulated honestly. At defaults the money
+     runs out at 89 — before the 95 being planned for — so the strip shows the
+     red flag at 89 and shades the years that would go unfunded. Nothing is
+     hardcoded: the ages below all come from simulate(). */
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  var res = simulate(state);
+
+  /* ── geometry: ages 55..95 on one precise horizontal line ── */
+  var W = 920, A0 = 55, A1 = 95;
+  var L = 34, R = 886;                 // the line's x extent
+  var AXIS_Y = 96;                     // the line itself
+  var BAND_T = 60, BAND_B = 96;        // working-years band above the line
+  function xFor(age) { return L + (Math.min(A1, Math.max(A0, age)) - A0) / (A1 - A0) * (R - L); }
+
+  var INK = '#1c1917', FAINT = '#d6d3d1', QUIET = '#a8a29e';
+  var WORK = '#334155';                // working years: solid, earning
+  var RETIRE = '#94a3b8';              // funded retirement: lighter
+  var SHORT = '#dc2626';               // the honest red
+
+  var s = '';
+
+  /* soft balance silhouette above the line — the pot rising, then falling.
+     Drawn from the simulated rows, so its shape is the plan's real arc. */
+  var rows = res.rows.filter(function (r) { return r.age <= A1; });
+  var maxBal = 1;
+  rows.forEach(function (r) { if (r.bal > maxBal) maxBal = r.bal; });
+  function yFor(bal) { return BAND_B - (bal / maxBal) * (BAND_B - BAND_T + 26); }
+  var line = '', first = null, last = null;
+  rows.forEach(function (r) {
+    if (!first) first = r;
+    last = r;
+    line += (line ? ' L ' : 'M ') + xFor(r.age).toFixed(1) + ' ' + yFor(r.bal).toFixed(1);
+  });
+  if (first && last) {
+    s += '<path d="M ' + xFor(first.age).toFixed(1) + ' ' + BAND_B + ' ' + line.replace('M', 'L') +
+         ' L ' + xFor(last.age).toFixed(1) + ' ' + BAND_B + ' Z" fill="#0f172a" fill-opacity="0.055"/>';
+    s += '<path d="' + line + '" fill="none" stroke="#0f172a" stroke-opacity="0.28" stroke-width="1.5" stroke-linejoin="round"/>';
+  }
+
+  /* the axis line itself, with the funded / unfunded stretch colored */
+  var depl = res.depletionAge;
+  var fundedEnd = (depl != null && depl <= A1) ? depl : A1;
+  s += '<line x1="' + L + '" y1="' + AXIS_Y + '" x2="' + xFor(fundedEnd) + '" y2="' + AXIS_Y + '" stroke="' + INK + '" stroke-width="2.5" stroke-linecap="round"/>';
+  if (depl != null && depl <= A1) {
+    /* the years the plan can't pay for — drawn, not hidden */
+    s += '<line x1="' + xFor(depl) + '" y1="' + AXIS_Y + '" x2="' + R + '" y2="' + AXIS_Y + '" stroke="' + SHORT + '" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.55" stroke-dasharray="1 6"/>';
+  }
+
+  /* working years vs retirement years, as ticks above / below the line */
+  for (var a = A0; a <= A1; a++) {
+    var x = xFor(a), major = a % 5 === 0;
+    var working = a < state.retireAge;
+    var tickLen = major ? 12 : 7;
+    var color = (depl != null && a > depl) ? '#fca5a5' : (working ? WORK : RETIRE);
+    s += '<line x1="' + x.toFixed(1) + '" y1="' + (AXIS_Y - tickLen) + '" x2="' + x.toFixed(1) + '" y2="' + AXIS_Y +
+         '" stroke="' + color + '" stroke-width="' + (major ? 2 : 1.25) + '" stroke-opacity="' + (working ? 0.9 : 0.7) + '"/>';
+    if (major) {
+      s += '<text x="' + x.toFixed(1) + '" y="' + (AXIS_Y + 22) + '" font-size="11.5" fill="' + QUIET +
+           '" text-anchor="middle" class="num">' + a + '</text>';
+    }
+  }
+
+  /* ── milestone labels ── */
+  function label(age, text, color, dy, anchor) {
+    var x = xFor(age);
+    anchor = anchor || (x < 120 ? 'start' : (x > W - 120 ? 'end' : 'middle'));
+    var lx = anchor === 'start' ? Math.max(x - 4, 2) : (anchor === 'end' ? Math.min(x + 4, W - 2) : x);
+    return '<text x="' + lx.toFixed(1) + '" y="' + dy + '" font-size="12" fill="' + color +
+           '" text-anchor="' + anchor + '" font-weight="600">' + text + '</text>';
+  }
+
+  /* you are here */
+  s += '<circle cx="' + xFor(state.currentAge) + '" cy="' + AXIS_Y + '" r="4" fill="' + INK + '"/>'
+     + label(state.currentAge, 'you are here · ' + state.currentAge, INK, AXIS_Y + 40);
+
+  /* work ends */
+  s += '<circle cx="' + xFor(state.retireAge) + '" cy="' + AXIS_Y + '" r="4.5" fill="#fff" stroke="' + INK + '" stroke-width="2"/>'
+     + label(state.retireAge, 'work ends · ' + state.retireAge, '#57534e', 34);
+
+  /* the point the money runs out — marked honestly */
+  if (depl != null && depl <= A1) {
+    s += '<g class="flag-in">'
+       + '<circle cx="' + xFor(depl) + '" cy="' + AXIS_Y + '" r="5" fill="' + SHORT + '" stroke="#fff" stroke-width="2"/>'
+       + label(depl, 'money runs out · ' + depl, SHORT, 34)
+       + '</g>';
+    if (state.maxAge > depl) {
+      s += label(state.maxAge, 'you planned to ' + state.maxAge, QUIET, AXIS_Y + 40, 'end');
+    }
+  } else {
+    s += '<g class="flag-in">' + label(A1, 'money outlasts the plan', '#166534', AXIS_Y + 40, 'end') + '</g>';
+  }
+
+  document.getElementById('life').innerHTML = s;
+
+  /* caption under the strip — the plan in one honest sentence */
+  var cap = document.getElementById('lifeCaption');
+  if (res.ok) {
+    cap.textContent = 'One plan: save until ' + state.retireAge + ', spend ' + fmtMoney(state.spending) +
+      ' a year — the money lasts to ' + lastsLabel(res) + ', past the ' + state.maxAge + ' being planned for.';
+  } else {
+    var gap = state.maxAge - depl;
+    cap.innerHTML = 'One plan: save until ' + state.retireAge + ', spend ' + fmtMoney(state.spending) +
+      ' a year — and the money runs out at <strong class="text-slate-600 num">' + depl + '</strong>, ' +
+      gap + (gap === 1 ? ' year' : ' years') + ' short of ' + state.maxAge +
+      '. Most tools hide this. The fix is usually small: ' + (suggest(state) || '');
+  }
+})();
+</script>
+</body>
+</html>
