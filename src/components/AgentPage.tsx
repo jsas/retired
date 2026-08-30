@@ -476,21 +476,16 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
 /** Model picker in the header: every configured connection's model, plus a
  *  "Load model…" escape hatch that opens the Connections page. Choosing an
  *  entry makes that connection (and its model) active. */
-function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
+export function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
   settings: AiSettings;
   activeId: string | null;
   onChoose: (id: string) => void;
   onLoadModel: () => void;
 }) {
   if (settings.connections.length === 0) {
-    return (
-      <button
-        onClick={onLoadModel}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700"
-      >
-        <Download size={13} /> Load a model
-      </button>
-    );
+    // No connection configured: the OfflineAssistant body renders the same
+    // "Load a model" CTA, so render nothing here to avoid a duplicate button.
+    return null;
   }
   return (
     <div className="flex items-center gap-1.5">
