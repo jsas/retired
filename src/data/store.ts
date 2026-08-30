@@ -25,8 +25,27 @@ import {
 const LEGACY_SCENARIOS_KEY = 'wealthconsole_scenarios';
 const LEGACY_CONFIG_KEY = 'wealthconsole_config';
 
-/** Revision-id sequence — Date.now() alone can collide within one ms. */
+/** Revision-id sequence — Date.now() alone can collide within one ms. Seeded
+ *  from the loaded history on every open (see seedRevSeq) so a fresh session
+ *  never re-mints a suffix an earlier session already used (issue D-05). */
 let revSeq = 0;
+
+/** Advance revSeq past every `rev-<ts>-<n>` suffix already in the loaded
+ *  history. Ids are `rev-<base36 ms>-<base36 seq>`; the timestamp halves differ
+ *  across sessions in practice, but two sessions opened in the same millisecond
+ *  (or one whose clock moved back) could re-emit an identical pair — so the
+ *  counter restarts beyond the highest suffix any surviving revision used. */
+function seedRevSeq(revisions: Array<{ id: string }>): void {
+  let max = 0;
+  for (const r of revisions) {
+    const m = /^rev-[0-9a-z]+-([0-9a-z]+)$/.exec(r.id);
+    if (m) {
+      const n = parseInt(m[1], 36);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+  }
+  revSeq = Math.max(revSeq, max + 1);
+}
 
 export interface AppState {
   scenarios: Scenario[];
@@ -53,6 +72,7 @@ export class AppStore {
     const store = new AppStore(db);
     store.revisionStore = new SqliteRevisionStore(db);
     store.revisions = store.revisionStore.loadAll();
+    seedRevSeq(store.revisions); // D-05: never re-mint a suffix the history already used
 
     let scenarios = db.loadScenarios();
     let configRaw = db.loadConfig();

@@ -248,6 +248,55 @@ describe('AppStore revisions', () => {
     expect(revs[0].inputs).toEqual(state.scenarios[0].inputs);
   });
 
+  it('a fresh session never re-mints a revision id the history already used (D-05)', async () => {
+    // revSeq is module-global and resets to 0 on every page load; a second
+    // session that mints its first revision in the same millisecond as an
+    // earlier session would otherwise re-emit a byte-identical id, and
+    // pushRevision treats "same id" as "same row" — silently OVERWRITING that
+    // history entry. seedRevSeq must lift the counter past the loaded history.
+    // Pin the clock so both sessions mint in the same millisecond and the
+    // suffix alone decides the id.
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    try {
+      // Session one starts from a fresh module registry, exactly like a
+      // browser load: revSeq begins at 0 and it mints suffixes 0, 1, 2.
+      vi.resetModules();
+      const { AppStore: FreshAppStore } = await import('./store');
+      const { store, state } = await FreshAppStore.open(customDefaults);
+      const sid = state.activeScenarioId;
+      for (const spend of [11111, 22222]) {
+        store.persist({
+          scenarios: [{ id: sid, name: 'S', inputs: baseInputs({ desiredSpending: spend }) }],
+          activeScenarioId: sid,
+        });
+      }
+      const firstSessionIds = store.allRevisions().map(r => r.id);
+      expect(firstSessionIds.length).toBe(3); // seed + two changes, all in one ms
+
+      // Session two: another fresh registry over the SAME persisted bytes.
+      vi.resetModules();
+      const { AppStore: FreshAppStore2 } = await import('./store');
+      const { store: store2 } = await FreshAppStore2.open(customDefaults);
+      store2.persist({
+        scenarios: [{ id: sid, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }],
+        activeScenarioId: sid,
+      });
+      const ids = store2.allRevisions().map(r => r.id);
+      // Nothing was overwritten: the history gained exactly one row (a
+      // collision would REPLACE the oldest row — same id = same slot to
+      // pushRevision — leaving the count flat and its inputs clobbered)…
+      expect(ids.length).toBe(firstSessionIds.length + 1);
+      for (const id of firstSessionIds) expect(ids).toContain(id);
+      // …and session one's seed revision still holds the seed inputs, not
+      // session two's 33333 overwrite.
+      const seedRow = store2.allRevisions().find(r => r.id === firstSessionIds[0])!;
+      expect(seedRow.inputs.desiredSpending).toBe(baseInputs().desiredSpending);
+    } finally {
+      vi.restoreAllMocks();
+      vi.resetModules();
+    }
+  });
+
   it('records a revision only when the inputs actually change', async () => {
     const { store, state } = await AppStore.open(customDefaults);
     const id = state.activeScenarioId;
