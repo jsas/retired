@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome } from './retirementEngine';
+import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent } from './retirementEngine';
+import { legacyToPerson, legacyToShared, legacySpouseToPerson } from './householdTypes';
 import { calculateTax } from './canadianTax';
 import { baselineInputs } from './scenarioStorage';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
@@ -530,6 +531,193 @@ describe('inter-spousal transfers (household conservation)', () => {
     for (const age of [65, 66, 67]) {
       expect(yearAt(r.spouse!.yearlyBreakdown, age).detail?.deposit?.tfsa).toBeCloseTo(10000, 0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E-02 fixed-point oracle: does calculateHousehold's re-run loop converge?
+// ---------------------------------------------------------------------------
+describe('household re-run convergence (E-02)', () => {
+  // Pension splitting is applied AFTER the re-run loop and reallocates tax
+  // between the partners; disable it so engine-vs-oracle tax rows compare
+  // cleanly (the oracle replicates the loop only, not the post-split pass).
+  const config = testConfig();
+  config.engine.pensionSplitMaxRate = 0;
+
+  // Replicate calculateHousehold's iterate-pair passes EXACTLY (same initial
+  // runs, same rehome/translate, same feed order — Gauss-Seidel), but with no
+  // 5-pass cap and a pure fixed-point break: the pair repeats byte-for-byte.
+  // The engine's result must match this oracle (within the loop's own $1 GIS
+  // / deposit-stability criteria) — if the engine stopped one oscillation
+  // early, its returned pair would differ from the settled pair.
+  const oraclePair = (inputs: ReturnType<typeof baseInputs>): { primary: RetirementResults; spouse: RetirementResults; passes: number } => {
+    const shared = legacyToShared(inputs);
+    const primaryPerson = legacyToPerson(inputs);
+    const sp = legacySpouseToPerson(inputs.spouse!);
+    const primaryCtx = {
+      cppStartAge: sp.cppStartAge,
+      cppMonthlyAmount: sp.cppMonthlyAmount,
+      oasStartAge: sp.oasStartAge,
+      oasYearsInCanada: sp.oasYearsInCanada,
+      currentAge: sp.currentAge,
+      pensions: sp.pensions,
+      employment: sp.employment,
+    };
+    const rehome = (
+      ownerEvents: CashEvent[] | undefined,
+      ownerCurrentAge: number,
+      selfRef: 'primary' | 'spouse',
+      selfCurrentAge: number,
+    ): CashEvent[] => (ownerEvents ?? [])
+      .filter(e => e.from && e.from.kind === 'account' && e.from.person === selfRef)
+      .map(e => {
+        const shift = ownerCurrentAge - selfCurrentAge;
+        const age = e.age - shift;
+        const clamped = Math.max(age, selfCurrentAge);
+        return {
+          ...e, age: clamped,
+          ...(e.endAge != null ? { endAge: Math.max(e.endAge - shift, clamped) } : {}),
+        };
+      });
+    const primaryRun: typeof primaryPerson = {
+      ...primaryPerson,
+      events: [...(primaryPerson.events ?? []), ...rehome(sp.events, sp.currentAge, 'primary', primaryPerson.currentAge) ?? []],
+    } as typeof primaryPerson;
+    const spRun: typeof primaryPerson = {
+      ...sp,
+      events: [...(sp.events ?? []), ...rehome(primaryPerson.events, primaryPerson.currentAge, 'spouse', sp.currentAge)],
+    } as typeof primaryPerson;
+    const translate = (
+      deposits: NonNullable<RetirementResults['crossDeposits']>,
+      fromCurrentAge: number,
+      toCurrentAge: number,
+    ) => deposits.map(d => ({ ...d, age: d.age - (fromCurrentAge - toCurrentAge) }));
+
+    // Pass 0: primary runs cold; spouse runs on primary's first crossDeposits.
+    let P = calculatePerson(primaryRun, shared, config, { personRef: 'primary', spouseContext: { ...primaryCtx } });
+    let S = calculatePerson(spRun, shared, config, {
+      personRef: 'spouse',
+      spouseContext: { ...primaryCtx },
+      ...(translate(P.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge).length > 0
+        ? { inboundDeposits: translate(P.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge) }
+        : {}),
+    });
+
+    // Iterate to a TRUE fixed point: re-run both, break only when the pair is
+    // byte-identical to the previous pass (no per-field tolerance, no cap).
+    const pairKey = (p: RetirementResults, s: RetirementResults) =>
+      JSON.stringify([p.yearlyBreakdown, p.crossDeposits, p.householdDraws])
+      + JSON.stringify([s.yearlyBreakdown, s.crossDeposits, s.householdDraws]);
+    let passes = 0;
+    let prevKey = pairKey(P, S);
+    for (;;) {
+      passes++;
+      const pToS = translate(P.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
+      const sToP = translate(S.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge);
+      P = calculatePerson(primaryRun, shared, config, {
+        personRef: 'primary',
+        spouseContext: { ...primaryCtx, partnerDrawsAt: (a: number) => S.householdDraws?.[a] ?? 0 },
+        ...(sToP.length > 0 ? { inboundDeposits: sToP } : {}),
+      });
+      S = calculatePerson(spRun, shared, config, {
+        personRef: 'spouse',
+        spouseContext: { ...primaryCtx, partnerDrawsAt: (a: number) => P.householdDraws?.[a] ?? 0 },
+        ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
+      });
+      const key = pairKey(P, S);
+      if (key === prevKey) break; // true fixed point reached
+      prevKey = key;
+      if (passes > 60) throw new Error('oracle did not converge within 60 passes');
+    }
+    return { primary: P, spouse: S, passes };
+  };
+
+  const melt = (from: 'primary' | 'spouse', amount: number, endAge = 68) => ({
+    id: `melt-${from}`, age: 65, endAge, label: `meltdown ${from}`, amount, direction: 'out' as const,
+    from: { kind: 'account' as const, person: from, account: 'rrsp' as const },
+    to: { kind: 'account' as const, person: (from === 'primary' ? 'spouse' : 'primary') as 'primary' | 'spouse', account: 'tfsa' as const },
+  });
+
+  const compare = (
+    engineP: RetirementResults, engineS: RetirementResults,
+    oracleP: RetirementResults, oracleS: RetirementResults,
+  ) => {
+    const cmp = (a: YearlyBreakdown[], b: YearlyBreakdown[]) => {
+      expect(a.length).toBe(b.length);
+      for (let i = 0; i < a.length; i++) {
+        expect(closeTo(a[i].gisIncome, b[i].gisIncome, 1)).toBe(true);
+        expect(closeTo(a[i].incomeTax, b[i].incomeTax, 2)).toBe(true);
+        expect(closeTo(a[i].rrspBalance, b[i].rrspBalance, 2)).toBe(true);
+        expect(closeTo(a[i].tfsaBalance, b[i].tfsaBalance, 2)).toBe(true);
+        expect(closeTo(a[i].taxableBalance, b[i].taxableBalance, 2)).toBe(true);
+        expect(closeTo(a[i].endingBalance, b[i].endingBalance, 2)).toBe(true);
+      }
+    };
+    cmp(engineP.yearlyBreakdown, oracleP.yearlyBreakdown);
+    cmp(engineS.yearlyBreakdown, oracleS.yearlyBreakdown);
+    expect(JSON.stringify(engineP.crossDeposits)).toBe(JSON.stringify(oracleP.crossDeposits));
+    expect(JSON.stringify(engineS.crossDeposits)).toBe(JSON.stringify(oracleS.crossDeposits));
+  };
+
+  it('two-way transfers, no GIS: engine pair is the true fixed point', () => {
+    // Both partners melt down part of their RRSP into the OTHER's TFSA — the
+    // two-way deposit coupling with GIS out of the picture (no OAS/CPP).
+    const inputs = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 75,
+      rrspBalance: 400000, tfsaBalance: 20000, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 32000,
+      cppStartAge: null, cppMonthlyAmount: 0,
+      oasStartAge: null, oasYearsInCanada: 40,
+      spouse: {
+        enabled: true, currentAge: 63, retirementAge: 63,
+        rrspBalance: 260000, tfsaBalance: 10000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 16000, pensions: [],
+      },
+    });
+    inputs.events = [melt('primary', 12000), melt('spouse', 8000)];
+
+    const engine = calculateHousehold(inputs, config);
+    const { primary: oracleP, spouse: oracleS, passes } = oraclePair(inputs);
+    // The oracle must actually iterate (the coupling is real), not pass on
+    // pass 0 — otherwise this fixture proves nothing.
+    expect(passes).toBeGreaterThanOrEqual(2);
+    compare(engine, engine.spouse!, oracleP, oracleS);
+    // Two-way transfers really fired both ways (fixture sanity).
+    expect((engine.crossDeposits ?? []).length).toBe(4);
+    expect((engine.spouse!.crossDeposits ?? []).length).toBe(4);
+  });
+
+  it('two-way transfers + couple GIS: engine pair is the true fixed point', () => {
+    // Low income so couple GIS is alive on BOTH sides: each partner's draws
+    // shrink the other's GIS, which changes their need, which changes their
+    // draws — the strongest coupling the household pass iterates over. The
+    // partner-draw feedback must settle identically to the oracle.
+    const inputs = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 75,
+      rrspBalance: 60000, tfsaBalance: 10000, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 8000,
+      cppStartAge: 65, cppMonthlyAmount: 50,
+      oasStartAge: 65, oasYearsInCanada: 40,
+      spouse: {
+        enabled: true, currentAge: 63, retirementAge: 63,
+        rrspBalance: 60000, tfsaBalance: 10000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 50, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 8000, pensions: [],
+      },
+    });
+    inputs.events = [melt('primary', 2000), melt('spouse', 2000)];
+
+    const engine = calculateHousehold(inputs, config);
+    const { primary: oracleP, spouse: oracleS, passes } = oraclePair(inputs);
+    expect(passes).toBeGreaterThanOrEqual(2);
+    compare(engine, engine.spouse!, oracleP, oracleS);
+    // Couple GIS actually engaged on both sides (fixture sanity: the GIS
+    // coupling is live, not bypassed by the zero-GIS fast path).
+    expect(engine.yearlyBreakdown.some(y => y.gisIncome > 0)).toBe(true);
+    expect(engine.spouse!.yearlyBreakdown.some(y => y.gisIncome > 0)).toBe(true);
   });
 });
 

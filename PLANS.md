@@ -952,7 +952,7 @@ regen.
 
 ---
 
-## [ ] PLAN E-02 · Two-way inter-spousal transfer re-run may sit one oscillation stale (VERIFY)
+## [x] PLAN E-02 · Two-way inter-spousal transfer re-run may sit one oscillation stale (VERIFY)
 **Maps to:** REVIEW.md **E-02** · Severity MEDIUM (verify)
 **File:** `src/lib/retirementEngine.ts`
 
