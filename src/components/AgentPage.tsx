@@ -51,7 +51,7 @@ import {
   loadChats, saveChats, newThread, titleFromFirstMessage,
   type ChatThread,
 } from '../lib/ai/chatStore';
-import { resetWebLlmChat } from '../lib/ai/webLlmProvider';
+import { resetWebLlmChat, loadedWebLlmModel } from '../lib/ai/webLlmProvider';
 import { Markdown } from './Markdown';
 
 interface AgentPageProps {
@@ -793,7 +793,11 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       return;
     }
 
-    if (isLocal) {
+    if (isLocal && loadedWebLlmModel() !== connection.model) {
+      // Only a turn that might actually DOWNLOAD/COMPILE the model shows the
+      // progress bar. When the engine is already resident, streamWebLlm reuses
+      // it and never calls onProgress — the bar would sit at 0% for the whole
+      // reply (the "Preparing the local model… on every chat" bug).
       downloadDoneRef.current = false;
       setLoadProgress({ progress: 0, text: 'Preparing the local model…' });
     }

@@ -182,6 +182,26 @@ describe('streamWebLlm', () => {
     expect(lastRequest?.max_tokens).toBeGreaterThanOrEqual(4096);
   });
 
+  it('reports progress only while loading — a reused engine stays silent', async () => {
+    // Regression for "Preparing the local model… 0% stuck on every chat": the
+    // page keys the progress bar off this callback, so on an engine-reuse turn
+    // it must NOT fire at all — otherwise the bar appears with nothing to
+    // clear it until the whole reply finishes.
+    const { streamWebLlm, unloadWebLlmEngine, loadedWebLlmModel } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    const progress: Array<{ progress: number }> = [];
+    const req = () => ({ system: 'sys', messages: [{ role: 'user' as const, content: 'hi' }], tools: [] });
+    // First turn: a cold engine loads, progress flows, and the model reports resident.
+    for await (const _ of streamWebLlm(conn, req(), p => progress.push(p))) void _;
+    expect(progress.length).toBeGreaterThan(0);
+    expect(loadedWebLlmModel()).toBe(conn.model);
+    // Second turn: the engine is reused — no load, no progress events.
+    progress.length = 0;
+    for await (const _ of streamWebLlm(conn, req(), p => progress.push(p))) void _;
+    expect(progress).toEqual([]);
+  });
+
   it('respects an explicit maxTokens cap', async () => {
     const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
     await unloadWebLlmEngine();
