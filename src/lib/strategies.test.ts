@@ -374,6 +374,72 @@ describe('runStrategies filtering', () => {
   });
 });
 
+describe('RDSP withdrawal-order variants (S-03)', () => {
+  // Retiree with a funded RDSP: the explorer's order variants must test
+  // explicit 'rdsp' placements, not just the 3-account permutations — the
+  // engine auto-injects 'rdsp' ahead of taxable when the order omits it, so
+  // the base permutations all collapse into that one RDSP shape.
+  const rdspRetiree = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 90,
+    rrspBalance: 100000, tfsaBalance: 150000, taxableBalance: 50000,
+    cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 24000,
+    rdsp: { enabled: true, balance: 60000, contribution: 0, familyIncome: 40000, dtcEligible: true },
+    pensions: [],
+  });
+
+  it('order variants place rdsp explicitly when the RDSP is active (S-03)', () => {
+    const report = runStrategies(rdspRetiree(), config);
+    const orders = report.strategies.filter(s => s.id.startsWith('order-'));
+    expect(orders.length).toBeGreaterThan(0);
+    // Every order variant includes 'rdsp' in its patch...
+    for (const o of orders) {
+      expect(o.patch.withdrawalOrder).toContain('rdsp');
+    }
+    // ...and both extremes exist: rdsp first (spend the partly-tax-free dollar
+    // earliest) and rdsp last (preserve it longest).
+    expect(orders.some(o => o.patch.withdrawalOrder![0] === 'rdsp')).toBe(true);
+    expect(orders.some(o => o.patch.withdrawalOrder!.at(-1) === 'rdsp')).toBe(true);
+    // The other accounts are never dropped from the ordering.
+    for (const o of orders) {
+      const w = o.patch.withdrawalOrder!;
+      expect(w).toContain('tfsa');
+      expect(w).toContain('rrsp');
+      expect(new Set(w).size).toBe(w.length); // no duplicates
+    }
+  });
+
+  it('order variants omit rdsp when no RDSP is active', () => {
+    const report = runStrategies(gisSensitive(), config);
+    const orders = report.strategies.filter(s => s.id.startsWith('order-'));
+    expect(orders.length).toBe(5); // the 6 base permutations minus current
+    for (const o of orders) {
+      expect(o.patch.withdrawalOrder).not.toContain('rdsp');
+    }
+  });
+
+  it('a disabled or zero-balance RDSP does not produce rdsp orderings', () => {
+    const off = rdspRetiree();
+    off.rdsp = { ...off.rdsp!, enabled: false };
+    expect(runStrategies(off, config).strategies.filter(s => s.id.startsWith('order-') && s.patch.withdrawalOrder!.includes('rdsp')).length).toBe(0);
+    const empty = rdspRetiree();
+    empty.rdsp = { ...empty.rdsp!, balance: 0 };
+    expect(runStrategies(empty, config).strategies.filter(s => s.id.startsWith('order-') && s.patch.withdrawalOrder!.includes('rdsp')).length).toBe(0);
+    const notDtc = rdspRetiree();
+    notDtc.rdsp = { ...notDtc.rdsp!, dtcEligible: false };
+    expect(runStrategies(notDtc, config).strategies.filter(s => s.id.startsWith('order-') && s.patch.withdrawalOrder!.includes('rdsp')).length).toBe(0);
+  });
+
+  it('rdsp order variants run the engine without error and report finite metrics', () => {
+    const report = runStrategies(rdspRetiree(), config);
+    for (const o of report.strategies.filter(s => s.id.startsWith('order-'))) {
+      expect(Number.isFinite(o.sustainableSpending)).toBe(true);
+      expect(Number.isFinite(o.endingBalance)).toBe(true);
+      expect(o.lifetimeTax).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
 describe('sustainableSpending ceiling edge (S-02)', () => {
   // A runaway plan: $100M in TFSA (tax-free, no CPP/OAS) funding a 25-year
   // horizon survives even the $5M/yr ceiling (PV of $5M × 25 yrs at 5% ≈

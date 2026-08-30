@@ -680,7 +680,7 @@ shape to the #28 loop caps already fixed). Confirm and cap the expansion.
 
 ---
 
-## [ ] PLAN S-03 · Strategy orderings omit RDSP
+## [x] PLAN S-03 · Strategy orderings omit RDSP
 **Maps to:** REVIEW.md **S-03** · Severity LOW (== #40 family)
 **File:** `src/lib/strategies.ts`
 
