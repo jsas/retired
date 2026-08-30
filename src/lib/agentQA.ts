@@ -9,6 +9,7 @@
 // free and private. Nothing is ingested back.
 
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from './retirementEngine';
+import { householdOutcome } from './retirementEngine';
 import type { MonteCarloResults } from './monteCarlo';
 
 export interface QAPreset {
@@ -85,6 +86,22 @@ function yearLine(r: YearlyBreakdown): string {
   );
 }
 
+// The household-level verdict line (issue A-03): for a couple the headline
+// must be the COMBINED outcome — one partner's silo can deplete while the
+// funded partner covers the gap (and vice-versa). Matches the dashboard and
+// the Monte Carlo screen (#33), which both use householdOutcome. The per-person
+// digests below stay as detail.
+function householdVerdictLine(inputs: RetirementInputs, results: RetirementResults): string {
+  const ho = householdOutcome(results, inputs);
+  return (
+    `HOUSEHOLD VERDICT: ${ho.status === 'ON_TRACK' ? 'ON TRACK' : 'SHORTFALL'} — ` +
+    (ho.depletionAge != null
+      ? `combined portfolio depletes at age ${ho.depletionAge}`
+      : `combined portfolio funded to age ${inputs.maxAge}+`) +
+    (results.spouse ? ' (the per-person lines below are detail; this household verdict is the plan answer)' : '')
+  );
+}
+
 // A compact digest of one person's projection: verdict + milestone ages.
 function planDigest(label: string, results: RetirementResults, maxAge: number): string {
   const rows = results.yearlyBreakdown;
@@ -120,6 +137,8 @@ export interface QAContext {
  */
 export function buildPlanDigest(inputs: RetirementInputs, ctx: QAContext): string {
   const digests: string[] = [
+    // The household verdict leads (issue A-03); per-person digests follow as detail.
+    householdVerdictLine(inputs, ctx.results),
     planDigest(inputs.spouse?.enabled ? 'You' : 'Plan', ctx.results, inputs.maxAge),
   ];
   if (ctx.results.spouse) {
@@ -149,6 +168,8 @@ export function buildQAPrompt(
   const question = (customQuestion?.trim() || preset.question).trim();
 
   const digests: string[] = [
+    // The household verdict leads (issue A-03); per-person digests follow as detail.
+    householdVerdictLine(inputs, ctx.results),
     planDigest(inputs.spouse?.enabled ? 'You' : 'Plan', ctx.results, inputs.maxAge),
   ];
   if (ctx.results.spouse) {

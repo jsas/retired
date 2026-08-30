@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '../retirementEngine';
-import { calculateHousehold } from '../retirementEngine';
+import { calculateHousehold, householdOutcome } from '../retirementEngine';
 import type { AppConfig } from '../appConfig';
 import { runStrategies, type StrategyFilter } from '../strategies';
 import { solveSustainableSpending } from '../spendingSolver';
@@ -598,11 +598,17 @@ function summarizeResults(label: string, inputs: RetirementInputs, results: Reti
   const last = rows[rows.length - 1];
   const lifetimeTax = last?.cumulativeTax ?? 0;
   const firstShortfall = rows.find(r => (r.shortfall ?? 0) > 0);
+  // Household-first verdict (issue A-03): for a couple the headline must be the
+  // COMBINED outcome — the primary's own silo can deplete while the funded
+  // partner covers the gap (and vice-versa). Matches the dashboard and the
+  // Monte Carlo screen (#33), which both use householdOutcome. The per-person
+  // lines below stay as secondary detail.
+  const ho = householdOutcome(results, inputs);
   const lines = [
-    `${label}: ${results.status === 'ON_TRACK' ? 'ON TRACK' : 'SHORTFALL'} — ` +
-    (results.depletionAge != null
-      ? `portfolio depletes at age ${results.depletionAge}`
-      : `funded to age ${inputs.maxAge}+`),
+    `${label}: ${ho.status === 'ON_TRACK' ? 'ON TRACK' : 'SHORTFALL'} — ` +
+    (ho.depletionAge != null
+      ? `household portfolio depletes at age ${ho.depletionAge}`
+      : `household funded to age ${inputs.maxAge}+`),
     `  net worth at retirement ${money(results.totalNetWorthAtRetirement)}, ` +
     `withdrawal rate ${(results.withdrawalRate * 100).toFixed(1)}%, ` +
     `lifetime tax ${money(lifetimeTax)}, ending balance ${money(last?.endingBalance ?? 0)}`,
@@ -612,8 +618,9 @@ function summarizeResults(label: string, inputs: RetirementInputs, results: Reti
   }
   if (results.spouse) {
     lines.push(
-      `  spouse: ${results.spouse.status === 'ON_TRACK' ? 'on track' : `depletes at ${results.spouse.depletionAge}`}, ` +
-      `ending ${money(results.spouse.yearlyBreakdown.at(-1)?.endingBalance ?? 0)}`,
+      `  per-person (detail): you ${results.status === 'ON_TRACK' ? 'on track' : `deplete at ${results.depletionAge}`}, ` +
+      `spouse ${results.spouse.status === 'ON_TRACK' ? 'on track' : `depletes at ${results.spouse.depletionAge}`}, ` +
+      `spouse ending ${money(results.spouse.yearlyBreakdown.at(-1)?.endingBalance ?? 0)}`,
     );
   }
   // Milestone years so the model can reference specifics without the full table.

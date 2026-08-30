@@ -520,7 +520,7 @@ normal input. **Needed:** decide the RDSP drawdown UX (see E-01), then make the 
 ingest path, the agent tool path, and the sidebar widget agree on whether/when 'rdsp'
 may appear in `withdrawalOrder`.
 
-**A-03 · LOW · Agent tool outputs can show a stale per-person verdict.** `tools.ts`
+~~**A-03 · LOW · Agent tool outputs can show a stale per-person verdict.**~~ ✅ **FIXED 2026-08-30** (`fix/a03-agent-household-verdict`) `tools.ts`
 `summarizeResults` (:559) reads `results.status` (primary) and `results.spouse.status`
 (:572) directly rather than the household-first `householdOutcome()`. For a couple
 where the primary silo depletes but the partner backstops, the agent is told
@@ -529,6 +529,15 @@ where the primary silo depletes but the partner backstops, the agent is told
 but the agent could recommend "fix" a plan that is actually household-funded. Related
 to **E-09**. **Needed:** route the agent's verdict strings through `householdOutcome`
 when a spouse is present (same as compareMetrics.ts:47-58).
+**Fix:** `summarizeResults` now leads with `householdOutcome(results, inputs)` for the
+headline ("Result: ON TRACK — household funded to age 90+"), demoting the per-person
+verdicts to a labeled `per-person (detail):` line. `agentQA.ts` gained a
+`householdVerdictLine` helper that leads both `buildPlanDigest` and `buildQAPrompt`
+above the You/Spouse digests (which stay as per-person detail). Tests: a couple whose
+primary silo depletes while the funded spouse covers the gap must read
+"HOUSEHOLD VERDICT: ON TRACK" / "Result: ON TRACK — household funded" with the
+per-person SHORTFALL demoted to detail; fixture sanity-asserts the primary's own
+status really is SHORTFALL. 788/788 tests, `tsc` clean.
 
 **A-04 · INFO · compareMetrics is household-first and correct.** `metricsFromResults`
 (compareMetrics.ts:47-58) uses `householdOutcome(results, inputs)` for both
@@ -638,7 +647,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | H-01 | Backtest | INFO | `runBacktest` sound; horizon clamped | Info |
 | H-02 | Backtest | LOW | Backtest is primary-only (spouse stripped) | Actionable (optional) |
 | A-01 | AI | INFO | Tool surface well-defended; confirm-before-apply holds | Info |
-| A-03 | AI | LOW | Agent verdict strings use per-person status, not household | Actionable |
+| ~~A-03~~ | AI | ~~LOW~~ ✅ | Agent verdict strings used per-person status, not household — **FIXED** (`fix/a03-agent-household-verdict`) | **Fixed** |
 | A-04 | AI | INFO | compareMetrics household-first, correct | Info |
 | A-05 | AI | INFO | MemoryStore clean, well-bounded | Info |
 | ~~X-01~~ | Cross-cutting | ~~LOW~~ ✅ | Leftover probe `src/test/tmp/bug2.test.ts` — **DELETED** (was untracked, not committed) | **Fixed** |
@@ -686,7 +695,7 @@ Everything not struck through above. These are the items that still need doing.
 - **T-03 · LOW** — OAS `yearsInCanada` not re-pro-rated for partial residency.
 
 ### AI / other
-- **A-03 · LOW** — Agent verdict strings use per-person status, not household.
+- ~~**A-03 · LOW** — Agent verdict strings use per-person status, not household.~~ ✅ FIXED (`fix/a03-agent-household-verdict`)
 - **H-02 · LOW (optional)** — Backtest is primary-only (spouse stripped).
 - **X-04 · LOW** — endAge/RM null-vs-omitted convention documented only in CLAUDE.md.
 
@@ -737,6 +746,10 @@ Everything not struck through above. These are the items that still need doing.
   household verdict against `merged` (the inputs the engine ran on), closing the latent
   trap where a strategy patching `maxAge`/spouse fields would be judged on the wrong
   horizon. 778/778 tests, `tsc` clean.
+- **2026-08-30** — **A-03** fixed on `fix/a03-agent-household-verdict`: the agent's
+  `summarizeResults` headline and both agentQA digest builders now lead with the
+  `householdOutcome` verdict; per-person statuses are demoted to labeled detail lines.
+  788/788 tests, `tsc` clean.
 
 ---
 
@@ -746,8 +759,8 @@ Everything not struck through above. These are the items that still need doing.
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
-4. **Quick wins** — U-15 fixed (`fix/u15-print-rdsp-column`). Remaining: A-03
-   (household verdict strings), D-02 (#19 warning), X-04 (comment).
+4. **Quick wins** — U-15 (`fix/u15-print-rdsp-column`) and A-03
+   (`fix/a03-agent-household-verdict`) fixed. Remaining: D-02 (#19 warning), X-04 (comment).
 5. **Verify-before-fix** — E-02 (fixed-point oracle), E-04, T-02, T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 
