@@ -21,6 +21,16 @@
   .tile.hidden-weak { display: none; }
   #rate-tools { position: sticky; top: 0; z-index: 40; }
   .tile { position: relative; }
+  /* why-note field, shown after Keep/Meh */
+  .whynote { display: none; margin-top: 8px; }
+  .whynote.show { display: block; }
+  .whynote textarea { width: 100%; box-sizing: border-box; border: 1px solid #e2e8f0; border-radius: 6px;
+    padding: 6px 8px; font-size: 12px; font-family: inherit; color: #334155; resize: vertical; min-height: 44px;
+    background: #f8fafc; }
+  .whynote textarea:focus { outline: none; border-color: #94a3b8; background: #fff; }
+  .whynote textarea::placeholder { color: #94a3b8; }
+  .whynote .wn-label { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #94a3b8; display: block; margin-bottom: 3px; }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
@@ -52,6 +62,7 @@
       <button id="show-keeps" class="px-2.5 py-1 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700">Show keeps only</button>
       <button id="show-all" class="px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:border-slate-400">Show all</button>
       <button id="clear-all" class="px-2.5 py-1 rounded-md border border-slate-200 text-slate-500 hover:border-slate-400">Reset</button>
+      <button id="copy-ratings" class="px-2.5 py-1 rounded-md border border-blue-200 bg-blue-50 text-blue-700 font-semibold hover:border-blue-400">Copy ratings for Claude</button>
     </span>
     <div id="rate-summary" class="w-full text-slate-500"></div>
   </div>
@@ -91,7 +102,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="01-verdict-dashboard.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="02-welcome-editorial.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-violet-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-violet-600 mb-1">02</div>
@@ -103,7 +118,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="02-welcome-editorial.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="03-steering-control-room.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">03</div>
@@ -115,7 +134,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="03-steering-control-room.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -132,7 +155,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="04-range-gauge.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="05-the-sentence.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-violet-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-violet-600 mb-1">05</div>
@@ -144,7 +171,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="05-the-sentence.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="06-the-river.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">06</div>
@@ -156,7 +187,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="06-the-river.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -173,7 +208,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="07-calm-focus.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="08-life-timeline.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">08</div>
@@ -185,7 +224,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="08-life-timeline.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="09-card-wizard.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">09</div>
@@ -197,7 +240,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="09-card-wizard.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="10-split-answer.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">10</div>
@@ -209,7 +256,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="10-split-answer.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -226,7 +277,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="11-bento.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="12-plan-score.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">12</div>
@@ -238,7 +293,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="12-plan-score.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="13-printed-plan.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">13</div>
@@ -250,7 +309,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="13-printed-plan.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="14-terminal.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-slate-500 mb-1">14</div>
@@ -262,7 +325,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="14-terminal.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -279,7 +346,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="15-glass-night.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="16-contour-map.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">16</div>
@@ -291,7 +362,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="16-contour-map.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="17-conversation.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">17</div>
@@ -303,7 +378,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="17-conversation.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
   <div class="grid md:grid-cols-3 gap-3 mb-10">
@@ -317,7 +396,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="18-instrument-dials.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="19-year-strip.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-zinc-400 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-zinc-500 mb-1">19</div>
@@ -329,7 +412,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="19-year-strip.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="20-one-breath.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-slate-500 mb-1">20</div>
@@ -341,7 +428,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="20-one-breath.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -358,7 +449,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="21-statement.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="22-swiss-poster.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">22</div>
@@ -370,7 +465,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="22-swiss-poster.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="23-morning-briefing.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">23</div>
@@ -382,7 +481,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="23-morning-briefing.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="24-ledger.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-stone-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-stone-600 mb-1">24</div>
@@ -394,7 +497,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="24-ledger.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -411,7 +518,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="25-spreadsheet.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="26-big-canvas.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-slate-500 mb-1">26</div>
@@ -423,7 +534,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="26-big-canvas.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="27-forecast.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-sky-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-sky-600 mb-1">27</div>
@@ -435,7 +550,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="27-forecast.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="28-fitness-rings.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">28</div>
@@ -447,7 +566,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="28-fitness-rings.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -464,7 +587,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="29-road-trip.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="30-checklist.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">30</div>
@@ -476,7 +603,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="30-checklist.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="31-card-deck.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-indigo-600 mb-1">31</div>
@@ -488,7 +619,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="31-card-deck.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="32-comic.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">32</div>
@@ -500,7 +635,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="32-comic.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -517,7 +656,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="33-blueprint.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="34-retro-broadcast.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">34</div>
@@ -529,7 +672,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="34-retro-broadcast.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="35-crayon.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">35</div>
@@ -541,7 +688,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="35-crayon.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="36-ambient.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-teal-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-teal-600 mb-1">36</div>
@@ -553,7 +704,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="36-ambient.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -570,7 +725,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="37-paystub.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="38-kitchen-table.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">38</div>
@@ -582,7 +741,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="38-kitchen-table.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="39-voice.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-violet-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-violet-600 mb-1">39</div>
@@ -594,7 +757,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="39-voice.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
     <a href="40-split-worlds.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">40</div>
@@ -606,7 +773,11 @@
         <button data-rate="keep" title="worth building">Keep</button>
         <button data-rate="meh" title="has a piece worth stealing">Meh</button>
         <button data-rate="no" title="drop it">No</button>
-      </div>
+      
+        <div class="whynote" data-file="40-split-worlds.html">
+          <span class="wn-label">Why?</span>
+          <textarea placeholder="why this one? what works, what to steal for others…" rows="2"></textarea>
+        </div>
     </a>
   </div>
 
@@ -625,43 +796,83 @@
 
 <script>
 (function () {
-  var KEY = 'retired_rateings_v1';
-  var rates = {};
-  try { rates = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { rates = {}; }
+  var KEY = 'retired_rateings_v2'; // v2 adds per-rating why-notes
+  var data = {}; // { file: { rate: 'keep'|'meh'|'no', note: string } }
+  try { data = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { data = {}; }
 
   var summary = document.getElementById('rate-summary');
-
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(rates)); } catch (e) {} }
-
   var bars = document.querySelectorAll('.ratebar');
+  var titles = {};
+  document.querySelectorAll('a[href]').forEach(function (a) {
+    var bar = a.querySelector('.ratebar');
+    if (bar) titles[bar.dataset.file] = (a.querySelector('h3') || {}).textContent || '';
+  });
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
+  function entry(f) { return data[f] || null; }
+
+  function refreshCard(f) {
+    var d = entry(f) || {};
+    bars.forEach(function (bar) {
+      if (bar.dataset.file !== f) return;
+      bar.querySelectorAll('button').forEach(function (btn) {
+        btn.classList.toggle('on', d.rate === btn.dataset.rate);
+      });
+      var wn = bar.parentElement.querySelector('.whynote');
+      if (wn) {
+        var ta = wn.querySelector('textarea');
+        if (document.activeElement !== ta) ta.value = d.note || '';
+        wn.classList.toggle('show', d.rate === 'keep' || d.rate === 'meh');
+      }
+    });
+  }
+
   bars.forEach(function (bar) {
-    var file = bar.dataset.file;
+    var f = bar.dataset.file;
+    refreshCard(f); // restore saved rating + note on load
     bar.querySelectorAll('button').forEach(function (btn) {
-      if (rates[file]) btn.classList.toggle('on', rates[file] === btn.dataset.rate);
       btn.addEventListener('click', function (ev) {
-        ev.preventDefault(); // buttons live inside the card's <a> — don't navigate
+        ev.preventDefault(); // inside the card's <a> — don't navigate
         ev.stopPropagation();
-        // click the active rating again to clear it
-        if (rates[file] === btn.dataset.rate) delete rates[file];
-        else rates[file] = btn.dataset.rate;
+        var d = entry(f) || {};
+        if (d.rate === btn.dataset.rate) delete data[f]; // re-click clears
+        else data[f] = { rate: btn.dataset.rate, note: d.note || '' };
         save();
-        bars.forEach(function (b2) {
-          b2.querySelectorAll('button').forEach(function (b3) {
-            b3.classList.toggle('on', rates[b2.dataset.file] === b3.dataset.rate);
-          });
-        });
+        refreshCard(f);
         updateSummary();
         applyFilters();
+        if (data[f] && (data[f].rate === 'keep' || data[f].rate === 'meh')) {
+          var ta = bar.parentElement.querySelector('.whynote textarea');
+          if (ta) ta.focus();
+        }
       });
     });
   });
 
+  // note editing — save on every keystroke
+  document.addEventListener('input', function (ev) {
+    var ta = ev.target;
+    if (!ta.matches || !ta.matches('.whynote textarea')) return;
+    var wn = ta.closest('.whynote');
+    var f = wn && wn.dataset.file;
+    if (f && data[f]) { data[f].note = ta.value; save(); }
+  });
+
+  // keep typing in the textarea from triggering the card link
+  document.addEventListener('click', function (ev) {
+    if (ev.target && ev.target.matches && ev.target.matches('.whynote textarea')) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }, true);
+
   function counts() {
     var k = 0, m = 0, n = 0;
-    Object.keys(rates).forEach(function (f) {
-      if (rates[f] === 'keep') k++; else if (rates[f] === 'meh') m++; else if (rates[f] === 'no') n++;
+    Object.keys(data).forEach(function (f) {
+      var r = data[f] && data[f].rate;
+      if (r === 'keep') k++; else if (r === 'meh') m++; else if (r === 'no') n++;
     });
-    return { k: k, m: m, n: n, total: Object.keys(rates).length };
+    return { k: k, m: m, n: n, total: k + m + n };
   }
 
   function updateSummary() {
@@ -678,20 +889,59 @@
     document.querySelectorAll('a[href]').forEach(function (a) {
       var bar = a.querySelector('.ratebar');
       if (!bar) return;
-      var file = bar.dataset.file;
-      var hide = filtering && rates[file] !== 'keep';
-      a.classList.toggle('hidden-weak', hide);
+      var d = entry(bar.dataset.file);
+      a.classList.toggle('hidden-weak', filtering && (!d || d.rate !== 'keep'));
     });
   }
 
   document.getElementById('show-keeps').addEventListener('click', function () { filtering = true; applyFilters(); });
   document.getElementById('show-all').addEventListener('click', function () { filtering = false; applyFilters(); });
   document.getElementById('clear-all').addEventListener('click', function () {
-    rates = {}; save();
-    bars.forEach(function (b2) {
-      b2.querySelectorAll('button').forEach(function (b3) { b3.classList.remove('on'); });
+    data = {}; save();
+    bars.forEach(function (bar) {
+      bar.querySelectorAll('button').forEach(function (btn) { btn.classList.remove('on'); });
+      var wn = bar.parentElement.querySelector('.whynote');
+      if (wn) { wn.classList.remove('show'); var ta = wn.querySelector('textarea'); if (ta) ta.value = ''; }
     });
     updateSummary(); applyFilters();
+  });
+
+  // ---- copy ratings for Claude ----
+  function copyText(text, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+    } else fallbackCopy(text, done);
+  }
+  function fallbackCopy(text, done) {
+    var t = document.createElement('textarea');
+    t.value = text;
+    document.body.appendChild(t);
+    t.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(t);
+  }
+
+  document.getElementById('copy-ratings').addEventListener('click', function () {
+    var lines = ['# My ratings of the 40 RE:tired proposals', ''];
+    Object.keys(titles).sort().forEach(function (f) {
+      var d = entry(f);
+      if (!d) return;
+      var num = f.split('-')[0];
+      var name = (titles[f] || '').trim();
+      var label = num + ' ' + name;
+      if (d.rate === 'keep') lines.push('**KEEP** — ' + label);
+      else if (d.rate === 'meh') lines.push('**MEH** — ' + label + ' (steal pieces)');
+      else lines.push('**NO** — ' + label);
+      if (d.note) lines.push('> ' + d.note);
+      lines.push('');
+    });
+    if (lines.length === 2) lines.push('(no ratings yet)');
+    copyText(lines.join('\n'), function () {
+      var b = document.getElementById('copy-ratings');
+      var old = b.textContent;
+      b.textContent = 'Copied!';
+      setTimeout(function () { b.textContent = old; }, 1500);
+    });
   });
 
   updateSummary();
