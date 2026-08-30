@@ -35,6 +35,7 @@ import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationPr
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
+import { reasoningTail } from '../lib/ai/reasoningPreview';
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
@@ -1394,15 +1395,15 @@ function useStickToBottom() {
 function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
   const [open, setOpen] = useState(true);
   const { elRef, pin } = useStickToBottom();
-  // The tail of the reasoning for the COLLAPSED header: the LAST non-empty
-  // line, trimmed to a reasonable width. Recomputed per render — reasoning
-  // streams in as text chunks, so this updates live and the collapsed header
-  // reads like the lines are scrolling by.
-  const lastLine = (() => {
-    const lines = reasoning.split('\n').map(l => l.trim()).filter(Boolean);
-    const tail = lines[lines.length - 1] ?? '';
-    return tail.length > 90 ? `${tail.slice(0, 90)}…` : tail;
-  })();
+  // The tail of the reasoning for the COLLAPSED header: the LAST ~90 chars of
+  // the stream (word-boundary clipped), NOT the last line — prose-style
+  // reasoners (OpenRouter z-ai/glm-*) emit whole paragraphs as one line, so a
+  // last-LINE preview pins the paragraph's opening words for the entire stream
+  // and the header reads frozen. The tail tracks the newest text either way:
+  // line-per-step models (DeepSeek) behave as before, prose models scroll live.
+  // Recomputed per render — reasoning streams in as text chunks, so this
+  // updates live and the collapsed header reads like the lines are scrolling by.
+  const lastLine = reasoningTail(reasoning);
   // Header text: EXPANDED shows the static label only (the body carries the
   // content); COLLAPSED appends the live last line while streaming.
   const headerText = streaming
