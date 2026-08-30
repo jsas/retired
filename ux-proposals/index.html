@@ -645,7 +645,9 @@
     var file = bar.dataset.file;
     bar.querySelectorAll('button').forEach(function (btn) {
       if (rates[file]) btn.classList.toggle('on', rates[file] === btn.dataset.rate);
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault(); // buttons live inside the card's <a> — don't navigate
+        ev.stopPropagation();
         // click the active rating again to clear it
         if (rates[file] === btn.dataset.rate) delete rates[file];
         else rates[file] = btn.dataset.rate;
