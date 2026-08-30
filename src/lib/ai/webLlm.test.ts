@@ -12,6 +12,7 @@ import type { StreamEvent } from './providers';
 // is reset per test by clearing the provider's cached engine.
 let scriptedChunks: Array<Record<string, unknown>> = [];
 let interruptCalls = 0;
+let resetChatCalls = 0;
 let crashAfter: string | null = null; // when set, the stream throws after one chunk
 const cachedModels = new Set<string>(); // models the fake cache reports as present
 let deletedModels: string[] = [];
@@ -39,6 +40,7 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
         },
       },
       interruptGenerate: async () => { interruptCalls++; },
+      resetChat: async () => { resetChatCalls++; },
       unload: async () => {},
     }),
     hasModelInCache: async (id: string) => cachedModels.has(id),
@@ -388,6 +390,27 @@ describe('web-llm model cache management', () => {
     await deleteWebLlmModel('Other-Model-MLC');
     expect(deletedModels).toContain('Other-Model-MLC');
     expect(cachedModels.has('Other-Model-MLC')).toBe(false);
+  });
+
+  it('resets the engine conversation so a new chat starts from an empty KV cache', async () => {
+    // Regression for "new chat still sees the same context window as other
+    // chats": the engine keeps one conversation + KV cache across requests and
+    // reuses it whenever the next request matches its last conversation, so a
+    // fresh thread could silently inherit the previous chat's context. The
+    // page calls resetWebLlmChat on new/switch — verify it actually reaches
+    // the engine's resetChat (and is a safe no-op before any model loads).
+    const { resetWebLlmChat, streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    resetChatCalls = 0;
+    await resetWebLlmChat(); // no engine loaded: must not throw
+    expect(resetChatCalls).toBe(0);
+    // Load the engine, then reset — the engine's resetChat runs.
+    scriptedChunks = [{ choices: [{ delta: { content: 'hi' }, finish_reason: 'stop' }] }];
+    for await (const _ of streamWebLlm(conn, {
+      system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
+    })) { /* drain to load */ }
+    await resetWebLlmChat();
+    expect(resetChatCalls).toBe(1);
   });
 
   it('unloads the live engine before deleting its model', async () => {
