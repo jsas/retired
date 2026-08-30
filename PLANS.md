@@ -79,7 +79,7 @@ npx tsc --noEmit -p tsconfig.app.json --pretty false   # typecheck
 
 ---
 
-## [ ] PLAN E-07 · Pre-retirement registered transfer taxed from a $0 income floor
+## [x] PLAN E-07 · Pre-retirement registered transfer taxed from a $0 income floor
 **Maps to:** open issue **#25** · REVIEW.md **E-07** · Severity MEDIUM
 **File:** `src/lib/retirementEngine.ts`
 

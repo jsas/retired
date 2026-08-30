@@ -211,6 +211,65 @@ describe('transfer events (RRSP meltdown)', () => {
     expect(row.tfsaBalance).toBeCloseTo(tr!.net * 1.05, 0);
   });
 
+  it("pre-retirement meltdown stacks on the year's employment income (E-07 / #25)", () => {
+    // Regression: pre-retirement the transfer-tax base started at $0, so a
+    // registered meltdown for someone still drawing wages was taxed from the
+    // bottom brackets instead of on top of their salary. The same $50k draw
+    // must cost MORE tax when the year has employment income under it.
+    const job = (over: Partial<import('./retirementEngine').EmploymentIncome> = {}): import('./retirementEngine').EmploymentIncome => ({
+      id: 'j', label: 'salary', annualAmount: 80000, startAge: 55, endAge: 59,
+      destAccount: 'tfsa', topUpSpending: false, indexedToCpi: false, ...over,
+    });
+    const mk = (employment: import('./retirementEngine').EmploymentIncome[]) => calculateRetirement(baseInputs({
+      currentAge: 55, retirementAge: 60, maxAge: 61,
+      rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0, // isolate the transfer: no spending draws
+      employment,
+      events: [{
+        id: 'm', age: 55, label: 'm', amount: 50000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'rrsp' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), config);
+    const taxNo = yearAt(mk([]).yearlyBreakdown, 55).detail?.calc?.transfers?.[0]?.tax ?? 0;
+    const taxWithJob = yearAt(mk([job()]).yearlyBreakdown, 55).detail?.calc?.transfers?.[0]?.tax ?? 0;
+    expect(taxWithJob).toBeGreaterThan(taxNo);
+    // The salary alone occupies the low brackets, so the $50k draw on top is
+    // taxed at a materially higher rate, not just marginally more.
+    expect(taxWithJob).toBeGreaterThan(taxNo * 1.5);
+  });
+
+  it('pre-retirement pension income also floors the transfer tax (E-07)', () => {
+    // Same idea with a DB pension active before retirement (bridge/temporary
+    // pensions can start pre-65).
+    const r = calculateRetirement(baseInputs({
+      currentAge: 55, retirementAge: 60, maxAge: 61,
+      rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      pensions: [{ id: 'p', label: 'DB', annualAmount: 40000, startAge: 55, endAge: null, indexedToCpi: false }],
+      events: [{
+        id: 'm', age: 55, label: 'm', amount: 50000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'rrsp' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), config);
+    const tr = yearAt(r.yearlyBreakdown, 55).detail?.calc?.transfers?.[0];
+    expect(tr).toBeDefined();
+    // No-income baseline tax on $50k for comparison.
+    const noIncome = calculateRetirement(baseInputs({
+      currentAge: 55, retirementAge: 60, maxAge: 61,
+      rrspBalance: 200000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0,
+      events: [{
+        id: 'm', age: 55, label: 'm', amount: 50000, direction: 'out',
+        from: { kind: 'account', person: 'primary', account: 'rrsp' },
+        to: { kind: 'account', person: 'primary', account: 'tfsa' },
+      }],
+    }), config);
+    const taxNo = yearAt(noIncome.yearlyBreakdown, 55).detail?.calc?.transfers?.[0]?.tax ?? 0;
+    expect(tr!.tax).toBeGreaterThan(taxNo);
+  });
+
   it('a TFSA → taxable transfer is NOT taxed (after-tax money)', () => {
     const r = calculateRetirement(baseInputs({
       currentAge: 65, retirementAge: 65, maxAge: 66,
