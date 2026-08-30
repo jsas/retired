@@ -31,7 +31,7 @@ export function buildMachineGuide(webgpu: boolean): MachineGuide {
   // Recommend the smallest model that can still drive the tool protocol (read
   // the plan, propose edits). Recommending a non-tool-capable model would
   // strand the user in a "questions only" assistant — a worse first run than
-  // a slightly bigger download. (Smallest tool-capable = Ministral 3 3B.)
+  // a slightly bigger download. (Smallest tool-capable = Phi-4 Mini.)
   const recommended = byVram.find(m => m.toolCapable) ?? byVram[0];
 
   if (!webgpu) {

@@ -108,7 +108,7 @@ describe('curated web-llm model list', () => {
 describe('webllm as a provider in settings', () => {
   const local: AiConnection = {
     id: 'c', provider: 'webllm', label: 'local', apiKey: '',
-    model: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
+    model: 'Qwen3.5-4B-q4f16_1-MLC',
   };
 
   it('needs no key or base URL — just a model id', () => {
@@ -139,7 +139,7 @@ describe('buildPlanDigest (chat-only provider context)', () => {
 describe('streamWebLlm', () => {
   const conn: AiConnection = {
     id: 'c', provider: 'webllm', label: 'local', apiKey: '',
-    model: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
+    model: 'Qwen3.5-4B-q4f16_1-MLC',
   };
 
   const collect = async (signal?: AbortSignal): Promise<StreamEvent[]> => {
@@ -284,7 +284,7 @@ describe('streamWebLlm', () => {
     await unloadWebLlmEngine();
     loadAttempts = [];
     scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
-    // conn has NO contextSize → auto. Ministral's ceiling is 32768.
+    // conn has NO contextSize → auto. Qwen3.5 4B's ceiling is 32768.
     for await (const _ of streamWebLlm(conn, {
       system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
     })) void _;
@@ -458,7 +458,7 @@ describe('isTokenEcho (word-salad circuit breaker)', () => {
 describe('web-llm model cache management', () => {
   const conn: AiConnection = {
     id: 'c', provider: 'webllm', label: 'local', apiKey: '',
-    model: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
+    model: 'Qwen3.5-4B-q4f16_1-MLC',
   };
 
   it('reports whether a model is cached, and false on a cache error', async () => {

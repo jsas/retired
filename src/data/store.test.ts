@@ -32,6 +32,7 @@ describe('AppStore', () => {
       'Example - Early Couple',
       'Example - Single at 60',
       'Example - Semi-retirement',
+      'Example - RDSP Starting Out',
     ]);
     expect(state.activeScenarioId).toBe(state.scenarios[0].id);
     expect(state.config).toBeNull(); // no config until the app writes one

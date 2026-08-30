@@ -23,11 +23,12 @@ const byName = (name: string) => {
 };
 
 describe('exampleScenarios — data audit', () => {
-  it('ships exactly the three documented examples with unique ids', () => {
+  it('ships exactly the four documented examples with unique ids', () => {
     expect(examples.map(s => s.name)).toEqual([
       'Example - Early Couple',
       'Example - Single at 60',
       'Example - Semi-retirement',
+      'Example - RDSP Starting Out',
     ]);
     expect(new Set(examples.map(s => s.id)).size).toBe(examples.length);
   });
@@ -80,5 +81,30 @@ describe('exampleScenarios — data audit', () => {
     expect(s.inputs.spendingBands?.length).toBeGreaterThanOrEqual(2);
     // A partial OAS history (35 of 40 years) is part of the example's texture.
     expect(s.inputs.oasYearsInCanada).toBeLessThan(40);
+  });
+
+  it('RDSP Starting Out models a young DTC-eligible beneficiary building from zero', () => {
+    const s = byName('Example - RDSP Starting Out');
+    const rdsp = s.inputs.rdsp;
+    expect(rdsp?.enabled).toBe(true);
+    expect(rdsp?.dtcEligible).toBe(true);
+    expect(s.inputs.currentAge).toBeLessThan(30); // a young-starter example
+    // Starting balance of zero is the whole point: grants/bonds do the lifting.
+    expect(rdsp?.balance).toBe(0);
+    // $1,500/yr at $30k family income earns the full CDSG grant ($3,500/yr).
+    expect(rdsp?.contribution).toBe(1500);
+    expect(rdsp?.familyIncome).toBeLessThanOrEqual(DEFAULT_APP_CONFIG.rdsp.grantThreshold);
+
+    const r = calculateHousehold({ ...migrateInputs(s.inputs) }, DEFAULT_APP_CONFIG);
+    // The first accumulation year must show the grant landing alongside the
+    // contribution — otherwise the RDSP slot is dead and the example lies.
+    const firstYear = r.yearlyBreakdown[0];
+    expect(firstYear.detail?.rdsp?.contribution).toBe(1500);
+    expect(firstYear.detail?.rdsp?.grant).toBeGreaterThan(0);
+    // Bond phases in at low family income (phases out above bondThresholdLower).
+    expect(firstYear.detail?.rdsp?.bond).toBeGreaterThan(0);
+    // The RDSP actually accumulates over the 40-year runway.
+    const lastAccumYear = r.yearlyBreakdown.find(y => y.age === s.inputs.retirementAge - 1);
+    expect(lastAccumYear?.rdspBalance ?? 0).toBeGreaterThan(100000);
   });
 });
