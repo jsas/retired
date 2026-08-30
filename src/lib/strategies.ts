@@ -36,7 +36,7 @@ export interface StrategyResult {
 }
 
 export type StrategyCategory =
-  | 'cpp' | 'oas' | 'withdrawal_order' | 'reverse_mortgage' | 'work';
+  | 'cpp' | 'oas' | 'pension_timing' | 'withdrawal_order' | 'reverse_mortgage' | 'work';
 
 export interface StrategyFilter {
   /** Keep only variants in these lever families. */
@@ -125,6 +125,104 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
       categories: ['oas'],
     });
   }
+  // Employer/DB pension start ages (issue #40). Each pension's startAge is a
+  // deferral lever exactly like CPP/OAS: take it early and shrink portfolio
+  // draws now, or defer and bridge the gap from the portfolio for a (usually
+  // larger, often CPI-indexed) cheque later. DB income is GIS-clawback income,
+  // so the move also shifts lifetime GIS — the existing report columns already
+  // score it. We sweep ONE pension at a time (combos multiply fast), then add
+  // a small pairwise flagship: start the smaller pension early, defer the
+  // larger one. Applies to the primary's pensions AND the spouse's (whose list
+  // lives under `spouse.pensions`, patched via the whole spouse object).
+  const PENSION_AGES = [55, 60, 65, 70] as const;
+  const pensionLabel = (p: { label: string; annualAmount: number; indexedToCpi: boolean }) =>
+    `${p.label} ($${Math.round(p.annualAmount).toLocaleString()}/yr${p.indexedToCpi ? ', indexed' : ''})`;
+  // Collect every pension across both people, tagged with how to patch it back.
+  type PensionRef = {
+    who: 'primary' | 'spouse';
+    index: number;
+    pension: { label: string; annualAmount: number; startAge: number; indexedToCpi: boolean };
+    withStartAge: (age: number) => Partial<RetirementInputs>;
+  };
+  const pensionRefs: PensionRef[] = [];
+  (inputs.pensions ?? []).forEach((p, index) => {
+    pensionRefs.push({
+      who: 'primary', index, pension: p,
+      withStartAge: (age) => ({
+        pensions: (inputs.pensions ?? []).map((q, i) => (i === index ? { ...q, startAge: age } : q)),
+      }),
+    });
+  });
+  if (inputs.spouse?.enabled) {
+    const sp = inputs.spouse;
+    (sp.pensions ?? []).forEach((p, index) => {
+      pensionRefs.push({
+        who: 'spouse', index, pension: p,
+        withStartAge: (age) => ({
+          spouse: {
+            ...sp,
+            pensions: (sp.pensions ?? []).map((q, i) => (i === index ? { ...q, startAge: age } : q)),
+          },
+        }),
+      });
+    });
+  }
+
+  for (const ref of pensionRefs) {
+    const now = ref.pension.startAge;
+    const who = ref.who === 'spouse' ? "spouse's " : '';
+    for (const age of PENSION_AGES) {
+      if (age === now) continue;
+      const defer = age > now;
+      specs.push({
+        id: `pension-${ref.who}-${ref.index}-${age}`,
+        name: `${defer ? 'Defer' : 'Take'} ${who}${ref.pension.label} at ${age}`,
+        description: defer
+          ? `Defer ${pensionLabel(ref.pension)} from ${now} to ${age}; bridge the gap from the portfolio.`
+          : `Start ${pensionLabel(ref.pension)} early at ${age} (currently ${now}); smaller draws later.`,
+        patch: ref.withStartAge(age),
+        categories: ['pension_timing'],
+      });
+    }
+  }
+
+  // Pairwise flagship: with several pensions, the per-pension answer is often
+  // "take the small one early to bridge, defer the large one" — the defer-all-70
+  // analogue for employer pensions. Only when there are 2+ pensions with
+  // differing amounts (otherwise the singles already cover it).
+  if (pensionRefs.length >= 2) {
+    const byAmount = [...pensionRefs].sort((a, b) => a.pension.annualAmount - b.pension.annualAmount);
+    const small = byAmount[0];
+    const large = byAmount[byAmount.length - 1];
+    const early = small.pension.startAge > 60 ? 60 : 55; // pull the smaller one earlier than now
+    const defer = large.pension.startAge < 65 ? 65 : 70;  // push the larger one later than now
+    if (large.pension.annualAmount > small.pension.annualAmount) {
+      const patch: Partial<RetirementInputs> = {
+        ...small.withStartAge(early),
+        ...large.withStartAge(defer),
+      };
+      // If both pensions belong to the same person, merge their two list patches
+      // into one (spread of two `pensions`/`spouse` keys would clobber one).
+      if (small.who === large.who) {
+        const key = small.who === 'primary' ? 'pensions' : 'spouse';
+        const mergedList = (small.who === 'primary' ? inputs.pensions : inputs.spouse!.pensions) ?? [];
+        const next = mergedList.map((q, i) =>
+          i === small.index ? { ...q, startAge: early }
+            : i === large.index ? { ...q, startAge: defer }
+              : q);
+        if (key === 'pensions') patch.pensions = next;
+        else patch.spouse = { ...inputs.spouse!, pensions: next };
+      }
+      specs.push({
+        id: 'pension-pair-early-small-defer-large',
+        name: `Bridge with ${small.pension.label}, defer ${large.pension.label}`,
+        description: `Start the smaller ${small.pension.label} at ${early} to bridge, defer the larger ${large.pension.label} to ${defer} for a bigger indexed cheque.`,
+        patch,
+        categories: ['pension_timing'],
+      });
+    }
+  }
+
   const currentOrder = (inputs.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp']).join(',');
   for (const order of ORDERINGS) {
     if (order.join(',') === currentOrder) continue;
@@ -304,7 +402,7 @@ function applyFilter(specs: StrategySpec[], filter?: StrategyFilter): { specs: S
 
 export function runStrategies(inputs: RetirementInputs, config: AppConfig, filter?: StrategyFilter): StrategyReport {
   if (filter?.categories) {
-    const KNOWN: StrategyCategory[] = ['cpp', 'oas', 'withdrawal_order', 'reverse_mortgage', 'work'];
+    const KNOWN: StrategyCategory[] = ['cpp', 'oas', 'pension_timing', 'withdrawal_order', 'reverse_mortgage', 'work'];
     const unknown = filter.categories.filter(c => !KNOWN.includes(c));
     if (unknown.length) {
       throw new Error(`Unknown strategy categor${unknown.length > 1 ? 'ies' : 'y'}: ${unknown.join(', ')}. Known: ${KNOWN.join(', ')}.`);
