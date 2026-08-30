@@ -663,6 +663,59 @@ const SECTIONS: HelpSection[] = [
         )
       },
       {
+        term: 'Your data & backups — your responsibility',
+        body: (
+          <>
+            <P>
+              Your plans live only in this browser's local storage — there is no server-side copy,
+              no account, and no way for anyone to recover them for you. Clearing the browser's site
+              data, uninstalling the browser, switching devices, or a disk or profile failure can
+              permanently erase every scenario.
+            </P>
+            <P>
+              Keeping a backup is entirely your responsibility: use the Data page's <strong>Export</strong>{' '}
+              regularly and keep the file somewhere safe. The authors accept no liability for lost,
+              corrupted, or inaccessible data.
+            </P>
+          </>
+        )
+      },
+      {
+        term: 'AI output may be wrong',
+        body: (
+          <>
+            <P>
+              The Assistant chat and the Optimize tab's copy-a-prompt AI are powered by large language
+              models, which can <strong>misread numbers, miscalculate, and state false things
+              confidently</strong> — about your plan, about tax rules, about anything.
+            </P>
+            <P>
+              AI replies are general educational commentary, never personalized advice. Always check
+              any AI answer against the app's own computed tables (which are deterministic) before
+              relying on it — and when the two disagree, the tables are the ones to trust.
+            </P>
+          </>
+        )
+      },
+      {
+        term: 'No warranty — use at your own risk',
+        body: (
+          <>
+            <P>
+              This software is provided <strong>"as is"</strong>, free of charge, without warranty of any
+              kind — including any warranty of correctness, fitness for a particular purpose, or
+              continued availability. The authors are not liable for any loss or damage arising from
+              its use: financial decisions made on its output, data loss, errors or omissions, or
+              downtime of any hosted copy.
+            </P>
+            <P>
+              The tool may change or be discontinued at any time without notice. Using it means
+              accepting these terms in full — if you don't agree, don't use it.
+            </P>
+          </>
+        )
+      },
+      {
         term: 'Credits',
         body: (
           <>
