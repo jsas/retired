@@ -149,4 +149,40 @@ describe('AppDatabase', () => {
     expect(db.getKv('retirement_ai_chats')).toBeNull();
     db.close();
   });
+
+  it('salvageableContents reports config when a scenario-less store still has one', async () => {
+    // The truncated-backup shape: meta + kv survived, scenarios did not.
+    const db = await AppDatabase.open();
+    db.saveScenarios(scenarios());
+    db.saveConfig(DEFAULT_APP_CONFIG);
+    const bytes = db.exportBytes();
+    db.close();
+
+    const reopened = await AppDatabase.open(bytes);
+    reopened.saveScenarios([]); // scenarios wiped, config left behind
+    const salvage = reopened.salvageableContents();
+    expect(salvage?.kind).toBe('config');
+    if (salvage?.kind === 'config') expect(salvage.config).toEqual(DEFAULT_APP_CONFIG);
+    reopened.close();
+  });
+
+  it('salvageableContents reports ai-only when only AI payloads remain', async () => {
+    const db = await AppDatabase.open();
+    db.setKv('retirement_ai_chats', JSON.stringify({ threads: [], activeThreadId: null }));
+    const salvage = db.salvageableContents();
+    expect(salvage?.kind).toBe('ai-only');
+    db.close();
+  });
+
+  it('salvageableContents returns null for a full store and for a foreign database', async () => {
+    const full = await AppDatabase.open();
+    full.saveScenarios(scenarios());
+    full.saveConfig(DEFAULT_APP_CONFIG);
+    expect(full.salvageableContents()).toBeNull(); // toDoc handles full stores
+    full.close();
+
+    const foreign = await AppDatabase.open();
+    expect(foreign.salvageableContents()).toBeNull(); // fresh/empty: nothing of ours
+    foreign.close();
+  });
 });

@@ -1507,7 +1507,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
         </CollapsibleSection>
 
         {/* Reverse Mortgage */}
-        <CollapsibleSection id="rmortgage" icon={<Home size={14} />} title="Home Equity (Reverse Mtg / HELOC)" open={isOpen('rmortgage')} onToggle={toggleSection}>
+        <CollapsibleSection id="rmortgage" icon={<Home size={14} />} title="Home Equity" open={isOpen('rmortgage')} onToggle={toggleSection}>
           <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer mb-3">
             <input
               type="checkbox"

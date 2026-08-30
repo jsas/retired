@@ -35,6 +35,7 @@ import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationPr
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
+import { reasoningTail } from '../lib/ai/reasoningPreview';
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import { toolSpecs } from '../lib/ai/tools';
 import type { ToolContext } from '../lib/ai/tools';
@@ -50,6 +51,7 @@ import {
   loadChats, saveChats, newThread, titleFromFirstMessage,
   type ChatThread,
 } from '../lib/ai/chatStore';
+import { resetWebLlmChat } from '../lib/ai/webLlmProvider';
 import { Markdown } from './Markdown';
 
 interface AgentPageProps {
@@ -248,10 +250,20 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     chatState.threads.find(t => t.id === chatState.activeThreadId) ?? null;
 
   const setActiveThread = (id: string | null) =>
-    setChatState(prev => ({ ...prev, activeThreadId: id }));
+    setChatState(prev => {
+      // Switching threads must not carry the local engine's KV cache over:
+      // the engine reuses it when the next request happens to match its last
+      // conversation, so a different chat could inherit this one's context
+      // (the "new chat sees the same window" bug). Reset before the switch.
+      if (id !== prev.activeThreadId) void resetWebLlmChat();
+      return { ...prev, activeThreadId: id };
+    });
 
   const newChat = () => {
     const t = newThread(scenarioName, Date.now());
+    // A fresh thread starts from an EMPTY context — never the last chat's
+    // KV cache (see setActiveThread).
+    void resetWebLlmChat();
     setChatState(prev => ({ threads: [t, ...prev.threads], activeThreadId: t.id }));
   };
 
@@ -489,21 +501,16 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
 /** Model picker in the header: every configured connection's model, plus a
  *  "Load model…" escape hatch that opens the Connections page. Choosing an
  *  entry makes that connection (and its model) active. */
-function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
+export function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
   settings: AiSettings;
   activeId: string | null;
   onChoose: (id: string) => void;
   onLoadModel: () => void;
 }) {
   if (settings.connections.length === 0) {
-    return (
-      <button
-        onClick={onLoadModel}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700"
-      >
-        <Download size={13} /> Load a model
-      </button>
-    );
+    // No connection configured: the OfflineAssistant body renders the same
+    // "Load a model" CTA, so render nothing here to avoid a duplicate button.
+    return null;
   }
   return (
     <div className="flex items-center gap-1.5">
@@ -531,28 +538,49 @@ function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
 // One conversation (assistant-ui runtime around our agent loop)
 // ---------------------------------------------------------------------------
 
-/** Assemble the system prompt body for a turn, by tool mode. 'prompt' and
- *  'off' both embed the live plan digest (local models have no other way to
- *  see the numbers); 'off' just leaves out the tool catalog so a weak model
- *  isn't tempted to emit tool calls it can't form. 'native' relies on the
- *  provider's function-calling, so the digest arrives via get_scenario. */
+/** Assemble the system prompt body for a turn, by tool mode. 'prompt' adds
+ *  the fenced-JSON tool catalog; 'off' leaves it out so a weak model isn't
+ *  tempted to emit tool calls it can't form; 'native' relies on the provider's
+ *  function-calling. The live plan digest for chat-only modes is NOT here — it
+ *  rides as a pinned leading history message (see planContextMessage) so a
+ *  plan edit doesn't invalidate the engine's cached system prefix. */
 function buildSystemBody(
   toolMode: 'native' | 'prompt' | 'off',
   scenarioName: string,
   basePrompt: string | undefined,
   config: AppConfig,
-  inputs: RetirementInputs,
 ): string {
   if (toolMode === 'prompt') {
     return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
-      buildPromptToolInstructions(toolSpecs()) + '\n\n' +
-      buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) });
+      buildPromptToolInstructions(toolSpecs());
   }
   if (toolMode === 'off') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config }) + '\n\n' +
-      buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) });
+    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config });
   }
   return buildSystemPrompt(scenarioName, { basePrompt, config });
+}
+
+/** The live plan digest for chat-only local models ('prompt' and 'off'
+ *  modes), which have no tool to read the plan. It rides as the FIRST HISTORY
+ *  message — not inside the system prompt. The local engine keeps one
+ *  conversation across requests and reuses its KV cache when the request
+ *  matches what it last saw; a plan digest baked into the system text changes
+ *  with every approved edit, breaking that match and forcing a full re-prefill
+ *  of the whole conversation every turn (the window the user saw every chat
+ *  share). As a pinned leading history message it only invalidates the prefix
+ *  when the plan actually changes, and a NEW chat — whose digest is the same
+ *  but whose turns are empty — can never be mistaken for a continuation of a
+ *  longer one. */
+function planContextMessage(
+  toolMode: 'native' | 'prompt' | 'off',
+  inputs: RetirementInputs,
+  config: AppConfig,
+): ChatMessage | null {
+  if (toolMode === 'native') return null;
+  return {
+    role: 'user',
+    content: buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) }),
+  };
 }
 
 function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
@@ -648,13 +676,15 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
     const basePrompt = settings.systemPromptOverride;
-    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config, inputs);
+    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config);
     const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
+    const planContext = planContextMessage(toolMode, inputs, config);
     const history = toHistory(turns);
+    const full = planContext ? [planContext, ...history] : history;
     if (thread.contextSummary) {
-      return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...history]);
+      return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...full]);
     }
-    return estimateTokens(system, history);
+    return estimateTokens(system, full);
   }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config]);
 
   /**
@@ -704,7 +734,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     };
 
     const basePrompt = settings.systemPromptOverride;
-    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config, inputs);
+    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config);
     // The chat's standing instructions go last so they read as the user's own
     // voice; they can steer tone/focus but the base prompt's rules come first.
     const system = thread.systemNote?.trim()
@@ -723,13 +753,20 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     // message instead ("I accepted/declined the change you proposed…").
     const historyTurns = resuming ? priorTurns.filter(t => t.id !== resumeTurnId) : priorTurns;
     const contextSize = effectiveContextLimit(connection);
+    const planContext = planContextMessage(toolMode, inputs, config);
     const fullHistory = toHistory(historyTurns);
+    // The plan digest message must never be a compaction victim: a tool-less
+    // local model that loses it can no longer see the plan at all. Plan the
+    // fold on the conversation turns alone, then pin the digest back in front.
+    // The planner treats `system` as fixed overhead, so pass the digest's
+    // estimated cost in there — the kept tail is then sized for digest + turns.
     const compaction = planCompaction({
-      system,
+      system: system + (planContext ? `\n\n${planContext.content}` : ''),
       messages: fullHistory,
       contextSize,
       priorSummary: thread.contextSummary ?? '',
     });
+    if (planContext) compaction.messages.unshift(planContext);
     const history = compaction.messages;
     if (compaction.compacted) {
       patchAssistant(t => { t.tools.push({ id: `compact-${Date.now().toString(36)}`, name: 'context compacted', state: 'done', summary: 'Older messages were summarized to fit the context window.' }); });
@@ -1428,15 +1465,15 @@ function useStickToBottom() {
 function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
   const [open, setOpen] = useState(true);
   const { elRef, pin } = useStickToBottom();
-  // The tail of the reasoning for the COLLAPSED header: the LAST non-empty
-  // line, trimmed to a reasonable width. Recomputed per render — reasoning
-  // streams in as text chunks, so this updates live and the collapsed header
-  // reads like the lines are scrolling by.
-  const lastLine = (() => {
-    const lines = reasoning.split('\n').map(l => l.trim()).filter(Boolean);
-    const tail = lines[lines.length - 1] ?? '';
-    return tail.length > 90 ? `${tail.slice(0, 90)}…` : tail;
-  })();
+  // The tail of the reasoning for the COLLAPSED header: the LAST ~90 chars of
+  // the stream (word-boundary clipped), NOT the last line — prose-style
+  // reasoners (OpenRouter z-ai/glm-*) emit whole paragraphs as one line, so a
+  // last-LINE preview pins the paragraph's opening words for the entire stream
+  // and the header reads frozen. The tail tracks the newest text either way:
+  // line-per-step models (DeepSeek) behave as before, prose models scroll live.
+  // Recomputed per render — reasoning streams in as text chunks, so this
+  // updates live and the collapsed header reads like the lines are scrolling by.
+  const lastLine = reasoningTail(reasoning);
   // Header text: EXPANDED shows the static label only (the body carries the
   // content); COLLAPSED appends the live last line while streaming.
   const headerText = streaming

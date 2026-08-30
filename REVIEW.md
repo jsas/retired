@@ -625,12 +625,12 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 
 ---
 
-## Still outstanding (as of 2026-08-30, post PR #44–#49)
+## Still outstanding (as of 2026-08-30, post PR #56)
 
 Everything not struck through above. These are the items that still need doing.
-**Fixed & merged:** E-01, E-03, E-05, T-01, U-07, U-08, U-09, U-10, U-14, A-02 (and
-X-01 housekeeping). **Fixed on branches (PR pending):** E-07 (#25), E-08 (#27).
-**Closed issues:** #28, #33.
+**Fixed & merged:** E-01, E-03, E-05, T-01, U-07, U-08, U-09, U-10, U-14, A-02, E-07
+(#25 via PR #50), E-08 (#27 via PR #56) and X-01 housekeeping.
+**Closed issues:** #25, #27, #28, #33.
 
 ### Engine — money correctness (highest value)
 - **E-06 · MEDIUM · == #26** — Couple GIS counts the person's own discretionary draws
@@ -691,14 +691,17 @@ X-01 housekeeping). **Fixed on branches (PR pending):** E-07 (#25), E-08 (#27).
   issue #25 auto-closed).
 - **2026-08-30** — **E-08** (#27) fixed on `fix/rehome-pastdated-transfer`: re-homed
   transfers clamp to the receiver's current age instead of being silently dropped.
-  739/739 tests, `tsc` clean; golden master unaffected.
+  739/739 tests, `tsc` clean; golden master unaffected. **Merged same day** (PR #56,
+  issue #27 auto-closed). Also merged by the user independently: PRs #54/#55 (agent
+  string coercion, #52), #57 (eqsolver CI timeouts), #58 (scenario revisions, #41),
+  plus ancestry merges of stale feature/worktree branches.
 
 ---
 
 ## Where to start (suggested priority — remaining)
 
 1. **Engine money-correctness MEDIUMs** — E-06 (#26 GIS) is the last one.
-   (E-07 / #25 and E-08 / #27 are fixed on branches — PRs pending.)
+   (E-07 / #25 and E-08 / #27 are merged.)
 2. **Data-durability MEDIUMs** — D-01 (#18 OPFS rollback), U-01 (stale export), U-02
    (no durability feedback). Real user-facing data risk.
 3. **S-01** — strategy scoring vs `merged`.

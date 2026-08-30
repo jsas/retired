@@ -396,6 +396,13 @@ export interface RetirementResults {
   // the partner's run so the transfer is conserved across the household.
   // Undefined for a standalone single-person run with no cross transfers.
   crossDeposits?: Array<{ age: number; account: 'rrsp' | 'tfsa' | 'taxable' | 'cash'; amount: number; label: string }>;
+  // This person's non-OAS draw income per their own age (registered draws +
+  // realized capital gains + RDSP taxable portion) — the exact base their GIS
+  // reduction used. The household pass hands it to the partner's run so couple
+  // GIS is assessed on the FULL combined income (issue #26). A plain record
+  // (age → dollars) so results stay JSON/clone-safe. Undefined when a caller
+  // ran the person standalone without a spouse context.
+  householdDraws?: Record<number, number>;
 }
 
 const MAX_TAX_ITERATIONS = 100;
@@ -492,10 +499,9 @@ export function calculatePerson(
     // Couple GIS context, set when this person has an enabled spouse: CRA
     // assesses each spouse's GIS on COMBINED non-OAS income and pays the
     // (lower) couple rate when both receive OAS, the single rate when only
-    // one does. The engine knows each spouse's CPP/pension income up front,
-    // so the combined base uses those; each spouse's discretionary registered
-    // draws only count toward their own reduction (the partner's land next
-    // year via Service Canada's quarterly recalc).
+    // one does. The engine knows each spouse's CPP/pension income up front;
+    // each partner's own registered draws are fed back by the household pass
+    // (see partnerDrawsAt) so the combined base counts BOTH sides.
     spouseContext?: {
       cppStartAge: number | null;
       cppMonthlyAmount: number;
@@ -504,6 +510,13 @@ export function calculatePerson(
       currentAge: number;
       pensions?: Pension[];
       employment?: EmploymentIncome[];
+      // The partner's non-OAS draw income per THEIR age (registered draws +
+      // realized capital gains + RDSP taxable portion) — the same "own" base
+      // this run feeds into its own GIS. Absent on the first household pass
+      // (and in standalone runs): those draws depend on the partner's GIS,
+      // which depends on this person's draws — a fixed point the household
+      // pass iterates to convergence (issue #26).
+      partnerDrawsAt?: (age: number) => number;
     };
     // After-tax amounts the PARTNER's transfer events sent into THIS person's
     // accounts (inter-spousal transfers), keyed by THIS person's age. Injected
@@ -627,8 +640,8 @@ export function calculatePerson(
   // (keyed by this person's age). Same shapes as the primary's own math —
   // CPP adjusted for start age and CPI, pensions active in their age window.
   const spouseCtx = options?.spouseContext;
-  const spouseFixedIncomeAt = (age: number): { fixed: number; hasOas: boolean } => {
-    if (!spouseCtx) return { fixed: 0, hasOas: false };
+  const spouseFixedIncomeAt = (age: number): { fixed: number; hasOas: boolean; partnerDraws: number } => {
+    if (!spouseCtx) return { fixed: 0, hasOas: false, partnerDraws: 0 };
     const spouseAge = age - (currentAge - spouseCtx.currentAge);
     let fixed = 0;
     if (spouseCtx.cppStartAge != null && spouseAge >= spouseCtx.cppStartAge) {
@@ -649,7 +662,11 @@ export function calculatePerson(
     const hasOas = spouseCtx.oasStartAge != null
       && spouseAge >= spouseCtx.oasStartAge
       && oasAnnualGross(spouseAge, spouseCtx.oasStartAge, spouseCtx.oasYearsInCanada, configAt(age)) > 0;
-    return { fixed, hasOas };
+    // The partner's discretionary draws, looked up on THEIR age axis (GIS is
+    // assessed on the calendar year's combined income; age − the current-age
+    // gap is the same translation `fixed` above already uses).
+    const partnerDraws = spouseCtx.partnerDrawsAt?.(spouseAge) ?? 0;
+    return { fixed, hasOas, partnerDraws };
   };
 
   // Per-age return override (Monte Carlo); falls back to the constant rate.
@@ -665,6 +682,9 @@ export function calculatePerson(
   let taxable = taxableBalance;
   let cashCushion = cashCushionBalance;
   let cumulativeTax = 0;
+  // Per-age non-OAS draw income (the GIS "own" base), captured in the
+  // decumulation loop for the household pass's couple-GIS iteration (#26).
+  const householdDraws: Record<number, number> = {};
 
   // Reverse mortgage: the home appreciates while the loan compounds with
   // interest + draws. Proceeds are tax-free, so draws land in the cash cushion
@@ -1326,14 +1346,17 @@ export function calculatePerson(
     // quarterly recalc — modelling it in-year keeps the projection honest.)
     // Couple rules apply when a spouse context is present: entitlement is
     // assessed on combined non-OAS income, at the couple rate when both
-    // spouses receive OAS, the single rate when only this person does.
+    // spouses receive OAS, the single rate when only this person does. The
+    // partner's own discretionary draws arrive via spouseContext.partnerDrawsAt
+    // (the household pass iterates to the fixed point — issue #26); standalone
+    // runs without it keep the documented single-sided approximation.
     const gisAt = () => {
       if (oasGross <= 0) return 0;
       if (spouseCtx) {
         const sp = spouseFixedIncomeAt(age);
         return gisAnnualCouple(
           registeredGross + capitalGains + rdspTaxable,
-          cppGross + pensionGross + employmentGross + sp.fixed,
+          cppGross + pensionGross + employmentGross + sp.fixed + sp.partnerDraws,
           sp.hasOas,
           yearConfig
         );
@@ -1549,10 +1572,15 @@ export function calculatePerson(
 
     // Pension-splitting inputs: eligible income is RRIF/RRSP registered draws
     // (which only exist from the RRIF-conversion age onward, so age ≥ 65 in
-    // practice) plus DB/bridge pensions. CPP and OAS are NOT eligible. Captured
+    // practice) plus DB pensions. CPP and OAS are NOT eligible. Captured
     // pre-split; the household pass applies the split to the reported tax.
     const splitEligibleIncome = registeredGross + pensionGross;
     const unsplitNetIncome = totalNetIncome;
+
+    // The GIS base this run actually used — captured per age so the household
+    // pass can feed it to the partner's run and iterate couple GIS to the
+    // fixed point (issue #26). Mirrors the "own" side of gisAt() exactly.
+    householdDraws[age] = registeredGross + capitalGains + rdspTaxable;
 
     yearlyBreakdown.push({
       age,
@@ -1635,6 +1663,7 @@ export function calculatePerson(
     averageReturn: investmentReturn,
     retirementAge,
     ...(crossDeposits.length > 0 ? { crossDeposits } : {}),
+    householdDraws,
   };
 
   return primary;
@@ -1748,52 +1777,68 @@ export function calculateHousehold(
       toCurrentAge: number,
     ) => deposits.map(d => ({ ...d, age: d.age - (fromCurrentAge - toCurrentAge) }));
 
-    // Run the spouse, injecting any primary→spouse transfer landings (after-tax).
-    const pToS = translate(primary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
+    // The two runs are coupled in BOTH directions:
+    //  - inter-spousal transfers: one person's crossDeposits are the other's
+    //    inboundDeposits, and those deposits change what the receiver draws;
+    //  - couple GIS (#26): each person's GIS depends on the partner's
+    //    discretionary draws, which depend on the partner's GIS. Whoever runs
+    //    first sees stale (zero) partner draws.
+    // Neither coupling has an analytic solution, so iterate the whole pair
+    // until both settle. Convergence is measured on the outputs (max per-year
+    // |ΔGIS| < $1 and a byte-stable cross-deposit schedule); the pass cap
+    // bounds a pathological oscillation. When GIS is zero everywhere in BOTH
+    // runs (adding partner draws can only reduce GIS further — income grows,
+    // entitlement shrinks) and transfers flow one way, the initial two runs
+    // are already the fixed point and the loop is skipped (Monte Carlo cost).
+    let finalPrimary = primary;
     let spouseResults = calculatePerson(spRun, shared, config, {
       ...options,
       personRef: 'spouse',
-      spouseContext: {
-        cppStartAge: primaryPerson.cppStartAge,
-        cppMonthlyAmount: primaryPerson.cppMonthlyAmount,
-        oasStartAge: primaryPerson.oasStartAge,
-        oasYearsInCanada: primaryPerson.oasYearsInCanada,
-        currentAge: primaryPerson.currentAge,
-        pensions: primaryPerson.pensions,
-        employment: primaryPerson.employment,
-      },
-      ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
+      ...(primaryCtx ? { spouseContext: { ...primaryCtx } } : {}),
+      ...(translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge).length > 0
+        ? { inboundDeposits: translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge) }
+        : {}),
     });
 
-    // If the spouse ALSO sent transfers back to the primary, re-run the primary
-    // with those injected (one extra pass; transfers are typically defined on
-    // one person's events, so this converges without ping-pong).
-    const sToP = translate(spouseResults.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge);
-    let finalPrimary = primary;
-    if (sToP.length > 0) {
-      finalPrimary = calculatePerson(primaryRun, shared, config, {
-        ...options,
-        personRef: 'primary',
-        ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
-        inboundDeposits: sToP,
-      });
-      // The primary's re-run may have changed its own cross-deposits to the
-      // spouse; re-inject and re-run the spouse once more for consistency.
-      const pToS2 = translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
-      spouseResults = calculatePerson(spRun, shared, config, {
-        ...options,
-        personRef: 'spouse',
-        spouseContext: {
-          cppStartAge: primaryPerson.cppStartAge,
-          cppMonthlyAmount: primaryPerson.cppMonthlyAmount,
-          oasStartAge: primaryPerson.oasStartAge,
-          oasYearsInCanada: primaryPerson.oasYearsInCanada,
-          currentAge: primaryPerson.currentAge,
-          pensions: primaryPerson.pensions,
-          employment: primaryPerson.employment,
-        },
-        ...(pToS2.length > 0 ? { inboundDeposits: pToS2 } : {}),
-      });
+    const gisAnywhere = (r: RetirementResults) => r.yearlyBreakdown.some(y => y.gisIncome > 0);
+    const twoWayTransfers = (spouseResults.crossDeposits?.length ?? 0) > 0;
+    if (gisAnywhere(finalPrimary) || gisAnywhere(spouseResults) || twoWayTransfers) {
+      for (let pass = 0; pass < 5; pass++) {
+        const prevGisP = finalPrimary.yearlyBreakdown.map(y => y.gisIncome);
+        const prevGisS = spouseResults.yearlyBreakdown.map(y => y.gisIncome);
+
+        // Feed each side's latest outputs back into the other. partnerDrawsAt
+        // receives the partner's own age (spouseFixedIncomeAt already did the
+        // age-axis translation), so the lookup is a direct hit.
+        const pToS = translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge);
+        const sToP = translate(spouseResults.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge);
+
+        finalPrimary = calculatePerson(primaryRun, shared, config, {
+          ...options,
+          personRef: 'primary',
+          ...(primaryCtx
+            ? { spouseContext: { ...primaryCtx, partnerDrawsAt: (a: number) => spouseResults.householdDraws?.[a] ?? 0 } }
+            : {}),
+          ...(sToP.length > 0 ? { inboundDeposits: sToP } : {}),
+        });
+        spouseResults = calculatePerson(spRun, shared, config, {
+          ...options,
+          personRef: 'spouse',
+          spouseContext: { ...primaryCtx!, partnerDrawsAt: (a: number) => finalPrimary.householdDraws?.[a] ?? 0 },
+          ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
+        });
+
+        // Converged when neither side's GIS moved more than $1 in any year and
+        // each side's cross-deposit schedule is unchanged by the re-run it just
+        // received (both directions stable ⇒ household conservation holds).
+        const gisSettled =
+          finalPrimary.yearlyBreakdown.every((y, i) => Math.abs(y.gisIncome - (prevGisP[i] ?? 0)) < 1) &&
+          spouseResults.yearlyBreakdown.every((y, i) => Math.abs(y.gisIncome - (prevGisS[i] ?? 0)) < 1);
+        const depositsSettled =
+          JSON.stringify(translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge)) === JSON.stringify(pToS) &&
+          JSON.stringify(translate(spouseResults.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge)) === JSON.stringify(sToP);
+        if (gisSettled && depositsSettled) break;
+      }
     }
 
     finalPrimary.spouse = spouseResults;
