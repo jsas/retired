@@ -77,23 +77,6 @@ have to hold them.
   onto a worker with the synchronous OPFS VFS for incremental (not
   whole-file) writes. The app is single-tab by design (see Non-goals).
 
-## Shipped since this list was last pruned
-
-So the parking lot stays honest — these were here and are done:
-
-- **Embedded AI agent** — in-app chat with bring-your-own-key providers and
-  in-browser models via `@mlc-ai/web-llm`, keys stored locally, plus the
-  scenario-onboarding interview (#29, `src/lib/ai/`).
-- **Local agent API with tool calling** — the Zod-typed tool surface
-  (`getScenario`, `runProjection`, `propose_*`, …) with checkpoints and
-  confirm-before-apply (#29).
-- **RDSP account** — grants/bonds, contribution-basis tracking, and the
-  AHA-clawback / carry-forward caveats documented in Help (#38).
-- **Strategy Explorer: employer/DB pension start-age optimization** (#40,
-  #99–100).
-- **kv-table UI prefs** — print options, panel collapse, and the rest now
-  live in the store's `kv` table (#20).
-
 ## Non-goals
 
 Worth stating explicitly so issues don't pile up:
