@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot } from 'lucide-react';
+import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot, AlertTriangle, X } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
@@ -202,6 +202,17 @@ function App() {
     const wrote = store?.persist({ scenarios, activeScenarioId }) ?? false;
     if (wrote) setRevisionNonce(n => n + 1);
   }, [store, scenarios, activeScenarioId]);
+
+  // Durability feedback (issue U-02): the persist writes are fire-and-forget,
+  // so a failed OPFS/localStorage write was previously only a console.warn —
+  // the user kept editing believing their plan was safe. Subscribe to the
+  // store's save-outcome channel: a failure shows a dismissible banner, the
+  // next durable write (any later persist) clears it.
+  const [saveError, setSaveError] = useState(false);
+  useEffect(() => {
+    if (!store) return;
+    return store.onSaveOutcome((err) => setSaveError(err != null));
+  }, [store]);
 
   // Persist engine config on every change.
   useEffect(() => {
@@ -709,6 +720,30 @@ function App() {
         onOpenDonate={() => setView('donate')}
         onOpenHelp={() => setView('help')}
       />
+
+      {/* Durability warning (issue U-02): shown when a persist write failed
+          (OPFS unavailable/full, or localStorage full with no OPFS). Clears
+          itself on the next durable write; dismissible for the session. The
+          fix is usually "free up browser storage" — the plan still lives in
+          this tab's memory, so exporting a backup keeps it. */}
+      {saveError && (
+        <div className="no-print flex items-center gap-2 bg-amber-50 border-b border-amber-300 px-3 md:px-6 py-2 text-xs text-amber-900" role="alert">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span className="flex-1">
+            <strong>Changes may not be saved.</strong> Browser storage is unavailable or full —
+            your plan is still in this tab, but it won&apos;t survive closing it.
+            Free up site storage, or use Data → Export full backup to keep a copy on disk.
+          </span>
+          <button
+            onClick={() => setSaveError(false)}
+            className="shrink-0 rounded p-0.5 hover:bg-amber-100"
+            title="Dismiss (the warning returns if saving still fails)"
+            aria-label="Dismiss storage warning"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="relative flex flex-1 flex-col md:flex-row md:overflow-hidden">
         {/* Mobile backdrop for the drawer sidebar */}

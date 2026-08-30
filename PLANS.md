@@ -520,7 +520,7 @@ isn't currently exposed, add a read-only accessor on the store (e.g.
 
 ---
 
-## [ ] PLAN U-02 · Persist effects are fire-and-forget (no durability feedback)
+## [x] PLAN U-02 · Persist effects are fire-and-forget (no durability feedback)
 **Maps to:** REVIEW.md **U-02** · Severity MEDIUM
 **File:** `src/App.tsx` (+ possibly `src/data/store.ts`)
 

@@ -98,6 +98,16 @@ export class AppStore {
     }
   }
 
+  /** Subscribe to durable-save outcomes: listener(err) when a mirror write
+   *  fails (OPFS down, or localStorage full when it's the only mirror),
+   *  listener(null) when a durable write lands. persist() is synchronous and
+   *  the OPFS write resolves later, so the caller can't learn the outcome from
+   *  the return value — the UI uses this to show and clear a "changes may not
+   *  be saved" banner (issue U-02). Returns an unsubscribe function. */
+  onSaveOutcome(listener: (err: unknown | null) => void): () => void {
+    return this.db.onSaveOutcome(listener);
+  }
+
   persist(state: { scenarios?: Scenario[]; activeScenarioId?: string; config?: AppConfig; skipRevisions?: boolean }): boolean {
     let wroteRevisions = false;
     if (state.scenarios) {

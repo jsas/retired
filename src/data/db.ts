@@ -98,9 +98,28 @@ const MIGRATIONS: Array<(db: Database) => void> = [
 export class AppDatabase {
   private db: Database;
   private backend: OpfsBackend | null;
+  /** Persist-outcome observers — called on durable-write failure (err set) and
+   *  on durable-write success (err null). The UI subscribes via AppStore to
+   *  show/clear a "changes may not be saved" banner (issue U-02); before this,
+   *  a failed write was only a console.warn. */
+  private saveListeners = new Set<(err: unknown | null) => void>();
   private constructor(db: Database, backend: OpfsBackend | null) {
     this.db = db;
     this.backend = backend;
+  }
+
+  /** Subscribe to persist outcomes: listener(err) on durable-write failure,
+   *  listener(null) once a durable write lands again. Returns an unsubscribe
+   *  function. */
+  onSaveOutcome(listener: (err: unknown | null) => void): () => void {
+    this.saveListeners.add(listener);
+    return () => this.saveListeners.delete(listener);
+  }
+
+  private reportSaveOutcome(err: unknown | null): void {
+    for (const listener of this.saveListeners) {
+      try { listener(err); } catch { /* a broken observer must not break save */ }
+    }
   }
 
   /** Open the store. Byte source priority: an explicit `seed` (tests,
@@ -170,18 +189,28 @@ export class AppDatabase {
           try {
             localStorage.setItem(STORAGE_KEY, bytesToBase64(bytes));
           } catch (err) {
+            // OPFS already has the bytes, so this session's data is durable —
+            // the loss is only the compatibility mirror. Still warn (the
+            // user's NEXT session may read the stale localStorage copy on a
+            // browser without OPFS), but don't alarm: not a save failure.
             console.warn('Failed to persist the database to localStorage:', err);
           }
+          this.reportSaveOutcome(null); // durable write landed
         })
-        .catch(err =>
-          console.warn('Failed to persist the database to OPFS:', err));
+        .catch(err => {
+          console.warn('Failed to persist the database to OPFS:', err);
+          this.reportSaveOutcome(err); // nothing durable this save — tell the UI
+        });
       return;
     }
-    // No OPFS backend: localStorage is the only mirror.
+    // No OPFS backend: localStorage is the only mirror — its failure IS the
+    // save failing.
     try {
       localStorage.setItem(STORAGE_KEY, bytesToBase64(bytes));
+      this.reportSaveOutcome(null);
     } catch (err) {
       console.warn('Failed to persist the database to localStorage:', err);
+      this.reportSaveOutcome(err);
     }
   }
 
