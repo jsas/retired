@@ -14,9 +14,12 @@ let scriptedChunks: Array<Record<string, unknown>> = [];
 let interruptCalls = 0;
 let resetChatCalls = 0;
 let crashAfter: string | null = null; // when set, the stream throws after one chunk
+let crashWith: string | null = null; // the error message to throw (defaults to a mapAsync dump)
 const cachedModels = new Set<string>(); // models the fake cache reports as present
 let deletedModels: string[] = [];
 let lastRequest: Record<string, unknown> | null = null; // the completion request, captured
+let loadAttempts: Array<{ contextWindow: number | undefined }> = []; // CreateMLCEngine calls
+let oomFirstLoads = 0; // how many initial loads should throw OOM before succeeding
 
 vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
   // Keep the real prebuilt catalog (so the curated-list test validates against
@@ -24,7 +27,13 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@mlc-ai/web-llm')>();
   return {
     ...actual,
-    CreateMLCEngine: async () => ({
+    CreateMLCEngine: async (_modelId: string, _init?: unknown, chatOpts?: { context_window_size?: number }) => {
+      loadAttempts.push({ contextWindow: chatOpts?.context_window_size });
+      if (oomFirstLoads > 0) {
+        oomFirstLoads--;
+        throw new Error('WebGPU device was lost while loading the model (OOM)');
+      }
+      return {
       chat: {
         completions: {
           create: async (req: Record<string, unknown>) => {
@@ -32,7 +41,7 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
             return (async function* () {
               if (crashAfter) {
                 yield { choices: [{ delta: { content: crashAfter } }] };
-                throw new Error("Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
+                throw new Error(crashWith ?? "Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
               }
               yield* scriptedChunks;
             })();
@@ -42,7 +51,8 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
       interruptGenerate: async () => { interruptCalls++; },
       resetChat: async () => { resetChatCalls++; },
       unload: async () => {},
-    }),
+      };
+    },
     hasModelInCache: async (id: string) => cachedModels.has(id),
     deleteModelAllInfoInCache: async (id: string) => { deletedModels.push(id); cachedModels.delete(id); },
   };
@@ -233,6 +243,62 @@ describe('streamWebLlm', () => {
       })) { /* drain */ }
     }).rejects.toThrow(/graphics memory/);
     crashAfter = null;
+  });
+
+  it('translates a context-window overflow into actionable guidance', async () => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    crashAfter = 'partial…';
+    crashWith = 'Prompt tokens exceed context window size: number of prompt tokens: 4818; context window size: 4096';
+    await expect(async () => {
+      for await (const _ of streamWebLlm(conn, {
+        system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
+      })) { /* drain */ }
+    }).rejects.toThrow(/too large for this local model's context window/);
+    crashAfter = null;
+    crashWith = null;
+  });
+
+  it('auto mode (no contextSize) loads at the model ceiling and uses it for the request', async () => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    loadAttempts = [];
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    // conn has NO contextSize → auto. Ministral's ceiling is 32768.
+    for await (const _ of streamWebLlm(conn, {
+      system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
+    })) void _;
+    expect(loadAttempts[0]?.contextWindow).toBe(32768);
+    expect(lastRequest?.context_window_size).toBe(32768);
+  });
+
+  it('auto mode halves the window and retries when the GPU runs out of memory', async () => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    loadAttempts = [];
+    oomFirstLoads = 2; // first two loads OOM, the third (quarter window) succeeds
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    for await (const _ of streamWebLlm(conn, {
+      system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
+    })) void _;
+    // 32768 → 16384 (OOM) → 8192 (loads).
+    expect(loadAttempts.map(a => a.contextWindow)).toEqual([32768, 16384, 8192]);
+    // And the request uses the window that actually loaded.
+    expect(lastRequest?.context_window_size).toBe(8192);
+    oomFirstLoads = 0;
+  });
+
+  it('an explicit contextSize is honoured and clamped to the model ceiling', async () => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    loadAttempts = [];
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    const manual: AiConnection = { ...conn, contextSize: 8192 };
+    for await (const _ of streamWebLlm(manual, {
+      system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
+    })) void _;
+    expect(loadAttempts[0]?.contextWindow).toBe(8192);
+    expect(lastRequest?.context_window_size).toBe(8192);
   });
 
   it('splits <think>…</think> reasoning out of the visible stream', async () => {

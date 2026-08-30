@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  CHARS_PER_TOKEN, defaultContextSize, estimateTokens, planCompaction, summaryNote,
+  CHARS_PER_TOKEN, COMPACT_AT, defaultContextSize, estimateTokens, planCompaction, summaryNote,
 } from './context';
 import type { ChatMessage } from './providers';
 
@@ -75,6 +75,37 @@ describe('planCompaction', () => {
     // is preserved — the model must not lose the immediate thread.
     expect(plan.messages.at(-1)).toEqual(assistant('answer'));
     expect(plan.messages.at(-2)).toEqual(user('now'));
+  });
+
+  it('shrinks the verbatim tail below keepRecent on a window too small to hold it', () => {
+    // A small local window: system + the full recent tail can't fit, so the
+    // floor drops below keepRecent until something fits. This is the fresh-chat
+    // local-model case where the plan digest leaves little room for history.
+    const long = 'lorem ipsum dolor sit amet '.repeat(20); // ~540 chars each
+    const messages = [
+      user(long), assistant(long), user(long), assistant(long), user(long), assistant(long),
+    ];
+    // Window holds the system + digest-note overhead (~180 tokens) plus two
+    // ~137-token messages (~454 total), but not three (~591) — so the floor
+    // drops below keepRecent until the request fits.
+    const contextSize = 570; // budget = 456 tokens
+    const plan = planCompaction({ system: 'sys', messages, contextSize, keepRecent: 6 });
+    expect(plan.compacted).toBe(true);
+    // Fewer than keepRecent messages are kept, and the newest survives.
+    const keptVerbatim = plan.messages.slice(1); // after the digest note
+    expect(keptVerbatim.length).toBeLessThan(6);
+    expect(keptVerbatim.at(-1)).toEqual(assistant(long));
+    // And the result genuinely fits the budget.
+    expect(estimateTokens('sys', plan.messages)).toBeLessThanOrEqual(contextSize * COMPACT_AT);
+  });
+
+  it('keeps the single newest message even when nothing else fits', () => {
+    const long = 'y'.repeat(2000);
+    const messages = [user(long), assistant(long), user(long), assistant(long)];
+    const plan = planCompaction({ system: 's', messages, contextSize: 100, keepRecent: 6 });
+    // Only the newest message can be kept verbatim.
+    expect(plan.messages.at(-1)).toEqual(assistant(long));
+    expect(plan.messages.length).toBe(2); // digest note + the one kept message
   });
 
   it('threads a prior digest into the note and the excerpt', () => {

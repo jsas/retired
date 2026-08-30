@@ -121,6 +121,19 @@ interface Turn {
 let turnSeq = 0;
 const newTurnId = () => `turn-${++turnSeq}`;
 
+/** The context window to plan around for a connection. An explicit setting
+ *  wins. For a LOCAL model on auto (no setting), plan against the model's own
+ *  ceiling rather than the small default — the engine loads as big as the GPU
+ *  holds and the per-request window is clamped to what actually loaded, so a
+ *  slightly-optimistic plan here just compacts a touch early on a weak GPU. */
+function effectiveContextLimit(connection: AiConnection): number {
+  if (connection.contextSize) return connection.contextSize;
+  if (connection.provider === 'webllm') {
+    return WEBLLM_MODELS.find(m => m.id === connection.model)?.maxWindow ?? defaultContextSize('webllm');
+  }
+  return defaultContextSize(connection.provider);
+}
+
 /** Fold the transcript into the provider-facing chat history. */
 function toHistory(turns: Turn[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
@@ -739,7 +752,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     // model the proposal was already answered. The decision rides as the user
     // message instead ("I accepted/declined the change you proposed…").
     const historyTurns = resuming ? priorTurns.filter(t => t.id !== resumeTurnId) : priorTurns;
-    const contextSize = connection.contextSize ?? defaultContextSize(connection.provider);
+    const contextSize = effectiveContextLimit(connection);
     const planContext = planContextMessage(toolMode, inputs, config);
     const fullHistory = toHistory(historyTurns);
     // The plan digest message must never be a compaction victim: a tool-less
@@ -757,6 +770,27 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     const history = compaction.messages;
     if (compaction.compacted) {
       patchAssistant(t => { t.tools.push({ id: `compact-${Date.now().toString(36)}`, name: 'context compacted', state: 'done', summary: 'Older messages were summarized to fit the context window.' }); });
+    }
+
+    // Even after compaction the request can exceed the window: the fixed
+    // overhead (persona + tool catalog + plan digest) plus the verbatim tail
+    // may simply not fit a small local model's compiled context — a fresh chat
+    // has no history to compact, so it's the overhead alone that overflows.
+    // Catching it here gives the user something they can act on instead of the
+    // engine's raw "prompt tokens exceed context window size" dump.
+    if (isLocal && estimateTokens(system, [...history, { role: 'user', content }]) > contextSize * COMPACT_AT) {
+      patchAssistant(t => {
+        t.state = 'error';
+        t.text =
+          `This local model's context window (${contextSize.toLocaleString()} tokens) is too small to hold your plan ` +
+          'summary and this conversation — even after older messages were compacted. On the Connections page, raise ' +
+          '"How much the model reads at once" (if your GPU has the memory), pick a model compiled for a larger ' +
+          'window, or switch to a cloud provider (Advanced), which offers a much bigger window.';
+      });
+      setRunning(false);
+      setLoadProgress(null);
+      abortRef.current = null;
+      return;
     }
 
     if (isLocal) {
@@ -1203,7 +1237,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
               {connection && (
                 <ContextMeter
                   used={contextUsed}
-                  limit={connection.contextSize ?? defaultContextSize(connection.provider)}
+                  limit={effectiveContextLimit(connection)}
                   compacted={Boolean(thread.contextSummary)}
                 />
               )}

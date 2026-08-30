@@ -15,6 +15,7 @@
 
 import { DEFAULT_LOCAL_TEMPERATURE, effectiveGeneration, type AiConnection } from '../aiSettings';
 import { ProviderError, type ChatMessage, type StreamEvent, type StreamChatRequest } from './providers';
+import { WEBLLM_MODELS } from './webLlmModels';
 
 /** Engine handle; one per loaded model, reused across chats. */
 interface MlcEngine {
@@ -36,6 +37,10 @@ interface MlcEngine {
 
 let enginePromise: Promise<MlcEngine> | null = null;
 let engineModel: string | null = null;
+/** The context window the loaded engine was actually built with. Auto mode
+ *  starts at the model's ceiling and backs off on OOM, so this can be smaller
+ *  than the requested target — the per-request window is clamped to it. */
+let engineWindow = 0;
 
 export interface LoadProgress {
   /** 0–1 fraction of the weight download/load. */
@@ -44,14 +49,36 @@ export interface LoadProgress {
 }
 
 /**
+ * The window an "auto" (unset `contextSize`) load should aim for: the model's
+ * own compiled ceiling when we know it, else a sensible large default. Auto
+ * mode means "as big as this GPU can hold" — we start here and halve on OOM.
+ */
+function autoWindowFor(modelId: string): number {
+  return WEBLLM_MODELS.find(m => m.id === modelId)?.maxWindow ?? 16384;
+}
+
+/** True when a load/generation failure looks like the GPU ran out of memory
+ *  (the only failure auto mode retries smaller on). */
+function isOom(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /out of memory|oom|device.?lost|mapAsync|was unmapped|GPUBuffer|maxBufferSize|maxStorageBufferBindingSize|context window/i.test(msg);
+}
+
+/**
  * Load (or reuse) the engine for `modelId`. The first load for a model
  * downloads and compiles the weights; subsequent chats reuse the same engine.
  * Progress is reported through `onProgress`.
+ *
+ * `targetWindow` is the context window to build the KV cache for; 0/omitted
+ * means AUTO — start at the model's ceiling and halve on OOM until it loads,
+ * so the window is as big as this particular GPU can hold. The resolved window
+ * is exposed via `loadedWebLlmWindow()`.
  */
 export async function loadWebLlmEngine(
   modelId: string,
   onProgress?: (p: LoadProgress) => void,
   signal?: AbortSignal,
+  targetWindow = 0,
 ): Promise<MlcEngine> {
   if (enginePromise && engineModel === modelId) return enginePromise;
   // A different model was requested: drop the old engine (VRAM is scarce).
@@ -69,17 +96,39 @@ export async function loadWebLlmEngine(
     // passed here (an explicit "cancel the download" from Connections) abandons
     // a load, and nothing currently passes one.
     const webllm = await import('@mlc-ai/web-llm');
-    const engine = await webllm.CreateMLCEngine(modelId, {
+    const init = {
       initProgressCallback: (report: { progress?: number; text?: string }) => {
         if (!signal?.aborted) onProgress?.({ progress: report.progress ?? 0, text: report.text ?? '' });
       },
-    });
-    return engine as unknown as MlcEngine;
+    };
+
+    // Auto (targetWindow 0) tries the model's ceiling first and backs off on
+    // OOM; an explicit window is honoured as-is but still retries smaller if
+    // even that won't load, since a working smaller window beats a crash.
+    let window = targetWindow > 0 ? Math.min(targetWindow, autoWindowFor(modelId)) : autoWindowFor(modelId);
+    const FLOOR = 2048;
+    for (;;) {
+      try {
+        const engine = await webllm.CreateMLCEngine(modelId, init, { context_window_size: window });
+        engineWindow = window;
+        if (window < autoWindowFor(modelId) || targetWindow === 0) {
+          // Tell the user when auto had to settle below the model's ceiling.
+          onProgress?.({ progress: 1, text: `Ready — using a ${window.toLocaleString()}-token window.` });
+        }
+        return engine as unknown as MlcEngine;
+      } catch (err) {
+        // Out of memory at this window: halve and try again while there's room
+        // to back off. Any other failure (or the floor) is fatal — rethrow.
+        if (!isOom(err) || window <= FLOOR) throw err;
+        window = Math.max(FLOOR, Math.floor(window / 2));
+        onProgress?.({ progress: 0, text: `Not enough graphics memory for a big window — retrying at ${window.toLocaleString()} tokens…` });
+      }
+    }
   })();
 
   // If the load fails (or is cancelled), clear the cached promise so the next
   // attempt retries instead of reusing a rejected engine.
-  enginePromise.catch(() => { enginePromise = null; engineModel = null; });
+  enginePromise.catch(() => { enginePromise = null; engineModel = null; engineWindow = 0; });
   return enginePromise;
 }
 
@@ -89,12 +138,18 @@ export async function unloadWebLlmEngine(): Promise<void> {
   const p = enginePromise;
   enginePromise = null;
   engineModel = null;
+  engineWindow = 0;
   try {
     const engine = await p;
     await engine.unload?.();
   } catch {
     // Engine never finished loading or already gone — nothing to release.
   }
+}
+
+/** The context window the currently-loaded engine was built with (0 = none). */
+export function loadedWebLlmWindow(): number {
+  return engineWindow;
 }
 
 /** The model currently loaded (null when none). */
@@ -259,6 +314,18 @@ export function isTokenEcho(text: string): boolean {
  *  errors ("mapAsync", "device lost") mean nothing to a non-technical user. */
 function translateLocalError(err: unknown): ProviderError {
   const msg = err instanceof Error ? err.message : String(err);
+  // The request's prompt alone overflowed the compiled context window — the
+  // plan digest + tool catalog + conversation didn't fit. This is the error a
+  // user hits when the model's window is smaller than the data we send; the
+  // fix is a bigger window (Connections) or a cloud provider, not a retry.
+  if (/prompt tokens exceed context window|context window size|exceed.{0,20}context/i.test(msg)) {
+    return new ProviderError(
+      'Your plan summary and this conversation are too large for this local model\'s context ' +
+      'window, so it can\'t read the request. On the Connections page, raise "How much the model ' +
+      'reads at once" (if your GPU has the memory), pick a model compiled for a larger window, ' +
+      'or switch to a cloud provider (Advanced), which offers a much bigger window.',
+    );
+  }
   if (/mapAsync|device.?lost|out of memory|was unmapped|GPUBuffer/i.test(msg)) {
     return new ProviderError(
       'The local model crashed while answering — this usually means it ran out of graphics ' +
@@ -298,8 +365,9 @@ export async function* streamWebLlm(
   try {
     // Deliberately do NOT pass req.signal as the load-abort: the engine load
     // must outlive this one request (see loadWebLlmEngine). req.signal still
-    // aborts the GENERATION below via interruptGenerate.
-    engine = await loadWebLlmEngine(conn.model, onProgress);
+    // aborts the GENERATION below via interruptGenerate. An unset contextSize
+    // means AUTO: load at the model's ceiling and back off on OOM.
+    engine = await loadWebLlmEngine(conn.model, onProgress, undefined, conn.contextSize ?? 0);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/webgpu/i.test(msg)) {
@@ -324,11 +392,11 @@ export async function* streamWebLlm(
       // then quit; 'continue' then cut off mid-sentence" bug). Give local
       // turns room to think AND answer; the caller can still cap lower.
       max_tokens: req.maxTokens ?? gen.maxTokens,
-      // Bound the context: the plan digest + tool catalog + a long user answer
-      // can exceed the KV cache a small model was compiled for, which is the
-      // main cause of mid-generation GPU crashes (mapAsync / device lost).
-      // Clamp the compile window so an over-large user value can't blow VRAM.
-      context_window_size: Math.min(req.contextSize ?? 16384, 32768),
+      // Use the window the engine was ACTUALLY built with (auto mode may have
+      // backed off below the model's ceiling on a weak GPU). The KV cache is
+      // allocated at engine load with this size, so a per-request value above
+      // it would be silently wrong — clamp to the loaded window.
+      context_window_size: loadedWebLlmWindow() || Math.min(req.contextSize ?? 16384, 32768),
       // math/reasoning models: keep them deterministic-ish by default; the
       // user can loosen this per connection on the Connections page.
       temperature: gen.temperature ?? DEFAULT_LOCAL_TEMPERATURE,

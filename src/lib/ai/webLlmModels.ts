@@ -31,6 +31,12 @@ export interface WebLlmModelChoice {
    *  run_projection, propose edits)? Small models mangle the fenced-JSON tool
    *  calls, so they're forced into a tools-off "answer questions only" mode. */
   toolCapable: boolean;
+  /** The largest context window (tokens) this build is compiled to run —
+   *  its architectural ceiling, NOT the 4096 KV-cache default web-llm ships
+   *  with. Auto mode loads the engine at this size and backs off on OOM; the
+   *  model's weights are the same either way, so a bigger window only costs
+   *  KV-cache memory, never quality. */
+  maxWindow: number;
   /** One-line "why this one" for the picker. */
   blurb: string;
 }
@@ -45,6 +51,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 3868,
     sizeGB: 2.8,
     toolCapable: true,
+    maxWindow: 32768,
     blurb: 'Newest all-rounder; strongest instruction-following in this size. Recommended for most.',
   },
   {
@@ -53,6 +60,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 3432,
     sizeGB: 2.5,
     toolCapable: true,
+    maxWindow: 32768,
     blurb: 'Reasoning mode for multi-step math; a touch smaller download than 3.5.',
   },
   {
@@ -61,6 +69,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 2864,
     sizeGB: 2.1,
     toolCapable: true,
+    maxWindow: 32768,
     blurb: 'Compact reasoning model, strong on multi-step arithmetic. Smallest that still edits your plan.',
   },
   {
@@ -69,6 +78,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 3438,
     sizeGB: 2.5,
     toolCapable: true,
+    maxWindow: 16384,
     blurb: 'Microsoft\'s small instruct model; reliable at following formats.',
   },
   {
@@ -77,6 +87,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 5107,
     sizeGB: 4.5,
     toolCapable: true,
+    maxWindow: 32768,
     blurb: 'Thinks out loud (R1-style), then answers. Verbose but careful; needs ~6 GB VRAM.',
   },
   {
@@ -85,6 +96,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 5696,
     sizeGB: 5.0,
     toolCapable: true,
+    maxWindow: 32768,
     blurb: 'Biggest thinking Qwen most GPUs can hold; needs ~6 GB free VRAM.',
   },
   {
@@ -93,6 +105,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 6433,
     sizeGB: 5.7,
     toolCapable: true,
+    maxWindow: 32768,
     blurb: 'Strongest model in the list, for GPUs with 8 GB+. Largest download.',
   },
   {
@@ -101,6 +114,7 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     vramMB: 1895,
     sizeGB: 1.6,
     toolCapable: false,
+    maxWindow: 8192,
     blurb: 'Smallest download, but too weak to change your plan — answers questions only. Pick only if nothing else fits your GPU.',
   },
 ];
