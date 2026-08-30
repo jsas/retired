@@ -325,11 +325,20 @@ import the split keys on first run; `scenarioStorage.ts`/`appConfig.ts` still se
 paint. Large, well-mapped refactor — issue #21 has the full plan. Not a defect; kept open.
 
 **D-05 · LOW · `revSeq` module counter resets per session; revision ids rely on
-`Date.now()` + a per-session seq.** store.ts:29,135. Across two sessions the same
+`Date.now()` + a per-session seq.** store.ts:29,135. ~~Across two sessions the same
 `(Date.now(), seq)` pair can regenerate if the clock is unchanged — but `Date.now()` ms
 resolution makes a collision across sessions vanishingly unlikely, and ids only need
 uniqueness within a scenario's history for rollback ordering (which also compares `at`).
-No real-world impact; note only.
+No real-world impact; note only.~~ ✅ **FIXED 2026-08-30** (`fix/revseq-seed`) —
+`seedRevSeq()` now runs at `open()` after loading history and advances the module
+counter past every `rev-<ts>-<n>` suffix already present, so a second session can
+never re-mint an id the loaded history used even if it mints in the same millisecond
+(browser reload, or a clock stepped backwards between sessions). Without it a
+colliding id silently **overwrote** an existing history row (`pushRevision` treats
+same-id as same-slot), losing a real revision. Test: two fresh module registries
+(`vi.resetModules()`) over the same persisted bytes with a pinned `Date.now()` —
+asserts the history grows by exactly one row, all prior ids survive, and the seed
+row's inputs aren't clobbered by the new save.
 
 **D-06 · INFO · `saveScenarios` does full DELETE+re-INSERT each persist** (db.ts:221-238)
 inside a transaction — fine at this scale (dozens of plans), and the comment justifies it.
@@ -640,7 +649,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | S-05 | Strategies | INFO | Extra `calculateHousehold` pass for gap — perf note only | Info |
 | ~~D-02~~ | Data | ~~LOW~~ ✅ | Silent config reset on corruption (== #19) — **FIXED** (`fix/d02-config-corrupt-warning`, closes #19) | **Fixed** |
 | D-03 | Data | LOW | UI-pref keys bypass the store (== #20) | Actionable |
-| D-05 | Data | LOW | `revSeq` resets per session; revision-id collision theoretical | Actionable |
+| ~~D-05~~ | Data | ~~LOW~~ ✅ | `revSeq` resets per session → cross-session revision-id collision — **FIXED** (`fix/revseq-seed`) | **Fixed** |
 | D-06 | Data | INFO | Full DELETE+re-INSERT per persist — acceptable at this scale | Info |
 | D-07 | Data | LOW | `toDoc()` returns null on invalid config, drops config silently | Actionable |
 | U-03 | UI (App) | LOW | `getSyncSeed` reads legacy localStorage (== #21, known) | Info |
@@ -692,7 +701,7 @@ Everything not struck through above. These are the items that still need doing.
 - **D-04 · MEDIUM · == #21** — Legacy localStorage dual-source still live (refactor).
 - ~~**D-02 · LOW · == #19** — Hand-corrupted config silently resets to defaults, no warning.~~ ✅ FIXED (`fix/d02-config-corrupt-warning`)
 - **D-03 · LOW · == #20** — UI-preference keys bypass the store's kv table.
-- **D-05 · LOW** — `revSeq` resets per session (revision-id collision, theoretical).
+- ~~**D-05 · LOW** — `revSeq` resets per session (revision-id collision, theoretical).~~ ✅ FIXED (`fix/revseq-seed`)
 - **D-07 · LOW** — `toDoc()` returns null on invalid config, dropping config silently.
 
 ### UI
@@ -764,6 +773,12 @@ Everything not struck through above. These are the items that still need doing.
   wholesale-invalid stored config now logs a loud console.error and banners the user
   (`configLoadWarning` on AppState) instead of silently resetting to defaults.
   790/790 tests, `tsc` clean.
+- **2026-08-30** — **D-05** fixed on `fix/revseq-seed`: `seedRevSeq()` advances the
+  module-level `revSeq` counter past every revision-id suffix in the loaded history at
+  `open()`, so a second browser session can never re-mint an id the history already
+  used (even in the same millisecond or after a clock step back) — a colliding id
+  would silently overwrite an existing revision row. Test uses two fresh module
+  registries over the same persisted bytes with a pinned clock. 791/791 tests, `tsc` clean.
 
 ---
 
@@ -773,8 +788,7 @@ Everything not struck through above. These are the items that still need doing.
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
-4. **Quick wins** — U-15, A-03, D-02 (#19), X-04 fixed. Remaining: D-05 (revSeq),
-   D-07 (toDoc null).
+4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05 fixed. Remaining: D-07 (toDoc null).
 5. **Verify-before-fix** — E-02 (fixed-point oracle), E-04, T-02, T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 

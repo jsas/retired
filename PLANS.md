@@ -897,7 +897,7 @@ in the SQL store.
 
 ---
 
-## [ ] PLAN D-05 · `revSeq` resets per session (revision-id collision, theoretical)
+## [x] PLAN D-05 · `revSeq` resets per session (revision-id collision, theoretical)
 **Maps to:** REVIEW.md **D-05** · Severity LOW
 **File:** `src/lib/scenarioRevisions.ts`
 
