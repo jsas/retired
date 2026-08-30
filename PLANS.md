@@ -190,7 +190,7 @@ decumulation block uses `e.startAge`, `e.endAge`, `e.annualAmount`, `e.indexedTo
 
 ---
 
-## [ ] PLAN E-06 · Couple GIS counts own draws in-year, partner's never
+## [x] PLAN E-06 · Couple GIS counts own draws in-year, partner's never
 **Maps to:** open issue **#26** · REVIEW.md **E-06** · Severity MEDIUM
 **File:** `src/lib/retirementEngine.ts`
 
