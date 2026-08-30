@@ -12,6 +12,13 @@ export interface TaxResult {
   takeHome: number;
 }
 
+// Cap on the upper-bound expansion below: takeHome is monotonic in gross for
+// any sane table (every marginal rate < 100%), so the bound is always found in
+// a handful of steps. The cap only trips if a user-edited table makes takeHome
+// non-monotonic (a marginal rate ≥ 100%) — better to stop on a wrong answer
+// than to hang the tab.
+const MAX_BOUND_EXPANSION = 60;
+
 function applyProgressiveTax(income: number, brackets: number[], rates: number[]): number {
   let tax = 0;
   let previousBracket = 0;
@@ -81,7 +88,7 @@ export function findGrossIncomeForTakeHome(
 
   let lowerBound = desiredTakeHome;
   let upperBound = desiredTakeHome * 1.5;
-  while (calculateTax(upperBound, provinceCode, config).takeHome < desiredTakeHome) {
+  for (let i = 0; i < MAX_BOUND_EXPANSION && calculateTax(upperBound, provinceCode, config).takeHome < desiredTakeHome; i++) {
     upperBound *= 1.5;
   }
   const tolerance = 0.01;

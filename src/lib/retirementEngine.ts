@@ -2068,7 +2068,11 @@ function grossTaxableWithdrawal(
   const net = (w: number) =>
     w - (calculateTax(baseGross + w * taxableFrac, provinceCode, config).totalTax
        - calculateTax(baseGross, provinceCode, config).totalTax);
-  while (net(upper) < neededAfterTax) upper *= 1.5;
+  // Upper-bound expansion is capped: net() is monotonic in w for any sane table
+  // (every marginal rate < 100%), so the bound is found in a few steps. The cap
+  // only trips if a user-edited table makes net() non-monotonic — stop there
+  // rather than hang the tab.
+  for (let i = 0; i < MAX_TAX_ITERATIONS && net(upper) < neededAfterTax; i++) upper *= 1.5;
   for (let i = 0; i < MAX_TAX_ITERATIONS; i++) {
     const mid = (lower + upper) / 2;
     const difference = net(mid) - neededAfterTax;
