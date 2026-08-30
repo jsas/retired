@@ -10,6 +10,8 @@ import type { Scenario } from '../lib/scenarioStorage';
  *   Example - Single at 60 ....... one-time cash events + CPP deferred to 70
  *   Example - Semi-retirement .... modest balances, spending bands, part-time
  *                                  style contributions into retirement
+ *   Example - RDSP Starting Out .. a 20-year-old DTC-eligible beneficiary
+ *                                  starting an RDSP from zero (CDSG + CDSB)
  *
  * Keep these aligned with the current RetirementInputs shape — the test suite
  * asserts each one runs through the engine and touches the features above.
@@ -124,6 +126,47 @@ export const buildDefaultScenarios = (): Scenario[] => [
         { fromAge: 70, pctOfBase: 0.9 },
         { fromAge: 80, pctOfBase: 0.75 },
       ],
+    },
+  },
+  {
+    id: 'scenario-4',
+    name: 'Example - RDSP Starting Out',
+    inputs: {
+      currentAge: 20,
+      retirementAge: 60,
+      maxAge: 90,
+      rrspBalance: 0,
+      tfsaBalance: 500,
+      taxableBalance: 0,
+      cashCushionBalance: 1000,
+      rrspContribution: 0,
+      tfsaContribution: 1200,
+      taxableContribution: 0,
+      annualWithdrawal: 28000,
+      investmentReturn: 0.05,
+      returnVolatility: 0.12,
+      provinceCode: 'ONT',
+      cppStartAge: 65,
+      cppMonthlyAmount: 700,
+      cppAdjustedAmount: false,
+      oasStartAge: 65,
+      oasYearsInCanada: 40,
+      desiredSpending: 28000,
+      withdrawalOrder: ['taxable', 'tfsa', 'rdsp', 'rrsp'],
+      spendingBands: [
+        { fromAge: 75, pctOfBase: 0.9 },
+        { fromAge: 85, pctOfBase: 0.8 },
+      ],
+      // The point of the example: a DTC-eligible beneficiary opening an RDSP
+      // at 20 with no balance. $1,500/yr at a modest family income earns the
+      // full $3,500 CDSG grant; the bond phases in below the lower threshold.
+      rdsp: {
+        enabled: true,
+        balance: 0,
+        contribution: 1500,
+        familyIncome: 30000,
+        dtcEligible: true,
+      },
     },
   },
 ];

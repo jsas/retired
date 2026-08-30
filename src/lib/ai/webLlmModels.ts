@@ -64,15 +64,6 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     blurb: 'Reasoning mode for multi-step math; a touch smaller download than 3.5.',
   },
   {
-    id: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
-    label: 'Ministral 3 3B Reasoning',
-    vramMB: 2864,
-    sizeGB: 2.1,
-    toolCapable: true,
-    maxWindow: 32768,
-    blurb: 'Compact reasoning model, strong on multi-step arithmetic. Smallest that still edits your plan.',
-  },
-  {
     id: 'Phi-4-mini-instruct-q4f16_1-MLC',
     label: 'Phi-4 Mini 3.8B',
     vramMB: 3438,
