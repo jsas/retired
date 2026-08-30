@@ -190,6 +190,141 @@ describe('work strategies (employment, issue #22)', () => {
   });
 });
 
+describe('runStrategies — employer pension timing (issue #40)', () => {
+  // A retiree with two DB pensions: a small bridge (non-indexed, ends at 65)
+  // and a larger lifetime indexed pension. Plus CPP/OAS so the stacking is real.
+  const pensioner = () => baseInputs({
+    currentAge: 60, retirementAge: 60, maxAge: 90,
+    rrspBalance: 200000, tfsaBalance: 100000, taxableBalance: 0,
+    cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 45000,
+    pensions: [
+      { id: 'bridge', label: 'Bridge', annualAmount: 6000, startAge: 60, endAge: 65, indexedToCpi: false },
+      { id: 'db', label: 'Work DB', annualAmount: 24000, startAge: 65, endAge: null, indexedToCpi: true },
+    ],
+  });
+
+  it('generates start-age variants for each pension, skipping the current age', () => {
+    const report = runStrategies(pensioner(), config);
+    const pt = report.strategies.filter(s => s.categories.includes('pension_timing'));
+    // Bridge is at 60 → variants at 55/65/70; Work DB is at 65 → 55/60/70.
+    const bridge = pt.filter(s => s.id.startsWith('pension-primary-0-'));
+    const db = pt.filter(s => s.id.startsWith('pension-primary-1-'));
+    expect(new Set(bridge.map(s => s.patch.pensions![0].startAge))).toEqual(new Set([55, 65, 70]));
+    expect(new Set(db.map(s => s.patch.pensions![1].startAge))).toEqual(new Set([55, 60, 70]));
+  });
+
+  it('each single-pension variant patches only that pension start age', () => {
+    const report = runStrategies(pensioner(), config);
+    const v = report.strategies.find(s => s.id === 'pension-primary-1-70')!;
+    // Defers the Work DB from 65 to 70, leaves the bridge at 60.
+    expect(v.patch.pensions![1].startAge).toBe(70);
+    expect(v.patch.pensions![0].startAge).toBe(60);
+    expect(v.patch.pensions![1].endAge).toBeNull(); // other fields preserved
+    expect(v.patch.pensions![1].indexedToCpi).toBe(true);
+  });
+
+  it('a pension variant changes lifetime GIS (DB income is clawback income)', () => {
+    // Lower-income retiree: the portfolio is small, so OAS/GIS carry the plan
+    // and a DB pension's start age moves the GIS clawback directly.
+    const inputs = baseInputs({
+      currentAge: 64, retirementAge: 65, maxAge: 90,
+      rrspBalance: 40000, tfsaBalance: 30000, taxableBalance: 0,
+      cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 22000,
+      pensions: [
+        { id: 'db', label: 'Work DB', annualAmount: 6000, startAge: 65, endAge: null, indexedToCpi: true },
+      ],
+    });
+    const report = runStrategies(inputs, config);
+    const pt = report.strategies.filter(s => s.categories.includes('pension_timing'));
+    expect(pt.length).toBeGreaterThan(0);
+    // Some pension timing leaves GIS on the table that another keeps.
+    const gis = new Set(pt.map(s => Math.round(s.lifetimeGis)));
+    expect(gis.size).toBeGreaterThan(1);
+    expect(Math.max(...pt.map(s => s.lifetimeGis))).toBeGreaterThan(0);
+  });
+
+  it('adds a pairwise "bridge with the small one, defer the large one" flagship', () => {
+    const report = runStrategies(pensioner(), config);
+    const pair = report.strategies.find(s => s.id === 'pension-pair-early-small-defer-large')!;
+    expect(pair).toBeDefined();
+    // Both pensions belong to the primary → one merged list patch.
+    expect(pair.patch.pensions![0].startAge).toBeLessThan(60);   // small bridge pulled early
+    expect(pair.patch.pensions![1].startAge).toBeGreaterThan(65); // large DB deferred
+  });
+
+  it('no pension variants at all when the plan has no pensions', () => {
+    const report = runStrategies(gisSensitive(), config); // pensions: []
+    expect(report.strategies.filter(s => s.categories.includes('pension_timing')).length).toBe(0);
+  });
+
+  it('a single pension gets start-age variants but no pairwise flagship', () => {
+    const inputs = pensioner();
+    inputs.pensions = [inputs.pensions![1]]; // only the big DB
+    const report = runStrategies(inputs, config);
+    const pt = report.strategies.filter(s => s.categories.includes('pension_timing'));
+    expect(pt.length).toBeGreaterThan(0);
+    expect(pt.some(s => s.id === 'pension-pair-early-small-defer-large')).toBe(false);
+  });
+
+  it('scopes to pension_timing via the category filter', () => {
+    const report = runStrategies(pensioner(), config, { categories: ['pension_timing'] });
+    expect(report.strategies.length).toBeGreaterThan(0);
+    for (const s of report.strategies) {
+      expect(s.categories).toContain('pension_timing');
+    }
+    expect(report.strategies.some(s => s.id.startsWith('cpp-'))).toBe(false);
+    expect(report.strategies.some(s => s.id.startsWith('order-'))).toBe(false);
+  });
+
+  it('spouse pensions are swept under spouse.pensions (patched via the spouse object)', () => {
+    const inputs = pensioner();
+    inputs.pensions = [];
+    inputs.spouse = {
+      enabled: true, currentAge: 60, retirementAge: 60,
+      rrspBalance: 100000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000,
+      pensions: [
+        { id: 'sp-db', label: 'Spouse DB', annualAmount: 15000, startAge: 65, endAge: null, indexedToCpi: true },
+      ],
+    };
+    const report = runStrategies(inputs, config);
+    const sp = report.strategies.filter(s => s.id.startsWith('pension-spouse-0-'));
+    expect(sp.length).toBeGreaterThan(0);
+    // The variant patches the spouse's pension start age through the spouse object.
+    const v = sp.find(s => s.id === 'pension-spouse-0-60')!;
+    expect(v.patch.spouse!.pensions![0].startAge).toBe(60);
+    // The primary's own (empty) pension list is untouched.
+    expect(v.patch.pensions).toBeUndefined();
+  });
+
+  it('pension results reflect the post-split tax pass, not pre-split amounts', () => {
+    // A couple where the higher-income spouse has the DB pension: deferring it
+    // changes the eligible split income, which the household splitting pass then
+    // re-optimizes. The strategy's lifetimeTax must come from the run that
+    // already applied pension splitting (the engine does this internally).
+    const inputs = pensioner();
+    inputs.spouse = {
+      enabled: true, currentAge: 60, retirementAge: 60,
+      rrspBalance: 50000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
+      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 300, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 15000,
+      pensions: [],
+    };
+    const report = runStrategies(inputs, config);
+    const defer70 = report.strategies.find(s => s.id === 'pension-primary-1-70')!;
+    // Recompute the truth directly: merged inputs → engine (which splits) → tax.
+    const merged = { ...inputs, ...defer70.patch };
+    const truth = calculateHousehold(merged, config)
+      .yearlyBreakdown.reduce((s, y) => s + (y.incomeTax ?? 0), 0);
+    expect(defer70.lifetimeTax).toBeCloseTo(truth, 6);
+  });
+});
+
 describe('runStrategies filtering', () => {
   it('narrowing to cpp drops other families but keeps the defer-both flagship', () => {
     const report = runStrategies(gisSensitive(), config, { categories: ['cpp'] });

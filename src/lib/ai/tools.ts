@@ -134,8 +134,8 @@ const managePensionArgs = z.object({
 });
 
 const runStrategiesArgs = z.object({
-  categories: z.array(z.enum(['cpp', 'oas', 'withdrawal_order', 'reverse_mortgage', 'work'])).optional()
-    .describe('Scope the explorer to specific lever families (e.g. ["cpp","oas"] for benefit timing only). Omit for all.'),
+  categories: z.array(z.enum(['cpp', 'oas', 'pension_timing', 'withdrawal_order', 'reverse_mortgage', 'work'])).optional()
+    .describe('Scope the explorer to specific lever families (e.g. ["cpp","oas"] for benefit timing only, ["pension_timing"] for employer-pension start ages). Omit for all.'),
   maxVariants: z.number().int().min(1).max(50).optional()
     .describe('Cap the number of variants returned (best first).'),
 }).describe('Optional filters; call with {} for the full exploration.');
@@ -274,7 +274,7 @@ export function toolSpecs(): ToolSpec[] {
       'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".',
       compareScenariosArgs),
     spec('run_strategies',
-      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, withdrawal order, retirement age) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.',
+      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.',
       runStrategiesArgs),
     spec('solve_spending',
       'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"',
