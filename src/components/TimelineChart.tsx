@@ -75,6 +75,10 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
   // stored in today's dollars; the chart shows nominal-of-that-year values).
   const deflate = (nominal: number, age: number) =>
     nominal / Math.pow(1 + inflation, Math.max(0, age - inputs.currentAge));
+  // Inverse: today's dollars → nominal at `age`. (Event amounts are stored
+  // nominal, so they are NOT inflated — see the spending-target note below.)
+  const inflate = (today: number, age: number) =>
+    today * Math.pow(1 + inflation, Math.max(0, age - inputs.currentAge));
 
   const bands = Array.isArray(inputs.spendingBands)
     ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge)
@@ -137,9 +141,13 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
     if (drag.kind === 'band') {
       const band = bands[drag.index];
       if (!band) return;
+      // The dragged Y is a nominal base-spending level at the band's age. The %
+      // is (nominal ÷ base nominal at that age) — deflate both to the SAME age
+      // (band.fromAge) so the inflation factor cancels, instead of dividing a
+      // fromAge-deflated level by today's-dollar desiredSpending (U-08).
       const nominal = Math.max(0, spendAtY(py));
-      const today = deflate(nominal, band.fromAge);
-      const pct = inputs.desiredSpending > 0 ? Math.min(2, today / inputs.desiredSpending) : 1;
+      const baseNominal = inflate(inputs.desiredSpending, band.fromAge);
+      const pct = baseNominal > 0 ? Math.min(2, nominal / baseNominal) : 1;
       const rounded = Math.round(pct * 100) / 100;
       if (rounded !== band.pctOfBase) {
         onChange({ ...inputs, spendingBands: bands.map((b, i) => (i === drag.index ? { ...b, pctOfBase: rounded } : b)) });
@@ -149,9 +157,12 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
 
     if (drag.kind === 'event') {
       const age = Math.round(Math.min(inputs.maxAge, Math.max(inputs.currentAge, ageAtX(px))));
+      // Event amounts are stored NOMINAL (the dollars of that year — confirmed:
+      // engine adds them to spendingTarget uninflated), so the dragged Y maps to
+      // the amount directly, no deflate (the old code deflated, shrinking the
+      // written amount by the inflation factor — U-08/U-10).
       const nominal = Math.max(0, spendAtY(py));
-      const today = deflate(nominal, age);
-      const rounded = Math.round(today / 1000) * 1000;
+      const rounded = Math.round(nominal / 1000) * 1000;
       onChange({
         ...inputs,
         events: events.map(ev => (ev.id === (drag as { kind: 'event'; id: string }).id
@@ -180,10 +191,24 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
   const step = Math.max(1, Math.round(span / 12));
   for (let a = minAge; a <= maxAge; a += step) xTicks.push(a);
 
+  // The engine's spendingTarget at an age is (base spending × band %, inflated
+  // from today's dollars) + (nominal event outflows) + (RM interest). To place or
+  // read a spending handle we need the BASE component (no events, no RM), which is
+  // also what `desiredSpending × pctOfBase` inflates to. Computing it analytically
+  // keeps the handle's drawn height and its drag-write on the same footing (U-08/
+  // U-09) — reading the height off `row.spendingTarget` would fold events/RM in.
+  const nominalBaseAt = (age: number): number => {
+    let pct = 1;
+    for (const b of bands) {
+      if (age >= b.fromAge) pct = b.pctOfBase;
+      else break;
+    }
+    return inflate(inputs.desiredSpending, age) * pct;
+  };
+
   // Base spending level shown at retirement (nominal, including inflation).
   const retRow = rows.find(r => r.age === inputs.retirementAge);
-  const baseEventOut = events.filter(ev => ev.direction === 'out' && ev.age === inputs.retirementAge).reduce((s, ev) => s + ev.amount, 0);
-  const baseSpendLevel = retRow ? Math.max(0, retRow.spendingTarget - baseEventOut) : 0;
+  const baseSpendLevel = retRow ? nominalBaseAt(inputs.retirementAge) : 0;
 
   const handleProps = (id: string, target: DragTarget) => ({
     className: `cursor-ns-resize ${hover === id || (drag && JSON.stringify(drag) === JSON.stringify(target)) ? 'opacity-100' : 'opacity-70'} hover:opacity-100`,
@@ -282,11 +307,12 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
 
           {/* Spending-band handles (drag vertically) */}
           {bands.map((b, i) => {
-            const row = rows.find(r => r.age >= b.fromAge);
-            if (!row) return null;
+            // Place the handle at the analytic base-spending level for the band's
+            // age (no events/RM folded in), matching what the drag writes (U-08).
+            if (b.fromAge < minAge || b.fromAge > maxAge) return null;
             return (
               <g key={i} {...handleProps(`band-${i}`, { kind: 'band', index: i })}>
-                <rect x={x(b.fromAge) - 5} y={ys(row.spendingTarget) - 5} width="10" height="10" rx="2"
+                <rect x={x(b.fromAge) - 5} y={ys(nominalBaseAt(b.fromAge)) - 5} width="10" height="10" rx="2"
                   fill="#10b981" stroke="#fff" strokeWidth="1.5" />
                 <title>From age {b.fromAge}: {Math.round(b.pctOfBase * 100)}% of spending — drag to adjust</title>
               </g>
@@ -295,7 +321,8 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
 
           {/* Event diamonds (drag both axes) */}
           {events.map((ev: CashEvent) => {
-            const nominal = ev.amount * Math.pow(1 + inflation, Math.max(0, ev.age - inputs.currentAge));
+            // Event amounts are already nominal dollars of that year (no inflate).
+            const nominal = ev.amount;
             return (
               <g key={ev.id} {...handleProps(ev.id, { kind: 'event', id: ev.id })} style={{ cursor: 'move' }}>
                 <rect
