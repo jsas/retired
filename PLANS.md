@@ -656,7 +656,7 @@ engine ran on; align any that don't.
 
 ---
 
-## [ ] PLAN S-02 · `sustainableSpending` hi-expansion edge
+## [x] PLAN S-02 · `sustainableSpending` hi-expansion edge
 **Maps to:** REVIEW.md **S-02** · Severity LOW
 **File:** `src/lib/strategies.ts`
 

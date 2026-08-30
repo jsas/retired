@@ -75,14 +75,30 @@ const orderLabel = (o: WithdrawalAccount[]) =>
 // household-first verdict (combined money exhausted with an unfunded shortfall)
 // — the raw primary-only depletionAge would call a couple "failed" because the
 // primary's own silo ran dry while the household was fine.
-function sustainableSpending(inputs: RetirementInputs, config: AppConfig): number {
+//
+// A plan so over-funded that even the 5M ceiling survives has no failing `hi`
+// within the search bounds — there is no bracket, and "the highest spending
+// that survives" is unbounded in practical terms. Mirror spendingSolver's
+// unconstrained handling: return the ceiling itself rather than letting the
+// binary search run on a surviving `hi` (violating its lo-survives/hi-fails
+// invariant) and landing on the expansion overshoot, a value ABOVE the ceiling.
+// Exported for tests: the S-02 regression drives a runaway plan directly.
+export function sustainableSpending(inputs: RetirementInputs, config: AppConfig): number {
   const survives = (spend: number) =>
     householdOutcome(calculateHousehold({ ...inputs, desiredSpending: spend }, config), inputs).depletionAge === null;
   if (!survives(0)) return 0; // runs out even at zero spending (huge fixed events)
-  let lo = 0, hi = 500000;
-  // Expand hi until it fails (caps runaway plans) or we hit an absolute ceiling.
+  const START_CEILING = 500000, ABSOLUTE_CEILING = 5000000;
+  let lo = 0, hi = START_CEILING;
+  // Expand hi until it fails (caps runaway plans) or we hit the absolute
+  // ceiling. hiSurvives tracks the last probe so the ceiling case is detected
+  // without a redundant engine run after the loop.
+  let hiSurvives = true;
   let guard = 0;
-  while (survives(hi) && hi < 5000000 && guard++ < 40) hi *= 1.5;
+  while (hiSurvives && hi < ABSOLUTE_CEILING && guard++ < 40) {
+    hi = Math.min(ABSOLUTE_CEILING, hi * 1.5);
+    hiSurvives = survives(hi);
+  }
+  if (hiSurvives) return ABSOLUTE_CEILING; // unbounded: plan clears the ceiling
   for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2;
     if (survives(mid)) lo = mid; else hi = mid;

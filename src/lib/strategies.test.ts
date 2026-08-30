@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runStrategies, runOne, type StrategySpec } from './strategies';
+import { runStrategies, runOne, sustainableSpending, type StrategySpec } from './strategies';
 import { calculateHousehold, householdOutcome } from './retirementEngine';
 import { testConfig, baseInputs } from '../test/helpers';
 
@@ -371,6 +371,41 @@ describe('runStrategies filtering', () => {
     for (const s of report.shown) {
       expect(s.categories.some(c => c === 'cpp' || c === 'oas')).toBe(true);
     }
+  });
+});
+
+describe('sustainableSpending ceiling edge (S-02)', () => {
+  // A runaway plan: $100M in TFSA (tax-free, no CPP/OAS) funding a 25-year
+  // horizon survives even the $5M/yr ceiling (PV of $5M × 25 yrs at 5% ≈
+  // $70M), so no failing `hi` exists within the search bounds. Before the fix
+  // the expansion kept multiplying past the ceiling, the binary search ran
+  // anyway on a surviving `hi` (invariant violated), and it returned the
+  // ×1.5^40 overshoot — a value ABOVE the 5M ceiling — instead of the ceiling.
+  const runaway = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 90,
+    tfsaBalance: 100000000, rrspBalance: 0, taxableBalance: 0,
+    desiredSpending: 100000, pensions: [],
+  });
+
+  it('a plan that survives the ceiling returns the ceiling, not an overshoot', () => {
+    expect(sustainableSpending(runaway(), config)).toBe(5000000);
+  });
+
+  it('a normal plan still returns a finite interior value (fix changes nothing there)', () => {
+    const r = sustainableSpending(gisSensitive(), config);
+    expect(Number.isFinite(r)).toBe(true);
+    expect(r).toBeGreaterThan(0);
+    expect(r).toBeLessThan(5000000);
+  });
+
+  it('a plan that depletes even at zero spending returns 0', () => {
+    const broke = baseInputs({
+      currentAge: 65, retirementAge: 65, maxAge: 90,
+      tfsaBalance: 0, rrspBalance: 0, taxableBalance: 0,
+      desiredSpending: 50000, pensions: [],
+    });
+    // No CPP/OAS and no assets: every year is unfunded → never survives.
+    expect(sustainableSpending(broke, config)).toBe(0);
   });
 });
 

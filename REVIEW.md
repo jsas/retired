@@ -269,16 +269,20 @@ are now exported so a synthetic maxAge-patching spec proves the verdict matches
 `status` horizon semantics (depletion at 93 reads SHORTFALL at horizon 95, ON_TRACK at 90).
 778/778 tests, `tsc` clean.
 
-**S-02 · LOW · `sustainableSpending` hi-expansion can leave `lo`/`hi` straddling nothing.**
-strategies.ts:82-90: `hi` starts at 500k, expands ×1.5 while `survives(hi)` (guard 40,
-abs ceiling 5M). If `survives(hi)` is still true at the ceiling, the loop exits with
-`hi` = a surviving value and the binary search then assumes `hi` fails — the invariant
-(`lo` survives, `hi` fails) is violated, so the search returns ~`hi` (a surviving value)
-rather than a true bracket. Result is a *lower bound* on sustainable spending in that
-runaway case, not the max. Acceptable (the plan is absurdly over-funded), but the
-returned number isn't "the highest flat spending that survives" — it's "≥ ceiling."
-**Needed:** mirror `spendingSolver`'s explicit `unconstrained` flag, or document that a
-ceiling-hit returns the ceiling. Compare spendingSolver.ts:100-107 which handles this.
+~~**S-02 · LOW · `sustainableSpending` hi-expansion can leave `lo`/`hi` straddling nothing.**~~
+✅ **FIXED 2026-08-30** (`fix/s02-spending-ceiling`) strategies.ts: the expansion loop
+can exit with `hi` still surviving (plan clears the 5M ceiling) — the binary search
+then ran on a violated lo-survives/hi-fails invariant and, because `hi` was never
+clamped at the ceiling, returned the ×1.5 overshoot (e.g. 5,397,285): a value ABOVE
+the documented 5M ceiling, not "the highest spending that survives". **Fix:** mirror
+`spendingSolver`'s unconstrained handling (spendingSolver.ts:100-107) — clamp `hi` at
+the ceiling during expansion, track whether the last probe survived, and if the
+ceiling itself survives return the ceiling directly (the plan is unbounded in
+practical terms; no redundant 40-iteration search). Exported `sustainableSpending`
+for tests; regression drives a $100M TFSA runaway plan (returns 5,000,000 exactly —
+proved discriminating: with the old unclamped behavior it returns 5,397,285), plus
+guards for the normal interior case and the zero-asset 0 case. 804/804 tests, `tsc`
+clean.
 
 **S-03 · LOW · Strategy withdrawal-order variants omit RDSP.** `ORDERINGS` (strategies.ts:61-68)
 is the 6 permutations of tfsa/taxable/rrsp — no `'rdsp'`, consistent with E-01. Once E-01
@@ -671,7 +675,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | ~~T-02~~ | Tax | ~~LOW~~ ✅ | `taxOnTable` BPA credit at lowest rate — verified CRA-correct (`verify/t02-taxontable-exemption`) | **Verified OK** |
 | ~~T-03~~ | Tax | ~~LOW~~ ✅ | OAS residency pro-rating — verified correct incl. deferral combo (`verify/t03-oas-residency`) | **Verified OK** |
 | T-04 | Tax | INFO | GIS single-vs-couple reduction base — documented, correct | Info |
-| S-02 | Strategies | LOW | `sustainableSpending` hi-expansion edge | Actionable |
+| ~~S-02~~ | Strategies | ~~LOW~~ ✅ | `sustainableSpending` ceiling overshoot — **FIXED** (`fix/s02-spending-ceiling`) | **Fixed** |
 | S-03 | Strategies | LOW | Strategy orderings omit RDSP (== #40 family) | Actionable |
 | S-04 | Strategies | INFO | Gap-targeted work stint uses flat 30% marginal — documented approx | Info |
 | S-05 | Strategies | INFO | Extra `calculateHousehold` pass for gap — perf note only | Info |
@@ -722,7 +726,7 @@ Everything not struck through above. These are the items that still need doing.
 
 ### Strategies / solvers
 - ~~**S-01 · MEDIUM** — `runOne` scores household outcome against `inputs`, not `merged`.~~ ✅ FIXED (`fix/s01-strategy-scoring`)
-- **S-02 · LOW** — `sustainableSpending` hi-expansion edge.
+- ~~**S-02 · LOW** — `sustainableSpending` hi-expansion edge.~~ ✅ FIXED (`fix/s02-spending-ceiling`)
 - **S-03 · LOW · == #40 family** — Strategy orderings omit RDSP.
 
 ### Data layer (== open issues #18–#21)
@@ -839,6 +843,12 @@ Everything not struck through above. These are the items that still need doing.
   pro-rating can't be escaped), and both callers pass `yearsInCanada` through.
   New test pins the partial-residency + deferral-to-70 combination the finding was
   worried about. 801/801 tests, `tsc` clean.
+- **2026-08-30** — **S-02** fixed on `fix/s02-spending-ceiling`: `sustainableSpending`
+  no longer lets the binary search run on a surviving `hi` — when the plan clears the
+  5M ceiling the ceiling is returned directly (mirroring `spendingSolver`'s
+  unconstrained handling), and `hi` is clamped at the ceiling during expansion. Old
+  behavior returned the unclamped ×1.5 overshoot (5,397,285 on the regression fixture)
+  instead of the ceiling. 804/804 tests, `tsc` clean.
 
 ---
 
@@ -847,7 +857,7 @@ Everything not struck through above. These are the items that still need doing.
 1. **Engine money-correctness MEDIUMs** — all fixed (E-06 #26, E-07 #25, E-08 #27).
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
-3. **S-01** — fixed (`fix/s01-strategy-scoring`).
+3. **S-01** — fixed (`fix/s01-strategy-scoring`). **S-02** — fixed (`fix/s02-spending-ceiling`).
 4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05, D-07 fixed. Remaining: none.
 5. **Verify-before-fix** — E-04, E-02, T-02, T-03 all verified OK. Remaining: none.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
