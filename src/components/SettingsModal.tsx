@@ -21,12 +21,17 @@ interface SettingsModalProps {
 // AsyncOpfsBackend below), agent memories (a table inside that database), EQ
 // crops, panel layouts, AI chat threads and AI model connections. The reload
 // lands on factory defaults + the first-run example scenarios.
-//   wealthconsole_db                — the SQLite bytes (localStorage mirror)
+//   wealthconsole_db                — the SQLite bytes (localStorage mirror);
+//                                     its kv table holds the UI preferences
+//                                     (panels/print/export/welcome, EQ crops —
+//                                     issue #20) and the opt-in AI payloads
 //   wealthconsole.sqlite            — the SQLite file itself (OPFS)
 //   wealthconsole_scenarios/_config — pre-SQLite legacy split keys
-//   wealthconsole_eq                — EQ steering crops
-//   wealthconsole_panel_state       — collapsed panels + print/export options
-//                                     + welcome dismissal
+//   wealthconsole_eq                — UI preferences: EQ steering crops (the
+//                                     localStorage mirror of the kv row)
+//   wealthconsole_panel_state       — UI preferences: collapsed panels +
+//                                     print/export options + welcome dismissal
+//                                     (the localStorage mirror of the kv row)
 //   retirement_ai_chats             — assistant chat threads
 //   retirement_ai_settings          — model connections + AI preferences
 const ERASABLE_KEYS = [

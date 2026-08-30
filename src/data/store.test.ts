@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AppStore } from './store';
+import { AppDatabase, DB_STORAGE_KEY } from './db';
 import { baseInputs } from '../test/helpers';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
 import { buildDefaultScenarios } from './exampleScenarios';
@@ -117,6 +118,38 @@ describe('AppStore', () => {
     store.persist({ scenarios: customDefaults(), activeScenarioId: 'gone' });
     const again = await AppStore.open(customDefaults);
     expect(again.state.activeScenarioId).toBe('seed-1');
+  });
+
+  it('migrates pre-#20 localStorage preference keys into the store kv on open', async () => {
+    // The one-time path for users from older builds: their pref blobs sit in
+    // raw localStorage (the pre-#20 layout); opening the store folds them in.
+    storage.set('wealthconsole_panel_state', '{"welcome_dismissed":true}');
+    storage.set('wealthconsole_eq', '{"bandsFrac":{"retirementAge":{"lo":0.2,"hi":0.8}}}');
+
+    await AppStore.open(customDefaults);
+    const { AppDatabase } = await import('./db');
+    const db = await AppDatabase.open(); // reopens the mirrored bytes
+    expect(db.getKv('wealthconsole_panel_state')).toBe('{"welcome_dismissed":true}');
+    expect(db.getKv('wealthconsole_eq')).toBe('{"bandsFrac":{"retirementAge":{"lo":0.2,"hi":0.8}}}');
+    db.close();
+  });
+
+  it('preference keys survive the backup round-trip through export bytes (#20)', async () => {
+    // The acceptance criterion: a .sqlite backup carries the pref blobs, and
+    // an import surfaces them to the mirror the synchronous readers use.
+    const { store } = await AppStore.open(customDefaults);
+    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1', config: DEFAULT_APP_CONFIG });
+    // Write prefs through the facade (the path the UI modules use).
+    const { prefKV, attachPrefKv } = await import('../lib/prefKv');
+    attachPrefKv((store as unknown as { db: AppDatabase }).db);
+    prefKV().setItem('wealthconsole_panel_state', '{"print_opts":{"includeMilestones":false}}');
+    prefKV().setItem('wealthconsole_eq', '{"bandsFrac":{}}');
+
+    const bytes = store.exportBytes();
+    const db = await AppDatabase.open(bytes);
+    expect(db.getKv('wealthconsole_panel_state')).toBe('{"print_opts":{"includeMilestones":false}}');
+    expect(db.getKv('wealthconsole_eq')).toBe('{"bandsFrac":{}}');
+    db.close();
   });
 
   it('exportBytes produces a file a fresh database can open (the backup loop)', async () => {

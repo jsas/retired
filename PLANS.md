@@ -847,26 +847,38 @@ missed by someone not reading CLAUDE.md.
 
 ---
 
-## [ ] PLAN D-03 · UI-preference keys bypass the store's kv table
-**Maps to:** open issue **#20** · REVIEW.md **D-03** · Severity LOW
-**Files:** `src/lib/eqStorage.ts`, `src/lib/projectionExport.ts` (and any other
-direct-`localStorage` UI-pref writers)
+## [x] PLAN D-03 · UI-preference keys bypass the store's kv table
+**Maps to:** issue **#20** · REVIEW.md **D-03** · Severity LOW
+**Files:** `src/lib/prefKv.ts` (new facade), `src/lib/printOptions.ts`,
+`src/lib/projectionExport.ts`, `src/lib/eqStorage.ts`, `src/components/WelcomeCard.tsx`,
+`src/components/CollapsiblePanel.tsx`, `src/data/store.ts`, `src/App.tsx`,
+`src/components/DataPage.tsx`
 
 ### Problem
 Five UI-preference keys are written straight to `localStorage` instead of the
 store's `kv` table, so they (a) aren't captured in full backups and (b) keep the
 legacy localStorage path alive (blocks #21).
 
-### Task
-- Enumerate the direct writers (grep `localStorage.setItem` outside `src/data`).
-  Route each through the store's `kv` (`db.setKv`/`getKv`) with a one-time migration
-  from the legacy key. **Coordinate with #21** — this is really a sub-task of the
-  single-source refactor; consider folding D-03 into a #21 PR rather than landing
-  it alone.
+### Done (2026-08-30)
+- `lib/prefKv.ts`: pref facade — store `kv` row is the durable home, localStorage
+  is the first-paint mirror (the store opens async after the wasm loads). Writes
+  go to both; store saves are debounced 300ms so an EQ drag or panel burst
+  doesn't serialize the whole DB per frame.
+- `AppStore.open` attaches the facade and reconciles fill-only both ways:
+  mirror-only → store (the one-time #20 migration), store-only → mirror
+  (backup import / evicted mirror), divergent → store wins and re-derives the
+  mirror.
+- Backup export always packs the pref rows; import applies them through the
+  facade (a mirror-only write would be reverted by the next reconcile) behind
+  an opt-out checkbox on the Data page.
+- Kept per-browser where it's honest: these are preferences, not plan data —
+  but now they *travel* when the user backs up, so "all plan state in one
+  database" has no asterisk.
 
 ### Acceptance
 - UI prefs live in the kv table and survive backup/restore. REVIEW.md updated; PR
-  references #20 (and #21 if combined).
+  references #20 (and #21 if combined). — `npx vitest run` 819/819, `tsc` clean,
+  build green.
 
 ---
 

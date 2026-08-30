@@ -46,6 +46,7 @@ import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
 import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
+import { PREF_KEYS, prefKV } from './lib/prefKv';
 import { runEqSolverAuto } from './lib/runEqSolver';
 import { solveEqReadout } from './lib/eqSolver';
 import { renderRange, axisValue, consistentAges } from './lib/eqConstraints';
@@ -289,6 +290,12 @@ function App() {
     // store may hold it even when this backup shouldn't).
     packAiKey(db, AI_CHATS_STORAGE_KEY, ai.chats);
     packAiKey(db, AI_SETTINGS_STORAGE_KEY, ai.settings);
+    // UI preferences always ride along (issue #20): the store's kv rows were
+    // seeded from the live bytes, but this session's pref writes may be ahead
+    // of the last debounced save — copy the mirror's current payload over to
+    // be sure. These are non-sensitive choices, unlike the AI keys above, so
+    // there's no reason to make them opt-in.
+    for (const key of PREF_KEYS) packAiKey(db, key, true);
     const bytes = db.exportBytes();
     db.close();
     const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/vnd.sqlite3' });
@@ -302,6 +309,17 @@ function App() {
 
   // Apply a full-backup import chosen on the Data page.
   const handleImportFull = (sel: FullBackupSelection) => {
+    // UI preferences (issue #20) go through the pref facade so BOTH homes
+    // update — the mirror the synchronous readers use, and the live store's
+    // kv row (writing only the mirror would leave the store's old row
+    // divergent, and the next open's reconcile would revert the import).
+    // Panels/print/export/EQ pick the values up on their next mount, same as
+    // the AI payloads below.
+    if (sel.prefs) {
+      for (const [key, value] of Object.entries(sel.prefs)) {
+        prefKV().setItem(key, JSON.stringify(value));
+      }
+    }
     const list = sel.scenarios.length > 0 ? sel.scenarios : scenarios;
     const activeId = list.some(s => s.id === sel.activeScenarioId) ? sel.activeScenarioId : list[0].id;
     setScenarios(list);

@@ -18,7 +18,10 @@ import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './
  *   kv(key TEXT PK, value TEXT)        — engine config ('config') as JSON, plus
  *                                        opt-in app data ('retirement_ai_chats',
  *                                        'retirement_ai_settings') when the user
- *                                        includes it in a backup
+ *                                        includes it in a backup, and the UI
+ *                                        preferences ('wealthconsole_panel_state',
+ *                                        'wealthconsole_eq') mirrored there by
+ *                                        lib/prefKv so they travel with every backup
  *
  * Why a document-per-row model rather than one column per input field: the
  * engine's input shape is deep and still evolving (spouse blocks, events,
@@ -429,20 +432,21 @@ export class AppDatabase {
   /** What remains importable in a store whose scenarios table is empty —
    *  `kind` tells the importer which path to offer:
    *  - 'config': the kv config validates (settings-only backup).
-   *  - 'ai-only': no config, but some kv payload (AI chats/settings) is
-   *    present. The store's fingerprints (meta.active_scenario_id, companion
-   *    tables like scenario_revisions/memories) are deliberately NOT checked:
-   *    they survive in truncated backups and would mislabel any SQLite file
-   *    that merely shares our table names as a backup. The AI blob itself is
-   *    not deep-validated here — chat payloads already self-validate on load
-   *    (corrupt → empty), same as a corrupt blob in a full backup.
+   *  - 'ai-only': no config, but some kv payload (AI chats/settings, or the
+   *    UI-preference blobs) is present. The store's fingerprints (meta
+   *    .active_scenario_id, companion tables like scenario_revisions/memories)
+   *    are deliberately NOT checked: they survive in truncated backups and
+   *    would mislabel any SQLite file that merely shares our table names as a
+   *    backup. The AI blob itself is not deep-validated here — chat payloads
+   *    already self-validate on load (corrupt → empty), same as a corrupt
+   *    blob in a full backup.
    *  - null: nothing of ours — not a backup of this app. */
   salvageableContents(): { kind: 'config'; config: AppConfig } | { kind: 'ai-only' } | null {
     if (this.loadScenarios().length > 0) return null; // a full store — toDoc handles it
     const configRaw = this.loadConfig();
     const config = configRaw ? validateAppConfig(configRaw) : null;
     if (config) return { kind: 'config', config };
-    for (const key of ['retirement_ai_chats', 'retirement_ai_settings']) {
+    for (const key of ['retirement_ai_chats', 'retirement_ai_settings', 'wealthconsole_panel_state', 'wealthconsole_eq']) {
       if (this.getKv(key) !== null) return { kind: 'ai-only' };
     }
     return null;
