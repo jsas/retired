@@ -39,6 +39,12 @@ export interface WebLlmModelChoice {
   maxWindow: number;
   /** One-line "why this one" for the picker. */
   blurb: string;
+  /** Give this model the SHORT built-in persona (SIMPLE_SYSTEM_PROMPT) instead
+   *  of the full one. Small models lose the thread of a long prompt — Phi-4-mini
+   *  recited the tool catalog as prose (#108) — so weaker models get a terse
+   *  persona they can actually hold. Independent of toolCapable: a model can
+   *  drive tools and still need the simple voice. */
+  simplePrompt?: boolean;
 }
 
 export const WEBLLM_MODELS: WebLlmModelChoice[] = [
@@ -71,7 +77,9 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     toolCapable: true,
     maxWindow: 16384,
     // Loop-prone: see MODEL_SAMPLER_DEFAULTS in aiSettings for its stronger
-    // anti-repeat profile (diverse word-salad is its failure mode).
+    // anti-repeat profile (diverse word-salad is its failure mode). Long
+    // prompts also derail it into reciting the tool catalog — simple persona.
+    simplePrompt: true,
     blurb: 'Microsoft\'s small instruct model; reliable at following formats.',
   },
   {
@@ -108,6 +116,8 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     sizeGB: 1.6,
     toolCapable: false,
     maxWindow: 8192,
+    // Too small for the full persona as well as the tool protocol.
+    simplePrompt: true,
     blurb: 'Smallest download, but too weak to change your plan — answers questions only. Pick only if nothing else fits your GPU.',
   },
 ];

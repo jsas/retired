@@ -69,6 +69,10 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   /** Safety net: max tool-call round trips per user message (default 8). */
   maxRounds?: number;
+  /** Built-in persona tier the turn started on; the forced-finalization pass
+   *  rebuilds the system prompt and must keep the same persona (a simple-tier
+   *  model doesn't get the long prompt back just because it looped). */
+  promptTier?: PromptTier;
   /** The live app config; when supplied, the finalization pass after the round
    *  limit re-reads the rules from it. Not required for the loop itself. */
   config?: AppConfig;
@@ -113,23 +117,55 @@ export const DEFAULT_SYSTEM_PROMPT = [
   'evidence-based recommendations; the user always makes the final call.',
 ].join('\n');
 
+/** Which built-in persona a model gets when the user hasn't overridden it.
+ *  'full' is DEFAULT_SYSTEM_PROMPT, written for cloud-class instruction
+ *  followers. 'simple' is the short-form persona below, for small local
+ *  models that lose the thread of long prompts (Phi-4-mini reciting the tool
+ *  catalog as prose was the trigger — see #108). */
+export type PromptTier = 'full' | 'simple';
+
+/** The built-in persona for a tier. */
+export function personaFor(tier: PromptTier): string {
+  return tier === 'simple' ? SIMPLE_SYSTEM_PROMPT : DEFAULT_SYSTEM_PROMPT;
+}
+
+/**
+ * The short-form persona for simple local models. Same job as the full one —
+ * grounded, propose-don't-apply, evidence-based — but written for a 3.8B
+ * instruction follower: a handful of one-line rules, positive phrasing only
+ * (small models parrot negated instructions), no abstract framing. Long
+ * prompts are what make these models recite the prompt back instead of
+ * answering.
+ */
+export const SIMPLE_SYSTEM_PROMPT = [
+  'You are the retirement assistant in RE:tired, a Canadian retirement planner.',
+  '',
+  'Rules:',
+  '- Use only numbers from the plan summary or the tool results.',
+  '- Keep answers short: a few sentences, plain words.',
+  '- To change the plan, call a tool. The user confirms every change.',
+].join('\n');
+
 /** Build the system prompt the agent runs under. The persona comes from
- *  `basePrompt` (DEFAULT_SYSTEM_PROMPT unless the user has overridden it in
- *  Settings); this appends the tool-usage mechanics, the live program rules
- *  (from `config`, when given), and the scenario name. */
+ *  `basePrompt` (a user override), else the built-in for `tier`
+ *  (DEFAULT_SYSTEM_PROMPT unless the model is a simple-tier local model);
+ *  this appends the tool-usage mechanics, the live program rules (from
+ *  `config`, when given), and the scenario name. */
 export function buildSystemPrompt(
   scenarioName: string,
   opts?: {
     toolsEnabled?: boolean;
     toolMode?: 'native' | 'prompt' | 'off';
     basePrompt?: string;
+    /** Built-in persona tier when there's no user override (default 'full'). */
+    tier?: PromptTier;
     /** Live engine config; when supplied, the CPP/OAS/GIS/RRIF/limit rules are
      *  rendered from it so the model quotes the program's real numbers. */
     config?: AppConfig;
   },
 ): string {
   const mode = opts?.toolMode ?? (opts?.toolsEnabled === false ? 'off' : 'native');
-  const persona = (opts?.basePrompt?.trim()) || DEFAULT_SYSTEM_PROMPT;
+  const persona = (opts?.basePrompt?.trim()) || personaFor(opts?.tier ?? 'full');
   const rules = opts?.config ? buildProgramRules(opts.config) : '';
   return [
     persona,
@@ -337,6 +373,7 @@ async function* finalizeWithoutTools(
   const base = buildSystemPrompt(opts.context.scenarioName, {
     toolMode: 'off',
     basePrompt: undefined, // default persona — the override lives on the full prompt
+    tier: opts.promptTier, // keep the same persona tier the turn started on
     config: opts.config ?? opts.context.config,
   });
   const finalSystem = [

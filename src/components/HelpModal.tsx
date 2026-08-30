@@ -623,6 +623,10 @@ const SECTIONS: HelpSection[] = [
         body: <P><strong>Local</strong> runs on your own computer: nothing leaves the machine, no account or key needed, but answers are only as good as your hardware allows. <strong>Online</strong> sends your question (and the plan details in it) to a provider's servers: generally smarter answers, but you need an API key and the privacy trade-off above applies. Pick on the Connections page.</P>
       },
       {
+        term: 'Base prompt (persona)',
+        body: <P>The standing instructions that shape how the assistant answers — editable via <strong>Base prompt</strong> under the chat input, applying to every chat. Stronger models get the full persona; small local models that get tangled up in long instructions automatically get a <strong>short one-line-rules version</strong> instead, which they follow far more reliably. The editor shows which version your current model uses, and you can always override it with your own text or switch to the full persona.</P>
+      },
+      {
         term: 'Tokens',
         body: <P>How AI models measure text — roughly three-quarters of a word each. Your question, the plan summary, and the answer all count. Only matters because a model can only hold so many at once (see Context window).</P>
       },

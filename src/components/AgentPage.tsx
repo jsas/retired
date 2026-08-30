@@ -31,7 +31,7 @@ import {
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
-import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, personaFor, runAgentTurn, type MutationProposal, type PromptTier } from '../lib/ai/agentLoop';
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
@@ -244,6 +244,9 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   const localMeta = isLocal ? WEBLLM_MODELS.find(m => m.id === connection?.model) : undefined;
   const toolCapable = !isLocal || (localMeta?.toolCapable ?? true);
   const toolMode: 'native' | 'prompt' | 'off' = !isLocal ? 'native' : toolCapable ? 'prompt' : 'off';
+  // Weak local models get the short built-in persona — a long prompt is what
+  // makes them recite the tool catalog instead of answering (#108).
+  const promptTier: PromptTier = localMeta?.simplePrompt ? 'simple' : 'full';
 
   // The active thread object (creating one lazily if the store is empty).
   const activeThread: ChatThread | null =
@@ -473,6 +476,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               ready={ready}
               isLocal={isLocal}
               toolMode={toolMode}
+              promptTier={promptTier}
               settings={settings}
               onSettingsChange={setSettings}
               inputs={inputs}
@@ -549,15 +553,16 @@ function buildSystemBody(
   scenarioName: string,
   basePrompt: string | undefined,
   config: AppConfig,
+  tier: PromptTier = 'full',
 ): string {
   if (toolMode === 'prompt') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
+    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, tier, config }) + '\n\n' +
       buildPromptToolInstructions(toolSpecs());
   }
   if (toolMode === 'off') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config });
+    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, tier, config });
   }
-  return buildSystemPrompt(scenarioName, { basePrompt, config });
+  return buildSystemPrompt(scenarioName, { basePrompt, tier, config });
 }
 
 /** The live plan digest for chat-only local models ('prompt' and 'off'
@@ -583,11 +588,12 @@ function planContextMessage(
   };
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
+function Conversation({ thread, ready, isLocal, toolMode, promptTier, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
   toolMode: 'native' | 'prompt' | 'off';
+  promptTier: PromptTier;
   settings: AiSettings;
   onSettingsChange: (mutate: (prev: AiSettings) => AiSettings) => void;
   inputs: RetirementInputs;
@@ -676,7 +682,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
     const basePrompt = settings.systemPromptOverride;
-    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config);
+    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config, promptTier);
     const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
     const planContext = planContextMessage(toolMode, inputs, config);
     const history = toHistory(turns);
@@ -685,7 +691,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...full]);
     }
     return estimateTokens(system, full);
-  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config]);
+  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns, toolMode, promptTier, scenarioName, inputs, config]);
 
   /**
    * Run one assistant turn: append (or replace) a streaming assistant bubble
@@ -734,7 +740,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     };
 
     const basePrompt = settings.systemPromptOverride;
-    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config);
+    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config, promptTier);
     // The chat's standing instructions go last so they read as the user's own
     // voice; they can steer tone/focus but the base prompt's rules come first.
     const system = thread.systemNote?.trim()
@@ -828,6 +834,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
         },
         signal: abort.signal,
         toolMode,
+        promptTier,
         maxRounds: toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS : toolMode === 'off' ? 0 : undefined,
         config,
         onMutation: proposal =>
@@ -1236,6 +1243,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
               />
               <BasePromptEditor
                 override={settings.systemPromptOverride ?? ''}
+                tier={promptTier}
                 onChange={text => onSettingsChange(prev => ({ ...prev, systemPromptOverride: text || undefined }))}
               />
               {connection && (
@@ -1686,21 +1694,28 @@ function ContextMeter({ used, limit, compacted }: { used: number; limit: number;
 
 /** The assistant's base persona prompt, editable across all chats. A collapsed
  *  one-line button by default; opens into an editor pre-filled with whatever
- *  is currently in effect (the user's override, or the built-in default they
- *  can use as a starting point). Clearing it restores the default. */
-function BasePromptEditor({ override, onChange }: { override: string; onChange: (text: string) => void }) {
+ *  is currently in effect (the user's override, or the built-in persona for
+ *  the active model's tier). Weak local models run on a short persona they
+ *  can actually hold (#108), so "default" means that model's built-in —
+ *  Reset restores the tier's persona, Use default clears the override. */
+function BasePromptEditor({ override, tier, onChange }: {
+  override: string;
+  tier: PromptTier;
+  onChange: (text: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(override);
   const customized = override.trim().length > 0;
+  const builtIn = personaFor(tier);
   if (!open) {
     return (
       <button
-        onClick={() => { setDraft(customized ? override : DEFAULT_SYSTEM_PROMPT); setOpen(true); }}
+        onClick={() => { setDraft(customized ? override : builtIn); setOpen(true); }}
         className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
         title="View and edit the assistant's base persona prompt (applies to every chat)"
       >
         <Bot size={11} />
-        {customized ? 'Base prompt: customized' : 'Base prompt'}
+        {customized ? 'Base prompt: customized' : tier === 'simple' ? 'Base prompt: simple (this model)' : 'Base prompt'}
       </button>
     );
   }
@@ -1714,6 +1729,16 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
           <X size={12} />
         </button>
       </div>
+      {tier === 'simple' && (
+        <p className="text-[10px] text-slate-500 mb-1 leading-snug">
+          This model uses the short persona — small models follow a few plain rules better
+          than a long prompt. <button
+            onClick={() => setDraft(DEFAULT_SYSTEM_PROMPT)}
+            className="font-semibold text-violet-700 hover:underline"
+            title="Load the full (longer) persona into the editor"
+          >Use the full persona instead</button> (only recommended for stronger models).
+        </p>
+      )}
       <textarea
         value={draft}
         onChange={e => setDraft(e.target.value)}
@@ -1722,9 +1747,9 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
       />
       <div className="flex items-center justify-between gap-2 mt-1">
         <button
-          onClick={() => { setDraft(DEFAULT_SYSTEM_PROMPT); }}
+          onClick={() => { setDraft(builtIn); }}
           className="text-[10px] font-semibold text-slate-400 hover:text-violet-700"
-          title="Restore the built-in default persona"
+          title={`Restore the built-in ${tier} persona for this model`}
         >
           Reset to default
         </button>
@@ -1739,7 +1764,7 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
             </button>
           )}
           <button
-            onClick={() => { onChange(draft.trim() === DEFAULT_SYSTEM_PROMPT.trim() ? '' : draft.trim()); setOpen(false); }}
+            onClick={() => { onChange(draft.trim() === builtIn.trim() ? '' : draft.trim()); setOpen(false); }}
             className="px-2.5 py-1 bg-violet-600 text-white text-[11px] font-semibold rounded hover:bg-violet-700"
           >
             Save

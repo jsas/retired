@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { runAgentTurn, buildSystemPrompt, type AgentEvent, type MutationProposal } from './agentLoop';
+import {
+  runAgentTurn, buildSystemPrompt, personaFor,
+  DEFAULT_SYSTEM_PROMPT, SIMPLE_SYSTEM_PROMPT,
+  type AgentEvent, type MutationProposal,
+} from './agentLoop';
 import type { ChatMessage, StreamEvent } from './providers';
 import type { ToolContext } from './tools';
 import { baseInputs, testConfig } from '../../test/helpers';
@@ -303,6 +307,36 @@ describe('buildSystemPrompt', () => {
   it('omits the rules section when no config is given', () => {
     const s = buildSystemPrompt('My Plan');
     expect(s).not.toContain('Rules this program applies');
+  });
+
+  it('tier "simple" swaps in the short persona, keeping mechanics + scenario', () => {
+    const s = buildSystemPrompt('My Plan', { tier: 'simple' });
+    // The short persona's distinctive line, not the long one's phrasing.
+    expect(s).toContain('Keep answers short');
+    expect(s).not.toContain('You ARE a planner');
+    // The mechanics the tier must NOT lose: tool protocol + scenario name.
+    expect(s).toContain('set_scenario_value');
+    expect(s).toContain('"My Plan"');
+  });
+
+  it('tier defaults to the full persona when unspecified', () => {
+    expect(buildSystemPrompt('My Plan')).toContain('You ARE a planner');
+    expect(buildSystemPrompt('My Plan', { tier: 'full' })).toContain('You ARE a planner');
+  });
+
+  it('a user override wins over the tier selection', () => {
+    const s = buildSystemPrompt('My Plan', { tier: 'simple', basePrompt: 'My custom voice.' });
+    expect(s).toContain('My custom voice.');
+    expect(s).not.toContain('Keep answers short');
+  });
+
+  it('the simple persona is genuinely short and free of negated rules', () => {
+    // The whole point (#108): small models parrot long prompts and negated
+    // instructions. Keep it under a tenth the length, positive phrasing only.
+    expect(SIMPLE_SYSTEM_PROMPT.length).toBeLessThan(DEFAULT_SYSTEM_PROMPT.length / 3);
+    expect(SIMPLE_SYSTEM_PROMPT).not.toMatch(/\bnever\b/i);
+    expect(personaFor('simple')).toBe(SIMPLE_SYSTEM_PROMPT);
+    expect(personaFor('full')).toBe(DEFAULT_SYSTEM_PROMPT);
   });
 });
 
