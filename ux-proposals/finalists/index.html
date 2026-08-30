@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 5 finalists</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .tile:hover .arrow { transform: translateX(3px); }
+  .tile .arrow { transition: transform .15s; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+<div class="max-w-5xl mx-auto px-6 py-12">
+
+  <div class="flex items-center gap-2 font-semibold text-sm mb-8">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired — five finalists from your second-round ratings</span>
+    <a href="../winners/index.html" class="ml-auto text-xs text-slate-400 hover:text-slate-600">← winners</a>
+  </div>
+
+  <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Five finalists</h1>
+  <p class="text-slate-600 text-sm leading-relaxed mb-4 max-w-2xl">
+    Your verdicts from the winners round, applied: <b>no cards, no rounded corners, light and plain.</b>
+    The drag pad and the contour curve survive; the conversation stays as the assistant on-ramp;
+    everything busy or dark is gone.
+  </p>
+
+  <div class="bg-white/95 backdrop-blur border border-slate-200 rounded-xl p-3 mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" style="position:sticky;top:0;z-index:40;">
+    <span class="font-semibold text-slate-700">Pick the one:</span>
+    <span class="text-slate-400">rate each page —</span>
+    <span class="inline-flex items-center gap-1"><b class="text-blue-600">Keep</b> worth building</span>
+    <span class="inline-flex items-center gap-1"><b class="text-amber-600">Meh</b> has a piece</span>
+    <span class="inline-flex items-center gap-1"><b class="text-red-600">No</b> drop it</span>
+    <span class="ml-auto">
+      <button id="copy-wratings" class="px-2.5 py-1 rounded-md border border-blue-200 bg-blue-50 text-blue-700 font-semibold hover:border-blue-400">Copy ratings for Claude</button>
+    </span>
+    <div id="wrate-summary" class="w-full text-slate-500"></div>
+  </div>
+
+  <!-- ═══ F1 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">1 · Editorial, lit</h2>
+      <span class="text-xs text-slate-400">KEEP w1 landing but not dark + KEEP w2 app with zero cards, square corners</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="f1-editorial.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">The editorial welcome, in daylight</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">"Will your money outlast you?" — same layout you approved, light theme, square edges.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="f1-editorial-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Drag pad, no cards anywhere</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">The steering app you kept, restyled: flat, square, light. Chrome as plain text links.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ F2 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">2 · Contour, curved</h2>
+      <span class="text-xs text-slate-400">KEEP w7 landing + KEEP w7 app with real topographic curves</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="f2-timeline.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">The timeline strip, refined</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">"See your whole life on one line." — the plain sleek one you praised, squared off.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="f2-timeline-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Success terrain with smooth boundary curves</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">The contour graph you liked, with real curves instead of cells — "integrate with the mechanics of the current one."</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ F3 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">3 · Conversation to assistant</h2>
+      <span class="text-xs text-slate-400">KEEP w3 chat on-ramp with the "wanna chat to an AI assistant" path + contour app</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="f3-conversation.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">Chat that becomes the assistant</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Five questions build the plan, then: open the dashboard or keep chatting — with the local-model install step shown.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="f3-conversation-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Contour + docked assistant</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Smooth-curve terrain and small faders on the left, the assistant as a flat panel on the right.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ F4 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">4 · Just the score</h2>
+      <span class="text-xs text-slate-400">MEH w2 landing stripped to the essence + KEEP w2 app squared</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="f4-score.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">One number, one sentence, one door</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">The honest score alone — "too many cards, too busy" answered by deleting almost everything.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="f4-score-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Steering pad with a thin score strip</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">The drag pad you kept, flat and square, score pinned as a hairline strip.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ F5 ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">5 · One continuous line</h2>
+      <span class="text-xs text-slate-400">KEEP w7 landing + KEEP w2 app — landing strip = app strip, one visual language</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="f5-line.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">The timeline as the whole hero</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">"One line. Your whole plan." — the strip here is pixel-identical to the app's strip.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="f5-line-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Controls above, the same line below</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Smooth-curved success pad + small faders on top; drag them and the landing's strip redraws live.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="text-slate-500 text-xs leading-relaxed border-t border-slate-200 pt-6 space-y-2 max-w-2xl">
+    <p>Every app page shows named homes for the full surface (13 input sections, plans, assistant,
+    data/backup, print) per the bolt-on test in <code class="bg-slate-100 px-1.5 py-0.5 rounded">../REQUIREMENTS.md</code> §8.7.
+    Landings carry the privacy promise and the not-advice line per §8.8.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var KEY = 'retired_finalists_v1'; // { file: { rate: 'keep'|'meh'|'no', note: string } }
+  var data = {};
+  try { data = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { data = {}; }
+
+  // inject rating CSS
+  var st = document.createElement('style');
+  st.textContent =
+    '.wratebar { display: flex; gap: 4px; margin-top: 10px; align-items: center; flex-wrap: wrap; }' +
+    '.wratebar button { min-width: 30px; height: 24px; border-radius: 6px; border: 1px solid #e2e8f0;' +
+    ' background: #f8fafc; font-size: 11px; font-weight: 600; color: #94a3b8; cursor: pointer; padding: 0 6px; }' +
+    '.wratebar button:hover { border-color: #94a3b8; color: #475569; }' +
+    '.wratebar button.on[data-rate="keep"] { background: #2563eb; border-color: #2563eb; color: #fff; }' +
+    '.wratebar button.on[data-rate="meh"] { background: #d97706; border-color: #d97706; color: #fff; }' +
+    '.wratebar button.on[data-rate="no"] { background: #dc2626; border-color: #dc2626; color: #fff; }' +
+    '.dark-tile .wratebar button { background: #1e293b; border-color: #475569; color: #94a3b8; }' +
+    '.wnote { display: none; margin-top: 8px; flex-basis: 100%; }' +
+    '.wnote.show { display: block; }' +
+    '.wnote textarea { width: 100%; box-sizing: border-box; border: 1px solid #e2e8f0; border-radius: 6px;' +
+    ' padding: 6px 8px; font-size: 12px; font-family: inherit; color: #334155; resize: vertical; min-height: 40px; background: #f8fafc; }' +
+    '.wnote textarea:focus { outline: none; border-color: #94a3b8; background: #fff; }' +
+    '.wnote .wl { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8; display: block; margin-bottom: 3px; }' +
+    '.tile.hidden-weak { display: none; }';
+  document.head.appendChild(st);
+
+  // inject ratebars into every tile card
+  var cards = document.querySelectorAll('a.tile');
+  var titles = {};
+  cards.forEach(function (a) {
+    var href = a.getAttribute('href') || '';
+    if (!/^f\d/.test(href)) return;
+    titles[href] = ((a.querySelector('h3') || {}).textContent || '').trim();
+    if (a.classList.contains('bg-slate-900')) a.classList.add('dark-tile');
+    var bar = document.createElement('div');
+    bar.className = 'wratebar';
+    bar.dataset.file = href;
+    bar.innerHTML =
+      '<button data-rate="keep" title="worth building">Keep</button>' +
+      '<button data-rate="meh" title="has a piece worth stealing">Meh</button>' +
+      '<button data-rate="no" title="drop it">No</button>' +
+      '<div class="wnote"><span class="wl">Why?</span>' +
+      '<textarea placeholder="what works, what to change, what to steal…" rows="2"></textarea></div>';
+    a.appendChild(bar);
+  });
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
+  function entry(f) { return data[f] || null; }
+
+  function refreshCard(f) {
+    var d = entry(f) || {};
+    cards.forEach(function (a) {
+      var bar = a.querySelector('.wratebar');
+      if (!bar || bar.dataset.file !== f) return;
+      bar.querySelectorAll('button').forEach(function (btn) {
+        btn.classList.toggle('on', d.rate === btn.dataset.rate);
+      });
+      var wn = bar.querySelector('.wnote');
+      var ta = wn.querySelector('textarea');
+      if (document.activeElement !== ta) ta.value = d.note || '';
+      wn.classList.toggle('show', d.rate === 'keep' || d.rate === 'meh');
+    });
+  }
+
+  document.querySelectorAll('.wratebar').forEach(function (bar) {
+    var f = bar.dataset.file;
+    refreshCard(f);
+    bar.querySelectorAll('button').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var d = entry(f) || {};
+        if (d.rate === btn.dataset.rate) delete data[f];
+        else data[f] = { rate: btn.dataset.rate, note: d.note || '' };
+        save();
+        refreshCard(f);
+        updateSummary();
+        if (data[f] && (data[f].rate === 'keep' || data[f].rate === 'meh')) {
+          var ta = bar.querySelector('.wnote textarea');
+          if (ta) ta.focus();
+        }
+      });
+    });
+  });
+
+  document.addEventListener('input', function (ev) {
+    var ta = ev.target;
+    if (!ta.matches || !ta.matches('.wnote textarea')) return;
+    var bar = ta.closest('.wratebar');
+    var f = bar && bar.dataset.file;
+    if (f && data[f]) { data[f].note = ta.value; save(); }
+  });
+
+  document.addEventListener('click', function (ev) {
+    if (ev.target && ev.target.matches && ev.target.matches('.wnote textarea')) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }, true);
+
+  function updateSummary() {
+    var el = document.getElementById('wrate-summary');
+    if (!el) return;
+    var k = 0, m = 0, n = 0;
+    Object.keys(data).forEach(function (f) {
+      var r = data[f] && data[f].rate;
+      if (r === 'keep') k++; else if (r === 'meh') m++; else if (r === 'no') n++;
+    });
+    var total = k + m + n;
+    el.textContent = total === 0
+      ? '0 of 10 rated — keep the winners, meh the maybes, no the rest'
+      : k + ' keep · ' + m + ' meh · ' + n + ' no — ' + (10 - total) + ' left';
+  }
+
+  function copyText(text, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+    } else fallbackCopy(text, done);
+  }
+  function fallbackCopy(text, done) {
+    var t = document.createElement('textarea');
+    t.value = text;
+    document.body.appendChild(t);
+    t.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(t);
+  }
+
+  var copyBtn = document.getElementById('copy-wratings');
+  if (copyBtn) copyBtn.addEventListener('click', function () {
+    var lines = ['# My ratings of the 5 finalist pairs (10 pages)', ''];
+    Object.keys(titles).sort().forEach(function (f) {
+      var d = entry(f);
+      if (!d) return;
+      var label = f.replace('.html', '') + ' — ' + titles[f];
+      if (d.rate === 'keep') lines.push('**KEEP** — ' + label);
+      else if (d.rate === 'meh') lines.push('**MEH** — ' + label + ' (steal pieces)');
+      else lines.push('**NO** — ' + label);
+      if (d.note) lines.push('> ' + d.note);
+      lines.push('');
+    });
+    if (lines.length === 2) lines.push('(no ratings yet)');
+    copyText(lines.join('\n'), function () {
+      var old = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(function () { copyBtn.textContent = old; }, 1500);
+    });
+  });
+
+  updateSummary();
+})();
+</script>
+</body>
+</html>

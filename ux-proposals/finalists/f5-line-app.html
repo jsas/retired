@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Take the controls</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* drag pad */
+  #pad { touch-action: none; cursor: crosshair; }
+  #pad.grabbing { cursor: grabbing; }
+  #dot { cursor: grab; }
+
+  /* small faders — 4px track, 14px thumb, square */
+  input[type=range].fader {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; background: #e5e5e5; outline: none; cursor: pointer;
+  }
+  input[type=range].fader::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 0;
+    background: #fff; border: 2px solid #1d4ed8; cursor: grab;
+  }
+  input[type=range].fader::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 0;
+    background: #fff; border: 2px solid #1d4ed8; cursor: grab;
+  }
+  input[type=range].fader:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 3px; }
+
+  /* dropdowns */
+  .dropdown { position: relative; }
+  .dropdown-panel { display: none; position: absolute; top: calc(100% + 2px); left: 0; z-index: 50; }
+  .dropdown.open .dropdown-panel { display: block; }
+
+  ::selection { background: #dbeafe; }
+</style>
+</head>
+<body class="bg-white text-neutral-900 min-h-screen flex flex-col antialiased">
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SITE 2 — APP CHROME, as a plain top bar. No panels, no shadows.
+     Bolt-on homes (REQUIREMENTS §8.7):
+       Details ▾    → the 13 input sections
+       Plans ▾      → scenario switcher / revisions / compare
+       Assistant    → the AI agent
+       Data         → backup / restore / import / share links
+       Print/Export → the one-page plan, CSV/PDF
+       Verdict      → plain text line above the pad + chip top-right
+     ══════════════════════════════════════════════════════════════════ -->
+<header class="border-b border-neutral-200">
+  <div class="max-w-6xl mx-auto px-4 md:px-6 h-14 flex items-center gap-1">
+
+    <a href="f5-line.html" class="mr-2 flex shrink-0 items-center gap-2 text-sm font-semibold" title="Back to the landing">
+      <div class="w-6 h-6 bg-neutral-900 text-white flex items-center justify-center text-[10px] font-bold">RE:</div>
+      <span class="hidden sm:inline">tired</span>
+    </a>
+
+    <!-- Details ▾ — the 13 input sections -->
+    <div class="dropdown" id="ddDetails">
+      <button class="dd-btn flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100">
+        Details <span class="text-[10px] text-neutral-400">▾</span>
+      </button>
+      <div class="dropdown-panel min-w-[300px] border border-neutral-200 bg-white p-2">
+        <p class="px-3 pt-2 pb-1.5 text-[10px] uppercase tracking-wider text-neutral-400">The full plan — every section one click away</p>
+        <div class="grid grid-cols-2 gap-x-1 text-[12.5px]">
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Personal Profile</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Account Balances</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Contribution Rates</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">RDSP</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Government Benefits</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Pensions</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Employment Income</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Cash Events</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Spending Phases</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Spouse</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Withdrawal Strategy</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Home Equity</a>
+          <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Market Hypotheses</a>
+        </div>
+        <p class="mt-1 border-t border-neutral-100 px-3 pt-2 text-[10.5px] text-neutral-400">The pad steers the two biggest levers. The rest live here.</p>
+      </div>
+    </div>
+
+    <!-- Plans ▾ — scenario switcher -->
+    <div class="dropdown" id="ddPlans">
+      <button class="dd-btn flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100">
+        Plans <span class="text-[10px] text-neutral-400">▾</span>
+      </button>
+      <div class="dropdown-panel min-w-[230px] border border-neutral-200 bg-white p-2">
+        <p class="px-3 pt-2 pb-1.5 text-[10px] uppercase tracking-wider text-neutral-400">Scenarios</p>
+        <a href="#" class="flex items-center justify-between bg-neutral-100 px-3 py-1.5 text-[12.5px] font-medium text-neutral-900">Base plan <span class="text-[10px] text-neutral-400">current</span></a>
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Retire at 60</a>
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Sell the house at 80</a>
+        <div class="mt-1.5 border-t border-neutral-100 pt-1.5">
+          <a href="#" class="block px-3 py-1.5 text-[12.5px] text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900">+ New plan</a>
+          <a href="#" class="block px-3 py-1.5 text-[12.5px] text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900">Compare plans…</a>
+          <a href="#" class="block px-3 py-1.5 text-[12.5px] text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900">Revision history…</a>
+        </div>
+      </div>
+    </div>
+
+    <a href="#" class="hidden md:block px-3 py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100" title="AI assistant — reads your plan, shows its work">Assistant</a>
+    <a href="#" class="hidden md:block px-3 py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100" title="Backup, restore, import, share links">Data</a>
+    <a href="#" class="hidden md:block px-3 py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100" title="Print the one-page plan, or export CSV / PDF">Print / Export</a>
+
+    <!-- small screens -->
+    <div class="dropdown md:hidden" id="ddMore">
+      <button class="dd-btn px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100">More ▾</button>
+      <div class="dropdown-panel left-auto right-0 min-w-[180px] border border-neutral-200 bg-white p-2">
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-neutral-600 hover:bg-neutral-100">Assistant</a>
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-neutral-600 hover:bg-neutral-100">Data &amp; backup</a>
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-neutral-600 hover:bg-neutral-100">Print / export</a>
+      </div>
+    </div>
+
+    <div class="flex-1"></div>
+
+    <!-- persistent verdict chip — always top-right, text + dot, never color alone -->
+    <div class="flex shrink-0 items-center gap-2.5 border-l border-neutral-200 pl-3" id="vchip" title="The verdict, always on">
+      <span id="vchipDot" class="w-2.5 h-2.5 bg-neutral-300"></span>
+      <div class="leading-tight">
+        <div class="num text-sm font-bold text-neutral-900">lasts to <span id="vchipAge">—</span></div>
+        <div class="text-[9px] uppercase tracking-wider text-neutral-400" id="vchipState">checking…</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 w-full max-w-6xl mx-auto px-4 md:px-6 pb-16">
+
+  <!-- ═══ VERDICT — one plain text line above the pad ═══ -->
+  <section class="pt-8 md:pt-10 pb-6 border-b border-neutral-200">
+    <div class="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+      <div class="min-w-0">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">The verdict</p>
+        <h1 id="verdict" class="mt-1.5 text-[24px] md:text-[30px] leading-snug font-semibold text-neutral-900"></h1>
+        <p id="verdictSub" class="mt-1.5 text-[13.5px] leading-relaxed text-neutral-500"></p>
+      </div>
+      <!-- weather toggle — the layperson's Monte Carlo -->
+      <div class="flex items-center gap-1.5 text-[12px] text-neutral-500">
+        <span class="mr-1">If the markets are</span>
+        <button data-sky="storm"  class="skybtn border border-neutral-200 px-2.5 py-1 text-neutral-500 hover:text-neutral-900" aria-pressed="false">stormy</button>
+        <button data-sky="normal" class="skybtn border border-neutral-800 px-2.5 py-1 font-semibold text-neutral-900" aria-pressed="true">ordinary</button>
+        <button data-sky="sun"    class="skybtn border border-neutral-200 px-2.5 py-1 text-neutral-500 hover:text-neutral-900" aria-pressed="false">kind</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ THE PAD + THE FADERS ═══ -->
+  <section class="border-b border-neutral-200 py-7 grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-x-10 gap-y-8">
+
+    <!-- ── THE DRAG PAD: retire age (x) × yearly spending (y).
+         The success region's boundary is a smooth curve: a fine simulate()
+         grid gives a per-column spending ceiling, which is interpolated and
+         drawn as a bezier-smoothed SVG path — the line the user liked. -->
+    <div>
+      <div class="mb-2.5 flex items-baseline justify-between">
+        <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">The ground your plan stands on</h2>
+        <span class="text-[11px] text-neutral-400">drag the square, or use the faders</span>
+      </div>
+
+      <svg id="pad" viewBox="0 0 720 480" class="w-full block select-none border border-neutral-200 bg-white"
+           role="img" aria-label="Drag pad: retirement age against yearly spending, with a smooth curve marking where the plan holds">
+        <g id="gRegion"></g>
+        <g id="gGrid"></g>
+        <g id="gLabels"></g>
+        <g id="gDot"></g>
+      </svg>
+
+      <div class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11.5px] text-neutral-500">
+        <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 bg-blue-100 border border-blue-300"></span>the plan holds past <span class="num" id="lgMax">95</span></span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3.5 border-t-2 border-blue-700"></span>the boundary — the curve where it starts to fail</span>
+      </div>
+    </div>
+
+    <!-- ── THE FADERS — the same two levers, small. Each says its consequence. ── -->
+    <div class="space-y-6 lg:pt-6">
+      <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">The two levers</h2>
+
+      <div>
+        <div class="mb-1.5 flex items-baseline justify-between">
+          <label for="fRetire" class="text-[13px] font-medium text-neutral-700">Stop working at</label>
+          <span class="num text-[15px] font-bold text-neutral-900" id="vRetire">62</span>
+        </div>
+        <input id="fRetire" type="range" class="fader" min="55" max="75" step="1" value="62" />
+        <div class="num mt-1 flex justify-between text-[10px] text-neutral-400"><span>55</span><span>75</span></div>
+        <p class="mt-2 border-t border-neutral-100 pt-2 text-[11.5px] leading-relaxed text-neutral-500" id="fxRetire"></p>
+      </div>
+
+      <div>
+        <div class="mb-1.5 flex items-baseline justify-between">
+          <label for="fSpend" class="text-[13px] font-medium text-neutral-700">Spend a year</label>
+          <span class="num text-[15px] font-bold text-neutral-900" id="vSpend">$85,000</span>
+        </div>
+        <input id="fSpend" type="range" class="fader" min="40000" max="160000" step="1000" value="85000" />
+        <div class="num mt-1 flex justify-between text-[10px] text-neutral-400"><span>$40k</span><span>$160k</span></div>
+        <p class="mt-2 border-t border-neutral-100 pt-2 text-[11.5px] leading-relaxed text-neutral-500" id="fxSpend"></p>
+      </div>
+
+      <!-- storm-test indicator — always on, plain words -->
+      <div class="border-t border-neutral-200 pt-4">
+        <div class="flex items-center gap-2">
+          <span id="stormDot" class="w-2 h-2 bg-neutral-300"></span>
+          <span class="text-[13px] font-medium text-neutral-700" id="stormTitle">Storm test</span>
+        </div>
+        <p class="mt-1.5 text-[11.5px] leading-relaxed text-neutral-500" id="stormLine"></p>
+      </div>
+
+      <p class="text-[11px] leading-relaxed text-neutral-400">
+        Every other input — spouse, pensions, cash events, withdrawal order —
+        is one click away under <strong class="text-neutral-500">Details ▾</strong> above.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══ THE LINE — the same strip as the landing, now live.
+       Identical geometry, viewBox and colors to f5-line.html: the landing
+       was this strip; the app just added controls above it. Dragging the
+       pad redraws it. ═══ -->
+  <section class="border-b border-neutral-200 py-7">
+    <div class="mb-2.5 flex items-baseline justify-between">
+      <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">Your life on one line — this exact plan</h2>
+      <span class="num text-[11px] text-neutral-400" id="tlRange"></span>
+    </div>
+    <svg id="life" viewBox="0 0 1000 150" class="w-full block select-none" role="img"
+         aria-label="Timeline from 55 to 95 showing the balance over the years and where the money runs out"></svg>
+  </section>
+
+  <!-- ═══ EVIDENCE — per-account balances over time + key numbers ═══ -->
+  <section class="py-7 grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-x-10 gap-y-8">
+
+    <!-- per-account balances over time -->
+    <div>
+      <div class="mb-2.5 flex items-baseline justify-between">
+        <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">Where it sits, over time</h2>
+        <span class="text-[11px] text-neutral-400">at age
+          <select id="accAgeSel" class="num border border-neutral-200 bg-white px-1 py-0.5 text-[11px] text-neutral-600"></select>
+        </span>
+      </div>
+      <div class="space-y-2 text-[12px]">
+        <div class="flex items-center gap-2.5">
+          <span class="w-14 text-neutral-500">RRSP</span>
+          <div class="h-2 flex-1 bg-neutral-100"><div id="accRRSP" class="h-full bg-neutral-700" style="width:52%"></div></div>
+          <span class="num w-20 text-right text-neutral-700" id="accRRSPv"></span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="w-14 text-neutral-500">TFSA</span>
+          <div class="h-2 flex-1 bg-neutral-100"><div id="accTFSA" class="h-full bg-blue-700" style="width:31%"></div></div>
+          <span class="num w-20 text-right text-neutral-700" id="accTFSAv"></span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="w-14 text-neutral-500">Taxable</span>
+          <div class="h-2 flex-1 bg-neutral-100"><div id="accTax" class="h-full bg-neutral-400" style="width:17%"></div></div>
+          <span class="num w-20 text-right text-neutral-700" id="accTaxv"></span>
+        </div>
+      </div>
+      <p class="mt-2.5 text-[11px] leading-relaxed text-neutral-400">Shares of <span id="accTotal" class="num"></span> at that age. The mix shifts as the plan moves across the pad.</p>
+    </div>
+
+    <!-- key numbers — hairline-separated, no cards -->
+    <div class="grid grid-cols-2 gap-5">
+      <div>
+        <p class="text-[10.5px] uppercase tracking-wider text-neutral-400">Money lasts to</p>
+        <p id="rLasts" class="num mt-0.5 text-2xl font-bold text-neutral-900">—</p>
+        <p class="mt-0.5 text-[11px] text-neutral-400" id="rLastsNote"></p>
+      </div>
+      <div>
+        <p class="text-[10.5px] uppercase tracking-wider text-neutral-400">Left at <span class="num" id="rMaxLbl">95</span></p>
+        <p id="rLeft" class="num mt-0.5 text-2xl font-bold text-neutral-900">—</p>
+        <p class="mt-0.5 text-[11px] text-neutral-400" id="rLeftNote"></p>
+      </div>
+      <div>
+        <p class="text-[10.5px] uppercase tracking-wider text-neutral-400">In the pot at work's end</p>
+        <p id="rAtRet" class="num mt-0.5 text-2xl font-bold text-neutral-900">—</p>
+        <p class="mt-0.5 text-[11px] text-neutral-400">after the saving years</p>
+      </div>
+      <div>
+        <p class="text-[10.5px] uppercase tracking-wider text-neutral-400">CPP + OAS from <span class="num" id="rBenAge">65</span></p>
+        <p id="rBen" class="num mt-0.5 text-2xl font-bold text-neutral-900">—</p>
+        <p class="mt-0.5 text-[11px] text-neutral-400">every year after that</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="text-[11px] leading-relaxed text-neutral-400 border-t border-neutral-200 pt-4">
+    Everything here is live — drag the pad or move a fader and the verdict, the curve, the line,
+    the accounts and the storm test recompute together. Year-by-year receipts, withdrawal-order
+    optimization and backtests live one level down, behind the numbers they explain.
+  </p>
+</main>
+
+<footer class="border-t border-neutral-200 px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-neutral-400">
+  <span>Educational modeling — not financial, tax, or investment advice. Data stays in this browser.</span>
+  <span>F5 · One line — the landing grew controls.</span>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  function el(id) { return document.getElementById(id); }
+  var ACCENT = '#1d4ed8', RED = '#dc2626';
+
+  /* ═══════════════ THE DRAG PAD — smooth-curved success region ═══════════════
+     Fine grid: retire age 55..75 step 0.5 × spending $40k..$160k step $2k.
+     Every point is a real simulate() run. For each age column we take the
+     highest spending that still holds past maxAge; across columns that gives
+     a boundary polyline, drawn as a bezier-smoothed SVG path — one clean
+     curve, not cells. */
+
+  var VW = 720, VH = 480;
+  var PL = 56, PR = 700, PT = 20, PB = 432;
+  var A0 = 55, A1 = 75;                    // retire age (x)
+  var S0 = 160000, S1 = 40000;             // spending (y, top→bottom)
+
+  var GRID_A = [];
+  for (var ga = A0; ga <= A1; ga += 0.5) GRID_A.push(ga);
+  var GRID_S = [];
+  for (var gs = S1; gs <= S0; gs += 2000) GRID_S.push(gs);
+
+  function xFor(age)    { return PL + (age - A0) / (A1 - A0) * (PR - PL); }
+  function yFor(spend)  { return PT + (S0 - spend) / (S0 - S1) * (PB - PT); }
+  function ageForX(x)   { return A0 + (x - PL) / (PR - PL) * (A1 - A0); }
+  function spendForY(y) { return S1 + (PB - y) / (PB - PT) * (S0 - S1); }
+
+  /* highest spending per age-column that still holds */
+  function boundaryColumns() {
+    var cols = [];
+    for (var i = 0; i < GRID_A.length; i++) {
+      var best = null;
+      for (var j = 0; j < GRID_S.length; j++) {
+        var r = simulate({
+          currentAge: state.currentAge, retireAge: GRID_A[i], maxAge: state.maxAge,
+          savings: state.savings, contrib: state.contrib, spending: GRID_S[j],
+          benefits: state.benefits, benefitAge: state.benefitAge, sky: state.sky
+        });
+        if (r.ok) best = GRID_S[j];
+      }
+      cols.push(best === null ? S1 : best);
+    }
+    return cols;
+  }
+
+  /* light smoothing on the spending ceilings, then a Catmull-Rom → cubic
+     bezier conversion so the boundary is a smooth curve, not segments. */
+  function boundaryPath(cols) {
+    var ys = cols.slice();
+    for (var pass = 0; pass < 2; pass++) {
+      var next = ys.slice();
+      for (var k = 1; k < ys.length - 1; k++) next[k] = (ys[k-1] + ys[k]*2 + ys[k+1]) / 4;
+      ys = next;
+    }
+    var pts = [];
+    for (var i = 0; i < GRID_A.length; i++) {
+      pts.push([xFor(GRID_A[i]), yFor(Math.min(S0, Math.max(S1, ys[i])))]);
+    }
+    if (pts.length < 2) return '';
+    var d = 'M ' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var m = 0; m < pts.length - 1; m++) {
+      var p0 = pts[Math.max(0, m - 1)], p1 = pts[m], p2 = pts[m + 1], p3 = pts[Math.min(pts.length - 1, m + 2)];
+      var c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      var c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      d += ' C ' + c1x.toFixed(1) + ' ' + c1y.toFixed(1) + ', ' + c2x.toFixed(1) + ' ' + c2y.toFixed(1) +
+           ', ' + p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+    }
+    return d;
+  }
+
+  function drawRegion() {
+    var edge = boundaryPath(boundaryColumns());
+    /* the holds-region = under the curve, down to the bottom of the plot */
+    var region = edge + ' L ' + PR + ' ' + PB + ' L ' + PL + ' ' + PB + ' Z';
+    var out = '';
+    out += '<path d="' + region + '" fill="' + ACCENT + '" fill-opacity="0.07"/>';
+    out += '<path d="' + edge + '" fill="none" stroke="' + ACCENT + '" stroke-width="2" stroke-linejoin="round"/>';
+    el('gRegion').innerHTML = out;
+  }
+
+  /* static grid + axes, drawn once */
+  (function drawGrid() {
+    var out = '';
+    for (var a = A0; a <= A1; a += 5) {
+      out += '<line x1="' + xFor(a) + '" y1="' + PT + '" x2="' + xFor(a) + '" y2="' + PB + '" stroke="#e5e5e5" stroke-width="1"/>';
+    }
+    for (var s = S1; s <= S0; s += 20000) {
+      out += '<line x1="' + PL + '" y1="' + yFor(s) + '" x2="' + PR + '" y2="' + yFor(s) + '" stroke="#e5e5e5" stroke-width="1"/>';
+    }
+    out += '<rect x="' + PL + '" y="' + PT + '" width="' + (PR - PL) + '" height="' + (PB - PT) + '" fill="none" stroke="#d4d4d4" stroke-width="1"/>';
+    el('gGrid').innerHTML = out;
+
+    var lab = '';
+    for (var a2 = A0; a2 <= A1; a2 += 5) {
+      lab += '<text x="' + xFor(a2) + '" y="' + (PB + 20) + '" font-size="11" fill="#a3a3a3" text-anchor="middle" class="num">' + a2 + '</text>';
+    }
+    for (var s2 = S1; s2 <= S0; s2 += 20000) {
+      lab += '<text x="' + (PL - 8) + '" y="' + (yFor(s2) + 4) + '" font-size="11" fill="#a3a3a3" text-anchor="end" class="num">' + fmtMoney(s2).replace(',000', 'k') + '</text>';
+    }
+    lab += '<text x="' + ((PL + PR) / 2) + '" y="' + (VH - 8) + '" font-size="12" fill="#525252" text-anchor="middle" font-weight="600">the age you stop working →</text>';
+    lab += '<text x="16" y="' + ((PT + PB) / 2) + '" font-size="12" fill="#525252" text-anchor="middle" font-weight="600" transform="rotate(-90 16 ' + ((PT + PB) / 2) + ')">what you spend each year →</text>';
+    el('gLabels').innerHTML = lab;
+  })();
+
+  /* ── the draggable marker (a square — nothing rounded) ── */
+  var pad = el('pad');
+  function toSvg(evt) {
+    var pt = pad.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    var m = pad.getScreenCTM();
+    return m ? pt.matrixTransform(m.inverse()) : null;
+  }
+  function applyPad(evt) {
+    var p = toSvg(evt);
+    if (!p) return;
+    state.retireAge = Math.round(Math.min(A1, Math.max(A0, ageForX(p.x))));
+    state.spending = Math.round(Math.min(S0, Math.max(S1, spendForY(p.y))) / 1000) * 1000;
+    render();
+  }
+  var dragging = false;
+  pad.addEventListener('pointerdown', function (e) {
+    dragging = true; pad.classList.add('grabbing');
+    try { pad.setPointerCapture(e.pointerId); } catch (_) {}
+    applyPad(e);
+  });
+  pad.addEventListener('pointermove', function (e) { if (dragging) applyPad(e); });
+  ['pointerup', 'pointercancel'].forEach(function (ev) {
+    pad.addEventListener(ev, function () { dragging = false; pad.classList.remove('grabbing'); });
+  });
+
+  function drawDot(res) {
+    var dx = xFor(state.retireAge), dy = yFor(state.spending);
+    var col = res.ok ? ACCENT : RED;
+    var out = '';
+    out += '<rect x="' + (dx - 20) + '" y="' + (dy - 20) + '" width="40" height="40" fill="' + col + '" opacity="0.10"/>';
+    out += '<rect id="dot" x="' + (dx - 9) + '" y="' + (dy - 9) + '" width="18" height="18" fill="' + col + '" stroke="#fff" stroke-width="3"/>';
+    var txt = 'you are here · ' + state.retireAge + ', ' + fmtMoney(state.spending);
+    var w = Math.max(140, txt.length * 6.4 + 20);
+    var above = dy > PT + 60;
+    var px = Math.min(PR - w, Math.max(PL, dx - w / 2));
+    var py = above ? dy - 54 : dy + 28;
+    out += '<rect x="' + px + '" y="' + py + '" width="' + w + '" height="26" fill="#171717" fill-opacity="0.88"/>';
+    out += '<text x="' + (px + w / 2) + '" y="' + (py + 17) + '" font-size="11.5" fill="#fafafa" text-anchor="middle" font-weight="600" class="num">' + txt + '</text>';
+    el('gDot').innerHTML = out;
+  }
+
+  /* ═══════════════ THE LINE — identical to the landing's strip ═══════════════
+     Same viewBox (1000×150), same geometry, same colors as f5-line.html. */
+  var LW = 1000, LA0 = 55, LA1 = 95;
+  var LL = 30, LR = 972, LAXIS = 84;
+  function lxFor(age) { return LL + (Math.min(LA1, Math.max(LA0, age)) - LA0) / (LA1 - LA0) * (LR - LL); }
+
+  function drawLife(res) {
+    var s = '';
+    var INK = '#171717', QUIET = '#a3a3a3', WORK = '#404040', RET = '#a3a3a3';
+
+    /* balance silhouette from simulate() rows */
+    var rows = res.rows.filter(function (r) { return r.age <= LA1; });
+    var maxBal = 1;
+    rows.forEach(function (r) { if (r.bal > maxBal) maxBal = r.bal; });
+    function lyFor(b) { return LAXIS - 8 - (b / maxBal) * 52; }
+    var line = '', first = null, last = null;
+    rows.forEach(function (r) {
+      if (!first) first = r;
+      last = r;
+      line += (line ? ' L ' : 'M ') + lxFor(r.age).toFixed(1) + ' ' + lyFor(r.bal).toFixed(1);
+    });
+    if (first && last) {
+      s += '<path d="M ' + lxFor(first.age).toFixed(1) + ' ' + (LAXIS - 8) + ' ' + line.replace('M', 'L') +
+           ' L ' + lxFor(last.age).toFixed(1) + ' ' + (LAXIS - 8) + ' Z" fill="#171717" fill-opacity="0.05"/>';
+      s += '<path d="' + line + '" fill="none" stroke="#171717" stroke-opacity="0.28" stroke-width="1.5" stroke-linejoin="round"/>';
+    }
+
+    /* funded solid, unfunded dashed red */
+    var depl = res.depletionAge;
+    var fundedEnd = (depl != null && depl <= LA1) ? depl : LA1;
+    s += '<line x1="' + LL + '" y1="' + LAXIS + '" x2="' + lxFor(fundedEnd) + '" y2="' + LAXIS + '" stroke="' + INK + '" stroke-width="2.5" stroke-linecap="square"/>';
+    if (depl != null && depl <= LA1) {
+      s += '<line x1="' + lxFor(depl) + '" y1="' + LAXIS + '" x2="' + LR + '" y2="' + LAXIS + '" stroke="' + RED + '" stroke-width="2.5" stroke-linecap="square" stroke-opacity="0.6" stroke-dasharray="1 6"/>';
+    }
+
+    /* year ticks */
+    for (var a = LA0; a <= LA1; a++) {
+      var x = lxFor(a), major = a % 5 === 0;
+      var working = a < state.retireAge;
+      var col = (depl != null && a > depl) ? '#fca5a5' : (working ? WORK : RET);
+      s += '<line x1="' + x.toFixed(1) + '" y1="' + (LAXIS - (major ? 11 : 6)) + '" x2="' + x.toFixed(1) + '" y2="' + LAXIS +
+           '" stroke="' + col + '" stroke-width="' + (major ? 2 : 1.2) + '" stroke-opacity="0.85"/>';
+      if (major) s += '<text x="' + x.toFixed(1) + '" y="' + (LAXIS + 20) + '" font-size="11" fill="' + QUIET + '" text-anchor="middle" class="num">' + a + '</text>';
+    }
+
+    /* pins */
+    function pin(age, text, color, dy) {
+      var x = lxFor(age);
+      var anchor = x < 110 ? 'start' : (x > LW - 130 ? 'end' : 'middle');
+      var lx = anchor === 'start' ? Math.max(x - 4, 2) : (anchor === 'end' ? Math.min(x + 4, LW - 2) : x);
+      return '<text x="' + lx.toFixed(1) + '" y="' + dy + '" font-size="11.5" fill="' + color + '" text-anchor="' + anchor + '" font-weight="600">' + text + '</text>';
+    }
+    s += '<circle cx="' + lxFor(state.currentAge) + '" cy="' + LAXIS + '" r="3.5" fill="' + INK + '"/>'
+       + pin(state.currentAge, 'you · ' + state.currentAge, INK, LAXIS + 36);
+    s += '<rect x="' + (lxFor(state.retireAge) - 4.5).toFixed(1) + '" y="' + (LAXIS - 4.5).toFixed(1) + '" width="9" height="9" fill="#fff" stroke="' + INK + '" stroke-width="2"/>'
+       + pin(state.retireAge, 'work ends · ' + state.retireAge, '#525252', 18);
+    if (depl != null && depl <= LA1) {
+      s += '<rect x="' + (lxFor(depl) - 5).toFixed(1) + '" y="' + (LAXIS - 5).toFixed(1) + '" width="10" height="10" fill="' + RED + '" stroke="#fff" stroke-width="2"/>'
+         + pin(depl, 'money runs out · ' + depl, RED, 18);
+      if (state.maxAge > depl) s += pin(state.maxAge, 'planned to ' + state.maxAge, QUIET, LAXIS + 36);
+    } else {
+      s += pin(LA1, 'money outlasts the plan', '#166534', LAXIS + 36);
+    }
+
+    el('life').innerHTML = s;
+    el('tlRange').textContent = fmtMoney(state.savings) + ' today → ' +
+      fmtMoney(last ? last.bal : 0) + ' at ' + (last ? last.age : state.currentAge);
+  }
+
+  /* ── per-account mix (illustrative split that drifts with pot size) ── */
+  function accountMix(balance) {
+    var t = Math.max(0, Math.min(1, balance / 1500000));
+    var rrsp = 0.58 - 0.18 * t, taxable = 0.10 + 0.20 * t, tfsa = 1 - rrsp - taxable;
+    return { rrsp: rrsp, tfsa: tfsa, taxable: taxable };
+  }
+  function balAt(rows, age) {
+    if (!rows.length) return 0;
+    if (age <= rows[0].age) return rows[0].bal;
+    for (var i = 1; i < rows.length; i++) {
+      if (rows[i].age >= age) {
+        var a = rows[i - 1], b = rows[i];
+        var t = b.age === a.age ? 0 : (age - a.age) / (b.age - a.age);
+        return a.bal + (b.bal - a.bal) * t;
+      }
+    }
+    return rows.length ? rows[rows.length - 1].bal : 0;
+  }
+
+  (function fillAges() {
+    var sel = el('accAgeSel'), out = '';
+    for (var a = state.currentAge; a <= state.maxAge; a++) {
+      out += '<option value="' + a + '"' + (a === state.retireAge ? ' selected' : '') + '>' + a + '</option>';
+    }
+    sel.innerHTML = out;
+  })();
+  el('accAgeSel').addEventListener('change', function () { renderAccounts(); });
+
+  var lastRes = null;
+  function renderAccounts() {
+    if (!lastRes) return;
+    var age = +el('accAgeSel').value;
+    var bal = balAt(lastRes.rows, age);
+    var mix = accountMix(bal);
+    el('accTotal').textContent = fmtMoney(bal);
+    el('accRRSP').style.width = (mix.rrsp * 100) + '%';
+    el('accTFSA').style.width = (mix.tfsa * 100) + '%';
+    el('accTax').style.width = (mix.taxable * 100) + '%';
+    el('accRRSPv').textContent = fmtMoney(bal * mix.rrsp);
+    el('accTFSAv').textContent = fmtMoney(bal * mix.tfsa);
+    el('accTaxv').textContent = fmtMoney(bal * mix.taxable);
+  }
+
+  /* ═══════════════ RENDER ═══════════════ */
+  function render() {
+    if (state.retireAge < state.currentAge) state.retireAge = state.currentAge;
+    var res = simulate(state);
+    lastRes = res;
+    var ok = res.ok;
+
+    /* ── verdict, one plain line ── */
+    var v = el('verdict'), vs = el('verdictSub');
+    if (ok) {
+      v.innerHTML = 'Your money lasts until you&rsquo;re <span class="num text-blue-700">' + lastsLabel(res) + '</span>.';
+      vs.textContent = res.leftAtMax > 25000
+        ? 'About ' + fmtMoney(res.leftAtMax) + ' would still be there at ' + state.maxAge + ' — the ground here holds.'
+        : 'It carries you past the ' + state.maxAge + ' you\'re planning for.';
+    } else {
+      var gap = state.maxAge - res.depletionAge;
+      v.innerHTML = 'Your money runs out at <span class="num text-red-700">' + res.depletionAge + '</span> — ' +
+        gap + (gap === 1 ? ' year' : ' years') + ' short.';
+      vs.textContent = suggest(state) || 'Drag downhill on the pad: spend less, or work longer.';
+    }
+
+    /* ── persistent verdict chip ── */
+    el('vchipAge').textContent = lastsLabel(res);
+    el('vchipState').textContent = ok ? 'the plan holds' : 'runs short';
+    el('vchipDot').style.backgroundColor = ok ? ACCENT : RED;
+
+    /* ── pad ── */
+    drawRegion();
+    drawDot(res);
+    el('lgMax').textContent = state.maxAge;
+
+    /* ── the line ── */
+    drawLife(res);
+
+    /* ── faders ── */
+    el('fRetire').value = state.retireAge;
+    el('vRetire').textContent = state.retireAge;
+    el('fSpend').value = state.spending;
+    el('vSpend').textContent = fmtMoney(state.spending);
+
+    /* consequence lines */
+    var later = simulate(Object.assign({}, state, { retireAge: state.retireAge + 1 }));
+    el('fxRetire').innerHTML = 'One more year of work and the money lasts to <strong class="text-neutral-700 num">' +
+      lastsLabel(later) + '</strong>' + (later.ok && !ok ? ' — that alone would close the gap.' : '.');
+    var cheaper = simulate(Object.assign({}, state, { spending: Math.max(10000, state.spending - 5000) }));
+    el('fxSpend').innerHTML = fmtMoney(5000) + ' less a year and it lasts to <strong class="text-neutral-700 num">' +
+      lastsLabel(cheaper) + '</strong>' + (cheaper.ok && !ok ? ' — that alone would close the gap.' : '.');
+
+    /* ── storm test ── */
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var sdot = el('stormDot'), st2 = el('stormTitle'), sl = el('stormLine');
+    if (storm.ok) {
+      sdot.style.backgroundColor = ACCENT;
+      st2.textContent = 'Storm-tested.';
+      sl.innerHTML = 'Even in stormy markets this plan holds to <strong class="text-neutral-700 num">' + lastsLabel(storm) + '</strong>.';
+    } else {
+      sdot.style.backgroundColor = RED;
+      st2.textContent = 'Storm warning.';
+      sl.innerHTML = 'In stormy markets the money runs out at <strong class="text-neutral-900 num">' + storm.depletionAge + '</strong>. The pad above is for <em>' +
+        (state.sky === 'storm' ? 'stormy' : (state.sky === 'sun' ? 'kind' : 'ordinary')) + '</em> skies — switch it and the curve moves.';
+    }
+    document.querySelectorAll('[data-sky]').forEach(function (b) {
+      var on = b.getAttribute('data-sky') === state.sky;
+      b.setAttribute('aria-pressed', String(on));
+      b.className = 'skybtn border px-2.5 py-1 transition-colors ' +
+        (on ? 'border-neutral-800 font-semibold text-neutral-900' : 'border-neutral-200 text-neutral-500 hover:text-neutral-900');
+    });
+
+    /* ── numbers ── */
+    el('rLasts').textContent = lastsLabel(res);
+    el('rLasts').style.color = ok ? ACCENT : RED;
+    el('rLastsNote').textContent = ok ? 'past the plan' : 'before the ' + state.maxAge + ' planned';
+    el('rMaxLbl').textContent = state.maxAge;
+    el('rLeft').textContent = res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) : 'nothing';
+    el('rLeftNote').textContent = res.leftAtMax > 0 ? 'still in the pot' : 'the pot is empty';
+    el('rAtRet').textContent = fmtMoney(balAt(res.rows, state.retireAge));
+    el('rBenAge').textContent = state.benefitAge;
+    el('rBen').textContent = fmtMoney(state.benefits);
+
+    renderAccounts();
+  }
+
+  /* ── wiring ── */
+  el('fRetire').addEventListener('input', function () { state.retireAge = +this.value; render(); });
+  el('fSpend').addEventListener('input', function () { state.spending = +this.value; render(); });
+  document.querySelectorAll('[data-sky]').forEach(function (b) {
+    b.addEventListener('click', function () { state.sky = b.getAttribute('data-sky'); render(); });
+  });
+
+  /* dropdown chrome (illustrative — no navigation) */
+  document.querySelectorAll('.dd-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var dd = btn.closest('.dropdown');
+      document.querySelectorAll('.dropdown').forEach(function (d) { if (d !== dd) d.classList.remove('open'); });
+      dd.classList.toggle('open');
+    });
+  });
+  document.addEventListener('click', function () {
+    document.querySelectorAll('.dropdown').forEach(function (d) { d.classList.remove('open'); });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

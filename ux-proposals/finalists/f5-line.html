@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — One line. Your whole plan.</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .fu  { animation: fadeUp .7s ease-out both; }
+  .fu2 { animation: fadeUp .7s ease-out .15s both; }
+  .fu3 { animation: fadeUp .7s ease-out .35s both; }
+  .fu4 { animation: fadeUp .7s ease-out .55s both; }
+
+  ::selection { background: #dbeafe; }
+</style>
+</head>
+<body class="bg-white text-neutral-900 min-h-screen flex flex-col antialiased">
+
+<!-- ═══ SITE 1 — PURE MARKETING. No app chrome, no inputs, one door. ═══ -->
+
+<header class="border-b border-neutral-200">
+  <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-2 text-sm font-semibold">
+      <div class="w-6 h-6 bg-neutral-900 text-white flex items-center justify-center text-[10px] font-bold">RE:</div>
+      <span>tired</span>
+    </div>
+    <nav class="flex items-center gap-6 text-xs text-neutral-500">
+      <a href="#how" class="hover:text-neutral-900 hidden sm:block">How it works</a>
+      <a href="#privacy" class="hover:text-neutral-900 hidden sm:block">Privacy</a>
+      <a href="#legal" class="hover:text-neutral-900 hidden sm:block">Legal</a>
+      <a href="f5-line-app.html" class="text-blue-700 font-medium underline underline-offset-4 decoration-blue-200 hover:decoration-blue-700">Open the app →</a>
+    </nav>
+  </div>
+</header>
+
+<main class="flex-1">
+  <div class="max-w-6xl mx-auto px-6">
+
+    <!-- ═══ HEADLINE — above the strip ═══ -->
+    <section class="pt-16 md:pt-24 pb-10 md:pb-14 text-center">
+      <p class="fu text-[11px] font-semibold uppercase tracking-[0.3em] text-neutral-400">
+        RE:tired — a retirement planner that answers first
+      </p>
+      <h1 class="fu2 mt-6 text-5xl md:text-6xl font-semibold tracking-tight leading-[1.05]">
+        One line.<br class="hidden sm:block" /> Your whole plan.
+      </h1>
+      <p class="fu3 mt-6 text-base md:text-lg text-neutral-500 leading-relaxed max-w-xl mx-auto">
+        From where you are to the age you're planning for — the saving years,
+        the retired years, and honestly, the point the money runs out if it does.
+        This is one real plan, drawn to scale.
+      </p>
+    </section>
+
+    <!-- ═══ THE LINE — the entire hero. Full-width 55→95 strip.
+         This strip is IDENTICAL in geometry and style to the strip at the
+         bottom of the app page — the landing is the app, minus controls. ═══ -->
+    <section class="fu3 w-full">
+      <svg id="life" viewBox="0 0 1000 150" class="w-full block select-none" role="img"
+           aria-label="Timeline from 55 to 95 showing the balance over the years and the age the money runs out"></svg>
+      <p id="lifeCaption" class="mt-4 text-[13px] text-neutral-500 text-center leading-relaxed max-w-2xl mx-auto"></p>
+    </section>
+
+    <!-- ═══ CTA — the one door ═══ -->
+    <section class="fu4 py-14 md:py-20 text-center">
+      <a href="f5-line-app.html"
+         class="group inline-flex items-center gap-2.5 bg-blue-700 px-8 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-blue-800">
+        Take the controls
+        <span class="transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>
+      </a>
+      <p class="mt-3 text-[12px] text-neutral-400">
+        Free · No account · Runs entirely in your browser
+      </p>
+    </section>
+
+    <!-- ═══ HOW IT WORKS — hairline dividers, no cards ═══ -->
+    <section id="how" class="border-t border-neutral-200">
+      <div class="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-neutral-200">
+        <div class="py-10 md:py-12 md:pr-10">
+          <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400 mb-3">01</div>
+          <h3 class="text-sm font-semibold mb-2">Tell it your life</h3>
+          <p class="text-[13px] text-neutral-500 leading-relaxed">
+            Ages, balances, contributions, CPP/OAS, your spending goal. A partner
+            gets their own pass. Everything stays editable, live as you type.
+          </p>
+        </div>
+        <div class="py-10 md:py-12 md:px-10">
+          <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400 mb-3">02</div>
+          <h3 class="text-sm font-semibold mb-2">Read the answer</h3>
+          <p class="text-[13px] text-neutral-500 leading-relaxed">
+            One plain-English verdict — "your money lasts until you're 96" — with the
+            line above as evidence. The year-by-year math is one click down.
+          </p>
+        </div>
+        <div class="py-10 md:py-12 md:pl-10">
+          <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400 mb-3">03</div>
+          <h3 class="text-sm font-semibold mb-2">Steer it</h3>
+          <p class="text-[13px] text-neutral-500 leading-relaxed">
+            Drag retirement age against spending and the line redraws instantly.
+            If the plan falls short, it tells you the one change that closes the gap.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PRIVACY ═══ -->
+    <section id="privacy" class="border-t border-neutral-200 py-10 md:py-12 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
+      <svg class="shrink-0 mt-1 md:mt-0" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="1.8" stroke-linecap="square"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      <div class="flex-1">
+        <h3 class="text-sm font-semibold mb-1">Your data never leaves this device.</h3>
+        <p class="text-[13px] text-neutral-500 leading-relaxed max-w-2xl">
+          No servers, no accounts. Scenarios, settings and results live only in this
+          browser's local storage — nothing is uploaded, nothing is tracked.
+        </p>
+      </div>
+      <a href="f5-line-app.html" class="text-sm font-medium text-blue-700 underline underline-offset-4 decoration-blue-200 hover:decoration-blue-700 shrink-0">Open the app →</a>
+    </section>
+
+    <!-- ═══ LEGAL ═══ -->
+    <section id="legal" class="border-t border-neutral-200 py-10 md:py-12">
+      <h3 class="text-sm font-semibold mb-2">What this is — and isn't.</h3>
+      <p class="text-[13px] text-neutral-500 leading-relaxed max-w-2xl">
+        RE:tired is an educational modeling tool. It is not financial, tax, or
+        investment advice. Canadian tax and benefit rules are approximations;
+        your real numbers will differ. Open-source — the whole engine is readable.
+      </p>
+    </section>
+
+  </div>
+</main>
+
+<footer class="border-t border-neutral-200 px-6 py-4">
+  <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1.5 text-[11.5px] text-neutral-400 text-center sm:text-left">
+    <span>No servers, no accounts — your numbers never leave this browser.</span>
+    <span class="flex items-center gap-4">
+      <span>Not financial, tax, or investment advice.</span>
+      <a href="#" class="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600">Open source</a>
+      <a href="#" class="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600">Donate</a>
+      <a href="#" class="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600">Help</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* The strip is the demo plan, simulated honestly. At defaults the money
+     runs out at 89 — before the 95 being planned for — so the strip draws
+     the dashed red stretch from 89 and pins the flag there. Nothing is
+     hardcoded: the ages below all come from simulate().
+
+     NOTE: this draw routine is byte-for-byte the one used in f5-line-app.html,
+     with the same viewBox (1000×150) and the same colors, so the app's bottom
+     strip reads as the same line with controls added above it. */
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  var res = simulate(state);
+
+  /* ── strip geometry: ages 55..95 on one horizontal line ── */
+  var LW = 1000, LA0 = 55, LA1 = 95;
+  var LL = 30, LR = 972, LAXIS = 84;
+  function lxFor(age) { return LL + (Math.min(LA1, Math.max(LA0, age)) - LA0) / (LA1 - LA0) * (LR - LL); }
+
+  var INK = '#171717', QUIET = '#a3a3a3', WORK = '#404040', RET = '#a3a3a3', RED = '#dc2626';
+  var ACCENT = '#1d4ed8';
+
+  var s = '';
+
+  /* balance silhouette above the line — the pot rising, then falling.
+     Drawn from simulate() rows; the shape IS the plan. */
+  var rows = res.rows.filter(function (r) { return r.age <= LA1; });
+  var maxBal = 1;
+  rows.forEach(function (r) { if (r.bal > maxBal) maxBal = r.bal; });
+  function lyFor(b) { return LAXIS - 8 - (b / maxBal) * 52; }
+  var line = '', first = null, last = null;
+  rows.forEach(function (r) {
+    if (!first) first = r;
+    last = r;
+    line += (line ? ' L ' : 'M ') + lxFor(r.age).toFixed(1) + ' ' + lyFor(r.bal).toFixed(1);
+  });
+  if (first && last) {
+    s += '<path d="M ' + lxFor(first.age).toFixed(1) + ' ' + (LAXIS - 8) + ' ' + line.replace('M', 'L') +
+         ' L ' + lxFor(last.age).toFixed(1) + ' ' + (LAXIS - 8) + ' Z" fill="#171717" fill-opacity="0.05"/>';
+    s += '<path d="' + line + '" fill="none" stroke="#171717" stroke-opacity="0.28" stroke-width="1.5" stroke-linejoin="round"/>';
+  }
+
+  /* the line itself: funded solid ink, unfunded dashed red */
+  var depl = res.depletionAge;
+  var fundedEnd = (depl != null && depl <= LA1) ? depl : LA1;
+  s += '<line x1="' + LL + '" y1="' + LAXIS + '" x2="' + lxFor(fundedEnd) + '" y2="' + LAXIS + '" stroke="' + INK + '" stroke-width="2.5" stroke-linecap="square"/>';
+  if (depl != null && depl <= LA1) {
+    s += '<line x1="' + lxFor(depl) + '" y1="' + LAXIS + '" x2="' + LR + '" y2="' + LAXIS + '" stroke="' + RED + '" stroke-width="2.5" stroke-linecap="square" stroke-opacity="0.6" stroke-dasharray="1 6"/>';
+  }
+
+  /* year ticks: darker while working, lighter once retired, pink once unfunded */
+  for (var a = LA0; a <= LA1; a++) {
+    var x = lxFor(a), major = a % 5 === 0;
+    var working = a < state.retireAge;
+    var col = (depl != null && a > depl) ? '#fca5a5' : (working ? WORK : RET);
+    s += '<line x1="' + x.toFixed(1) + '" y1="' + (LAXIS - (major ? 11 : 6)) + '" x2="' + x.toFixed(1) + '" y2="' + LAXIS +
+         '" stroke="' + col + '" stroke-width="' + (major ? 2 : 1.2) + '" stroke-opacity="0.85"/>';
+    if (major) s += '<text x="' + x.toFixed(1) + '" y="' + (LAXIS + 20) + '" font-size="11" fill="' + QUIET + '" text-anchor="middle" class="num">' + a + '</text>';
+  }
+
+  /* pins: you / work ends / money runs out (honest) */
+  function pin(age, text, color, dy) {
+    var x = lxFor(age);
+    var anchor = x < 110 ? 'start' : (x > LW - 130 ? 'end' : 'middle');
+    var lx = anchor === 'start' ? Math.max(x - 4, 2) : (anchor === 'end' ? Math.min(x + 4, LW - 2) : x);
+    return '<text x="' + lx.toFixed(1) + '" y="' + dy + '" font-size="11.5" fill="' + color + '" text-anchor="' + anchor + '" font-weight="600">' + text + '</text>';
+  }
+  s += '<circle cx="' + lxFor(state.currentAge) + '" cy="' + LAXIS + '" r="3.5" fill="' + INK + '"/>'
+     + pin(state.currentAge, 'you · ' + state.currentAge, INK, LAXIS + 36);
+  s += '<rect x="' + (lxFor(state.retireAge) - 4.5).toFixed(1) + '" y="' + (LAXIS - 4.5).toFixed(1) + '" width="9" height="9" fill="#fff" stroke="' + INK + '" stroke-width="2"/>'
+     + pin(state.retireAge, 'work ends · ' + state.retireAge, '#525252', 18);
+  if (depl != null && depl <= LA1) {
+    /* the honest pin: money runs out at 89 */
+    s += '<rect x="' + (lxFor(depl) - 5).toFixed(1) + '" y="' + (LAXIS - 5).toFixed(1) + '" width="10" height="10" fill="' + RED + '" stroke="#fff" stroke-width="2"/>'
+       + pin(depl, 'money runs out · ' + depl, RED, 18);
+    if (state.maxAge > depl) s += pin(state.maxAge, 'planned to ' + state.maxAge, QUIET, LAXIS + 36);
+  } else {
+    s += pin(LA1, 'money outlasts the plan', '#166534', LAXIS + 36);
+  }
+
+  document.getElementById('life').innerHTML = s;
+
+  /* caption under the strip — the plan in one honest sentence */
+  var cap = document.getElementById('lifeCaption');
+  if (res.ok) {
+    cap.textContent = 'One plan: save until ' + state.retireAge + ', spend ' + fmtMoney(state.spending) +
+      ' a year — the money lasts to ' + lastsLabel(res) + ', past the ' + state.maxAge + ' being planned for.';
+  } else {
+    var gap = state.maxAge - depl;
+    cap.innerHTML = 'One plan: save until ' + state.retireAge + ', spend ' + fmtMoney(state.spending) +
+      ' a year — and the money runs out at <strong class="text-neutral-700 num">' + depl + '</strong>, ' +
+      gap + (gap === 1 ? ' year' : ' years') + ' short of ' + state.maxAge +
+      '. Most tools hide this. The fix is usually small: ' + (suggest(state) || '');
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — your plan</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* small faders — SQUARE thumbs (no rounded anything) */
+  input[type=range].fader {
+    -webkit-appearance:none; appearance:none; width:100%; height:16px;
+    background:transparent; cursor:pointer; outline:none;
+  }
+  input[type=range].fader::-webkit-slider-runnable-track {
+    height:2px; background:#d4d4d4;
+  }
+  input[type=range].fader::-moz-range-track {
+    height:2px; background:#d4d4d4;
+  }
+  input[type=range].fader::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none;
+    width:14px; height:14px; margin-top:-6px; border-radius:0;
+    background:#0f172a; border:none;
+  }
+  input[type=range].fader::-moz-range-thumb {
+    width:14px; height:14px; border-radius:0;
+    background:#0f172a; border:none;
+  }
+  input[type=range].fader:focus-visible::-webkit-slider-thumb { background:#2563eb; }
+
+  #pad { touch-action:none; cursor:crosshair; }
+  #pad .grab { cursor:grab; }
+  #pad.dragging, #pad.dragging .grab { cursor:grabbing; }
+
+  .sky { border-left:1px solid #d4d4d4; }
+  .sky:first-child { border-left:none; }
+  .seg-active { background:#0f172a !important; color:#fff !important; }
+
+  #details-chev { transition:transform .2s; }
+</style>
+</head>
+<body class="min-h-screen bg-[#fafafa] text-slate-900 antialiased">
+
+<!-- ═══════════ SITE 2 · APP CHROME — plain top-bar text links, no buttons-with-boxes ═══════════ -->
+<header class="sticky top-0 z-40 border-b border-slate-200 bg-[#fafafa]">
+  <div class="mx-auto flex h-12 max-w-6xl items-center gap-5 px-4 md:px-6 text-[12.5px]">
+
+    <a href="f4-score.html" class="flex items-center gap-2 font-semibold" title="Back to the landing page">
+      <span class="inline-block h-3.5 w-3.5 bg-slate-900"></span>
+      <span>RE:tired</span>
+    </a>
+
+    <!-- scenario switcher -->
+    <select class="cursor-pointer appearance-none bg-transparent py-1 pr-5 text-[12.5px] text-slate-600 hover:text-slate-900"
+            style="background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 3l3 3 3-3' fill='none' stroke='%2371717a' stroke-width='1.5'/%3E%3C/svg%3E&quot;);background-repeat:no-repeat;background-position:right center;"
+            title="Scenarios — switch, compare, roll back revisions">
+      <option>Martin &amp; Sasha — base plan</option>
+      <option>Retire at 60, leaner</option>
+      <option>+ New scenario…</option>
+    </select>
+
+    <!-- save / dirty state, as a text link -->
+    <button id="save-btn" class="text-slate-600 hover:text-slate-900" title="Save changes to this scenario">
+      Save<span id="save-dot" class="hidden num text-amber-600"> · unsaved</span>
+    </button>
+
+    <div class="flex-1"></div>
+
+    <!-- AI assistant entry -->
+    <button class="text-slate-600 hover:text-slate-900" title="Ask the in-browser assistant — it reads your plan and shows its work">Assistant</button>
+
+    <!-- data / backup entry -->
+    <button class="hidden text-slate-600 hover:text-slate-900 sm:inline" title="Your data: full backup, restore, import, share links">Data</button>
+
+    <!-- print / export entry -->
+    <button class="hidden text-slate-600 hover:text-slate-900 sm:inline" title="Print the one-page plan, or export projections (CSV / PDF)">Print / Export</button>
+
+    <span class="hidden text-[11px] text-slate-400 lg:inline">f4</span>
+  </div>
+</header>
+
+<!-- ═══ PINNED VERDICT STRIP — thin, square score mark + sentence + storm indicator ═══ -->
+<div class="sticky top-12 z-30 border-b border-slate-200 bg-[#fafafa]/95 backdrop-blur">
+  <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2 md:px-6">
+
+    <div class="flex items-baseline gap-3">
+      <span id="score-num" class="num text-[18px] font-bold leading-none text-amber-700" title="Plan score out of 100">0</span>
+      <span class="num text-[13.5px] font-medium" id="verdict-line">Your money lasts until you&rsquo;re 89.</span>
+      <span class="text-[11.5px] text-slate-500" id="verdict-sub">6 years short of the 95 you planned for.</span>
+    </div>
+
+    <!-- storm-test indicator: square tick + words, color never the only signal -->
+    <span class="flex items-baseline gap-1.5 text-[11.5px]" title="The same plan re-run in stormy markets">
+      <span id="storm-tick" class="inline-block h-2 w-2 translate-y-px bg-rose-600"></span>
+      <span id="storm-label" class="font-medium text-slate-700">In a storm: runs out at 80</span>
+    </span>
+
+    <!-- weather toggle: square segmented control -->
+    <div class="ml-auto flex items-baseline gap-2">
+      <span class="text-[11px] text-slate-400">Markets</span>
+      <div class="inline-flex border border-slate-300" role="group" aria-label="Market weather">
+        <button data-sky="storm"  class="sky px-2.5 py-1 text-[11.5px] font-medium text-slate-500">stormy</button>
+        <button data-sky="normal" class="sky seg-active px-2.5 py-1 text-[11.5px] font-medium text-slate-500">ordinary</button>
+        <button data-sky="sun"    class="sky px-2.5 py-1 text-[11.5px] font-medium text-slate-500">kind</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="mx-auto max-w-6xl px-4 py-6 md:px-6">
+
+  <div class="grid gap-x-10 gap-y-8 lg:grid-cols-[1fr_300px]">
+
+    <!-- ═══ LEFT: the steering pad + faders — plain surface, hairlines only ═══ -->
+    <section>
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h1 class="text-[15px] font-semibold">Drag your plan</h1>
+          <p class="mt-0.5 text-[12px] text-slate-500">Retire age across, spending up. Green means the money lasts to 95 — red means it runs out.</p>
+        </div>
+        <span id="pad-readout" class="num text-[11.5px] text-slate-500">retire 62 · $85k/yr</span>
+      </div>
+
+      <div class="mt-3 border border-slate-200 bg-white">
+        <svg id="pad" viewBox="0 0 640 430" class="w-full select-none" aria-label="Steering pad: drag the dot to change retirement age and yearly spending">
+          <!-- gridlines + ticks -->
+          <g stroke="#e4e4e0" stroke-width="1">
+            <line x1="60" y1="360" x2="616" y2="360"/>
+            <line x1="60" y1="14"  x2="60" y2="360"/>
+          </g>
+          <g id="xticks" font-size="11" fill="#a1a1aa" class="num" text-anchor="middle"></g>
+          <g id="yticks" font-size="11" fill="#a1a1aa" class="num" text-anchor="end"></g>
+
+          <text x="338" y="410" text-anchor="middle" font-size="12" fill="#71717a" font-weight="600">Retire age →</text>
+          <text x="16" y="187" text-anchor="middle" font-size="12" fill="#71717a" font-weight="600" transform="rotate(-90 16 187)">Spending a year →</text>
+
+          <!-- you-are-here marker (circles are fine — the ban is on rounded boxes) -->
+          <g id="dot" class="grab">
+            <circle id="dot-halo" r="26" fill="#0f172a" opacity="0.08"/>
+            <circle id="dot-body" r="11" fill="#fff" stroke="#0f172a" stroke-width="2.5"/>
+            <circle id="dot-core" r="3.5" fill="#0f172a"/>
+          </g>
+          <g id="dot-tip" pointer-events="none">
+            <rect id="dot-tip-box" width="176" height="40" fill="#0f172a"/>
+            <text id="dot-tip-l1" font-size="11.5" fill="#f8fafc" font-weight="700" class="num"></text>
+            <text id="dot-tip-l2" font-size="10.5" fill="#fbbf24" font-weight="600" class="num"></text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- faders with one-line live consequences -->
+      <div class="mt-6 grid gap-x-8 gap-y-6 border-t border-slate-200 pt-6 sm:grid-cols-3">
+        <div>
+          <div class="mb-1 flex items-baseline justify-between">
+            <label for="f-retire" class="text-[12.5px] font-medium text-slate-600">Stop working at</label>
+            <span id="f-retire-val" class="num text-[12.5px] font-semibold">62</span>
+          </div>
+          <input id="f-retire" type="range" class="fader" min="55" max="70" step="1" value="62" />
+          <p id="c-retire" class="num mt-1 text-[11px] leading-snug text-slate-500">…</p>
+        </div>
+        <div>
+          <div class="mb-1 flex items-baseline justify-between">
+            <label for="f-spend" class="text-[12.5px] font-medium text-slate-600">Spending a year</label>
+            <span id="f-spend-val" class="num text-[12.5px] font-semibold">$85,000</span>
+          </div>
+          <input id="f-spend" type="range" class="fader" min="60000" max="110000" step="1000" value="85000" />
+          <p id="c-spend" class="num mt-1 text-[11px] leading-snug text-slate-500">…</p>
+        </div>
+        <div>
+          <div class="mb-1 flex items-baseline justify-between">
+            <label for="f-saved" class="text-[12.5px] font-medium text-slate-600">Saved so far</label>
+            <span id="f-saved-val" class="num text-[12.5px] font-semibold">$850,000</span>
+          </div>
+          <input id="f-saved" type="range" class="fader" min="100000" max="2500000" step="25000" value="850000" />
+          <p id="c-saved" class="num mt-1 text-[11px] leading-snug text-slate-500">…</p>
+        </div>
+      </div>
+
+      <!-- the one change — plain text with a square marker, not an alert box -->
+      <p id="fix-line" class="mt-6 flex items-baseline gap-2 text-[13px] font-medium">
+        <span id="fix-tick" class="inline-block h-2 w-2 shrink-0 translate-y-[-1px] bg-amber-600"></span>
+        <span id="fix-text">Working 2 more years would close the gap.</span>
+      </p>
+    </section>
+
+    <!-- ═══ RIGHT COLUMN — hairline-separated sections, no cards ═══ -->
+    <aside class="space-y-8 lg:border-l lg:border-slate-200 lg:pl-8">
+
+      <!-- per-account balances over time -->
+      <section>
+        <h2 class="text-[11px] font-semibold uppercase tracking-[.16em] text-slate-400">Your accounts over time</h2>
+        <svg id="acct-chart" viewBox="0 0 300 150" class="mt-3 w-full" aria-label="Per-account balances over time: RRSP, TFSA, taxable">
+          <g id="acct-lines" fill="none" stroke-width="1.75" stroke-linejoin="round"></g>
+          <line id="acct-depl" stroke="#e11d48" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+          <g font-size="8.5" fill="#a1a1aa" class="num">
+            <text x="2" y="146" id="acct-x0">55</text>
+            <text x="278" y="146" id="acct-x1" text-anchor="end">95</text>
+          </g>
+        </svg>
+        <ul class="mt-2 space-y-1 text-[11.5px]" id="acct-legend">
+          <li class="flex items-center gap-2"><span class="inline-block h-2 w-2 bg-slate-900"></span><span class="text-slate-600">RRSP</span><span class="num ml-auto font-semibold" id="leg-rrsp">–</span></li>
+          <li class="flex items-center gap-2"><span class="inline-block h-2 w-2 bg-slate-400"></span><span class="text-slate-600">TFSA</span><span class="num ml-auto font-semibold" id="leg-tfsa">–</span></li>
+          <li class="flex items-center gap-2"><span class="inline-block h-2 w-2 bg-slate-300"></span><span class="text-slate-600">Taxable</span><span class="num ml-auto font-semibold" id="leg-tax">–</span></li>
+        </ul>
+        <p class="mt-2 text-[10.5px] leading-snug text-slate-400">Demo model: one pot split illustratively 50 / 30 / 20. The full engine tracks each account&rsquo;s own tax rules.</p>
+      </section>
+
+      <!-- Details ▾ : home for the 13 input sections -->
+      <section class="border-t border-slate-200 pt-4">
+        <button id="details-toggle" class="flex w-full items-baseline justify-between text-left" aria-expanded="false">
+          <span class="text-[13px] font-semibold">Details <span class="text-slate-400 font-normal">▾</span></span>
+          <span class="flex items-center gap-2 text-[11px] text-slate-400">
+            the full plan inputs
+            <svg id="details-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><polyline points="6 9 12 15 18 9"/></svg>
+          </span>
+        </button>
+        <div id="details-body" class="hidden pt-2">
+          <ul class="text-[12.5px]" id="details-list"></ul>
+        </div>
+      </section>
+
+      <!-- where the rest of the app lives -->
+      <section class="border-t border-slate-200 pt-4">
+        <h2 class="text-[11px] font-semibold uppercase tracking-[.16em] text-slate-400">The rest of the app</h2>
+        <ul class="mt-2 space-y-0.5 text-[12.5px] text-slate-600">
+          <li class="flex items-baseline justify-between py-1 hover:text-slate-900"><span>The receipts — year-by-year math</span><span class="text-slate-300">→</span></li>
+          <li class="flex items-baseline justify-between py-1 hover:text-slate-900"><span>Storm test &amp; history — Monte Carlo, backtest</span><span class="text-slate-300">→</span></li>
+          <li class="flex items-baseline justify-between py-1 hover:text-slate-900"><span>What would a machine do — optimizer</span><span class="text-slate-300">→</span></li>
+          <li class="flex items-baseline justify-between py-1 hover:text-slate-900"><span>Compare scenarios side by side</span><span class="text-slate-300">→</span></li>
+          <li class="flex items-baseline justify-between py-1 hover:text-slate-900"><span>Settings &amp; help</span><span class="text-slate-300">→</span></li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+  <footer class="mt-10 border-t border-slate-200 pt-4 pb-6 text-[11px] text-slate-400">
+    The pad and faders are live — everything re-computes as you drag. Chrome above shows where the full app surface lives.
+  </footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* state: demo plan (defaults fail at 89 — shown honestly) */
+  var state = Object.assign({}, DEMO_DEFAULTS);
+
+  var $ = function (id) { return document.getElementById(id); };
+  var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
+
+  /* pad geometry: x = retire 55–70, y = spending 60–110k */
+  var PAD = { x0: 60, y0: 14, w: 556, h: 346 };
+  var AGE = { min: 55, max: 70 };
+  var SPEND = { min: 60000, max: 110000 };
+
+  function ageToX(a) { return PAD.x0 + (a - AGE.min) / (AGE.max - AGE.min) * PAD.w; }
+  function xToAge(x) { return clamp(Math.round(AGE.min + (x - PAD.x0) / PAD.w * (AGE.max - AGE.min)), AGE.min, AGE.max); }
+  function spendToY(s) { return PAD.y0 + (1 - (s - SPEND.min) / (SPEND.max - SPEND.min)) * PAD.h; }
+  function yToSpend(y) { return clamp(Math.round((SPEND.min + (1 - (y - PAD.y0) / PAD.h) * (SPEND.max - SPEND.min)) / 1000) * 1000, SPEND.min, SPEND.max); }
+
+  /* ticks */
+  (function buildTicks() {
+    var xt = $('xticks'), yt = $('yticks');
+    for (var a = 55; a <= 70; a += 3) {
+      var t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', ageToX(a)); t.setAttribute('y', '378'); t.textContent = a;
+      xt.appendChild(t);
+    }
+    for (var s = 60000; s <= 110000; s += 10000) {
+      var u = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      u.setAttribute('x', '52'); u.setAttribute('y', spendToY(s) + 3.5); u.textContent = '$' + (s / 1000) + 'k';
+      yt.appendChild(u);
+    }
+  })();
+
+  /* live success region: coarse grid, each cell re-simulated */
+  var regionCells = [];
+  (function buildRegion() {
+    var svg = $('pad');
+    var COLS = 31, ROWS = 21;
+    var cw = PAD.w / COLS, ch = PAD.h / ROWS;
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    for (var c = 0; c < COLS; c++) {
+      for (var r = 0; r < ROWS; r++) {
+        var age = AGE.min + (c + 0.5) / COLS * (AGE.max - AGE.min);
+        var spend = SPEND.min + (1 - (r + 0.5) / ROWS) * (SPEND.max - SPEND.min);
+        var cell = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        cell.setAttribute('x', PAD.x0 + c * cw);
+        cell.setAttribute('y', PAD.y0 + r * ch);
+        cell.setAttribute('width', cw + 0.5);
+        cell.setAttribute('height', ch + 0.5);
+        g.appendChild(cell);
+        regionCells.push({ el: cell, age: age, spend: spend });
+      }
+    }
+    svg.insertBefore(g, $('xticks'));
+  })();
+
+  function paintRegion() {
+    for (var i = 0; i < regionCells.length; i++) {
+      var c = regionCells[i];
+      var o = Object.assign({}, state, { retireAge: Math.round(c.age), spending: Math.round(c.spend / 1000) * 1000 });
+      var res = simulate(o);
+      c.el.setAttribute('fill', res.ok ? '#059669' : '#e11d48');
+      c.el.setAttribute('opacity', res.ok ? '0.16' : '0.10');
+    }
+  }
+
+  /* scoring (same recipe as the landing page) */
+  function scoreOutlast(o, res) {
+    if (res.ok) return 100;
+    var span = Math.max(1, o.maxAge - o.currentAge);
+    return Math.max(0, Math.round(100 * ((res.depletionAge - o.currentAge) / span)));
+  }
+  function scoreCushion(o, res) {
+    return Math.min(100, Math.round(100 * res.leftAtMax / (3 * o.spending)));
+  }
+  function scoreColor(v) {
+    if (v < 45) return 'text-rose-700';
+    if (v < 70) return 'text-amber-700';
+    return 'text-emerald-700';
+  }
+
+  /* per-account chart: illustrative split of the single model pot */
+  var ACCT_SPLIT = [['RRSP', 0.50, '#0f172a', 'leg-rrsp'], ['TFSA', 0.30, '#94a3b8', 'leg-tfsa'], ['Taxable', 0.20, '#cbd5e1', 'leg-tax']];
+  function drawAccounts(res) {
+    var g = $('acct-lines');
+    while (g.firstChild) g.removeChild(g.firstChild);
+    var W = 300, H = 136, x0 = 2, yTop = 4;
+    var maxBal = 0;
+    for (var i = 0; i < res.rows.length; i++) maxBal = Math.max(maxBal, res.rows[i].bal);
+    if (maxBal <= 0) maxBal = 1;
+    var a0 = res.rows.length ? res.rows[0].age : state.currentAge;
+    var a1 = state.maxAge;
+    $('acct-x0').textContent = a0; $('acct-x1').textContent = a1;
+    function XY(row) {
+      var x = x0 + (row.age - a0) / Math.max(1, (a1 - a0)) * (W - 8);
+      var y = yTop + (1 - row.bal / maxBal) * (H - 16);
+      return [x, y];
+    }
+    ACCT_SPLIT.forEach(function (acct) {
+      var pts = res.rows.map(function (row) {
+        var p = XY({ age: row.age, bal: row.bal * acct[1] });
+        return p[0].toFixed(1) + ',' + p[1].toFixed(1);
+      }).join(' ');
+      var pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      pl.setAttribute('points', pts);
+      pl.setAttribute('stroke', acct[2]);
+      g.appendChild(pl);
+    });
+    var dl = $('acct-depl');
+    if (res.depletionAge != null && res.depletionAge <= a1) {
+      var dx = x0 + (res.depletionAge - a0) / Math.max(1, (a1 - a0)) * (W - 8);
+      dl.setAttribute('x1', dx); dl.setAttribute('x2', dx);
+      dl.setAttribute('y1', yTop); dl.setAttribute('y2', H - 12);
+      dl.setAttribute('opacity', '1');
+    } else {
+      dl.setAttribute('opacity', '0');
+    }
+    $('leg-rrsp').textContent = fmtMoney(res.leftAtMax * 0.50);
+    $('leg-tfsa').textContent = fmtMoney(res.leftAtMax * 0.30);
+    $('leg-tax').textContent = fmtMoney(res.leftAtMax * 0.20);
+  }
+
+  /* consequence lines: live A/B probe for each fader */
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+  function lasts(o) {
+    var r = simulate(o);
+    return r.depletionAge == null ? 110 : r.depletionAge;
+  }
+  function consequenceRetire() {
+    var now = lasts(state);
+    var earlier = lasts(Object.assign({}, state, { retireAge: Math.max(AGE.min, state.retireAge - 1) }));
+    var d = now - earlier;
+    $('c-retire').textContent = d > 0
+      ? 'Retiring one year earlier here means the money runs out about ' + d + ' ' + yearWord(d) + ' sooner.'
+      : 'At this setting, one year earlier doesn’t move the answer much.';
+  }
+  function consequenceSpend() {
+    var now = lasts(state);
+    var less = lasts(Object.assign({}, state, { spending: Math.max(SPEND.min, state.spending - 5000) }));
+    var d = less - now;
+    $('c-spend').textContent = d > 0
+      ? 'Spending ' + fmtMoney(5000) + ' less a year stretches the money about ' + d + ' ' + yearWord(d) + '.'
+      : 'At this setting, ' + fmtMoney(5000) + ' a year doesn’t move the answer much.';
+  }
+  function consequenceSaved() {
+    var now = lasts(state);
+    var more = lasts(Object.assign({}, state, { savings: state.savings + 100000 }));
+    var d = more - now;
+    $('c-saved').textContent = d > 0
+      ? 'Every ' + fmtMoney(100000) + ' more saved adds about ' + d + ' ' + yearWord(d) + ' of money.'
+      : 'At this setting, another ' + fmtMoney(100000) + ' doesn’t move the answer much.';
+  }
+
+  /* main render */
+  function render() {
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+
+    var s1 = scoreOutlast(state, res);
+    var s2 = scoreCushion(state, res);
+    var s3 = scoreOutlast(state, storm);
+    var total = Math.max(0, Math.min(100, Math.round(0.40 * s1 + 0.35 * s2 + 0.25 * s3)));
+
+    /* pinned score + verdict */
+    $('score-num').textContent = String(total);
+    $('score-num').className = 'num text-[18px] font-bold leading-none ' + scoreColor(total);
+
+    $('verdict-line').textContent = 'Your money lasts until you’re ' + lastsLabel(res) + '.';
+    if (res.ok) {
+      $('verdict-sub').textContent = 'Past the ' + state.maxAge + ' you planned for, with ' + fmtMoney(res.leftAtMax) + ' left over.';
+    } else {
+      var gap = state.maxAge - res.depletionAge;
+      $('verdict-sub').textContent = gap + ' ' + yearWord(gap) + ' short of the ' + state.maxAge + ' you planned for.';
+    }
+
+    /* storm indicator: square tick + words */
+    if (storm.ok) {
+      $('storm-label').textContent = 'Holds in a storm too';
+      $('storm-tick').className = 'inline-block h-2 w-2 translate-y-px bg-emerald-600';
+    } else {
+      $('storm-label').textContent = 'In a storm: runs out at ' + lastsLabel(storm);
+      $('storm-tick').className = 'inline-block h-2 w-2 translate-y-px bg-rose-600';
+    }
+
+    /* weather toggle */
+    var skyBtns = document.querySelectorAll('.sky');
+    for (var i = 0; i < skyBtns.length; i++) {
+      skyBtns[i].classList.toggle('seg-active', skyBtns[i].getAttribute('data-sky') === state.sky);
+    }
+
+    /* the dot */
+    var dx = ageToX(state.retireAge), dy = spendToY(state.spending);
+    $('dot').setAttribute('transform', 'translate(' + dx + ',' + dy + ')');
+    var okHere = res.ok;
+    $('dot-body').setAttribute('stroke', okHere ? '#059669' : '#e11d48');
+    $('dot-core').setAttribute('fill', okHere ? '#059669' : '#e11d48');
+    $('dot-halo').setAttribute('fill', okHere ? '#059669' : '#e11d48');
+
+    /* dot tooltip, flipped inside the pad */
+    var flipX = dx > PAD.x0 + PAD.w - 190;
+    var tx = flipX ? dx - 188 : dx + 14;
+    var ty = dy < PAD.y0 + 60 ? dy + 14 : dy - 52;
+    $('dot-tip').setAttribute('transform', 'translate(' + tx + ',' + ty + ')');
+    $('dot-tip-l1').setAttribute('x', 10); $('dot-tip-l1').setAttribute('y', 17);
+    $('dot-tip-l1').textContent = 'Retire ' + state.retireAge + ' · ' + fmtMoney(state.spending) + '/yr';
+    $('dot-tip-l2').setAttribute('x', 10); $('dot-tip-l2').setAttribute('y', 32);
+    $('dot-tip-l2').textContent = (okHere ? 'Lasts past ' + state.maxAge : 'Runs out at ' + lastsLabel(res)) + ' · score ' + total;
+    $('dot-tip-l2').setAttribute('fill', okHere ? '#34d399' : '#fda4af');
+
+    $('pad-readout').textContent = 'retire ' + state.retireAge + ' · $' + Math.round(state.spending / 1000) + 'k/yr';
+
+    /* fader labels */
+    $('f-retire-val').textContent = String(state.retireAge);
+    $('f-spend-val').textContent = fmtMoney(state.spending);
+    $('f-saved-val').textContent = fmtMoney(state.savings);
+    if (parseInt($('f-retire').value, 10) !== state.retireAge) $('f-retire').value = state.retireAge;
+    if (parseInt($('f-spend').value, 10) !== state.spending) $('f-spend').value = state.spending;
+    if (parseInt($('f-saved').value, 10) !== state.savings) $('f-saved').value = state.savings;
+
+    consequenceRetire(); consequenceSpend(); consequenceSaved();
+
+    /* the one change — suggest() from model.js, honest */
+    if (res.ok) {
+      $('fix-text').textContent = 'This plan holds to ' + state.maxAge + (storm.ok ? ' — in a storm, too.' : ' — in this weather, at least. Try the storm toggle.');
+      $('fix-tick').className = 'inline-block h-2 w-2 shrink-0 translate-y-[-1px] bg-emerald-600';
+    } else {
+      $('fix-text').textContent = suggest(state) || 'Nothing small fixes this — something bigger has to give.';
+      $('fix-tick').className = 'inline-block h-2 w-2 shrink-0 translate-y-[-1px] bg-amber-600';
+    }
+
+    drawAccounts(res);
+    paintRegion();
+
+    /* dirty marker on Save */
+    $('save-dot').classList.remove('hidden');
+  }
+
+  /* faders */
+  $('f-retire').addEventListener('input', function () { state.retireAge = parseInt(this.value, 10); render(); });
+  $('f-spend').addEventListener('input', function () { state.spending = parseInt(this.value, 10); render(); });
+  $('f-saved').addEventListener('input', function () { state.savings = parseInt(this.value, 10); render(); });
+
+  /* weather toggle */
+  var skyBtns = document.querySelectorAll('.sky');
+  for (var i = 0; i < skyBtns.length; i++) {
+    skyBtns[i].addEventListener('click', function () {
+      state.sky = this.getAttribute('data-sky');
+      render();
+    });
+  }
+
+  /* pad dragging (pointer events; mouse + touch) */
+  var pad = $('pad'), dragging = false;
+  function padPoint(evt) {
+    var pt = pad.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    var ctm = pad.getScreenCTM();
+    if (!ctm) return null;
+    return pt.matrixTransform(ctm.inverse());
+  }
+  function dragTo(evt) {
+    var p = padPoint(evt);
+    if (!p) return;
+    state.retireAge = xToAge(p.x);
+    state.spending = yToSpend(p.y);
+    render();
+  }
+  pad.addEventListener('pointerdown', function (e) {
+    dragging = true;
+    pad.classList.add('dragging');
+    pad.setPointerCapture(e.pointerId);
+    dragTo(e);
+    e.preventDefault();
+  });
+  pad.addEventListener('pointermove', function (e) { if (dragging) dragTo(e); });
+  function endDrag() { dragging = false; pad.classList.remove('dragging'); }
+  pad.addEventListener('pointerup', endDrag);
+  pad.addEventListener('pointercancel', endDrag);
+
+  /* keyboard access on the pad: arrows nudge */
+  pad.setAttribute('tabindex', '0');
+  pad.addEventListener('keydown', function (e) {
+    var used = true;
+    if (e.key === 'ArrowLeft') state.retireAge = clamp(state.retireAge - 1, AGE.min, AGE.max);
+    else if (e.key === 'ArrowRight') state.retireAge = clamp(state.retireAge + 1, AGE.min, AGE.max);
+    else if (e.key === 'ArrowUp') state.spending = clamp(state.spending + 1000, SPEND.min, SPEND.max);
+    else if (e.key === 'ArrowDown') state.spending = clamp(state.spending - 1000, SPEND.min, SPEND.max);
+    else used = false;
+    if (used) { render(); e.preventDefault(); }
+  });
+
+  /* Details ▾ : named homes for the 13 input sections */
+  var SECTIONS = [
+    ['Personal Profile', 'age 55 · planning to 95'],
+    ['Account Balances', 'RRSP · TFSA · taxable · RDSP'],
+    ['Contribution Rates', fmtMoney(DEMO_DEFAULTS.contrib) + '/yr while working'],
+    ['RDSP', 'none set up'],
+    ['Government Benefits', 'CPP + OAS ' + fmtMoney(DEMO_DEFAULTS.benefits) + '/yr from ' + DEMO_DEFAULTS.benefitAge],
+    ['Pensions', 'none entered'],
+    ['Employment Income', 'part-time work, top-up spending'],
+    ['Cash Events', 'one-time & recurring, transfers'],
+    ['Spending Phases', 'steady ' + fmtMoney(DEMO_DEFAULTS.spending) + '/yr'],
+    ['Spouse', 'full second set of inputs'],
+    ['Withdrawal Strategy', 'which account empties first'],
+    ['Home Equity', 'reverse mortgage / HELOC'],
+    ['Market Hypotheses', 'returns · volatility · inflation']
+  ];
+  var list = $('details-list');
+  SECTIONS.forEach(function (s) {
+    var li = document.createElement('li');
+    li.className = 'flex items-baseline justify-between gap-3 py-1 border-b border-slate-100 last:border-b-0';
+    li.innerHTML = '<span class="font-medium text-slate-700">' + s[0] + '</span>' +
+                   '<span class="num truncate text-[11px] text-slate-400">' + s[1] + '</span>';
+    list.appendChild(li);
+  });
+  $('details-toggle').addEventListener('click', function () {
+    var body = $('details-body');
+    var open = body.classList.toggle('hidden');
+    this.setAttribute('aria-expanded', String(!open));
+    $('details-chev').style.transform = open ? '' : 'rotate(180deg)';
+  });
+
+  /* save button clears the dirty marker */
+  $('save-btn').addEventListener('click', function () { $('save-dot').classList.add('hidden'); });
+
+  render();
+})();
+</script>
+</body>
+</html>

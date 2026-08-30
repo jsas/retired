@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — Walk the map</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  #map { touch-action: none; cursor: crosshair; }
+  #map.grabbing { cursor: grabbing; }
+  #dot { cursor: grab; }
+
+  /* compact faders — small, quiet, self-explaining. Square track, square thumb. */
+  input[type=range].fader {
+    -webkit-appearance: none; appearance: none;
+    height: 3px; background: #e2e8f0; outline: none; cursor: pointer;
+  }
+  input[type=range].fader::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px;
+    background: #fff; border: 2px solid #334155; cursor: grab;
+  }
+  input[type=range].fader::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 0;
+    background: #fff; border: 2px solid #334155; cursor: grab;
+  }
+  input[type=range].fader:focus-visible { outline: 2px solid #334155; outline-offset: 3px; }
+
+  /* dropdowns */
+  .dropdown { position: relative; }
+  .dropdown-panel { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; }
+  .dropdown.open .dropdown-panel { display: block; }
+
+  /* verdict badge square */
+  .vdot { transition: background-color .3s; }
+
+  ::selection { background: #e2e8f0; }
+</style>
+</head>
+<body class="bg-[#fbfbfa] text-slate-800 min-h-screen antialiased flex flex-col">
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SITE 2 — APP CHROME (plain top bar, square corners, hairlines only)
+     Named homes (REQUIREMENTS §8.7 bolt-on test):
+       Details ▾    → the 13 input sections, one click away
+       Plans ▾      → scenario switcher / revisions / compare
+       Assistant    → the AI agent's home
+       Data         → backup / restore / import / share links
+       Print/Export → the one-page plan, CSV/PDF
+       Verdict      → pinned top-right, always visible
+     ══════════════════════════════════════════════════════════════════ -->
+<header class="sticky top-0 z-40 border-b border-slate-200 bg-[#fbfbfa]/95 backdrop-blur">
+  <div class="flex h-14 items-center gap-1 px-4 md:px-6">
+
+    <!-- brand → back to the landing -->
+    <a href="f2-timeline.html" class="mr-2 flex shrink-0 items-center gap-2 text-sm font-semibold text-slate-900">
+      <div class="flex h-6 w-6 items-center justify-center bg-slate-900 text-[10px] font-bold text-white">RE:</div>
+      <span class="hidden sm:inline">tired</span>
+    </a>
+
+    <!-- Details ▾ — the 13 input sections live here -->
+    <div class="dropdown" id="ddDetails">
+      <button class="dd-btn flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-900/5 hover:text-slate-900">
+        Details <span class="text-[10px] text-slate-400">▾</span>
+      </button>
+      <div class="dropdown-panel min-w-[300px] border border-slate-200 bg-white p-2">
+        <p class="px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wider text-slate-400">The full plan — every section one click away</p>
+        <div class="grid grid-cols-2 gap-x-1 text-[12.5px]">
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Personal Profile</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Account Balances</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Contribution Rates</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">RDSP</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Government Benefits</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Pensions</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Employment Income</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Cash Events</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Spending Phases</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Spouse</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Withdrawal Strategy</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Home Equity</a>
+          <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Market Hypotheses</a>
+        </div>
+        <p class="mt-1 border-t border-slate-100 px-3 pt-2 text-[10.5px] text-slate-400">The map below steers the two biggest of these. The rest live here.</p>
+      </div>
+    </div>
+
+    <!-- Plans ▾ — scenario switcher -->
+    <div class="dropdown" id="ddPlans">
+      <button class="dd-btn flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-900/5 hover:text-slate-900">
+        Plans <span class="text-[10px] text-slate-400">▾</span>
+      </button>
+      <div class="dropdown-panel min-w-[230px] border border-slate-200 bg-white p-2">
+        <p class="px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wider text-slate-400">Scenarios</p>
+        <a href="#" class="flex items-center justify-between bg-slate-900/5 px-3 py-1.5 text-[12.5px] font-medium text-slate-900">Base plan <span class="text-[10px] text-slate-400">current</span></a>
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Retire at 60</a>
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Sell the house at 80</a>
+        <div class="mt-1.5 border-t border-slate-100 pt-1.5">
+          <a href="#" class="block px-3 py-1.5 text-[12.5px] text-slate-400 hover:bg-slate-900/5 hover:text-slate-900">+ New plan</a>
+          <a href="#" class="block px-3 py-1.5 text-[12.5px] text-slate-400 hover:bg-slate-900/5 hover:text-slate-900">Compare plans…</a>
+          <a href="#" class="block px-3 py-1.5 text-[12.5px] text-slate-400 hover:bg-slate-900/5 hover:text-slate-900">Revision history…</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- straight-shot entries -->
+    <a href="#" title="AI assistant — reads your plan, answers questions, shows its work"
+       class="hidden px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-900/5 hover:text-slate-900 md:block">Assistant</a>
+    <a href="#" title="Backup, restore, import, share links"
+       class="hidden px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-900/5 hover:text-slate-900 md:block">Data</a>
+    <a href="#" title="Print the one-page plan, or export CSV / PDF"
+       class="hidden px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-900/5 hover:text-slate-900 md:block">Print / Export</a>
+
+    <!-- same entries, small screens -->
+    <div class="dropdown md:hidden" id="ddMore">
+      <button class="dd-btn px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">More ▾</button>
+      <div class="dropdown-panel left-auto right-0 min-w-[180px] border border-slate-200 bg-white p-2">
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Assistant</a>
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Data &amp; backup</a>
+        <a href="#" class="block px-3 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Print / export</a>
+      </div>
+    </div>
+
+    <div class="flex-1"></div>
+
+    <!-- ═══ PERSISTENT VERDICT CHIP — always top-right, text + square, never color alone ═══ -->
+    <div class="flex shrink-0 items-center gap-2.5 border-l border-slate-200 pl-3" id="vchip" title="The verdict, always on">
+      <span id="vchipDot" class="vdot h-2.5 w-2.5"></span>
+      <div class="leading-tight">
+        <div class="num text-sm font-bold text-slate-900">lasts to <span id="vchipAge">—</span></div>
+        <div class="text-[9px] uppercase tracking-wider text-slate-400" id="vchipState">checking…</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 md:px-8">
+
+  <!-- ═══ VERDICT — the answer, first, in plain English ═══ -->
+  <section class="border-b border-slate-200 pb-6 pt-8 md:pt-10">
+    <div class="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+      <div class="min-w-0">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">The verdict</p>
+        <h1 id="verdict" class="mt-1.5 text-[24px] leading-snug font-semibold text-slate-900 md:text-[30px]"></h1>
+        <p id="verdictSub" class="mt-1.5 text-[13.5px] leading-relaxed text-slate-500"></p>
+      </div>
+
+      <!-- storm / ordinary / kind — the layperson's Monte Carlo. Switching re-runs the terrain. -->
+      <div class="flex items-center gap-1.5 text-[12px] text-slate-500">
+        <span class="mr-1">If the markets are</span>
+        <button data-sky="storm"  class="skybtn border border-slate-200 px-2.5 py-1 text-slate-500 transition-colors hover:text-slate-900" aria-pressed="false">stormy</button>
+        <button data-sky="normal" class="skybtn border border-slate-200 px-2.5 py-1 text-slate-500 transition-colors hover:text-slate-900" aria-pressed="true">ordinary</button>
+        <button data-sky="sun"    class="skybtn border border-slate-200 px-2.5 py-1 text-slate-500 transition-colors hover:text-slate-900" aria-pressed="false">kind</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ THE MAP + THE FADERS ═══ -->
+  <section class="grid grid-cols-1 gap-x-10 gap-y-8 border-b border-slate-200 py-7 lg:grid-cols-[1.6fr_1fr]">
+
+    <!-- ── THE CONTOUR MAP ──
+         The success terrain as a real topographic map: the success/failure boundary
+         over (retire age × spending) is computed from simulate() on a fine grid,
+         then drawn as smooth interpolated curves (Catmull-Rom → bezier), with the
+         green / amber / red bands filled under the curves. No stepped cells. -->
+    <div>
+      <div class="mb-2.5 flex items-baseline justify-between">
+        <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">The ground your plan stands on</h2>
+        <span class="text-[11px] text-slate-400">drag the dot, or use the faders</span>
+      </div>
+
+      <svg id="map" viewBox="0 0 720 480" class="w-full block select-none"
+           role="img" aria-label="Contour map of plan success over retirement age and yearly spending">
+        <!-- bands + grid + dot drawn by script -->
+        <g id="gBands"></g>
+        <g id="gGrid"></g>
+        <g id="gLabels"></g>
+        <g id="gDot"></g>
+      </svg>
+
+      <!-- legend: three bands, plain words -->
+      <div class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11.5px] text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 bg-emerald-300"></span>holds past <span class="num" id="lgMax">95</span></span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 bg-amber-300"></span>borderline — within a few years</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 bg-rose-300"></span>runs out early</span>
+      </div>
+    </div>
+
+    <!-- ── THE FADERS (compact) — the same two levers, for hands not mice.
+         Each one says what moving it does. Flat blocks, hairline dividers. ── -->
+    <div class="lg:pt-6">
+      <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">The two levers</h2>
+
+      <div class="mt-4 border-t border-slate-200 pt-4">
+        <div class="mb-1.5 flex items-baseline justify-between">
+          <label for="fRetire" class="text-[13px] font-medium text-slate-700">Stop working at</label>
+          <span class="num text-[15px] font-bold text-slate-900" id="vRetire">62</span>
+        </div>
+        <input id="fRetire" type="range" class="fader w-full" min="55" max="75" step="1" value="62" />
+        <div class="num mt-1 flex justify-between text-[10px] text-slate-400"><span>55</span><span>75</span></div>
+        <p class="mt-2 text-[11.5px] leading-relaxed text-slate-500" id="fxRetire"></p>
+      </div>
+
+      <div class="mt-4 border-t border-slate-200 pt-4">
+        <div class="mb-1.5 flex items-baseline justify-between">
+          <label for="fSpend" class="text-[13px] font-medium text-slate-700">Spend a year</label>
+          <span class="num text-[15px] font-bold text-slate-900" id="vSpend">$85,000</span>
+        </div>
+        <input id="fSpend" type="range" class="fader w-full" min="40000" max="160000" step="1000" value="85000" />
+        <div class="num mt-1 flex justify-between text-[10px] text-slate-400"><span>$40k</span><span>$160k</span></div>
+        <p class="mt-2 text-[11.5px] leading-relaxed text-slate-500" id="fxSpend"></p>
+      </div>
+
+      <!-- storm-test indicator — always on, plain words -->
+      <div class="mt-4 border-t border-slate-200 pt-4">
+        <div class="flex items-center gap-2">
+          <span id="stormDot" class="vdot h-2 w-2"></span>
+          <span class="text-[13px] font-medium text-slate-700" id="stormTitle">Storm test</span>
+        </div>
+        <p class="mt-1.5 text-[11.5px] leading-relaxed text-slate-500" id="stormLine"></p>
+      </div>
+
+      <p class="mt-4 border-t border-slate-200 pt-4 text-[11px] leading-relaxed text-slate-400">
+        Every other input — spouse, pensions, cash events, withdrawal order —
+        is one click away under <strong class="text-slate-500">Details ▾</strong> above.
+        The map updates the moment any of them change.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══ THE LIFE TIMELINE STRIP — the currently-pointed plan, as one line ═══ -->
+  <section class="border-b border-slate-200 py-7">
+    <div class="mb-2.5 flex items-baseline justify-between">
+      <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Your life on one line — this exact plan</h2>
+      <span class="num text-[11px] text-slate-400" id="tlRange"></span>
+    </div>
+    <svg id="life" viewBox="0 0 1000 150" class="w-full block select-none" role="img"
+         aria-label="Timeline from 55 to 95 showing working years, retirement years, and where the money runs out"></svg>
+  </section>
+
+  <!-- ═══ EVIDENCE ROW — per-account balances over time + the numbers ═══ -->
+  <section class="grid grid-cols-1 gap-x-10 gap-y-8 py-7 md:grid-cols-[1fr_1fr]">
+
+    <!-- per-account balances over time -->
+    <div>
+      <div class="mb-2.5 flex items-baseline justify-between">
+        <h2 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Where it sits, over time</h2>
+        <span class="text-[11px] text-slate-400">at age
+          <select id="accAgeSel" class="num border border-slate-200 bg-white px-1 py-0.5 text-[11px] text-slate-600"></select>
+        </span>
+      </div>
+      <div class="space-y-2 text-[12px]">
+        <div class="flex items-center gap-2.5">
+          <span class="w-14 text-slate-500">RRSP</span>
+          <div class="h-2 flex-1 bg-slate-100"><div id="accRRSP" class="h-full bg-slate-700" style="width:52%"></div></div>
+          <span class="num w-20 text-right text-slate-700" id="accRRSPv"></span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="w-14 text-slate-500">TFSA</span>
+          <div class="h-2 flex-1 bg-slate-100"><div id="accTFSA" class="h-full bg-emerald-600" style="width:31%"></div></div>
+          <span class="num w-20 text-right text-slate-700" id="accTFSAv"></span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="w-14 text-slate-500">Taxable</span>
+          <div class="h-2 flex-1 bg-slate-100"><div id="accTax" class="h-full bg-slate-400" style="width:17%"></div></div>
+          <span class="num w-20 text-right text-slate-700" id="accTaxv"></span>
+        </div>
+      </div>
+      <p class="mt-2.5 text-[11px] leading-relaxed text-slate-400">Shares of <span id="accTotal" class="num"></span> at that age. The mix shifts as the plan moves across the map.</p>
+    </div>
+
+    <!-- key numbers -->
+    <div class="grid grid-cols-2 gap-5">
+      <div>
+        <p class="text-[10.5px] uppercase tracking-wider text-slate-400">Money lasts to</p>
+        <p id="rLasts" class="num mt-0.5 text-2xl font-bold text-slate-900">—</p>
+        <p class="mt-0.5 text-[11px] text-slate-400" id="rLastsNote"></p>
+      </div>
+      <div>
+        <p class="text-[10.5px] uppercase tracking-wider text-slate-400">Left at <span class="num" id="rMaxLbl">95</span></p>
+        <p id="rLeft" class="num mt-0.5 text-2xl font-bold text-slate-900">—</p>
+        <p class="mt-0.5 text-[11px] text-slate-400" id="rLeftNote"></p>
+      </div>
+      <div>
+        <p class="text-[10.5px] uppercase tracking-wider text-slate-400">In the pot at work's end</p>
+        <p id="rAtRet" class="num mt-0.5 text-2xl font-bold text-slate-900">—</p>
+        <p class="mt-0.5 text-[11px] text-slate-400">after the saving years</p>
+      </div>
+      <div>
+        <p class="text-[10.5px] uppercase tracking-wider text-slate-400">CPP + OAS from <span class="num" id="rBenAge">65</span></p>
+        <p id="rBen" class="num mt-0.5 text-2xl font-bold text-slate-900">—</p>
+        <p class="mt-0.5 text-[11px] text-slate-400">every year after that</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="text-[11px] leading-relaxed text-slate-400">
+    Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line,
+    the accounts and the storm test recompute together. Year-by-year receipts, withdrawal-order
+    optimization and backtests live one level down, behind the numbers they explain.
+  </p>
+</main>
+
+<footer class="flex flex-col items-center justify-between gap-2 border-t border-slate-200 px-5 py-4 text-[11px] text-slate-400 sm:flex-row">
+  <span>Educational modeling — not financial, tax, or investment advice. Data stays in this browser.</span>
+  <span>F2 · The timeline pair — smooth-curve terrain, one dot, your life below it.</span>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    spending:   DEMO_DEFAULTS.spending,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  function el(id) { return document.getElementById(id); }
+
+  /* ═══════════════ THE CONTOUR MAP — real curves ═══════════════
+     Axes: retire age 55..75 (x) × spending $40k..$160k (y).
+     The terrain is sampled from simulate() on a fine grid: for each of many
+     retire-age columns, the exact spending where the plan crosses each
+     boundary is found by bisection (the predicates are monotonic in spending),
+     giving a dense chain of points per boundary. Each chain is then drawn as
+     a smooth Catmull-Rom → cubic-bezier curve — a genuine topographic line,
+     not stepped cells. Bands are filled under the smooth curves.
+
+     Three contour lines:
+       deep  — money lasts at least CUSHION years past maxAge (faint, inner green)
+       green — money lasts past maxAge (the plan holds)
+       amber — money runs out exactly at the borderline edge (within BORDER_YEARS of maxAge)
+     Bands: green under the green line, amber between green and amber, red above. */
+
+  var VW = 720, VH = 480;
+  var PL = 56, PR = 700, PT = 20, PB = 432;      // plot box
+  var A0 = 55, A1 = 75;                          // retire age range (x)
+  var S_TOP = 160000, S_BOT = 40000;             // spending range (top→bottom)
+
+  var BORDER_YEARS = 6;                          // amber = runs out within this of maxAge
+  var CUSHION = 5;                               // deep-green = lasts this far past maxAge
+  var COLS = 80;                                 // boundary samples across the x range
+  var BISECT = 14;                               // bisection iterations per boundary point
+
+  function xFor(age)   { return PL + (age - A0) / (A1 - A0) * (PR - PL); }
+  function yFor(spend) { return PT + (S_TOP - spend) / (S_TOP - S_BOT) * (PB - PT); }
+  function ageForX(x)  { return A0 + (x - PL) / (PR - PL) * (A1 - A0); }
+  function spendForY(y){ return S_BOT + (PB - y) / (PB - PT) * (S_TOP - S_BOT); }
+
+  function simAt(retireAge, spending) {
+    return simulate({
+      currentAge: state.currentAge, retireAge: retireAge, maxAge: state.maxAge,
+      savings: state.savings, contrib: state.contrib, spending: spending,
+      benefits: state.benefits, benefitAge: state.benefitAge, sky: state.sky
+    });
+  }
+
+  /* For one column (retire age), find the spending where pred flips from true
+     (low spending) to false (high spending), by bisection. Clamped to range. */
+  function boundarySpend(retireAge, pred) {
+    if (pred(simAt(retireAge, S_TOP))) return S_TOP;   // holds even at the top of the map
+    if (!pred(simAt(retireAge, S_BOT))) return S_BOT;  // fails even at the bottom
+    var lo = S_BOT, hi = S_TOP;
+    for (var k = 0; k < BISECT; k++) {
+      var mid = (lo + hi) / 2;
+      if (pred(simAt(retireAge, mid))) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
+  function predGreen(r) { return r.ok; }
+  function predAmber(r) {
+    return r.ok || (r.depletionAge != null && (state.maxAge - r.depletionAge) <= BORDER_YEARS);
+  }
+  function predDeep(r) {
+    return r.depletionAge == null || r.depletionAge > state.maxAge + CUSHION;
+  }
+
+  /* A chain of [x, y] screen points for one boundary, sampled across the map. */
+  function boundaryChain(pred) {
+    var pts = [];
+    for (var i = 0; i <= COLS; i++) {
+      var ra = A0 + (A1 - A0) * i / COLS;
+      var b = boundarySpend(ra, pred);
+      pts.push([xFor(ra), yFor(b)]);
+    }
+    return pts;
+  }
+
+  /* Catmull-Rom chain → single smooth cubic-bezier SVG path.
+     Control points clamped into the plot box so the curve never overshoots
+     the frame. This is what makes the bands read as a topographic map. */
+  function smoothCurve(pts) {
+    function clampY(y) { return Math.min(PB, Math.max(PT, y)); }
+    var d = 'M ' + pts[0][0].toFixed(1) + ' ' + clampY(pts[0][1]).toFixed(1);
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[Math.max(0, i - 1)], p1 = pts[i],
+          p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+      var c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      var c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      d += ' C ' + c1x.toFixed(1) + ' ' + clampY(c1y).toFixed(1) + ', '
+                 + c2x.toFixed(1) + ' ' + clampY(c2y).toFixed(1) + ', '
+                 + p2[0].toFixed(1) + ' ' + clampY(p2[1]).toFixed(1);
+    }
+    return d;
+  }
+
+  /* The terrain depends on everything EXCEPT the two axes (retire age and
+     spending move the dot, not the ground). Cache it; recompute only when a
+     ground-changing input — the sky, here — changes. */
+  var terrainKey = null;
+  var terrain = null;   // { green: pathD, amber: pathD, deep: pathD }
+
+  function ensureTerrain() {
+    var key = JSON.stringify([state.sky, state.savings, state.contrib,
+                              state.benefits, state.benefitAge, state.maxAge, state.currentAge]);
+    if (key === terrainKey && terrain) return;
+    terrainKey = key;
+
+    var greenPts = boundaryChain(predGreen);
+    var amberPts = boundaryChain(predAmber);
+    var deepPts  = boundaryChain(predDeep);
+
+    /* keep the ordering honest: amber boundary never below green, deep never above */
+    for (var i = 0; i < greenPts.length; i++) {
+      if (amberPts[i][1] > greenPts[i][1]) amberPts[i][1] = greenPts[i][1];
+      if (deepPts[i][1] < greenPts[i][1]) deepPts[i][1] = greenPts[i][1];
+    }
+
+    terrain = {
+      green: smoothCurve(greenPts),
+      amber: smoothCurve(amberPts),
+      deep:  smoothCurve(deepPts)
+    };
+  }
+
+  function drawBands() {
+    ensureTerrain();
+    var out = '';
+    /* the high ground fails — red wash over the whole plot first */
+    out += '<rect x="' + PL + '" y="' + PT + '" width="' + (PR - PL) + '" height="' + (PB - PT) + '" fill="#fda4af" fill-opacity="0.24"/>';
+    /* amber: everything under the amber line */
+    out += '<path d="' + terrain.amber + ' L ' + PR + ' ' + PB + ' L ' + PL + ' ' + PB + ' Z" fill="#fcd34d" fill-opacity="0.30"/>';
+    /* green: everything under the green line */
+    out += '<path d="' + terrain.green + ' L ' + PR + ' ' + PB + ' L ' + PL + ' ' + PB + ' Z" fill="#6ee7b7" fill-opacity="0.36"/>';
+    /* the contour lines themselves — crisp, like printed topo lines */
+    out += '<path d="' + terrain.deep  + '" fill="none" stroke="#059669" stroke-opacity="0.30" stroke-width="1.2"/>';
+    out += '<path d="' + terrain.amber + '" fill="none" stroke="#d97706" stroke-opacity="0.55" stroke-width="1.5"/>';
+    out += '<path d="' + terrain.green + '" fill="none" stroke="#059669" stroke-opacity="0.6" stroke-width="1.5"/>';
+    el('gBands').innerHTML = out;
+  }
+
+  /* static grid + axes, drawn once */
+  (function drawGrid() {
+    var out = '';
+    for (var a = A0; a <= A1; a += 5) {
+      var x = xFor(a);
+      out += '<line x1="' + x + '" y1="' + PT + '" x2="' + x + '" y2="' + PB + '" stroke="#e2e8f0" stroke-width="1"/>';
+    }
+    for (var s = S_BOT; s <= S_TOP; s += 20000) {
+      var y = yFor(s);
+      out += '<line x1="' + PL + '" y1="' + y + '" x2="' + PR + '" y2="' + y + '" stroke="#e2e8f0" stroke-width="1"/>';
+    }
+    out += '<rect x="' + PL + '" y="' + PT + '" width="' + (PR - PL) + '" height="' + (PB - PT) + '" fill="none" stroke="#cbd5e1" stroke-width="1"/>';
+    el('gGrid').innerHTML = out;
+
+    var lab = '';
+    for (var a2 = A0; a2 <= A1; a2 += 5) {
+      lab += '<text x="' + xFor(a2) + '" y="' + (PB + 20) + '" font-size="11" fill="#94a3b8" text-anchor="middle" class="num">' + a2 + '</text>';
+    }
+    for (var s2 = S_BOT; s2 <= S_TOP; s2 += 20000) {
+      lab += '<text x="' + (PL - 8) + '" y="' + (yFor(s2) + 4) + '" font-size="11" fill="#94a3b8" text-anchor="end" class="num">' + fmtMoney(s2).replace(',000', 'k') + '</text>';
+    }
+    lab += '<text x="' + ((PL + PR) / 2) + '" y="' + (VH - 8) + '" font-size="12" fill="#64748b" text-anchor="middle" font-weight="600">the age you stop working →</text>';
+    lab += '<text x="16" y="' + ((PT + PB) / 2) + '" font-size="12" fill="#64748b" text-anchor="middle" font-weight="600" transform="rotate(-90 16 ' + ((PT + PB) / 2) + ')">what you spend each year →</text>';
+    el('gLabels').innerHTML = lab;
+  })();
+
+  /* ── the draggable "you are here" dot ── */
+  var map = el('map');
+  function toSvg(evt) {
+    var pt = map.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    var m = map.getScreenCTM();
+    return m ? pt.matrixTransform(m.inverse()) : null;
+  }
+  function applyMap(evt) {
+    var p = toSvg(evt);
+    if (!p) return;
+    state.retireAge = Math.round(Math.min(A1, Math.max(A0, ageForX(p.x))));
+    state.spending = Math.round(Math.min(S_TOP, Math.max(S_BOT, spendForY(p.y))) / 1000) * 1000;
+    render();
+  }
+  var dragging = false;
+  map.addEventListener('pointerdown', function (e) {
+    dragging = true; map.classList.add('grabbing');
+    try { map.setPointerCapture(e.pointerId); } catch (_) {}
+    applyMap(e);
+  });
+  map.addEventListener('pointermove', function (e) { if (dragging) applyMap(e); });
+  ['pointerup', 'pointercancel'].forEach(function (ev) {
+    map.addEventListener(ev, function () { dragging = false; map.classList.remove('grabbing'); });
+  });
+
+  function drawDot(res) {
+    var dx = xFor(state.retireAge), dy = yFor(state.spending);
+    var ok = res.ok;
+    var borderline = !ok && res.depletionAge != null && (state.maxAge - res.depletionAge) <= BORDER_YEARS;
+    var col = ok ? '#047857' : (borderline ? '#b45309' : '#be123c');
+    var out = '';
+    out += '<circle cx="' + dx + '" cy="' + dy + '" r="24" fill="' + col + '" opacity="0.12"/>';
+    out += '<circle id="dot" cx="' + dx + '" cy="' + dy + '" r="11" fill="' + col + '" stroke="#fff" stroke-width="3"/>';
+    /* label, kept inside the frame — square tag */
+    var txt = 'you are here · ' + state.retireAge + ', ' + fmtMoney(state.spending);
+    var w = Math.max(140, txt.length * 6.4 + 20);
+    var above = dy > PT + 60;
+    var px = Math.min(PR - w, Math.max(PL, dx - w / 2));
+    var py = above ? dy - 52 : dy + 26;
+    out += '<rect x="' + px + '" y="' + py + '" width="' + w + '" height="26" fill="#0f172a" fill-opacity="0.88"/>';
+    out += '<text x="' + (px + w / 2) + '" y="' + (py + 17) + '" font-size="11.5" fill="#f8fafc" text-anchor="middle" font-weight="600" class="num">' + txt + '</text>';
+    el('gDot').innerHTML = out;
+  }
+
+  /* ═══════════════ THE LIFE TIMELINE STRIP ═══════════════ */
+  var LW = 1000, LA0 = 55, LA1 = 95;
+  var LL = 30, LR = 972, LAXIS = 84;
+  function lxFor(age) { return LL + (Math.min(LA1, Math.max(LA0, age)) - LA0) / (LA1 - LA0) * (LR - LL); }
+
+  function drawLife(res) {
+    var s = '';
+    var INK = '#1c1917', QUIET = '#a8a29e', WORK = '#334155', RET = '#94a3b8', RED = '#dc2626';
+
+    /* balance silhouette */
+    var rows = res.rows.filter(function (r) { return r.age <= LA1; });
+    var maxBal = 1;
+    rows.forEach(function (r) { if (r.bal > maxBal) maxBal = r.bal; });
+    function lyFor(b) { return LAXIS - 8 - (b / maxBal) * 52; }
+    var line = '', first = null, last = null;
+    rows.forEach(function (r) {
+      if (!first) first = r;
+      last = r;
+      line += (line ? ' L ' : 'M ') + lxFor(r.age).toFixed(1) + ' ' + lyFor(r.bal).toFixed(1);
+    });
+    if (first && last) {
+      s += '<path d="M ' + lxFor(first.age).toFixed(1) + ' ' + (LAXIS - 8) + ' ' + line.replace('M', 'L') +
+           ' L ' + lxFor(last.age).toFixed(1) + ' ' + (LAXIS - 8) + ' Z" fill="#0f172a" fill-opacity="0.05"/>';
+      s += '<path d="' + line + '" fill="none" stroke="#0f172a" stroke-opacity="0.25" stroke-width="1.5"/>';
+    }
+
+    /* the line: funded solid, unfunded dashed red */
+    var depl = res.depletionAge;
+    var fundedEnd = (depl != null && depl <= LA1) ? depl : LA1;
+    s += '<line x1="' + LL + '" y1="' + LAXIS + '" x2="' + lxFor(fundedEnd) + '" y2="' + LAXIS + '" stroke="' + INK + '" stroke-width="2.5"/>';
+    if (depl != null && depl <= LA1) {
+      s += '<line x1="' + lxFor(depl) + '" y1="' + LAXIS + '" x2="' + LR + '" y2="' + LAXIS + '" stroke="' + RED + '" stroke-width="2.5" stroke-opacity="0.55" stroke-dasharray="1 6"/>';
+    }
+
+    /* year ticks */
+    for (var a = LA0; a <= LA1; a++) {
+      var x = lxFor(a), major = a % 5 === 0;
+      var working = a < state.retireAge;
+      var col = (depl != null && a > depl) ? '#fca5a5' : (working ? WORK : RET);
+      s += '<line x1="' + x.toFixed(1) + '" y1="' + (LAXIS - (major ? 11 : 6)) + '" x2="' + x.toFixed(1) + '" y2="' + LAXIS +
+           '" stroke="' + col + '" stroke-width="' + (major ? 2 : 1.2) + '" stroke-opacity="0.85"/>';
+      if (major) s += '<text x="' + x.toFixed(1) + '" y="' + (LAXIS + 20) + '" font-size="11" fill="' + QUIET + '" text-anchor="middle" class="num">' + a + '</text>';
+    }
+
+    /* pins: you / work ends / money runs out */
+    function pin(age, text, color, dy) {
+      var x = lxFor(age);
+      var anchor = x < 110 ? 'start' : (x > LW - 130 ? 'end' : 'middle');
+      var lx = anchor === 'start' ? Math.max(x - 4, 2) : (anchor === 'end' ? Math.min(x + 4, LW - 2) : x);
+      return '<text x="' + lx.toFixed(1) + '" y="' + dy + '" font-size="11.5" fill="' + color + '" text-anchor="' + anchor + '" font-weight="600">' + text + '</text>';
+    }
+    s += '<circle cx="' + lxFor(state.currentAge) + '" cy="' + LAXIS + '" r="3.5" fill="' + INK + '"/>'
+       + pin(state.currentAge, 'you · ' + state.currentAge, INK, LAXIS + 36);
+    s += '<circle cx="' + lxFor(state.retireAge) + '" cy="' + LAXIS + '" r="4.5" fill="#fff" stroke="' + INK + '" stroke-width="2"/>'
+       + pin(state.retireAge, 'work ends · ' + state.retireAge, '#57534e', 18);
+    if (depl != null && depl <= LA1) {
+      s += '<circle cx="' + lxFor(depl) + '" cy="' + LAXIS + '" r="5" fill="' + RED + '" stroke="#fff" stroke-width="2"/>'
+         + pin(depl, 'money runs out · ' + depl, RED, 18);
+      if (state.maxAge > depl) s += pin(state.maxAge, 'planned to ' + state.maxAge, QUIET, LAXIS + 36);
+    } else {
+      s += pin(LA1, 'money outlasts the plan', '#166534', LAXIS + 36);
+    }
+
+    el('life').innerHTML = s;
+    el('tlRange').textContent = fmtMoney(state.savings) + ' today → ' +
+      fmtMoney(last ? last.bal : 0) + ' at ' + (last ? last.age : state.currentAge);
+  }
+
+  /* ── per-account mix (illustrative split that drifts with pot size) ── */
+  function accountMix(balance) {
+    var t = Math.max(0, Math.min(1, balance / 1500000));
+    var rrsp = 0.58 - 0.18 * t, taxable = 0.10 + 0.20 * t, tfsa = 1 - rrsp - taxable;
+    return { rrsp: rrsp, tfsa: tfsa, taxable: taxable };
+  }
+  function balAt(rows, age) {
+    if (!rows.length) return 0;
+    if (age <= rows[0].age) return rows[0].bal;
+    for (var i = 1; i < rows.length; i++) {
+      if (rows[i].age >= age) {
+        var a = rows[i - 1], b = rows[i];
+        var t = b.age === a.age ? 0 : (age - a.age) / (b.age - a.age);
+        return a.bal + (b.bal - a.bal) * t;
+      }
+    }
+    return rows.length ? rows[rows.length - 1].bal : 0;
+  }
+
+  /* fill the age picker once */
+  (function fillAges() {
+    var sel = el('accAgeSel'), out = '';
+    for (var a = state.currentAge; a <= state.maxAge; a++) {
+      out += '<option value="' + a + '"' + (a === state.retireAge ? ' selected' : '') + '>' + a + '</option>';
+    }
+    sel.innerHTML = out;
+  })();
+  el('accAgeSel').addEventListener('change', function () { renderAccounts(); });
+
+  var lastRes = null;
+  function renderAccounts() {
+    if (!lastRes) return;
+    var age = +el('accAgeSel').value;
+    var bal = balAt(lastRes.rows, age);
+    var mix = accountMix(bal);
+    el('accTotal').textContent = fmtMoney(bal);
+    el('accRRSP').style.width = (mix.rrsp * 100) + '%';
+    el('accTFSA').style.width = (mix.tfsa * 100) + '%';
+    el('accTax').style.width = (mix.taxable * 100) + '%';
+    el('accRRSPv').textContent = fmtMoney(bal * mix.rrsp);
+    el('accTFSAv').textContent = fmtMoney(bal * mix.tfsa);
+    el('accTaxv').textContent = fmtMoney(bal * mix.taxable);
+  }
+
+  /* ═══════════════ RENDER ═══════════════ */
+  function render() {
+    if (state.retireAge < state.currentAge) state.retireAge = state.currentAge;
+    var res = simulate(state);
+    lastRes = res;
+    var ok = res.ok;
+    var borderline = !ok && res.depletionAge != null && (state.maxAge - res.depletionAge) <= BORDER_YEARS;
+
+    /* ── verdict ── */
+    var v = el('verdict'), vs = el('verdictSub');
+    if (ok) {
+      v.innerHTML = 'Your money lasts until you&rsquo;re <span class="num text-emerald-700">' + lastsLabel(res) + '</span>.';
+      vs.textContent = res.leftAtMax > 25000
+        ? 'About ' + fmtMoney(res.leftAtMax) + ' would still be there at ' + state.maxAge + ' — the ground here holds.'
+        : 'It carries you past the ' + state.maxAge + ' you\'re planning for.';
+    } else {
+      var gap = state.maxAge - res.depletionAge;
+      v.innerHTML = 'Your money runs out at <span class="num ' + (borderline ? 'text-amber-700' : 'text-rose-700') + '">' +
+        res.depletionAge + '</span> — ' + gap + (gap === 1 ? ' year' : ' years') + ' short.';
+      vs.textContent = (suggest(state) || 'Drag downhill on the map: spend less, or work longer.') +
+        ' The dot is in the ' + (borderline ? 'amber — close, but not held.' : 'red.');
+    }
+
+    /* ── persistent verdict chip ── */
+    el('vchipAge').textContent = lastsLabel(res);
+    var st = el('vchipState'), sd = el('vchipDot');
+    st.textContent = ok ? 'the plan holds' : (borderline ? 'borderline' : 'runs short');
+    sd.style.backgroundColor = ok ? '#10b981' : (borderline ? '#f59e0b' : '#f43f5e');
+
+    /* ── map (terrain redraws from cache unless the sky moved) ── */
+    drawBands();
+    drawDot(res);
+    el('lgMax').textContent = state.maxAge;
+
+    /* ── life strip ── */
+    drawLife(res);
+
+    /* ── faders ── */
+    el('fRetire').value = state.retireAge;
+    el('vRetire').textContent = state.retireAge;
+    el('fSpend').value = state.spending;
+    el('vSpend').textContent = fmtMoney(state.spending);
+
+    /* consequence lines — each fader says what moving it would do */
+    var later = simulate(Object.assign({}, state, { retireAge: state.retireAge + 1 }));
+    el('fxRetire').innerHTML = 'One more year of work and the money lasts to <strong class="text-slate-700 num">' +
+      lastsLabel(later) + '</strong>' + (later.ok && !ok ? ' — that alone would close the gap.' : '.');
+    var cheaper = simulate(Object.assign({}, state, { spending: Math.max(10000, state.spending - 5000) }));
+    el('fxSpend').innerHTML = fmtMoney(5000) + ' less a year and it lasts to <strong class="text-slate-700 num">' +
+      lastsLabel(cheaper) + '</strong>' + (cheaper.ok && !ok ? ' — that alone would close the gap.' : '.');
+
+    /* ── storm test ── */
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var sdot = el('stormDot'), st2 = el('stormTitle'), sl = el('stormLine');
+    if (storm.ok) {
+      sdot.style.backgroundColor = '#10b981';
+      st2.textContent = 'Storm-tested.';
+      sl.innerHTML = 'Even in stormy markets this plan holds to <strong class="text-slate-700 num">' + lastsLabel(storm) + '</strong>.';
+    } else {
+      sdot.style.backgroundColor = '#f43f5e';
+      st2.textContent = 'Storm warning.';
+      sl.innerHTML = 'In stormy markets the money runs out at <strong class="text-slate-900 num">' + storm.depletionAge + '</strong>. The map above is for <em>' +
+        (state.sky === 'storm' ? 'stormy' : (state.sky === 'sun' ? 'kind' : 'ordinary')) + '</em> skies — switch it and the bands move.';
+    }
+    document.querySelectorAll('[data-sky]').forEach(function (b) {
+      var on = b.getAttribute('data-sky') === state.sky;
+      b.setAttribute('aria-pressed', String(on));
+      b.className = 'skybtn border px-2.5 py-1 transition-colors ' +
+        (on ? 'border-slate-800 font-semibold text-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900');
+    });
+
+    /* ── numbers ── */
+    el('rLasts').textContent = lastsLabel(res);
+    el('rLasts').style.color = ok ? '#047857' : (borderline ? '#b45309' : '#be123c');
+    el('rLastsNote').textContent = ok ? 'past the plan' : 'before the ' + state.maxAge + ' planned';
+    el('rMaxLbl').textContent = state.maxAge;
+    el('rLeft').textContent = res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) : 'nothing';
+    el('rLeftNote').textContent = res.leftAtMax > 0 ? 'still in the pot' : 'the pot is empty';
+    el('rAtRet').textContent = fmtMoney(balAt(res.rows, state.retireAge));
+    el('rBenAge').textContent = state.benefitAge;
+    el('rBen').textContent = fmtMoney(state.benefits);
+
+    renderAccounts();
+  }
+
+  /* ── wiring: faders ── */
+  el('fRetire').addEventListener('input', function () { state.retireAge = +this.value; render(); });
+  el('fSpend').addEventListener('input', function () { state.spending = +this.value; render(); });
+
+  /* ── wiring: the sky — re-runs the terrain ── */
+  document.querySelectorAll('[data-sky]').forEach(function (b) {
+    b.addEventListener('click', function () { state.sky = b.getAttribute('data-sky'); render(); });
+  });
+
+  /* ── dropdown chrome (illustrative — no navigation) ── */
+  document.querySelectorAll('.dd-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var dd = btn.closest('.dropdown');
+      document.querySelectorAll('.dropdown').forEach(function (d) { if (d !== dd) d.classList.remove('open'); });
+      dd.classList.toggle('open');
+    });
+  });
+  document.addEventListener('click', function () {
+    document.querySelectorAll('.dropdown').forEach(function (d) { d.classList.remove('open'); });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

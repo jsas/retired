@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — just talk it through</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ─── FLAT, SQUARE — the pair's design rules.
+         No cards, no rounded corners, no shadows.
+         Whitespace + hairline dividers carry the structure. ─── */
+  * { border-radius: 0 !important; box-shadow: none !important; }
+
+  /* message entrance — the only motion in the thread */
+  @keyframes rise { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  .msg { animation: rise .4s cubic-bezier(.2,.7,.3,1) both; }
+
+  /* typing indicator — three flat squares, not dots */
+  @keyframes tick { 0%,60%,100% { opacity:.25; } 30% { opacity:1; } }
+  .tdot { animation: tick 1.1s infinite; }
+  .tdot:nth-child(2) { animation-delay:.15s; }
+  .tdot:nth-child(3) { animation-delay:.3s; }
+
+  .chip { transition: background .12s, color .12s, border-color .12s; }
+  .chip:hover { background:#f5f5f4; }
+
+  input[type=text].freetext:focus { outline:none; border-color:#0f172a; }
+
+  /* the model download — flat, square progress */
+  @keyframes fillbar { from { width:0%; } }
+  #dlBar { animation: fillbar 4.2s cubic-bezier(.3,.7,.4,1) both; }
+
+  ::selection { background:#e2e8f0; }
+</style>
+</head>
+<body class="bg-white text-slate-900 min-h-screen flex flex-col antialiased">
+
+<!--
+  ══════════════════════════════════════════════════════════════════
+  F3 · CONVERSATION — SITE 1: THE LANDING (the on-ramp)
+  The wizard, replaced by a chat. Five questions build the plan, then
+  the twist the user asked for: the verdict offers TWO doors —
+    1. open the dashboard (the app)
+    2. keep talking — which downloads a small local model and turns
+       this same window into a real AI assistant, on-device.
+  Square message blocks, hairline dividers, no bubbles, no cards.
+  ══════════════════════════════════════════════════════════════════
+-->
+
+<!-- minimal wordmark only — this is the landing, not the app -->
+<header class="w-full max-w-2xl mx-auto flex items-center gap-2.5 px-5 pt-7">
+  <div class="w-6 h-6 bg-slate-900 flex items-center justify-center text-[9px] font-bold text-white">RE:</div>
+  <span class="font-semibold text-[15px] tracking-tight">tired</span>
+  <span class="text-[12px] text-slate-400 ml-1">— knows if your money outlasts you</span>
+</header>
+
+<main class="flex-1 w-full max-w-2xl mx-auto px-5 py-10 pb-44">
+  <div id="thread" class="space-y-5"></div>
+  <div id="pending" class="mt-5"></div>
+</main>
+
+<!-- fixed composer — flat, hairline top border -->
+<div id="composer" class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 pt-4 pb-5 px-5 hidden">
+  <div class="max-w-2xl mx-auto">
+    <div id="chips" class="flex flex-wrap gap-2 mb-3"></div>
+    <form id="say" class="flex gap-2 items-stretch">
+      <input id="sayInput" type="text" autocomplete="off"
+        class="freetext flex-1 bg-white border border-slate-300 px-4 py-2.5 text-[15px] placeholder:text-slate-400"
+        placeholder="Type your answer…" />
+      <button type="submit" aria-label="send"
+        class="w-11 shrink-0 bg-slate-900 text-white text-lg font-bold hover:bg-slate-700 transition-colors">↑</button>
+    </form>
+    <p class="text-[11px] text-slate-400 mt-3">Nothing is sent anywhere — this all happens in your browser.</p>
+  </div>
+</div>
+
+<!-- landing footer: privacy + legal, per the two-site split -->
+<footer class="border-t border-slate-200">
+  <div class="max-w-2xl mx-auto px-5 py-6 text-[12px] leading-relaxed text-slate-500">
+    <p><strong class="text-slate-700">Private by design.</strong> No servers, no accounts, no tracking.
+      Everything you type stays in this browser tab and is gone when you close it (unless you later save a plan).</p>
+    <p class="mt-2"><strong class="text-slate-700">Not advice.</strong> RE:tired is an educational model, not financial,
+      tax, or investment advice. Tax and benefit rules are Canadian approximations — talk to a professional before acting.</p>
+    <p class="mt-2 text-slate-400">Open source · Help &amp; docs · f3 · conversation → assistant — landing</p>
+  </div>
+</footer>
+
+<script src="../model.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────────
+   The conversation. Five exchanges build the plan; the assistant
+   reacts like a person would, then delivers the honest verdict and
+   offers the two doors: open the dashboard, or keep chatting with
+   a real AI assistant — which means downloading the local model.
+   ───────────────────────────────────────────────────────────────── */
+const plan = { ...DEMO_DEFAULTS };
+const $ = id => document.getElementById(id);
+const thread = $('thread'), pending = $('pending');
+
+/* square RE block — no rounded avatar */
+const AVATAR = '<div class="w-6 h-6 bg-slate-900 flex items-center justify-center text-[9px] font-bold text-white shrink-0">RE</div>';
+
+function scrollSoon() {
+  requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
+}
+
+/* A message: flat rectangular block with a left accent border.
+   Assistant: left border in slate-900. Me: left border in slate-300,
+   right-aligned by being placed on the right via justify-end. */
+function block(html, who, accent) {
+  const me = who === 'me';
+  const row = document.createElement('div');
+  row.className = 'msg flex ' + (me ? 'justify-end' : 'items-start gap-3');
+  const border = accent || (me ? 'border-slate-300' : 'border-slate-900');
+  row.innerHTML = me
+    ? '<div class="max-w-[80%] border-l-2 ' + border + ' bg-slate-50 pl-4 pr-3 py-2.5 text-[15px] leading-relaxed text-slate-800">' + html + '</div>'
+    : AVATAR + '<div class="max-w-[85%] border-l-2 ' + border + ' pl-4 pr-3 py-2.5 text-[15px] leading-relaxed text-slate-800">' + html + '</div>';
+  thread.appendChild(row);
+  scrollSoon();
+  return row;
+}
+
+function typing() {
+  const t = document.createElement('div');
+  t.className = 'msg flex gap-3 items-start';
+  t.innerHTML = AVATAR + '<div class="border-l-2 border-slate-200 pl-4 py-3 flex gap-1.5">'
+    + '<span class="tdot w-1.5 h-1.5 bg-slate-400"></span>'
+    + '<span class="tdot w-1.5 h-1.5 bg-slate-400"></span>'
+    + '<span class="tdot w-1.5 h-1.5 bg-slate-400"></span></div>';
+  pending.appendChild(t);
+  scrollSoon();
+  return t;
+}
+
+/* assistant speaks after a beat, like it's thinking */
+function say(html, delay) {
+  return new Promise(res => {
+    const t = typing();
+    setTimeout(() => { t.remove(); block(html); res(); }, delay ?? (650 + Math.random() * 450));
+  });
+}
+
+/* ── free-text composer with quick-answer chips ── */
+let answer = null;
+const MONEY_RE = /([\d,.]+)\s*(k|m|million|thousand)?/i;
+
+function parseMoney(text) {
+  const m = text.replace(/[$,\s]/g, '').match(MONEY_RE);
+  if (!m) return null;
+  let n = parseFloat(m[1].replace(/,/g, ''));
+  if (isNaN(n)) return null;
+  const unit = (m[2] || '').toLowerCase();
+  if (unit === 'k' || unit === 'thousand') n *= 1000;
+  if (unit === 'm' || unit === 'million') n *= 1000000;
+  return Math.round(n);
+}
+function parseAge(text) {
+  const m = text.match(/\b(\d{2})\b/);
+  return m ? +m[1] : null;
+}
+
+function ask(q) {
+  $('composer').classList.remove('hidden');
+  $('chips').innerHTML = '';
+  (q.chips || []).forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip px-4 py-1.5 text-[13.5px] bg-white border border-slate-300 text-slate-700 hover:border-slate-900';
+    b.textContent = c.label;
+    b.addEventListener('click', () => submit(c.value, c.echo ?? c.label));
+    $('chips').appendChild(b);
+  });
+  $('sayInput').placeholder = q.placeholder;
+  $('sayInput').focus();
+
+  answer = text => {
+    const v = q.parse(text);
+    if (v == null) { say(q.retry, 500); return; }
+    submit(v, q.echoFree ? q.echoFree(v) : text);
+  };
+
+  function submit(v, echo) {
+    answer = null;
+    $('sayInput').value = '';
+    $('chips').innerHTML = '';
+    plan[q.key] = v;
+    block(echo, 'me');
+    q.next(v);
+  }
+}
+
+$('say').addEventListener('submit', e => {
+  e.preventDefault();
+  const text = $('sayInput').value.trim();
+  if (!text || !answer) return;
+  answer(text);
+});
+
+/* ── the script of the conversation ── */
+async function start() {
+  await say('Hi. I\'m RE — I can tell you whether your money will outlast you. It takes about five questions, and nothing you say leaves this browser.');
+  await say('First — <strong>how old are you right now?</strong>', 800);
+  ask({
+    key: 'currentAge',
+    placeholder: 'e.g. 55',
+    parse: parseAge,
+    echoFree: v => 'I\'m <strong class="num">' + v + '</strong>.',
+    retry: 'Just a number is fine — like 55.',
+    chips: [{ label: '55', value: 55 }, { label: '60', value: 60 }, { label: '65', value: 65 }],
+    next: async v => {
+      plan.currentAge = Math.min(80, Math.max(40, v));
+      await say(v <= 60
+        ? 'Good — still time on your side, then.'
+        : 'Okay. The questions get easier from here.', 700);
+      await say('When would you like to <strong>stop working</strong>?');
+      ask({
+        key: 'retireAge',
+        placeholder: 'e.g. 62',
+        parse: parseAge,
+        echoFree: v => 'I\'d stop at <strong class="num">' + v + '</strong>.',
+        retry: 'Give me an age — like 62. Any age between now and 80 works.',
+        chips: [{ label: '60', value: 60 }, { label: '62', value: 62 }, { label: '65', value: 65 }],
+        next: async v => {
+          plan.retireAge = Math.max(plan.currentAge, Math.min(80, v));
+          await say(plan.retireAge - plan.currentAge <= 3
+            ? 'Soon, then. Let\'s make sure the math is ready for it.'
+            : 'That\'s ' + (plan.retireAge - plan.currentAge) + ' more working years to build with.', 750);
+          await say('Roughly <strong>how much have you saved</strong> all together — RRSP, TFSA, investments, everything? A round number is fine.');
+          ask({
+            key: 'savings',
+            placeholder: 'e.g. 850k, or $850,000',
+            parse: parseMoney,
+            echoFree: v => 'About <strong class="num">' + fmtMoney(v) + '</strong>.',
+            retry: 'Any way of writing it works — "850k", "$1.2M", "900000".',
+            chips: [{ label: '$500k', value: 500000 }, { label: '$850k', value: 850000 }, { label: '$1.2M', value: 1200000 }],
+            next: async v => {
+              plan.savings = Math.max(0, v);
+              await say('That\'s real money — good. Now the other side of the ledger.');
+              await say('Once you stop working, <strong>how much do you want to spend each year?</strong> Don\'t overthink it — what would a good year cost?');
+              ask({
+                key: 'spending',
+                placeholder: 'e.g. 85k a year',
+                parse: parseMoney,
+                echoFree: v => '<strong class="num">' + fmtMoney(v) + '</strong> a year.',
+                retry: 'A yearly number — like "80k" or "$90,000".',
+                chips: [{ label: '$60k', value: 60000 }, { label: '$85k', value: 85000 }, { label: '$110k', value: 110000 }],
+                next: async v => {
+                  plan.spending = Math.max(10000, v);
+                  await say('Last one. Will you get <strong>CPP and OAS</strong> — the government benefits? Most people do; together they\'re usually worth around ' + fmtMoney(DEMO_DEFAULTS.benefits) + ' a year from age 65.');
+                  ask({
+                    key: 'benefits',
+                    placeholder: 'a yearly amount, or "yes" / "no"',
+                    parse: text => {
+                      if (/^(yes|y|yeah|yep|sure)/i.test(text.trim())) return DEMO_DEFAULTS.benefits;
+                      if (/^(no|n|nope)/i.test(text.trim())) return 0;
+                      return parseMoney(text);
+                    },
+                    echoFree: v => v === 0 ? 'No benefits for me.' : 'About <strong class="num">' + fmtMoney(v) + '</strong> a year.',
+                    retry: 'You can say "yes" for the usual amount, "no", or give me a yearly number.',
+                    chips: [
+                      { label: 'Yes, the usual', value: DEMO_DEFAULTS.benefits, echo: 'Yes — the usual.' },
+                      { label: 'No', value: 0, echo: 'No benefits for me.' },
+                    ],
+                    next: async v => {
+                      plan.benefits = v;
+                      await say('That\'s everything I need. Let me run the numbers…', 700);
+                      setTimeout(verdict, 1100);
+                    }
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+    }
+  });
+}
+
+/* ── the verdict, delivered as a message — honest about the shortfall ── */
+async function verdict() {
+  const res = simulate(plan);
+  const ok = res.ok;
+
+  if (ok) {
+    await say('Here\'s your answer: on those numbers, <strong>your money lasts until you\'re <span class="num text-emerald-700 text-[17px]">'
+      + lastsLabel(res) + '</span></strong>'
+      + (res.leftAtMax > 25000
+        ? ' — with about <span class="num">' + fmtMoney(res.leftAtMax) + '</span> still there at ' + plan.maxAge + '.'
+        : ' — past the ' + plan.maxAge + ' we\'re planning to.'), 1200);
+  } else {
+    await say('Here\'s the honest answer: on those numbers, <strong>your money lasts until you\'re <span class="num text-rose-700 text-[17px]">'
+      + lastsLabel(res) + '</span></strong>. That\'s ' + (plan.maxAge - res.depletionAge) + ' years short of ' + plan.maxAge + '.', 1200);
+    const fix = suggest(plan);
+    if (fix) await say('But it\'s close — <strong>' + fix.charAt(0).toLowerCase() + fix.slice(1) + '</strong>', 850);
+  }
+
+  /* little balance sketch, drawn square — sharp polyline, hairline baseline */
+  const rows = res.rows;
+  const X0 = 6, X1 = 334, Y0 = 6, Y1 = 74, AGE_MAX = 110;
+  const peak = Math.max(1, ...rows.map(r => r.bal));
+  const cx = a => X0 + (a - plan.currentAge) / (AGE_MAX - plan.currentAge) * (X1 - X0);
+  const cy = v => Y0 + (1 - v / peak) * (Y1 - Y0);
+  const pts = rows.map(r => cx(r.age).toFixed(1) + ',' + cy(r.bal).toFixed(1)).join(' ');
+  const dryX = res.depletionAge != null ? cx(res.depletionAge).toFixed(1) : null;
+  await say(
+    '<svg viewBox="0 0 340 92" class="w-full block" aria-label="Balance over your lifetime">'
+    + '<line x1="6" y1="74" x2="334" y2="74" stroke="#e2e8f0" stroke-width="1"/>'
+    + '<polyline points="' + pts + '" fill="none" stroke="' + (ok ? '#047857' : '#0f172a') + '" stroke-width="2" stroke-linejoin="miter"/>'
+    + (dryX ? '<line x1="' + dryX + '" y1="6" x2="' + dryX + '" y2="74" stroke="#e11d48" stroke-width="1.2" stroke-dasharray="3 3"/>' : '')
+    + '<text x="6" y="88" font-size="9" fill="#94a3b8" class="num">' + plan.currentAge + '</text>'
+    + '<text x="' + (dryX || X1) + '" y="88" font-size="9" fill="' + (dryX ? '#e11d48' : '#94a3b8') + '" text-anchor="' + (dryX ? 'middle' : 'end') + '" class="num">'
+      + (res.depletionAge != null ? 'runs out at ' + res.depletionAge : '110+') + '</text>'
+    + '</svg>', 700);
+
+  /* ── the twist: TWO doors, both real ── */
+  await say(ok
+    ? 'That\'s the picture. Where would you like to go from here?'
+    : '<strong>Want to fix that?</strong> Two ways from here — pick whichever feels right.', 900);
+
+  const doors = document.createElement('div');
+  doors.className = 'msg flex gap-3 items-start';
+  doors.innerHTML = AVATAR
+    + '<div class="flex-1 max-w-[85%] grid gap-2 sm:grid-cols-2">'
+    /* door 1: the dashboard */
+    +   '<a href="f3-conversation-app.html" class="group block border-l-2 border-slate-900 bg-slate-900 text-white pl-4 pr-4 py-3.5 hover:bg-slate-800 transition-colors">'
+    +     '<div class="text-[14.5px] font-semibold">Open the dashboard →</div>'
+    +     '<div class="text-[12px] text-slate-300 mt-1 leading-relaxed">'
+    +       (ok
+    ?         'The whole plan laid out — the map, the faders, the storm test. Move things and watch the answer change.'
+    :         'The plan on a map. Drag the two levers that decide the answer, and watch the age move.')
+    +     '</div>'
+    +   '</a>'
+    /* door 2: keep chatting — downloads the local model */
+    +   '<button id="doorAssistant" class="group block text-left border-l-2 border border-slate-200 bg-white pl-4 pr-4 py-3.5 hover:border-slate-900 transition-colors">'
+    +     '<div class="text-[14.5px] font-semibold text-slate-900">Keep chatting with the AI assistant</div>'
+    +     '<div class="text-[12px] text-slate-500 mt-1 leading-relaxed">'
+    +       'A small local model, runs on your device — nothing leaves the browser. About a 2 GB download, once.'
+    +     '</div>'
+    +     '<div class="text-[11px] text-slate-400 mt-2">Ask things like “what if I work one more year?” — it reads the plan and shows its work.</div>'
+    +   '</button>'
+    + '</div>';
+  thread.appendChild(doors);
+  scrollSoon();
+
+  /* wire the assistant door */
+  document.getElementById('doorAssistant').addEventListener('click', startAssistantInstall, { once: true });
+
+  /* quiet restart, bottom of thread */
+  const again = document.createElement('div');
+  again.className = 'msg text-center pt-2';
+  again.innerHTML = '<button class="chip text-[12px] text-slate-400 underline underline-offset-2 hover:text-slate-600">start the conversation over</button>';
+  again.querySelector('button').addEventListener('click', () => location.reload());
+  thread.appendChild(again);
+  $('composer').classList.add('hidden');
+  scrollSoon();
+}
+
+/* ── the assistant install flow — mocked, on-device model ── */
+async function startAssistantInstall() {
+  $('composer').classList.add('hidden');
+  await say('Good choice. To keep everything on your device, I\'ll download a small language model into this browser. It\'s about <strong class="num">2 GB</strong> — once it\'s in, you can ask me anything about your plan, even offline.', 800);
+
+  /* flat, square download block */
+  const dl = document.createElement('div');
+  dl.className = 'msg flex gap-3 items-start';
+  dl.innerHTML = AVATAR
+    + '<div class="flex-1 max-w-[85%] border-l-2 border-slate-900 pl-4 py-3">'
+    +   '<div class="flex items-baseline justify-between text-[13px]">'
+    +     '<span class="font-medium text-slate-900">re-tired-q3.local (~2.0 GB)</span>'
+    +     '<span class="num text-slate-500" id="dlPct">0%</span>'
+    +   '</div>'
+    +   '<div class="mt-2 h-1.5 bg-slate-100 overflow-hidden"><div id="dlBar" class="h-full bg-slate-900"></div></div>'
+    +   '<div class="mt-2 flex items-baseline justify-between text-[11px] text-slate-400 num">'
+    +     '<span id="dlSpeed">— MB/s</span>'
+    +     '<span id="dlEta">estimating…</span>'
+    +   '</div>'
+    +   '<p class="mt-2.5 text-[11.5px] leading-relaxed text-slate-500">'
+    +     'This stays in your browser\'s storage. No account, no server, no upload — the model never sees the internet and neither does your plan.'
+    +   '</p>'
+    + '</div>';
+  thread.appendChild(dl);
+  scrollSoon();
+
+  /* fake but convincing progress */
+  const pct = dl.querySelector('#dlPct');
+  const spd = dl.querySelector('#dlSpeed');
+  const eta = dl.querySelector('#dlEta');
+  const DURATION = 4200;
+  const t0 = performance.now();
+  function tick(now) {
+    const p = Math.min(1, (now - t0) / DURATION);
+    /* ease with a little wobble so it feels like a real download */
+    const eased = 1 - Math.pow(1 - p, 2.2);
+    const wob = Math.sin(p * 18) * 0.012 * (1 - p);
+    const shown = Math.min(1, Math.max(0, eased + wob));
+    pct.textContent = Math.round(shown * 100) + '%';
+    spd.textContent = (420 + Math.sin(p * 30) * 80 + Math.random() * 30).toFixed(0) + ' MB/s';
+    const left = Math.max(0, (1 - shown) * 4.1);
+    eta.textContent = left > 0.2 ? Math.ceil(left) + 's left' : 'finishing…';
+    if (p < 1) requestAnimationFrame(tick);
+    else finishInstall();
+  }
+  requestAnimationFrame(tick);
+}
+
+async function finishInstall() {
+  await say('<span class="inline-flex items-center gap-2"><span class="w-2 h-2 bg-emerald-600 inline-block"></span><strong>Ready — the model is on your device.</strong></span>', 500);
+  await say('Ask me anything about your plan. I can read the numbers we just built, try changes, and show you the work. For example:', 700);
+
+  /* a few canned example chips to kick the assistant off */
+  const ideas = document.createElement('div');
+  ideas.className = 'msg flex gap-3 items-start';
+  ideas.innerHTML = AVATAR
+    + '<div class="flex-1 max-w-[85%] flex flex-wrap gap-2">'
+    +   '<button data-q="work" class="chip border border-slate-300 px-3.5 py-1.5 text-[13px] text-slate-700 hover:border-slate-900">“What if I work one more year?”</button>'
+    +   '<button data-q="spend" class="chip border border-slate-300 px-3.5 py-1.5 text-[13px] text-slate-700 hover:border-slate-900">“What spending would last to 95?”</button>'
+    +   '<button data-q="storm" class="chip border border-slate-300 px-3.5 py-1.5 text-[13px] text-slate-700 hover:border-slate-900">“Does it survive a bad market?”</button>'
+    + '</div>';
+  thread.appendChild(ideas);
+  scrollSoon();
+
+  ideas.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-q]');
+    if (!btn) return;
+    ideas.remove();
+    await answerCanned(btn.getAttribute('data-q'));
+  }, { once: true });
+}
+
+/* a single canned assistant exchange, computed live through simulate() */
+async function answerCanned(which) {
+  if (which === 'work') {
+    block('“What if I work one more year?”', 'me');
+    const before = simulate(plan);
+    const after = simulate({ ...plan, retireAge: plan.retireAge + 1 });
+    await say('Working to <strong class="num">' + (plan.retireAge + 1) + '</strong> instead of ' + plan.retireAge
+      + ' moves the money from lasting to <span class="num">' + lastsLabel(before) + '</span>'
+      + ' to lasting to <strong class="num text-emerald-700">' + lastsLabel(after) + '</strong>'
+      + (after.ok && !before.ok ? ' — that alone closes the gap.' : '.'), 900);
+  } else if (which === 'spend') {
+    block('“What spending would last to ' + plan.maxAge + '?”', 'me');
+    /* find the highest spending that still holds */
+    let best = 0;
+    for (let s = plan.spending; s >= 10000; s -= 500) {
+      if (simulate({ ...plan, spending: s }).ok) { best = s; break; }
+    }
+    await say(best > 0
+      ? 'The highest yearly spending that still reaches ' + plan.maxAge + ' is about <strong class="num text-emerald-700">' + fmtMoney(best) + '</strong>'
+        + ' — that\'s ' + fmtMoney(plan.spending - best) + ' less a year than the ' + fmtMoney(plan.spending) + ' you told me.'
+      : 'Honestly, even at very low spending this plan doesn\'t reach ' + plan.maxAge + ' — something bigger has to change.', 900);
+  } else if (which === 'storm') {
+    block('“Does it survive a bad market?”', 'me');
+    const storm = simulate({ ...plan, sky: 'storm' });
+    await say(storm.ok
+      ? 'Yes — even with stormy markets the plan holds to <strong class="num text-emerald-700">' + lastsLabel(storm) + '</strong>.'
+      : 'Honestly, no — in stormy markets the money runs out at <strong class="num text-rose-700">' + storm.depletionAge + '</strong>, earlier than the ' + lastsLabel(simulate(plan)) + ' we saw with ordinary weather.', 900);
+  }
+
+  /* then the door into the app with the assistant alive there too */
+  await say('I\'m in the dashboard too — same model, same device. Whenever you\'re ready:', 800);
+  const door = document.createElement('div');
+  door.className = 'msg flex gap-3 items-start';
+  door.innerHTML = AVATAR
+    + '<a href="f3-conversation-app.html" class="group inline-block border-l-2 border-slate-900 bg-slate-900 text-white pl-4 pr-5 py-3 hover:bg-slate-800 transition-colors">'
+    +   '<span class="text-[14px] font-semibold">Open the dashboard with me in it →</span>'
+    +   '<span class="block text-[11.5px] text-slate-300 mt-1">I\'ll be docked on the right — ask while you drag.</span>'
+    + '</a>';
+  thread.appendChild(door);
+  scrollSoon();
+}
+
+start();
+</script>
+</body>
+</html>
