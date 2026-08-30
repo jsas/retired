@@ -236,6 +236,18 @@ export function isTokenEcho(text: string): boolean {
  *  errors ("mapAsync", "device lost") mean nothing to a non-technical user. */
 function translateLocalError(err: unknown): ProviderError {
   const msg = err instanceof Error ? err.message : String(err);
+  // The request's prompt alone overflowed the compiled context window — the
+  // plan digest + tool catalog + conversation didn't fit. This is the error a
+  // user hits when the model's window is smaller than the data we send; the
+  // fix is a bigger window (Connections) or a cloud provider, not a retry.
+  if (/prompt tokens exceed context window|context window size|exceed.{0,20}context/i.test(msg)) {
+    return new ProviderError(
+      'Your plan summary and this conversation are too large for this local model\'s context ' +
+      'window, so it can\'t read the request. On the Connections page, raise "How much the model ' +
+      'reads at once" (if your GPU has the memory), pick a model compiled for a larger window, ' +
+      'or switch to a cloud provider (Advanced), which offers a much bigger window.',
+    );
+  }
   if (/mapAsync|device.?lost|out of memory|was unmapped|GPUBuffer/i.test(msg)) {
     return new ProviderError(
       'The local model crashed while answering — this usually means it ran out of graphics ' +

@@ -722,6 +722,27 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       patchAssistant(t => { t.tools.push({ id: `compact-${Date.now().toString(36)}`, name: 'context compacted', state: 'done', summary: 'Older messages were summarized to fit the context window.' }); });
     }
 
+    // Even after compaction the request can exceed the window: the fixed
+    // overhead (persona + tool catalog + plan digest) plus the verbatim tail
+    // may simply not fit a small local model's compiled context — a fresh chat
+    // has no history to compact, so it's the overhead alone that overflows.
+    // Catching it here gives the user something they can act on instead of the
+    // engine's raw "prompt tokens exceed context window size" dump.
+    if (isLocal && estimateTokens(system, [...history, { role: 'user', content }]) > contextSize * COMPACT_AT) {
+      patchAssistant(t => {
+        t.state = 'error';
+        t.text =
+          `This local model's context window (${contextSize.toLocaleString()} tokens) is too small to hold your plan ` +
+          'summary and this conversation — even after older messages were compacted. On the Connections page, raise ' +
+          '"How much the model reads at once" (if your GPU has the memory), pick a model compiled for a larger ' +
+          'window, or switch to a cloud provider (Advanced), which offers a much bigger window.';
+      });
+      setRunning(false);
+      setLoadProgress(null);
+      abortRef.current = null;
+      return;
+    }
+
     if (isLocal) {
       downloadDoneRef.current = false;
       setLoadProgress({ progress: 0, text: 'Preparing the local model…' });

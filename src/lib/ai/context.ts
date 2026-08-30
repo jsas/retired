@@ -87,26 +87,26 @@ export function planCompaction(opts: {
   keepRecent?: number;
 }): CompactionPlan {
   const { system, messages, contextSize, priorSummary = '', keepRecent = 6 } = opts;
+  const budget = contextSize * COMPACT_AT;
   const used = estimateTokens(system, messages);
-  if (used <= contextSize * COMPACT_AT) {
+  if (used <= budget) {
     return { compacted: false, messages, excerptToDigest: '' };
   }
 
-  // Drop oldest messages until the remainder + the digest note fits. Always
-  // keep at least the trailing `keepRecent` messages verbatim.
-  let drop = 0;
-  const maxDrop = Math.max(0, messages.length - keepRecent);
-  while (drop < maxDrop) {
-    const rest = messages.slice(drop + 1);
-    const projected = estimateTokens(system, [
-      { role: 'user', content: summaryNote(priorSummary) },
-      ...rest,
-    ]);
-    if (projected <= contextSize * COMPACT_AT) break;
-    drop += 1;
+  // Keep the NEWEST `keep` messages verbatim and drop the rest. Start from the
+  // caller's keepRecent preference, then shrink below it when the window can't
+  // hold the system prompt + digest note + that tail — a small local window
+  // (the fresh-chat case, where there's no long history but the plan digest is
+  // large) must still leave room to answer. The single newest message is never
+  // dropped: it's the live edge of the conversation, and the caller's overflow
+  // check reports the case where even it won't fit.
+  const note = (): ChatMessage => ({ role: 'user', content: summaryNote(priorSummary) });
+  let keep = Math.max(1, Math.min(keepRecent, messages.length));
+  while (keep > 1 && estimateTokens(system, [note(), ...messages.slice(-keep)]) > budget) {
+    keep -= 1;
   }
-  const dropped = messages.slice(0, drop);
-  const kept = messages.slice(drop);
+  const dropped = messages.slice(0, messages.length - keep);
+  const kept = messages.slice(messages.length - keep);
 
   const excerptToDigest = [
     priorSummary.trim() ? `Prior digest:\n${priorSummary.trim()}` : '',
@@ -116,7 +116,7 @@ export function planCompaction(opts: {
 
   return {
     compacted: dropped.length > 0,
-    messages: [{ role: 'user', content: summaryNote(priorSummary) }, ...kept],
+    messages: [note(), ...kept],
     excerptToDigest: dropped.length > 0 ? excerptToDigest : '',
   };
 }

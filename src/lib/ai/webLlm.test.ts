@@ -13,6 +13,7 @@ import type { StreamEvent } from './providers';
 let scriptedChunks: Array<Record<string, unknown>> = [];
 let interruptCalls = 0;
 let crashAfter: string | null = null; // when set, the stream throws after one chunk
+let crashWith: string | null = null; // the error message to throw (defaults to a mapAsync dump)
 const cachedModels = new Set<string>(); // models the fake cache reports as present
 let deletedModels: string[] = [];
 let lastRequest: Record<string, unknown> | null = null; // the completion request, captured
@@ -31,7 +32,7 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
             return (async function* () {
               if (crashAfter) {
                 yield { choices: [{ delta: { content: crashAfter } }] };
-                throw new Error("Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
+                throw new Error(crashWith ?? "Failed to execute 'mapAsync' on 'GPUBuffer': Buffer was unmapped before mapping was resolved.");
               }
               yield* scriptedChunks;
             })();
@@ -231,6 +232,20 @@ describe('streamWebLlm', () => {
       })) { /* drain */ }
     }).rejects.toThrow(/graphics memory/);
     crashAfter = null;
+  });
+
+  it('translates a context-window overflow into actionable guidance', async () => {
+    const { streamWebLlm, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    crashAfter = 'partial…';
+    crashWith = 'Prompt tokens exceed context window size: number of prompt tokens: 4818; context window size: 4096';
+    await expect(async () => {
+      for await (const _ of streamWebLlm(conn, {
+        system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
+      })) { /* drain */ }
+    }).rejects.toThrow(/too large for this local model's context window/);
+    crashAfter = null;
+    crashWith = null;
   });
 
   it('splits <think>…</think> reasoning out of the visible stream', async () => {
