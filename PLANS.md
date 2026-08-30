@@ -933,7 +933,7 @@ doc, or a console.error) so a silent partial export can't happen.
 
 ---
 
-## [ ] PLAN E-04 · RRIF-min excess redeposit — VERIFY double-tax
+## [x] PLAN E-04 · RRIF-min excess redeposit — VERIFY double-tax
 **Maps to:** REVIEW.md **E-04** · Severity MEDIUM (verify)
 **File:** `src/lib/retirementEngine.ts`
 

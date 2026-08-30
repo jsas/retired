@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome } from './retirementEngine';
+import { calculateTax } from './canadianTax';
 import { baselineInputs } from './scenarioStorage';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
@@ -1633,6 +1634,51 @@ describe('year detail (drill-down)', () => {
     const tr = row.detail?.calc?.transfers?.[0];
     expect(tr).toBeDefined();
     expect(tr!.gross).toBeCloseTo(50000, 0);
+  });
+
+  it('RRIF-min excess redeposit is taxed once and carries full ACB (E-04)', () => {
+    // VERIFY-only plan: the RRIF minimum is withdrawn and taxed as registered
+    // income; whatever after-tax portion the spending need doesn't absorb is
+    // redeposited into taxable with FULL ACB (a return of already-taxed
+    // principal, not new income). Assert the three consequences:
+    //  (1) the year's unified incomeTax equals the tax on the minimum exactly
+    //      once — no second hit on the redeposited principal;
+    //  (2) taxableAcb rises by the redeposit, so gainsFraction stays 0;
+    //  (3) when the redeposit is later drawn from taxable, only its growth is
+    //      realized as a capital gain — the principal never re-enters income.
+    const r = calculateRetirement(baseInputs({
+      currentAge: 72, retirementAge: 72, maxAge: 74,
+      rrspBalance: 500000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+      desiredSpending: 0, // the whole minimum becomes excess; no spending draws
+    }), config);
+    const y72 = yearAt(r.yearlyBreakdown, 72);
+    const min = y72.detail!.withdraw.rrifMin;
+    expect(min).toBeCloseTo(500000 * 0.0540, 0); // age-72 rate, on Jan-1 $500k
+    const redeposit = y72.detail!.calc!.rrifMinExcess;
+    expect(redeposit).toBeGreaterThan(0);
+
+    // (1) Taxed exactly once. incomeTax = tax(benefits + registered + gains)
+    //     − tax(benefits) with no benefits and no gains → tax(min) alone.
+    //     A double-taxed redeposit would push incomeTax past that figure.
+    expect(closeTo(y72.incomeTax, calculateTax(min, 'ONT', config).totalTax, 1)).toBe(true);
+    // (2) The redeposit carries full ACB: taxable ends the year at redeposit
+    //     × growth with ACB still equal to the full redeposit (gains fraction 0).
+    expect(closeTo(y72.detail!.calc!.taxableAcb, redeposit, 1)).toBe(true);
+    expect(closeTo(y72.detail!.calc!.gainsFraction, 0, 0.0001)).toBe(true);
+
+    // (3) Age 73 forces a second minimum, whose redeposit also carries full
+    //     ACB. Before that year's growth, the taxable account holds both
+    //     redeposits plus one year's growth on the FIRST — so the embedded
+    //     gain that a later draw would realize is exactly that growth
+    //     (redeposit × 0.05); the principal never re-enters income.
+    const y73 = yearAt(r.yearlyBreakdown, 73);
+    const acb73 = y73.detail!.calc!.taxableAcb;
+    const frac73 = y73.detail!.calc!.gainsFraction;
+    expect(closeTo(acb73, redeposit + (acb73 - redeposit), 1)).toBe(true); // both redeposits in ACB
+    expect(acb73).toBeGreaterThan(redeposit);
+    const taxableStart73 = acb73 / (1 - frac73);
+    const embeddedGain73 = taxableStart73 - acb73;
+    expect(closeTo(embeddedGain73, redeposit * 0.05, 1)).toBe(true);
   });
 
   it('respects the withdrawal order: TFSA-first year draws only from TFSA', () => {
