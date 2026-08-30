@@ -984,10 +984,12 @@ loop-termination condition.
 
 ## Suggested execution order
 
-1. **E-07** (#25) → **E-08** (#27) → **E-06** (#26) — engine money correctness.
-2. **D-01** (#18) → **U-02** → **U-01** — durability (do D-01 before U-02).
-3. **S-01** → **S-03** / **S-02** — strategies.
-4. **Quick wins:** U-15, A-03, D-02 (#19), X-04, D-05, D-07.
-5. **Verify-first:** E-04, E-02, T-02, T-03 (may close as Info).
-6. **Refactor:** D-03 + D-04 (#20/#21) together.
-7. **Features:** #24, #40.
+1. **E-07** (#25) → **E-08** (#27) → **E-06** (#26) — engine money correctness. ✅
+2. **D-01** (#18) → **U-02** → **U-01** — durability (do D-01 before U-02). ✅
+3. **S-01** → **S-03** / **S-02** — strategies. ✅
+4. **Quick wins:** U-15, A-03, D-02 (#19), X-04, D-05, D-07. ✅
+5. **Verify-first:** E-04, E-02, T-02, T-03 (may close as Info). ✅
+6. **Refactor:** D-03 + D-04 (#20/#21) together. ← next
+7. **Features:** #24, #40. (#40 landed via PR #100.)
+
+Optional remainder: **H-02** (backtest primary-only — household run or a UI label).
