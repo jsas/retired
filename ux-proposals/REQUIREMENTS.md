@@ -80,7 +80,7 @@ RE:tired's engine is strong and the app is honest, but the interface buries the 
 
 ## 5. Implementation contract (what building "the winner" means)
 
-1. **New components only, additive.** No changes to the engine or its tests; the engine stays authoritative for numbers.
+1. **New components only, additive.** The engine stays authoritative for numbers. (If the `retired-engine` extraction in §6 is undertaken, "no changes" means no *behavior* changes: golden-master tests stay green; import paths may move.)
 2. **Verdict component** (`VerdictHero`): badge + sentence + sub-line + one-line fix; takes engine results, emits no edits.
 3. **Three dials** (`PlanDials`): retire age, spending, savings; consequence line under each; writes through the normal `handleInputsChange` path (unsaved-edits flow unchanged).
 4. **Plain-English mapping layer** (`plainEnglish.ts`): pure functions engine→words (verdict sentence, lasts-to, left-at-95, storm test, milestone list). Fully unit-testable; this is where jargon dies.
@@ -96,3 +96,55 @@ RE:tired's engine is strong and the app is honest, but the interface buries the 
 - Browse `index.html` (gallery of 40) and `dashboard.html` (full-page dashboard).
 - Pick one design (or a mashup) — the requirements above apply to whichever wins.
 - The most buildable set: **01 (verdict hero) + 12 (honest score) + 08 (timeline)** merged — which is roughly what `dashboard.html` demonstrates.
+
+## 7. Architecture requirement: `retired-engine` package + datasource layer
+
+**The ask:** take *all* website function and turn it into a node package (`retired-engine`), and expose all data as datasource classes with eventing, so React components subscribe instead of owning state — making any reskin cheap.
+
+This is the makeovers' precondition: §5 says "new components only, additive" because touching existing state flow is risky. A datasource layer removes that reason — the UI becomes a thin, replaceable skin over data sources.
+
+### 7.1 Package boundary
+
+- New workspace package `packages/retired-engine` (or `packages/retired-engine/` as a plain folder + workspace entry). The app depends on it as `@retired/engine`.
+- **What moves in:** everything that is pure TypeScript with no DOM dependency —
+  `retirementEngine.ts`, `strategies.ts`, `monteCarlo.ts`, `spendingSolver.ts`, `eqSolver.ts`, `eqConstraints.ts`, `eqSolver.ts`, `canadianTax.ts`, `engineMath.ts`, `historicalReturns.ts`, `householdTypes.ts`, `compareMetrics.ts`, `planTransfer.ts`, `projectionExport.ts`, `scenarioRevisions.ts`, `shareLink.ts`, `strategies.ts`, types from `appConfig.ts`, plus new `plainEnglish.ts`.
+- **What stays in the app:** browser-bound code — `appDb.ts` / `data/db.ts` (sql.js), `opfs.ts`, `db.ts`, `store.ts`, the three workers, everything in `lib/ai/` (web-llm is browser-only), `aiSettings`, `eqStorage`, `printOptions`, `shareLink`'s URL I/O, UI helpers.
+- **Known extraction wrinkles** (audit before moving): `appConfig.ts` mixes pure validation with `loadConfig`/`saveConfig` localStorage calls — split into `config-schema.ts` (types + `validateAppConfig`, moves) and `config-storage.ts` (localStorage, stays); `retirementEngine.ts` and `strategies.ts` matches were comment-only (verified — no browser APIs).
+- **Public API** (one barrel export, versioned): `calculatePerson`, `calculateRetirement`, `calculateHousehold`, `combineHouseholdBreakdown`, `householdOutcome`, `cppAdjustmentMultiplier`, `runMonteCarlo`, solvers, all input/result types, `AppConfig` types + `validateAppConfig`, and `plainEnglish` mappers.
+- **Engine tests travel with the code** (golden master, engineMath, etc. keep running against the package); they double as the extraction's regression net.
+- **Packaging:** ESM, `type: module`, TS strict, zero runtime deps, exports map for both `import` and types; no browser globals reachable from any module entry.
+
+### 7.2 Datasource classes
+
+One class per data domain, each: holds state, emits change events, exposes an async mutating action, and never imports React.
+
+| Datasource | State it owns | Change events | Backed by |
+|---|---|---|---|
+| `ScenariosDatasource` | scenario list, active id, dirty flags | `change`, `switch`, `dirty` | `AppStore` (which wraps `AppDatabase`/sql.js) |
+| `ResultsDatasource` | `calculateHousehold(...)` output for active inputs+config | `change` (debounced) | `@retired/engine` |
+| `MonteCarloDatasource` | latest MC results + `running` flag | `status`, `result` | `monteCarlo.worker` via existing run helpers |
+| `SolversDatasource` | EQ + spending solver state | `status`, `result` | eq/spending workers |
+| `ConfigDatasource` | `AppConfig` | `change` | `config-storage.ts` |
+| `RevisionsDatasource` | revision list | `change` | `SqliteRevisionStore` |
+| `AiDatasource` | chat, provider, streaming state | `message`, `status` | `lib/ai/*` |
+
+- **Tiny event emitter** (~30 lines, `on/off/once/emit`) in the package — no RxJS, no external deps. One `EventEmitter` base class, subclasses call `this.emit('change', payload)`.
+- **One `DatasourceHost`** wires them together and owns cross-datasource reactions (inputs change → results recompute → MC invalidates). Datasources stay ignorant of each other where possible; the host sequences reactions.
+- **Subscribe via `useSyncExternalStore`** (React 19) — one 15-line hook `useDatasource(ds, selector)`, replacing the ~40 `useState`/`useMemo`/`useEffect` chains in `App.tsx` over time. Components get data by subscription, not props-drilled state.
+
+### 7.3 Migration contract
+
+1. **Golden-master safety:** `goldenMaster.test.ts` values must be byte-identical after the move.
+2. **No behavior change:** same results for same inputs, same persistence keys, same URL shapes; users see nothing except faster reskins later.
+3. **Strangler order** (each step ships independently, tests green after each):
+   1. `retired-engine` package created with pure modules + their tests; app imports from the package; delete originals.
+   2. Introduce `EventEmitter` + `ResultsDatasource` only — App.tsx's `results` memo becomes a subscription; everything else unchanged.
+   3. Convert remaining domains one at a time (scenarios → config → MC → solvers → revisions → AI), app green after each.
+4. **Don't rewrite what works:** the AI tools' direct `calculateHousehold` calls (`ai/tools.ts:623+`) can stay until they move to `ResultsDatasource` naturally.
+
+### 7.4 Acceptance
+
+- `npx vitest run` green at every step; golden master unchanged.
+- After step 1, `grep -r "from './lib/retirementEngine'" src/` returns nothing (imports go through the package).
+- After each datasource step, that domain's UI flow works identically (manual checklist per domain).
+- A reskin test: build one mockup (e.g. 01) against the datasource layer with **zero changes to any datasource** — that's the proof the skin is thin.
