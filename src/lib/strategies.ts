@@ -90,7 +90,7 @@ function sustainableSpending(inputs: RetirementInputs, config: AppConfig): numbe
   return Math.round(lo);
 }
 
-interface StrategySpec {
+export interface StrategySpec {
   id: string;
   name: string;
   description: string;
@@ -253,15 +253,24 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
   return specs;
 }
 
-function runOne(inputs: RetirementInputs, config: AppConfig, spec: StrategySpec): StrategyResult {
+// Exported for tests: the S-01 regression test drives a synthetic spec whose
+// patch touches a verdict-relevant field (maxAge) — no built-in strategy does,
+// so the only way to prove the verdict is scored against `merged` is to run
+// one directly.
+export function runOne(inputs: RetirementInputs, config: AppConfig, spec: StrategySpec): StrategyResult {
   const merged: RetirementInputs = { ...inputs, ...spec.patch };
   const r: RetirementResults = calculateHousehold(merged, config);
   const lifetimeTax = r.yearlyBreakdown.reduce((s, y) => s + (y.incomeTax ?? 0), 0);
   const lifetimeGis = r.yearlyBreakdown.reduce((s, y) => s + (y.gisIncome ?? 0), 0);
   const sustainable = sustainableSpending(merged, config);
   // Household-first verdict (combined money + shortfall), matching the Monte
-  // Carlo screen and the dashboard — not the primary's own depletionAge.
-  const ho = householdOutcome(r, inputs);
+  // Carlo screen and the dashboard — not the primary's own depletionAge. The
+  // verdict must be scored against `merged` (the inputs the engine actually
+  // ran on): householdOutcome reads inputs.maxAge for the status horizon and
+  // combineHouseholdBreakdown may read other patched fields, so scoring
+  // against the unpatched `inputs` would misjudge any strategy whose patch
+  // touches a verdict-relevant field (issue S-01).
+  const ho = householdOutcome(r, merged);
   return {
     id: spec.id,
     name: spec.name,

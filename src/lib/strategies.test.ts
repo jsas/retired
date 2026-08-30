@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { runStrategies } from './strategies';
+import { runStrategies, runOne, type StrategySpec } from './strategies';
+import { calculateHousehold, householdOutcome } from './retirementEngine';
 import { testConfig, baseInputs } from '../test/helpers';
 
 const config = testConfig();
@@ -235,5 +236,51 @@ describe('runStrategies filtering', () => {
     for (const s of report.shown) {
       expect(s.categories.some(c => c === 'cpp' || c === 'oas')).toBe(true);
     }
+  });
+});
+
+describe('runOne — verdict scored against the patched inputs (S-01)', () => {
+  // A plan that depletes PAST the base maxAge but BEFORE the extended one
+  // (depletes at 93: funded to 90, short by 95) — so the depletion age falls in
+  // the window where the two horizons disagree.
+  const tight = () => baseInputs({
+    currentAge: 65, retirementAge: 65, maxAge: 90,
+    rrspBalance: 300000, tfsaBalance: 0, taxableBalance: 0,
+    cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 40000, pensions: [],
+  });
+
+  it('runOne agrees with householdOutcome scored against the MERGED inputs', () => {
+    const inputs = tight();
+    const spec: StrategySpec = {
+      id: 'extend-maxage', name: 'Plan to 95', description: 'synthetic',
+      patch: { maxAge: 95 }, categories: [],
+    };
+    const s = runOne(inputs, config, spec);
+
+    // Ground truth: the engine run on the merged inputs, scored against merged.
+    const merged = { ...inputs, ...spec.patch };
+    const truth = householdOutcome(calculateHousehold(merged, config), merged);
+    // Sanity: this fixture genuinely exercises the horizon — the merged run
+    // depletes at 93, past the base inputs' horizon (90) but within the extended.
+    expect(truth.depletionAge).toBe(93);
+    // runOne's verdict must be the merged-inputs verdict, field for field.
+    expect(s.depletionAge).toBe(truth.depletionAge);
+    expect(s.endingBalance).toBeCloseTo(truth.endingBalance, 6);
+    expect(s.survived).toBe(truth.depletionAge === null);
+  });
+
+  it('householdOutcome status itself depends on which inputs are passed (the S-01 hazard)', () => {
+    // The reason runOne must pass `merged`: householdOutcome reads inputs.maxAge
+    // for the status horizon. This run depletes at 93 — scored against `merged`
+    // (horizon 95) that's a real SHORTFALL; scored against the base `inputs`
+    // (horizon 90) the depletion is past-horizon and reads ON_TRACK. StrategyResult
+    // doesn't carry status, but this locks the semantics the fix protects so a
+    // future field (or a refactor) can't silently revert it.
+    const inputs = tight();
+    const merged = { ...inputs, maxAge: 95 };
+    const r = calculateHousehold(merged, config);
+    expect(householdOutcome(r, merged).status).toBe('SHORTFALL');
+    expect(householdOutcome(r, inputs).status).toBe('ON_TRACK');
   });
 });

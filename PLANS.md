@@ -613,7 +613,7 @@ only the wholesale `null` case is the bug.)
 
 ---
 
-## [ ] PLAN S-01 · `runOne` scores household outcome against `inputs`, not `merged`
+## [x] PLAN S-01 · `runOne` scores household outcome against `inputs`, not `merged`
 **Maps to:** REVIEW.md **S-01** · Severity MEDIUM
 **File:** `src/lib/strategies.ts`
 
