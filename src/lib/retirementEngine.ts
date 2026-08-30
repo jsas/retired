@@ -76,6 +76,15 @@ export interface RetirementInputs {
   rrspContribution: number;
   tfsaContribution: number;
   taxableContribution: number;
+  // Contribution room (issue #24 Phase 2): the CRA notice-of-assessment dollars
+  // available to contribute TODAY. `null`/absent = unlimited (enforcement off —
+  // the pre-#24 behaviour, so existing scenarios are unchanged); a number turns
+  // enforcement on: registered deposits are capped at remaining room and the
+  // excess spills to taxable. Room accrues each year (TFSA: +annual limit;
+  // RRSP: +18% of earned income, capped) and TFSA withdrawals re-add room the
+  // following year.
+  tfsaRoom?: number | null;
+  rrspRoom?: number | null;
   annualWithdrawal: number;
   investmentReturn: number;
   // Annual volatility of returns (standard deviation) — used by Monte Carlo.
@@ -141,6 +150,10 @@ export interface SpouseInputs {
   rrspContribution: number;
   tfsaContribution: number;
   taxableContribution: number;
+  // Contribution room (issue #24 Phase 2) — same semantics as the primary's:
+  // null/absent = unlimited, a number turns enforcement on.
+  tfsaRoom?: number | null;
+  rrspRoom?: number | null;
   cppStartAge: number | null;
   cppMonthlyAmount: number; // age-65 amount; adjustment applied
   oasStartAge: number | null;
@@ -330,6 +343,11 @@ export interface YearDetail {
   // and the year's accounting reconciles on the math page. Optional so older
   // fixtures compile; the engine always sets it.
   deposit?: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number };
+  // Contribution-room overflow (issue #24): the dollars that WOULD have landed
+  // in a registered account this year but were redirected to taxable because
+  // the account's remaining room ran out. Only present when room tracking is
+  // on (tfsaRoom/rrspRoom set) and an overflow actually occurred.
+  overflow?: { tfsa: number; rrsp: number };
   // Tax decomposition for the year's withdrawals.
   tax: { oasClawback: number; capitalGains: number; registeredGross: number };
   // Reverse mortgage / HELOC, when enabled. interestAccrued is the year's
@@ -613,6 +631,53 @@ export function calculatePerson(
   // The CPI multiplier applied to the spending target; 1 when indexSpending is off.
   const spendingFactorAt = (age: number) => (indexSpending ? factorAt(age) : 1);
 
+  // This year's earned income (employment + self-employment) for RRSP accrual —
+  // 18% of earned income builds room. Computed standalone from the register so
+  // it's available in BOTH loops (the decumulation `employmentGross` isn't in
+  // scope pre-retirement, and the accumulation `preRetIncome` fuses pensions in).
+  const earnedIncomeAt = (age: number): number => {
+    let gross = 0;
+    for (const e of incomeSources) {
+      if (e.kind !== 'employment' && e.kind !== 'selfEmployment') continue;
+      if (age < e.startAge) continue;
+      if (e.endAge != null && age > e.endAge) continue;
+      gross += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+    return gross;
+  };
+  // This year's total pension adjustment (PA) from DB pensions — reduces RRSP
+  // room accrual dollar-for-dollar (CRA: a DB pension's PA eats RRSP room).
+  const pensionAdjustmentAt = (age: number): number => {
+    let pa = 0;
+    for (const p of pensionList) {
+      if (age < p.startAge) continue;
+      if (p.endAge != null && age > p.endAge) continue;
+      pa += p.pensionAdjustment ?? 0;
+    }
+    return pa;
+  };
+
+  /**
+   * Accrue one year's contribution room at the START of the person's age-year
+   * (CRA grants the year's TFSA limit on Jan 1; RRSP room from last year's
+   * earned income becomes available). Also re-adds LAST year's TFSA withdrawals
+   * to TFSA room (the CRA rule: withdrawals free room again on the next Jan 1).
+   * No-ops for whichever room is unlimited (null).
+   */
+  const accrueRoom = (age: number): void => {
+    if (tfsaRoom !== null) {
+      const limit = config.engine.tfsaAnnualLimit * (indexTables ? factorAt(age) : 1);
+      tfsaRoom += limit + tfsaWithdrawnLastYear;
+    }
+    if (rrspRoom !== null) {
+      const cap = config.engine.rrspAnnualMax * (indexTables ? factorAt(age) : 1);
+      const accrual = Math.max(0, Math.min(0.18 * earnedIncomeAt(age), cap) - pensionAdjustmentAt(age));
+      rrspRoom += accrual;
+    }
+    // The re-add is consumed (or not) this year; reset for the coming year.
+    tfsaWithdrawnLastYear = 0;
+  };
+
   // Spending phases: fraction of desired spending at each age (default 1).
   const bands = Array.isArray(person.spendingBands) ? [...person.spendingBands].sort((a, b) => a.fromAge - b.fromAge) : [];
   const spendingPctAt = (age: number): number => {
@@ -702,6 +767,45 @@ export function calculatePerson(
   let taxable = taxableBalance;
   let cashCushion = cashCushionBalance;
   let cumulativeTax = 0;
+
+  // Contribution room (issue #24). `null` = unlimited (enforcement off — the
+  // pre-#24 behaviour). A number seeds the CRA notice-of-assessment room and
+  // turns enforcement on. The engine accrues room each year (TFSA: +the annual
+  // limit; RRSP: +18% of that year's earned income, capped at the config max,
+  // minus each DB pension's pension adjustment) and a TFSA withdrawal re-adds
+  // to room the FOLLOWING year (the CRA rule). `tfsaWithdrawnLastYear` carries
+  // the prior year's TFSA draws so the re-add can land one year late.
+  let tfsaRoom: number | null = person.tfsaRoom ?? null;
+  let rrspRoom: number | null = person.rrspRoom ?? null;
+  let tfsaWithdrawnLastYear = 0;
+  // This year's overflow (registered deposit redirected to taxable for lack of
+  // room), accumulated per account and surfaced on the year's detail.
+  const yearOverflow = { tfsa: 0, rrsp: 0 };
+
+  /**
+   * Cap a registered deposit at the account's remaining room and redirect the
+   * excess to taxable (same after-tax dollars, ACB-tracked). Returns the amount
+   * that actually lands registered. With room off (null) the full amount lands.
+   * Growth and the RRSP→RRIF conversion are NOT deposits and never pass here.
+   */
+  const capToRoom = (account: 'rrsp' | 'tfsa', amount: number): number => {
+    if (amount <= 0) return 0;
+    if (account === 'tfsa') {
+      if (tfsaRoom === null) return amount;
+      const land = Math.min(amount, Math.max(0, tfsaRoom));
+      tfsaRoom -= land;
+      const excess = amount - land;
+      if (excess > 0) { taxable += excess; taxableAcb += excess; yearOverflow.tfsa += excess; }
+      return land;
+    }
+    if (rrspRoom === null) return amount;
+    const land = Math.min(amount, Math.max(0, rrspRoom));
+    rrspRoom -= land;
+    const excess = amount - land;
+    if (excess > 0) { taxable += excess; taxableAcb += excess; yearOverflow.rrsp += excess; }
+    return land;
+  };
+
   // Per-age non-OAS draw income (the GIS "own" base), captured in the
   // decumulation loop for the household pass's couple-GIS iteration (#26).
   const householdDraws: Record<number, number> = {};
@@ -907,11 +1011,17 @@ export function calculatePerson(
     // person's balances; credit the deposit locally when it's ours, else hand
     // the after-tax net to the household pass to inject into the partner's run.
     if (to.person === selfRef) {
-      acct.put(to.account, net);
-      if (to.account === 'rrsp') deposit.rrsp += net;
-      else if (to.account === 'tfsa') deposit.tfsa += net;
-      else if (to.account === 'cash') deposit.cash += net;
-      else deposit.taxable += net;
+      // A registered destination consumes room: only the in-room portion lands
+      // registered; the excess spills to taxable (the meltdown's after-tax net
+      // is capped by TFSA room, so the rest becomes taxable — issue #24).
+      const land = to.account === 'rrsp' ? capToRoom('rrsp', net)
+        : to.account === 'tfsa' ? capToRoom('tfsa', net)
+        : net;
+      acct.put(to.account, land);
+      if (to.account === 'rrsp') deposit.rrsp += land;
+      else if (to.account === 'tfsa') deposit.tfsa += land;
+      else if (to.account === 'cash') deposit.cash += land;
+      else deposit.taxable += land;
     } else {
       // Stamp the FIRING age, not the event's start age: a recurring transfer
       // (age 65, endAge 70) must land in the partner's run each year 65..70,
@@ -932,6 +1042,10 @@ export function calculatePerson(
   // ---------------- accumulation phase ----------------
   for (let age = currentAge; age < retirementAge; age++) {
     const startingTotal = totalBalance();
+    // New year: accrue this year's room (and re-add last year's TFSA draws),
+    // and reset the year's overflow accumulator.
+    accrueRoom(age);
+    yearOverflow.tfsa = 0; yearOverflow.rrsp = 0;
 
     const r = rateAt(age);
     const rrspGains = rrsp * r;
@@ -939,8 +1053,12 @@ export function calculatePerson(
     const taxableGains = taxable * r;
     const cashGains = cashCushion * cushionRate;
 
-    rrsp += rrspGains + rrspContribution;
-    tfsa += tfsaGains + tfsaContribution;
+    // Growth is not a deposit and never consumes room; only the CONTRIBUTION is
+    // capped (issue #24). The fused `balance += gains + contribution` line is
+    // split so the cap applies to the contribution alone, the excess spilling
+    // to taxable (tracked in ACB by capToRoom).
+    rrsp += rrspGains + capToRoom('rrsp', rrspContribution);
+    tfsa += tfsaGains + capToRoom('tfsa', tfsaContribution);
     taxable += taxableGains + taxableContribution;
     taxableAcb += taxableContribution;
     cashCushion += cashGains;
@@ -1017,10 +1135,11 @@ export function calculatePerson(
     // transfer the same year is taxed at the right marginal rate. Seeded with
     // the year's income floor above.
     let accumTransferBaseGross = preRetIncome;
-    // Inbound inter-spousal transfers land here as after-tax money.
+    // Inbound inter-spousal transfers land here as after-tax money. A
+    // registered landing is a deposit and consumes room (issue #24).
     for (const d of inboundAt(age)) {
-      if (d.account === 'rrsp') { rrsp += d.amount; accumDeposit.rrsp += d.amount; }
-      else if (d.account === 'tfsa') { tfsa += d.amount; accumDeposit.tfsa += d.amount; }
+      if (d.account === 'rrsp') { const land = capToRoom('rrsp', d.amount); rrsp += land; accumDeposit.rrsp += land; }
+      else if (d.account === 'tfsa') { const land = capToRoom('tfsa', d.amount); tfsa += land; accumDeposit.tfsa += land; }
       else if (d.account === 'cash') { cashCushion += d.amount; accumDeposit.cash += d.amount; }
       else { taxable += d.amount; taxableAcb += d.amount; accumDeposit.taxable += d.amount; }
     }
@@ -1063,8 +1182,8 @@ export function calculatePerson(
       }
       if (ev.direction === 'in') {
         const dest = ev.account ?? 'taxable';
-        if (dest === 'rrsp') { rrsp += ev.amount; accumDeposit.rrsp += ev.amount; }
-        else if (dest === 'tfsa') { tfsa += ev.amount; accumDeposit.tfsa += ev.amount; }
+        if (dest === 'rrsp') { const land = capToRoom('rrsp', ev.amount); rrsp += land; accumDeposit.rrsp += land; }
+        else if (dest === 'tfsa') { const land = capToRoom('tfsa', ev.amount); tfsa += land; accumDeposit.tfsa += land; }
         else if (dest === 'cash') { cashCushion += ev.amount; accumDeposit.cash += ev.amount; }
         else { taxable += ev.amount; taxableAcb += ev.amount; accumDeposit.taxable += ev.amount; }
       } else {
@@ -1110,6 +1229,7 @@ export function calculatePerson(
         growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
         contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution, ...(rdspOn ? { rdsp: rdspContribution } : {}) },
         deposit: accumDeposit,
+        ...(yearOverflow.tfsa > 0 || yearOverflow.rrsp > 0 ? { overflow: { tfsa: yearOverflow.tfsa, rrsp: yearOverflow.rrsp } } : {}),
         tax: { oasClawback: 0, capitalGains: 0, registeredGross: accumTransferBaseGross },
         ...(rdspOn ? { rdsp: { contribution: rdspContribution, grant: rdspGrant, bond: rdspBond, growth: rdspGains, balance: rdspBal, contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction() } } : {}),
         ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: accRmInterestExpense } : {}) } } : {}),
@@ -1145,9 +1265,15 @@ export function calculatePerson(
   const totalStartingRetirement = totalBalance();
 
   for (let age = retirementAge; age <= maxAge; age++) {
+    // New year: accrue this year's room (and re-add last year's TFSA draws),
+    // and reset the year's overflow accumulator.
+    accrueRoom(age);
+    yearOverflow.tfsa = 0; yearOverflow.rrsp = 0;
+
     // RRSP converts to RRIF at the configured age. `>=` so a plan that
     // starts retirement past the conversion age converts immediately
-    // rather than skipping conversion (and RRIF minimums) forever.
+    // rather than skipping conversion (and RRIF minimums) forever. This is a
+    // registered→registered move, NOT a deposit — it never touches room.
     if (age >= rrifAge && rrsp > 0) {
       rrif += rrsp;
       rrsp = 0;
@@ -1194,16 +1320,17 @@ export function calculatePerson(
       if (ev.from || ev.to) continue; // transfer — processed below
       if (ev.direction !== 'in') continue;
       const dest = ev.account ?? 'taxable';
-      if (dest === 'rrsp') { rrsp += ev.amount; deposit.rrsp += ev.amount; }
-      else if (dest === 'tfsa') { tfsa += ev.amount; deposit.tfsa += ev.amount; }
+      if (dest === 'rrsp') { const land = capToRoom('rrsp', ev.amount); rrsp += land; deposit.rrsp += land; }
+      else if (dest === 'tfsa') { const land = capToRoom('tfsa', ev.amount); tfsa += land; deposit.tfsa += land; }
       else if (dest === 'cash') { cashCushion += ev.amount; deposit.cash += ev.amount; }
       else { taxable += ev.amount; taxableAcb += ev.amount; deposit.taxable += ev.amount; }
     }
     // Inbound inter-spousal transfers (the partner's cross-deposits) land here
-    // as after-tax money, at the start of the year.
+    // as after-tax money, at the start of the year. A registered landing is a
+    // deposit and consumes room (issue #24).
     for (const d of inboundAt(age)) {
-      if (d.account === 'rrsp') { rrsp += d.amount; deposit.rrsp += d.amount; }
-      else if (d.account === 'tfsa') { tfsa += d.amount; deposit.tfsa += d.amount; }
+      if (d.account === 'rrsp') { const land = capToRoom('rrsp', d.amount); rrsp += land; deposit.rrsp += land; }
+      else if (d.account === 'tfsa') { const land = capToRoom('tfsa', d.amount); tfsa += land; deposit.tfsa += land; }
       else if (d.account === 'cash') { cashCushion += d.amount; deposit.cash += d.amount; }
       else { taxable += d.amount; taxableAcb += d.amount; deposit.taxable += d.amount; }
     }
@@ -1516,10 +1643,11 @@ export function calculatePerson(
       const depositEmployment = (e: IncomeSource, amt: number) => {
         if (amt <= 0) return;
         // destAccount is optional on the register; absent = taxable (the
-        // legacy default for employment savings).
+        // legacy default for employment savings). A registered destination is a
+        // deposit and consumes room (issue #24).
         const dest = e.destAccount ?? 'taxable';
-        if (dest === 'rrsp') { rrsp += amt; deposit.rrsp += amt; }
-        else if (dest === 'tfsa') { tfsa += amt; deposit.tfsa += amt; }
+        if (dest === 'rrsp') { const land = capToRoom('rrsp', amt); rrsp += land; deposit.rrsp += land; }
+        else if (dest === 'tfsa') { const land = capToRoom('tfsa', amt); tfsa += land; deposit.tfsa += land; }
         else if (dest === 'cash') { cashCushion += amt; deposit.cash += amt; }
         else { taxable += amt; taxableAcb += amt; deposit.taxable += amt; }
       };
@@ -1607,6 +1735,10 @@ export function calculatePerson(
     // fixed point (issue #26). Mirrors the "own" side of gisAt() exactly.
     householdDraws[age] = registeredGross + capitalGains + rdspTaxable;
 
+    // TFSA withdrawals this year re-add to room NEXT year (CRA rule). Carry the
+    // year's total (spending draws + transfer-outs) so accrueRoom can re-add it.
+    tfsaWithdrawnLastYear = wd.tfsa;
+
     yearlyBreakdown.push({
       age,
       startingBalance: startingTotal,
@@ -1641,6 +1773,7 @@ export function calculatePerson(
         withdraw: wd,
         growth: { rrsp: rrspGains, rrif: rrifGains, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains, ...(rdspOn ? { rdsp: rdspGains } : {}) },
         deposit,
+        ...(yearOverflow.tfsa > 0 || yearOverflow.rrsp > 0 ? { overflow: { tfsa: yearOverflow.tfsa, rrsp: yearOverflow.rrsp } } : {}),
         tax: { oasClawback, capitalGains, registeredGross },
         ...(rdspOn ? { rdsp: { contribution: 0, grant: 0, bond: 0, growth: rdspGains, balance: Math.max(0, rdspBal), contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction(), withdrawal: rdspWithdrawn, taxablePortion: rdspTaxable } } : {}),
         ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: rmInterestExpense } : {}) } } : {}),
