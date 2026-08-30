@@ -251,7 +251,13 @@ function App() {
   const handleExportFull = async (scenarioIds: string[], includeConfig: boolean, ai: AiBackupInclude) => {
     const chosen = scenarios.filter(s => scenarioIds.includes(s.id));
     const activeId = chosen.some(s => s.id === activeScenarioId) ? activeScenarioId : (chosen[0]?.id ?? activeScenarioId);
-    const db = await AppDatabase.open();
+    // Seed the throwaway DB from the LIVE store's in-memory bytes — not from
+    // OPFS/localStorage, which can lag behind the persist effect's latest write
+    // (issue U-01). The chosen-subset overwrite below still filters the backup
+    // to what the user picked; the seed just guarantees the starting point is
+    // current, not stale.
+    const seed = store?.exportBytes();
+    const db = await AppDatabase.open(seed);
     db.saveScenarios(chosen);
     db.saveActiveScenarioId(activeId);
     if (includeConfig) db.saveConfig(config);

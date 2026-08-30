@@ -474,7 +474,7 @@ save(): void {
 
 ---
 
-## [ ] PLAN U-01 · Full export opens a 2nd SQLite connection (stale-bytes risk)
+## [x] PLAN U-01 · Full export opens a 2nd SQLite connection (stale-bytes risk)
 **Maps to:** REVIEW.md **U-01** · Severity MEDIUM
 **File:** `src/App.tsx`
 
