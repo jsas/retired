@@ -231,7 +231,7 @@ the subject of #26/E-06. No additional bug here.
 
 ### B.3 Strategies / solvers — `strategies.ts`, `spendingSolver.ts`, `eqSolver.ts`, `run*.ts`, workers
 
-**S-01 · MEDIUM · `runOne` scores the household outcome against `inputs`, not `merged`.**
+~~**S-01 · MEDIUM · `runOne` scores the household outcome against `inputs`, not `merged`.**~~ ✅ **FIXED 2026-08-30** (`fix/s01-strategy-scoring`)
 strategies.ts:264 `const ho = householdOutcome(r, inputs)` — but `r = calculateHousehold(
 merged, config)`. `householdOutcome` uses `inputs.currentAge`/`inputs.spouse.currentAge`
 to align the two spouses' age axes (via `combineHouseholdBreakdown`). For every current
@@ -240,6 +240,13 @@ currentAge or spouse — so `inputs` and `merged` align and the result is correc
 But it's a latent trap: any future strategy that patches `currentAge`, spouse presence, or
 spouse ages would score the verdict against the wrong age axis. **Needed:** pass `merged`
 to `householdOutcome`. One-line, zero-risk.
+**Fix:** `runOne` now passes `merged` to `householdOutcome` (with a comment explaining why).
+The audit confirmed every other call site (monteCarlo, eqConstraints, compareMetrics,
+sustainableSpending) already passes the inputs the engine ran on. Tests: `runOne`/`StrategySpec`
+are now exported so a synthetic maxAge-patching spec proves the verdict matches
+`householdOutcome(run, merged)` field-for-field, and a companion test locks the
+`status` horizon semantics (depletion at 93 reads SHORTFALL at horizon 95, ON_TRACK at 90).
+778/778 tests, `tsc` clean.
 
 **S-02 · LOW · `sustainableSpending` hi-expansion can leave `lo`/`hi` straddling nothing.**
 strategies.ts:82-90: `hi` starts at 500k, expands ×1.5 while `survives(hi)` (guard 40,
@@ -590,7 +597,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | ~~E-08~~ | Engine | ~~MEDIUM~~ ✅ | Re-homed past-dated transfer silently dropped — **FIXED** (`fix/rehome-pastdated-transfer`, clamps to fire now) | **Fixed** |
 | E-04 | Engine | MEDIUM | RRIF-min excess redeposit / ACB-free handling — verify | Actionable (verify) |
 | E-02 | Engine | MEDIUM (plausible) | Inter-spousal transfer re-run may be one oscillation stale | Verify |
-| S-01 | Strategies | MEDIUM | `runOne` scores household outcome vs `inputs`, not `merged` | Actionable |
+| ~~S-01~~ | Strategies | ~~MEDIUM~~ ✅ | `runOne` scored household outcome vs `inputs`, not `merged` — **FIXED** (`fix/s01-strategy-scoring`) | **Fixed** |
 | ~~D-01~~ | Data | ~~MEDIUM~~ ✅ | OPFS-write failure → one-session rollback (== #18) — **FIXED** (`issue/18-opfs-rollback`, mirror sequenced behind OPFS) | **Fixed** |
 | D-04 | Data | MEDIUM | Legacy localStorage dual-source still live (== #21) | Actionable (refactor) |
 | ~~U-01~~ | UI (App) | ~~MEDIUM~~ ✅ | Full export opened a 2nd SQLite connection, could snapshot stale bytes — **FIXED** (`fix/u01-stale-export`, seeds from live `store.exportBytes()`) | **Fixed** |
@@ -654,7 +661,7 @@ Everything not struck through above. These are the items that still need doing.
   oscillation stale; build a fixed-point oracle to confirm.
 
 ### Strategies / solvers
-- **S-01 · MEDIUM** — `runOne` scores household outcome against `inputs`, not `merged`.
+- ~~**S-01 · MEDIUM** — `runOne` scores household outcome against `inputs`, not `merged`.~~ ✅ FIXED (`fix/s01-strategy-scoring`)
 - **S-02 · LOW** — `sustainableSpending` hi-expansion edge.
 - **S-03 · LOW · == #40 family** — Strategy orderings omit RDSP.
 
@@ -722,6 +729,10 @@ Everything not struck through above. These are the items that still need doing.
   reports durable-write outcomes through an `onSaveOutcome` channel; App.tsx shows a
   dismissible "Changes may not be saved" banner on failure that clears on the next
   durable write. 776/776 tests, `tsc` clean.
+- **2026-08-30** — **S-01** fixed on `fix/s01-strategy-scoring`: `runOne` now scores the
+  household verdict against `merged` (the inputs the engine ran on), closing the latent
+  trap where a strategy patching `maxAge`/spouse fields would be judged on the wrong
+  horizon. 778/778 tests, `tsc` clean.
 
 ---
 
@@ -730,7 +741,7 @@ Everything not struck through above. These are the items that still need doing.
 1. **Engine money-correctness MEDIUMs** — all fixed (E-06 #26, E-07 #25, E-08 #27).
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
-3. **S-01** — strategy scoring vs `merged`.
+3. **S-01** — fixed (`fix/s01-strategy-scoring`).
 4. **Quick wins** — U-15 (RDSP print column), A-03 (household verdict strings), D-02
    (#19 warning), X-04 (comment).
 5. **Verify-before-fix** — E-02 (fixed-point oracle), E-04, T-02, T-03.
