@@ -26,6 +26,11 @@ interface MlcEngine {
   /** Halts the in-flight generation; used when the user presses Stop, since
    *  the engine's own stream doesn't observe our AbortSignal. */
   interruptGenerate?(): Promise<void>;
+  /** Clears the engine's internal conversation + KV cache. The engine keeps
+   *  one conversation across requests and reuses its KV cache when the next
+   *  request "matches" (same system text and messages); a reset forces the
+   *  following request to start from an empty context. */
+  resetChat?(keepStats?: boolean): Promise<void>;
   unload?(): Promise<void>;
 }
 
@@ -95,6 +100,24 @@ export async function unloadWebLlmEngine(): Promise<void> {
 /** The model currently loaded (null when none). */
 export function loadedWebLlmModel(): string | null {
   return engineModel;
+}
+
+/**
+ * Clear the loaded engine's conversation + KV cache. Called when the user
+ * switches to a DIFFERENT chat thread (or starts a new one): the engine
+ * otherwise decides multi-round-ness by comparing the request against the
+ * conversation it last saw, and a fresh thread whose first turn happens to
+ * match would silently inherit the previous chat's KV cache — the "new chat
+ * still sees the old context" bug. No-op when nothing is loaded.
+ */
+export async function resetWebLlmChat(): Promise<void> {
+  if (!enginePromise) return;
+  try {
+    const engine = await enginePromise;
+    await engine.resetChat?.();
+  } catch {
+    // Engine failed to load or is gone — nothing to reset.
+  }
 }
 
 /** True when the model's weights are cached on this device. Best-effort:
