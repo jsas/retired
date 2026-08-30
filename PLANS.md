@@ -10,7 +10,28 @@ a time, in any order, by an engineer or a code model with no prior context**.
 > done in `REVIEW.md` (strike it through and remove it from the "Still outstanding"
 > section). Do not batch unrelated plans into one change.
 
+> **⚠ Instructions for the executing model/agent:**
+> - **Work exactly ONE plan per invocation.** Do not start a second plan in the same
+>   session, and do not combine plans into one commit/branch/PR.
+> - **Stop after each plan.** When the plan's acceptance criteria are met (code +
+>   test committed, suite + typecheck green, REVIEW.md updated), commit on a
+>   `fix/<slug>` branch, open the PR if it maps to an issue, update the plan's
+>   checkbox below to `[x]`, and **end the turn**. Do not continue to the next plan.
+> - **Plans marked "verify-first" (E-04, E-02, T-02, T-03)** may legitimately close
+>   as *verified-OK / Info* with NO code change — that is a valid outcome, not a
+>   failure. Only write code if the verification finds a real defect.
+> - **Plans with an "Options (pick one)" section** name a recommended default but
+>   flag a real tradeoff — surface the choice to the user before coding if it isn't
+>   already decided.
+> - If a plan's file/line references have drifted, re-locate the code by the symbol
+>   names quoted in the plan rather than trusting the numbers blindly.
+
+**Progress tracker:** the checkbox next to each plan title is the burn-down list.
+`[ ]` = outstanding, `[x]` = done (merged). Keep it in sync with REVIEW.md.
+
 ---
+
+
 
 ## Global rules (apply to EVERY plan)
 
@@ -58,7 +79,7 @@ npx tsc --noEmit -p tsconfig.app.json --pretty false   # typecheck
 
 ---
 
-## PLAN E-07 · Pre-retirement registered transfer taxed from a $0 income floor
+## [ ] PLAN E-07 · Pre-retirement registered transfer taxed from a $0 income floor
 **Maps to:** open issue **#25** · REVIEW.md **E-07** · Severity MEDIUM
 **File:** `src/lib/retirementEngine.ts`
 
@@ -169,7 +190,7 @@ decumulation block uses `e.startAge`, `e.endAge`, `e.annualAmount`, `e.indexedTo
 
 ---
 
-## PLAN E-06 · Couple GIS counts own draws in-year, partner's never
+## [ ] PLAN E-06 · Couple GIS counts own draws in-year, partner's never
 **Maps to:** open issue **#26** · REVIEW.md **E-06** · Severity MEDIUM
 **File:** `src/lib/retirementEngine.ts`
 
@@ -275,7 +296,7 @@ Model it on the existing couple-GIS tests (grep `gisAnnualCouple` /
 
 ---
 
-## PLAN E-08 · Re-homed past-dated transfer silently dropped
+## [ ] PLAN E-08 · Re-homed past-dated transfer silently dropped
 **Maps to:** open issue **#27** · REVIEW.md **E-08** · Severity MEDIUM
 **File:** `src/lib/retirementEngine.ts`
 
@@ -367,7 +388,7 @@ year`, ~engine test:428) for the exact couple-fixture shape.
 
 ---
 
-## PLAN D-01 · OPFS-write failure → one-session rollback of the last save
+## [ ] PLAN D-01 · OPFS-write failure → one-session rollback of the last save
 **Maps to:** open issue **#18** · REVIEW.md **D-01** · Severity MEDIUM
 **File:** `src/data/db.ts`
 
@@ -453,7 +474,7 @@ save(): void {
 
 ---
 
-## PLAN U-01 · Full export opens a 2nd SQLite connection (stale-bytes risk)
+## [ ] PLAN U-01 · Full export opens a 2nd SQLite connection (stale-bytes risk)
 **Maps to:** REVIEW.md **U-01** · Severity MEDIUM
 **File:** `src/App.tsx`
 
@@ -499,7 +520,7 @@ isn't currently exposed, add a read-only accessor on the store (e.g.
 
 ---
 
-## PLAN U-02 · Persist effects are fire-and-forget (no durability feedback)
+## [ ] PLAN U-02 · Persist effects are fire-and-forget (no durability feedback)
 **Maps to:** REVIEW.md **U-02** · Severity MEDIUM
 **File:** `src/App.tsx` (+ possibly `src/data/store.ts`)
 
@@ -541,7 +562,7 @@ first.
 
 ---
 
-## PLAN D-02 · Hand-corrupted config silently resets to defaults
+## [ ] PLAN D-02 · Hand-corrupted config silently resets to defaults
 **Maps to:** open issue **#19** · REVIEW.md **D-02** · Severity LOW
 **Files:** `src/data/store.ts`, `src/lib/appConfig.ts`
 
@@ -592,7 +613,7 @@ only the wholesale `null` case is the bug.)
 
 ---
 
-## PLAN S-01 · `runOne` scores household outcome against `inputs`, not `merged`
+## [ ] PLAN S-01 · `runOne` scores household outcome against `inputs`, not `merged`
 **Maps to:** REVIEW.md **S-01** · Severity MEDIUM
 **File:** `src/lib/strategies.ts`
 
@@ -635,7 +656,7 @@ engine ran on; align any that don't.
 
 ---
 
-## PLAN S-02 · `sustainableSpending` hi-expansion edge
+## [ ] PLAN S-02 · `sustainableSpending` hi-expansion edge
 **Maps to:** REVIEW.md **S-02** · Severity LOW
 **File:** `src/lib/strategies.ts`
 
@@ -659,7 +680,7 @@ shape to the #28 loop caps already fixed). Confirm and cap the expansion.
 
 ---
 
-## PLAN S-03 · Strategy orderings omit RDSP
+## [ ] PLAN S-03 · Strategy orderings omit RDSP
 **Maps to:** REVIEW.md **S-03** · Severity LOW (== #40 family)
 **File:** `src/lib/strategies.ts`
 
@@ -689,7 +710,7 @@ consider RDSP in its permutations when the plan has one.
 
 ---
 
-## PLAN U-15 · PrintSummary detailed table omits the RDSP column
+## [ ] PLAN U-15 · PrintSummary detailed table omits the RDSP column
 **Maps to:** REVIEW.md **U-15** · Severity LOW
 **File:** `src/components/PrintSummary.tsx`
 
@@ -717,7 +738,7 @@ one; this brings print to parity.)
 
 ---
 
-## PLAN A-03 · Agent verdict strings use per-person status, not household
+## [ ] PLAN A-03 · Agent verdict strings use per-person status, not household
 **Maps to:** REVIEW.md **A-03** · Severity LOW
 **File:** `src/lib/ai/tools.ts`
 
@@ -747,7 +768,7 @@ screen already use `householdOutcome()` (#33); the agent should match.
 
 ---
 
-## PLAN T-02 · `taxOnTable` basic-exemption assumes lowest bracket rate (VERIFY)
+## [ ] PLAN T-02 · `taxOnTable` basic-exemption assumes lowest bracket rate (VERIFY)
 **Maps to:** REVIEW.md **T-02** · Severity LOW
 **File:** `src/lib/canadianTax.ts`
 
@@ -769,7 +790,7 @@ credits use different rates).
 
 ---
 
-## PLAN T-03 · OAS `yearsInCanada` not re-pro-rated for partial residency (VERIFY)
+## [ ] PLAN T-03 · OAS `yearsInCanada` not re-pro-rated for partial residency (VERIFY)
 **Maps to:** REVIEW.md **T-03** · Severity LOW
 **File:** `src/lib/canadianTax.ts`
 
@@ -788,7 +809,7 @@ rules; confirm no path uses the full amount when residency < 40 years.
 
 ---
 
-## PLAN H-02 · Backtest is primary-only (spouse stripped) — OPTIONAL
+## [ ] PLAN H-02 · Backtest is primary-only (spouse stripped) — OPTIONAL
 **Maps to:** REVIEW.md **H-02** · Severity LOW (optional)
 **File:** `src/lib/historicalReturns.ts`
 
@@ -806,7 +827,7 @@ this understates/overstates the historical outcome. Optional enhancement, not a 
 
 ---
 
-## PLAN X-04 · endAge / RM null-vs-omitted convention only in CLAUDE.md
+## [ ] PLAN X-04 · endAge / RM null-vs-omitted convention only in CLAUDE.md
 **Maps to:** REVIEW.md **X-04** · Severity LOW
 **Files:** `src/lib/retirementEngine.ts` (types) / `CLAUDE.md`
 
@@ -826,7 +847,7 @@ missed by someone not reading CLAUDE.md.
 
 ---
 
-## PLAN D-03 · UI-preference keys bypass the store's kv table
+## [ ] PLAN D-03 · UI-preference keys bypass the store's kv table
 **Maps to:** open issue **#20** · REVIEW.md **D-03** · Severity LOW
 **Files:** `src/lib/eqStorage.ts`, `src/lib/projectionExport.ts` (and any other
 direct-`localStorage` UI-pref writers)
@@ -849,7 +870,7 @@ legacy localStorage path alive (blocks #21).
 
 ---
 
-## PLAN D-04 · Remove legacy localStorage dual-source (== #21, refactor)
+## [ ] PLAN D-04 · Remove legacy localStorage dual-source (== #21, refactor)
 **Maps to:** open issue **#21** · REVIEW.md **D-04** · Severity MEDIUM (refactor)
 **Files:** `src/App.tsx` (`getSyncSeed`), `src/data/store.ts` (`importLegacyKeys`),
 `src/lib/scenarioStorage.ts`, `src/lib/appConfig.ts`
@@ -876,7 +897,7 @@ in the SQL store.
 
 ---
 
-## PLAN D-05 · `revSeq` resets per session (revision-id collision, theoretical)
+## [ ] PLAN D-05 · `revSeq` resets per session (revision-id collision, theoretical)
 **Maps to:** REVIEW.md **D-05** · Severity LOW
 **File:** `src/lib/scenarioRevisions.ts`
 
@@ -894,7 +915,7 @@ next id from the max existing id instead of a session counter.
 
 ---
 
-## PLAN D-07 · `toDoc()` returns null on invalid config (drops config silently)
+## [ ] PLAN D-07 · `toDoc()` returns null on invalid config (drops config silently)
 **Maps to:** REVIEW.md **D-07** · Severity LOW
 **File:** `src/lib/projectionExport.ts` (or wherever `toDoc` lives)
 
@@ -912,7 +933,7 @@ doc, or a console.error) so a silent partial export can't happen.
 
 ---
 
-## PLAN E-04 · RRIF-min excess redeposit — VERIFY double-tax
+## [ ] PLAN E-04 · RRIF-min excess redeposit — VERIFY double-tax
 **Maps to:** REVIEW.md **E-04** · Severity MEDIUM (verify)
 **File:** `src/lib/retirementEngine.ts`
 
@@ -931,7 +952,7 @@ regen.
 
 ---
 
-## PLAN E-02 · Two-way inter-spousal transfer re-run may sit one oscillation stale (VERIFY)
+## [ ] PLAN E-02 · Two-way inter-spousal transfer re-run may sit one oscillation stale (VERIFY)
 **Maps to:** REVIEW.md **E-02** · Severity MEDIUM (verify)
 **File:** `src/lib/retirementEngine.ts`
 
@@ -952,10 +973,10 @@ loop-termination condition.
 
 # Feature work (open issues, larger — NOT quick fixes)
 
-- **#24 — Track TFSA/RRSP contribution room; overflow deposits to taxable.**
+- [ ] **#24 — Track TFSA/RRSP contribution room; overflow deposits to taxable.**
   Needs a contribution-room model (annual limits already in config:
   `engine.tfsaAnnualLimit`, `engine.rrspAnnualMax`). Plan as its own feature PR.
-- **#40 — Strategy Explorer: optimize employer/DB pension start ages.** Add a
+- [ ] **#40 — Strategy Explorer: optimize employer/DB pension start ages.** Add a
   pension-start-age lever to the strategy specs (fold in S-03 RDSP orderings).
   Plan as its own feature PR.
 
