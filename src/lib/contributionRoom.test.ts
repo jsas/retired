@@ -8,8 +8,8 @@ import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
 const config = testConfig();
 // testConfig ships indexTaxTables off, so factorAt() = 1 and the annual limits
-// below are flat (not CPI-indexed). rrspAnnualMax is large enough not to bind.
-const TFSA_LIMIT = config.engine.tfsaAnnualLimit; // 7000
+// are flat (not CPI-indexed). The tests below assume the shipped defaults:
+// TFSA annual limit 7000/yr, and rrspAnnualMax large enough not to bind.
 
 describe('TFSA room', () => {
   it('accrues the annual limit each year on top of the starting room', () => {
