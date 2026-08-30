@@ -15,9 +15,9 @@
     background: #f8fafc; font-size: 11px; font-weight: 600; color: #94a3b8; cursor: pointer;
     transition: all .12s; line-height: 1; padding: 0 6px; }
   .ratebar button:hover { border-color: #94a3b8; color: #475569; }
-  .ratebar button.on.keep { background: #2563eb; border-color: #2563eb; color: #fff; }
-  .ratebar button.on.meh { background: #d97706; border-color: #d97706; color: #fff; }
-  .ratebar button.on.no { background: #dc2626; border-color: #dc2626; color: #fff; }
+  .ratebar button.on[data-rate="keep"] { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .ratebar button.on[data-rate="meh"] { background: #d97706; border-color: #d97706; color: #fff; }
+  .ratebar button.on[data-rate="no"] { background: #dc2626; border-color: #dc2626; color: #fff; }
   .tile.hidden-weak { display: none; }
   #rate-tools { position: sticky; top: 0; z-index: 40; }
   .tile { position: relative; }
@@ -632,13 +632,6 @@
   var summary = document.getElementById('rate-summary');
 
   function save() { try { localStorage.setItem(KEY, JSON.stringify(rates)); } catch (e) {} }
-
-  function apply(file, btn) {
-    btn.classList.toggle('on', !!rates[file]);
-    btn.parentElement.querySelectorAll('button').forEach(function (b) {
-      b.classList.toggle('on', rates[file] === b.dataset.rate);
-    });
-  }
 
   var bars = document.querySelectorAll('.ratebar');
   bars.forEach(function (bar) {
