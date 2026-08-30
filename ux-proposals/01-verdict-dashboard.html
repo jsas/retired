@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>01 — Verdict Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  @keyframes drawLine { from { stroke-dashoffset: 900; } to { stroke-dashoffset: 0; } }
+  .hero-line { stroke-dasharray: 900; animation: drawLine 1.6s ease-out forwards; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .fade-up { animation: fadeUp .5s ease-out both; }
+  .fade-up-1 { animation-delay: .05s; } .fade-up-2 { animation-delay: .12s; }
+  .fade-up-3 { animation-delay: .19s; } .fade-up-4 { animation-delay: .26s; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen">
+
+<!-- ═══════════ HEADER (unchanged — dark, recognizable) ═══════════ -->
+<header class="bg-neutral-900 text-white flex items-center px-4 h-14 gap-3 border-b border-neutral-800">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold">RE:</div>
+    <span>tired</span>
+  </div>
+  <select class="px-2.5 py-1.5 bg-neutral-800 rounded text-xs appearance-none pr-7">
+    <option>Martin &amp; Sasha — base plan</option>
+  </select>
+  <button class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-neutral-600 rounded cursor-not-allowed">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Save
+  </button>
+  <div class="flex-1"></div>
+  <span class="text-xs text-neutral-400 hidden md:block">01 — Verdict-first dashboard</span>
+</header>
+
+<div class="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8">
+
+  <!-- ═══════════ HERO VERDICT — the answer IS the page ═══════════ -->
+  <section class="fade-up bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+    <div class="grid md:grid-cols-[1.1fr_1.6fr]">
+      <!-- Left: the verdict -->
+      <div class="p-6 md:p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-slate-100">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <span class="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">On track</span>
+        </div>
+        <h1 class="text-2xl md:text-[28px] font-bold leading-snug tracking-tight text-slate-900">
+          Your money outlasts you —<br class="hidden md:block" />
+          it lasts to age <span class="text-emerald-600">95+</span>
+        </h1>
+        <p class="mt-3 text-sm text-slate-600 leading-relaxed">
+          Retiring at <strong>62</strong> on <strong>$78,000</strong>/yr, the household never runs
+          out — even after CPP, OAS, GIS and taxes, year by year.
+        </p>
+        <div class="mt-5 flex flex-wrap gap-2">
+          <button class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 shadow-sm">
+            Stress-test it →
+          </button>
+          <button class="px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50">
+            How is this calculated?
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: the one chart that matters -->
+      <div class="p-6 md:p-8 bg-gradient-to-b from-slate-50/60 to-white">
+        <div class="flex items-baseline justify-between mb-1">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">Household wealth, age 55 → 95</h2>
+          <span class="text-[11px] text-slate-400">today's dollars</span>
+        </div>
+        <svg viewBox="0 0 640 260" class="w-full">
+          <defs>
+            <linearGradient id="fillA" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2563eb" stop-opacity="0.18"/>
+              <stop offset="100%" stop-color="#2563eb" stop-opacity="0.01"/>
+            </linearGradient>
+          </defs>
+          <g stroke="#e2e8f0" stroke-width="1">
+            <line x1="60" y1="30"  x2="620" y2="30"/>
+            <line x1="60" y1="85"  x2="620" y2="85"/>
+            <line x1="60" y1="140" x2="620" y2="140"/>
+            <line x1="60" y1="195" x2="620" y2="195"/>
+          </g>
+          <g font-size="10" fill="#94a3b8" class="num">
+            <text x="52" y="34" text-anchor="end">$2.0M</text>
+            <text x="52" y="89" text-anchor="end">$1.5M</text>
+            <text x="52" y="144" text-anchor="end">$1.0M</text>
+            <text x="52" y="199" text-anchor="end">$0.5M</text>
+            <text x="52" y="249" text-anchor="end">$0</text>
+            <text x="60"  y="254" text-anchor="middle">55</text>
+            <text x="200" y="254" text-anchor="middle">62</text>
+            <text x="340" y="254" text-anchor="middle">71</text>
+            <text x="480" y="254" text-anchor="middle">81</text>
+            <text x="620" y="254" text-anchor="middle">95</text>
+          </g>
+          <path d="M 60 210 L 200 120 L 270 128 L 340 142 L 410 160 L 480 182 L 550 206 L 620 232 L 620 245 L 60 245 Z" fill="url(#fillA)"/>
+          <path class="hero-line" d="M 60 210 L 200 120 L 270 128 L 340 142 L 410 160 L 480 182 L 550 206 L 620 232" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="200" y1="24" x2="200" y2="245" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <circle cx="200" cy="120" r="4.5" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
+          <g font-size="10">
+            <rect x="150" y="8" width="104" height="16" rx="8" fill="#fef3c7"/>
+            <text x="202" y="19" text-anchor="middle" fill="#92400e" font-weight="600">retire at 62 · $1.4M</text>
+          </g>
+          <circle cx="620" cy="232" r="4.5" fill="#10b981" stroke="#fff" stroke-width="2"/>
+          <g font-size="10">
+            <rect x="520" y="212" width="98" height="16" rx="8" fill="#d1fae5"/>
+            <text x="569" y="223" text-anchor="middle" fill="#065f46" font-weight="600">$410k left at 95</text>
+          </g>
+        </svg>
+        <p class="mt-2 text-[11px] text-slate-500 leading-relaxed">
+          The bend at 71 is RRIF minimums kicking in; the slower decline after 65 is CPP + OAS
+          covering a third of spending. Hover any year for the full breakdown.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ SUPPORTING METRICS ═══════════ -->
+  <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    <div class="fade-up fade-up-1 bg-white rounded-xl border border-slate-200 p-4">
+      <div class="text-[11px] font-medium text-slate-500 mb-1">You retire with</div>
+      <div class="text-xl font-bold num text-slate-900">$1.42M</div>
+      <div class="text-[11px] text-slate-400 mt-0.5">household, at age 62</div>
+    </div>
+    <div class="fade-up fade-up-2 bg-white rounded-xl border border-slate-200 p-4">
+      <div class="text-[11px] font-medium text-slate-500 mb-1">You spend</div>
+      <div class="text-xl font-bold num text-slate-900">$78k<span class="text-sm font-medium text-slate-400">/yr</span></div>
+      <div class="text-[11px] text-slate-400 mt-0.5">after tax, today's dollars</div>
+    </div>
+    <div class="fade-up fade-up-3 bg-white rounded-xl border border-slate-200 p-4">
+      <div class="text-[11px] font-medium text-slate-500 mb-1">Withdrawal rate</div>
+      <div class="text-xl font-bold num text-slate-900">3.9%</div>
+      <div class="text-[11px] text-emerald-600 mt-0.5">▼ under the 4% rule of thumb</div>
+    </div>
+    <div class="fade-up fade-up-4 bg-white rounded-xl border border-slate-200 p-4">
+      <div class="text-[11px] font-medium text-slate-500 mb-1">Government benefits</div>
+      <div class="text-xl font-bold num text-slate-900">$31k<span class="text-sm font-medium text-slate-400">/yr</span></div>
+      <div class="text-[11px] text-slate-400 mt-0.5">CPP + OAS from age 65</div>
+    </div>
+  </section>
+
+  <!-- ═══════════ "WHAT COULD GO WRONG?" ═══════════ -->
+  <section class="fade-up mb-6">
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 px-1">What could go wrong?</h2>
+    <div class="grid md:grid-cols-3 gap-3">
+      <a href="#" class="group bg-white rounded-xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-md transition-all">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-semibold text-slate-900">Market luck</span>
+          <span class="text-xs font-bold num px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">94%</span>
+        </div>
+        <p class="text-[13px] text-slate-600 leading-relaxed">500 random market futures: the plan succeeds in 94% of them.</p>
+        <svg viewBox="0 0 200 48" class="w-full mt-3">
+          <path d="M0 30 L40 26 L80 22 L120 18 L160 14 L200 10" stroke="#93c5fd" stroke-width="10" fill="none" opacity=".35" stroke-linecap="round"/>
+          <path d="M0 32 L40 30 L80 27 L120 24 L160 22 L200 20" stroke="#2563eb" stroke-width="2" fill="none"/>
+        </svg>
+        <div class="mt-2 text-xs font-medium text-blue-600 group-hover:underline">Open Monte Carlo →</div>
+      </a>
+      <a href="#" class="group bg-white rounded-xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-md transition-all">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-semibold text-slate-900">History repeats</span>
+          <span class="text-xs font-bold num px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">38 / 41</span>
+        </div>
+        <p class="text-[13px] text-slate-600 leading-relaxed">Replayed against every historical window since 1970, it survives 38 of 41.</p>
+        <svg viewBox="0 0 200 48" class="w-full mt-3">
+          <g fill="#10b981"><rect x="4" y="18" width="6" height="22" rx="1"/><rect x="16" y="14" width="6" height="26" rx="1"/><rect x="28" y="22" width="6" height="18" rx="1"/><rect x="40" y="10" width="6" height="30" rx="1"/><rect x="52" y="20" width="6" height="20" rx="1"/></g>
+          <g fill="#f43f5e"><rect x="64" y="30" width="6" height="10" rx="1"/><rect x="76" y="32" width="6" height="8" rx="1"/></g>
+          <g fill="#10b981"><rect x="88" y="16" width="6" height="24" rx="1"/><rect x="100" y="12" width="6" height="28" rx="1"/><rect x="112" y="24" width="6" height="16" rx="1"/><rect x="124" y="18" width="6" height="22" rx="1"/><rect x="136" y="14" width="6" height="26" rx="1"/></g>
+          <g fill="#f43f5e"><rect x="148" y="31" width="6" height="9" rx="1"/></g>
+          <g fill="#10b981"><rect x="160" y="20" width="6" height="20" rx="1"/><rect x="172" y="16" width="6" height="24" rx="1"/><rect x="184" y="22" width="6" height="18" rx="1"/></g>
+        </svg>
+        <div class="mt-2 text-xs font-medium text-blue-600 group-hover:underline">Open Backtest →</div>
+      </a>
+      <a href="#" class="group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-semibold text-slate-900">Your choices</span>
+          <span class="text-xs font-bold num px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">3 levers</span>
+        </div>
+        <p class="text-[13px] text-slate-600 leading-relaxed">Retiring 1 year earlier drops success to 81%. Drag the plan and watch it move.</p>
+        <svg viewBox="0 0 200 48" class="w-full mt-3">
+          <rect x="0" y="0" width="200" height="48" rx="4" fill="#f0f9ff"/>
+          <circle cx="120" cy="22" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
+          <text x="120" y="42" text-anchor="middle" font-size="9" fill="#0369a1" font-weight="600">you are here</text>
+        </svg>
+        <div class="mt-2 text-xs font-medium text-amber-600 group-hover:underline">Open Steering →</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ═══════════ DETAILS — collapsed by default ═══════════ -->
+  <section class="fade-up bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <button class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50">
+      <span class="text-sm font-semibold text-slate-900">Year-by-year schedule <span class="text-slate-400 font-normal">— every account, every tax, age 55 → 95</span></span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+  </section>
+
+  <p class="mt-6 text-center text-[11px] text-slate-400">
+    01 · Verdict-first dashboard — the verdict and its evidence lead; raw data is one tap away.
+  </p>
+</div>
+
+</body>
+</html>

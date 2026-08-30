@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — The Dashboard (second wave)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range].dial { -webkit-appearance:none; appearance:none; height:6px; border-radius:3px; background:#e2e8f0; outline:none; }
+  input[type=range].dial::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:20px; height:20px; border-radius:50%;
+    background:#fff; border:2.5px solid #2563eb; box-shadow:0 1px 4px rgba(15,23,42,.25); cursor:grab;
+  }
+  input[type=range].dial::-moz-range-thumb {
+    width:20px; height:20px; border-radius:50%; background:#fff; border:2.5px solid #2563eb;
+    box-shadow:0 1px 4px rgba(15,23,42,.25); cursor:grab;
+  }
+  .sec-h { font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#64748b; }
+  tr.hoverable:hover { background:#f8fafc; }
+  .fade-in { animation: fi .35s ease-out both; }
+  @keyframes fi { from { opacity:0; transform:translateY(6px);} to { opacity:1; transform:none;} }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen">
+
+<!-- ═══ APP HEADER — same shell as the real app ═══ -->
+<header class="bg-neutral-900 text-white flex items-center px-4 h-14 gap-3 border-b border-neutral-800 sticky top-0 z-30">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold">RE:</div>
+    <span>tired</span>
+  </div>
+  <select class="px-2.5 py-1.5 bg-neutral-800 rounded text-xs appearance-none pr-7 cursor-pointer">
+    <option>Martin &amp; Sasha — base plan</option>
+  </select>
+  <button id="saveBtn" class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-emerald-600 text-white hover:bg-emerald-700 rounded font-medium">
+    Save<span id="saveDot" class="w-1.5 h-1.5 bg-white rounded-full"></span>
+  </button>
+  <div class="hidden md:flex items-center gap-1 text-xs ml-4">
+    <button data-nav="dashboard" class="nav px-2.5 py-1.5 rounded">Dashboard</button>
+    <button data-nav="none" class="nav px-2.5 py-1.5 rounded text-neutral-300 hover:bg-neutral-800">Monte Carlo</button>
+    <button data-nav="none" class="nav px-2.5 py-1.5 rounded text-neutral-300 hover:bg-neutral-800">Backtest</button>
+    <button data-nav="none" class="nav px-2.5 py-1.5 rounded text-neutral-300 hover:bg-neutral-800">Optimize</button>
+  </div>
+  <div class="flex-1"></div>
+  <span class="text-[11px] text-neutral-400">second wave · full dashboard</span>
+</header>
+
+<!-- ═══ THE PLAN BAR — always-visible assumptions, editable in place ═══ -->
+<div class="bg-white border-b border-slate-200">
+  <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+    <div class="flex items-center gap-2 text-[13px]">
+      <span class="text-slate-500">Stop working at</span>
+      <strong id="pbRetire" class="num">62</strong>
+      <input id="pbRetireIn" type="range" class="dial w-24 accent-blue-600" min="55" max="75" value="62">
+    </div>
+    <div class="flex items-center gap-2 text-[13px]">
+      <span class="text-slate-500">Spend</span>
+      <strong id="pbSpend" class="num">$85,000</strong>
+      <input id="pbSpendIn" type="range" class="dial w-24 accent-blue-600" min="40000" max="160000" step="1000" value="85000">
+    </div>
+    <div class="flex items-center gap-2 text-[13px]">
+      <span class="text-slate-500">Saved</span>
+      <strong id="pbSaved" class="num">$850,000</strong>
+      <input id="pbSavedIn" type="range" class="dial w-24 accent-blue-600" min="100000" max="3000000" step="10000" value="850000">
+    </div>
+    <div class="flex items-center gap-1.5 text-[13px] ml-auto">
+      <span class="text-slate-500">Markets</span>
+      <div class="inline-flex rounded-lg border border-slate-200 p-0.5">
+        <button data-sky="storm"  class="sky px-2.5 py-1 text-xs rounded-md">stormy</button>
+        <button data-sky="normal" class="sky px-2.5 py-1 text-xs rounded-md">ordinary</button>
+        <button data-sky="sun"    class="sky px-2.5 py-1 text-xs rounded-md">kind</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-8">
+
+  <!-- ═══ SECTION 1 — VERDICT ═══ -->
+  <section>
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="sec-h">The verdict</h2>
+      <span class="text-[11px] text-slate-400">today's dollars · ordinary markets</span>
+    </div>
+    <div class="grid md:grid-cols-[1fr_1.3fr] gap-4">
+      <div id="verdictCard" class="fade-in bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-center">
+        <span id="vBadge" class="inline-flex w-fit items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-full mb-3"></span>
+        <p id="vLine" class="text-[22px] leading-snug font-semibold tracking-tight"></p>
+        <p id="vSub" class="mt-2 text-[13px] text-slate-600 leading-relaxed"></p>
+        <p id="vFix" class="mt-2 text-[13px] font-medium text-blue-700"></p>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="flex items-baseline justify-between mb-2">
+          <h3 class="text-[13px] font-semibold text-slate-700">Household money, 55 → 100</h3>
+          <span id="peakNote" class="text-[11px] text-slate-400"></span>
+        </div>
+        <svg id="mainChart" viewBox="0 0 560 220" class="w-full">
+          <defs>
+            <linearGradient id="mc" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2563eb" stop-opacity=".16"/>
+              <stop offset="100%" stop-color="#2563eb" stop-opacity=".01"/>
+            </linearGradient>
+          </defs>
+          <g id="mcGrid" stroke="#f1f5f9"></g>
+          <path id="mcFill" fill="url(#mc)" d=""></path>
+          <path id="mcLine" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" d=""></path>
+          <line id="mcDry" y1="10" y2="200" stroke="#e11d48" stroke-width="1.5" stroke-dasharray="4 4" opacity="0"></line>
+          <g id="mcAxis" font-size="10" fill="#94a3b8" class="num"></g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 2 — THE NUMBERS ═══ -->
+  <section>
+    <h2 class="sec-h mb-3">The numbers</h2>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <div class="text-[11px] text-slate-500 mb-1">Money lasts to</div>
+        <div id="sLasts" class="text-xl font-bold num">—</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <div class="text-[11px] text-slate-500 mb-1">Peak money</div>
+        <div id="sPeak" class="text-xl font-bold num">—</div>
+        <div id="sPeakWhen" class="text-[11px] text-slate-400 mt-0.5">—</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <div class="text-[11px] text-slate-500 mb-1">Left at 95</div>
+        <div id="sLeft" class="text-xl font-bold num">—</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <div class="text-[11px] text-slate-500 mb-1">Benefits from 65</div>
+        <div id="sBen" class="text-xl font-bold num">—</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <div class="text-[11px] text-slate-500 mb-1">Stormy-markets test</div>
+        <div id="sStorm" class="text-xl font-bold num">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 3 — MILESTONES ═══ -->
+  <section>
+    <h2 class="sec-h mb-3">Milestones</h2>
+    <div class="bg-white rounded-2xl border border-slate-200 p-6">
+      <div class="grid md:grid-cols-3 gap-x-8 gap-y-4" id="milestones"></div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 4 — YEAR BY YEAR ═══ -->
+  <section>
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="sec-h">Year by year</h2>
+      <button id="moreBtn" class="text-xs font-medium text-blue-600 hover:underline">Show every year ↓</button>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <table class="w-full text-[13px]">
+        <thead>
+          <tr class="text-left text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-200 bg-slate-50">
+            <th class="px-4 py-2.5 font-semibold">Age</th>
+            <th class="px-4 py-2.5 font-semibold text-right">Money in</th>
+            <th class="px-4 py-2.5 font-semibold text-right">Money out</th>
+            <th class="px-4 py-2.5 font-semibold text-right">Balance after</th>
+            <th class="px-4 py-2.5 font-semibold hidden md:table-cell">What's happening</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 5 — WHAT COULD GO WRONG ═══ -->
+  <section>
+    <h2 class="sec-h mb-3">What could go wrong?</h2>
+    <div class="grid md:grid-cols-3 gap-3">
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[13.5px] font-semibold">Stormy markets</span>
+          <span id="wStorm" class="text-xs font-bold px-2 py-0.5 rounded-full"></span>
+        </div>
+        <p id="wStormTxt" class="text-[12.5px] text-slate-600 leading-relaxed"></p>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[13.5px] font-semibold">The gap</span>
+          <span id="wGap" class="text-xs font-bold px-2 py-0.5 rounded-full"></span>
+        </div>
+        <p id="wGapTxt" class="text-[12.5px] text-slate-600 leading-relaxed"></p>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[13.5px] font-semibold">The fix</span>
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">1 change</span>
+        </div>
+        <p id="wFixTxt" class="text-[12.5px] text-slate-600 leading-relaxed"></p>
+      </div>
+    </div>
+  </section>
+
+  <p class="text-center text-[11px] text-slate-400 pb-6">
+    Second wave · The full dashboard — verdict, numbers, milestones, every year, and the risks in one scroll. Same engine as designs 01–40.
+  </p>
+</main>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const savedOriginal = JSON.stringify(state);
+
+  const BADGE_OK = ['bg-emerald-50 text-emerald-700', 'on track'];
+  const BADGE_SHORT = ['bg-rose-50 text-rose-700', 'runs short'];
+
+  function yearNote(r, i, rows) {
+    if (r.age === state.retireAge) return 'work ends — spending starts';
+    if (r.age === state.benefitAge) return 'CPP + OAS join';
+    if (r.age === state.currentAge) return 'today';
+    const prev = rows[i - 1];
+    if (prev && prev.bal > 0 && r.bal === 0) return 'money runs out here';
+    if (r.bal < (prev ? prev.bal : Infinity) && r.age > state.retireAge) return 'drawing down';
+    if (r.age < state.retireAge) return 'still saving';
+    return '';
+  }
+
+  function render() {
+    const res = simulate(state);
+
+    // ---- verdict ----
+    const [badgeCls, badgeTxt] = res.ok ? BADGE_OK : BADGE_SHORT;
+    const badge = $('vBadge');
+    badge.className = 'inline-flex w-fit items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-full mb-3 ' + badgeCls;
+    badge.textContent = badgeTxt;
+    if (res.ok) {
+      $('vLine').innerHTML = `Your money lasts until you're <span class="num text-emerald-600">${lastsLabel(res)}</span>.`;
+      $('vSub').textContent = res.leftAtMax > 25000
+        ? `Past the ${state.maxAge} you're planning for, with about ${fmtMoney(res.leftAtMax)} still left at ${state.maxAge}.`
+        : `Past the ${state.maxAge} you're planning for.`;
+      $('vFix').textContent = '';
+    } else {
+      const gap = state.maxAge - res.depletionAge;
+      $('vLine').innerHTML = `Your money runs out at <span class="num text-rose-600">${res.depletionAge}</span>.`;
+      $('vSub').textContent = `That's ${gap} year${gap === 1 ? '' : 's'} short of the ${state.maxAge} you're planning for.`;
+      $('vFix').textContent = suggest(state) ?? '';
+    }
+    $('vBadge').parentElement.classList.remove('fade-in');
+    void $('vBadge').offsetWidth;
+    $('vBadge').parentElement.classList.add('fade-in');
+
+    // ---- chart ----
+    const W = 560, H = 220, L = 46, R = 8, T = 12, B = 26;
+    const rows = res.rows;
+    const maxBal = Math.max(1, ...rows.map(r => r.bal));
+    const x = age => L + (age - rows[0].age) / (rows[rows.length - 1].age - rows[0].age) * (W - L - R);
+    const y = v => T + (1 - v / maxBal) * (H - T - B);
+    let line = `M ${x(rows[0].age)} ${y(rows[0].bal)}`;
+    rows.forEach(r => { line += ` L ${x(r.age)} ${y(r.bal)}`; });
+    $('mcLine').setAttribute('d', line);
+    $('mcFill').setAttribute('d', line + ` L ${x(rows[rows.length-1].age)} ${H-B} L ${x(rows[0].age)} ${H-B} Z`);
+    // grid + axis: 4 h-lines with money labels; 5 age ticks
+    let grid = '', axis = '';
+    for (let i = 0; i <= 4; i++) {
+      const gy = T + i * (H - T - B) / 4;
+      grid += `<line x1="${L}" y1="${gy}" x2="${W-R}" y2="${gy}"/>`;
+      axis += `<text x="${L-6}" y="${gy+3}" text-anchor="end">${fmtMoney(maxBal * (1 - i/4)).replace(/,000/, 'k')}</text>`;
+    }
+    [55, 65, 75, 85, 95].forEach(a => {
+      axis += `<text x="${x(a)}" y="${H-8}" text-anchor="middle">${a}</text>`;
+    });
+    $('mcGrid').innerHTML = grid;
+    $('mcAxis').innerHTML = axis;
+    // retirement marker
+    axis += `<line x1="${x(state.retireAge)}" y1="${T}" x2="${x(state.retireAge)}" y2="${H-B}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    $('mcAxis').innerHTML = axis;
+    // dry marker
+    const dry = $('mcDry');
+    if (res.depletionAge != null) {
+      const dx = x(res.depletionAge);
+      dry.setAttribute('x1', dx); dry.setAttribute('x2', dx);
+      dry.style.opacity = .8;
+    } else dry.style.opacity = 0;
+
+    // ---- stats ----
+    const peak = rows.reduce((m, r) => r.bal > m.bal ? r : m, rows[0]);
+    $('sLasts').textContent = lastsLabel(res);
+    $('sPeak').textContent = fmtMoney(peak.bal);
+    $('sPeakWhen').textContent = `at age ${peak.age}`;
+    $('sLeft').textContent = res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) : 'nothing';
+    $('sBen').textContent = fmtMoney(state.benefits) + '/yr';
+    const storm = simulate({ ...state, sky: 'storm' });
+    $('sStorm').textContent = storm.ok ? `lasts to ${lastsLabel(storm)}` : `dry at ${storm.depletionAge}`;
+
+    // ---- milestones ----
+    const ms = [
+      { when: `age ${state.retireAge}`, what: 'Work ends', note: `spending ${fmtMoney(state.spending)}/yr starts` },
+      { when: `age ${state.benefitAge}`, what: 'CPP + OAS join', note: `${fmtMoney(state.benefits)}/yr for life` },
+      res.ok
+        ? { when: `age ${lastsLabel(res)}`, what: 'Money never runs out', note: `${fmtMoney(res.leftAtMax)} still there at ${state.maxAge}` }
+        : { when: `age ${res.depletionAge}`, what: 'Money runs out', note: `${state.maxAge - res.depletionAge} years short` },
+    ];
+    $('milestones').innerHTML = ms.map(m => `
+      <div class="border-l-2 ${res.ok && m.what === 'Money runs out' ? 'border-slate-200' : (m.what === 'Money runs out' ? 'border-rose-400' : 'border-blue-400')} pl-4">
+        <div class="text-[11px] uppercase tracking-wider text-slate-400">${m.when}</div>
+        <div class="text-[14px] font-semibold text-slate-900 mt-0.5">${m.what}</div>
+        <div class="text-[12px] text-slate-500 mt-0.5">${m.note}</div>
+      </div>`).join('');
+
+    // ---- table ----
+    const showAll = document.body.dataset.more === '1';
+    const shown = showAll ? rows : rows.filter(r => r.age % 5 === 0 || r.age === state.retireAge || r.age === state.benefitAge || (res.depletionAge != null && r.age === res.depletionAge));
+    $('rows').innerHTML = shown.map((r, i) => {
+      const inflow = r.age < state.retireAge ? state.contrib : (r.age >= state.benefitAge ? state.benefits : 0);
+      const outflow = r.age < state.retireAge ? 0 : state.spending;
+      const note = yearNote(r, i, rows);
+      const dryRow = r.bal === 0 && res.depletionAge != null;
+      return `<tr class="hoverable border-t border-slate-100 ${dryRow ? 'bg-rose-50/60' : ''}">
+        <td class="px-4 py-2 font-semibold num">${r.age}</td>
+        <td class="px-4 py-2 text-right num ${inflow > 0 ? 'text-emerald-600' : 'text-slate-300'}">${inflow > 0 ? '+' + fmtMoney(inflow) : '—'}</td>
+        <td class="px-4 py-2 text-right num ${outflow > 0 ? 'text-slate-700' : 'text-slate-300'}">${outflow > 0 ? '−' + fmtMoney(outflow) : '—'}</td>
+        <td class="px-4 py-2 text-right font-semibold num ${dryRow ? 'text-rose-600' : ''}">${fmtMoney(r.bal)}</td>
+        <td class="px-4 py-2 hidden md:table-cell text-slate-500 text-[12px]">${note}</td>
+      </tr>`;
+    }).join('');
+    $('moreBtn').textContent = showAll ? 'Show every 5 years ↑' : 'Show every year ↓';
+
+    // ---- what could go wrong ----
+    $('wStorm').textContent = storm.ok ? 'survives' : 'fails';
+    $('wStorm').className = 'text-xs font-bold px-2 py-0.5 rounded-full ' + (storm.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700');
+    $('wStormTxt').textContent = storm.ok
+      ? `In stormy markets the money still lasts to ${lastsLabel(storm)}.`
+      : `In stormy markets the money runs out at ${storm.depletionAge} instead of holding on.`;
+    const gapYears = res.ok ? 0 : state.maxAge - res.depletionAge;
+    $('wGap').textContent = gapYears === 0 ? 'none' : `${gapYears} yr`;
+    $('wGap').className = 'text-xs font-bold px-2 py-0.5 rounded-full ' + (gapYears === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700');
+    $('wGapTxt').textContent = gapYears === 0
+      ? `No gap — the plan covers you past ${state.maxAge}.`
+      : `The plan comes up ${gapYears} year${gapYears === 1 ? '' : 's'} short of ${state.maxAge}.`;
+    $('wFixTxt').textContent = suggest(state) ?? 'Nothing to fix — but try the stormy switch to stress it.';
+
+    // ---- plan bar + save state ----
+    $('pbRetire').textContent = state.retireAge;
+    $('pbSpend').textContent = fmtMoney(state.spending);
+    $('pbSaved').textContent = fmtMoney(state.savings);
+    const dirty = JSON.stringify(state) !== savedOriginal;
+    $('saveBtn').className = dirty
+      ? 'flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-emerald-600 text-white hover:bg-emerald-700 rounded font-medium'
+      : 'flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-neutral-600 rounded cursor-not-allowed';
+    $('saveDot').style.display = dirty ? '' : 'none';
+
+    // ---- weather buttons ----
+    document.querySelectorAll('.sky').forEach(b =>
+      b.className = 'sky px-2.5 py-1 text-xs rounded-md ' + (b.dataset.sky === state.sky
+        ? 'bg-slate-900 text-white font-medium'
+        : 'text-slate-600 hover:bg-slate-100'));
+
+    // slider positions
+    $('pbRetireIn').value = state.retireAge;
+    $('pbSpendIn').value = state.spending;
+    $('pbSavedIn').value = state.savings;
+  }
+
+  $('pbRetireIn').addEventListener('input', e => { state.retireAge = +e.target.value; render(); });
+  $('pbSpendIn').addEventListener('input', e => { state.spending = +e.target.value; render(); });
+  $('pbSavedIn').addEventListener('input', e => { state.savings = +e.target.value; render(); });
+  document.querySelectorAll('.sky').forEach(b => b.addEventListener('click', () => { state.sky = b.dataset.sky; render(); }));
+  $('moreBtn').addEventListener('click', () => {
+    document.body.dataset.more = document.body.dataset.more === '1' ? '0' : '1';
+    render();
+  });
+  $('saveBtn').addEventListener('click', () => render());
+  document.querySelectorAll('.nav').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.nav').forEach(x => x.className = 'nav px-2.5 py-1.5 rounded text-neutral-300 hover:bg-neutral-800');
+    b.className = 'nav px-2.5 py-1.5 rounded bg-neutral-800 text-white';
+  }));
+
+  render();
+</script>
+</body>
+</html>

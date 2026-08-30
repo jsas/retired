@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>34 — Retro Broadcast</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #101010; }
+  .num { font-variant-numeric: tabular-nums; }
+  .phos { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
+
+  /* ---- the cabinet ---- */
+  .cabinet {
+    background: linear-gradient(180deg, #2a2a2c 0%, #1b1b1d 46%, #131315 100%);
+    border-radius: 28px;
+    border: 1px solid #3a3a3d;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.07),
+      inset 0 -18px 34px rgba(0,0,0,.55),
+      0 26px 60px rgba(0,0,0,.6);
+  }
+
+  /* ---- the tube ---- */
+  .tube {
+    position: relative;
+    border-radius: 26px / 34px;
+    overflow: hidden;
+    background:
+      radial-gradient(115% 90% at 50% 42%, #12281c 0%, #0a1a12 55%, #050c08 100%);
+    box-shadow:
+      inset 0 0 0 3px #0a0a0a,
+      inset 0 0 44px rgba(0,0,0,.9),
+      0 0 40px rgba(60,255,150,.05);
+  }
+  /* scanlines */
+  .tube::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 3;
+    background: repeating-linear-gradient(180deg, rgba(0,0,0,.30) 0px, rgba(0,0,0,.30) 1px, transparent 1px, transparent 3px);
+  }
+  /* vignette + glass glare */
+  .tube::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 4;
+    background:
+      radial-gradient(78% 62% at 50% 44%, transparent 44%, rgba(0,0,0,.55) 100%),
+      linear-gradient(115deg, rgba(255,255,255,.055) 0%, transparent 34%, transparent 100%);
+  }
+  .tube * { position: relative; z-index: 2; }
+  /* Tailwind's .absolute must win over the blanket rule above */
+  .tube .absolute { position: absolute; }
+
+  /* ---- the phosphor curve ---- */
+  #curve { filter: drop-shadow(0 0 3px rgba(120,255,170,.55)) drop-shadow(0 0 10px rgba(60,255,140,.25)); }
+  .flicker { animation: flick 3.4s steps(1,end) infinite; }
+  @keyframes flick {
+    0%,100% { opacity: 1; }
+    31% { opacity: .93; }
+    33% { opacity: 1; }
+    67% { opacity: .88; }
+    69% { opacity: 1; }
+    82% { opacity: .96; }
+  }
+
+  /* ---- ticker ---- */
+  .ticker-win { overflow: hidden; }
+  .ticker-track { display: inline-block; white-space: nowrap; will-change: transform; animation: slide 26s linear infinite; }
+  @keyframes slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  /* ---- faders ---- */
+  input[type=range].fad {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; cursor: grab;
+  }
+  input[type=range].fad::-webkit-slider-runnable-track {
+    height: 8px; border-radius: 4px;
+    background: linear-gradient(180deg, #060606, #232323 40%, #0c0c0c);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.06);
+  }
+  input[type=range].fad::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 30px; height: 18px; margin-top: -5px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, #e9e6df 0%, #b9b4a8 46%, #6f6a5f 52%, #4d4a43 100%);
+    border: 1px solid #2a2825;
+    box-shadow: 0 2px 6px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.6);
+  }
+  input[type=range].fad::-moz-range-track {
+    height: 8px; border-radius: 4px; background: #0b0b0b;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,.9);
+  }
+  input[type=range].fad::-moz-range-thumb {
+    width: 30px; height: 18px; border-radius: 3px; border: 1px solid #2a2825;
+    background: linear-gradient(180deg, #e9e6df 0%, #b9b4a8 46%, #6f6a5f 52%, #4d4a43 100%);
+  }
+  input[type=range].fad:active { cursor: grabbing; }
+
+  /* ---- the channel knob ---- */
+  .knob {
+    position: relative; width: 58px; height: 58px; border-radius: 9999px; flex: none;
+    background: radial-gradient(circle at 34% 30%, #4a4a4d, #232325 62%, #161617 100%);
+    border: 1px solid #434346;
+    box-shadow: 0 4px 12px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.16);
+    cursor: pointer; transition: transform .26s cubic-bezier(.34,1.5,.5,1);
+  }
+  .knob i {
+    position: absolute; left: 50%; top: 5px; width: 3px; height: 16px; margin-left: -1.5px;
+    background: #d8ffd8; border-radius: 2px; box-shadow: 0 0 6px rgba(150,255,180,.9);
+    transform-origin: 50% 24px;
+  }
+  .knob:focus-visible { outline: 2px solid #7dffb0; outline-offset: 3px; }
+  .chlabel { transition: color .2s, text-shadow .2s; }
+  .chlabel.on { color: #9cffc4; text-shadow: 0 0 8px rgba(120,255,170,.7); }
+  .chlabel.on b { color: #fff; }
+
+  .amber { color: #ffb54d; text-shadow: 0 0 9px rgba(255,170,60,.45); }
+  .grn   { color: #8fffbe; text-shadow: 0 0 9px rgba(120,255,170,.45); }
+  .badge-off { background: rgba(255,60,60,.14); color: #ff8d8d; border: 1px solid rgba(255,90,90,.55); }
+  .badge-on  { background: rgba(90,255,160,.10); color: #8fffbe; border: 1px solid rgba(120,255,170,.5); }
+</style>
+</head>
+<body class="min-h-screen text-neutral-300 flex flex-col">
+
+<header class="flex items-center gap-2.5 px-5 py-3.5">
+  <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+  <span class="font-semibold text-sm">tired</span>
+  <span class="text-[11px] text-neutral-500 ml-1 phos">· 34 — Retro Broadcast</span>
+</header>
+
+<main class="flex-1 px-3 sm:px-6 pb-10 flex flex-col items-center">
+  <div class="cabinet w-full max-w-[860px] p-3 sm:p-4">
+
+    <!-- screen -->
+    <div class="tube aspect-[4/3] w-full">
+      <div class="absolute inset-0 flex flex-col">
+
+        <!-- ticker -->
+        <div class="ticker-win bg-black/55 border-b border-[#2c5c3e] py-1.5">
+          <div class="ticker-track phos text-[12px] tracking-[0.14em] grn">
+            <span id="tick1"></span><span id="tick2"></span>
+          </div>
+        </div>
+
+        <!-- the chart -->
+        <div class="flex-1 relative px-4 pt-3 pb-1">
+          <svg id="scope" viewBox="0 0 640 250" preserveAspectRatio="none" class="absolute inset-0 w-full h-full flicker" aria-label="Your money over time"></svg>
+
+          <!-- lower third -->
+          <div class="absolute left-4 right-4 bottom-3">
+            <div class="flex items-stretch gap-0 shadow-[0_6px_22px_rgba(0,0,0,.7)]">
+              <div class="px-3 py-2 flex items-center bg-[#c9a227] text-black font-bold text-[12px] tracking-[0.2em] phos">LIVE</div>
+              <div class="flex-1 bg-black/78 px-4 py-2 backdrop-blur-[1px]">
+                <p id="l3" class="num font-bold text-[19px] sm:text-[24px] leading-tight grn">—</p>
+                <p id="l3sub" class="phos text-[10.5px] tracking-[0.16em] amber mt-0.5">—</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- below the screen: knob + faders -->
+    <div class="mt-4 px-1 flex flex-col lg:flex-row gap-5 lg:items-center">
+
+      <div class="flex items-center gap-3.5 flex-none">
+        <button id="knob" class="knob" role="slider" aria-label="market mood" aria-valuemin="0" aria-valuemax="2" aria-valuenow="1" tabindex="0">
+          <i id="pointer"></i>
+        </button>
+        <div class="phos text-[10px] tracking-[0.2em] leading-[1.5]">
+          <button id="ch0" data-sky="storm" class="chlabel block text-left">CH 1 <b>STORMY</b></button>
+          <button id="ch1" data-sky="normal" class="chlabel on block text-left">CH 2 <b>ORDINARY</b></button>
+          <button id="ch2" data-sky="sun" class="chlabel block text-left">CH 3 <b>KIND</b></button>
+        </div>
+        <div class="hidden sm:block w-px h-12 bg-neutral-700 mx-1"></div>
+        <div class="phos text-[10px] tracking-[0.14em] text-neutral-500 leading-[1.6]">
+          <div>CHANNEL</div>
+          <div class="text-neutral-400">turn to change<br>the market's mood</div>
+        </div>
+      </div>
+
+      <div class="flex-1 grid sm:grid-cols-3 gap-x-5 gap-y-1">
+        <label class="block">
+          <span class="flex justify-between phos text-[10px] tracking-[0.16em] text-neutral-400">
+            <span>STOP WORKING</span><span id="vRetire" class="num text-neutral-100">AGE 62</span>
+          </span>
+          <input id="sRetire" type="range" class="fad" min="55" max="75" step="1" value="62">
+        </label>
+        <label class="block">
+          <span class="flex justify-between phos text-[10px] tracking-[0.16em] text-neutral-400">
+            <span>SPEND EACH YEAR</span><span id="vSpend" class="num text-neutral-100">$85,000</span>
+          </span>
+          <input id="sSpend" type="range" class="fad" min="40000" max="160000" step="1000" value="85000">
+        </label>
+        <label class="block">
+          <span class="flex justify-between phos text-[10px] tracking-[0.16em] text-neutral-400">
+            <span>SAVED SO FAR</span><span id="vSaved" class="num text-neutral-100">$850,000</span>
+          </span>
+          <input id="sSaved" type="range" class="fad" min="100000" max="3000000" step="10000" value="850000">
+        </label>
+      </div>
+    </div>
+
+    <!-- power strip -->
+    <div class="mt-3.5 pt-3 border-t border-neutral-800 flex items-center justify-between gap-3">
+      <p id="hint" class="phos text-[10px] tracking-[0.1em] text-neutral-500"></p>
+      <div class="flex items-center gap-2 flex-none">
+        <span id="pwr" class="phos text-[9px] tracking-[0.22em] text-neutral-600">STANDBY</span>
+        <button id="power" aria-label="power" class="w-8 h-8 rounded-full border border-neutral-600 bg-gradient-to-b from-neutral-700 to-neutral-900 flex items-center justify-center hover:border-neutral-400 transition-colors">
+          <span id="pwrDot" class="w-2.5 h-2.5 rounded-full bg-[#7dffab] shadow-[0_0_8px_#7dffab]"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="px-5 py-4 text-[11px] text-neutral-500 phos">34 · Retro Broadcast — your plan, live on the evening news.</footer>
+
+<script src="model.js"></script>
+<script>
+  var state = Object.assign({}, DEMO_DEFAULTS);
+  function $(id) { return document.getElementById(id); }
+  var NS = 'http://www.w3.org/2000/svg';
+  var standby = false;
+
+  var CH = [
+    { key: 'storm',  name: 'STORMY',   word: 'stormy markets' },
+    { key: 'normal', name: 'ORDINARY', word: 'ordinary markets' },
+    { key: 'sun',    name: 'KIND',     word: 'kind markets' }
+  ];
+
+  function el(n, a) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); return e; }
+  function txt(s, x, y, size, anchor, fill) {
+    var t = el('text', { x: x, y: y, 'font-size': size, 'text-anchor': anchor || 'start', fill: fill, 'font-family': "ui-monospace, Menlo, Consolas, monospace" });
+    t.textContent = s; return t;
+  }
+
+  /* grid + labels are drawn once, the curve is redrawn on every render */
+  function buildScope() {
+    var s = $('scope');
+    while (s.firstChild) s.removeChild(s.firstChild);
+    var defs = el('defs', {});
+    var f = el('filter', { id: 'glow', x: '-25%', y: '-25%', width: '150%', height: '150%' });
+    f.appendChild(el('feGaussianBlur', { stdDeviation: '2.6', result: 'b' }));
+    var m = el('feMerge', {});
+    m.appendChild(el('feMergeNode', { in: 'b' }));
+    m.appendChild(el('feMergeNode', { in: 'SourceGraphic' }));
+    f.appendChild(m);
+    defs.appendChild(f);
+    s.appendChild(defs);
+    s.appendChild(el('rect', { x: 0, y: 0, width: 640, height: 250, fill: 'none' }));
+    for (var gy = 10; gy < 250; gy += 40) {
+      s.appendChild(el('line', { x1: 0, y1: gy, x2: 640, y2: gy, stroke: 'rgba(120,255,170,.075)', 'stroke-width': '1' }));
+    }
+    for (var gx = 40; gx < 640; gx += 80) {
+      s.appendChild(el('line', { x1: gx, y1: 0, x2: gx, y2: 250, stroke: 'rgba(120,255,170,.055)', 'stroke-width': '1' }));
+    }
+    s.appendChild(el('line', { x1: 0, y1: 246, x2: 640, y2: 246, stroke: 'rgba(120,255,170,.30)', 'stroke-width': '1' }));
+    s.appendChild(txt('TUNE IN: YOUR MONEY, YEAR BY YEAR', 8, 16, 9, 'start', 'rgba(120,255,170,.42)'));
+    s.appendChild(el('g', { id: 'dyn' }));
+  }
+
+  function render() {
+    var res = simulate(state);
+    var ok = res.ok;
+    var ch = CH.findIndex(function (c) { return c.key === state.sky; });
+    if (ch < 0) ch = 1;
+    var chv = CH[ch];
+
+    /* ---- lower third ---- */
+    $('l3').textContent = ok
+      ? 'LASTS TO ' + lastsLabel(res)
+      : 'RUNS OUT AT ' + res.depletionAge;
+    $('l3').className = 'num font-bold text-[19px] sm:text-[24px] leading-tight ' + (ok ? 'grn' : 'text-[#ff8d8d]');
+    $('l3').style.color = ok ? '' : '#ff8d8d';
+
+    $('l3sub').textContent = ok
+      ? (res.leftAtMax > 0
+          ? chv.word + ' · ' + fmtMoney(res.leftAtMax) + ' LEFT OVER AT ' + state.maxAge
+          : chv.word + ' · PAST THE ' + state.maxAge + ' YOU PLANNED FOR')
+      : chv.word + ' · ' + (state.maxAge - res.depletionAge) + ' YEARS SHORT OF ' + state.maxAge;
+
+    /* ---- ticker: duplicated once so the -50% loop is seamless ---- */
+    var item = (ok
+        ? 'YOUR MONEY LASTS TO AGE ' + lastsLabel(res) + '  +++  '
+        : 'YOUR MONEY RUNS OUT AT AGE ' + res.depletionAge + '  +++  ')
+      + (ok && res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) + ' LEFT OVER AT ' + state.maxAge + '  +++  ' : '')
+      + 'MARKETS: ' + chv.name + '  +++  '
+      + (ok ? 'PLAN CLEARS THE BAR  +++  ' : 'PLAN COMES UP SHORT  +++  ')
+      + 'STOP WORKING AT ' + state.retireAge + '  +++  '
+      + 'SPENDING ' + fmtMoney(state.spending) + ' A YEAR  +++  ';
+    $('tick1').textContent = item;
+    $('tick2').textContent = item;
+
+    /* ---- curve ---- */
+    var rows = res.rows;
+    var peak = 1;
+    for (var i = 0; i < rows.length; i++) if (rows[i].bal > peak) peak = rows[i].bal;
+    var xFor = function (a) { return (a - state.currentAge) / (HARD_CAP - state.currentAge) * 640; };
+    var yFor = function (b) { return 240 - (b / peak) * 214; };
+
+    var d = '';
+    for (var j = 0; j < rows.length; j++) {
+      d += (j ? 'L' : 'M') + xFor(rows[j].age).toFixed(1) + ' ' + yFor(rows[j].bal).toFixed(1);
+      if (j < rows.length - 1) d += ' ';
+    }
+    var last = rows[rows.length - 1];
+    var area = d + ' L' + xFor(last.age).toFixed(1) + ' 246 L0 246 Z';
+
+    var s = $('scope');
+    var dyn = s.querySelector('#dyn');
+    while (dyn.firstChild) dyn.removeChild(dyn.firstChild);
+    function add(n, a) { var e = el(n, a); dyn.appendChild(e); return e; }
+    function addTxt(a, b, c, d2, e2, f2) { var t = txt(a, b, c, d2, e2, f2); dyn.appendChild(t); return t; }
+
+    var col = ok ? '#8fffbe' : '#ff8d8d';
+    add('path', { d: area, fill: ok ? 'rgba(120,255,170,.09)' : 'rgba(255,120,120,.10)' });
+    add('path', { d: d, fill: 'none', stroke: col, 'stroke-width': '2', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', filter: 'url(#glow)' });
+
+    /* plan-for marker at maxAge */
+    var mx = xFor(state.maxAge);
+    add('line', { x1: mx, y1: 8, x2: mx, y2: 246, stroke: ok ? 'rgba(120,255,170,.35)' : 'rgba(255,120,120,.45)', 'stroke-width': '1', 'stroke-dasharray': '4 4' });
+    add('circle', { cx: mx, cy: yFor(res.leftAtMax), r: '3.4', fill: col });
+    addTxt('AGE ' + state.maxAge, mx + 5, 22, 9, mx > 560 ? 'end' : 'start', ok ? 'rgba(120,255,170,.6)' : 'rgba(255,140,140,.75)');
+
+    if (res.depletionAge != null) {
+      var dx = xFor(res.depletionAge);
+      add('circle', { cx: dx, cy: yFor(0), r: '4.5', fill: '#ff8d8d', stroke: '#000', 'stroke-width': '1' });
+      add('circle', { cx: dx, cy: yFor(0), r: '9', fill: 'none', stroke: 'rgba(255,120,120,.45)', 'stroke-width': '1' });
+      var outRight = dx > 590;
+      addTxt('OUT', dx + (outRight ? -11 : 11), yFor(0) + 3.5, 9, outRight ? 'end' : 'start', '#ff8d8d');
+    }
+
+    $('vRetire').textContent = 'AGE ' + state.retireAge;
+    $('vSpend').textContent = fmtMoney(state.spending);
+    $('vSaved').textContent = fmtMoney(state.savings);
+
+    var sug = suggest(state);
+    $('hint').textContent = ok
+      ? 'ON AIR: plan clears the bar.'
+      : (sug ? 'ON AIR: ' + sug : 'ON AIR: the plan comes up short.');
+
+    for (var c = 0; c < 3; c++) {
+      $('ch' + c).classList.toggle('on', c === ch);
+    }
+    $('knob').setAttribute('aria-valuenow', String(ch));
+    $('knob').setAttribute('aria-valuetext', chv.word);
+    $('pointer').style.transform = 'rotate(' + (ch * 120 - 120) + 'deg)';
+    if (!standby) {
+      $('pwr').textContent = 'ON AIR';
+      $('pwr').style.color = ok ? '#7dffab' : '#ff8d8d';
+    }
+  }
+
+  /* ---- knob: three stops, wrap-around ---- */
+  function curIdx() {
+    var i = CH.findIndex(function (c) { return c.key === state.sky; });
+    return i < 0 ? 1 : i;
+  }
+  function setChannel(i) {
+    var n = ((i % 3) + 3) % 3;
+    state.sky = CH[n].key;
+    $('pointer').style.transform = 'rotate(' + (n * 120 - 120) + 'deg)';
+    render();
+  }
+  $('knob').addEventListener('click', function () { setChannel(curIdx() + 1); });
+
+  /* three direct channel buttons for keyboard / screen-reader users */
+  for (var c = 0; c < 3; c++) {
+    (function (idx) {
+      $('ch' + idx).addEventListener('click', function () { setChannel(idx); });
+    })(c);
+  }
+  $('knob').addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { setChannel(curIdx() + 1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { setChannel(curIdx() - 1); e.preventDefault(); }
+  });
+
+  $('sRetire').addEventListener('input', function (e) { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', function (e) { state.spending = +e.target.value; render(); });
+  $('sSaved').addEventListener('input', function (e) { state.savings = +e.target.value; render(); });
+
+  /* power: a soft standby that dims the picture without losing your settings */
+  $('power').addEventListener('click', function () {
+    standby = !standby;
+    $('pwrDot').style.opacity = standby ? '.12' : '1';
+    $('pwrDot').style.boxShadow = standby ? 'none' : '0 0 8px #7dffab';
+    $('scope').style.opacity = standby ? '.14' : '1';
+    $('l3').style.opacity = standby ? '.2' : '1';
+    $('l3sub').style.opacity = standby ? '.2' : '1';
+    $('pwr').textContent = standby ? 'STANDBY' : 'ON AIR';
+    $('pwr').style.color = standby ? '#525252' : (res_ok() ? '#7dffab' : '#ff8d8d');
+  });
+
+  function res_ok() {
+    return simulate(state).ok;
+  }
+
+  buildScope();
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>36 — Ambient</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html, body { height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    background: #dcd3d1;
+    transition: background 1.6s cubic-bezier(.4,0,.2,1);
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* the background wash — the whole interface */
+  #wash {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    transition: background 1.6s cubic-bezier(.4,0,.2,1);
+  }
+
+  /* the one enormous number, breathing */
+  #big {
+    font-weight: 100;
+    line-height: .82;
+    letter-spacing: -.035em;
+    animation: breathe 6s ease-in-out infinite;
+    transform-origin: center;
+    cursor: pointer;
+    transition: color 1.2s ease;
+    -webkit-user-select: none; user-select: none;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.02); }
+  }
+  #big:hover { text-shadow: 0 0 34px rgba(255,255,255,.5); }
+  #big:focus-visible { outline: none; text-shadow: 0 0 34px rgba(255,255,255,.75); }
+
+  /* ---- the ghost control bar ---- */
+  #bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    opacity: 0; transform: translateY(18px); pointer-events: none;
+    transition: opacity .45s cubic-bezier(.4,0,.2,1), transform .45s cubic-bezier(.4,0,.2,1);
+  }
+  #bar.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  input[type=range].ghost {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 24px;
+    background: transparent; cursor: ew-resize;
+  }
+  input[type=range].ghost::-webkit-slider-runnable-track { height: 1.5px; background: rgba(0,0,0,.20); }
+  input[type=range].ghost::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 13px; height: 13px; margin-top: -5.7px;
+    border-radius: 9999px; background: rgba(0,0,0,.60); border: none;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.34);
+  }
+  input[type=range].ghost::-moz-range-track { height: 1.5px; background: rgba(0,0,0,.20); }
+  input[type=range].ghost::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 9999px; background: rgba(0,0,0,.60); border: none;
+  }
+  input[type=range].ghost:focus-visible { outline: 1px dotted rgba(0,0,0,.4); outline-offset: 4px; }
+
+  .wbtn {
+    border-radius: 9999px; padding: 3px 12px; font-size: 12px;
+    color: rgba(0,0,0,.42); background: transparent; border: none; cursor: pointer;
+    transition: background .2s, color .2s;
+  }
+  .wbtn:hover { color: rgba(0,0,0,.72); background: rgba(255,255,255,.30); }
+  .wbtn.on { color: rgba(0,0,0,.80); background: rgba(255,255,255,.55); font-weight: 600; }
+
+  /* a faint affordance hint in the corner */
+  #hint { opacity: .34; transition: opacity .6s ease; }
+  #hint.dim { opacity: .08; }
+  @media (max-width: 640px) { #hint { display: none; } }
+</style>
+</head>
+<body>
+
+<div id="wash"></div>
+
+<header class="relative z-20 flex items-center gap-2.5 px-5 py-3.5">
+  <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+  <span class="font-semibold text-sm">tired</span>
+  <span id="chromeLabel" class="text-[11px] ml-1">· 36 — Ambient</span>
+  <span id="weatherWord" class="text-[11px] ml-auto pr-1">ordinary</span>
+</header>
+
+<main class="relative z-10 flex flex-col items-center justify-center text-center px-6"
+      style="min-height:calc(100vh - 210px)">
+  <p id="label" class="text-[11px] tracking-[0.3em] uppercase mb-5">LASTS TO</p>
+  <h1 id="big" tabindex="0" role="button" class="text-[30vw] sm:text-[21vw] leading-none">89</h1>
+  <p id="sentence" class="mt-7 text-[15px] sm:text-[17px] max-w-[30rem] leading-relaxed"></p>
+  <p id="hint" class="mt-8 text-[11px]">move toward the bottom edge for the dials · tap the number to switch to money</p>
+</main>
+
+<footer class="fixed bottom-3 inset-x-0 z-20 px-5 text-center text-[11px]" id="foot">
+  36 · Ambient — one number, one wash of colour, controls that appear only when you go looking.
+</footer>
+
+<div id="bar">
+  <div class="mx-auto max-w-[900px] px-5 pb-5 pt-7"
+       style="background:linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.66) 26%, rgba(255,255,255,.84) 100%)">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <span class="text-[11px] tracking-[0.26em] uppercase" style="color:rgba(0,0,0,.34)">Your dials</span>
+      <div class="flex items-center gap-1">
+        <button class="wbtn" data-sky="storm">stormy</button>
+        <button class="wbtn on" data-sky="normal">ordinary</button>
+        <button class="wbtn" data-sky="sun">kind</button>
+        <button id="closeBar" class="wbtn ml-2" aria-label="hide controls">done</button>
+      </div>
+    </div>
+    <div class="grid sm:grid-cols-3 gap-x-8 gap-y-3">
+      <label class="block">
+        <span class="flex justify-between text-[12px] mb-0.5" style="color:rgba(0,0,0,.42)">
+          <span>stop working at</span><span id="vRetire" class="num">62</span>
+        </span>
+        <input id="sRetire" type="range" class="ghost" min="55" max="75" step="1" value="62">
+      </label>
+      <label class="block">
+        <span class="flex justify-between text-[12px] mb-0.5" style="color:rgba(0,0,0,.42)">
+          <span>spend each year</span><span id="vSpend" class="num">$85,000</span>
+        </span>
+        <input id="sSpend" type="range" class="ghost" min="40000" max="160000" step="1000" value="85000">
+      </label>
+      <label class="block">
+        <span class="flex justify-between text-[12px] mb-0.5" style="color:rgba(0,0,0,.42)">
+          <span>saved so far</span><span id="vSaved" class="num">$850,000</span>
+        </span>
+        <input id="sSaved" type="range" class="ghost" min="100000" max="3000000" step="10000" value="850000">
+      </label>
+    </div>
+    <p id="barHint" class="text-[11px] mt-3"></p>
+  </div>
+</div>
+
+<script src="model.js"></script>
+<script>
+  var state = Object.assign({}, DEMO_DEFAULTS);
+  function $(id) { return document.getElementById(String(id).replace(/^#/, '')); }
+
+  /* health -> colour. failing is dusty rose, healthy is calm green-teal. */
+  var HEALTH = {
+    fail: {
+      bg: 'linear-gradient(160deg,#e6d6d3 0%,#dcc6c3 46%,#ccafb0 100%)',
+      fg: 'rgba(72,26,26,.60)', hi: 'rgba(62,16,16,.86)', soft: 'rgba(72,26,26,.30)'
+    },
+    near: {
+      bg: 'linear-gradient(160deg,#e8dfd3 0%,#ded3c2 46%,#cec0aa 100%)',
+      fg: 'rgba(62,46,26,.58)', hi: 'rgba(50,36,16,.84)', soft: 'rgba(62,46,26,.30)'
+    },
+    pass: {
+      bg: 'linear-gradient(160deg,#dfe8e2 0%,#cfe0da 46%,#b7d1ca 100%)',
+      fg: 'rgba(16,46,40,.58)', hi: 'rgba(10,36,30,.84)', soft: 'rgba(16,46,40,.30)'
+    }
+  };
+  var SKY_WORD = { storm: 'stormy', normal: 'ordinary', sun: 'kind' };
+  var view = 'age';
+  var barTimer = null;
+
+  function healthKey(res) {
+    if (!res.ok) return 'fail';
+    return res.leftAtMax > 150000 ? 'pass' : 'near';
+  }
+
+  function paint(c) {
+    document.body.style.background = c.bg;
+    $('#wash').style.background = c.bg;
+    $('#big').style.color = c.hi;
+    $('#label').style.color = c.fg;
+    $('#sentence').style.color = c.fg;
+    $('#hint').style.color = c.soft;
+    $('#foot').style.color = c.soft;
+    $('#chromeLabel').style.color = c.fg;
+    $('#weatherWord').style.color = c.fg;
+    $('#barHint').style.color = c.fg;
+    var v = ['vRetire', 'vSpend', 'vSaved'], i;
+    for (i = 0; i < v.length; i++) $(v[i]).style.color = 'rgba(0,0,0,.72)';
+  }
+
+  function render() {
+    var res = simulate(state);
+    var ok = res.ok;
+    var sug = suggest(state);
+    var c = HEALTH[healthKey(res)];
+    var wl = lastsLabel(res);
+    var left = res.leftAtMax;
+
+    paint(c);
+
+    if (view === 'age') {
+      $('#big').textContent = wl;
+      $('#label').textContent = 'LASTS TO';
+      $('#big').setAttribute('aria-label', 'lasts to age ' + wl);
+    } else {
+      $('#big').textContent = left > 0 ? fmtMoney(left) : '$0';
+      $('#label').textContent = 'LEFT OVER AT ' + state.maxAge;
+      $('#big').setAttribute('aria-label', 'left over at ' + state.maxAge + ': ' + fmtMoney(left));
+    }
+
+    var s;
+    if (ok) {
+      s = view === 'age'
+        ? "Until you're " + wl + (left > 0 ? ', with about ' + fmtMoney(left) + ' still there at ' + state.maxAge + '.' : '.')
+        : 'About ' + fmtMoney(left) + ' would still be there at ' + state.maxAge + '. Tap the number to see the age instead.';
+    } else {
+      s = view === 'age'
+        ? "It runs out when you're " + res.depletionAge + ', ' + (state.maxAge - res.depletionAge) + ' years short of ' + state.maxAge + '.'
+        : 'Nothing would be left by age ' + res.depletionAge + '. Tap the number to see the age instead.';
+    }
+    $('#sentence').textContent = s;
+
+    $('#vRetire').textContent = state.retireAge;
+    $('#vSpend').textContent = fmtMoney(state.spending);
+    $('#vSaved').textContent = fmtMoney(state.savings);
+
+    $('#barHint').textContent = ok
+      ? 'Your plan clears the bar. Nudge a dial to see what else it could do.'
+      : (sug ? sug : 'Your plan comes up short. Try a dial below.');
+
+    $('#weatherWord').textContent = SKY_WORD[state.sky] + ' markets';
+  }
+
+  /* ---- the ghost bar ---- */
+  function showBar() {
+    $('#bar').classList.add('show');
+    $('#hint').classList.add('dim');
+    clearTimeout(barTimer);
+    barTimer = setTimeout(hideBar, 3000);
+  }
+  function hideBar() {
+    $('#bar').classList.remove('show');
+    $('#hint').classList.remove('dim');
+    clearTimeout(barTimer);
+  }
+  function barIsOpen() { return $('#bar').classList.contains('show'); }
+
+  document.addEventListener('mousemove', function (e) {
+    if (e.clientY > window.innerHeight - 170) showBar();
+  });
+  document.addEventListener('mouseleave', hideBar);
+  document.addEventListener('touchstart', function (e) {
+    var y = e.touches && e.touches[0] ? e.touches[0].clientY : 0;
+    if (y > window.innerHeight - 170) showBar();
+  }, { passive: true });
+
+  /* any interaction keeps the bar alive for another 3s */
+  ['input', 'pointerdown', 'keydown', 'wheel'].forEach(function (t) {
+    document.addEventListener(t, function () { if (barIsOpen()) showBar(); }, { passive: true });
+  });
+
+  $('#closeBar').addEventListener('click', hideBar);
+  $('#bar').addEventListener('mouseenter', function () { clearTimeout(barTimer); });
+
+  $('#big').addEventListener('click', function () {
+    view = view === 'age' ? 'money' : 'age';
+    render();
+  });
+  $('#big').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { view = view === 'age' ? 'money' : 'age'; render(); e.preventDefault(); }
+  });
+
+  $('#sRetire').addEventListener('input', function (e) { state.retireAge = +e.target.value; render(); });
+  $('#sSpend').addEventListener('input', function (e) { state.spending = +e.target.value; render(); });
+  $('#sSaved').addEventListener('input', function (e) { state.savings = +e.target.value; render(); });
+
+  var skies = Array.prototype.slice.call(document.querySelectorAll('[data-sky]'));
+  skies.forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.sky = b.getAttribute('data-sky');
+      skies.forEach(function (x) { x.classList.toggle('on', x === b); });
+      showBar();
+      render();
+    });
+  });
+
+  render();
+</script>
+</body>
+</html>

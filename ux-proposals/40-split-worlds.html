@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 40 · Split Worlds</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* two worlds, two papers */
+  .worldA { background: #f7f4ec; }
+  .worldB { background: #eef2f8; }
+  .tintA { color: #b45309; }
+  .tintB { color: #1d4ed8; }
+
+  /* ---------- sliders (colour follows the world) ---------- */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; background: transparent; cursor: pointer;
+    --p: 50%;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 999px;
+    background: linear-gradient(90deg, currentColor var(--p), rgba(15,23,42,.14) var(--p));
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px; border-radius: 999px;
+    background: linear-gradient(90deg, currentColor var(--p), rgba(15,23,42,.14) var(--p));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    height: 15px; width: 15px; margin-top: -5.5px; border-radius: 999px;
+    background: #ffffff; border: 2px solid currentColor;
+    box-shadow: 0 1px 3px rgba(15,23,42,.25);
+    transition: transform .12s ease;
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 13px; width: 13px; border-radius: 999px;
+    background: #ffffff; border: 2px solid currentColor;
+    box-shadow: 0 1px 3px rgba(15,23,42,.25);
+  }
+  input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
+  input[type="range"]:focus-visible { outline: none; }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(29,78,216,.25); }
+
+  /* ---------- the divider ---------- */
+  #divider {
+    position: absolute; top: 0; bottom: 0; width: 3px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(15,23,42,.08), rgba(15,23,42,.34), rgba(15,23,42,.08));
+    z-index: 30;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  #divider::after {
+    content: '';
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px; height: 44px; border-radius: 999px;
+    background-color: #ffffff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l-4 6 4 6'/><path d='M15 6l4 6-4 6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 22px 22px;
+    box-shadow: 0 2px 12px rgba(15,23,42,.3), 0 0 0 1px rgba(15,23,42,.1);
+  }
+  #divider:hover::after { box-shadow: 0 3px 16px rgba(15,23,42,.4), 0 0 0 2px rgba(29,78,216,.35); }
+  #divider:focus-visible { outline: none; }
+  #divider:focus-visible::after { box-shadow: 0 0 0 3px rgba(29,78,216,.45); }
+
+  .focusA { filter: brightness(1.035) saturate(1.03); }
+  .focusB { filter: brightness(1.035) saturate(1.03); }
+
+  /* ---------- adjust bars ---------- */
+  .adjust {
+    cursor: pointer; border: 1px solid rgba(15,23,42,.14); border-radius: 8px;
+    background: rgba(255,255,255,.6); color: #475569;
+    font-size: 11px; padding: 4px 10px 5px;
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .adjust:hover, .adjust.open { background: #fff; color: #0f172a; border-color: rgba(15,23,42,.32); }
+
+  .bar {
+    border-radius: 8px; border: 1px solid rgba(15,23,42,.1);
+    background: rgba(255,255,255,.72);
+    padding: 8px 10px;
+  }
+
+  /* ---------- winner pill ---------- */
+  .pill { border-radius: 999px; padding: 6px 14px 7px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .pill-good { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  .pill-bad  { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+  .pill-even { background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; }
+
+  /* ---------- mini bars ---------- */
+  .mini { height: 6px; border-radius: 999px; background: rgba(15,23,42,.1); overflow: hidden; }
+  .mini > span { display: block; height: 100%; border-radius: 999px; background: currentColor; transition: width .25s ease; }
+
+  .kpi { border-radius: 12px; border: 1px solid rgba(15,23,42,.1); background: rgba(255,255,255,.7); padding: 10px 12px; }
+
+  ::selection { background: rgba(29,78,216,.16); }
+</style>
+</head>
+<body class="h-screen overflow-hidden text-slate-900 antialiased">
+
+<!-- HEADER -->
+<div id="chrome" class="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/85 backdrop-blur">
+  <div class="mx-auto flex max-w-[1700px] flex-wrap items-center gap-2.5 px-4 py-2.5">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="hidden text-[11px] text-slate-400 sm:inline">40 — Split Worlds</span>
+
+    <div class="ml-auto flex items-center gap-2">
+      <div id="pill" class="pill pill-even">Two worlds, same numbers.</div>
+      <button id="copyAB" type="button" class="adjust">Copy A → B</button>
+    </div>
+  </div>
+</div>
+
+<!-- STAGE -->
+<div id="stage" class="absolute inset-x-0" style="top:53px; bottom:30px">
+
+  <!-- WORLD A -->
+  <section id="sideA" class="worldA tintA absolute inset-y-0 left-0 overflow-y-auto" style="width:50%">
+    <div class="mx-auto max-w-[540px] px-5 py-5 sm:px-7">
+
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="text-[19px] font-bold tracking-tight">World A</h2>
+        <span class="num text-[11.5px] text-slate-500" data-a-sum>retire 62 · spend $85,000 · $850,000</span>
+      </div>
+
+      <div class="kpi mt-3">
+        <div class="num text-[25px] font-bold leading-tight" data-a-verdict>Short by 6 years</div>
+        <div class="num mt-1 text-[13px] leading-relaxed text-slate-600" data-a-sub>Runs out at 89 — nothing left over at 95.</div>
+
+        <div class="mt-3 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3">
+          <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-slate-400">lasts to</div>
+            <div class="num text-[19px] font-bold" data-a-lasts>89</div>
+          </div>
+          <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-slate-400">left at 95</div>
+            <div class="num text-[19px] font-bold" data-a-left>$0</div>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <div class="flex items-baseline justify-between text-[10px] uppercase tracking-[.16em] text-slate-400">
+            <span>the run to 95</span><span class="num normal-case tracking-normal" data-a-peak></span>
+          </div>
+          <svg data-a-chart viewBox="0 0 220 48" preserveAspectRatio="none" class="mt-1 h-[48px] w-full" role="img" aria-label="World A balance over your lifetime"></svg>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <button type="button" class="adjust" data-toggle="a">Adjust</button>
+      </div>
+
+      <div class="bar mt-2 hidden" data-panel="a">
+        <label class="block">
+          <span class="flex items-baseline justify-between text-[11.5px] text-slate-500">
+            <span>saved so far</span><span class="num font-semibold" data-a-out-savings>$850,000</span>
+          </span>
+          <input type="range" min="100000" max="2500000" step="25000" value="850000" data-a-in="savings" aria-label="World A saved so far" />
+        </label>
+        <label class="mt-1.5 block">
+          <span class="flex items-baseline justify-between text-[11.5px] text-slate-500">
+            <span>spending a year</span><span class="num font-semibold" data-a-out-spending>$85,000</span>
+          </span>
+          <input type="range" min="40000" max="150000" step="2500" value="85000" data-a-in="spending" aria-label="World A spending a year" />
+        </label>
+        <label class="mt-1.5 block">
+          <span class="flex items-baseline justify-between text-[11.5px] text-slate-500">
+            <span>stop working at</span><span class="num font-semibold" data-a-out-retire>62</span>
+          </span>
+          <input type="range" min="50" max="75" step="1" value="62" data-a-in="retire" aria-label="World A age you stop working" />
+        </label>
+        <div class="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2">
+          <span class="mr-1 text-[10.5px] uppercase tracking-[.14em] text-slate-400">markets</span>
+          <button type="button" class="adjust" data-a-sky="storm" aria-pressed="false">stormy</button>
+          <button type="button" class="adjust" data-a-sky="normal" aria-pressed="true">ordinary</button>
+          <button type="button" class="adjust" data-a-sky="sun" aria-pressed="false">kind</button>
+        </div>
+      </div>
+
+      <p class="mt-4 text-[11px] leading-relaxed text-slate-400">
+        Counted in today's dollars. CPP and Old Age Security arrive together from age 65.
+      </p>
+    </div>
+  </section>
+
+  <!-- WORLD B -->
+  <section id="sideB" class="worldB tintB absolute inset-y-0 right-0 overflow-y-auto" style="width:50%">
+    <div class="mx-auto max-w-[540px] px-5 py-5 sm:px-7">
+
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="text-[19px] font-bold tracking-tight">World B</h2>
+        <span class="num text-[11.5px] text-slate-500" data-b-sum>retire 62 · spend $85,000 · $850,000</span>
+      </div>
+
+      <div class="kpi mt-3">
+        <div class="num text-[25px] font-bold leading-tight" data-b-verdict>Short by 6 years</div>
+        <div class="num mt-1 text-[13px] leading-relaxed text-slate-600" data-b-sub>Runs out at 89 — nothing left over at 95.</div>
+
+        <div class="mt-3 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3">
+          <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-slate-400">lasts to</div>
+            <div class="num text-[19px] font-bold" data-b-lasts>89</div>
+          </div>
+          <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-slate-400">left at 95</div>
+            <div class="num text-[19px] font-bold" data-b-left>$0</div>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <div class="flex items-baseline justify-between text-[10px] uppercase tracking-[.16em] text-slate-400">
+            <span>the run to 95</span><span class="num normal-case tracking-normal" data-b-peak></span>
+          </div>
+          <svg data-b-chart viewBox="0 0 220 48" preserveAspectRatio="none" class="mt-1 h-[48px] w-full" role="img" aria-label="World B balance over your lifetime"></svg>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <button type="button" class="adjust" data-toggle="b">Adjust</button>
+      </div>
+
+      <div class="bar mt-2 hidden" data-panel="b">
+        <label class="block">
+          <span class="flex items-baseline justify-between text-[11.5px] text-slate-500">
+            <span>saved so far</span><span class="num font-semibold" data-b-out-savings>$850,000</span>
+          </span>
+          <input type="range" min="100000" max="2500000" step="25000" value="850000" data-b-in="savings" aria-label="World B saved so far" />
+        </label>
+        <label class="mt-1.5 block">
+          <span class="flex items-baseline justify-between text-[11.5px] text-slate-500">
+            <span>spending a year</span><span class="num font-semibold" data-b-out-spending>$85,000</span>
+          </span>
+          <input type="range" min="40000" max="150000" step="2500" value="85000" data-b-in="spending" aria-label="World B spending a year" />
+        </label>
+        <label class="mt-1.5 block">
+          <span class="flex items-baseline justify-between text-[11.5px] text-slate-500">
+            <span>stop working at</span><span class="num font-semibold" data-b-out-retire>62</span>
+          </span>
+          <input type="range" min="50" max="75" step="1" value="62" data-b-in="retire" aria-label="World B age you stop working" />
+        </label>
+        <div class="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2">
+          <span class="mr-1 text-[10.5px] uppercase tracking-[.14em] text-slate-400">markets</span>
+          <button type="button" class="adjust" data-b-sky="storm" aria-pressed="false">stormy</button>
+          <button type="button" class="adjust" data-b-sky="normal" aria-pressed="true">ordinary</button>
+          <button type="button" class="adjust" data-b-sky="sun" aria-pressed="false">kind</button>
+        </div>
+      </div>
+
+      <p class="mt-4 text-[11px] leading-relaxed text-slate-400">
+        Change anything here and this world moves on its own — A stays put.
+      </p>
+    </div>
+  </section>
+
+  <div id="divider" role="separator" aria-orientation="vertical" aria-label="Drag to change how the screen is split" tabindex="0" style="left:50%"></div>
+</div>
+
+<!-- FOOTER -->
+<div id="foot" class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/70 bg-white/85 px-4 py-1.5 backdrop-blur">
+  <div class="mx-auto max-w-[1700px] text-[11px] text-slate-400">
+    40 · Split Worlds — two plans side by side, so the trade is something you can see.
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  function baseState() {
+    return {
+      currentAge: DEMO_DEFAULTS.currentAge,
+      maxAge: DEMO_DEFAULTS.maxAge,
+      savings: DEMO_DEFAULTS.savings,
+      contrib: DEMO_DEFAULTS.contrib,
+      spending: DEMO_DEFAULTS.spending,
+      benefits: DEMO_DEFAULTS.benefits,
+      benefitAge: DEMO_DEFAULTS.benefitAge,
+      retireAge: DEMO_DEFAULTS.retireAge,
+      sky: DEMO_DEFAULTS.sky
+    };
+  }
+
+  var A = baseState();
+  var B = baseState();
+  var SKYWORD = { storm: 'stormy', normal: 'ordinary', sun: 'kind' };
+
+  function el(id) { return document.getElementById(id); }
+  function money(v) { return '$' + Math.round(Math.abs(v)).toLocaleString('en-CA'); }
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+  function q(root, sel) { return root.querySelector(sel); }
+
+  var stage = el('stage'), sideA = el('sideA'), sideB = el('sideB'), divider = el('divider');
+  var pill = el('pill'), copyBtn = el('copyAB');
+  var split = 50; /* percentage for World A */
+
+  /* ============ one world's rendering ============ */
+  function gapYears(st, res) {
+    if (res.ok) return 0;
+    return Math.max(0, st.maxAge - (res.depletionAge != null ? res.depletionAge : st.maxAge));
+  }
+
+  function renderWorld(side, st, tag) {
+    var root = el(side);
+    var res = simulate(st);
+    var lasts = lastsLabel(res);
+    var gap = gapYears(st, res);
+    var exact = !res.ok && gap === 0; /* runs out right at the age you had in mind */
+
+    q(root, '[data-' + tag + '-verdict]').textContent = res.ok
+      ? (res.leftAtMax > 0 ? 'Holds, with ' + money(res.leftAtMax) + ' spare' : 'Holds, just')
+      : (exact ? 'Runs out right at ' + st.maxAge : 'Short by ' + gap + ' ' + yearWord(gap));
+    q(root, '[data-' + tag + '-sub]').textContent = res.ok
+      ? 'Money lasts to ' + lasts + ' — past the ' + st.maxAge + ' you have in mind.'
+      : 'Money runs out at ' + lasts + ' — nothing left over at ' + st.maxAge + '.';
+    q(root, '[data-' + tag + '-lasts]').textContent = lasts;
+    q(root, '[data-' + tag + '-left]').textContent = money(res.ok ? res.leftAtMax : 0);
+    q(root, '[data-' + tag + '-sum]').textContent =
+      'retire ' + st.retireAge + ' · spend ' + money(st.spending) + ' · ' + money(st.savings);
+
+    /* mini chart */
+    var svg = q(root, '[data-' + tag + '-chart]');
+    var rows = res.rows;
+    var peak = 0;
+    rows.forEach(function (r) { if (r.bal > peak) peak = r.bal; });
+    if (peak <= 0) peak = 1;
+    var W = 220, H = 48, pad = 3;
+    function X(a) { return pad + ((a - st.currentAge) / (110 - st.currentAge)) * (W - pad * 2); }
+    function Yv(b) { return H - pad - (b / peak) * (H - pad * 2); }
+    var pts = rows.map(function (r) { return X(r.age).toFixed(1) + ',' + Yv(r.bal).toFixed(1); }).join(' ');
+    var lastAge = rows[rows.length - 1].age;
+    var fill = pts + ' ' + X(lastAge).toFixed(1) + ',' + (H - pad) + ' ' + X(st.currentAge).toFixed(1) + ',' + (H - pad);
+    var mark = '';
+    if (res.depletionAge != null) {
+      mark = '<line x1="' + X(res.depletionAge).toFixed(1) + '" y1="' + pad + '" x2="' +
+             X(res.depletionAge).toFixed(1) + '" y2="' + (H - pad) +
+             '" stroke="#b91c1c" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/>';
+    }
+    svg.innerHTML =
+      '<polygon points="' + fill + '" fill="currentColor" fill-opacity=".12"/>' +
+      '<polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' + mark;
+    q(root, '[data-' + tag + '-peak]').textContent = 'peaks at ' + money(peak);
+  }
+
+  function wireWorld(tag, st) {
+    ['savings', 'spending', 'retire'].forEach(function (k) {
+      var input = q(sideOf(tag), '[data-' + tag + '-in="' + k + '"]');
+      var out = q(sideOf(tag), '[data-' + tag + '-out-' + k + ']');
+      var paint = function () {
+        var pct = ((Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min))) * 100;
+        input.style.setProperty('--p', pct.toFixed(2) + '%');
+      };
+      input.addEventListener('input', function () {
+        st[k === 'retire' ? 'retireAge' : k] = Number(input.value);
+        out.textContent = (k === 'retire') ? String(input.value) : money(Number(input.value));
+        paint();
+        renderAll();
+      });
+      paint();
+    });
+
+    var side = sideOf(tag);
+    Array.prototype.forEach.call(side.querySelectorAll('[data-' + tag + '-sky]'), function (b) {
+      b.addEventListener('click', function () {
+        st.sky = b.getAttribute('data-' + tag + '-sky');
+        Array.prototype.forEach.call(side.querySelectorAll('[data-' + tag + '-sky]'), function (o) {
+          o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+        });
+        renderAll();
+      });
+    });
+
+    var toggle = q(side, '[data-toggle="' + tag + '"]');
+    var panel = q(side, '[data-panel="' + tag + '"]');
+    toggle.addEventListener('click', function () {
+      var opening = panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', !opening);
+      toggle.classList.toggle('open', opening);
+      toggle.textContent = opening ? 'Close' : 'Adjust';
+    });
+  }
+
+  function sideOf(tag) { return tag === 'a' ? sideA : sideB; }
+
+  /* sync the visible controls from state (used by Copy A → B) */
+  function syncControls(tag, st) {
+    var side = sideOf(tag);
+    ['savings', 'spending', 'retire'].forEach(function (k) {
+      var input = q(side, '[data-' + tag + '-in="' + k + '"]');
+      var out = q(side, '[data-' + tag + '-out-' + k + ']');
+      var v = (k === 'retire') ? st.retireAge : st[k];
+      input.value = String(v);
+      out.textContent = (k === 'retire') ? String(v) : money(v);
+      var pct = ((Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min))) * 100;
+      input.style.setProperty('--p', pct.toFixed(2) + '%');
+    });
+    Array.prototype.forEach.call(side.querySelectorAll('[data-' + tag + '-sky]'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-' + tag + '-sky') === st.sky ? 'true' : 'false');
+    });
+  }
+
+  /* ============ winner pill ============ */
+  function renderPill() {
+    var ra = simulate(A), rb = simulate(B);
+    var la = ra.depletionAge == null ? 999 : ra.depletionAge;
+    var lb = rb.depletionAge == null ? 999 : rb.depletionAge;
+    var diff = lb - la;
+
+    pill.className = 'pill';
+    if (diff === 0) {
+      pill.classList.add('pill-even');
+      pill.textContent = 'Dead even — both last to ' + lastsLabel(ra) + '.';
+      return;
+    }
+    var win = diff > 0 ? 'B' : 'A';
+    var n = Math.abs(diff);
+    if (la === 999 || lb === 999) {
+      /* one holds to the cap, one does not — describe it plainly */
+      if (la === 999 && lb !== 999) {
+        pill.classList.add('pill-good');
+        pill.textContent = 'World A holds past 95; World B runs out at ' + lastsLabel(rb) + '.';
+      } else {
+        pill.classList.add('pill-good');
+        pill.textContent = 'World B holds past 95; World A runs out at ' + lastsLabel(ra) + '.';
+      }
+      return;
+    }
+    pill.classList.add('pill-good');
+    pill.textContent = 'World ' + win + ' lasts ' + n + ' ' + yearWord(n) + ' longer.';
+  }
+
+  function renderAll() {
+    renderWorld('sideA', A, 'a');
+    renderWorld('sideB', B, 'b');
+    renderPill();
+  }
+
+  /* ============ divider drag ============ */
+  function setSplit(pct) {
+    split = Math.round(Math.min(78, Math.max(22, pct)) * 10) / 10;
+    sideA.style.width = split + '%';
+    sideB.style.width = (100 - split) + '%';
+    divider.style.left = split + '%';
+  }
+
+  var dragging = false;
+  divider.addEventListener('pointerdown', function (e) {
+    dragging = true;
+    divider.setPointerCapture && divider.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  divider.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var r = stage.getBoundingClientRect();
+    setSplit(((e.clientX - r.left) / r.width) * 100);
+  });
+  divider.addEventListener('pointerup', function (e) {
+    dragging = false;
+    if (divider.releasePointerCapture) {
+      try { divider.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+  });
+  divider.addEventListener('pointercancel', function () { dragging = false; });
+  divider.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') { setSplit(split - 3); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { setSplit(split + 3); e.preventDefault(); }
+  });
+
+  /* clicking anywhere on the stage focuses that side */
+  stage.addEventListener('pointermove', function (e) {
+    if (dragging) return;
+    var r = stage.getBoundingClientRect();
+    var left = (e.clientX - r.left) / r.width * 100;
+    var onA = left < split;
+    sideA.classList.toggle('focusA', onA);
+    sideB.classList.toggle('focusB', !onA);
+  });
+  stage.addEventListener('pointerleave', function () {
+    sideA.classList.remove('focusA');
+    sideB.classList.remove('focusB');
+  });
+
+  /* ============ copy A → B ============ */
+  copyBtn.addEventListener('click', function () {
+    B = Object.assign({}, A);
+    syncControls('b', B);
+    renderAll();
+  });
+
+  wireWorld('a', A);
+  wireWorld('b', B);
+  setSplit(50);
+  renderAll();
+
+  /* keep the stage between the header and the footer, whatever they wrap to */
+  var chrome = el('chrome'), foot = el('foot');
+  function fit() {
+    stage.style.top = chrome.offsetHeight + 'px';
+    stage.style.bottom = foot.offsetHeight + 'px';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>06 — The River</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  .story { opacity: .28; transition: opacity .35s ease; }
+  .story.active { opacity: 1; }
+  .chip { transition: all .2s; }
+  .chip.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+  input[type=range].rsl { -webkit-appearance:none; appearance:none; height:6px; border-radius:3px; background:#cbd5e1; outline:none; width:100%; }
+  input[type=range].rsl::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:20px; height:20px; border-radius:50%; background:#fff; border:2.5px solid #1e293b; cursor:grab; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+  input[type=range].rsl::-moz-range-thumb { width:20px; height:20px; border-radius:50%; background:#fff; border:2.5px solid #1e293b; cursor:grab; }
+  #ripple { transition: opacity .6s; }
+</style>
+</head>
+<body class="bg-sky-50 text-slate-900">
+
+<!-- fixed header -->
+<header class="fixed top-0 inset-x-0 z-40 bg-sky-50/85 backdrop-blur border-b border-sky-100">
+  <div class="max-w-6xl mx-auto px-5 h-14 flex items-center gap-3">
+    <div class="flex items-center gap-2 font-semibold text-sm">
+      <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+      <span>tired</span>
+    </div>
+    <span class="text-xs text-slate-500 hidden sm:block">06 — follow your money downstream</span>
+    <div class="flex-1"></div>
+    <div class="flex items-center gap-2 text-xs">
+      <span class="text-slate-500 hidden md:block">If the markets are</span>
+      <button data-sky="storm"  class="chip px-3 py-1 rounded-full border border-slate-300 text-slate-600">stormy</button>
+      <button data-sky="normal" class="chip active px-3 py-1 rounded-full border border-slate-300 text-slate-600">ordinary</button>
+      <button data-sky="sun"    class="chip px-3 py-1 rounded-full border border-slate-300 text-slate-600">kind</button>
+    </div>
+  </div>
+</header>
+
+<!-- fixed river -->
+<div class="fixed inset-x-0 top-14 bottom-0 z-0 pointer-events-none">
+  <svg id="river" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
+    <defs>
+      <linearGradient id="water" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#60a5fa" stop-opacity=".85"/>
+        <stop offset="100%" stop-color="#3b82f6" stop-opacity=".9"/>
+      </linearGradient>
+      <linearGradient id="shallows" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#93c5fd" stop-opacity=".5"/>
+        <stop offset="100%" stop-color="#bfdbfe" stop-opacity=".15"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="1200" height="700" fill="#f0f9ff"/>
+    <path id="riverFill" fill="url(#water)" d=""/>
+    <path id="riverBed" fill="none" stroke="#d6b08c" stroke-width="10" stroke-linecap="round" opacity=".55" d=""/>
+    <path id="riverTop" fill="none" stroke="#1d4ed8" stroke-width="2.5" opacity=".8" d=""/>
+    <g id="ageTicks" font-size="12" fill="#64748b" class="num" font-weight="600"></g>
+    <g id="markers"></g>
+    <!-- dry ripple at depletion -->
+    <g id="ripple" opacity="0">
+      <ellipse id="rip1" cx="0" cy="0" rx="14" ry="6" fill="none" stroke="#b45309" stroke-width="2">
+        <animate attributeName="rx" values="10;34" dur="1.8s" repeatCount="indefinite"/>
+        <animate attributeName="ry" values="4;14" dur="1.8s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".8;0" dur="1.8s" repeatCount="indefinite"/>
+      </ellipse>
+    </g>
+  </svg>
+</div>
+
+<!-- scroll track -->
+<main class="relative z-10 max-w-6xl mx-auto px-5 pt-14">
+
+  <!-- intro -->
+  <section class="min-h-[88vh] flex items-center">
+    <div class="story max-w-md bg-white/80 backdrop-blur rounded-2xl p-7 shadow-sm border border-sky-100" data-at="55">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 mb-3">Follow the river</p>
+      <h1 class="text-3xl font-bold leading-tight mb-3">Your money has a current.</h1>
+      <p class="text-[15px] text-slate-600 leading-relaxed">
+        While you work, it flows in and the river widens. When you stop, it flows out
+        and the river narrows. Scroll to follow it — and see where it runs dry.
+      </p>
+      <p class="mt-4 text-sm text-blue-600 font-medium">Scroll ↓</p>
+    </div>
+  </section>
+
+  <!-- working years -->
+  <section class="min-h-[85vh] flex items-center justify-end">
+    <div class="story max-w-md bg-white/80 backdrop-blur rounded-2xl p-7 shadow-sm border border-sky-100" data-at="58">
+      <h2 class="text-xl font-bold mb-2">Right now, the river is filling.</h2>
+      <p class="text-[15px] text-slate-600 leading-relaxed">
+        You're <strong>55</strong> with <strong>$850,000</strong> saved. Every year you're still
+        working adds <strong>$25,000</strong> — and growth adds a little current of its own.
+      </p>
+      <div class="mt-4 pt-4 border-t border-slate-200">
+        <label class="text-xs font-medium text-slate-500 flex justify-between">Add each year <span id="vContrib" class="num font-bold text-slate-800">$25,000</span></label>
+        <input id="sContrib" type="range" class="rsl mt-2" min="0" max="80000" step="1000" value="25000">
+      </div>
+    </div>
+  </section>
+
+  <!-- retirement -->
+  <section class="min-h-[85vh] flex items-center">
+    <div class="story max-w-md bg-white/80 backdrop-blur rounded-2xl p-7 shadow-sm border border-amber-200" data-at="62">
+      <h2 class="text-xl font-bold mb-2">At <span id="vRetireInline">62</span>, the current turns.</h2>
+      <p class="text-[15px] text-slate-600 leading-relaxed">
+        The paycheques stop; the spending starts. The river is at its widest —
+        <strong id="peakHere">$1.18M</strong> — and from here it only narrows. Later is wider.
+      </p>
+      <div class="mt-4 pt-4 border-t border-slate-200">
+        <label class="text-xs font-medium text-slate-500 flex justify-between">I stop working at <span id="vRetire" class="num font-bold text-slate-800">62</span></label>
+        <input id="sRetire" type="range" class="rsl mt-2" min="55" max="75" value="62">
+      </div>
+    </div>
+  </section>
+
+  <!-- benefits tributary -->
+  <section class="min-h-[85vh] flex items-center justify-end">
+    <div class="story max-w-md bg-white/80 backdrop-blur rounded-2xl p-7 shadow-sm border border-emerald-200" data-at="65">
+      <h2 class="text-xl font-bold mb-2">At 65, a tributary joins.</h2>
+      <p class="text-[15px] text-slate-600 leading-relaxed">
+        CPP and OAS add <strong>$22,000</strong> a year for life. It doesn't refill the river —
+        but it slows how fast it drains.
+      </p>
+    </div>
+  </section>
+
+  <!-- spending -->
+  <section class="min-h-[85vh] flex items-center">
+    <div class="story max-w-md bg-white/80 backdrop-blur rounded-2xl p-7 shadow-sm border border-sky-100" data-at="74">
+      <h2 class="text-xl font-bold mb-2">Spending sets the drain.</h2>
+      <p class="text-[15px] text-slate-600 leading-relaxed">
+        At <strong id="spendInline">$85,000</strong> a year, the river loses more than growth and
+        benefits put back. Watch the far bank when you move this.
+      </p>
+      <div class="mt-4 pt-4 border-t border-slate-200">
+        <label class="text-xs font-medium text-slate-500 flex justify-between">I spend each year <span id="vSpend" class="num font-bold text-slate-800">$85,000</span></label>
+        <input id="sSpend" type="range" class="rsl mt-2" min="40000" max="160000" step="1000" value="85000">
+      </div>
+    </div>
+  </section>
+
+  <!-- the ending -->
+  <section class="min-h-[95vh] flex items-center justify-center">
+    <div class="story max-w-lg bg-white/85 backdrop-blur rounded-2xl p-8 shadow-md border border-sky-100 text-center" data-at="92">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 mb-3">Where your river ends</p>
+      <p id="ending" class="text-2xl md:text-3xl font-bold leading-snug"></p>
+      <p id="endingSub" class="mt-3 text-[15px] text-slate-600 leading-relaxed"></p>
+      <p id="endingTip" class="mt-3 text-sm text-blue-700 font-medium"></p>
+      <div class="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
+        <a href="#" class="text-blue-600 hover:underline">Walk every year, numbers and all →</a>
+        <a href="#" class="text-blue-600 hover:underline">Save this river →</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+
+  const X0 = 40, X1 = 1160, A0 = 50, A1 = 100, SURF = 330;
+  const xFor = age => X0 + (age - A0) / (A1 - A0) * (X1 - X0);
+  const MAXBAL = 2200000;
+  const halfW = bal => 6 + Math.sqrt(Math.max(0, bal) / MAXBAL) * 130;
+
+  function buildPath(rows) {
+    if (!rows.length) return { fill: '', top: '', bed: '' };
+    let top = `M ${xFor(A0)} ${SURF}`;
+    let bot = '';
+    const pts = [];
+    rows.forEach(r => {
+      const x = xFor(r.age), w = halfW(r.bal);
+      top += ` L ${x} ${SURF - w}`;
+      bot = ` L ${x} ${SURF + w}` + bot;
+      pts.push([x, SURF - w, r]);
+    });
+    const lastX = xFor(rows[rows.length - 1].age);
+    const fill = top + ` L ${lastX} ${SURF}` + bot + ' Z';
+    const bed = `M ${xFor(A0)} ${SURF} ` + rows.map(r => `L ${xFor(r.age)} ${SURF + halfW(r.bal)}`).join(' ');
+    return { fill, top, bed, pts, lastX };
+  }
+
+  function render() {
+    const res = simulate(state);
+    const { fill, top, bed } = buildPath(res.rows);
+
+    $('riverFill').setAttribute('d', fill);
+    $('riverTop').setAttribute('d', top);
+    $('riverBed').setAttribute('d', bed);
+
+    // age ticks along the surface
+    let ticks = '';
+    for (let a = 55; a <= 95; a += 5) {
+      ticks += `<text x="${xFor(a)}" y="${SURF + 168}" text-anchor="middle">${a}</text>`;
+    }
+    $('ageTicks').innerHTML = ticks;
+
+    // markers: retirement flag + tributary
+    let mk = '';
+    const rx = xFor(state.retireAge), peak = res.rows.find(r => r.age === state.retireAge - 1) ?? res.rows[0];
+    const ry = SURF - halfW(peak ? peak.bal : 0);
+    mk += `<line x1="${rx}" y1="${ry}" x2="${rx}" y2="${ry - 46}" stroke="#b45309" stroke-width="2.5"/>
+           <rect x="${rx - 52}" y="${ry - 74}" width="104" height="26" rx="13" fill="#fef3c7" stroke="#f59e0b"/>
+           <text x="${rx}" y="${ry - 56}" text-anchor="middle" font-size="12" font-weight="700" fill="#92400e">work ends · ${state.retireAge}</text>`;
+    const bx = xFor(state.benefitAge), brow = res.rows.find(r => r.age === state.benefitAge);
+    if (brow) {
+      const by = SURF - halfW(brow.bal);
+      mk += `<path d="M ${bx - 34} ${by - 58} Q ${bx - 10} ${by - 40} ${bx} ${by - 6}" fill="none" stroke="#059669" stroke-width="7" stroke-linecap="round" opacity=".8"/>
+             <text x="${bx + 8}" y="${by - 40}" font-size="12" font-weight="600" fill="#047857">CPP + OAS join</text>`;
+    }
+    $('markers').innerHTML = mk;
+
+    // dry ripple where the river ends (if it ends early)
+    if (res.depletionAge != null) {
+      const dx = xFor(res.depletionAge);
+      $('rip1').setAttribute('cx', dx); $('rip1').setAttribute('cy', SURF);
+      $('ripple').style.opacity = 1;
+    } else {
+      $('ripple').style.opacity = 0;
+    }
+
+    // story numbers
+    const peakBal = Math.max(...res.rows.map(r => r.bal));
+    $('peakHere').textContent = fmtMoney(peakBal);
+    $('vContrib').textContent = fmtMoney(state.contrib);
+    $('vRetire').textContent = state.retireAge;
+    $('vRetireInline').textContent = state.retireAge;
+    $('vSpend').textContent = fmtMoney(state.spending);
+    $('spendInline').textContent = fmtMoney(state.spending);
+
+    // the ending
+    const e = $('ending'), es = $('endingSub'), et = $('endingTip');
+    if (res.ok) {
+      const left = res.leftAtMax;
+      e.innerHTML = left > 25000
+        ? `It never runs dry — there's <span class="text-emerald-600">${fmtMoney(left)}</span> still flowing at ${state.maxAge}.`
+        : `It carries you past <span class="text-emerald-600">${state.maxAge}</span> — the age you're planning for.`;
+      es.textContent = 'Flip the markets to "stormy" above to see if that still holds.';
+      et.textContent = '';
+    } else {
+      e.innerHTML = `It runs dry when you're <span class="text-amber-700">${res.depletionAge}</span>.`;
+      es.textContent = `That's ${state.maxAge - res.depletionAge} years before the ${state.maxAge} you're planning for.`;
+      et.textContent = suggest(state) ?? '';
+    }
+  }
+
+  // scroll choreography: each story lights up when its age band is centered
+  const stories = [...document.querySelectorAll('.story')];
+  function onScroll() {
+    const mid = window.scrollY + window.innerHeight * 0.5;
+    let active = stories[0];
+    stories.forEach(s => {
+      const sec = s.closest('section');
+      const top = sec.offsetTop, bot = top + sec.offsetHeight;
+      if (mid >= top - 100) active = s;
+      s.classList.toggle('active', false);
+    });
+    active.classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  $('sContrib').addEventListener('input', e => { state.contrib = +e.target.value; render(); });
+  $('sRetire').addEventListener('input', e => { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', e => { state.spending = +e.target.value; render(); });
+  document.querySelectorAll('[data-sky]').forEach(b => b.addEventListener('click', () => {
+    state.sky = b.dataset.sky;
+    document.querySelectorAll('[data-sky]').forEach(x => x.classList.toggle('active', x === b));
+    render();
+  }));
+
+  render(); onScroll();
+</script>
+</body>
+</html>

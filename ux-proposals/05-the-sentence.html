@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>05 — The Sentence</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; }
+  .ui { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  @keyframes fadeUp { from { opacity:0; transform: translateY(12px);} to { opacity:1; transform:none;} }
+  .fu { animation: fadeUp .7s cubic-bezier(.2,.7,.3,1) both; }
+  .fu-2 { animation-delay:.15s } .fu-3 { animation-delay:.3s }
+
+  /* an editable value inside the sentence */
+  .field {
+    display: inline-block; position: relative;
+    border-bottom: 2.5px solid #93c5fd; color: #1d4ed8;
+    cursor: text; padding: 0 2px; border-radius: 3px 3px 0 0;
+    transition: background .15s, border-color .15s;
+    font-weight: 700; white-space: nowrap;
+  }
+  .field:hover { background: #eff6ff; }
+  .field:focus { outline: none; background: #dbeafe; border-bottom-color: #2563eb; }
+  .field::after {
+    content: attr(data-hint); position: absolute; left: 50%; top: 100%;
+    transform: translateX(-50%); margin-top: 4px;
+    font-family: system-ui, sans-serif; font-size: 10px; font-weight: 500;
+    color: #94a3b8; white-space: nowrap; opacity: 0; transition: opacity .15s;
+    pointer-events: none;
+  }
+  .field:hover::after, .field:focus::after { opacity: 1; }
+
+  #verdict { transition: color .4s; }
+  .flash { animation: flash .8s ease-out; }
+  @keyframes flash { 0% { background: #fef3c7; } 100% { background: transparent; } }
+
+  input[type=range].mini { -webkit-appearance:none; appearance:none; height:5px; border-radius:3px; background:#e2e8f0; outline:none; width:130px; }
+  input[type=range].mini::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%; background:#2563eb; cursor:grab; }
+  input[type=range].mini::-moz-range-thumb { width:16px; height:16px; border-radius:50%; background:#2563eb; border:none; cursor:grab; }
+</style>
+</head>
+<body class="bg-[#fafaf7] text-slate-800 min-h-screen">
+
+<header class="ui flex items-center justify-between px-5 py-3">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-slate-500">05 — your plan, as one sentence</span>
+</header>
+
+<main class="max-w-3xl mx-auto px-6 pt-10 md:pt-16 pb-16">
+
+  <p class="fu ui text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-600 mb-6">Your plan</p>
+
+  <!-- ═══ THE SENTENCE ═══
+       Every underlined span is a number you can click and type over.
+       No sidebar, no form: the sentence IS the input form. -->
+  <p class="fu fu-2 text-[26px] md:text-[34px] leading-[1.55] text-slate-800">
+    I'm <span class="field num" id="fCurrent" data-hint="your age today" contenteditable spellcheck="false">55</span>.
+    I've saved <span class="field num" id="fSavings" data-hint="everything invested, all accounts" contenteditable spellcheck="false">$850,000</span>,
+    and I'm adding <span class="field num" id="fContrib" data-hint="per year, until you stop working" contenteditable spellcheck="false">$25,000</span> a year.
+    I want to stop working at <span class="field num" id="fRetire" data-hint="the age you retire" contenteditable spellcheck="false">62</span>
+    and spend <span class="field num" id="fSpend" data-hint="per year, after that" contenteditable spellcheck="false">$85,000</span> a year.
+    Government benefits will add about <span class="field num" id="fBenefits" data-hint="CPP + OAS, per year" contenteditable spellcheck="false">$22,000</span> from age <span class="field num" id="fBenAge" data-hint="when CPP + OAS begin" contenteditable spellcheck="false">65</span>.
+    I'm planning to <span class="field num" id="fMax" data-hint="the age your plan must reach" contenteditable spellcheck="false">95</span>.
+  </p>
+
+  <!-- ═══ THE LAST LINE ═══ -->
+  <p class="fu fu-3 mt-10 text-[22px] md:text-[28px] leading-[1.5]">
+    <span id="verdict" class="font-bold num px-1 rounded"></span>
+  </p>
+  <p id="advice" class="ui mt-3 text-sm text-slate-500 leading-relaxed max-w-xl"></p>
+
+  <!-- ═══ ONE QUIET CHOICE ═══ -->
+  <div class="fu fu-3 ui mt-12 pt-6 border-t border-slate-200 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-slate-600">
+    <div class="flex items-center gap-3">
+      <span>Assuming markets are</span>
+      <select id="sky" class="px-2 py-1 border border-slate-300 rounded-md bg-white text-slate-700">
+        <option value="storm">stormy</option>
+        <option value="normal" selected>ordinary</option>
+        <option value="sun">kind</option>
+      </select>
+    </div>
+    <span class="text-slate-400 text-xs">Click any underlined number to change it — the last line keeps up.</span>
+  </div>
+
+  <!-- ═══ WHERE THE REST OF THE APP LIVES ═══ -->
+  <div class="fu fu-3 ui mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+    <a href="#" class="text-blue-600 hover:underline">Why that age? See every year →</a>
+    <a href="#" class="text-blue-600 hover:underline">What if markets turn? →</a>
+    <a href="#" class="text-blue-600 hover:underline">Compare another version of me →</a>
+  </div>
+
+  <p class="ui mt-14 text-[11px] text-slate-400 leading-relaxed max-w-xl">
+    05 · The sidebar as literature. Everything the wizard asks, said out loud in first person —
+    click a number, type, and the story's ending rewrites itself. The table, the chart and the stress
+    tests become footnotes you open from the last line.
+  </p>
+</main>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+
+  /* Each editable span ↔ a state key, with parse + format. */
+  const FIELDS = [
+    { id: 'fCurrent',  key: 'currentAge', parse: v => clampInt(v, 30, 75),   fmt: v => String(v) },
+    { id: 'fSavings',  key: 'savings',    parse: v => clampMoney(v, 0, 20e6),fmt: fmtMoney },
+    { id: 'fContrib',  key: 'contrib',    parse: v => clampMoney(v, 0, 5e5), fmt: fmtMoney },
+    { id: 'fRetire',   key: 'retireAge',  parse: v => clampInt(v, 40, 80),   fmt: v => String(v) },
+    { id: 'fSpend',    key: 'spending',   parse: v => clampMoney(v, 10000, 1e6), fmt: fmtMoney },
+    { id: 'fBenefits', key: 'benefits',   parse: v => clampMoney(v, 0, 1e5), fmt: fmtMoney },
+    { id: 'fBenAge',   key: 'benefitAge', parse: v => clampInt(v, 60, 70),   fmt: v => String(v) },
+    { id: 'fMax',      key: 'maxAge',     parse: v => clampInt(v, 75, 105),  fmt: v => String(v) },
+  ];
+  function clampInt(v, lo, hi) { const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10); return isNaN(n) ? null : Math.min(hi, Math.max(lo, n)); }
+  function clampMoney(v, lo, hi) {
+    let s = String(v).replace(/[$,\s]/g, '').toLowerCase();
+    let mult = 1;
+    if (s.endsWith('k')) { mult = 1e3; s = s.slice(0, -1); }
+    if (s.endsWith('m')) { mult = 1e6; s = s.slice(0, -1); }
+    const n = parseFloat(s) * mult;
+    return isNaN(n) ? null : Math.min(hi, Math.max(lo, Math.round(n)));
+  }
+
+  function render(flashVerdict) {
+    const res = simulate(state);
+    const v = $('verdict'), adv = $('advice');
+    if (res.ok) {
+      const left = res.leftAtMax;
+      v.innerHTML = left > 25000
+        ? `The money lasts until I'm <span class="text-emerald-700">${lastsLabel(res)}</span> — with ${fmtMoney(left)} to spare.`
+        : `The money lasts until I'm <span class="text-emerald-700">${lastsLabel(res)}</span> — past the ${state.maxAge} I'm planning for.`;
+      adv.textContent = '';
+    } else {
+      const gap = state.maxAge - res.depletionAge;
+      v.innerHTML = `The money runs out when I'm <span class="text-rose-700">${res.depletionAge}</span> — ${gap} year${gap === 1 ? '' : 's'} too soon.`;
+      adv.textContent = suggest(state) ?? 'The charts below show where the gap opens.';
+    }
+    if (flashVerdict) { v.classList.remove('flash'); void v.offsetWidth; v.classList.add('flash'); }
+  }
+
+  /* Wire the fields: type → parse → state → re-render; blur re-formats. */
+  FIELDS.forEach(({ id, key, parse, fmt }) => {
+    const el = $(id);
+    const commit = (reformat) => {
+      const n = parse(el.textContent);
+      if (n == null) { el.textContent = fmt(state[key]); return; }  // unparseable: revert
+      state[key] = n;
+      // keep ages sensible relative to each other
+      if (state.retireAge < state.currentAge) state.retireAge = state.currentAge;
+      if (reformat) el.textContent = fmt(state[key]);
+      render(true);
+    };
+    el.addEventListener('input', () => commit(false));
+    el.addEventListener('blur', () => commit(true));
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+  });
+
+  $('sky').addEventListener('change', e => { state.sky = e.target.value; render(true); });
+
+  render(false);
+</script>
+</body>
+</html>

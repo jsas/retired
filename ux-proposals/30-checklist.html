@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30 — The Checklist</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 8px; border-radius: 999px;
+    background: #e7e5e4; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; border: 4px solid #2563eb; cursor: grab;
+    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  }
+  input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; border-color: #1d4ed8; }
+  input[type=range]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 4px solid #2563eb; cursor: grab;
+    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  }
+  input[type=range]:focus-visible { outline: 2px solid #2563eb; outline-offset: 4px; }
+
+  /* the rubber stamp */
+  .stamp {
+    border: 4px double currentColor; border-radius: 10px;
+    letter-spacing: .16em; transform: rotate(-3.5deg);
+    padding: .35rem .9rem; font-weight: 800; line-height: 1.15;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.6);
+  }
+
+  .row { transition: background .15s; }
+  .rowbtn:hover { background: #fafaf9; }
+
+  .panel { overflow: hidden; }
+  .panel.closed { display: none; }
+
+  .paper {
+    background-image: repeating-linear-gradient(180deg, transparent 0 31px, #e7e5e4 31px 32px);
+  }
+</style>
+</head>
+<body class="bg-[#f7f6f3] text-stone-800 min-h-screen flex flex-col">
+
+<header class="flex items-center justify-between px-5 py-3">
+  <div class="flex items-center gap-2">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[9px] font-bold text-white leading-none">RE:</div>
+    <span class="font-semibold text-sm tracking-tight">tired</span>
+  </div>
+  <span class="text-xs text-stone-500">30 — The Checklist</span>
+</header>
+
+<main class="flex-1 w-full max-w-3xl mx-auto px-4 pt-6 pb-10">
+
+  <!-- ═══ HEADER + STAMP ═══ -->
+  <div class="flex items-start justify-between gap-6">
+    <div>
+      <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-700">Preflight</p>
+      <h1 class="mt-1 text-2xl md:text-3xl font-bold tracking-tight text-stone-900">Before you stop working</h1>
+      <p id="stampSub" class="mt-2 text-sm text-stone-600"></p>
+    </div>
+    <div id="stamp" class="stamp shrink-0 mt-2 text-rose-700 text-xl md:text-2xl">NOT CLEARED</div>
+  </div>
+
+  <!-- ═══ THE PAPER CARD ═══ -->
+  <div class="mt-6 rounded-2xl bg-white border border-stone-300 shadow-[0_2px_10px_rgba(28,25,23,.06)]">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-dashed border-stone-300">
+      <span class="text-[12px] font-semibold uppercase tracking-[0.18em] text-stone-500">Checklist · 5 items</span>
+      <span id="scoreLine" class="num text-[12px] font-semibold text-stone-500"></span>
+    </div>
+
+    <div id="rows"></div>
+
+    <div class="px-5 py-3 border-t border-dashed border-stone-300 text-[11.5px] text-stone-500">
+      Every line is checked against your numbers, live. Amber means it needs attention — the fix is right there under it.
+    </div>
+  </div>
+
+  <!-- ═══ THE ASSUMPTIONS ═══ -->
+  <div class="mt-6 rounded-2xl bg-white border border-stone-200 p-5">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500 mb-4">The numbers being checked</p>
+    <div class="grid gap-5 md:grid-cols-3">
+      <div>
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] font-medium text-stone-600">Savings today</span>
+          <span id="vSavings" class="num text-[14px] font-bold text-stone-900">$850,000</span>
+        </div>
+        <input id="sSavings" type="range" min="100000" max="2500000" step="10000" value="850000" aria-label="Savings today">
+      </div>
+      <div>
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] font-medium text-stone-600">Adding a year</span>
+          <span id="vContrib" class="num text-[14px] font-bold text-stone-900">$25,000</span>
+        </div>
+        <input id="sContrib" type="range" min="0" max="60000" step="1000" value="25000" aria-label="Adding per year">
+      </div>
+      <div>
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] font-medium text-stone-600">Planning to age</span>
+          <span id="vMax" class="num text-[14px] font-bold text-stone-900">95</span>
+        </div>
+        <input id="sMax" type="range" min="80" max="105" step="1" value="95" aria-label="Planning to age">
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="px-5 py-4 text-xs text-stone-500 border-t border-stone-200">
+  30 · The Checklist — a preflight card that grades itself against your own numbers.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  /* manual open/closed overrides: null = let the status decide */
+  const open = { outlast: null, storm: null, pace: null, contrib: null, benefits: null };
+
+  /* ---------- each row: check(state) -> {pass, value, note} ; fix -> slider ---------- */
+  const ROWS = [
+    {
+      id: 'outlast', label: 'Money outlasts age', valueKey: 'maxAge',
+      check: s => {
+        const res = simulate(s);
+        return {
+          pass: res.ok,
+          value: lastsLabel(res),
+          note: res.ok
+            ? `Your money is still there at ${s.maxAge}, with ${fmtMoney(res.leftAtMax)} left over.`
+            : `It runs out at ${res.depletionAge} — ${s.maxAge - res.depletionAge} year${s.maxAge - res.depletionAge === 1 ? '' : 's'} before ${s.maxAge}.`,
+        };
+      },
+      fix: {
+        title: 'One way to close the gap',
+        sliders: [{ key: 'retireAge', min: 58, max: 75, step: 1, label: 'Work ends at', fmt: v => 'age ' + v }],
+      },
+    },
+    {
+      id: 'storm', label: 'Stormy markets survivable', valueKey: null,
+      check: s => {
+        const bad = simulate({ ...s, sky: 'storm' });
+        const good = simulate({ ...s, sky: 'sun' });
+        return {
+          pass: bad.ok,
+          value: bad.ok ? 'holds' : 'dry at ' + bad.depletionAge,
+          note: `Stormy here means about ${(SKY_RETURN.storm * 100).toFixed(1)}% growth a year instead of ${(SKY_RETURN.normal * 100).toFixed(1)}%. ` +
+                (bad.ok ? `Even then you still have ${fmtMoney(bad.leftAtMax)} at ${s.maxAge}.`
+                        : `In a kind market you'd reach ${s.maxAge} with ${fmtMoney(good.leftAtMax)} — the difference is your cushion.`),
+        };
+      },
+      fix: {
+        title: 'A cushion big enough for a bad decade',
+        sliders: [
+          { key: 'spending', min: 30000, max: 150000, step: 2500, label: 'Spending a year', fmt: fmtMoney },
+          { key: 'retireAge', min: 58, max: 75, step: 1, label: 'Work ends at', fmt: v => 'age ' + v },
+        ],
+      },
+    },
+    {
+      id: 'pace', label: 'Withdrawal pace under 4%', valueKey: null,
+      check: s => {
+        const res = simulate(s);
+        const row = res.rows.find(r => r.age === s.retireAge);
+        const pot = row ? row.bal : 0;
+        const pct = pot > 0 ? (s.spending / pot) * 100 : 999;
+        return {
+          pass: pct < 4,
+          value: pct > 900 ? '—' : pct.toFixed(1) + '%',
+          note: pot > 0
+            ? `In your first year out you'd take ${fmtMoney(s.spending)} from a pot of about ${fmtMoney(pot)} — that's ${pct.toFixed(1)}% of it.`
+            : 'There is no pot left at retirement to take from.',
+        };
+      },
+      fix: {
+        title: 'Keep the first year under 4% of the pot',
+        sliders: [
+          { key: 'spending', min: 30000, max: 150000, step: 2500, label: 'Spending a year', fmt: fmtMoney },
+          { key: 'savings', min: 100000, max: 2500000, step: 10000, label: 'Savings today', fmt: fmtMoney },
+        ],
+      },
+    },
+    {
+      id: 'contrib', label: 'Contributions still flowing until retirement', valueKey: null,
+      check: s => ({
+        pass: s.contrib > 0,
+        value: s.contrib > 0 ? fmtMoney(s.contrib) + '/yr' : 'stopped',
+        note: s.contrib > 0
+          ? `You add ${fmtMoney(s.contrib)} a year until ${s.retireAge === s.currentAge ? 'now' : 'age ' + s.retireAge}. That's the cheapest money in the whole plan.`
+          : 'Nothing is being added, so growth alone has to do all the work.',
+      }),
+      fix: {
+        title: 'Put something in every year you still work',
+        sliders: [{ key: 'contrib', min: 0, max: 60000, step: 1000, label: 'Adding a year', fmt: fmtMoney }],
+      },
+    },
+    {
+      id: 'benefits', label: 'Government benefits counted', valueKey: null,
+      check: s => ({
+        pass: s.benefits > 0,
+        value: s.benefits > 0 ? fmtMoney(s.benefits) + '/yr' : 'none',
+        note: s.benefits > 0
+          ? `${fmtMoney(s.benefits)} a year from CPP + OAS starting at ${s.benefitAge} — that covers about ${Math.round((s.benefits / s.spending) * 100)}% of your spending.`
+          : 'CPP and OAS are worth claiming. Leave them out and the plan looks worse than it is.',
+      }),
+      fix: {
+        title: 'Count what the government will actually pay',
+        sliders: [
+          { key: 'benefits', min: 0, max: 45000, step: 500, label: 'Benefits a year', fmt: fmtMoney },
+          { key: 'benefitAge', min: 60, max: 70, step: 1, label: 'Starting at', fmt: v => 'age ' + v },
+        ],
+      },
+    },
+  ];
+
+  /* ---------- build the DOM once ---------- */
+  const rowsEl = $('rows');
+  ROWS.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'row border-b border-dashed border-stone-200 last:border-0';
+    row.innerHTML =
+      '<button class="rowbtn w-full text-left px-5 py-3.5 flex items-start gap-3.5" aria-expanded="false">' +
+        '<span class="mt-0.5 num text-[11px] font-bold text-stone-400 w-4 shrink-0">' + (i + 1) + '</span>' +
+        '<span data-chip class="shrink-0 mt-0.5"></span>' +
+        '<span class="flex-1 min-w-0">' +
+          '<span class="block text-[15px] font-semibold text-stone-800" data-label></span>' +
+          '<span class="block text-[12px] text-stone-500 mt-0.5" data-brief></span>' +
+        '</span>' +
+        '<span data-val class="num shrink-0 text-[13px] font-bold text-stone-700"></span>' +
+        '<span data-caret class="shrink-0 text-stone-400 text-xs mt-1">▾</span>' +
+      '</button>' +
+      '<div class="panel closed"><div class="px-5 pb-5 pl-[3.4rem]" data-panel></div></div>';
+    rowsEl.appendChild(row);
+    r.el = row;
+    r.chip = row.querySelector('[data-chip]');
+    r.brief = row.querySelector('[data-brief]');
+    r.val = row.querySelector('[data-val]');
+    r.panel = row.querySelector('.panel');
+    r.panelBody = row.querySelector('[data-panel]');
+    r.btn = row.querySelector('button');
+    r.btn.addEventListener('click', () => {
+      open[r.id] = r.panel.classList.contains('closed');
+      paint();
+    });
+  });
+
+  /* ---------- chip + panel bodies ---------- */
+  function chipHTML(pass, word) {
+    const c = pass
+      ? 'bg-green-100 text-green-800 border-green-300'
+      : 'bg-amber-100 text-amber-900 border-amber-400';
+    return '<span class="inline-block rounded-md border px-2 py-0.5 text-[11px] font-extrabold tracking-wide ' + c + '">' + word + '</span>';
+  }
+
+  function buildPanel(r, out) {
+    /* only rebuild the DOM when the pass state flips — rebuilding mid-drag
+       would destroy the slider the user is holding */
+    const key = out.pass ? 'pass' : 'fail';
+    if (r.builtFor !== key) {
+      r.builtFor = key;
+      let html = '<p class="text-[13px] leading-relaxed text-stone-600 mb-3" data-note>' + out.note + '</p>';
+      if (!out.pass && r.fix) {
+        html += '<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700 mb-3">' + r.fix.title + '</p>';
+        html += '<div class="grid gap-4' + (r.fix.sliders.length > 1 ? ' md:grid-cols-2' : '') + '">';
+        r.fix.sliders.forEach(sl => {
+          html += '<div>' +
+            '<div class="flex items-baseline justify-between mb-1.5">' +
+              '<span class="text-[12.5px] font-medium text-stone-600">' + sl.label + '</span>' +
+              '<span class="num text-[13px] font-bold text-blue-700" data-out="' + sl.key + '">' + sl.fmt(state[sl.key]) + '</span>' +
+            '</div>' +
+            '<input type="range" data-fix="' + sl.key + '" min="' + sl.min + '" max="' + sl.max + '" step="' + sl.step + '"' +
+                   ' value="' + state[sl.key] + '" aria-label="' + sl.label + '">' +
+          '</div>';
+        });
+        html += '</div>';
+      }
+      r.panelBody.innerHTML = html;
+      r.panelBody.querySelectorAll('input[data-fix]').forEach(inp => {
+        inp.addEventListener('input', () => {
+          const k = inp.dataset.fix;
+          state[k] = parseInt(inp.value, 10);
+          syncTop();
+          paint();
+        });
+      });
+      return;
+    }
+    /* same structure as before: just refresh the note and the live values */
+    const note = r.panelBody.querySelector('[data-note]');
+    if (note) note.textContent = out.note;
+    if (!out.pass) {
+      r.panelBody.querySelectorAll('input[data-fix]').forEach(inp => {
+        inp.value = state[inp.dataset.fix];
+        const o = r.panelBody.querySelector('[data-out="' + inp.dataset.fix + '"]');
+        const sl = r.fix.sliders.find(s => s.key === inp.dataset.fix);
+        if (o && sl) o.textContent = sl.fmt(state[inp.dataset.fix]);
+      });
+    }
+  }
+
+  /* ---------- keep the top slider row in step with the fix sliders ---------- */
+  function syncTop() {
+    $('sSavings').value = state.savings;  $('vSavings').textContent = fmtMoney(state.savings);
+    $('sContrib').value = state.contrib;  $('vContrib').textContent = fmtMoney(state.contrib);
+    $('sMax').value = state.maxAge;       $('vMax').textContent = String(state.maxAge);
+  }
+
+  /* ---------- the paint ---------- */
+  function paint() {
+    let passCount = 0;
+
+    ROWS.forEach(r => {
+      const out = r.check(state);
+      if (out.pass) passCount++;
+      const word = out.pass ? 'PASS' : 'CHECK';
+
+      r.chip.innerHTML = chipHTML(out.pass, word);
+      r.val.textContent = out.value;
+      r.val.className = 'num shrink-0 text-[13px] font-bold ' + (out.pass ? 'text-green-700' : 'text-amber-800');
+
+      const rowLabel = r.el.querySelector('[data-label]');
+      rowLabel.textContent = r.id === 'outlast' ? ('Money outlasts age ' + state.maxAge) : r.label;
+
+      r.brief.textContent = out.pass
+        ? 'Nothing to do here.'
+        : 'Needs attention — the fix is below.';
+
+      const shouldOpen = open[r.id] == null ? !out.pass : open[r.id];
+      r.panel.classList.toggle('closed', !shouldOpen);
+      r.btn.setAttribute('aria-expanded', String(shouldOpen));
+      r.el.querySelector('[data-caret]').textContent = shouldOpen ? '▴' : '▾';
+
+      buildPanel(r, out);
+    });
+
+    const cleared = passCount === ROWS.length;
+    const stamp = $('stamp');
+    stamp.textContent = cleared ? 'CLEARED' : 'NOT CLEARED';
+    stamp.className = 'stamp shrink-0 mt-2 text-xl md:text-2xl ' + (cleared ? 'text-green-700' : 'text-rose-700');
+    const n = ROWS.length - passCount;
+    $('stampSub').textContent = cleared
+      ? 'All five items check out. You are good to stop working.'
+      : n + ' item' + (n === 1 ? '' : 's') + ' need' + (n === 1 ? 's' : '') + ' attention before you go.';
+    $('scoreLine').textContent = passCount + ' of ' + ROWS.length + ' pass';
+  }
+
+  /* ---------- top sliders ---------- */
+  [['sSavings', 'savings'], ['sContrib', 'contrib'], ['sMax', 'maxAge']].forEach(([id, key]) => {
+    $(id).addEventListener('input', e => {
+      state[key] = parseInt(e.target.value, 10);
+      syncTop();
+      paint();
+    });
+  });
+
+  syncTop();
+  paint();
+</script>
+</body>
+</html>

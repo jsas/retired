@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>10 — Split Answer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range].sl { -webkit-appearance:none; appearance:none; height:3px; background:#e5e5e5; border-radius:2px; outline:none; }
+  input[type=range].sl::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; margin-top:-5.5px;
+    background:#525252; border:3px solid #fff; box-shadow:0 0 0 1px #d4d4d4, 0 1px 3px rgba(0,0,0,.12);
+  }
+  input[type=range].sl::-moz-range-thumb {
+    width:14px; height:14px; border-radius:50%; background:#525252; border:3px solid #fff;
+    box-shadow:0 0 0 1px #d4d4d4, 0 1px 3px rgba(0,0,0,.12);
+  }
+  input[type=range].sl:hover::-webkit-slider-thumb,
+  input[type=range].sl:active::-webkit-slider-thumb { background:#5e6ad2; box-shadow:0 0 0 1px #5e6ad2, 0 1px 3px rgba(0,0,0,.12); }
+  input[type=range].sl:hover::-moz-range-thumb,
+  input[type=range].sl:active::-moz-range-thumb { background:#5e6ad2; box-shadow:0 0 0 1px #5e6ad2, 0 1px 3px rgba(0,0,0,.12); }
+  .row { transition: background .15s; }
+  .row:hover { background:#fafafa; }
+  .seg { transition: all .15s; }
+  .seg.on { background:#fff; color:#18181b; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  #verdict { letter-spacing:-.03em; }
+</style>
+</head>
+<body class="bg-[#fafafa] text-zinc-800 antialiased">
+
+<header class="flex items-center justify-between px-6 lg:px-10 py-3.5 bg-white border-b border-zinc-200/80">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[9px] font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-zinc-400">10 · Split Answer</span>
+</header>
+
+<div class="lg:grid lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_460px]">
+
+  <!-- ══════════ LEFT · CONTROLS ══════════ -->
+  <div class="order-2 lg:order-1 px-6 lg:px-10 py-8 lg:border-r border-zinc-200/80">
+    <p class="text-[11px] uppercase tracking-[0.14em] text-zinc-400 mb-1">what you can change</p>
+    <h1 class="text-[15px] font-semibold text-zinc-900">Four things decide the answer</h1>
+
+    <div id="rows" class="mt-6 divide-y divide-zinc-200/70 border-y border-zinc-200/70"></div>
+
+    <!-- planning horizon + markets -->
+    <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-8">
+      <div>
+        <div class="flex items-baseline justify-between mb-2">
+          <label for="dMax" class="text-[13px] text-zinc-700">I'm planning to age</label>
+          <span id="vMax" class="num text-[13px] font-medium text-zinc-900">95</span>
+        </div>
+        <input id="dMax" type="range" class="sl w-full" min="80" max="100" step="1" value="95">
+      </div>
+      <div>
+        <div class="text-[13px] text-zinc-700 mb-2">If the markets are</div>
+        <div class="inline-flex rounded-lg bg-zinc-100 p-0.5 text-[12px]">
+          <button class="seg rounded-md px-3 py-1.5 text-zinc-500" data-sky="storm">stormy</button>
+          <button class="seg on rounded-md px-3 py-1.5 text-zinc-500" data-sky="normal">ordinary</button>
+          <button class="seg rounded-md px-3 py-1.5 text-zinc-500" data-sky="sun">kind</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="mt-8 text-[12px] leading-relaxed text-zinc-400 max-w-lg">
+      The number on the right is the only one that matters. Everything here is just the four inputs behind
+      it — drag any of them and the line under the slider tells you what it did, before and after.
+    </p>
+
+    <footer class="mt-12 pt-4 border-t border-zinc-200/70 text-[11px] text-zinc-400">
+      10 · Split Answer — the levers on the left, the answer that never leaves the screen on the right.
+    </footer>
+  </div>
+
+  <!-- ══════════ RIGHT · THE ANSWER ══════════ -->
+  <div class="order-1 lg:order-2 lg:sticky lg:top-0 lg:h-screen bg-white flex flex-col px-6 lg:px-8 py-8 overflow-y-auto">
+    <p class="text-[11px] uppercase tracking-[0.14em] text-zinc-400">your money lasts until you're</p>
+    <div id="verdict" class="num text-[76px] leading-[0.9] font-semibold mt-2">89</div>
+    <p id="verdictSub" class="text-[13px] leading-relaxed text-zinc-500 mt-3"></p>
+    <p id="sugg" class="text-[12.5px] leading-relaxed mt-2 text-[#5e6ad2]"></p>
+
+    <!-- three summary numbers -->
+    <div class="mt-7 grid grid-cols-3 gap-4 border-t border-zinc-200/80 pt-6">
+      <div>
+        <div class="text-[11px] text-zinc-400 leading-snug">left over at <span id="hMax">95</span></div>
+        <div class="num text-[19px] font-semibold text-zinc-900 mt-1" id="sum1">—</div>
+      </div>
+      <div>
+        <div class="text-[11px] text-zinc-400 leading-snug">in the pot at 65</div>
+        <div class="num text-[19px] font-semibold text-zinc-900 mt-1" id="sum2">—</div>
+      </div>
+      <div>
+        <div class="text-[11px] text-zinc-400 leading-snug">most you could spend</div>
+        <div class="num text-[19px] font-semibold text-zinc-900 mt-1" id="sum3">—</div>
+      </div>
+    </div>
+
+    <!-- the chart -->
+    <div class="mt-7 border-t border-zinc-200/80 pt-6">
+      <div class="flex items-baseline justify-between">
+        <span class="text-[11px] uppercase tracking-[0.14em] text-zinc-400">the pot, year by year</span>
+        <span class="text-[11px] text-zinc-400 num" id="chartNote">ages 55 to 100</span>
+      </div>
+      <svg id="chart" viewBox="0 0 1000 190" preserveAspectRatio="none" class="w-full h-[170px] mt-3 block"></svg>
+      <div id="chartAxis" class="flex justify-between text-[11px] text-zinc-400 num mt-1"></div>
+    </div>
+
+    <div class="mt-auto pt-6 text-[11px] text-zinc-300">
+      Assumes $25,000 a year still going in until work ends, and $22,000 a year from CPP and OAS.
+    </div>
+  </div>
+
+</div>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const ACCENT = '#5e6ad2', BAD = '#b91c1c';
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  const ROWS = [
+    { key:'retireAge',  label:'I stop working at',   min:55,    max:75,      step:1,     fmt:v => v },
+    { key:'spending',   label:'I spend a year after',min:40000, max:200000,  step:1000,  fmt:fmtMoney },
+    { key:'savings',    label:"I've saved so far",   min:100000,max:3000000, step:10000, fmt:fmtMoney },
+    { key:'benefitAge', label:'CPP and OAS start at',min:60,    max:70,      step:1,     fmt:v => v },
+  ];
+
+  /* quiet, still-informative line shown when a row isn't being dragged */
+  function idleText(key) {
+    if (key === 'retireAge')  return 'pay keeps going in for ' + Math.max(0, state.retireAge - state.currentAge) + ' more years';
+    if (key === 'spending')   return 'about ' + fmtMoney(Math.round(state.spending / 12)) + ' a month, before tax';
+    if (key === 'savings')    return 'about ' + Math.floor(state.savings / Math.max(state.spending, 1)) + ' years of spending banked';
+    return 'covers ' + Math.round(state.benefits / Math.max(state.spending, 1) * 100) + '% of a year of spending';
+  }
+
+  function buildRows() {
+    $('rows').innerHTML = ROWS.map(r => (
+      '<div class="row py-4 px-1 -mx-1">' +
+        '<div class="flex items-baseline justify-between">' +
+          '<label for="s_' + r.key + '" class="text-[13px] text-zinc-700">' + r.label + '</label>' +
+          '<span id="v_' + r.key + '" class="num text-[13px] font-medium text-zinc-900"></span>' +
+        '</div>' +
+        '<input id="s_' + r.key + '" type="range" class="sl w-full mt-2.5" min="' + r.min + '" max="' + r.max + '" step="' + r.step + '">' +
+        '<p id="c_' + r.key + '" class="mt-2 text-[12px] text-zinc-400 num"></p>' +
+      '</div>'
+    )).join('');
+
+    ROWS.forEach(r => {
+      const el = $('s_' + r.key);
+      el.value = state[r.key];
+      el.addEventListener('input', () => {
+        state[r.key] = +el.value;
+        if (base != null) arm();   // keep the baseline alive for as long as the drag continues
+        render();
+      });
+      /* baseline for the before → during readout */
+      el.addEventListener('pointerdown', arm);
+      el.addEventListener('blur', release);
+      el.addEventListener('keydown', e => {
+        if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key)) arm();
+        else if (['Enter','Tab','Escape'].includes(e.key)) release();
+      });
+    });
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+  }
+
+  /* ── the "before" value, captured the moment a drag starts ── */
+  let base = null, baseTimer = null;
+  function arm() {
+    if (base == null) base = lastsLabel(simulate(state));
+    clearTimeout(baseTimer);
+    baseTimer = setTimeout(release, 3500);   // fallback only; pointerup is the normal exit
+  }
+  function release() {
+    if (base == null) return;
+    clearTimeout(baseTimer);
+    base = null;
+    render();
+  }
+
+  /* ── the most you could spend and still reach maxAge ── */
+  function safeSpend() {
+    if (!simulate({ ...state, spending: 0 }).ok) return 0;
+    let lo = 0, hi = 900000;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (simulate({ ...state, spending: mid }).ok) lo = mid; else hi = mid;
+    }
+    return Math.floor(lo / 100) * 100;
+  }
+
+  function balAt(rows, age) {
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i].age >= age) {
+        const a = rows[i - 1], b = rows[i];
+        const t = b.age === a.age ? 0 : (age - a.age) / (b.age - a.age);
+        return a.bal + (b.bal - a.bal) * t;
+      }
+    }
+    return rows.length ? rows[rows.length - 1].bal : 0;
+  }
+
+  function drawChart(res) {
+    const rows = res.rows.filter(r => r.age <= 100);
+    if (rows.length < 2) return;
+    const w = 1000, h = 190, top = 10, bot = h - 8, L = 2, Rr = w - 2;
+    const A0 = rows[0].age, A1 = 100;
+    const max = Math.max(...rows.map(r => r.bal), 1);
+    const xFor = age => L + (age - A0) / (A1 - A0) * (Rr - L);
+    const yFor = v => bot - (v / max) * (bot - top);
+
+    let d = '';
+    rows.forEach((r, i) => { d += (i ? ' L ' : 'M ') + xFor(r.age).toFixed(1) + ' ' + yFor(r.bal).toFixed(1); });
+    const last = rows[rows.length - 1];
+    const area = d + ' L ' + xFor(last.age).toFixed(1) + ' ' + bot + ' L ' + xFor(A0).toFixed(1) + ' ' + bot + ' Z';
+
+    const dry = res.depletionAge != null && res.depletionAge <= state.maxAge;
+    const col = dry ? BAD : ACCENT;
+    let out = '<path d="' + area + '" fill="' + col + '" fill-opacity="0.10"/>'
+            + '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round"/>'
+            + '<line x1="' + xFor(state.maxAge).toFixed(1) + '" y1="' + top + '" x2="' + xFor(state.maxAge).toFixed(1) + '" y2="' + bot + '" stroke="#d4d4d8" stroke-width="1" stroke-dasharray="4 4"/>'
+            + '<circle cx="' + xFor(last.age).toFixed(1) + '" cy="' + yFor(last.bal).toFixed(1) + '" r="3.5" fill="' + col + '"/>';
+
+    if (dry) {
+      out += '<text x="' + xFor(res.depletionAge).toFixed(1) + '" y="' + (top + 12) + '" font-size="22" fill="' + BAD + '" text-anchor="middle" font-weight="600">' + res.depletionAge + '</text>';
+    }
+    out += '<text x="' + xFor(state.maxAge).toFixed(1) + '" y="' + (top + 12) + '" font-size="22" fill="#a1a1aa" text-anchor="middle">plan to ' + state.maxAge + '</text>';
+    $('chart').innerHTML = out;
+
+    let ax = '';
+    [55, 65, 75, 85, 95].forEach(a => {
+      if (a < A0) return;
+      ax += '<span style="position:absolute;left:' + (xFor(a) / w * 100).toFixed(1) + '%;transform:translateX(-50%)">' + a + '</span>';
+    });
+    $('chartAxis').innerHTML = ax;
+    $('chartAxis').style.position = 'relative';
+    $('chartNote').textContent = 'ages ' + A0 + ' to 100';
+  }
+
+  function render() {
+    const res = simulate(state);
+    const v = $('verdict');
+
+    /* verdict */
+    v.textContent = lastsLabel(res);
+    v.style.color = res.ok ? '#18181b' : BAD;
+    if (res.ok) {
+      $('verdictSub').innerHTML = res.leftAtMax > 25000
+        ? 'past the ' + state.maxAge + " you're planning for, with about " + fmtMoney(res.leftAtMax) + ' to spare.'
+        : 'past the ' + state.maxAge + " you're planning for.";
+      $('sugg').textContent = '';
+    } else {
+      $('verdictSub').innerHTML = 'your money runs out at ' + res.depletionAge + ' — '
+        + (state.maxAge - res.depletionAge) + ' year' + (state.maxAge - res.depletionAge === 1 ? '' : 's') + ' short of ' + state.maxAge + '.';
+      $('sugg').textContent = suggest(state) ?? '';
+    }
+
+    /* summaries */
+    $('hMax').textContent = state.maxAge;
+    $('sum1').textContent = res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) : 'nothing';
+    $('sum2').textContent = fmtMoney(balAt(res.rows, 65));
+    const safe = safeSpend();
+    $('sum3').textContent = fmtMoney(safe);
+
+    /* rows */
+    const now = lastsLabel(res);
+    ROWS.forEach(r => {
+      $('v_' + r.key).textContent = r.fmt(state[r.key]);
+      const c = $('c_' + r.key);
+      if (base != null && numeral(now) !== numeral(base)) {
+        const up = numeral(now) > numeral(base);
+        c.textContent = 'money lasts to ' + base + ' ' + (up ? '↑' : '↓') + ' ' + now;
+        c.style.color = up ? ACCENT : BAD;
+      } else if (base != null) {
+        c.textContent = 'money lasts to ' + now + ' — unchanged';
+        c.style.color = '#a1a1aa';
+      } else {
+        c.textContent = idleText(r.key);
+        c.style.color = '#a1a1aa';
+      }
+    });
+
+    $('vMax').textContent = state.maxAge;
+    $('dMax').value = state.maxAge;
+    document.querySelectorAll('[data-sky]').forEach(b => b.classList.toggle('on', b.dataset.sky === state.sky));
+
+    drawChart(res);
+  }
+
+  /* "96" and "110+" both need to compare as numbers */
+  function numeral(label) { return parseFloat(String(label).replace('+', '')) || 0; }
+
+  $('dMax').addEventListener('input', e => { state.maxAge = +e.target.value; render(); });
+  document.querySelectorAll('[data-sky]').forEach(b => b.addEventListener('click', () => {
+    state.sky = b.dataset.sky; render();
+  }));
+
+  buildRows();
+  render();
+</script>
+</body>
+</html>

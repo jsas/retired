@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>32 — The Comic</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:14px;
+    border-radius:999px; background:#d6d3d1; outline:none; cursor:pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none;
+    width:30px; height:30px; border-radius:50%; background:#2563eb; border:4px solid #fffbeb;
+    box-shadow:0 2px 7px rgba(41,37,36,.4); cursor:grab; }
+  input[type=range]::-webkit-slider-thumb:active { cursor:grabbing; background:#1d4ed8; }
+  input[type=range]::-moz-range-thumb { width:26px; height:26px; border-radius:50%;
+    background:#2563eb; border:4px solid #fffbeb; box-shadow:0 2px 7px rgba(41,37,36,.4); cursor:grab; }
+  input[type=range]:focus-visible { outline:3px solid #2563eb; outline-offset:3px; }
+  .skybtn[aria-pressed="true"] { background:#1c1917; color:#fffbeb; }
+  .skybtn { transition: background .15s, color .15s; }
+  .svgtext text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+</style>
+</head>
+<body class="bg-[#fdf6e3] text-stone-800 min-h-screen flex flex-col">
+
+<header class="flex items-center justify-between px-5 py-3">
+  <div class="flex items-center gap-2">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[9px] font-bold text-white leading-none">RE:</div>
+    <span class="font-semibold text-sm tracking-tight">tired</span>
+  </div>
+  <span class="text-xs text-stone-500">32 — The Comic</span>
+</header>
+
+<main class="flex-1 w-full max-w-6xl mx-auto px-4 pt-4 pb-10">
+
+  <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">Your story in three frames</p>
+  <h1 id="headline" class="mt-1 text-xl md:text-2xl font-extrabold tracking-tight text-stone-800"></h1>
+
+  <div class="mt-4 grid gap-4 md:grid-cols-3">
+
+    <!-- PANEL 1 -->
+    <div class="rounded-3xl border-[3px] border-stone-800 bg-[#fffbf0] p-3 shadow-[4px_4px_0_0_#1c1917]">
+      <svg id="p1" viewBox="0 0 300 220" class="w-full h-auto svgtext" role="img" aria-label="The working years">
+        <rect x="8" y="8" width="284" height="150" rx="16" fill="#e0f2fe"/>
+        <circle cx="252" cy="42" r="17" fill="#fde68a" stroke="#f59e0b" stroke-width="3"/>
+        <g id="p1bars"></g>
+        <line x1="22" y1="158" x2="278" y2="158" stroke="#1c1917" stroke-width="3.5" stroke-linecap="round"/>
+        <text id="p1a" x="22" y="175" font-size="10.5" font-weight="700" fill="#57534e" class="num"></text>
+        <text id="p1b" x="278" y="175" text-anchor="end" font-size="10.5" font-weight="700" fill="#57534e" class="num"></text>
+        <text id="p1big" x="150" y="200" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1917" class="num"></text>
+        <g id="p1bubble"></g>
+      </svg>
+      <p id="cap1" class="mt-2 text-[13px] leading-snug font-bold text-stone-700"></p>
+    </div>
+
+    <!-- PANEL 2 -->
+    <div class="rounded-3xl border-[3px] border-stone-800 bg-[#fffbf0] p-3 shadow-[4px_4px_0_0_#1c1917]">
+      <svg id="p2" viewBox="0 0 300 220" class="w-full h-auto svgtext" role="img" aria-label="The turn into retirement">
+        <rect x="8" y="8" width="284" height="150" rx="16" fill="#fef3c7"/>
+        <circle cx="252" cy="42" r="17" fill="#fde68a" stroke="#f59e0b" stroke-width="3"/>
+        <g id="p2bars"></g>
+        <g id="p2stream"></g>
+        <line x1="22" y1="158" x2="278" y2="158" stroke="#1c1917" stroke-width="3.5" stroke-linecap="round"/>
+        <g id="p2flag"></g>
+        <text id="p2big" x="150" y="200" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1917" class="num"></text>
+        <g id="p2bubble"></g>
+      </svg>
+      <p id="cap2" class="mt-2 text-[13px] leading-snug font-bold text-stone-700"></p>
+    </div>
+
+    <!-- PANEL 3 -->
+    <div class="rounded-3xl border-[3px] border-stone-800 bg-[#fffbf0] p-3 shadow-[4px_4px_0_0_#1c1917]">
+      <svg id="p3" viewBox="0 0 300 220" class="w-full h-auto svgtext" role="img" aria-label="The ending">
+        <rect id="p3sky" x="8" y="8" width="284" height="150" rx="16" fill="#e0f2fe"/>
+        <g id="p3sun"></g>
+        <g id="p3cracks"></g>
+        <line x1="22" y1="158" x2="278" y2="158" stroke="#1c1917" stroke-width="3.5" stroke-linecap="round"/>
+        <g id="p3line"></g>
+        <text id="p3big" x="150" y="200" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1917" class="num"></text>
+        <g id="p3bubble"></g>
+      </svg>
+      <p id="cap3" class="mt-2 text-[13px] leading-snug font-bold text-stone-700"></p>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="mt-6 rounded-3xl border-[3px] border-stone-800 bg-[#fffbf0] p-5 shadow-[4px_4px_0_0_#1c1917]">
+    <div class="grid gap-6 md:grid-cols-4">
+      <div>
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] font-extrabold text-stone-700">Work ends at</span>
+          <span id="vRetire" class="num text-[14px] font-extrabold text-blue-700"></span>
+        </div>
+        <input id="sRetire" type="range" min="58" max="75" step="1" value="62" aria-label="Age work ends">
+      </div>
+      <div>
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] font-extrabold text-stone-700">Spending a year</span>
+          <span id="vSpend" class="num text-[14px] font-extrabold text-rose-700"></span>
+        </div>
+        <input id="sSpend" type="range" min="30000" max="150000" step="2500" value="85000" aria-label="Spending per year">
+      </div>
+      <div>
+        <div class="flex items-baseline justify-between mb-2">
+          <span class="text-[13px] font-extrabold text-stone-700">Savings today</span>
+          <span id="vSavings" class="num text-[14px] font-extrabold text-blue-700"></span>
+        </div>
+        <input id="sSavings" type="range" min="100000" max="2500000" step="10000" value="850000" aria-label="Savings today">
+      </div>
+      <div>
+        <div class="text-[13px] font-extrabold text-stone-700 mb-2">Markets feel</div>
+        <div id="skySeg" class="grid grid-cols-3 gap-1.5" role="group" aria-label="Market mood">
+          <button class="skybtn rounded-xl border-[3px] border-stone-800 py-2 text-[12.5px] font-extrabold bg-[#fffbf0] text-stone-500" data-sky="storm" aria-pressed="false">stormy</button>
+          <button class="skybtn rounded-xl border-[3px] border-stone-800 py-2 text-[12.5px] font-extrabold bg-[#fffbf0] text-stone-500" data-sky="normal" aria-pressed="true">ordinary</button>
+          <button class="skybtn rounded-xl border-[3px] border-stone-800 py-2 text-[12.5px] font-extrabold bg-[#fffbf0] text-stone-500" data-sky="sun" aria-pressed="false">kind</button>
+        </div>
+      </div>
+    </div>
+    <p id="advice" class="mt-5 text-[14px] font-bold leading-snug text-stone-600"></p>
+  </div>
+
+  <p class="mt-5 text-[12px] text-stone-500 leading-relaxed">Planning to age <span id="maxLbl" class="num font-semibold text-stone-700">95</span>. Every frame is redrawn from your own numbers as you move the sliders.</p>
+</main>
+
+<footer class="px-5 py-4 text-xs text-stone-500 border-t border-stone-200">
+  32 &middot; The Comic &mdash; three frames, drawn from your own numbers.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  /* ---------- helpers ---------- */
+  const esc = s => String(s);
+  const r1 = v => Math.round(v);
+  const sx = (i, n) => 30 + i * (240 / (n - 1));
+
+  function bubble(g, x, y, w, lines, fill, stroke) {
+    const h = 16 + lines.length * 15;
+    let s = '<rect x="' + (x - w / 2) + '" y="' + (y - h) + '" width="' + w + '" height="' + h + '" rx="9" fill="' + fill + '" stroke="' + stroke + '" stroke-width="2.5" stroke-linecap="round"/>';
+    s += '<polygon points="' + (x - 7) + ',' + y + ' ' + (x + 7) + ',' + y + ' ' + x + ',' + (y + 11) + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="2.5" stroke-linejoin="round"/>';
+    lines.forEach((ln, i) => {
+      s += '<text x="' + x + '" y="' + (y - h + 17 + i * 15) + '" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1c1917" class="num">' + ln + '</text>';
+    });
+    $(g).innerHTML = s;
+  }
+
+  /* ---------- PANEL 1: the working years ---------- */
+  function paint1() {
+    const years = Math.max(1, state.retireAge - state.currentAge);
+    const res = simulate(state);
+    const rows = res.rows.filter(r => r.age <= state.retireAge);
+    if (rows.length < 2) rows.push({ age: state.retireAge, bal: rows.length ? rows[rows.length - 1].bal : state.savings });
+    const pot = rows[rows.length - 1].bal;
+
+    const max = Math.max(...rows.map(r => r.bal)) || 1;
+    let s = '';
+    rows.forEach((rw, i) => {
+      const x = sx(i, rows.length) - 9, h = 12 + (rw.bal / max) * 100;
+      s += '<rect x="' + x.toFixed(1) + '" y="' + (158 - h).toFixed(1) + '" width="18" height="' + h.toFixed(1) + '" rx="4" fill="#2563eb"/>';
+    });
+    $('p1bars').innerHTML = s;
+
+    $('p1a').textContent = 'age ' + state.currentAge;
+    $('p1b').textContent = 'age ' + state.retireAge;
+    $('p1big').textContent = fmtMoney(pot);
+    $('cap1').textContent = 'You put in ' + fmtMoney(state.contrib) + ' a year while you work. By ' + state.retireAge + ' you have ' + fmtMoney(pot) + '.';
+    bubble('p1bubble', 105, 50, 152, ['+ ' + fmtMoney(state.contrib) + '/yr'], '#fffbeb', '#f59e0b');
+  }
+
+  /* ---------- PANEL 2: the turn ---------- */
+  function paint2() {
+    const res = simulate(state);
+    const rows = res.rows.filter(r => r.age <= state.retireAge + 18);
+    const max = Math.max(...rows.map(r => r.bal)) || 1;
+    const pot = res.rows.find(r => r.age === state.retireAge);
+    const potV = pot ? pot.bal : state.savings;
+
+    let s = '';
+    rows.forEach((rw, i) => {
+      const x = sx(i, rows.length) - 6, h = 10 + (rw.bal / max) * 100;
+      s += '<rect x="' + x.toFixed(1) + '" y="' + (158 - h).toFixed(1) + '" width="12" height="' + h.toFixed(1) + '" rx="3" fill="#60a5fa" opacity="0.85"/>';
+    });
+    $('p2bars').innerHTML = s;
+
+    /* benefits stream joining from benefitAge */
+    const bi = rows.findIndex(r => r.age >= state.benefitAge);
+    let stream = '';
+    if (bi >= 0) {
+      const bx = sx(bi, rows.length);
+      stream += '<path d="M' + bx.toFixed(1) + ' 158 C ' + (bx + 14) + ' 130, ' + (bx + 8) + ' 118, ' + (bx + 26) + ' 116" fill="none" stroke="#16a34a" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="9 7"/>';
+      stream += '<circle cx="' + (bx + 30).toFixed(1) + '" cy="116" r="6" fill="#16a34a"/>';
+      stream += '<text x="' + (bx + 30).toFixed(1) + '" y="103" text-anchor="middle" font-size="10.5" font-weight="800" fill="#166534" class="num">+' + fmtMoney(state.benefits) + '</text>';
+    }
+    $('p2stream').innerHTML = stream;
+
+    /* the retirement flag */
+    const fi = rows.findIndex(r => r.age === state.retireAge);
+    const fx = fi >= 0 ? sx(fi, rows.length) : 30;
+    let flag = '<line x1="' + fx.toFixed(1) + '" y1="158" x2="' + fx.toFixed(1) + '" y2="96" stroke="#1c1917" stroke-width="3.5" stroke-linecap="round"/>';
+    flag += '<polygon points="' + fx.toFixed(1) + ',96 ' + (fx + 34).toFixed(1) + ',105 ' + fx.toFixed(1) + ',114" fill="#f59e0b" stroke="#1c1917" stroke-width="2.5" stroke-linejoin="round"/>';
+    flag += '<text x="' + (fx + 2).toFixed(1) + '" y="90" text-anchor="middle" font-size="10.5" font-weight="800" fill="#1c1917" class="num">age ' + state.retireAge + '</text>';
+    $('p2flag').innerHTML = flag;
+
+    $('p2big').textContent = fmtMoney(potV);
+    $('cap2').textContent = 'You stop. Spending ' + fmtMoney(state.spending) + ' a year starts, and ' + fmtMoney(state.benefits) + ' of CPP + OAS joins at ' + state.benefitAge + '.';
+    bubble('p2bubble', 92, 56, 158, ['spending ' + fmtMoney(state.spending)], '#ffffff', '#1c1917');
+  }
+
+  /* ---------- PANEL 3: the ending ---------- */
+  function paint3() {
+    const res = simulate(state);
+    const rows = res.rows;
+    if (!rows.length) return;
+    const max = Math.max(...rows.map(r => r.bal)) || 1;
+    const lastAge = rows[rows.length - 1].age;
+    const x = a => 22 + (a - state.currentAge) / Math.max(1, lastAge - state.currentAge) * 256;
+    const y = v => 150 - (v / max) * 118;
+
+    let s = '';
+    rows.forEach((rw, i) => {
+      if (i % 3) return;
+      const cx = x(rw.age).toFixed(1), cy = y(rw.bal).toFixed(1);
+      s += '<circle cx="' + cx + '" cy="' + cy + '" r="2.6" fill="#2563eb"/>';
+    });
+    $('p3line').innerHTML = s;
+
+    const lasts = lastsLabel(res);
+    if (res.ok) {
+      $('p3sky').setAttribute('fill', '#e0f2fe');
+      $('p3cracks').innerHTML = '';
+      $('p3sun').innerHTML =
+        '<circle cx="248" cy="44" r="20" fill="#fcd34d" stroke="#f59e0b" stroke-width="3"/>' +
+        Array.from({ length: 8 }, (_, k) => {
+          const ang = (k / 8) * Math.PI * 2, cx = 248 + Math.cos(ang) * 27, cy = 44 + Math.sin(ang) * 27;
+          return '<line x1="' + (248 + Math.cos(ang) * 22).toFixed(1) + '" y1="' + (44 + Math.sin(ang) * 22).toFixed(1) + '" x2="' + cx.toFixed(1) + '" y2="' + cy.toFixed(1) + '" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>';
+        }).join('');
+      $('p3big').textContent = 'lasts to ' + lasts;
+      $('cap3').textContent = 'It lasts to ' + lasts + ' — past ' + state.maxAge + '. You have ' + fmtMoney(res.leftAtMax) + ' left over at ' + state.maxAge + '.';
+      bubble('p3bubble', 108, 66, 172, ['lasts to ' + lasts], '#fef9c3', '#f59e0b');
+    } else {
+      $('p3sky').setAttribute('fill', '#fde8e8');
+      $('p3sun').innerHTML = '';
+      let cr = '';
+      for (let k = 0; k < 7; k++) {
+        const cx = 34 + k * 36;
+        cr += '<path d="M' + cx + ' 158 L ' + (cx + 9) + ' ' + (148 - (k % 3) * 6) + ' L ' + (cx + 19) + ' 158" fill="none" stroke="#b91c1c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+      }
+      $('p3cracks').innerHTML = cr;
+      $('p3big').textContent = 'dry at ' + lasts;
+      $('cap3').textContent = 'It runs out at ' + lasts + ' — ' + (state.maxAge - res.depletionAge) + ' years before ' + state.maxAge + '.';
+      bubble('p3bubble', 108, 66, 172, ['dry at ' + lasts], '#fee2e2', '#b91c1c');
+    }
+    $('p3big').setAttribute('fill', res.ok ? '#166534' : '#b91c1c');
+    $('p3big').textContent = (res.ok ? 'lasts to ' : 'dry at ') + lasts;
+  }
+
+  /* ---------- headline + advice ---------- */
+  function paintHeadline(res) {
+    $('headline').textContent = res.ok
+      ? 'You get there, with ' + fmtMoney(res.leftAtMax) + ' to spare'
+      : 'You are ' + (state.maxAge - res.depletionAge) + ' years short of ' + state.maxAge;
+    $('advice').textContent = res.ok
+      ? 'Stormy markets would leave you at ' + lastsLabel(simulate({ ...state, sky: 'storm' })) + '.'
+      : (suggest(state) ?? 'Try working a little longer or spending a little less.');
+  }
+
+  /* ---------- the one render ---------- */
+  function render() {
+    const res = simulate(state);
+    paint1(); paint2(); paint3(); paintHeadline(res);
+  }
+
+  /* ---------- controls ---------- */
+  [['sRetire', 'retireAge', 'vRetire', v => 'age ' + v],
+   ['sSpend', 'spending', 'vSpend', fmtMoney],
+   ['sSavings', 'savings', 'vSavings', fmtMoney]].forEach(([id, key, out, fmt]) => {
+    $(id).addEventListener('input', e => {
+      state[key] = parseInt(e.target.value, 10);
+      $(out).textContent = fmt(state[key]);
+      render();
+    });
+  });
+
+  $('skySeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-sky]');
+    if (!b) return;
+    state.sky = b.dataset.sky;
+    [...$('skySeg').children].forEach(c => c.setAttribute('aria-pressed', String(c === b)));
+    render();
+  });
+
+  /* ---------- init ---------- */
+  state.retireAge = clamp(state.retireAge, 58, 75);
+  state.spending = clamp(state.spending, 30000, 150000);
+  state.savings = clamp(state.savings, 100000, 2500000);
+  $('vRetire').textContent = 'age ' + state.retireAge;
+  $('vSpend').textContent = fmtMoney(state.spending);
+  $('vSavings').textContent = fmtMoney(state.savings);
+  $('maxLbl').textContent = state.maxAge;
+  $('sRetire').value = state.retireAge;
+  render();
+</script>
+</body>
+</html>

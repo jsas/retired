@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 24 · The Ledger</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  body { font-family: Georgia, 'Times New Roman', Times, serif; }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* the ruled page: one blue rule every 34px, and every entry row is 34px tall */
+  .ruled {
+    background-color: #fbf6e9;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 33px,
+      rgba(58, 110, 165, .26) 33px,
+      rgba(58, 110, 165, .26) 34px
+    );
+  }
+
+  /* the red margin rule, drawn as a real border so it always lines up */
+  .redrule { border-left: 1.5px solid rgba(196, 74, 62, .45); }
+
+  .ink  { color: #1c3f77; }
+  .hand { font-style: italic; color: #1c3f77; }
+
+  /* UI chrome uses the system stack; the page itself stays serif */
+  .ui { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 108px; height: 18px; background: transparent; cursor: pointer; margin: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 3px; background: rgba(60, 42, 20, .40); border-radius: 2px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; margin-top: -5.5px;
+    background: #f3e7cd; border: 1.5px solid #4a3418; border-radius: 50%;
+  }
+  input[type=range]::-moz-range-track { height: 3px; background: rgba(60, 42, 20, .40); border-radius: 2px; }
+  input[type=range]::-moz-range-thumb {
+    width: 13px; height: 13px; background: #f3e7cd;
+    border: 1.5px solid #4a3418; border-radius: 50%;
+  }
+  input[type=range]:focus-visible { outline: 2px solid #f3e7cd; outline-offset: 3px; }
+
+  /* the ink stamp */
+  .stamp {
+    display: inline-block; transform: rotate(-3.2deg);
+    border: 3px double #a8332a; border-radius: 6px;
+    color: #a8332a; padding: 9px 18px 10px;
+    letter-spacing: .13em; text-transform: uppercase;
+    opacity: .92;
+  }
+  .stamp.ok { border-color: #1c5a3a; color: #1c5a3a; }
+
+  .desk { background: linear-gradient(180deg, #6b4b2a 0%, #593d20 100%); }
+
+  ::selection { background: rgba(28, 63, 119, .16); }
+</style>
+</head>
+<body class="min-h-screen bg-[#e9e1cf] text-[#2f2618] antialiased">
+
+<div class="mx-auto max-w-3xl px-4 py-7 sm:px-6 sm:py-10">
+
+  <!-- top chrome -->
+  <header class="ui mb-6 flex items-center gap-2.5">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-[#a39884]">24 — The Ledger</span>
+  </header>
+
+  <!-- DESK HEADER: three sliders on a wooden strip -->
+  <div class="desk mb-5 rounded-lg px-5 py-4 sm:px-7">
+    <div class="ui flex flex-wrap items-center gap-x-8 gap-y-3">
+      <span class="text-[9.5px] font-bold uppercase tracking-[.17em] text-[#d9c69f]">Keep the books</span>
+
+      <label class="flex items-center gap-2.5 text-[11.5px] text-[#e6d9ba]">
+        <span>stop working at</span>
+        <input id="ctl-retire" type="range" min="50" max="75" step="1" value="62" />
+        <span id="val-retire" class="num w-7 text-[13px] font-semibold text-[#fbf6e9]">62</span>
+      </label>
+
+      <label class="flex items-center gap-2.5 text-[11.5px] text-[#e6d9ba]">
+        <span>spend a year</span>
+        <input id="ctl-spend" type="range" min="40000" max="150000" step="2500" value="85000" />
+        <span id="val-spend" class="num w-[64px] text-[13px] font-semibold text-[#fbf6e9]">$85,000</span>
+      </label>
+
+      <label class="flex items-center gap-2.5 text-[11.5px] text-[#e6d9ba]">
+        <span>saved</span>
+        <input id="ctl-saved" type="range" min="100000" max="2500000" step="25000" value="850000" />
+        <span id="val-saved" class="num w-[72px] text-[13px] font-semibold text-[#fbf6e9]">$850,000</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- THE LEDGER PAGE -->
+  <article class="rounded-sm border border-[#c9b489] bg-[#fbf6e9] shadow-[0_2px_4px_rgba(60,42,20,.10),0_18px_44px_-26px_rgba(60,42,20,.45)]">
+
+    <!-- heading: plain paper above the rules -->
+    <div class="px-5 pb-4 pt-7 sm:px-10">
+      <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <h1 class="text-[21px] tracking-tight">Household Ledger</h1>
+        <div class="num text-[11.5px] italic text-[#7c6a4e]">
+          begun at age <span id="h-start">55</span> &nbsp;·&nbsp; kept to age <span id="h-max">95</span>
+        </div>
+      </div>
+      <div class="hand mt-1.5 text-[13px]">
+        Three things govern every line: when work ends, what a year costs, and what we began with.
+      </div>
+    </div>
+
+    <!-- column heads -->
+    <div class="flex items-baseline border-y border-[#3a6ea5]/45 px-5 py-2 sm:px-10">
+      <span class="w-[58px] flex-none text-[10.5px] uppercase tracking-[.14em] text-[#5a4a30]">Age</span>
+      <span class="redrule flex-1 pl-4 text-[10.5px] uppercase tracking-[.14em] text-[#5a4a30]">What happened</span>
+      <span class="w-[128px] flex-none text-right text-[10.5px] uppercase tracking-[.14em] text-[#5a4a30]">Balance</span>
+    </div>
+
+    <!-- the entries, each on its own rule -->
+    <div id="entries" class="ruled px-5 sm:px-10"></div>
+
+    <!-- the verdict and the stamp -->
+    <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-5 border-t border-[#3a6ea5]/45 px-5 py-8 sm:px-10">
+      <div class="max-w-[36ch]">
+        <p id="v-line" class="text-[15px] leading-[1.55]"></p>
+      </div>
+      <div id="stamp" class="stamp text-center">
+        <div class="ui text-[10px] font-bold" id="stamp-word">Overdrawn</div>
+        <div class="num text-[26px] font-bold leading-none" style="letter-spacing:.02em;" id="stamp-age">89</div>
+        <div class="ui text-[8.5px] font-semibold tracking-[.2em]" id="stamp-sub">runs dry here</div>
+      </div>
+    </div>
+  </article>
+
+  <!-- summary under the page -->
+  <div class="ui mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="rounded-md border border-[#c9b489] bg-[#fbf6e9] px-3.5 py-3">
+      <div class="text-[9.5px] font-bold uppercase tracking-[.15em] text-[#a39884]">Lasts to</div>
+      <div id="k-lasts" class="num mt-1 text-[18px] font-semibold">89</div>
+    </div>
+    <div class="rounded-md border border-[#c9b489] bg-[#fbf6e9] px-3.5 py-3">
+      <div class="text-[9.5px] font-bold uppercase tracking-[.15em] text-[#a39884]">Left over</div>
+      <div id="k-left" class="num mt-1 text-[18px] font-semibold">$0</div>
+    </div>
+    <div class="rounded-md border border-[#c9b489] bg-[#fbf6e9] px-3.5 py-3">
+      <div class="text-[9.5px] font-bold uppercase tracking-[.15em] text-[#a39884]">Stormy market</div>
+      <div id="k-storm" class="num mt-1 text-[18px] font-semibold">80</div>
+    </div>
+    <div class="rounded-md border border-[#c9b489] bg-[#fbf6e9] px-3.5 py-3">
+      <div class="text-[9.5px] font-bold uppercase tracking-[.15em] text-[#a39884]">Kind market</div>
+      <div id="k-sun" class="num mt-1 text-[18px] font-semibold">110+</div>
+    </div>
+  </div>
+
+  <footer class="ui mt-7 text-[11.5px] text-[#a39884]">
+    24 · The Ledger — the whole retirement, ruled and hand-annotated.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    spending:   DEMO_DEFAULTS.spending,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  function $(id) { return document.getElementById(id); }
+  function money(v) { return '$' + Math.round(v).toLocaleString('en-CA'); }
+
+  /* the ages the ledger keeps an entry for */
+  var MARKS = [60, 65, 70, 75, 80, 85, 90, 95];
+  var ROW_H = 34, AGE_W = 58, BAL_W = 128;
+
+  /* Turning points falling between marks are folded onto the first mark at or
+     after them, so the margin notes still tell the story when the sliders move. */
+  function notesFor(age, res, seen) {
+    var bits = [];
+
+    if (!seen.open) {
+      seen.open = true;
+      bits.push('began at ' + state.currentAge + ' with ' + money(state.savings));
+    }
+    if (!seen.retire && state.retireAge <= age) {
+      seen.retire = true;
+      bits.push('work ends at ' + state.retireAge);
+    }
+    if (!seen.benefit && state.benefitAge <= age) {
+      seen.benefit = true;
+      bits.push('CPP + OAS join at ' + state.benefitAge);
+    }
+    if (age === state.maxAge && res.ok) bits.push('still going, as hoped');
+    return bits;
+  }
+
+  function render() {
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var sun = simulate(Object.assign({}, state, { sky: 'sun' }));
+    var ok = res.ok;
+    var byAge = {};
+    res.rows.forEach(function (r) { byAge[r.age] = r.bal; });
+
+    /* desk strip */
+    $('val-retire').textContent = String(state.retireAge);
+    $('val-spend').textContent = money(state.spending);
+    $('val-saved').textContent = money(state.savings);
+    $('h-start').textContent = String(state.currentAge);
+    $('h-max').textContent = String(state.maxAge);
+
+    /* entries */
+    var host = $('entries');
+    host.textContent = '';
+    var seen = { open: false, retire: false, benefit: false };
+    var dryNoted = false;
+
+    MARKS.forEach(function (age) {
+      if (age < state.currentAge || age > state.maxAge) return;
+
+      var bal = byAge.hasOwnProperty(age) ? byAge[age] : 0;
+      var dry = (!dryNoted && res.depletionAge != null && res.depletionAge <= age);
+      if (dry) dryNoted = true;
+
+      var notes = notesFor(age, res, seen);
+      if (dry) notes.push(res.depletionAge === age ? 'runs dry here' : 'ran dry at ' + res.depletionAge);
+
+      var row = document.createElement('div');
+      row.className = 'flex items-baseline';
+      row.style.height = ROW_H + 'px';
+
+      var cAge = document.createElement('div');
+      cAge.className = 'num flex-none text-[15px]';
+      cAge.style.width = AGE_W + 'px';
+      if (dry) cAge.style.color = '#a8332a';
+      cAge.textContent = String(age);
+      row.appendChild(cAge);
+
+      var cNote = document.createElement('div');
+      cNote.className = 'hand flex-1 pl-4 pr-3 text-[13.5px] leading-[1.25]';
+      cNote.style.borderLeft = '1.5px solid rgba(196,74,62,.45)';
+      if (dry) cNote.style.color = '#a8332a';
+      if (notes.length) {
+        cNote.textContent = notes.join(' · ');
+      } else {
+        cNote.textContent = '—';
+        cNote.style.color = '#9a8a6d';
+        cNote.style.fontStyle = 'normal';
+      }
+      row.appendChild(cNote);
+
+      var cBal = document.createElement('div');
+      cBal.className = 'num flex-none text-right text-[16px] font-semibold ink';
+      cBal.style.width = BAL_W + 'px';
+      if (dry) cBal.style.color = '#a8332a';
+      cBal.textContent = money(bal);
+      row.appendChild(cBal);
+
+      host.appendChild(row);
+    });
+
+    /* summary cards */
+    $('k-lasts').textContent = lastsLabel(res);
+    $('k-lasts').style.color = ok ? '#1c3f77' : '#a8332a';
+    $('k-left').textContent = ok ? money(res.leftAtMax) : '$0';
+    $('k-storm').textContent = lastsLabel(storm);
+    $('k-sun').textContent = lastsLabel(sun);
+
+    /* the stamp */
+    var stamp = $('stamp');
+    if (ok) {
+      stamp.classList.add('ok');
+      $('stamp-word').textContent = 'Holds';
+      $('stamp-age').textContent = lastsLabel(res);
+      $('stamp-sub').textContent = 'money lasts to here';
+    } else {
+      stamp.classList.remove('ok');
+      $('stamp-word').textContent = 'Overdrawn';
+      $('stamp-age').textContent = String(res.depletionAge);
+      $('stamp-sub').textContent = 'runs dry here';
+    }
+
+    /* verdict line beside the stamp */
+    var gap = ok ? 0 : (state.maxAge - res.depletionAge);
+    var idea = suggest(state);
+    var line;
+    if (ok) {
+      line = 'The books balance. Your money lasts to ' + lastsLabel(res) +
+             ', past the ' + state.maxAge + ' you had in mind, and ' + money(res.leftAtMax) +
+             ' is left over at the end.';
+      if (!storm.ok) line += ' In a stormy market it runs out at ' + lastsLabel(storm) + '. ' + (idea || '');
+    } else {
+      line = 'The books come up short. Your money runs out at ' + res.depletionAge + ' — ' +
+             gap + (gap === 1 ? ' year' : ' years') + ' before the ' + state.maxAge +
+             ' you had in mind. ' + (idea || 'Nothing small repairs this; something larger has to give.');
+    }
+    $('v-line').textContent = line;
+  }
+
+  $('ctl-retire').addEventListener('input', function (e) { state.retireAge = Number(e.target.value); render(); });
+  $('ctl-spend').addEventListener('input',  function (e) { state.spending  = Number(e.target.value); render(); });
+  $('ctl-saved').addEventListener('input',  function (e) { state.savings   = Number(e.target.value); render(); });
+
+  render();
+})();
+</script>
+</body>
+</html>

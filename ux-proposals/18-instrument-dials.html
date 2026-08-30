@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>18 — Instrument Dials</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background:
+      radial-gradient(1100px 520px at 50% -12%, rgba(255,248,230,.055), transparent 70%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.013) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 1px, transparent 1px 4px),
+      linear-gradient(180deg, #232019 0%, #1c1917 45%, #12100e 100%);
+    background-attachment: fixed;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .panel {
+    background: linear-gradient(180deg, #2b2723 0%, #211d1a 55%, #1a1715 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.07), inset 0 -1px 0 rgba(0,0,0,.6), 0 18px 40px rgba(0,0,0,.55);
+    border: 1px solid rgba(0,0,0,.7);
+  }
+  /* engraved lettering: dark ink with a light lip below it */
+  .eng {
+    color: #8a8177;
+    text-shadow: 0 1px 0 rgba(255,255,255,.07);
+  }
+  .eng-dark { color: #4b453e; text-shadow: 0 1px 0 rgba(255,255,255,.05); }
+  .knob { cursor: ns-resize; touch-action: none; outline: none; }
+  .knob:focus-visible svg { filter: drop-shadow(0 0 0 2px #f59e0b); }
+  .knob:focus-visible .ring-focus { opacity: 1; }
+  .ring-focus { opacity: 0; transition: opacity .15s; }
+  .pm {
+    width: 30px; height: 30px; border-radius: 6px; line-height: 1;
+    background: linear-gradient(180deg, #34302b, #211d1a);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 2px 3px rgba(0,0,0,.5);
+    border: 1px solid rgba(0,0,0,.7);
+    color: #d6d3d1; font-size: 15px; font-weight: 700;
+  }
+  .pm:hover { color: #fbbf24; }
+  .pm:active { box-shadow: inset 0 2px 4px rgba(0,0,0,.7); }
+  .vfd {
+    background:
+      radial-gradient(120% 150% at 50% 0%, rgba(251,191,36,.10), transparent 60%),
+      linear-gradient(180deg, #241a06 0%, #140d02 100%);
+    box-shadow: inset 0 0 60px rgba(0,0,0,.9), inset 0 0 0 1px rgba(251,191,36,.16), 0 0 34px rgba(251,191,36,.07);
+  }
+  .scan {
+    background: repeating-linear-gradient(180deg, rgba(0,0,0,.30) 0 2px, rgba(0,0,0,0) 2px 4px);
+  }
+  .vfd-hot {
+    color: #ffc266;
+    text-shadow: 0 0 10px rgba(251,146,60,.75), 0 0 34px rgba(251,146,60,.35);
+  }
+  .vfd-dim { color: #b8862f; text-shadow: 0 0 8px rgba(251,146,60,.25); }
+  .led { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 2px rgba(0,0,0,.7); }
+  .mkt {
+    padding: 4px 10px; border-radius: 5px; font-size: 10px; letter-spacing: .18em;
+    background: linear-gradient(180deg, #2f2b26, #1e1b18);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 0 0 1px rgba(0,0,0,.6);
+    color: #7c736a; display: flex; align-items: center; gap: 6px;
+  }
+  .mkt:hover { color: #d6d3d1; }
+  .mkt.on { color: #fcd34d; box-shadow: inset 0 2px 5px rgba(0,0,0,.75), inset 0 0 0 1px rgba(251,191,36,.28); }
+  .mkt.on .dot { background: #fbbf24; box-shadow: 0 0 8px #f59e0b; }
+  .screw {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #6b6560, #29241f 70%);
+    box-shadow: inset 0 -1px 1px rgba(0,0,0,.8), 0 1px 0 rgba(255,255,255,.06);
+    position: relative;
+  }
+  .screw::after {
+    content: ''; position: absolute; left: 1px; right: 1px; top: 50%; height: 1px;
+    background: rgba(0,0,0,.75); transform: rotate(38deg);
+  }
+</style>
+</head>
+<body class="min-h-screen text-stone-300 flex flex-col">
+
+<!-- top chrome -->
+<header class="flex items-center justify-between px-5 py-3.5">
+  <div class="flex items-center gap-2.5">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+    <span class="font-semibold text-sm text-stone-100">tired</span>
+    <span class="text-[11px] eng hidden sm:inline ml-1">· 18 — instrument dials</span>
+  </div>
+  <div class="flex items-center gap-2 text-[10px] tracking-[0.25em] eng-dark">
+    <span>PWR</span><span class="led" style="background:#4ade80;box-shadow:0 0 8px #22c55e"></span>
+    <span class="ml-3">PLAN</span><span id="ledPlan" class="led" style="background:#4ade80;box-shadow:0 0 8px #22c55e"></span>
+  </div>
+</header>
+
+<main class="flex-1 w-full max-w-5xl mx-auto px-4 pb-8">
+
+  <!-- ═══════════ THE CONSOLE ═══════════ -->
+  <div class="panel rounded-2xl p-5 sm:p-8 relative">
+    <div class="absolute top-3 left-3 screw"></div>
+    <div class="absolute top-3 right-3 screw"></div>
+    <div class="absolute bottom-3 left-3 screw"></div>
+    <div class="absolute bottom-3 right-3 screw"></div>
+
+    <div class="flex items-center justify-between mb-6 px-6">
+      <p class="eng text-[10px] tracking-[0.4em]">RE:TIRE &nbsp;MODEL RD-55</p>
+      <p class="eng-dark text-[10px] tracking-[0.3em] hidden sm:block">DRAG A KNOB &nbsp;·&nbsp; OR USE THE STEPS</p>
+    </div>
+
+    <!-- backlit verdict readout -->
+    <div class="vfd rounded-lg relative overflow-hidden px-5 py-6 sm:py-7 text-center">
+      <div class="scan absolute inset-0 pointer-events-none opacity-40"></div>
+      <p class="vfd-dim text-[10px] tracking-[0.45em] mb-2">THE VERDICT</p>
+      <p id="verdict" class="vfd-hot num font-bold text-3xl sm:text-5xl tracking-[0.05em]">LASTS TO 96</p>
+      <p id="verdictSub" class="vfd-dim num text-[13px] sm:text-sm mt-3">past the 95 you're planning for</p>
+      <p id="verdictFix" class="text-[12px] mt-1.5 h-4"></p>
+    </div>
+
+    <!-- three knobs -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-6 mt-7">
+      <div id="slot-retire" class="flex flex-col items-center"></div>
+      <div id="slot-spend" class="flex flex-col items-center sm:border-l sm:border-black/50"></div>
+      <div id="slot-saved" class="flex flex-col items-center sm:border-l sm:border-black/50"></div>
+    </div>
+
+    <!-- market mood switch -->
+    <div class="mt-8 pt-5 border-t border-black/60 flex flex-wrap items-center justify-center gap-3">
+      <span class="eng text-[10px] tracking-[0.35em] mr-1">IF MARKETS ARE</span>
+      <button data-sky="storm"  class="mkt"><span class="dot led" style="background:#57534e"></span>STORMY</button>
+      <button data-sky="normal" class="mkt on"><span class="dot led" style="background:#57534e"></span>ORDINARY</button>
+      <button data-sky="sun"    class="mkt"><span class="dot led" style="background:#57534e"></span>KIND</button>
+    </div>
+  </div>
+
+  <p class="mt-5 text-[11px] eng-dark text-center leading-relaxed max-w-lg mx-auto">
+    Turn the three knobs. The backlit panel is the whole answer — everything else this app does is
+    the wiring behind that one reading.
+  </p>
+</main>
+
+<footer class="px-5 py-4 text-center text-[11px] eng-dark">
+  18 · Instrument Dials — your plan as a machined panel with three knobs and one glowing verdict.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = Object.assign({}, DEMO_DEFAULTS);
+  const $ = id => document.getElementById(id);
+
+  /* ── compact money for engraved readouts: $85K / $850K / $1.2M ── */
+  function compact(v) {
+    if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+    return '$' + Math.round(v / 1000) + 'K';
+  }
+
+  /* ── knob geometry ── */
+  const CX = 100, CY = 100, A0 = -135, A1 = 135;
+  function pt(a, r) {
+    const rad = a * Math.PI / 180;
+    return [CX + r * Math.sin(rad), CY - r * Math.cos(rad)];
+  }
+  function arcPath(a0, a1, r) {
+    if (a1 <= a0) return '';
+    const [x0, y0] = pt(a0, r), [x1, y1] = pt(a1, r);
+    const large = (a1 - a0) > 180 ? 1 : 0;
+    return 'M ' + x0.toFixed(2) + ' ' + y0.toFixed(2) +
+           ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + x1.toFixed(2) + ' ' + y1.toFixed(2);
+  }
+
+  const KNOBS = [
+    { key: 'retireAge', id: 'retire', name: 'RETIRE', unit: 'YEARS OLD',
+      min: 55, max: 75, step: 1, px: 110, fmt: v => String(Math.round(v)) },
+    { key: 'spending', id: 'spend', name: 'SPEND', unit: 'A YEAR',
+      min: 40000, max: 160000, step: 1000, px: 200, fmt: compact },
+    { key: 'savings', id: 'saved', name: 'SAVED', unit: 'SO FAR',
+      min: 100000, max: 3000000, step: 10000, px: 300, fmt: compact },
+  ];
+
+  function knobSVG(k) {
+    const TICKS = 30, gripLines = [];
+    let ticks = '';
+    for (let i = 0; i <= TICKS; i++) {
+      const a = A0 + (i / TICKS) * (A1 - A0);
+      const major = i % 5 === 0;
+      const r1 = major ? 74 : 78, r2 = 87;
+      const [x1, y1] = pt(a, r1), [x2, y2] = pt(a, r2);
+      ticks += '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) +
+               '" y2="' + y2.toFixed(1) + '" stroke="' + (major ? '#a8a29e' : '#57534e') +
+               '" stroke-width="' + (major ? 2.2 : 1.2) + '" stroke-linecap="round"/>';
+    }
+    for (let i = 0; i < 28; i++) {
+      const a = i * (360 / 28);
+      const [x1, y1] = pt(a, 47), [x2, y2] = pt(a, 57);
+      gripLines.push('<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) +
+                     '" y2="' + y2.toFixed(1) + '" stroke="#0c0a09" stroke-width="2.4" stroke-opacity=".55" stroke-linecap="round"/>');
+    }
+    const [lx0, ly0] = pt(A0, 101), [lx1, ly1] = pt(A1, 101);
+    return '' +
+    '<svg viewBox="-16 -16 232 232" class="w-full max-w-[230px] block">' +
+      '<defs>' +
+        '<radialGradient id="face-' + k.id + '" cx="34%" cy="26%" r="88%">' +
+          '<stop offset="0%" stop-color="#5c564e"/><stop offset="48%" stop-color="#332f2a"/>' +
+          '<stop offset="100%" stop-color="#15120f"/>' +
+        '</radialGradient>' +
+        '<linearGradient id="rim-' + k.id + '" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="#57534e"/><stop offset="50%" stop-color="#292521"/>' +
+          '<stop offset="100%" stop-color="#0c0a09"/>' +
+        '</linearGradient>' +
+      '</defs>' +
+      '<circle cx="100" cy="100" r="93" fill="none" stroke="url(#rim-' + k.id + ')" stroke-width="6"/>' +
+      '<circle cx="100" cy="100" r="96" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1"/>' +
+      '<g>' + ticks + '</g>' +
+      '<text x="' + lx0.toFixed(1) + '" y="' + (ly0 + 3).toFixed(1) + '" text-anchor="middle" font-size="9" fill="#6b6359" class="num">' + k.fmt(k.min) + '</text>' +
+      '<text x="' + lx1.toFixed(1) + '" y="' + (ly1 + 3).toFixed(1) + '" text-anchor="middle" font-size="9" fill="#6b6359" class="num">' + k.fmt(k.max) + '</text>' +
+      '<path id="arc-' + k.id + '" d="" fill="none" stroke="#f59e0b" stroke-width="4.5" stroke-linecap="round" opacity=".9"/>' +
+      '<circle cx="100" cy="100" r="60" fill="url(#face-' + k.id + ')"/>' +
+      '<circle cx="100" cy="100" r="60" fill="none" stroke="rgba(0,0,0,.75)" stroke-width="1.5"/>' +
+      '<circle cx="100" cy="100" r="58" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="1"/>' +
+      '<g id="grip-' + k.id + '">' + gripLines.join('') +
+        '<line x1="100" y1="42" x2="100" y2="16" stroke="#fbbf24" stroke-width="5" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(251,191,36,.85))"/>' +
+        '<circle cx="100" cy="100" r="9" fill="#0c0a09" stroke="#a8a29e" stroke-width="1.2"/>' +
+      '</g>' +
+      '<circle class="ring-focus" cx="100" cy="100" r="90" fill="none" stroke="#f59e0b" stroke-width="2"/>' +
+    '</svg>';
+  }
+
+  function buildKnobs() {
+    KNOBS.forEach(k => {
+      const slot = $('slot-' + k.id);
+      slot.innerHTML =
+        '<div id="knob-' + k.id + '" class="knob w-full max-w-[230px]" role="slider" tabindex="0"' +
+          ' aria-label="' + k.name.toLowerCase() + '" aria-valuemin="' + k.min + '" aria-valuemax="' + k.max + '">' +
+          knobSVG(k) +
+        '</div>' +
+        '<div class="flex items-center gap-3 mt-1">' +
+          '<button class="pm" data-id="' + k.id + '" data-dir="-1" aria-label="decrease ' + k.name.toLowerCase() + '">&#8722;</button>' +
+          '<div class="text-center w-[92px]">' +
+            '<div class="eng text-[9px] tracking-[0.35em]">' + k.name + '</div>' +
+            '<div id="val-' + k.id + '" class="num text-2xl font-bold text-stone-100 leading-tight"></div>' +
+            '<div class="eng-dark text-[8px] tracking-[0.28em]">' + k.unit + '</div>' +
+          '</div>' +
+          '<button class="pm" data-id="' + k.id + '" data-dir="1" aria-label="increase ' + k.name.toLowerCase() + '">+</button>' +
+        '</div>';
+      attachKnob(k);
+    });
+  }
+
+  function setVal(k, raw) {
+    if (typeof raw !== 'number' || !isFinite(raw)) return;
+    const stepped = Math.round(raw / k.step) * k.step;
+    const v = Math.min(k.max, Math.max(k.min, stepped));
+    if (state[k.key] === v) return;
+    state[k.key] = v;
+    render();
+  }
+
+  function attachKnob(k) {
+    const el = $('knob-' + k.id);
+    let startY = 0, startVal = 0, dragging = false;
+
+    el.addEventListener('pointerdown', e => {
+      dragging = true; startY = e.clientY; startVal = state[k.key];
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      if (el.focus) el.focus();
+      e.preventDefault();
+    });
+    el.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      const dy = e.clientY - startY;
+      setVal(k, startVal - dy * (k.max - k.min) / k.px);
+    });
+    const end = () => { dragging = false; };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('lostpointercapture', end);
+
+    el.addEventListener('keydown', e => {
+      const big = (k.max - k.min) / 10;
+      let v = null;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') v = state[k.key] + k.step;
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') v = state[k.key] - k.step;
+      else if (e.key === 'PageUp') v = state[k.key] + big;
+      else if (e.key === 'PageDown') v = state[k.key] - big;
+      else if (e.key === 'Home') v = k.min;
+      else if (e.key === 'End') v = k.max;
+      if (v === null) return;
+      e.preventDefault();
+      setVal(k, v);
+    });
+  }
+
+  function render() {
+    const res = simulate(state);
+
+    KNOBS.forEach(k => {
+      const v = state[k.key];
+      const deg = A0 + (v - k.min) / (k.max - k.min) * (A1 - A0);
+      $('grip-' + k.id).setAttribute('transform', 'rotate(' + deg.toFixed(2) + ' 100 100)');
+      $('arc-' + k.id).setAttribute('d', arcPath(A0, deg, 68));
+      $('val-' + k.id).textContent = k.fmt(v);
+      const el = $('knob-' + k.id);
+      el.setAttribute('aria-valuenow', v);
+      el.setAttribute('aria-valuetext', k.name + ' ' + k.fmt(v));
+    });
+
+    const vd = $('verdict'), sub = $('verdictSub'), fix = $('verdictFix'), led = $('ledPlan');
+    if (res.ok) {
+      vd.textContent = 'LASTS TO ' + lastsLabel(res);
+      const left = res.leftAtMax;
+      sub.textContent = left > 25000
+        ? 'past the ' + state.maxAge + " you're planning for — about " + fmtMoney(left) + ' still there'
+        : "past the " + state.maxAge + " you're planning for";
+      fix.textContent = '';
+      led.style.background = '#4ade80'; led.style.boxShadow = '0 0 8px #22c55e';
+    } else {
+      vd.textContent = 'DRY AT ' + res.depletionAge;
+      sub.textContent = 'that is ' + (state.maxAge - res.depletionAge) + ' years short of ' + state.maxAge;
+      fix.textContent = suggest(state) || '';
+      led.style.background = '#f87171'; led.style.boxShadow = '0 0 8px #ef4444';
+    }
+  }
+
+  buildKnobs();
+
+  document.querySelectorAll('.pm').forEach(b => b.addEventListener('click', () => {
+    const k = KNOBS.find(x => x.id === b.dataset.id);
+    setVal(k, state[k.key] + (+b.dataset.dir) * k.step);
+  }));
+
+  document.querySelectorAll('[data-sky]').forEach(b => b.addEventListener('click', () => {
+    state.sky = b.dataset.sky;
+    document.querySelectorAll('[data-sky]').forEach(x => x.classList.toggle('on', x === b));
+    render();
+  }));
+
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 38 · Kitchen Table</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: Georgia, 'Times New Roman', Times, serif; }
+  .ui { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .hand {
+    font-family: 'Segoe Script', 'Bradley Hand', 'Marker Felt', 'Comic Sans MS', cursive;
+    font-variant-numeric: tabular-nums;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- the tabletop ---------- */
+  #table {
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.16), rgba(0,0,0,0) 55%),
+      repeating-linear-gradient(93deg, rgba(0,0,0,.045) 0 3px, rgba(255,255,255,.03) 3px 9px, rgba(0,0,0,.03) 9px 14px),
+      linear-gradient(150deg, #8a5a33 0%, #a06c40 26%, #8a5a33 52%, #7a4d2b 78%, #6b4224 100%);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 -30px 60px -30px rgba(0,0,0,.55),
+                0 24px 50px -30px rgba(40,22,8,.7);
+  }
+  /* coffee ring somebody left */
+  .ring {
+    position: absolute; width: 132px; height: 132px; border-radius: 999px;
+    border: 7px solid rgba(60,32,14,.16);
+    box-shadow: inset 0 0 0 2px rgba(60,32,14,.07), 0 0 0 1px rgba(60,32,14,.05);
+    pointer-events: none;
+  }
+  .ring::after {
+    content: ''; position: absolute; inset: 26px; border-radius: 999px;
+    border: 2px solid rgba(60,32,14,.10);
+  }
+
+  /* ---------- paper cards ---------- */
+  .card {
+    position: absolute;
+    background: linear-gradient(180deg, #fffef9 0%, #fbf7ec 100%);
+    border: 1px solid rgba(120, 96, 60, .22);
+    box-shadow: 0 1px 1px rgba(50,28,10,.18), 0 10px 22px -10px rgba(40,20,6,.5),
+                0 26px 40px -26px rgba(40,20,6,.5);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+  .card.dragging { cursor: grabbing; box-shadow: 0 2px 4px rgba(50,28,10,.2), 0 22px 34px -12px rgba(40,20,6,.6); }
+  .card input[type="range"], .card button, .card a { cursor: pointer; }
+
+  /* faint ruled lines on the notes card */
+  .ruled {
+    background-image: repeating-linear-gradient(to bottom, transparent 0 25px, rgba(30,64,175,.14) 25px 26px);
+  }
+
+  /* ---------- pen-drawn sliders ---------- */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; background: transparent;
+    --p: 50%;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, #1e40af var(--p), rgba(30,64,175,.22) var(--p));
+  }
+  input[type="range"]::-moz-range-track {
+    height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, #1e40af var(--p), rgba(30,64,175,.22) var(--p));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    height: 15px; width: 15px; margin-top: -6px; border-radius: 999px;
+    background: #fffef9; border: 2px solid #1e40af;
+    box-shadow: 0 1px 2px rgba(40,20,6,.35);
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 13px; width: 13px; border-radius: 999px;
+    background: #fffef9; border: 2px solid #1e40af;
+    box-shadow: 0 1px 2px rgba(40,20,6,.35);
+  }
+  input[type="range"]:focus-visible { outline: none; }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(30,64,175,.22); }
+
+  /* ---------- weather chips ---------- */
+  .wx {
+    font-size: 12px; padding: 4px 10px 5px; border-radius: 999px;
+    border: 1px dashed rgba(30,64,175,.45); color: #1e3a8a; background: rgba(255,255,255,.6);
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .wx:hover { background: #fff; }
+  .wx[aria-pressed="true"] { background: #1e3a8a; border-style: solid; border-color: #1e3a8a; color: #fefce8; }
+
+  /* underlined "try it" pen link */
+  .penlink {
+    color: #1e40af; text-decoration: underline; text-decoration-style: dashed;
+    text-underline-offset: 3px; font-size: 13px;
+  }
+  .penlink:hover { color: #172554; }
+
+  .tape {
+    position: absolute; top: -11px; left: 50%; transform: translateX(-50%) rotate(-2deg);
+    width: 74px; height: 22px; background: rgba(240, 226, 178, .78);
+    box-shadow: 0 1px 2px rgba(40,20,6,.22);
+  }
+
+  @media (max-width: 639px) {
+    #table { height: auto !important; }
+    .card { position: static !important; margin: 0 0 14px; }
+    .ring { display: none; }
+  }
+</style>
+</head>
+<body class="min-h-screen bg-[#f2ece2] text-[#2b2419] antialiased">
+
+<div class="mx-auto max-w-5xl px-4 py-7 sm:px-8 sm:py-10">
+
+  <!-- top chrome -->
+  <header class="mb-6 flex items-center gap-2.5 ui">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-stone-400">38 — Kitchen Table</span>
+  </header>
+
+  <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 class="text-[24px] font-bold leading-tight tracking-tight ui sm:text-[27px]">Spread it out on the table.</h1>
+      <p class="ui mt-1 text-[13px] text-stone-500">Drag anything anywhere. Nudge the numbers on the plan card and the rest of the table rewrites itself.</p>
+    </div>
+    <button id="reset" type="button" class="ui rounded-md border border-stone-300 bg-white/70 px-3 py-1.5 text-[12px] text-stone-600 transition hover:bg-white hover:text-stone-900">
+      tidy the table
+    </button>
+  </div>
+
+  <!-- THE TABLE -->
+  <div id="table" class="relative min-h-[560px] rounded-2xl p-4 sm:h-[620px] sm:p-6">
+
+    <div class="ring" style="right:6%; bottom:4%; transform:rotate(-9deg)"></div>
+    <div class="ring" style="left:2%; top:44%; width:88px; height:88px; border-width:5px; transform:rotate(14deg)"></div>
+
+    <!-- 1 · VERDICT CARD -->
+    <div class="card w-[300px] rounded-[3px] px-6 py-6 sm:w-[340px]" data-card style="transform:rotate(-1.6deg)">
+      <div class="ui text-[10px] font-semibold uppercase tracking-[.2em] text-stone-400">the short version</div>
+      <p id="v-head" class="mt-3 text-[27px] leading-[1.15] tracking-tight text-[#231f18] sm:text-[30px]">
+        Your money runs out at 89.
+      </p>
+      <p id="v-sub" class="num mt-3 text-[14.5px] leading-relaxed text-[#4b4232]">
+        That is 6 years short of the 95 you have in mind, with nothing left over.
+      </p>
+      <div class="mt-4 flex items-center gap-5 border-t border-dashed border-stone-300 pt-3 ui">
+        <div>
+          <div class="text-[10px] uppercase tracking-[.16em] text-stone-400">lasts to</div>
+          <div id="v-lasts" class="num text-[19px] font-bold text-[#231f18]">89</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-[.16em] text-stone-400">left over</div>
+          <div id="v-left" class="num text-[19px] font-bold text-[#231f18]">$0</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-[.16em] text-stone-400">markets</div>
+          <div id="v-sky" class="text-[15px] font-semibold text-[#7c4a1e]">ordinary</div>
+        </div>
+      </div>
+      <p class="mt-4">
+        <button id="v-try" type="button" class="penlink hand">try that →</button>
+      </p>
+    </div>
+
+    <!-- 2 · THE PLAN CARD -->
+    <div class="card w-[290px] rounded-[3px] px-5 py-5 sm:w-[320px]" data-card style="transform:rotate(1.2deg)">
+      <div class="flex items-baseline justify-between border-b border-stone-300 pb-2">
+        <span class="ui text-[10px] font-semibold uppercase tracking-[.2em] text-stone-400">the plan</span>
+        <span class="hand text-[12px] text-stone-500">our numbers</span>
+      </div>
+
+      <div class="mt-3 space-y-3.5">
+        <label class="block">
+          <span class="ui flex items-baseline justify-between text-[12px] text-stone-500">
+            <span>saved so far</span>
+            <span id="n-savings" class="num text-[13px] font-bold text-[#1e3a8a]">$850,000</span>
+          </span>
+          <input id="in-savings" type="range" min="100000" max="2500000" step="25000" value="850000" aria-label="Saved so far" />
+        </label>
+
+        <label class="block">
+          <span class="ui flex items-baseline justify-between text-[12px] text-stone-500">
+            <span>spending a year</span>
+            <span id="n-spending" class="num text-[13px] font-bold text-[#1e3a8a]">$85,000</span>
+          </span>
+          <input id="in-spending" type="range" min="40000" max="150000" step="2500" value="85000" aria-label="Spending a year" />
+        </label>
+
+        <label class="block">
+          <span class="ui flex items-baseline justify-between text-[12px] text-stone-500">
+            <span>stop working at</span>
+            <span id="n-retire" class="num text-[13px] font-bold text-[#1e3a8a]">62</span>
+          </span>
+          <input id="in-retire" type="range" min="50" max="75" step="1" value="62" aria-label="Age you stop working" />
+        </label>
+
+        <div class="flex items-center gap-1.5 pt-0.5">
+          <span class="ui mr-1 text-[11px] uppercase tracking-[.14em] text-stone-400">markets</span>
+          <button type="button" class="wx" data-sky="storm" aria-pressed="false">stormy</button>
+          <button type="button" class="wx" data-sky="normal" aria-pressed="true">ordinary</button>
+          <button type="button" class="wx" data-sky="sun" aria-pressed="false">kind</button>
+        </div>
+      </div>
+
+      <div class="mt-4 border-t border-stone-300 pt-3">
+        <div class="flex items-baseline justify-between">
+          <span class="ui text-[11px] uppercase tracking-[.16em] text-stone-400">with those numbers</span>
+          <span class="num text-[13px] text-stone-500">lasts to</span>
+        </div>
+        <div id="n-lasts" class="num text-right text-[26px] font-bold leading-none text-[#231f18]">89</div>
+      </div>
+    </div>
+
+    <!-- 3 · NOTES CARD -->
+    <div class="card ruled w-[270px] rounded-[2px] px-5 py-4 sm:w-[290px]" data-card style="transform:rotate(-2.4deg)">
+      <div class="flex items-baseline justify-between pb-1.5">
+        <span class="ui text-[10px] font-semibold uppercase tracking-[.2em] text-stone-400">notes</span>
+        <span class="hand text-[11px] text-stone-400">things to remember</span>
+      </div>
+      <p id="note-1" class="hand text-[12.5px] leading-[26px] text-[#1e3a8a]">CPP joins at 65 — slows the drain.</p>
+      <p id="note-2" class="hand text-[12.5px] leading-[26px] text-[#1e3a8a]">Working two more years would close the gap.</p>
+      <p class="hand text-[12.5px] leading-[26px] text-stone-400">ask me about the roof, 2031</p>
+    </div>
+
+    <!-- 4 · POLAROID -->
+    <div class="card w-[196px] rounded-[2px] bg-white px-3 pb-3 pt-6 sm:w-[210px]" data-card style="transform:rotate(3.4deg)">
+      <span class="tape"></span>
+      <svg id="pol-spark" viewBox="0 0 180 74" preserveAspectRatio="none" class="h-[74px] w-full bg-[#fdfcf7]"
+           role="img" aria-label="Your balance over your lifetime, sketched in pen"></svg>
+      <p id="pol-cap" class="hand mt-2 text-center text-[12px] leading-snug text-[#334155]">the whole run — out at 89</p>
+    </div>
+
+  </div>
+
+  <p class="ui mt-3 text-[11.5px] text-stone-400">
+    Counted in today's dollars. One pot, steady growth, no inheritance and no windfall.
+    CPP and Old Age Security arrive together from age <span id="f-benefit-age" class="num">65</span>.
+  </p>
+
+  <footer class="ui mt-6 text-[11.5px] text-stone-400">
+    38 · Kitchen Table — your retirement argued out over coffee, not a slide deck.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    spending: DEMO_DEFAULTS.spending,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+
+  var SKYWORD = { storm: 'stormy', normal: 'ordinary', sun: 'kind' };
+
+  function el(id) { return document.getElementById(id); }
+  function money(v) { return '$' + Math.round(Math.abs(v)).toLocaleString('en-CA'); }
+  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+
+  /* ================= dragging ================= */
+  var table = el('table');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('[data-card]'));
+  var startSpots = [];
+  var zTop = 20;
+
+  function isStacked() { return window.innerWidth < 640; }
+
+  function setSpot(card, fx, fy) {
+    var tw = table.clientWidth, th = table.clientHeight;
+    var pad = 8;
+    var cw = card.offsetWidth, ch = card.offsetHeight;
+    var left = clamp(fx * tw, pad, Math.max(pad, tw - cw - pad));
+    var top = clamp(fy * th, pad, Math.max(pad, th - ch - pad));
+    card.style.left = left + 'px';
+    card.style.top = top + 'px';
+    card._fx = left / tw;
+    card._fy = top / th;
+  }
+
+  cards.forEach(function (card, i) { startSpots.push({ fx: 0, fy: 0 }); });
+
+  function layout() {
+    if (isStacked()) { cards.forEach(function (c) { c.style.left = ''; c.style.top = ''; }); return; }
+    table.style.position = 'relative';
+    cards.forEach(function (card, i) {
+      if (card._fx == null) {
+        var s = startSpots[i];
+        setSpot(card, s.fx, s.fy);
+      } else {
+        setSpot(card, card._fx, card._fy);
+      }
+    });
+  }
+
+  function recordStart() {
+    cards.forEach(function (card, i) {
+      startSpots[i] = { fx: card._fx, fy: card._fy };
+    });
+  }
+
+  cards.forEach(function (card) {
+    card.addEventListener('pointerdown', function (e) {
+      if (isStacked()) return;
+      if (e.target.closest('input, button, a')) return;
+      e.preventDefault();
+      card.classList.add('dragging');
+      card.style.zIndex = ++zTop;
+      var tr = table.getBoundingClientRect();
+      /* offsetLeft/Top are relative to the table (its offsetParent) and ignore the
+         rotation, so the card does not jump when you take hold of it */
+      var ox = e.clientX - tr.left - card.offsetLeft;
+      var oy = e.clientY - tr.top - card.offsetTop;
+      var cw = card.offsetWidth, ch = card.offsetHeight;
+
+      function move(ev) {
+        var left = clamp(ev.clientX - tr.left - ox, 0, Math.max(0, tr.width - cw));
+        var top = clamp(ev.clientY - tr.top - oy, 0, Math.max(0, tr.height - ch));
+        card.style.left = left + 'px';
+        card.style.top = top + 'px';
+        card._fx = left / tr.width;
+        card._fy = top / tr.height;
+      }
+      function up() {
+        card.classList.remove('dragging');
+        card.removeEventListener('pointermove', move);
+        card.removeEventListener('pointerup', up);
+        card.removeEventListener('pointercancel', up);
+        recordStart();
+      }
+      card.addEventListener('pointermove', move);
+      card.addEventListener('pointerup', up);
+      card.addEventListener('pointercancel', up);
+    });
+  });
+
+  el('reset').addEventListener('click', function () {
+    cards.forEach(function (card, i) {
+      card._fx = startSpots[i].fx;
+      card._fy = startSpots[i].fy;
+    });
+    layout();
+  });
+
+  window.addEventListener('resize', layout);
+
+  /* ================= sliders ================= */
+  var MAP = [
+    { key: 'savings', id: 'savings', out: 'n-savings', isMoney: true },
+    { key: 'spending', id: 'spending', out: 'n-spending', isMoney: true },
+    { key: 'retireAge', id: 'retire', out: 'n-retire', isMoney: false }
+  ];
+  MAP.forEach(function (m) {
+    var input = el('in-' + m.id);
+    var out = el(m.out);
+    var paint = function () {
+      var pct = ((Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min))) * 100;
+      input.style.setProperty('--p', pct.toFixed(2) + '%');
+    };
+    input.addEventListener('input', function () {
+      var v = Number(input.value);
+      state[m.key] = v;
+      out.textContent = m.isMoney ? money(v) : String(v);
+      paint();
+      render();
+    });
+    paint();
+  });
+
+  /* ================= weather ================= */
+  var wxBtns = Array.prototype.slice.call(document.querySelectorAll('.wx'));
+  wxBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.sky = b.getAttribute('data-sky');
+      wxBtns.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      render();
+    });
+  });
+
+  /* ================= the one idea, as an action ================= */
+  /* Mirrors suggest() so the "try that" link can actually apply it.
+     Only offers a fix that still lands inside the sliders' range. */
+  function findFix() {
+    var rMax = Number(el('in-retire').max);
+    var sMin = Number(el('in-spending').min);
+    for (var d = 1; d <= 5; d++) {
+      if (state.retireAge + d > rMax) break;
+      if (simulate(Object.assign({}, state, { retireAge: state.retireAge + d })).ok) {
+        return { key: 'retireAge', by: d, label: 'work ' + d + ' more year' + (d === 1 ? '' : 's') };
+      }
+    }
+    for (var cut = 5000; cut <= 30000; cut += 5000) {
+      if (state.spending - cut < sMin) break;
+      if (simulate(Object.assign({}, state, { spending: state.spending - cut })).ok) {
+        return { key: 'spending', by: -cut, label: 'spend ' + money(cut) + ' less a year' };
+      }
+    }
+    return null;
+  }
+
+  /* ================= polaroid sparkline ================= */
+  function spark(res) {
+    var svg = el('pol-spark');
+    var rows = res.rows;
+    var peak = 0;
+    rows.forEach(function (r) { if (r.bal > peak) peak = r.bal; });
+    if (peak <= 0) peak = 1;
+    var W = 180, H = 74, pad = 5;
+    function X(age) { return pad + ((age - state.currentAge) / (110 - state.currentAge)) * (W - pad * 2); }
+    function Y(b) { return H - pad - (b / peak) * (H - pad * 2); }
+    var pts = rows.map(function (r) { return X(r.age).toFixed(1) + ',' + Y(r.bal).toFixed(1); }).join(' ');
+    var out = rows[rows.length - 1].age;
+    var fill = pts + ' ' + X(out).toFixed(1) + ',' + (H - pad) + ' ' + X(state.currentAge).toFixed(1) + ',' + (H - pad);
+    var dash = '';
+    if (res.depletionAge != null) {
+      dash = '<line x1="' + X(res.depletionAge).toFixed(1) + '" y1="' + pad + '" x2="' + X(res.depletionAge).toFixed(1) +
+             '" y2="' + (H - pad) + '" stroke="#b91c1c" stroke-width="1" stroke-dasharray="3 2"/>';
+    }
+    svg.innerHTML =
+      '<polygon points="' + fill + '" fill="rgba(30,58,138,.09)"/>' +
+      '<polyline points="' + pts + '" fill="none" stroke="#1f2937" stroke-width="1.6" ' +
+      'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' + dash;
+  }
+
+  /* ================= render ================= */
+  function render() {
+    var res = simulate(state);
+    var lasts = lastsLabel(res);
+    var gap = state.maxAge - (res.depletionAge != null ? res.depletionAge : state.maxAge);
+
+    /* verdict card */
+    if (res.ok) {
+      el('v-head').textContent = 'Your money lasts to ' + lasts + '.';
+      el('v-sub').textContent = 'That is past the ' + state.maxAge + ' you have in mind, with ' +
+        money(res.leftAtMax) + ' still left over.';
+    } else {
+      el('v-head').textContent = 'Your money runs out at ' + lasts + '.';
+      el('v-sub').textContent = 'That is ' + gap + ' year' + (gap === 1 ? '' : 's') +
+        ' short of the ' + state.maxAge + ' you have in mind, with nothing left over.';
+    }
+    el('v-lasts').textContent = lasts;
+    el('v-left').textContent = money(res.ok ? res.leftAtMax : 0);
+    el('v-sky').textContent = SKYWORD[state.sky];
+
+    /* plan card, "with those numbers" */
+    el('n-lasts').textContent = lasts;
+    el('n-lasts').style.color = res.ok ? '#166534' : '#b91c1c';
+
+    /* notes: two live scribbles */
+    el('f-benefit-age').textContent = String(state.benefitAge);
+    if (state.benefitAge > state.retireAge) {
+      el('note-1').textContent = 'CPP joins at ' + state.benefitAge + ' — ' +
+        (state.benefitAge - state.retireAge) + ' years after you stop. Slows the drain.';
+    } else {
+      el('note-1').textContent = 'CPP is with you from ' + state.benefitAge + ' — ' +
+        money(state.benefits) + ' a year, every year.';
+    }
+
+    var idea = res.ok ? null : suggest(state);
+    var fix = res.ok ? null : findFix();
+    el('note-2').textContent = idea
+      || (res.ok ? ('There is room here — ' + money(res.leftAtMax) + ' left over at ' + state.maxAge + '.')
+                 : 'Nothing small repairs this; something larger must give.');
+
+    var tryBtn = el('v-try');
+    if (fix && !res.ok) {
+      tryBtn.style.display = '';
+      tryBtn.textContent = 'try that → ' + fix.label;
+    } else {
+      tryBtn.style.display = 'none';
+    }
+    tryBtn._fix = fix;
+
+    /* polaroid */
+    spark(res);
+    el('pol-cap').textContent = res.ok
+      ? 'the whole run — holds to ' + lasts
+      : 'the whole run — out at ' + lasts;
+  }
+
+  el('v-try').addEventListener('click', function () {
+    var fix = this._fix;
+    if (!fix) return;
+    state[fix.key] = state[fix.key] + fix.by;
+    MAP.forEach(function (m) {
+      if (m.key !== fix.key) return;
+      var input = el('in-' + m.id);
+      input.value = String(state[m.key]);
+      el(m.out).textContent = m.isMoney ? money(state[m.key]) : String(state[m.key]);
+      var pct = ((Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min))) * 100;
+      input.style.setProperty('--p', pct.toFixed(2) + '%');
+    });
+    render();
+  });
+
+  /* initial spots: spread across the table, responsive to its real size */
+  (function init() {
+    startSpots = [
+      { fx: 0.035, fy: 0.06 },   /* verdict  */
+      { fx: 0.40, fy: 0.30 },    /* the plan */
+      { fx: 0.075, fy: 0.62 },   /* notes    */
+      { fx: 0.62, fy: 0.03 }     /* polaroid */
+    ];
+    layout();
+    render();
+  })();
+})();
+</script>
+</body>
+</html>

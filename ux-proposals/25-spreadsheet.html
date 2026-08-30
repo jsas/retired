@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>25 — The Spreadsheet</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  table.xl { border-collapse: separate; border-spacing: 0; }
+  table.xl th, table.xl td {
+    border-right: 1px solid #dcdcdc; border-bottom: 1px solid #dcdcdc;
+    height: 24px; padding: 0 8px; font-size: 12px; white-space: nowrap;
+  }
+  table.xl thead th {
+    background: #f1f1f1; color: #6b7280; font-weight: 500; text-align: center;
+    font-size: 11px; height: 20px;
+  }
+  td.gut {
+    background: #f1f1f1; color: #8a8a8a; text-align: center; font-size: 11px;
+    min-width: 34px; padding: 0 4px;
+  }
+  td.a   { text-align: center; color: #374151; }
+  td.m   { text-align: right; color: #1f2937; }
+  td.z   { text-align: right; color: #b8b8b8; }
+  td.bal { text-align: right; font-weight: 600; color: #14532d; }
+  tr.dry td    { background: #fdecec; }
+  tr.dry td.bal{ background: #ffc7ce; color: #9c0006; font-weight: 700; }
+  tr.dry td.gut{ background: #ffc7ce; color: #9c0006; font-weight: 700; }
+  tr.sel td    { box-shadow: inset 2px 0 0 #217346; }
+  tr.sel td.gut{ background: #217346; color: #fff; font-weight: 700; }
+  tr.sel td.a  { color: #14532d; font-weight: 700; }
+  td.hdr { background: #e8f2ec; color: #217346; font-weight: 700; text-align: center; font-size: 11px; }
+  tbody tr:hover td.a { background: #eef6f1; }
+
+  .lab { background: #f1f1f1; border: 1px solid #dcdcdc; color: #6b7280;
+         font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+         padding: 0 7px; display: flex; align-items: center; white-space: nowrap; }
+  .cell { background: #fff; border: 1px solid #dcdcdc; height: 26px; padding: 0 8px;
+          font-size: 13px; color: #1f2937; width: 112px; }
+  .cell:focus { outline: none; border-color: #217346; box-shadow: 0 0 0 2px rgba(33,115,70,.18); }
+  .cell.bad { border-color: #d64545; background: #fff5f5; }
+
+  #formula { background: #fff; }
+  .fbadge { background: #f1f1f1; border-right: 1px solid #dcdcdc; color: #8a8a8a;
+            font-size: 10px; padding: 0 8px; display: flex; align-items: center; }
+
+  input[type=range].r { -webkit-appearance: none; appearance: none; height: 4px;
+    border-radius: 2px; background: #c9d6cf; outline: none; width: 100%; cursor: pointer; }
+  input[type=range].r::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%; background: #217346; border: 2px solid #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,.3); cursor: grab; }
+  input[type=range].r::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%;
+    background: #217346; border: 2px solid #fff; cursor: grab; }
+</style>
+</head>
+<body class="bg-[#f4f4f4] text-gray-900 min-h-screen flex flex-col">
+
+<header class="bg-white border-b border-gray-300">
+  <div class="max-w-[1180px] mx-auto px-5 h-12 flex items-center gap-2.5">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white shrink-0">RE:</div>
+    <span class="font-semibold text-sm text-gray-800">tired</span>
+    <span class="text-[11px] text-gray-400">25 — The Spreadsheet</span>
+  </div>
+</header>
+
+<main class="flex-1 w-full max-w-[1180px] mx-auto px-5 pt-5 pb-10">
+
+  <div class="bg-white border border-gray-300 shadow-sm">
+
+    <!-- title bar + status cell (the verdict lives here) -->
+    <div class="h-8 bg-[#217346] flex items-center px-3 gap-3">
+      <span class="text-white text-[12px] font-semibold tracking-wide">plan.xlsx — My retirement</span>
+      <div class="flex-1"></div>
+      <span id="statusCell" class="num text-[11px] font-semibold text-white px-2 py-0.5 rounded bg-black/25">calculating…</span>
+    </div>
+
+    <!-- frozen assumptions row -->
+    <div class="px-3 py-2.5 border-b border-gray-300 bg-[#fafafa]">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-[10px] uppercase tracking-[0.14em] text-gray-400 mr-1">Assumptions</span>
+        <span class="lab">retire at</span>
+        <input id="inRetire" class="cell num" type="text" inputmode="numeric" value="62" aria-label="retire age">
+        <span class="lab">spend / yr</span>
+        <input id="inSpend" class="cell num" type="text" inputmode="numeric" value="85000" aria-label="spending per year">
+        <span class="lab">saved now</span>
+        <input id="inSaved" class="cell num" type="text" inputmode="numeric" value="850000" aria-label="savings today">
+        <div class="flex-1"></div>
+        <span class="text-[10px] text-gray-400 hidden md:inline">type a number, press Enter</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2.5">
+        <input id="slRetire" type="range" class="r" min="56" max="75" step="1" value="62" aria-label="retire age slider">
+        <input id="slSpend" type="range" class="r" min="40000" max="160000" step="1000" value="85000" aria-label="spending slider">
+        <input id="slSaved" type="range" class="r" min="100000" max="3000000" step="10000" value="850000" aria-label="savings slider">
+      </div>
+    </div>
+
+    <!-- formula bar -->
+    <div class="flex items-stretch border-b border-gray-300">
+      <span class="fbadge num shrink-0" id="fbRef">D12</span>
+      <div id="formula" class="flex-1 px-3 py-2 text-[13px] text-gray-700 min-h-[38px] flex items-center leading-snug"></div>
+    </div>
+
+    <!-- the grid -->
+    <div class="overflow-x-auto">
+      <table class="xl w-full">
+        <thead>
+          <tr>
+            <th class="gut w-[34px]"></th>
+            <th class="w-[70px]">A</th>
+            <th class="w-[130px]">B</th>
+            <th class="w-[130px]">C</th>
+            <th class="w-[140px]">D</th>
+          </tr>
+          <tr>
+            <td class="gut"></td>
+            <td class="hdr">age</td>
+            <td class="hdr">money in</td>
+            <td class="hdr">money out</td>
+            <td class="hdr">balance</td>
+          </tr>
+        </thead>
+        <tbody id="grid"></tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center gap-2 px-3 py-1.5 border-t border-gray-300 bg-[#fafafa] text-[11px]">
+      <span class="px-2 py-0.5 bg-white border border-gray-300 rounded-t text-[#217346] font-semibold">plan</span>
+      <span class="px-2 py-0.5 text-gray-400">notes</span>
+      <div class="flex-1"></div>
+      <span class="text-gray-400 hidden sm:inline">click any row to see its math above</span>
+    </div>
+  </div>
+
+  <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div class="bg-white border border-gray-300 px-4 py-3">
+      <p class="text-[10px] uppercase tracking-[0.14em] text-gray-400">money lasts to</p>
+      <p id="outLasts" class="num text-2xl font-bold text-gray-900 mt-0.5">—</p>
+    </div>
+    <div class="bg-white border border-gray-300 px-4 py-3">
+      <p class="text-[10px] uppercase tracking-[0.14em] text-gray-400">left over at 95</p>
+      <p id="outLeft" class="num text-2xl font-bold text-gray-900 mt-0.5">—</p>
+    </div>
+    <div id="outFix" class="bg-white border border-gray-300 px-4 py-3 text-[13px] text-gray-600 flex items-center leading-snug">—</div>
+  </div>
+</main>
+
+<footer class="px-5 py-4 text-center text-[11px] text-gray-500">
+  25 · The Spreadsheet — your whole plan as one sheet you can edit, cell by cell.
+</footer>
+
+<script src="model.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    spending: DEMO_DEFAULTS.spending,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var MIN_AGE = 55, MAX_AGE = 95;
+  var SELECTED = 66;
+
+  var money = function (v) { return '$' + Math.round(v).toLocaleString('en-CA'); };
+  var kfmt = function (v) {
+    if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+    return '$' + Math.round(v / 1000) + 'k';
+  };
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /* one row's math, said in words */
+  function rowWords(age, prevBal, bal) {
+    if (bal <= 0) {
+      return 'at ' + age + ': started with ' + kfmt(prevBal) + ', spent ' + kfmt(state.spending) +
+             ', and that was the end of the money.';
+    }
+    var working = age < state.retireAge;
+    var inflow = working ? state.contrib : (age >= state.benefitAge ? state.benefits : 0);
+    var outflow = working ? 0 : state.spending;
+    var growth = bal - (prevBal + inflow - outflow);
+    var parts = ['at ' + age + ': started with ' + kfmt(prevBal)];
+    if (working) parts.push('you added ' + kfmt(inflow));
+    else {
+      if (inflow > 0) parts.push('benefits added ' + kfmt(inflow));
+      parts.push('you spent ' + kfmt(outflow));
+    }
+    if (growth >= 1) parts.push('growth added ' + kfmt(growth));
+    else if (growth <= -1) parts.push('growth took ' + kfmt(-growth));
+    parts.push('so you had ' + kfmt(bal));
+    return parts.join(', ') + '.';
+  }
+
+  function build(res) {
+    var rows = res.rows, html = '', prev = state.savings, shown = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (r.age > MAX_AGE) break;
+      var working = r.age < state.retireAge;
+      var inflow = working ? state.contrib : (r.age >= state.benefitAge ? state.benefits : 0);
+      var outflow = working ? 0 : state.spending;
+      var dry = res.depletionAge != null && r.age >= res.depletionAge;
+      var visible = (r.age % 5 === 0) || dry;
+      if (visible) {
+        var cls = [];
+        if (dry) cls.push('dry');
+        if (r.age === SELECTED) cls.push('sel');
+        html += '<tr data-age="' + r.age + '"' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>';
+        html += '<td class="gut num">' + (shown + 2) + '</td>';
+        html += '<td class="a num">' + r.age + '</td>';
+        html += '<td class="num ' + (inflow > 0 ? 'm' : 'z') + '">' + (inflow > 0 ? money(inflow) : '—') + '</td>';
+        html += '<td class="num ' + (outflow > 0 ? 'm' : 'z') + '">' + (outflow > 0 ? money(outflow) : '—') + '</td>';
+        html += '<td class="num bal">' + (dry ? '$0' : money(r.bal)) + '</td>';
+        html += '</tr>';
+        shown++;
+      }
+      prev = r.bal;
+    }
+    $('grid').innerHTML = html;
+
+    /* formula bar for whichever row is selected */
+    var selRow = null, selPrev = state.savings, p = state.savings, found = false;
+    for (var q = 0; q < rows.length; q++) {
+      if (rows[q].age === SELECTED) { selRow = rows[q]; selPrev = p; found = true; break; }
+      p = rows[q].bal;
+      if (rows[q].bal <= 0) break;
+    }
+    $('fbRef').textContent = 'D' + (SELECTED - MIN_AGE + 2);
+    $('formula').innerHTML = found
+      ? esc(rowWords(SELECTED, selPrev, selRow.bal))
+      : '<span style="color:#9ca3af">no row at ' + SELECTED + ' — the money is gone before then.</span>';
+  }
+
+  function render() {
+    var res = simulate(state);
+    build(res);
+
+    var st = $('statusCell');
+    if (res.ok) {
+      st.textContent = 'lasts to ' + lastsLabel(res);
+      st.style.background = '#0f5132';
+    } else {
+      st.textContent = 'runs out at ' + res.depletionAge;
+      st.style.background = '#a4262c';
+    }
+
+    $('outLasts').textContent = lastsLabel(res);
+    $('outLasts').style.color = res.ok ? '#14532d' : '#9c0006';
+    $('outLeft').textContent = money(res.leftAtMax);
+
+    var fx = $('outFix'), yrs = res.leftAtMax / state.spending;
+    if (!res.ok) {
+      fx.innerHTML = '<span><b style="color:#9c0006">Short by ' + (state.maxAge - res.depletionAge) +
+        ' year' + (state.maxAge - res.depletionAge === 1 ? '' : 's') + '.</b> ' +
+        esc(suggest(state) || 'No small change closes this gap.') + '</span>';
+    } else if (yrs < 3) {
+      fx.innerHTML = '<span><b style="color:#14532d">It holds.</b> A thin cushion though — about ' +
+        yrs.toFixed(1) + ' years of spending left over at 95.</span>';
+    } else {
+      fx.innerHTML = '<span><b style="color:#14532d">It holds, with room.</b> About ' +
+        yrs.toFixed(1) + ' years of spending left over at 95.</span>';
+    }
+
+    $('inRetire').value = String(state.retireAge);
+    $('inSpend').value = String(state.spending);
+    $('inSaved').value = String(state.savings);
+    $('slRetire').value = String(state.retireAge);
+    $('slSpend').value = String(state.spending);
+    $('slSaved').value = String(state.savings);
+  }
+
+  function commit(input, key, lo, hi) {
+    var v = parseFloat(String(input.value).replace(/[$,\s]/g, ''));
+    if (isNaN(v)) { input.classList.add('bad'); return; }
+    v = Math.round(v);
+    if (v < lo) v = lo;
+    if (v > hi) v = hi;
+    state[key] = v;
+    input.classList.remove('bad');
+    render();
+  }
+
+  $('inRetire').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') commit($('inRetire'), 'retireAge', 56, 75);
+  });
+  $('inSpend').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') commit($('inSpend'), 'spending', 10000, 400000);
+  });
+  $('inSaved').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') commit($('inSaved'), 'savings', 0, 20000000);
+  });
+  [$('inRetire'), $('inSpend'), $('inSaved')].forEach(function (el) {
+    el.addEventListener('blur', function () { render(); });
+  });
+
+  $('slRetire').addEventListener('input', function (e) { state.retireAge = +e.target.value; render(); });
+  $('slSpend').addEventListener('input', function (e) { state.spending = +e.target.value; render(); });
+  $('slSaved').addEventListener('input', function (e) { state.savings = +e.target.value; render(); });
+
+  $('grid').addEventListener('click', function (e) {
+    var tr = e.target && e.target.closest ? e.target.closest('tr[data-age]') : null;
+    if (!tr) return;
+    SELECTED = +tr.getAttribute('data-age');
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

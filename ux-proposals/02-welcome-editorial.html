@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>02 — Welcome: Editorial Dark</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .serif-display { font-family: Georgia, 'Times New Roman', serif; letter-spacing: -0.02em; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .fu { animation: fadeUp .7s cubic-bezier(.2,.7,.3,1) both; }
+  .fu-1 { animation-delay:.08s } .fu-2 { animation-delay:.18s } .fu-3 { animation-delay:.28s }
+  .fu-4 { animation-delay:.38s } .fu-5 { animation-delay:.48s } .fu-6 { animation-delay:.58s }
+  @keyframes glow { 0%,100% { opacity:.5 } 50% { opacity:.9 } }
+  .glow { animation: glow 5s ease-in-out infinite; }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body class="bg-[#0c0f14] text-slate-200 min-h-screen antialiased">
+
+<!-- thin top bar -->
+<header class="flex items-center justify-between px-6 md:px-10 h-16 border-b border-white/5">
+  <div class="flex items-center gap-2 font-semibold text-sm text-white">
+    <div class="w-6 h-6 bg-blue-500 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <div class="flex items-center gap-5 text-xs text-slate-400">
+    <a href="#" class="hover:text-white transition-colors hidden sm:block">How it works</a>
+    <a href="#" class="hover:text-white transition-colors hidden sm:block">Privacy</a>
+    <a href="#" class="px-3 py-1.5 rounded-md bg-white/10 text-white hover:bg-white/15 transition-colors">Skip to my plan →</a>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 md:px-10">
+
+  <!-- ═══ HERO — the question, huge ═══ -->
+  <section class="pt-16 md:pt-24 pb-14 md:pb-20 text-center relative">
+    <div class="glow absolute left-1/2 top-24 -translate-x-1/2 w-[560px] h-[280px] rounded-full bg-blue-600/20 blur-[110px] pointer-events-none"></div>
+
+    <p class="fu fu-1 relative text-[11px] font-semibold uppercase tracking-[0.28em] text-blue-400 mb-6">
+      A Canadian retirement drawdown planner
+    </p>
+    <h1 class="fu fu-2 relative serif-display text-5xl md:text-7xl text-white leading-[1.05]">
+      Will your money<br/>outlast <em class="text-blue-400 not-italic">you?</em>
+    </h1>
+    <p class="fu fu-3 relative mt-7 text-base md:text-lg text-slate-400 leading-relaxed max-w-xl mx-auto">
+      Project your savings year by year through retirement — taxes, CPP, OAS, GIS
+      and all — and see the exact age your money lasts to.
+    </p>
+
+    <div class="fu fu-4 relative mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+      <button class="group px-7 py-3.5 bg-blue-500 text-white text-sm font-semibold rounded-full hover:bg-blue-400 transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2">
+        Build my plan — 2 minutes
+        <span class="transition-transform group-hover:translate-x-0.5">→</span>
+      </button>
+      <button class="px-7 py-3.5 text-sm text-slate-300 rounded-full border border-white/15 hover:border-white/30 hover:text-white transition-all">
+        Explore a sample plan
+      </button>
+    </div>
+    <p class="fu fu-5 relative mt-5 text-[11px] text-slate-500">
+      Free · No account · Runs entirely in your browser
+    </p>
+  </section>
+
+  <!-- ═══ PROOF STRIP ═══ -->
+  <section class="fu fu-5 relative rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm overflow-hidden mb-16 md:mb-24">
+    <div class="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/5">
+      <div class="p-6 md:p-7">
+        <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-2">The verdict</div>
+        <div class="serif-display text-3xl text-emerald-400">Age 95+</div>
+        <p class="mt-1.5 text-[13px] text-slate-400 leading-relaxed">One clear answer, not a wall of tables. Stress-tested two ways.</p>
+      </div>
+      <div class="p-6 md:p-7">
+        <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-2">The honesty</div>
+        <div class="serif-display text-3xl text-white num">94<span class="text-lg text-slate-400">%</span> <span class="text-lg text-slate-500">·</span> <span class="text-lg text-slate-400">38/41</span></div>
+        <p class="mt-1.5 text-[13px] text-slate-400 leading-relaxed">Monte Carlo odds and a replay of every market window since 1970.</p>
+      </div>
+      <div class="p-6 md:p-7">
+        <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-2">The control</div>
+        <div class="serif-display text-3xl text-amber-400">Drag it</div>
+        <p class="mt-1.5 text-[13px] text-slate-400 leading-relaxed">Move retirement age or spending and watch the answer change live.</p>
+      </div>
+    </div>
+    <div class="px-6 md:px-7 pb-6">
+      <svg viewBox="0 0 900 90" class="w-full">
+        <defs>
+          <linearGradient id="dg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M 0 70 L 180 38 L 300 44 L 420 52 L 540 60 L 660 68 L 780 74 L 900 78 L 900 90 L 0 90 Z" fill="url(#dg)"/>
+        <path d="M 0 70 L 180 38 L 300 44 L 420 52 L 540 60 L 660 68 L 780 74 L 900 78" fill="none" stroke="#3b82f6" stroke-width="2"/>
+        <line x1="180" y1="10" x2="180" y2="90" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <text x="188" y="20" font-size="11" fill="#fbbf24">retire at 62</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ═══ THREE PROMISES ═══ -->
+  <section class="grid md:grid-cols-3 gap-10 md:gap-12 pb-16 md:pb-24">
+    <div class="fu fu-4">
+      <div class="serif-display text-5xl text-white/10 mb-3">01</div>
+      <h3 class="text-base font-semibold text-white mb-2">Tell it your life</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        A short wizard collects ages, balances, contributions, CPP/OAS and your
+        spending goal — a partner gets their own pass. Everything stays editable
+        afterwards, live as you type.
+      </p>
+    </div>
+    <div class="fu fu-5">
+      <div class="serif-display text-5xl text-white/10 mb-3">02</div>
+      <h3 class="text-base font-semibold text-white mb-2">Read the answer</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        The verdict, the timeline, and the full year-by-year math — every tax and
+        benefit shown its work. Collapse what you don't need; drill into what you do.
+      </p>
+    </div>
+    <div class="fu fu-6">
+      <div class="serif-display text-5xl text-white/10 mb-3">03</div>
+      <h3 class="text-base font-semibold text-white mb-2">Make it better</h3>
+      <p class="text-[13.5px] text-slate-400 leading-relaxed">
+        Optimize ranks CPP timing and withdrawal orders. Steering lets you drag the
+        plan on a live success-rate map. Compare puts scenarios side by side.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══ PRIVACY ═══ -->
+  <section class="fu fu-6 border-t border-white/5 py-10 md:py-14 flex flex-col md:flex-row items-start md:items-center gap-5 md:gap-8">
+    <div class="w-11 h-11 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+    </div>
+    <div class="flex-1">
+      <h3 class="text-sm font-semibold text-white mb-1">Your data never leaves this device.</h3>
+      <p class="text-[13px] text-slate-400 leading-relaxed max-w-2xl">
+        Scenarios, settings and results live only in this browser's local storage. No account, no
+        analytics on your numbers, nothing uploaded. Keep a backup file from the Data page if you
+        switch devices.
+      </p>
+    </div>
+    <button class="px-5 py-2.5 bg-white text-slate-900 text-sm font-semibold rounded-full hover:bg-slate-200 transition-colors shrink-0">
+      Get started →
+    </button>
+  </section>
+
+  <footer class="border-t border-white/5 py-8 flex flex-col md:flex-row items-center justify-between gap-3 text-[11px] text-slate-600">
+    <span>For education and exploration only — simplified estimates, not financial advice.</span>
+    <span>02 · Dark editorial welcome — the question up front, the answer one click away.</span>
+  </footer>
+</main>
+
+</body>
+</html>

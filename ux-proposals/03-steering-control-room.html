@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>03 — Steering: Control Room</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range].fader { -webkit-appearance:none; appearance:none; height:6px; border-radius:3px; background:#334155; outline:none; }
+  input[type=range].fader::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%;
+    background:#fff; border:2.5px solid #2563eb; box-shadow:0 1px 4px rgba(15,23,42,.25); cursor:grab;
+  }
+  input[type=range].fader::-moz-range-thumb {
+    width:22px; height:22px; border-radius:50%; background:#fff; border:2.5px solid #2563eb;
+    box-shadow:0 1px 4px rgba(15,23,42,.25); cursor:grab;
+  }
+  @keyframes pulseSoft { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,.35);} 50% { box-shadow: 0 0 0 10px rgba(16,185,129,0);} }
+  .pulse-soft { animation: pulseSoft 2.4s ease-out infinite; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px);} to { opacity:1; transform:none;} }
+  .fu { animation: fadeUp .5s ease-out both; }
+</style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+
+<header class="bg-neutral-950 text-white flex items-center px-4 h-14 gap-3 border-b border-neutral-800">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-neutral-500">/</span>
+  <span class="text-xs text-amber-400 font-medium flex items-center gap-1.5">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+    Steering
+  </span>
+  <div class="flex-1"></div>
+  <span class="text-xs text-neutral-500 hidden md:block">03 — Focused control room</span>
+</header>
+
+<!-- ═══ LIVE SCORE STRIP ═══ -->
+<div class="sticky top-0 z-20 bg-slate-900/90 backdrop-blur border-b border-slate-800">
+  <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center gap-4 md:gap-6 flex-wrap">
+    <div class="flex items-center gap-3">
+      <div class="pulse-soft w-12 h-12 rounded-full bg-emerald-500/15 border-2 border-emerald-500 flex items-center justify-center">
+        <span class="text-sm font-bold num text-emerald-400">94</span>
+      </div>
+      <div>
+        <div class="text-sm font-semibold text-white num">94% success rate</div>
+        <div class="text-[11px] text-slate-400">500 futures · money lasts to <span class="text-slate-200 font-medium">95+</span></div>
+      </div>
+    </div>
+    <div class="hidden sm:flex items-center gap-1.5 text-xs num px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+      +3 pts since you opened this page
+    </div>
+    <div class="flex-1"></div>
+    <div class="flex items-center gap-2 text-xs">
+      <button class="px-3 py-1.5 rounded-md bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700">Undo drag</button>
+      <button class="px-3 py-1.5 rounded-md bg-blue-600 text-white font-medium hover:bg-blue-500">Save to scenario</button>
+    </div>
+  </div>
+</div>
+
+<main class="max-w-6xl mx-auto px-4 md:px-6 py-6 grid lg:grid-cols-[1fr_380px] gap-6">
+
+  <!-- ═══ LEFT: THE PAD ═══ -->
+  <section class="fu">
+    <div class="bg-slate-800/60 rounded-2xl border border-slate-700/80 overflow-hidden">
+      <div class="flex items-center justify-between px-5 pt-4 pb-2">
+        <div>
+          <h1 class="text-sm font-semibold text-white">Drag your plan</h1>
+          <p class="text-[12px] text-slate-400 mt-0.5">Retirement age ↔ spending. Green means the money lasts; red means it runs out.</p>
+        </div>
+        <span class="text-[11px] num px-2 py-1 rounded bg-slate-900/70 text-slate-400 border border-slate-700">live · re-solving…</span>
+      </div>
+    </div>
+
+    <!-- the pad -->
+    <div class="px-5 pb-5">
+      <svg viewBox="0 0 640 420" class="w-full select-none" style="touch-action:none">
+        <defs>
+          <linearGradient id="feas" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"  stop-color="#059669" stop-opacity="0.55"/>
+            <stop offset="45%" stop-color="#d97706" stop-opacity="0.38"/>
+            <stop offset="100%" stop-color="#e11d48" stop-opacity="0.5"/>
+          </linearGradient>
+        </defs>
+        <rect x="56" y="16" width="560" height="340" rx="10" fill="url(#feas)"/>
+        <g font-size="11" font-weight="700" class="num">
+          <text x="90"  y="46"  fill="#a7f3d0">98%</text>
+          <text x="300" y="150" fill="#fde68a">90%</text>
+          <text x="510" y="300" fill="#fecdd3">65%</text>
+        </g>
+        <g stroke="#475569" stroke-width="1">
+          <line x1="56" y1="356" x2="616" y2="356"/>
+          <line x1="56" y1="16"  x2="56" y2="356"/>
+        </g>
+        <g font-size="11" fill="#94a3b8" class="num">
+          <text x="56"  y="376" text-anchor="middle">58</text>
+          <text x="196" y="376" text-anchor="middle">62</text>
+          <text x="336" y="376" text-anchor="middle">66</text>
+          <text x="476" y="366" text-anchor="middle">70</text>
+          <text x="616" y="376" text-anchor="middle">74</text>
+          <text x="48" y="360" text-anchor="end">$60k</text>
+          <text x="48" y="250" text-anchor="end">$80k</text>
+          <text x="48" y="140" text-anchor="end">$100k</text>
+          <text x="48" y="30"  text-anchor="end">$120k</text>
+        </g>
+        <text x="336" y="404" text-anchor="middle" font-size="12" fill="#cbd5e1" font-weight="600">Retirement age →</text>
+        <text x="18" y="186" text-anchor="middle" font-size="12" fill="#cbd5e1" font-weight="600" transform="rotate(-90 18 186)">Spending →</text>
+        <path d="M 56 330 C 180 300 300 240 380 170 C 440 120 520 60 616 40" fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6 5" opacity=".7"/>
+        <g style="cursor:grab">
+          <circle cx="196" cy="250" r="26" fill="#fff" opacity=".12"/>
+          <circle cx="196" cy="250" r="13" fill="#fbbf24" stroke="#0f172a" stroke-width="3"/>
+          <circle cx="196" cy="250" r="4" fill="#0f172a"/>
+        </g>
+        <g>
+          <rect x="222" y="204" width="150" height="58" rx="8" fill="#0f172a" stroke="#334155"/>
+          <text x="236" y="226" font-size="12" fill="#f8fafc" font-weight="700" class="num">Retire 62 · $80k/yr</text>
+          <text x="236" y="246" font-size="11" fill="#34d399" font-weight="600" class="num">94% · lasts to 95+</text>
+        </g>
+      </svg>
+      <p class="mt-1 text-[11px] text-slate-500 leading-relaxed">
+        The dotted line is the 90%-success frontier — anywhere below-left of it is comfortable.
+        Dragging the dot re-writes retirement age and spending in the sidebar, live.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══ RIGHT: THE FADERS ═══ -->
+  <aside class="space-y-3">
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">The levers</h2>
+
+    <div class="fu bg-slate-800/60 rounded-xl border border-slate-700/80 p-4">
+      <div class="flex items-baseline justify-between mb-1">
+        <label class="text-[13px] font-medium text-slate-200">Retirement age</label>
+        <span class="text-lg font-bold num text-white">62</span>
+    </div>
+      <input type="range" class="fader w-full" min="55" max="70" value="62" />
+      <div class="flex justify-between text-[10px] text-slate-500 num mt-1"><span>55</span><span>70</span></div>
+      <div class="mt-2.5 text-[11.5px] text-slate-400 leading-relaxed border-t border-slate-700/60 pt-2.5">
+        Each year earlier costs <span class="text-amber-400 font-medium num">≈ 4 pts</span> of success.
+        <button class="text-blue-400 hover:underline ml-1">Limit to 55–70</button>
+      </div>
+    </div>
+
+    <div class="fu bg-slate-800/60 rounded-xl border border-slate-700/80 p-4">
+      <div class="flex items-baseline justify-between mb-1">
+        <label class="text-[13px] font-medium text-slate-200">Spending / year</label>
+        <span class="text-lg font-bold num text-white">$80k</span>
+      </div>
+      <input type="range" class="fader w-full" min="50" max="120" value="80" />
+      <div class="flex justify-between text-[10px] text-slate-500 num mt-1"><span>$50k</span><span>$120k</span></div>
+      <div class="mt-2.5 text-[11.5px] text-slate-400 leading-relaxed border-t border-slate-700/60 pt-2.5">
+        $5k less per year adds <span class="text-emerald-400 font-medium num">≈ 2 pts</span>.
+        <button class="text-blue-400 hover:underline ml-1">Limit range</button>
+      </div>
+    </div>
+
+    <div class="fu bg-slate-800/60 rounded-xl border border-slate-700/80 p-4">
+      <div class="flex items-baseline justify-between mb-1">
+        <label class="text-[13px] font-medium text-slate-200">Investment return</label>
+        <span class="text-lg font-bold num text-white">5.0%</span>
+      </div>
+      <input type="range" class="fader w-full" min="2" max="8" step="0.1" value="5" />
+      <div class="flex justify-between text-[10px] text-slate-500 num mt-1"><span>2%</span><span>8%</span></div>
+      <div class="mt-2.5 text-[11.5px] text-slate-400 leading-relaxed border-t border-slate-700/60 pt-2.5">
+        This is an <em>assumption</em>, not a lever — the pad shows what happens if you're wrong.
+      </div>
+    </div>
+
+    <div class="fu bg-slate-800/60 rounded-xl border border-slate-700/80 p-4 opacity-75">
+      <div class="flex items-baseline justify-between mb-1">
+        <label class="text-[13px] font-medium text-slate-200">CPP start age</label>
+        <span class="text-lg font-bold num text-white">65</span>
+      </div>
+      <input type="range" class="fader w-full" min="60" max="70" value="65" />
+      <div class="flex justify-between text-[10px] text-slate-500 num mt-1"><span>60</span><span>70</span></div>
+      <div class="mt-2.5 text-[11.5px] text-slate-400 leading-relaxed border-t border-slate-700/60 pt-2.5">
+        Deferring to 70 raises success <span class="text-emerald-400 font-medium num">+1 pt</span> here — Optimize explores this automatically.
+      </div>
+    </div>
+
+    <div class="fu rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 text-[12px] text-blue-200 leading-relaxed">
+      <strong>Guardrails:</strong> every change here is an unsaved edit — nothing touches your stored
+      scenario until <em>Save to scenario</em>. Undo steps back through drags one at a time.
+    </div>
+  </aside>
+</main>
+
+<footer class="max-w-6xl mx-auto px-6 py-6 text-center text-[11px] text-slate-600">
+  03 · Steering as a focused control room: score pinned on top, pad dominant, faders explain their own consequences.
+</footer>
+
+</body>
+</html>

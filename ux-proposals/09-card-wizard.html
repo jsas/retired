@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>09 — One Question at a Time</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  .card { transition: opacity .28s ease, transform .28s ease; }
+  .off { display: none; }
+  .dot { width: 6px; height: 6px; border-radius: 9999px; background: #e5e5e5; transition: all .25s; }
+  .dot.on { background: #0f766e; width: 20px; }
+  input[type=range].st { -webkit-appearance:none; appearance:none; height:2px; background:#e5e5e5; border-radius:2px; outline:none; }
+  input[type=range].st::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:24px; height:24px; border-radius:50%; margin-top:-11px;
+    background:#0f766e; border:4px solid #fff; box-shadow:0 1px 6px rgba(15,118,110,.35);
+  }
+  input[type=range].st::-moz-range-thumb {
+    width:24px; height:24px; border-radius:50%; background:#0f766e; border:4px solid #fff;
+    box-shadow:0 1px 6px rgba(15,118,110,.35);
+  }
+  .stepbtn { width:34px; height:34px; border-radius:9999px; border:1px solid #e5e5e5; color:#525252;
+    display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1;
+    transition:all .15s; user-select:none; touch-action:manipulation; }
+  .stepbtn:hover { border-color:#0f766e; color:#0f766e; }
+  .stepbtn:active { transform:scale(.93); }
+  .chip { border:1px solid #e5e5e5; border-radius:9999px; padding:5px 13px; font-size:12px; color:#525252;
+    transition:all .15s; background:#fff; }
+  .chip:hover { border-color:#0f766e; color:#0f766e; }
+  .chip:active { transform:scale(.95); }
+  .money { font-variant-numeric: tabular-nums; outline:none; }
+  .money:focus { border-color:#0f766e; }
+  .pick { transition:all .15s; }
+  .pick:hover { background:#fafaf9; }
+  .pick:hover .go { opacity:1; transform:translateX(0); }
+  .go { opacity:0; transform:translateX(-4px); transition:all .15s; }
+  .fadein { animation: fi .3s ease both; }
+  @keyframes fi { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+</style>
+</head>
+<body class="bg-[#f7f7f6] text-neutral-900 min-h-screen flex flex-col antialiased">
+
+<header class="flex items-center justify-between px-5 py-4">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[9px] font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-neutral-400">09 · One Question at a Time</span>
+</header>
+
+<main class="flex-1 flex items-center justify-center px-5 py-8">
+
+  <!-- ═══ Q1 · AGE ═══ -->
+  <section id="q1" class="card w-full max-w-md">
+    <p class="text-[11px] uppercase tracking-[0.16em] text-neutral-400 mb-3">question 1 of 4</p>
+    <h2 class="text-2xl font-semibold tracking-tight">How old are you?</h2>
+    <div class="mt-9 flex items-center justify-between border-y border-neutral-200 py-7">
+      <button class="stepbtn" id="aMinus" aria-label="one year younger">&minus;</button>
+      <div class="text-[68px] leading-none font-light num" id="aVal">55</div>
+      <button class="stepbtn" id="aPlus" aria-label="one year older">+</button>
+    </div>
+    <input id="aRange" type="range" class="st w-full mt-6" min="30" max="75" step="1" value="55">
+    <p class="mt-4 text-[12px] text-neutral-400">Most people start planning between 45 and 65.</p>
+    <button id="n1" class="mt-8 w-full rounded-lg bg-teal-700 py-3 text-[14px] font-medium text-white hover:bg-teal-800 transition-colors">Next</button>
+  </section>
+
+  <!-- ═══ Q2 · SAVINGS ═══ -->
+  <section id="q2" class="card off w-full max-w-md">
+    <p class="text-[11px] uppercase tracking-[0.16em] text-neutral-400 mb-3">question 2 of 4</p>
+    <h2 class="text-2xl font-semibold tracking-tight">How much have you saved?</h2>
+    <div class="mt-9 flex items-baseline gap-2 border-b-2 border-neutral-900 pb-2">
+      <span class="text-3xl font-light text-neutral-400">$</span>
+      <input id="inSavings" class="money text-[44px] font-light w-full bg-transparent border-0 p-0" inputmode="numeric" value="850,000">
+    </div>
+    <div class="mt-5 flex flex-wrap gap-2">
+      <button class="chip" data-sav="-10000">&minus; $10,000</button>
+      <button class="chip" data-sav="10000">+ $10,000</button>
+      <button class="chip" data-sav="-100000">&minus; $100,000</button>
+      <button class="chip" data-sav="100000">+ $100,000</button>
+    </div>
+    <p class="mt-4 text-[12px] text-neutral-400">Everything, all together: RRSP, TFSA, GICs, cash.</p>
+    <button id="n2" class="mt-8 w-full rounded-lg bg-teal-700 py-3 text-[14px] font-medium text-white hover:bg-teal-800 transition-colors">Next</button>
+  </section>
+
+  <!-- ═══ Q3 · STOP WORKING ═══ -->
+  <section id="q3" class="card off w-full max-w-md">
+    <p class="text-[11px] uppercase tracking-[0.16em] text-neutral-400 mb-3">question 3 of 4</p>
+    <h2 class="text-2xl font-semibold tracking-tight">When do you want to stop working?</h2>
+    <div class="mt-9 flex items-center justify-between border-y border-neutral-200 py-7">
+      <button class="stepbtn" id="rMinus" aria-label="one year sooner">&minus;</button>
+      <div class="text-[68px] leading-none font-light num" id="rVal">62</div>
+      <button class="stepbtn" id="rPlus" aria-label="one year later">+</button>
+    </div>
+    <input id="rRange" type="range" class="st w-full mt-6" min="55" max="75" step="1" value="62">
+    <p class="mt-4 text-[12px] text-neutral-400" id="rHint">That is 7 more years of pay going in.</p>
+    <button id="n3" class="mt-8 w-full rounded-lg bg-teal-700 py-3 text-[14px] font-medium text-white hover:bg-teal-800 transition-colors">Next</button>
+  </section>
+
+  <!-- ═══ Q4 · SPENDING ═══ -->
+  <section id="q4" class="card off w-full max-w-md">
+    <p class="text-[11px] uppercase tracking-[0.16em] text-neutral-400 mb-3">question 4 of 4</p>
+    <h2 class="text-2xl font-semibold tracking-tight">How much a year, after?</h2>
+    <div class="mt-9 flex items-baseline gap-2 border-b-2 border-neutral-900 pb-2">
+      <span class="text-3xl font-light text-neutral-400">$</span>
+      <input id="inSpend" class="money text-[44px] font-light w-full bg-transparent border-0 p-0" inputmode="numeric" value="85,000">
+    </div>
+    <div class="mt-5 flex flex-wrap gap-2">
+      <button class="chip" data-spd="-5000">&minus; $5,000</button>
+      <button class="chip" data-spd="5000">+ $5,000</button>
+      <button class="chip" data-spd="-20000">&minus; $20,000</button>
+      <button class="chip" data-spd="20000">+ $20,000</button>
+    </div>
+    <p class="mt-4 text-[12px] text-neutral-400">What a comfortable year looks like, after the paycheques stop.</p>
+    <button id="n4" class="mt-8 w-full rounded-lg bg-teal-700 py-3 text-[14px] font-medium text-white hover:bg-teal-800 transition-colors">Show me the answer</button>
+  </section>
+
+  <!-- ═══ ANSWER ═══ -->
+  <section id="final" class="card off w-full max-w-md">
+    <p class="text-[11px] uppercase tracking-[0.16em] text-neutral-400 mb-4">your answer</p>
+    <h2 id="verdict" class="text-[34px] leading-[1.08] font-semibold tracking-tight"></h2>
+    <svg id="spark" viewBox="0 0 340 74" class="w-full h-[74px] mt-6 block"></svg>
+    <div class="mt-6 border-t border-neutral-200 pt-5 space-y-3 text-[13px]">
+      <div class="flex justify-between"><span class="text-neutral-500">Money lasts until you're</span><span class="num font-semibold" id="fLasts">89</span></div>
+      <div class="flex justify-between"><span class="text-neutral-500">In the pot at 65</span><span class="num font-semibold" id="fAt65">$1.06M</span></div>
+      <div class="flex justify-between"><span class="text-neutral-500">From CPP and OAS at 65</span><span class="num font-semibold">$22,000 a year</span></div>
+    </div>
+    <p id="fNote" class="mt-5 text-[13px] leading-relaxed text-neutral-500"></p>
+    <div class="mt-8 flex gap-3">
+      <button id="btnChange" class="flex-1 rounded-lg border border-neutral-300 py-3 text-[13px] font-medium hover:bg-white transition-colors">Change something</button>
+      <a href="#" class="flex-1 text-center rounded-lg bg-neutral-900 py-3 text-[13px] font-medium text-white hover:bg-neutral-700 transition-colors">Save this plan</a>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══ CHOOSER ═══ -->
+<div id="chooser" class="off fixed inset-0 z-20 bg-white/90 backdrop-blur-sm flex items-center justify-center px-5">
+  <div class="w-full max-w-md bg-white rounded-2xl border border-neutral-200 shadow-xl p-2 fadein">
+    <p class="px-4 pt-4 pb-2 text-[11px] uppercase tracking-[0.16em] text-neutral-400">change one of these</p>
+    <button class="pick w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-between" data-go="1">
+      <span><span class="block text-[14px] font-medium">How old you are</span><span class="block text-[12px] text-neutral-400 num" id="cAge">55</span></span>
+      <span class="go text-teal-700 text-[13px]">&rarr;</span>
+    </button>
+    <button class="pick w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-between" data-go="2">
+      <span><span class="block text-[14px] font-medium">What you've saved</span><span class="block text-[12px] text-neutral-400 num" id="cSav">$850,000</span></span>
+      <span class="go text-teal-700 text-[13px]">&rarr;</span>
+    </button>
+    <button class="pick w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-between" data-go="3">
+      <span><span class="block text-[14px] font-medium">When you stop working</span><span class="block text-[12px] text-neutral-400 num" id="cRet">62</span></span>
+      <span class="go text-teal-700 text-[13px]">&rarr;</span>
+    </button>
+    <button class="pick w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-between" data-go="4">
+      <span><span class="block text-[14px] font-medium">What you spend a year</span><span class="block text-[12px] text-neutral-400 num" id="cSpd">$85,000</span></span>
+      <span class="go text-teal-700 text-[13px]">&rarr;</span>
+    </button>
+    <button id="cClose" class="w-full px-4 py-3 text-[13px] text-neutral-400 hover:text-neutral-700 transition-colors">Back to the answer</button>
+  </div>
+</div>
+
+<footer class="px-5 py-4 text-[11px] text-neutral-400">
+  09 · One Question at a Time — four plain questions, one plain answer, no forms.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const ORDER = ['q1', 'q2', 'q3', 'q4', 'final'];
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  /* ── navigation ── */
+  let step = 1;
+  function show(n) {
+    step = n;
+    ORDER.forEach(id => $(id).classList.toggle('off', id !== ORDER[n - 1]));
+    const card = $(ORDER[n - 1]);
+    card.classList.remove('fadein'); void card.offsetWidth; card.classList.add('fadein');
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('on', i < Math.min(n, 4));
+    });
+    if (n === 5) renderAnswer();
+    const inp = card.querySelector('input.money');
+    if (inp) { inp.focus(); inp.select(); }
+  }
+  function next() { show(clamp(step + 1, 1, 5)); }
+  document.querySelectorAll('[id^="n"]').forEach(b => {
+    if (/^n[1-4]$/.test(b.id)) b.addEventListener('click', next);
+  });
+  document.addEventListener('keydown', e => {
+    const chooserOpen = !$('chooser').classList.contains('off');
+    const onNavButton = e.target instanceof Element && /^n[1-4]$/.test(e.target.id);
+    if (e.key === 'Enter' && step < 5 && !chooserOpen && !onNavButton) next();
+    if (e.key === 'Escape' && step === 5) closeChooser();
+  });
+
+  /* ── Q1 age ── */
+  function setAge(v) {
+    state.currentAge = clamp(Math.round(v), 30, 75);
+    $('aVal').textContent = state.currentAge;
+    $('aRange').value = state.currentAge;
+    if (state.retireAge < state.currentAge) {
+      state.retireAge = state.currentAge;
+      $('rVal').textContent = state.retireAge;
+      $('rRange').value = state.retireAge;
+    }
+    retHint();
+  }
+  $('aMinus').addEventListener('click', () => setAge(state.currentAge - 1));
+  $('aPlus').addEventListener('click', () => setAge(state.currentAge + 1));
+  $('aRange').addEventListener('input', e => setAge(+e.target.value));
+
+  /* ── Q3 retire age ── */
+  function retHint() {
+    const yrs = state.retireAge - state.currentAge;
+    $('rHint').textContent = yrs <= 0
+      ? 'You are already there — the money starts coming out now.'
+      : 'That is ' + yrs + ' more year' + (yrs === 1 ? '' : 's') + ' of pay going in.';
+  }
+  function setRet(v) {
+    state.retireAge = clamp(Math.round(v), 55, 75);
+    $('rVal').textContent = state.retireAge;
+    $('rRange').value = state.retireAge;
+    retHint();
+  }
+  $('rMinus').addEventListener('click', () => setRet(state.retireAge - 1));
+  $('rPlus').addEventListener('click', () => setRet(state.retireAge + 1));
+  $('rRange').addEventListener('input', e => setRet(+e.target.value));
+
+  /* ── money fields ── */
+  function bindMoney(inputId, key, lo, hi) {
+    const el = $(inputId);
+    const paint = () => { el.value = Math.round(state[key]).toLocaleString('en-CA'); };
+    el.addEventListener('input', () => {
+      const n = parseFloat(el.value.replace(/[^0-9.]/g, ''));
+      state[key] = clamp(isNaN(n) ? 0 : n, lo, hi);
+      const m = $(inputId === 'inSavings' ? 'cSav' : 'cSpd');
+      m.textContent = fmtMoney(state[key]);
+    });
+    el.addEventListener('blur', paint);
+    el.addEventListener('focus', () => el.select());
+    return paint;
+  }
+  const paintSav = bindMoney('inSavings', 'savings', 0, 5000000);
+  const paintSpd = bindMoney('inSpend', 'spending', 10000, 400000);
+  document.querySelectorAll('[data-sav]').forEach(b => b.addEventListener('click', () => {
+    state.savings = clamp(state.savings + (+b.dataset.sav), 0, 5000000);
+    paintSav(); $('cSav').textContent = fmtMoney(state.savings);
+  }));
+  document.querySelectorAll('[data-spd]').forEach(b => b.addEventListener('click', () => {
+    state.spending = clamp(state.spending + (+b.dataset.spd), 10000, 400000);
+    paintSpd(); $('cSpd').textContent = fmtMoney(state.spending);
+  }));
+
+  /* ── the answer ── */
+  function balAt(rows, age) {
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i].age >= age) {
+        const a = rows[i - 1], b = rows[i];
+        const t = b.age === a.age ? 0 : (age - a.age) / (b.age - a.age);
+        return a.bal + (b.bal - a.bal) * t;
+      }
+    }
+    return rows.length ? rows[rows.length - 1].bal : 0;
+  }
+
+  function renderAnswer() {
+    const res = simulate(state);
+    const v = $('verdict');
+    if (res.ok) {
+      v.innerHTML = 'Your money lasts until you’re <span class="text-teal-700 num">' + lastsLabel(res) + '</span>.';
+      v.classList.remove('text-rose-700');
+    } else {
+      v.innerHTML = 'Your money runs out when you’re <span class="num">' + res.depletionAge + '</span>.';
+      v.classList.add('text-rose-700');
+    }
+    $('fLasts').textContent = lastsLabel(res);
+    $('fAt65').textContent = fmtMoney(balAt(res.rows, 65));
+
+    const note = $('fNote');
+    if (res.ok) {
+      note.innerHTML = res.leftAtMax > 25000
+        ? 'That leaves about <strong class="text-neutral-800 num">' + fmtMoney(res.leftAtMax) + '</strong> still unspent at ' + state.maxAge + '.'
+        : 'You reach ' + state.maxAge + ' with the plan intact. That is the whole job.';
+    } else {
+      const s = suggest(state);
+      note.innerHTML = 'That is <strong class="text-neutral-800 num">' + (state.maxAge - res.depletionAge) + ' years</strong> short of ' + state.maxAge + '.'
+        + (s ? '<br>' + s : '');
+    }
+
+    /* sparkline */
+    const rows = res.rows, w = 340, h = 74, top = 8, bot = h - 6;
+    const max = Math.max(...rows.map(r => r.bal), 1);
+    const x = i => (i / (rows.length - 1)) * w;
+    const y = val => bot - (val / max) * (bot - top);
+    let d = 'M ' + x(0).toFixed(1) + ' ' + y(rows[0].bal).toFixed(1);
+    for (let i = 1; i < rows.length; i++) d += ' L ' + x(i).toFixed(1) + ' ' + y(rows[i].bal).toFixed(1);
+    const dry = !res.ok;
+    $('spark').innerHTML =
+      '<path d="' + d + ' L ' + x(rows.length - 1).toFixed(1) + ' ' + bot + ' L 0 ' + bot + ' Z" fill="' + (dry ? '#e11d48' : '#0f766e') + '" fill-opacity="0.09"/>' +
+      '<path d="' + d + '" fill="none" stroke="' + (dry ? '#e11d48' : '#0f766e') + '" stroke-width="1.75" stroke-linejoin="round"/>';
+
+    $('cAge').textContent = state.currentAge;
+    $('cSav').textContent = fmtMoney(state.savings);
+    $('cRet').textContent = state.retireAge;
+    $('cSpd').textContent = fmtMoney(state.spending);
+  }
+
+  /* ── chooser ── */
+  function closeChooser() { $('chooser').classList.add('off'); }
+  $('btnChange').addEventListener('click', () => $('chooser').classList.remove('off'));
+  $('cClose').addEventListener('click', closeChooser);
+  document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => {
+    closeChooser();
+    show(+b.dataset.go);
+  }));
+
+  /* dots live in a strip under the card */
+  const strip = document.createElement('div');
+  strip.className = 'fixed bottom-5 left-0 right-0 flex items-center justify-center gap-1.5';
+  strip.innerHTML = '<span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  document.body.appendChild(strip);
+
+  setAge(state.currentAge); setRet(state.retireAge);
+  paintSav(); paintSpd();
+  show(1);
+</script>
+</body>
+</html>

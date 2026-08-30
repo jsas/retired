@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 13 · The Printed Plan</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  body { font-family: Georgia, 'Times New Roman', Times, serif; }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* small-caps section labels */
+  .sc {
+    font-variant-caps: all-small-caps;
+    letter-spacing: .18em;
+  }
+
+  /* ink-blue figures, underlined like a clerk's pen */
+  .fig {
+    font-variant-numeric: tabular-nums;
+    color: #1e3a8a;
+    border-bottom: 1px solid rgba(30, 58, 138, .38);
+    padding-bottom: 1px;
+    cursor: default;
+  }
+
+  /* footnote markers */
+  .fn {
+    font-size: .62em;
+    vertical-align: super;
+    line-height: 0;
+    color: #1e3a8a;
+    cursor: help;
+    padding: 0 .1em;
+    border-bottom: none;
+    transition: color .15s ease;
+    -webkit-user-select: none; user-select: none;
+  }
+  .fn:hover, .fn.pinned { color: #b45309; }
+
+  .rule { border-top: 1px solid rgba(41, 37, 28, .16); }
+
+  /* steppers */
+  .step-btn {
+    width: 22px; height: 22px; line-height: 1;
+    border: 1px solid rgba(41, 37, 28, .22);
+    border-radius: 4px;
+    background: transparent;
+    color: #29251c;
+    font-family: Georgia, serif;
+    font-size: 13px;
+    transition: background-color .15s ease, border-color .15s ease;
+  }
+  .step-btn:hover { background: rgba(41, 37, 28, .06); border-color: rgba(41, 37, 28, .4); }
+  .step-btn:active { background: rgba(41, 37, 28, .12); }
+
+  .ghost {
+    border: 1px solid rgba(41, 37, 28, .22);
+    border-radius: 4px;
+    padding: 5px 14px;
+    font-size: 12px;
+    letter-spacing: .08em;
+    color: #29251c;
+    transition: background-color .15s ease;
+  }
+  .ghost:hover { background: rgba(41, 37, 28, .05); }
+
+  ::selection { background: rgba(30, 58, 138, .12); }
+</style>
+</head>
+<body class="min-h-screen bg-[#faf9f6] text-[#29251c] antialiased">
+
+<div class="mx-auto max-w-3xl px-5 py-8 sm:px-8 sm:py-10">
+
+  <!-- top chrome -->
+  <header class="mb-7 flex items-center gap-2.5" style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-[#a8a294]">· 13 The Printed Plan</span>
+  </header>
+
+  <!-- ADJUST STRIP -->
+  <div class="mb-6 rounded-lg border border-[#29251c]/12 bg-[#fcfbf7] px-4 py-3"
+       style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+      <span class="text-[10px] font-semibold uppercase tracking-[.16em] text-[#a8a294]">Adjust</span>
+
+      <div class="flex items-center gap-2">
+        <span class="text-[12px] text-[#6b6552]">stop working at</span>
+        <button id="r-minus" class="step-btn" type="button" aria-label="Work one year less">&minus;</button>
+        <span id="a-retire" class="num w-7 text-center text-[13px] font-semibold text-[#29251c]">62</span>
+        <button id="r-plus" class="step-btn" type="button" aria-label="Work one year more">+</button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span class="text-[12px] text-[#6b6552]">spending a year</span>
+        <button id="s-minus" class="step-btn" type="button" aria-label="Spend less">&minus;</button>
+        <span id="a-spend" class="num w-[62px] text-center text-[13px] font-semibold text-[#29251c]">$85,000</span>
+        <button id="s-plus" class="step-btn" type="button" aria-label="Spend more">+</button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span class="text-[12px] text-[#6b6552]">saved</span>
+        <button id="v-minus" class="step-btn" type="button" aria-label="Save less">&minus;</button>
+        <span id="a-saved" class="num w-[68px] text-center text-[13px] font-semibold text-[#29251c]">$850,000</span>
+        <button id="v-plus" class="step-btn" type="button" aria-label="Save more">+</button>
+      </div>
+
+      <a href="#" id="print-btn" class="ghost select-none"
+         title="This is a mockup — the printer is not wired up.">Print</a>
+    </div>
+  </div>
+
+  <!-- THE SHEET -->
+  <article class="rounded-sm border border-[#29251c]/12 bg-[#fdfcfa] px-7 py-9 shadow-[0_1px_2px_rgba(41,37,28,.04),0_10px_30px_-18px_rgba(41,37,28,.25)] sm:px-12 sm:py-12">
+
+    <!-- masthead -->
+    <div class="text-center">
+      <div class="sc text-[13px] text-[#6b6552]">Private &amp; Confidential</div>
+      <h1 class="mt-2 text-[26px] leading-tight tracking-tight sm:text-[30px]">A Plan for Your Retirement</h1>
+      <div id="doc-date" class="num mt-2 text-[12px] italic text-[#8a8474]">Prepared the 30th of August, 2026</div>
+      <div class="rule mx-auto mt-6 w-16"></div>
+    </div>
+
+    <!-- ARRANGEMENT -->
+    <section class="mt-8">
+      <div class="sc text-[12px] font-medium text-[#8a8474]">The Arrangement</div>
+      <div class="rule mt-2 mb-4"></div>
+      <p class="num text-[16px] leading-[1.85]">
+        You are <span id="p-age">fifty-five</span> today, and you have
+        <span id="p-saved" class="fig">$850,000</span> set aside.<span class="fn" data-note="One pot, counted together — registered and not. We assume it grows at a steady rate, which is a simplification we would rather make openly than hide.">1</span>
+        You mean to stop working at <span id="p-retire" class="fig">62</span>,<span class="fn" data-note="The age you stop working. Each extra year does two things at once: it adds a year of saving, and it takes a year off the drawing.">2</span>
+        and until then you will add <span id="p-contrib" class="fig">$25,000</span> a year.<span class="fn" data-note="Added each year while you are still working, on top of whatever the pot itself earns.">3</span>
+        At <span id="p-benefit-age" class="fig">65</span> the government begins to add
+        <span id="p-benefit" class="fig">$22,000</span> a year<span class="fn" data-note="Your CPP and your Old Age Security together, held flat in today's money. It arrives whether the markets are kind or not, which is worth more than it looks.">4</span>
+        — a small tributary that never runs dry, and asks nothing of you.
+      </p>
+    </section>
+
+    <!-- THE HOUSEHOLD -->
+    <section class="mt-8">
+      <div class="sc text-[12px] font-medium text-[#8a8474]">The Household</div>
+      <div class="rule mt-2 mb-4"></div>
+      <p class="num text-[16px] leading-[1.85]">
+        From <span id="p-retire-2" class="fig">62</span> the household lives on
+        <span id="p-spend" class="fig">$85,000</span> a year,<span class="fn" data-note="Spending after you stop working. Of every number in this letter, this one moves the ending the most.">5</span>
+        drawn down from what you have saved. Nothing else is assumed: no inheritance, no property
+        sold, no part-time work, no windfall. The figure is deliberately plain — it is what you
+        spend, not what you hope to spend.
+      </p>
+    </section>
+
+    <!-- THE WEATHER -->
+    <section class="mt-8">
+      <div class="sc text-[12px] font-medium text-[#8a8474]">The Weather</div>
+      <div class="rule mt-2 mb-4"></div>
+      <p class="num text-[16px] leading-[1.85]">
+        Markets will not be kind in every year of a thirty-year retirement, so we have run the same
+        plan three ways.<span class="fn" data-note="Storm, ordinary and kind stand in for the range of returns markets actually deliver. Three futures, plainly named, rather than a thousand simulated ones.">6</span>
+        In ordinary weather your money lasts until you are
+        <span id="p-lasts" class="fig">89</span>. In a storm, until you are
+        <span id="p-storm" class="fig">80</span>. In a kind stretch,
+        <span id="p-sun" class="fig">110+</span>.<span class="fn" data-note="The model is never run past one hundred and ten; '110+' means the money holds to the end of it.">7</span>
+        The storm is the honest one to plan around, and it is the one we would put our name to.
+      </p>
+    </section>
+
+    <!-- CONCLUSION -->
+    <section class="mt-9">
+      <div class="sc text-[12px] font-medium text-[#8a8474]">In Closing</div>
+      <div class="rule mt-2 mb-4"></div>
+      <p id="p-verdict" class="num text-[16.5px] leading-[1.9]">
+        <em class="not-italic font-bold">Conclusion.</em>
+        As written, this plan does not hold. Your money lasts until you are 89 — six years short of
+        the 95 you have in mind — and nothing remains at the end. <span id="p-fix">Working two more
+        years would close the gap.</span> We would not sign this plan as it stands; we would sign the
+        one with that change in it.
+      </p>
+      <div class="rule mt-8 mb-4"></div>
+      <div class="flex items-baseline justify-between">
+        <span class="sc text-[12px] text-[#8a8474]">Prepared for you</span>
+        <span class="text-[13px] italic text-[#8a8474]">RE:tired — drawn from your own numbers, not a table of averages</span>
+      </div>
+    </section>
+
+    <!-- FOOTNOTE TRAY -->
+    <div class="mt-9 rounded-sm border border-[#29251c]/12 bg-[#f7f5ef] px-4 py-3">
+      <div class="flex items-baseline gap-2">
+        <span id="foot-num" class="num text-[11px] font-bold text-[#b45309]">&mdash;</span>
+        <span id="foot-text" class="text-[12.5px] italic leading-relaxed text-[#6b6552]">
+          Rest a finger on any small number above to read its footnote. Click it to keep it open.
+        </span>
+      </div>
+    </div>
+
+  </article>
+
+  <footer class="mt-8 text-[11.5px] text-[#a8a294]"
+          style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    13 · The Printed Plan — your retirement as a letter worth keeping.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    spending: DEMO_DEFAULTS.spending,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+
+  var el = function (id) { return document.getElementById(id); };
+  var $ = {
+    aRetire: el('a-retire'), aSpend: el('a-spend'), aSaved: el('a-saved'),
+    rMinus: el('r-minus'), rPlus: el('r-plus'),
+    sMinus: el('s-minus'), sPlus: el('s-plus'),
+    vMinus: el('v-minus'), vPlus: el('v-plus'),
+    pAge: el('p-age'), pSaved: el('p-saved'), pRetire: el('p-retire'),
+    pRetire2: el('p-retire-2'), pContrib: el('p-contrib'),
+    pBenefit: el('p-benefit'), pBenefitAge: el('p-benefit-age'),
+    pSpend: el('p-spend'), pLasts: el('p-lasts'), pStorm: el('p-storm'),
+    pSun: el('p-sun'), verdict: el('p-verdict'), fix: el('p-fix')
+  };
+
+  var LIMITS = {
+    retireAge: { min: 50, max: 75, step: 1 },
+    spending:  { min: 40000, max: 150000, step: 2500 },
+    savings:   { min: 100000, max: 2500000, step: 25000 }
+  };
+
+  var ONES = ['zero','one','two','three','four','five','six','seven','eight','nine','ten',
+              'eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen',
+              'eighteen','nineteen'];
+  var TENS = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+
+  function words(n) {
+    n = Math.round(n);
+    if (n < 20) return ONES[n];
+    if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? '-' + ONES[n % 10] : '');
+    return String(n);
+  }
+
+  function money(v) { return '$' + Math.round(v).toLocaleString('en-CA'); }
+
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+
+  function setDocDate() {
+    var months = ['January','February','March','April','May','June','July','August',
+                  'September','October','November','December'];
+    var d = new Date();
+    var day = d.getDate(), suf = 'th';
+    if (day === 1 || day === 21 || day === 31) suf = 'st';
+    else if (day === 2 || day === 22) suf = 'nd';
+    else if (day === 3 || day === 23) suf = 'rd';
+    el('doc-date').textContent = 'Prepared the ' + day + suf + ' of ' + months[d.getMonth()] +
+      ', ' + d.getFullYear();
+  }
+
+  function clamp(v, l) { return Math.min(l.max, Math.max(l.min, v)); }
+
+  function render() {
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var sun = simulate(Object.assign({}, state, { sky: 'sun' }));
+
+    /* adjust strip */
+    $.aRetire.textContent = String(state.retireAge);
+    $.aSpend.textContent = money(state.spending);
+    $.aSaved.textContent = money(state.savings);
+
+    /* prose */
+    $.pAge.textContent = words(state.currentAge);
+    $.pSaved.textContent = money(state.savings);
+    $.pRetire.textContent = String(state.retireAge);
+    $.pRetire2.textContent = String(state.retireAge);
+    $.pContrib.textContent = money(state.contrib);
+    $.pBenefit.textContent = money(state.benefits);
+    $.pBenefitAge.textContent = String(state.benefitAge);
+    $.pSpend.textContent = money(state.spending);
+    $.pLasts.textContent = lastsLabel(res);
+    $.pStorm.textContent = lastsLabel(storm);
+    $.pSun.textContent = lastsLabel(sun);
+
+    /* verdict */
+    var gap = state.maxAge - (res.depletionAge != null ? res.depletionAge : state.maxAge);
+    var s = suggest(state);
+    var fixLine = s || 'Nothing small repairs this; something larger must give.';
+
+    if (res.ok) {
+      $.verdict.innerHTML =
+        '<em class="not-italic font-bold">Conclusion.</em> ' +
+        'As written, this plan holds. Your money lasts until you are ' + lastsLabel(res) +
+        ' — past the ' + state.maxAge + ' you have in mind — and ' + money(res.leftAtMax) +
+        ' remains at the end. ' +
+        'In a storm it lasts until you are ' + lastsLabel(storm) + ', ' +
+        (storm.ok
+          ? 'which is the sentence we would put our name to.'
+          : 'and that is the sentence worth repairing. ' + fixLine) +
+        ' We are content to sign this plan' +
+        (storm.ok ? ' as it stands.' : ', with that change in it.');
+    } else {
+      $.verdict.innerHTML =
+        '<em class="not-italic font-bold">Conclusion.</em> ' +
+        'As written, this plan does not hold. Your money lasts until you are ' + lastsLabel(res) +
+        ' — ' + gap + ' ' + yearWord(gap) + ' short of the ' + state.maxAge + ' you have in mind' +
+        ' — and nothing remains at the end. ' + fixLine + ' ' +
+        'We would not sign this plan as it stands; we would sign the one with that change in it.';
+    }
+    $.fix.textContent = '';
+  }
+
+  /* steppers */
+  function step(key, dir, labelEl) {
+    var l = LIMITS[key];
+    state[key] = clamp(state[key] + dir * l.step, l);
+    render();
+  }
+  $.rMinus.addEventListener('click', function () { step('retireAge', -1); });
+  $.rPlus.addEventListener('click', function () { step('retireAge', 1); });
+  $.sMinus.addEventListener('click', function () { step('spending', -1); });
+  $.sPlus.addEventListener('click', function () { step('spending', 1); });
+  $.vMinus.addEventListener('click', function () { step('savings', -1); });
+  $.vPlus.addEventListener('click', function () { step('savings', 1); });
+
+  /* footnotes: hover to peek, click to pin */
+  var footNum = el('foot-num'), footText = el('foot-text');
+  var IDLE = 'Rest a finger on any small number above to read its footnote. Click it to keep it open.';
+  var pinned = null;
+
+  function showFoot(n, text) {
+    footNum.textContent = n;
+    footText.textContent = text;
+  }
+  function clearFoot() {
+    footNum.textContent = '—';
+    footText.textContent = IDLE;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.fn'), function (m) {
+    m.setAttribute('tabindex', '0');
+    m.addEventListener('mouseenter', function () {
+      showFoot(m.textContent, m.getAttribute('data-note'));
+    });
+    m.addEventListener('mouseleave', function () {
+      if (pinned) showFoot(pinned.textContent, pinned.getAttribute('data-note'));
+      else clearFoot();
+    });
+    m.addEventListener('focus', function () {
+      showFoot(m.textContent, m.getAttribute('data-note'));
+    });
+    m.addEventListener('blur', function () {
+      if (pinned) showFoot(pinned.textContent, pinned.getAttribute('data-note'));
+      else clearFoot();
+    });
+    m.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (pinned === m) {
+        m.classList.remove('pinned');
+        pinned = null;
+        clearFoot();
+      } else {
+        if (pinned) pinned.classList.remove('pinned');
+        pinned = m;
+        m.classList.add('pinned');
+        showFoot(m.textContent, m.getAttribute('data-note'));
+      }
+    });
+  });
+
+  setDocDate();
+  render();
+})();
+</script>
+</body>
+</html>

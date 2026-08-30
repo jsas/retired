@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>04 — Range</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  @keyframes fadeUp { from { opacity:0; transform: translateY(10px);} to { opacity:1; transform:none;} }
+  .fu { animation: fadeUp .6s cubic-bezier(.2,.7,.3,1) both; }
+  input[type=range].dial { -webkit-appearance:none; appearance:none; height:8px; border-radius:4px; background:#e2e8f0; outline:none; }
+  input[type=range].dial::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:30px; height:30px; border-radius:50%;
+    background:#fff; border:3px solid #0f172a; box-shadow:0 2px 6px rgba(15,23,42,.3); cursor:grab;
+  }
+  input[type=range].dial::-moz-range-thumb {
+    width:30px; height:30px; border-radius:50%; background:#fff; border:3px solid #0f172a;
+    box-shadow:0 2px 6px rgba(15,23,42,.3); cursor:grab;
+  }
+  .needle { transition: transform .5s cubic-bezier(.34,1.4,.44,1); transform-origin: 300px 262px; }
+  .odometer { transition: color .3s; }
+  .skybtn { transition: all .2s; }
+  .skybtn.active { background:#0f172a; color:#fff; border-color:#0f172a; }
+</style>
+</head>
+<body class="bg-[#f4f1ea] text-slate-900 min-h-screen flex flex-col">
+
+<!-- minimal chrome -->
+<header class="flex items-center justify-between px-5 py-3">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-slate-500">04 — your money's range</span>
+</header>
+
+<main class="flex-1 flex flex-col items-center justify-center px-4 pb-10 w-full max-w-3xl mx-auto">
+
+  <!-- ═══ THE GAUGE ═══ -->
+  <div class="fu w-full">
+    <svg viewBox="0 0 600 300" class="w-full max-w-xl mx-auto block">
+      <defs>
+        <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop id="arcStop1" offset="0%" stop-color="#dc2626"/>
+          <stop id="arcStop2" offset="55%" stop-color="#d97706"/>
+          <stop id="arcStop3" offset="100%" stop-color="#059669"/>
+        </linearGradient>
+      </defs>
+
+      <!-- arc track: semicircle from age 55 to 105 -->
+      <path id="arcBg" d="M 60 262 A 240 240 0 0 1 540 262" fill="none" stroke="#e7e2d8" stroke-width="26" stroke-linecap="round"/>
+      <path id="arcFill" d="M 60 262 A 240 240 0 0 1 540 262" fill="none" stroke="url(#arcGrad)" stroke-width="26" stroke-linecap="round"/>
+
+      <!-- the "you" marker: where retirement starts -->
+      <g id="retireMark"></g>
+
+      <!-- tick labels -->
+      <g font-size="13" fill="#a8a29e" class="num" font-weight="600">
+        <text x="60"  y="292" text-anchor="middle">55</text>
+        <text x="176" y="106" text-anchor="middle">70</text>
+        <text x="300" y="46"  text-anchor="middle">80</text>
+        <text x="424" y="106" text-anchor="middle">90</text>
+        <text x="540" y="292" text-anchor="middle">105</text>
+      </g>
+
+      <!-- needle -->
+      <g id="needle" class="needle">
+        <line x1="300" y1="262" x2="300" y2="76" stroke="#0f172a" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="300" cy="262" r="14" fill="#0f172a"/>
+      </g>
+    </svg>
+
+    <!-- the readout: the only number that matters, in words -->
+    <div class="text-center -mt-6">
+      <p id="headline" class="odometer text-4xl md:text-5xl font-bold tracking-tight num">96</p>
+      <p id="subline" class="mt-2 text-base md:text-lg text-slate-600 max-w-md mx-auto leading-relaxed"></p>
+      <p id="suggest" class="mt-2 text-sm text-blue-700 font-medium h-5"></p>
+    </div>
+  </div>
+
+  <!-- ═══ THE SKY ═══ -->
+  <div class="fu mt-8 flex items-center gap-2 text-sm">
+    <span class="text-slate-500 mr-1">If the markets are</span>
+    <button data-sky="storm"  class="skybtn px-4 py-1.5 rounded-full border border-slate-300 text-slate-600">stormy</button>
+    <button data-sky="normal" class="skybtn active px-4 py-1.5 rounded-full border border-slate-300 text-slate-600">ordinary</button>
+    <button data-sky="sun"    class="skybtn px-4 py-1.5 rounded-full border border-slate-300 text-slate-600">kind</button>
+  </div>
+
+  <!-- ═══ THREE DIALS ═══ -->
+  <div class="fu mt-8 w-full max-w-xl space-y-5">
+    <div>
+      <div class="flex items-baseline justify-between mb-1.5">
+        <label class="text-sm font-medium text-slate-700">I stop working at</label>
+        <span id="vRetire" class="text-xl font-bold num">62</span>
+      </div>
+      <input id="dRetire" type="range" class="dial w-full" min="55" max="75" value="62">
+    </div>
+    <div>
+      <div class="flex items-baseline justify-between mb-1.5">
+        <label class="text-sm font-medium text-slate-700">I spend a year</label>
+        <span id="vSpend" class="text-xl font-bold num">$85,000</span>
+      </div>
+      <input id="dSpend" type="range" class="dial w-full" min="40000" max="160000" step="1000" value="85000">
+    </div>
+    <div>
+      <div class="flex items-baseline justify-between mb-1.5">
+        <label class="text-sm font-medium text-slate-700">I've saved so far</label>
+        <span id="vSaved" class="text-xl font-bold num">$850,000</span>
+      </div>
+      <input id="dSaved" type="range" class="dial w-full" min="100000" max="3000000" step="10000" value="850000">
+    </div>
+  </div>
+
+  <p class="fu mt-8 text-[11px] text-slate-400 text-center max-w-sm leading-relaxed">
+    This is the whole app, reduced to a gauge. Every panel of the real product — Monte Carlo,
+    backtests, the year-by-year table — is one answer to "why does the needle sit where it sits?"
+  </p>
+</main>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+
+  // gauge geometry: ages 55..105 mapped onto a 180° arc (left→right)
+  const A0 = 55, A1 = 105;
+  function angleFor(age) { return Math.PI - (age - A0) / (A1 - A0) * Math.PI; }
+  function pointFor(age, radius) {
+    const a = angleFor(age);
+    return [300 + radius * Math.cos(a), 262 - radius * Math.sin(a)];
+  }
+  function arcPathTo(age, radius) {
+    const [x, y] = pointFor(Math.max(A0, Math.min(A1, age)), radius);
+    return `M ${pointFor(A0, radius)[0]} ${pointFor(A0, radius)[1]} A ${radius} ${radius} 0 0 1 ${x} ${y}`;
+  }
+
+  function render() {
+    const res = simulate(state);
+    const lastsAge = res.depletionAge ?? 108;
+
+    // needle + arc
+    const a = angleFor(Math.min(lastsAge, A1));
+    $('needle').style.transform = `rotate(${90 - a * 180 / Math.PI}deg)`;
+    $('arcFill').setAttribute('d', arcPathTo(lastsAge, 240));
+
+    // arc color follows health: green if it beats maxAge, red if it falls short
+    const healthy = res.ok;
+    $('arcStop1').setAttribute('stop-color', healthy ? '#059669' : '#b91c1c');
+    $('arcStop2').setAttribute('stop-color', healthy ? '#10b981' : '#dc2626');
+    $('arcStop3').setAttribute('stop-color', healthy ? '#34d399' : '#f59e0b');
+
+    // retirement marker (small tick on the arc)
+    const [rx, ry] = pointFor(state.retireAge, 240);
+    const [tx, ty] = pointFor(state.retireAge, 218);
+    $('retireMark').innerHTML =
+      `<line x1="${rx}" y1="${ry}" x2="${tx}" y2="${ty}" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>` +
+      `<text x="${pointFor(state.retireAge, 258)[0]}" y="${pointFor(state.retireAge, 258)[1] + 4}" font-size="11" fill="#57534e" text-anchor="middle" font-weight="600">work ends</text>`;
+
+    // the readout, in words
+    const hl = $('headline'), sl = $('subline'), sg = $('suggest');
+    if (res.ok) {
+      hl.textContent = lastsLabel(res);
+      hl.style.color = '#065f46';
+      const left = res.leftAtMax;
+      sl.innerHTML = left > 25000
+        ? `Your money lasts until you're <strong>${lastsLabel(res)}</strong> — and there's about <strong>${fmtMoney(left)}</strong> left over at ${state.maxAge}.`
+        : `Your money lasts until you're <strong>${lastsLabel(res)}</strong> — past the ${state.maxAge} you're planning for.`;
+      sg.textContent = '';
+    } else {
+      hl.textContent = res.depletionAge;
+      hl.style.color = '#b91c1c';
+      sl.innerHTML = `Your money runs out when you're <strong>${res.depletionAge}</strong> — <strong>${state.maxAge - res.depletionAge} years</strong> short of the ${state.maxAge} you're planning for.`;
+      sg.textContent = suggest(state) ?? '';
+    }
+
+    $('vRetire').textContent = state.retireAge;
+    $('vSpend').textContent = fmtMoney(state.spending);
+    $('vSaved').textContent = fmtMoney(state.savings);
+  }
+
+  $('dRetire').addEventListener('input', e => { state.retireAge = +e.target.value; render(); });
+  $('dSpend').addEventListener('input', e => { state.spending = +e.target.value; render(); });
+  $('dSaved').addEventListener('input', e => { state.savings = +e.target.value; render(); });
+  document.querySelectorAll('[data-sky]').forEach(b => b.addEventListener('click', () => {
+    state.sky = b.dataset.sky;
+    document.querySelectorAll('[data-sky]').forEach(x => x.classList.toggle('active', x === b));
+    render();
+  }));
+
+  render();
+</script>
+</body>
+</html>

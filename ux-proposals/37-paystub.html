@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 37 · The Paystub</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  :root { color-scheme: light; }
+
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- sliders ---------- */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; background: transparent; cursor: pointer;
+    --p: 50%;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 999px;
+    background: linear-gradient(90deg, #166534 var(--p), #cfdbc4 var(--p));
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px; border-radius: 999px;
+    background: linear-gradient(90deg, #166534 var(--p), #cfdbc4 var(--p));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    height: 15px; width: 15px; margin-top: -5.5px; border-radius: 999px;
+    background: #fdfdf8; border: 2px solid #166534;
+    box-shadow: 0 1px 3px rgba(24, 34, 22, .25);
+    transition: transform .12s ease;
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 13px; width: 13px; border-radius: 999px;
+    background: #fdfdf8; border: 2px solid #166534;
+    box-shadow: 0 1px 3px rgba(24, 34, 22, .25);
+  }
+  input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.18); }
+  input[type="range"]:focus-visible { outline: none; }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { border-color: #facc15; box-shadow: 0 0 0 3px rgba(250,204,21,.35); }
+
+  /* ---------- ledger paper ---------- */
+  .stub {
+    background-color: #e9f1e1;
+    background-image: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 40%);
+    border: 2px dashed rgba(46, 78, 44, .45);
+    box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 18px 40px -24px rgba(24,34,22,.55);
+  }
+  /* ruled body: every row is exactly 28px so the rules line up */
+  .ledger {
+    background-image: repeating-linear-gradient(to bottom,
+      transparent 0 27px, rgba(58, 96, 54, .16) 27px 28px);
+  }
+  .lrow { height: 28px; display: flex; align-items: center; }
+  .lead { flex: 1 1 auto; border-bottom: 1px dotted rgba(58, 96, 54, .38); margin: 0 10px; height: 1px; align-self: center; }
+  .sect {
+    height: 28px; display: flex; align-items: center;
+    font-size: 9.5px; font-weight: 700; letter-spacing: .2em;
+    color: rgba(46, 78, 44, .72);
+  }
+
+  /* ---------- rubber stamp ---------- */
+  .stamp {
+    transform: rotate(-7deg);
+    border: 3px double currentColor;
+    border-radius: 6px;
+    padding: 6px 12px 7px;
+    text-align: center;
+    letter-spacing: .14em;
+    line-height: 1.05;
+    mix-blend-mode: multiply;
+    opacity: .92;
+    user-select: none;
+  }
+  .stamp-pass { color: #15803d; }
+  .stamp-fail { color: #b91c1c; }
+  .stamp small { display: block; letter-spacing: .1em; opacity: .85; }
+
+  /* ---------- chips ---------- */
+  .chip {
+    min-width: 52px; padding: 7px 10px 8px;
+    border: 1px solid rgba(46, 78, 44, .28);
+    border-radius: 8px;
+    background: rgba(255,255,255,.55);
+    color: #33452f;
+    font-size: 13px;
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease;
+  }
+  .chip:hover { background: #ffffff; border-color: rgba(46, 78, 44, .55); }
+  .chip[aria-pressed="true"] {
+    background: #14532d; border-color: #14532d; color: #f0fdf4;
+    box-shadow: 0 2px 8px -2px rgba(20, 83, 45, .55);
+  }
+  .chip:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
+
+  .skybtn {
+    padding: 5px 11px; font-size: 12px; border-radius: 999px;
+    border: 1px solid rgba(46, 78, 44, .28); color: #3a4c35;
+    background: rgba(255,255,255,.5);
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .skybtn:hover { background: #fff; }
+  .skybtn[aria-pressed="true"] { background: #1f3327; border-color: #1f3327; color: #f0fdf4; }
+
+  ::selection { background: rgba(22, 101, 52, .18); }
+</style>
+</head>
+<body class="min-h-screen bg-[#eeece5] text-[#1f2a1d] antialiased">
+
+<div class="mx-auto max-w-3xl px-4 py-7 sm:px-8 sm:py-10">
+
+  <!-- top chrome -->
+  <header class="mb-6 flex items-center gap-2.5">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-stone-400">37 — The Paystub</span>
+  </header>
+
+  <!-- SLIM CONTROLS -->
+  <div class="mb-5 rounded-xl border border-[#2e4e2c]/15 bg-white/70 px-4 py-3.5 shadow-[0_1px_2px_rgba(24,34,22,.05)] backdrop-blur">
+    <div class="grid gap-x-6 gap-y-3 sm:grid-cols-3">
+
+      <label class="block">
+        <span class="mb-1 flex items-baseline justify-between">
+          <span class="text-[11px] font-medium uppercase tracking-[.13em] text-stone-500">Saved so far</span>
+          <span id="v-savings" class="mono text-[12.5px] font-semibold text-[#14532d]">$850,000</span>
+        </span>
+        <input id="in-savings" type="range" min="100000" max="2500000" step="25000" value="850000" aria-label="Saved so far" />
+      </label>
+
+      <label class="block">
+        <span class="mb-1 flex items-baseline justify-between">
+          <span class="text-[11px] font-medium uppercase tracking-[.13em] text-stone-500">Spending a year</span>
+          <span id="v-spending" class="mono text-[12.5px] font-semibold text-[#14532d]">$85,000</span>
+        </span>
+        <input id="in-spending" type="range" min="40000" max="150000" step="2500" value="85000" aria-label="Spending a year" />
+      </label>
+
+      <label class="block">
+        <span class="mb-1 flex items-baseline justify-between">
+          <span class="text-[11px] font-medium uppercase tracking-[.13em] text-stone-500">Stop working at</span>
+          <span id="v-retire" class="mono text-[12.5px] font-semibold text-[#14532d]">62</span>
+        </span>
+        <input id="in-retire" type="range" min="50" max="75" step="1" value="62" aria-label="Age you stop working" />
+      </label>
+    </div>
+
+    <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-[#2e4e2c]/12 pt-3">
+      <span class="text-[11px] font-medium uppercase tracking-[.13em] text-stone-500">Markets</span>
+      <button type="button" class="skybtn" data-sky="storm" aria-pressed="false">stormy</button>
+      <button type="button" class="skybtn" data-sky="normal" aria-pressed="true">ordinary</button>
+      <button type="button" class="skybtn" data-sky="sun" aria-pressed="false">kind</button>
+      <span class="ml-auto text-[11.5px] text-stone-500">
+        Plan runs to <span class="mono font-semibold text-[#33452f]">95</span> ·
+        money lasts to <span id="hdr-lasts" class="mono font-semibold text-[#14532d]">89</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- AGE PICKER -->
+  <div class="mb-4 flex flex-wrap items-center gap-2">
+    <span class="mr-1 text-[12px] text-stone-500">Show the stub for the year you are</span>
+    <div id="chips" class="flex flex-wrap gap-2"></div>
+  </div>
+
+  <!-- THE STUB -->
+  <article class="stub relative rounded-lg px-5 py-6 sm:px-9 sm:py-8">
+
+    <!-- stamp -->
+    <div id="stamp" class="stamp stamp-fail absolute right-4 top-4 z-10 sm:right-7 sm:top-6">
+      <div id="stamp-word" class="text-[15px] font-black">SHORT</div>
+      <small id="stamp-sub" class="mono text-[10px]">RUNS OUT AT 89</small>
+    </div>
+
+    <!-- stub masthead -->
+    <div class="flex flex-wrap items-end justify-between gap-3 border-b border-[#2e4e2c]/30 pb-3 pr-24 sm:pr-32">
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-[.24em] text-[#2e4e2c]/70">Earnings statement</div>
+        <div class="mt-1 text-[21px] font-semibold leading-tight tracking-tight sm:text-[24px]">
+          The year you are <span id="stub-age" class="mono">70</span>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="text-[10px] uppercase tracking-[.16em] text-[#2e4e2c]/60">Pay period</div>
+        <div id="stub-period" class="mono mt-0.5 text-[13px] font-semibold text-[#33452f]">age 69 → 70</div>
+        <div id="stub-yearno" class="mono text-[11px] text-[#2e4e2c]/65">year 15 of the plan</div>
+      </div>
+    </div>
+
+    <!-- line items -->
+    <div id="lines" class="ledger mt-4 pr-1"></div>
+
+    <!-- arithmetic footnote -->
+    <div class="mt-4 border-t border-[#2e4e2c]/30 pt-3">
+      <div class="text-[10px] uppercase tracking-[.18em] text-[#2e4e2c]/60">The arithmetic</div>
+      <div id="arith" class="mono mt-1.5 text-[12.5px] leading-relaxed text-[#33452f]"></div>
+    </div>
+
+    <!-- sparkline of the whole run, marker on this year -->
+    <div class="mt-4">
+      <div class="flex items-baseline justify-between text-[10px] uppercase tracking-[.18em] text-[#2e4e2c]/60">
+        <span>The whole run</span><span id="spark-end" class="mono normal-case tracking-normal"></span>
+      </div>
+      <svg id="spark" viewBox="0 0 320 46" preserveAspectRatio="none" class="mt-1 h-[46px] w-full" role="img" aria-label="Balance over your lifetime"></svg>
+    </div>
+
+    <!-- small print -->
+    <div class="mt-4 text-[10.5px] leading-relaxed text-[#2e4e2c]/60">
+      Counted in today's dollars. One pot of savings, steady growth, no inheritance and no windfall.
+      CPP and Old Age Security arrive together from age <span id="sp-benefit-age" class="mono">65</span>.
+      Growth is what the pot earned; it can be negative in a storm.
+    </div>
+
+    <!-- perforation tear line -->
+    <div class="mt-5 flex items-center gap-2 text-[9.5px] uppercase tracking-[.22em] text-[#2e4e2c]/45">
+      <span class="h-px flex-1 border-t border-dashed border-[#2e4e2c]/40"></span>
+      <span>✂ tear here · keep this portion</span>
+      <span class="h-px flex-1 border-t border-dashed border-[#2e4e2c]/40"></span>
+    </div>
+  </article>
+
+  <!-- tear-off summary strip -->
+  <div class="mt-3 rounded-lg border border-dashed border-[#2e4e2c]/30 bg-white/55 px-4 py-3">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-[12.5px]">
+      <span class="text-stone-500">In short:</span>
+      <span id="tear-verdict" class="font-semibold text-[#1f2a1d]">Short by 6 years.</span>
+      <span id="tear-idea" class="text-stone-600">Working two more years would close the gap.</span>
+    </div>
+  </div>
+
+  <footer class="mt-7 text-[11.5px] text-stone-400">
+    37 · The Paystub — one year of your retirement, written out like a wage slip.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    spending: DEMO_DEFAULTS.spending,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+
+  var AGES = [65, 70, 75, 80, 85, 90];
+  var viewAge = 70;
+
+  function el(id) { return document.getElementById(id); }
+  function money(v) { return '$' + Math.round(Math.abs(v)).toLocaleString('en-CA'); }
+  function signed(v) { return (v < 0 ? '−' : '+') + money(v); }
+  function plain(v) { return (v < 0 ? '−' : '') + money(v); }
+
+  var LIM = {
+    savings:  el('in-savings'),
+    spending: el('in-spending'),
+    retire:   el('in-retire')
+  };
+
+  function paintTrack(input) {
+    var min = Number(input.min), max = Number(input.max), v = Number(input.value);
+    var pct = ((v - min) / (max - min)) * 100;
+    input.style.setProperty('--p', pct.toFixed(2) + '%');
+  }
+
+  /* ---------- chips ---------- */
+  var chipWrap = el('chips');
+  AGES.forEach(function (a) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip mono';
+    b.textContent = String(a);
+    b.setAttribute('aria-pressed', a === viewAge ? 'true' : 'false');
+    b.addEventListener('click', function () {
+      viewAge = a;
+      Array.prototype.forEach.call(chipWrap.children, function (c) {
+        c.setAttribute('aria-pressed', Number(c.textContent) === viewAge ? 'true' : 'false');
+      });
+      render();
+    });
+    chipWrap.appendChild(b);
+  });
+
+  /* ---------- sky ---------- */
+  var skyBtns = Array.prototype.slice.call(document.querySelectorAll('.skybtn'));
+  skyBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.sky = b.getAttribute('data-sky');
+      skyBtns.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      render();
+    });
+  });
+
+  /* ---------- sliders ---------- */
+  Object.keys(LIM).forEach(function (key) {
+    var input = LIM[key];
+    var out = el('v-' + (key === 'retire' ? 'retire' : key));
+    var apply = function () {
+      var v = Number(input.value);
+      state[key === 'retire' ? 'retireAge' : key] = v;
+      out.textContent = key === 'retire' ? String(v) : money(v);
+      paintTrack(input);
+      render();
+    };
+    input.addEventListener('input', apply);
+    paintTrack(input);
+  });
+
+  /* ---------- line helpers ---------- */
+  function sect(t) {
+    return '<div class="lrow sect"><span>' + t + '</span></div>';
+  }
+  function row(label, amt, cls, muted) {
+    return '<div class="lrow">' +
+      '<span class="text-[13px] ' + (muted ? 'text-[#2e4e2c]/55' : 'text-[#22301f]') + '">' + label + '</span>' +
+      '<span class="lead"></span>' +
+      '<span class="mono text-[13.5px] font-semibold ' + (cls || 'text-[#22301f]') + '">' + amt + '</span>' +
+      '</div>';
+  }
+  function note(t) {
+    return '<div class="lrow"><span class="text-[12px] italic text-[#2e4e2c]/65">' + t + '</span></div>';
+  }
+
+  /* ---------- sparkline ---------- */
+  function spark(res) {
+    var svg = el('spark');
+    var rows = res.rows;
+    var x0 = state.currentAge;
+    var x1 = 110;
+    var peak = 0;
+    rows.forEach(function (r) { if (r.bal > peak) peak = r.bal; });
+    if (peak <= 0) peak = 1;
+    var W = 320, H = 46, pad = 2;
+    function X(age) { return pad + ((age - x0) / (x1 - x0)) * (W - pad * 2); }
+    function Y(b) { return H - pad - (b / peak) * (H - pad * 2); }
+
+    var pts = rows.map(function (r) { return X(r.age).toFixed(1) + ',' + Y(r.bal).toFixed(1); }).join(' ');
+    var area = pts + ' ' + X(rows[rows.length - 1].age).toFixed(1) + ',' + (H - pad) + ' ' + X(x0).toFixed(1) + ',' + (H - pad);
+
+    var mark = '';
+    var cur = null;
+    rows.forEach(function (r) { if (r.age === viewAge) cur = r; });
+    if (cur) {
+      var cy = Y(cur.bal);
+      mark = '<line x1="' + X(viewAge).toFixed(1) + '" y1="' + pad + '" x2="' + X(viewAge).toFixed(1) +
+             '" y2="' + (H - pad) + '" stroke="#b45309" stroke-width="1" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>' +
+             '<circle cx="' + X(viewAge).toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="3" fill="#b45309"/>';
+    } else {
+      mark = '<text x="' + X(viewAge).toFixed(1) + '" y="' + (H - 12) + '" fill="#b91c1c" font-size="11" text-anchor="middle">×</text>';
+    }
+    var limit = '<line x1="' + X(state.maxAge).toFixed(1) + '" y1="' + pad + '" x2="' + X(state.maxAge).toFixed(1) +
+                '" y2="' + (H - pad) + '" stroke="#2e4e2c" stroke-opacity=".35" stroke-width="1" vector-effect="non-scaling-stroke"/>';
+
+    svg.innerHTML =
+      '<polygon points="' + area + '" fill="#166534" fill-opacity=".13"/>' +
+      '<polyline points="' + pts + '" fill="none" stroke="#166534" stroke-width="1.8" ' +
+      'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
+      limit + mark;
+    el('spark-end').textContent = 'peaks at ' + money(peak);
+  }
+
+  /* ---------- main render ---------- */
+  function render() {
+    var res = simulate(state);
+    var rows = res.rows;
+
+    el('stub-age').textContent = String(viewAge);
+    el('stub-period').textContent = 'age ' + (viewAge - 1) + ' → ' + viewAge;
+    el('stub-yearno').textContent = 'year ' + (viewAge - state.currentAge) + ' of the plan';
+    el('sp-benefit-age').textContent = String(state.benefitAge);
+    el('hdr-lasts').textContent = lastsLabel(res);
+
+    var working = viewAge < state.retireAge;
+    var inflow = working ? state.contrib : (viewAge >= state.benefitAge ? state.benefits : 0);
+    var outflow = working ? 0 : state.spending;
+
+    var cur = null, prev = null;
+    rows.forEach(function (r) {
+      if (r.age === viewAge) cur = r;
+      if (r.age === viewAge - 1) prev = r;
+    });
+    var prevBal = (viewAge === state.currentAge) ? state.savings : (prev ? prev.bal : null);
+
+    var html = '';
+    var net, growth, balAfter;
+
+    if (cur && prevBal != null) {
+      balAfter = cur.bal;
+      net = balAfter - prevBal;
+      growth = net - (inflow - outflow);
+
+      html += sect('Balance at the start of the year');
+      html += row('What you had at ' + (viewAge - 1), money(prevBal), '', false);
+
+      html += sect('Money coming in');
+      if (working) {
+        html += row('Still working — pay you add', '+' + money(inflow), 'text-[#15803d]');
+      } else if (viewAge >= state.benefitAge) {
+        html += row('CPP + Old Age Security', '+' + money(inflow), 'text-[#15803d]');
+        if (viewAge === state.benefitAge) {
+          html += note('First year of it. From here on they arrive every year, storm or shine.');
+        }
+      } else {
+        html += row('CPP + Old Age Security', '—', 'text-[#2e4e2c]/45', true);
+        html += note('Not yet. They start at ' + state.benefitAge + ', in ' + (state.benefitAge - viewAge) + ' more year' + (state.benefitAge - viewAge === 1 ? '' : 's') + '.');
+      }
+
+      html += sect('Money going out');
+      if (working) {
+        html += row('Living costs while working', '—', 'text-[#2e4e2c]/45', true);
+        html += note('You have not stopped working yet, so the pot is still filling.');
+      } else {
+        html += row('Living costs', '−' + money(outflow), 'text-[#b91c1c]');
+      }
+
+      html += sect('What the pot did');
+      if (growth >= 0) html += row('Growth on the pot', '+' + money(growth), 'text-[#15803d]');
+      else html += row('Growth on the pot', '−' + money(growth), 'text-[#b91c1c]');
+
+      html += '<div class="lrow" style="border-top:2px solid rgba(46,78,44,.35); margin-top:2px">' +
+              '<span class="text-[13px] font-semibold text-[#22301f]">Net change this year</span>' +
+              '<span class="lead"></span>' +
+              '<span class="mono text-[14px] font-bold ' + (net >= 0 ? 'text-[#15803d]' : 'text-[#b91c1c]') + '">' + signed(net) + '</span></div>';
+
+      html += '<div class="lrow" style="background:rgba(20,83,45,.10)">' +
+              '<span class="text-[13.5px] font-bold text-[#14532d]">Balance after this year</span>' +
+              '<span class="lead"></span>' +
+              '<span class="mono text-[15.5px] font-bold text-[#14532d]">' + money(balAfter) + '</span></div>';
+
+      el('arith').textContent =
+        money(prevBal) + ' + ' + (inflow ? money(inflow) : '0') + ' in − ' +
+        (outflow ? money(outflow) : '0') + ' out ' + (growth >= 0 ? '+ ' : '− ') +
+        money(growth) + ' growth = ' + money(balAfter);
+    } else {
+      var ranOut = lastsLabel(res);
+      html += sect('This year');
+      html += note('Nothing arrives and nothing leaves — the pot was already empty.');
+      html += '<div class="lrow"><span class="text-[13px] text-[#22301f]">Money coming in</span><span class="lead"></span>' +
+              '<span class="mono text-[13.5px] font-semibold text-[#b91c1c]">0</span></div>';
+      html += '<div class="lrow"><span class="text-[13px] text-[#22301f]">Money going out</span><span class="lead"></span>' +
+              '<span class="mono text-[13.5px] font-semibold text-[#b91c1c]">0</span></div>';
+      html += '<div class="lrow" style="background:rgba(185,28,28,.08)">' +
+              '<span class="text-[13.5px] font-bold text-[#b91c1c]">Balance after this year</span>' +
+              '<span class="lead"></span><span class="mono text-[15.5px] font-bold text-[#b91c1c]">0</span></div>';
+      balAfter = 0; net = 0; growth = 0; prevBal = 0; inflow = 0; outflow = 0;
+      el('arith').textContent = 'The money ran out at ' + ranOut + ', so age ' + viewAge + ' has nothing left to show.';
+    }
+
+    el('lines').innerHTML = html;
+    spark(res);
+
+    /* stamp = whole-plan verdict */
+    var ok = res.ok;
+    var st = el('stamp');
+    st.className = 'stamp absolute right-4 top-4 z-10 sm:right-7 sm:top-6 ' + (ok ? 'stamp-pass' : 'stamp-fail');
+    el('stamp-word').textContent = ok ? 'HOLDS' : 'SHORT';
+    el('stamp-sub').textContent = ok
+      ? 'LASTS TO ' + lastsLabel(res)
+      : 'RUNS OUT AT ' + lastsLabel(res);
+
+    /* tear-off strip */
+    var gap = ok ? 0 : (state.maxAge - (res.depletionAge != null ? res.depletionAge : state.maxAge));
+    el('tear-verdict').textContent = ok
+      ? 'Lasts to ' + lastsLabel(res) + ', with ' + money(res.leftAtMax) + ' left over.'
+      : (gap === 0
+        ? 'Runs out right at ' + lastsLabel(res) + ' — nothing left over at ' + state.maxAge + '.'
+        : 'Runs out at ' + lastsLabel(res) + ' — ' + gap + ' year' + (gap === 1 ? '' : 's') + ' short of ' + state.maxAge + '.');
+    el('tear-idea').textContent = ok
+      ? (res.leftAtMax > 0 ? 'You have room here — nothing needs fixing.' : 'It holds, but only just.')
+      : (suggest(state) || 'Nothing small repairs this; something larger must give.');
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

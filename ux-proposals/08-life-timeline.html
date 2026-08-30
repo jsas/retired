@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>08 — Life Timeline</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range].pin { -webkit-appearance:none; appearance:none; height:20px; background:transparent; outline:none; cursor:grab; }
+  input[type=range].pin:active { cursor:grabbing; }
+  input[type=range].pin::-webkit-slider-runnable-track { height:2px; background:#e7e5e4; border-radius:2px; }
+  input[type=range].pin::-moz-range-track { height:2px; background:#e7e5e4; border-radius:2px; }
+  input[type=range].pin::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%; margin-top:-7px;
+    background:#f59e0b; border:2px solid #fff; box-shadow:0 0 0 1px #d97706, 0 2px 6px rgba(180,83,9,.3);
+  }
+  input[type=range].pin::-moz-range-thumb {
+    width:16px; height:16px; border-radius:50%; background:#f59e0b; border:2px solid #fff;
+    box-shadow:0 0 0 1px #d97706, 0 2px 6px rgba(180,83,9,.3);
+  }
+  input[type=range].pin.teal::-webkit-slider-thumb { background:#0f766e; box-shadow:0 0 0 1px #0f766e, 0 2px 6px rgba(13,148,136,.25); }
+  input[type=range].pin.teal::-moz-range-thumb { background:#0f766e; box-shadow:0 0 0 1px #0f766e, 0 2px 6px rgba(13,148,136,.25); }
+  #viz { touch-action: none; cursor: grab; }
+  #viz.grabbing { cursor: grabbing; }
+  .plinth { transition: all .2s; }
+</style>
+</head>
+<body class="bg-white text-stone-900 min-h-screen flex flex-col antialiased">
+
+<header class="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[9px] font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-stone-400">08 · Life Timeline</span>
+</header>
+
+<main class="flex-1 w-full max-w-5xl mx-auto px-6 py-10 flex flex-col justify-center">
+
+  <!-- ═══ THE AXIS ═══ -->
+  <svg id="viz" viewBox="0 0 1000 262" class="w-full block select-none">
+    <g id="chart"></g>
+    <g id="axis"></g>
+    <g id="pins"></g>
+  </svg>
+
+  <!-- ═══ DRAG ROWS ═══ -->
+  <div class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6 max-w-3xl mx-auto w-full">
+    <div>
+      <div class="flex items-baseline justify-between">
+        <label for="dRetire" class="text-[13px] font-medium text-stone-600">work ends <span class="text-stone-400">— amber pin</span></label>
+        <span class="text-lg font-semibold num text-amber-600" id="vRetire">62</span>
+      </div>
+      <input id="dRetire" type="range" class="pin w-full mt-1" min="55" max="80" step="1" value="62">
+    </div>
+    <div>
+      <div class="flex items-baseline justify-between">
+        <label for="dBenefit" class="text-[13px] font-medium text-stone-600">CPP + OAS start <span class="text-stone-400">— teal pin</span></label>
+        <span class="text-lg font-semibold num text-teal-700" id="vBenefit">65</span>
+      </div>
+      <input id="dBenefit" type="range" class="pin teal w-full mt-1" min="60" max="70" step="1" value="65">
+    </div>
+  </div>
+
+  <!-- ═══ THREE STATS ═══ -->
+  <div class="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-10 max-w-3xl mx-auto w-full">
+    <div class="plinth">
+      <div class="text-[11px] uppercase tracking-[0.14em] text-stone-400">money lasts until you're</div>
+      <div class="text-[40px] leading-none font-semibold num mt-2.5" id="sLasts">89</div>
+      <p class="text-[13px] text-stone-500 mt-2 leading-relaxed" id="sLastsNote"></p>
+    </div>
+    <div class="plinth">
+      <div class="text-[11px] uppercase tracking-[0.14em] text-stone-400">in the pot at 65</div>
+      <div class="text-[40px] leading-none font-semibold num mt-2.5" id="sAt65">$0</div>
+      <p class="text-[13px] text-stone-500 mt-2 leading-relaxed" id="sAt65Note"></p>
+    </div>
+    <div class="plinth">
+      <div class="text-[11px] uppercase tracking-[0.14em] text-stone-400">you could spend</div>
+      <div class="text-[40px] leading-none font-semibold num mt-2.5 text-amber-600" id="sSafe">$0</div>
+      <p class="text-[13px] text-stone-500 mt-2 leading-relaxed" id="sSafeNote"></p>
+    </div>
+  </div>
+
+  <p class="mt-12 text-[12px] leading-relaxed text-stone-400 max-w-xl mx-auto text-center">
+    Drag the pins straight on the axis, or use the two sliders underneath. The red flag is the age your
+    money runs out; when your money outlasts the plan it turns gray instead. Assumes $25,000 a year still
+    going in until work ends, and $22,000 a year from CPP and OAS once they start.
+  </p>
+</main>
+
+<footer class="px-5 py-4 text-[11px] text-stone-400 border-t border-stone-100">
+  08 · Life Timeline — your whole plan laid on one age axis you can drag.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+
+  /* ── geometry: ages 55..100 on a precise horizontal axis ── */
+  const W = 1000, A0 = 55, A1 = 100;
+  const L = 40, R = 960;              // chart x extent
+  const AXIS_Y = 68;                  // the hairline axis
+  const TICK_TO = 78, NUM_Y = 96;     // ticks + their numbers hang below
+  const YOU_Y = 113;                  // "you are here", under the current-age number
+  const TOP = 122, BOT = 244;         // balance chart band
+  const ROW_WORK = 16, ROW_BEN = 35, ROW_END = 54;   // label rows above the axis
+  const AMBER = '#d97706', TEAL = '#0f766e', RED = '#dc2626', GRAY = '#a8a29e';
+  const clampAge = a => Math.max(A0, Math.min(A1, a));
+  const xFor = age => L + (clampAge(age) - A0) / (A1 - A0) * (R - L);
+
+  /* hairline axis, ticks and numbers — drawn once */
+  (function buildAxis() {
+    let out = '<line x1="' + L + '" y1="' + AXIS_Y + '" x2="' + R + '" y2="' + AXIS_Y + '" stroke="#e7e5e4" stroke-width="1"/>';
+    for (let a = A0; a <= A1; a++) {
+      const major = a % 5 === 0, x = xFor(a).toFixed(1);
+      out += '<line x1="' + x + '" y1="' + AXIS_Y + '" x2="' + x + '" y2="' + (major ? TICK_TO : TICK_TO - 4) + '" stroke="' + (major ? '#d6d3d1' : '#ede9e5') + '" stroke-width="1"/>';
+      if (major) out += '<text x="' + x + '" y="' + NUM_Y + '" font-size="11" fill="#a8a29e" text-anchor="middle" class="num">' + a + '</text>';
+    }
+    out += '<text x="' + xFor(state.currentAge) + '" y="' + YOU_Y + '" font-size="11" fill="#57534e" text-anchor="middle" class="num" font-weight="600">you are here</text>';
+    $('axis').innerHTML = out;
+  })();
+
+  function balAt(rows, age) {
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i].age >= age) {
+        const a = rows[i - 1], b = rows[i];
+        const t = b.age === a.age ? 0 : (age - a.age) / (b.age - a.age);
+        return a.bal + (b.bal - a.bal) * t;
+      }
+    }
+    return rows.length ? rows[rows.length - 1].bal : 0;
+  }
+
+  function safeSpend() {
+    if (!simulate({ ...state, spending: 0 }).ok) return 0;
+    let lo = 0, hi = 900000;
+    for (let i = 0; i < 22; i++) {
+      const mid = (lo + hi) / 2;
+      if (simulate({ ...state, spending: mid }).ok) lo = mid; else hi = mid;
+    }
+    return Math.floor(lo / 100) * 100;
+  }
+
+  function pin(x, color, label, age, row) {
+    /* keep the label inside the frame when the pin sits at either edge */
+    const anchor = x < 120 ? 'start' : (x > W - 120 ? 'end' : 'middle');
+    const lx = anchor === 'start' ? Math.max(x - 5, 2) : (anchor === 'end' ? Math.min(x + 5, W - 2) : x);
+    return '<line x1="' + x + '" y1="' + (row + 4) + '" x2="' + x + '" y2="' + BOT + '" stroke="' + color + '" stroke-width="1" stroke-opacity="0.35"/>'
+         + '<circle cx="' + x + '" cy="' + AXIS_Y + '" r="5" fill="' + color + '" stroke="#fff" stroke-width="2"/>'
+         + '<text x="' + lx + '" y="' + row + '" font-size="11.5" fill="' + color + '" text-anchor="' + anchor + '" font-weight="600">' + label + ' · ' + age + '</text>';
+  }
+
+  function render() {
+    const res = simulate(state);
+    const rows = res.rows;
+    const max = Math.max(...rows.map(r => r.bal), 1);
+    const yFor = v => BOT - (v / max) * (BOT - TOP);
+
+    /* balance area, ending where the money ends (or at 100) */
+    let line = '', first = null, last = null;
+    rows.forEach(r => {
+      if (r.age > A1) return;
+      if (!first) first = r;
+      last = r;
+      line += (line ? ' L ' : 'M ') + xFor(r.age).toFixed(1) + ' ' + yFor(r.bal).toFixed(1);
+    });
+    let area = '';
+    if (first && last) {
+      area = 'M ' + xFor(first.age).toFixed(1) + ' ' + BOT + ' ' + line.replace('M', 'L') +
+             ' L ' + xFor(last.age).toFixed(1) + ' ' + BOT + ' Z';
+    }
+    const dry = !res.ok && res.depletionAge != null && res.depletionAge <= state.maxAge;
+    const stroke = dry ? RED : '#57534e';
+    $('chart').innerHTML =
+      '<path d="' + area + '" fill="' + (dry ? RED : AMBER) + '" fill-opacity="0.10"/>' +
+      '<path d="' + line + '" fill="none" stroke="' + stroke + '" stroke-width="1.75" stroke-linejoin="round"/>';
+
+    /* the three milestone pins */
+    let p = pin(xFor(state.retireAge), AMBER, 'work ends', state.retireAge, ROW_WORK);
+    p += pin(xFor(state.benefitAge), TEAL, 'CPP + OAS', state.benefitAge, ROW_BEN);
+    if (res.depletionAge != null && res.depletionAge <= A1) {
+      p += pin(xFor(res.depletionAge), dry ? RED : GRAY, 'money runs out', res.depletionAge, ROW_END);
+    } else {
+      const msg = res.depletionAge == null ? 'never runs out' : 'runs out past 100';
+      p += '<line x1="' + R + '" y1="' + (ROW_END - 4) + '" x2="' + R + '" y2="' + AXIS_Y + '" stroke="#d6d3d1" stroke-width="1" stroke-dasharray="2 3"/>'
+         + '<text x="' + R + '" y="' + ROW_END + '" font-size="11.5" fill="' + GRAY + '" text-anchor="end" font-weight="600">' + msg + '</text>';
+    }
+    $('pins').innerHTML = p;
+
+    /* stats */
+    const short = res.ok ? 0 : state.maxAge - res.depletionAge;
+    $('sLasts').textContent = lastsLabel(res);
+    $('sLasts').style.color = res.ok ? '#1c1917' : RED;
+    $('sLastsNote').textContent = res.ok
+      ? 'past the ' + state.maxAge + " you're planning for."
+      : short + ' year' + (short === 1 ? '' : 's') + ' short of ' + state.maxAge + '.';
+
+    $('sAt65').textContent = fmtMoney(balAt(rows, 65));
+    $('sAt65Note').textContent = state.retireAge > 65
+      ? 'still earning, so it keeps climbing.'
+      : (65 - state.retireAge) + ' year' + (65 - state.retireAge === 1 ? '' : 's') + ' into retirement, and still holding.';
+
+    const safe = safeSpend();
+    $('sSafe').textContent = fmtMoney(safe);
+    const gap = safe - state.spending;
+    $('sSafeNote').textContent = gap >= 0
+      ? fmtMoney(gap) + ' a year more than you planned, and still reach ' + state.maxAge + '.'
+      : 'you planned ' + fmtMoney(state.spending) + ' — ' + fmtMoney(-gap) + ' a year too much for ' + state.maxAge + '.';
+  }
+
+  /* ── drag on the axis itself ── */
+  const svg = $('viz');
+  const LIMITS = { retireAge: [55, 80], benefitAge: [60, 70] };
+  function apply(key, age) {
+    const [lo, hi] = LIMITS[key];
+    state[key] = Math.max(lo, Math.min(hi, Math.round(age)));
+    $('dRetire').value = state.retireAge;
+    $('dBenefit').value = state.benefitAge;
+    $('vRetire').textContent = state.retireAge;
+    $('vBenefit').textContent = state.benefitAge;
+    render();
+  }
+  function ageFromEvent(e) {
+    const rect = svg.getBoundingClientRect();
+    const vx = (e.clientX - rect.left) / rect.width * W;
+    return A0 + (vx - L) / (R - L) * (A1 - A0);
+  }
+  let dragging = null;
+  svg.addEventListener('pointerdown', e => {
+    const a = ageFromEvent(e);
+    const dWork = Math.abs(a - state.retireAge), dBen = Math.abs(a - state.benefitAge);
+    /* generous hit area: 6 years on the axis, and the nearer pin wins */
+    if (Math.min(dWork, dBen) > 6) return;
+    dragging = dWork <= dBen ? 'retireAge' : 'benefitAge';
+    svg.setPointerCapture(e.pointerId);
+    svg.classList.add('grabbing');
+    apply(dragging, a);
+  });
+  svg.addEventListener('pointermove', e => { if (dragging) apply(dragging, ageFromEvent(e)); });
+  ['pointerup', 'pointercancel'].forEach(ev => svg.addEventListener(ev, () => {
+    dragging = null; svg.classList.remove('grabbing');
+  }));
+
+  /* ── and the sliders underneath ── */
+  $('dRetire').addEventListener('input', e => apply('retireAge', +e.target.value));
+  $('dBenefit').addEventListener('input', e => apply('benefitAge', +e.target.value));
+
+  render();
+</script>
+</body>
+</html>

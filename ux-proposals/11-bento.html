@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 11 · Bento Board</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---- range inputs: custom track + thumb ---- */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; background: transparent; cursor: pointer;
+    accent-color: #1d4ed8;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 999px;
+    background: #e7e2da;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px; border-radius: 999px; background: #e7e2da;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    height: 16px; width: 16px; margin-top: -6px; border-radius: 999px;
+    background: #ffffff; border: 2px solid #1d4ed8;
+    box-shadow: 0 1px 3px rgba(20,20,20,.18);
+    transition: transform .12s ease;
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 14px; width: 14px; border-radius: 999px;
+    background: #ffffff; border: 2px solid #1d4ed8;
+    box-shadow: 0 1px 3px rgba(20,20,20,.18);
+  }
+  input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { border-color: #0f172a; }
+
+  .tile { transition: box-shadow .18s ease, transform .18s ease; }
+  .tile:hover { box-shadow: 0 6px 18px -8px rgba(40,30,20,.18); }
+</style>
+</head>
+<body class="min-h-screen bg-[#fbf7f2] text-stone-900 antialiased">
+
+<div class="mx-auto max-w-5xl px-5 py-8 sm:px-8 sm:py-10">
+
+  <!-- top chrome -->
+  <header class="mb-7 flex items-center gap-2.5">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-stone-400">· 11 Bento Board</span>
+  </header>
+
+  <div class="mb-6">
+    <h1 class="text-[22px] font-bold tracking-tight">Your whole plan, on one board.</h1>
+    <p class="mt-1 text-[13px] leading-relaxed text-stone-500">
+      Every tile is live. Drag a dial, switch the weather, and the whole board rearranges its opinion.
+    </p>
+  </div>
+
+  <main class="grid grid-cols-2 gap-3.5 sm:gap-4 lg:grid-cols-4">
+
+    <!-- 1 · VERDICT (2x2) -->
+    <section id="tile-verdict"
+      class="tile col-span-2 row-span-2 flex flex-col justify-between rounded-2xl border border-black/[.06] bg-white p-5 sm:p-6">
+      <div>
+        <div class="mb-4 flex items-center gap-2">
+          <span id="verdict-dot" class="h-2 w-2 rounded-full bg-amber-500"></span>
+          <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">The verdict</span>
+        </div>
+        <h2 id="verdict-head" class="text-[26px] font-bold leading-[1.15] tracking-tight sm:text-[30px]">
+          This plan runs short.
+        </h2>
+        <p id="verdict-body" class="num mt-2.5 text-[13.5px] leading-relaxed text-stone-600">
+          Your money lasts until you're 89 — six years before you planned for.
+        </p>
+        <p id="verdict-fix" class="mt-3 text-[12.5px] font-medium leading-relaxed text-amber-700">
+          Working 2 more years would close the gap.
+        </p>
+      </div>
+
+      <div class="mt-5">
+        <div class="mb-1.5 flex items-baseline justify-between">
+          <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">Your savings</span>
+          <span class="num text-[10.5px] text-stone-400">age 55 → 95</span>
+        </div>
+        <svg id="spark" viewBox="0 0 300 74" preserveAspectRatio="none" class="h-[74px] w-full" aria-hidden="true">
+          <defs>
+            <linearGradient id="sparkfill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1d4ed8" stop-opacity=".16" />
+              <stop offset="100%" stop-color="#1d4ed8" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <line x1="0" y1="72" x2="300" y2="72" stroke="#e7e2da" stroke-width="1" />
+          <path id="spark-area" fill="url(#sparkfill)" d="" />
+          <path id="spark-line" fill="none" stroke="#1d4ed8" stroke-width="2"
+                stroke-linejoin="round" stroke-linecap="round" d="" />
+          <line id="spark-dep" x1="0" y1="0" x2="0" y2="72" stroke="#d97706" stroke-width="1"
+                stroke-dasharray="3 3" visibility="hidden" />
+          <circle id="spark-end" cx="0" cy="0" r="3" fill="#1d4ed8" />
+        </svg>
+      </div>
+    </section>
+
+    <!-- 2 · LASTS TO AGE -->
+    <section class="tile flex flex-col justify-between rounded-2xl border border-black/[.06] bg-white p-4 sm:p-5">
+      <div class="flex items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+        <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">Money lasts to</span>
+      </div>
+      <div class="mt-3">
+        <div class="num text-[34px] font-bold leading-none tracking-tight text-blue-700" id="lasts-val">89</div>
+        <div class="num mt-2 text-[11.5px] leading-snug text-stone-500" id="lasts-sub">planning to 95</div>
+      </div>
+    </section>
+
+    <!-- 3 · LEFT OVER AT 95 -->
+    <section class="tile flex flex-col justify-between rounded-2xl border border-black/[.06] bg-white p-4 sm:p-5">
+      <div class="flex items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-violet-600"></span>
+        <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">Left at 95</span>
+      </div>
+      <div class="mt-3">
+        <div class="num text-[24px] font-bold leading-none tracking-tight text-violet-700" id="left-val">$0</div>
+        <div class="num mt-2 text-[11.5px] leading-snug text-stone-500" id="left-sub">nothing left to leave anyone</div>
+      </div>
+    </section>
+
+    <!-- 4 · WEATHER -->
+    <section class="tile flex flex-col justify-between rounded-2xl border border-black/[.06] bg-white p-4 sm:p-5">
+      <div class="flex items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-sky-600"></span>
+        <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">The weather</span>
+      </div>
+      <div class="mt-3">
+        <div id="weather-desc" class="text-[12.5px] font-medium leading-snug text-stone-700">
+          Ordinary markets.
+        </div>
+        <div id="weather-seg" class="mt-3 grid grid-cols-3 gap-1 rounded-lg bg-stone-100 p-1">
+          <button data-sky="storm"
+            class="seg rounded-md px-1 py-1.5 text-[11.5px] font-medium text-stone-500 transition-colors">Stormy</button>
+          <button data-sky="normal"
+            class="seg rounded-md px-1 py-1.5 text-[11.5px] font-medium text-stone-500 transition-colors">Ordinary</button>
+          <button data-sky="sun"
+            class="seg rounded-md px-1 py-1.5 text-[11.5px] font-medium text-stone-500 transition-colors">Kind</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 · THEN → NOW -->
+    <section class="tile flex flex-col justify-between rounded-2xl border border-black/[.06] bg-white p-4 sm:p-5">
+      <div class="flex items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-teal-600"></span>
+        <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">Then → now</span>
+      </div>
+      <div class="mt-3 space-y-2">
+        <div>
+          <div class="num text-[19px] font-bold leading-none tracking-tight text-teal-700" id="peak-val">$1.24M</div>
+          <div class="num mt-1 text-[11px] text-stone-500" id="peak-sub">your best year, at 61</div>
+        </div>
+        <svg class="h-3 w-3 text-stone-300" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M6 1v10M2.5 7.5L6 11l3.5-3.5" stroke="currentColor" stroke-width="1.4"
+                stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <div>
+          <div class="num text-[19px] font-bold leading-none tracking-tight text-stone-800" id="now-val">$850,000</div>
+          <div class="num mt-1 text-[11px] text-stone-500" id="now-sub">what you have today, at 55</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 · YEARS SHORT / TO SPARE -->
+    <section class="tile flex flex-col justify-between rounded-2xl border border-black/[.06] bg-white p-4 sm:p-5">
+      <div class="flex items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+        <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">The gap</span>
+      </div>
+      <div class="mt-3">
+        <div class="num text-[24px] font-bold leading-none tracking-tight text-rose-600" id="gap-val">6 short</div>
+        <div class="num mt-2 text-[11.5px] leading-snug text-stone-500" id="gap-sub">against your plan to 95</div>
+      </div>
+    </section>
+
+    <!-- 7 · CONTRIBUTIONS IN -->
+    <section class="tile flex flex-col justify-between rounded-2xl border border-black/[.06] bg-white p-4 sm:p-5">
+      <div class="flex items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-emerald-600"></span>
+        <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">Still adding</span>
+      </div>
+      <div class="mt-3">
+        <div class="num text-[24px] font-bold leading-none tracking-tight text-emerald-700" id="contrib-val">$25,000</div>
+        <div class="num mt-2 text-[11.5px] leading-snug text-stone-500" id="contrib-sub">a year until you stop at 62</div>
+      </div>
+    </section>
+
+    <!-- 8 · DIALS (2 cols) -->
+    <section class="tile col-span-2 rounded-2xl border border-black/[.06] bg-white p-4 sm:p-5">
+      <div class="flex items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-stone-700"></span>
+        <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">Three dials</span>
+      </div>
+      <div class="mt-3 space-y-3.5">
+        <div>
+          <div class="mb-1 flex items-baseline justify-between">
+            <label for="d-retire" class="text-[12.5px] font-medium text-stone-700">When you stop working</label>
+            <span class="num text-[12.5px] font-semibold text-stone-900" id="d-retire-val">62</span>
+          </div>
+          <input id="d-retire" type="range" min="50" max="75" step="1" value="62" />
+        </div>
+        <div>
+          <div class="mb-1 flex items-baseline justify-between">
+            <label for="d-spend" class="text-[12.5px] font-medium text-stone-700">Spending each year after</label>
+            <span class="num text-[12.5px] font-semibold text-stone-900" id="d-spend-val">$85,000</span>
+          </div>
+          <input id="d-spend" type="range" min="40000" max="150000" step="2500" value="85000" />
+        </div>
+        <div>
+          <div class="mb-1 flex items-baseline justify-between">
+            <label for="d-saved" class="text-[12.5px] font-medium text-stone-700">What you've saved</label>
+            <span class="num text-[12.5px] font-semibold text-stone-900" id="d-saved-val">$850,000</span>
+          </div>
+          <input id="d-saved" type="range" min="100000" max="2500000" step="25000" value="850000" />
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 · LINKS (full width) -->
+    <section class="tile col-span-2 flex flex-col justify-between rounded-2xl border border-black/[.06] bg-white p-4 sm:p-5 lg:col-span-4">
+      <div class="flex items-center gap-2">
+        <span class="h-1.5 w-1.5 rounded-full bg-stone-400"></span>
+        <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-stone-400">Go deeper</span>
+      </div>
+      <div class="mt-3.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <a href="#" class="rounded-lg border border-stone-200 px-3 py-2.5 text-center text-[12.5px] font-medium text-stone-700 transition-colors hover:border-stone-300 hover:bg-stone-50">Details</a>
+        <a href="#" class="rounded-lg border border-stone-200 px-3 py-2.5 text-center text-[12.5px] font-medium text-stone-700 transition-colors hover:border-stone-300 hover:bg-stone-50">Year table</a>
+        <a href="#" class="rounded-lg border border-stone-200 px-3 py-2.5 text-center text-[12.5px] font-medium text-stone-700 transition-colors hover:border-stone-300 hover:bg-stone-50">Stress tests</a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="mt-8 text-[11.5px] text-stone-400">
+    11 · Bento Board — the whole plan as nine tiles you can push around.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    spending: DEMO_DEFAULTS.spending,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+
+  var el = function (id) { return document.getElementById(id); };
+  var $ = {
+    verdictTile: el('tile-verdict'), dot: el('verdict-dot'),
+    head: el('verdict-head'), body: el('verdict-body'), fix: el('verdict-fix'),
+    sparkLine: el('spark-line'), sparkArea: el('spark-area'),
+    sparkDep: el('spark-dep'), sparkEnd: el('spark-end'),
+    lastsVal: el('lasts-val'), lastsSub: el('lasts-sub'),
+    leftVal: el('left-val'), leftSub: el('left-sub'),
+    weatherDesc: el('weather-desc'), seg: el('weather-seg'),
+    peakVal: el('peak-val'), peakSub: el('peak-sub'),
+    nowVal: el('now-val'), nowSub: el('now-sub'),
+    gapVal: el('gap-val'), gapSub: el('gap-sub'),
+    contribVal: el('contrib-val'), contribSub: el('contrib-sub'),
+    rRetire: el('d-retire'), rSpend: el('d-spend'), rSaved: el('d-saved'),
+    vRetire: el('d-retire-val'), vSpend: el('d-spend-val'), vSaved: el('d-saved-val')
+  };
+
+  var WEATHER = {
+    storm:  { label: 'Stormy',   desc: 'Stormy markets. Bad returns for a long stretch.' },
+    normal: { label: 'Ordinary', desc: 'Ordinary markets. Nothing unusual, good or bad.' },
+    sun:    { label: 'Kind',     desc: 'Kind markets. Better returns than history promises.' }
+  };
+
+  function money(v) { return '$' + Math.round(v).toLocaleString('en-CA'); }
+
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+
+  function peakOf(rows) {
+    var best = rows[0];
+    for (var i = 1; i < rows.length; i++) { if (rows[i].bal > best.bal) best = rows[i]; }
+    return best;
+  }
+
+  function paintSpark(res) {
+    var W = 300, H = 74, pad = 4;
+    var a0 = state.currentAge, a1 = state.maxAge;
+    var span = Math.max(1, a1 - a0);
+    var byAge = {};
+    res.rows.forEach(function (r) { byAge[r.age] = r.bal; });
+    var pts = [];
+    for (var age = a0; age <= a1; age++) {
+      var b = (age in byAge) ? byAge[age] : 0;
+      pts.push([pad + (age - a0) / span * (W - 2 * pad), H - pad - (b / (res.peak || 1)) * (H - 2 * pad)]);
+    }
+    var line = pts.map(function (p, i) {
+      return (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ' ' + p[1].toFixed(1);
+    }).join(' ');
+    $.sparkLine.setAttribute('d', line);
+    $.sparkArea.setAttribute('d', line + ' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + (H - pad) +
+      ' L' + pts[0][0].toFixed(1) + ' ' + (H - pad) + ' Z');
+    var last = pts[pts.length - 1];
+    $.sparkEnd.setAttribute('cx', last[0].toFixed(1));
+    $.sparkEnd.setAttribute('cy', last[1].toFixed(1));
+    $.sparkEnd.setAttribute('fill', res.ok ? '#1d4ed8' : '#d97706');
+    if (res.depletionAge != null && res.depletionAge <= a1) {
+      var x = pad + (res.depletionAge - a0) / span * (W - 2 * pad);
+      $.sparkDep.setAttribute('x1', x.toFixed(1));
+      $.sparkDep.setAttribute('x2', x.toFixed(1));
+      $.sparkDep.setAttribute('visibility', 'visible');
+    } else {
+      $.sparkDep.setAttribute('visibility', 'hidden');
+    }
+  }
+
+  function paintWeather() {
+    var buttons = $.seg.querySelectorAll('.seg');
+    for (var i = 0; i < buttons.length; i++) {
+      var b = buttons[i], on = b.getAttribute('data-sky') === state.sky;
+      b.className = 'seg rounded-md px-1 py-1.5 text-[11.5px] font-medium transition-colors ' +
+        (on ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700');
+    }
+    $.weatherDesc.textContent = WEATHER[state.sky].desc;
+  }
+
+  function render() {
+    var res = simulate(state);
+    var peak = peakOf(res.rows);
+    res.peak = peak.bal;
+
+    /* verdict: the age the money actually reaches (the model never runs past 110) */
+    var MODEL_CAP = 110;
+    var effAge = res.depletionAge != null ? res.depletionAge : MODEL_CAP;
+    var diff = effAge - state.maxAge;   /* positive = years to spare, negative = years short */
+    var gap = Math.abs(diff);
+    var okCol = res.ok;
+    $.head.textContent = okCol ? 'This plan holds.' : 'This plan runs short.';
+    $.head.className = 'text-[26px] font-bold leading-[1.15] tracking-tight sm:text-[30px] ' +
+      (okCol ? 'text-emerald-700' : 'text-amber-800');
+    $.dot.className = 'h-2 w-2 rounded-full ' + (okCol ? 'bg-emerald-500' : 'bg-amber-500');
+    $.verdictTile.style.borderColor = okCol ? 'rgba(5,150,105,.18)' : 'rgba(180,83,9,.18)';
+
+    if (okCol) {
+      $.body.textContent = 'Your money lasts until you’re ' + lastsLabel(res) +
+        ' — past the 95 you planned for, with ' + fmtMoney(res.leftAtMax) + ' still there.';
+      $.fix.textContent = 'Nothing needs fixing. Stormy markets are the thing to watch: they’d last until you’re ' +
+        lastsLabel(simulate(Object.assign({}, state, { sky: 'storm' }))) + '.';
+      $.fix.className = 'mt-3 text-[12.5px] font-medium leading-relaxed text-emerald-700';
+    } else {
+      $.body.textContent = 'Your money lasts until you’re ' + lastsLabel(res) +
+        ' — ' + gap + ' ' + yearWord(gap) + ' before the 95 you planned for.';
+      var s = suggest(state);
+      $.fix.textContent = s || 'Nothing small fixes this. Something bigger has to give.';
+      $.fix.className = 'mt-3 text-[12.5px] font-medium leading-relaxed text-amber-700';
+    }
+
+    paintSpark(res);
+
+    /* tiles */
+    $.lastsVal.textContent = lastsLabel(res);
+    $.lastsSub.textContent = okCol
+      ? 'past the 95 you planned for'
+      : gap + ' ' + yearWord(gap) + ' short of 95';
+
+    $.leftVal.textContent = fmtMoney(res.leftAtMax);
+    $.leftVal.className = 'num text-[24px] font-bold leading-none tracking-tight ' +
+      (res.leftAtMax > 0 ? 'text-violet-700' : 'text-stone-300');
+    $.leftSub.textContent = res.leftAtMax > 0
+      ? 'still in the pot at 95'
+      : 'nothing left to leave anyone';
+
+    $.peakVal.textContent = fmtMoney(peak.bal);
+    $.peakSub.textContent = 'your best year, at ' + peak.age;
+    $.nowVal.textContent = money(state.savings);
+    $.nowSub.textContent = 'what you have today, at ' + state.currentAge;
+
+    if (okCol) {
+      $.gapVal.textContent = diff > 0 ? gap + ' to spare' : 'no gap';
+      $.gapVal.className = 'num text-[24px] font-bold leading-none tracking-tight text-emerald-700';
+      $.gapSub.textContent = diff > 0
+        ? 'you outlast the ' + state.maxAge + ' you planned for'
+        : 'the money reaches ' + effAge + ', the age you planned for';
+    } else {
+      $.gapVal.textContent = gap + ' short';
+      $.gapVal.className = 'num text-[24px] font-bold leading-none tracking-tight text-rose-600';
+      $.gapSub.textContent = 'against your plan to 95';
+    }
+
+    $.contribVal.textContent = money(state.contrib);
+    $.contribSub.textContent = 'a year until you stop at ' + state.retireAge;
+
+    paintWeather();
+
+    /* dial labels */
+    $.vRetire.textContent = state.retireAge;
+    $.vSpend.textContent = money(state.spending);
+    $.vSaved.textContent = money(state.savings);
+  }
+
+  /* wiring */
+  $.rRetire.addEventListener('input', function () {
+    state.retireAge = parseInt(this.value, 10); render();
+  });
+  $.rSpend.addEventListener('input', function () {
+    state.spending = parseInt(this.value, 10); render();
+  });
+  $.rSaved.addEventListener('input', function () {
+    state.savings = parseInt(this.value, 10); render();
+  });
+  $.seg.addEventListener('click', function (e) {
+    var b = e.target.closest('.seg');
+    if (!b) return;
+    state.sky = b.getAttribute('data-sky');
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 23 · Morning Briefing</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  body { font-family: Georgia, 'Times New Roman', Times, serif; }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* tiny caps headers */
+  .cap {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 9.5px; font-weight: 700; letter-spacing: .17em;
+    text-transform: uppercase; color: #8c7f6a;
+  }
+
+  /* masthead wordmark */
+  .mast {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 800; letter-spacing: -.025em;
+  }
+
+  .rule     { border-top: 1px solid rgba(60, 46, 26, .18); }
+  .rule-hvy { border-top: 3px solid #2f2618; }
+
+  /* the three inline sliders in the edit strip */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 88px; height: 16px; background: transparent; cursor: pointer; margin: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 2px; background: rgba(60, 46, 26, .30); border-radius: 2px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; margin-top: -5.5px;
+    background: #2f2618; border: none; border-radius: 50%;
+  }
+  input[type=range]::-moz-range-track { height: 2px; background: rgba(60, 46, 26, .30); border-radius: 2px; }
+  input[type=range]::-moz-range-thumb { width: 13px; height: 13px; background: #2f2618; border: none; border-radius: 50%; }
+  input[type=range]:focus-visible { outline: 2px solid #2f2618; outline-offset: 3px; }
+
+  .chip {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 11px; letter-spacing: .05em;
+    background: none; border: 1px solid rgba(60, 46, 26, .25); border-radius: 999px;
+    padding: 3px 10px; color: #5c5340; transition: all .14s ease;
+  }
+  .chip:hover { border-color: #2f2618; color: #2f2618; }
+  .chip[aria-pressed="true"] { background: #2f2618; border-color: #2f2618; color: #fdfbf7; }
+
+  .watch li { position: relative; padding-left: 18px; }
+  .watch li::before {
+    content: ''; position: absolute; left: 2px; top: .62em;
+    width: 7px; height: 7px; border-radius: 50%; background: #b3541e;
+  }
+
+  ::selection { background: rgba(179, 84, 30, .16); }
+</style>
+</head>
+<body class="min-h-screen bg-[#efeae0] text-[#2f2618] antialiased">
+
+<div class="mx-auto max-w-2xl px-4 py-7 sm:py-11">
+
+  <!-- top chrome -->
+  <header class="mb-6 flex items-center gap-2.5" style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-[#a39884]">23 — Morning Briefing</span>
+  </header>
+
+  <!-- EDIT PLAN STRIP: the three sliders, inline -->
+  <div class="mb-4 rounded-lg border border-[#c9beaa] bg-[#faf7f0] px-4 py-3"
+       style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2.5">
+      <span class="text-[9.5px] font-bold uppercase tracking-[.17em] text-[#a39884]">Edit plan</span>
+
+      <label class="flex items-center gap-2.5 text-[11.5px] text-[#5c5340]">
+        <span>stop working at</span>
+        <input id="ctl-retire" type="range" min="50" max="75" step="1" value="62" />
+        <span id="val-retire" class="num w-7 text-[12.5px] font-semibold text-[#2f2618]">62</span>
+      </label>
+
+      <label class="flex items-center gap-2.5 text-[11.5px] text-[#5c5340]">
+        <span>spend a year</span>
+        <input id="ctl-spend" type="range" min="40000" max="150000" step="2500" value="85000" />
+        <span id="val-spend" class="num w-[62px] text-[12.5px] font-semibold text-[#2f2618]">$85,000</span>
+      </label>
+
+      <label class="flex items-center gap-2.5 text-[11.5px] text-[#5c5340]">
+        <span>saved</span>
+        <input id="ctl-saved" type="range" min="100000" max="2500000" step="25000" value="850000" />
+        <span id="val-saved" class="num w-[70px] text-[12.5px] font-semibold text-[#2f2618]">$850,000</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- THE BRIEFING -->
+  <article class="rounded-md border border-[#d3c9b6] bg-[#fdfbf7] px-6 py-8 shadow-[0_1px_2px_rgba(60,46,26,.05),0_16px_40px_-24px_rgba(60,46,26,.35)] sm:px-10 sm:py-11">
+
+    <!-- masthead -->
+    <div class="text-center">
+      <div class="cap">A one-minute read, every morning</div>
+      <h1 class="mast mt-2.5 text-[30px] leading-none sm:text-[34px]">Your plan, this morning</h1>
+      <div class="num mt-3 text-[11.5px] italic text-[#8c7f6a]">
+        <span id="m-date">Saturday, 30 August 2026</span> &nbsp;·&nbsp; ages <span id="m-span">55</span> to <span id="m-max">95</span>
+      </div>
+      <div class="rule-hvy mt-5"></div>
+      <div class="rule mt-[3px]"></div>
+    </div>
+
+    <!-- TL;DR -->
+    <section class="mt-7" aria-live="polite">
+      <p id="tldr" class="text-[17.5px] leading-[1.62]">
+        Good morning. As your plan stands, your money runs out at 89.
+        <strong>That is six years short of the 95 you have in mind, and there is nothing left over.</strong>
+        Working two more years would close the gap.
+      </p>
+    </section>
+
+    <div class="rule mt-8"></div>
+
+    <!-- THE NUMBERS -->
+    <section class="mt-6">
+      <div class="cap">The numbers</div>
+      <table class="mt-3 w-full border-collapse text-[14px]">
+        <tbody>
+          <tr class="border-b border-[#e2d9c7]">
+            <td class="py-2.5 pr-3 text-[#5c5340]">Your money lasts to</td>
+            <td id="n-lasts" class="num py-2.5 text-right font-bold">89</td>
+          </tr>
+          <tr class="border-b border-[#e2d9c7]">
+            <td class="py-2.5 pr-3 text-[#5c5340]">You are planning to</td>
+            <td class="num py-2.5 text-right font-bold">95</td>
+          </tr>
+          <tr class="border-b border-[#e2d9c7]">
+            <td class="py-2.5 pr-3 text-[#5c5340]">Left over at 95</td>
+            <td id="n-left" class="num py-2.5 text-right font-bold">$0</td>
+          </tr>
+          <tr class="border-b border-[#e2d9c7]">
+            <td class="py-2.5 pr-3 text-[#5c5340]">In a stormy market</td>
+            <td id="n-storm" class="num py-2.5 text-right font-bold">80</td>
+          </tr>
+          <tr>
+            <td class="py-2.5 pr-3 text-[#5c5340]">In a kind market</td>
+            <td id="n-sun" class="num py-2.5 text-right font-bold">110+</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="rule mt-7"></div>
+
+    <!-- THE CHART -->
+    <section class="mt-6">
+      <div class="cap">The chart</div>
+      <div id="chart" class="mt-4"></div>
+      <div class="num mt-2 flex justify-between text-[11px] text-[#a39884]">
+        <span id="ch-a">55</span><span id="ch-b">95</span>
+      </div>
+    </section>
+
+    <div class="rule mt-7"></div>
+
+    <!-- WHAT TO WATCH -->
+    <section class="mt-6">
+      <div class="cap">What to watch</div>
+      <ul id="watch" class="watch mt-3.5 space-y-2.5 text-[14.5px] leading-[1.6] text-[#3d3324]"></ul>
+    </section>
+
+    <div class="rule mt-7"></div>
+
+    <!-- ONE IDEA -->
+    <section class="mt-6">
+      <div class="cap">One idea</div>
+      <div class="mt-3.5 rounded-md border-l-[3px] border-[#b3541e] bg-[#f7f1e6] px-4 py-3.5">
+        <p id="idea" class="text-[15px] leading-[1.6]">
+          Working two more years would close the gap.
+        </p>
+      </div>
+    </section>
+
+    <div class="rule mt-8"></div>
+    <div class="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <span class="cap">RE:tired</span>
+      <span class="text-[11.5px] italic text-[#a39884]">Drawn from your own numbers, not a table of averages.</span>
+    </div>
+  </article>
+
+  <footer class="mt-7 text-[11.5px] text-[#a39884]"
+          style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    23 · Morning Briefing — the whole plan, before your coffee goes cold.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    spending:   DEMO_DEFAULTS.spending,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  function $(id) { return document.getElementById(id); }
+  function money(v) { return '$' + Math.round(v).toLocaleString('en-CA'); }
+
+  function dated() {
+    var d = new Date();
+    var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var months = ['January','February','March','April','May','June','July','August',
+                  'September','October','November','December'];
+    $('m-date').textContent = days[d.getDay()] + ', ' + d.getDate() + ' ' + months[d.getMonth()] +
+      ' ' + d.getFullYear();
+  }
+
+  function chart(res) {
+    var pts = res.rows.filter(function (r) { return r.age <= state.maxAge; });
+    var W = 520, H = 108;
+    if (!pts.length) { $('chart').innerHTML = ''; return; }
+    var top = 0;
+    pts.forEach(function (p) { if (p.bal > top) top = p.bal; });
+    if (top <= 0) top = 1;
+    var lo = pts[0].age, hi = pts[pts.length - 1].age;
+    var x = function (a) { return hi === lo ? 0 : ((a - lo) / (hi - lo)) * W; };
+    var y = function (b) { return H - (b / top) * H; };
+
+    var line = '';
+    pts.forEach(function (p, i) { line += (i ? 'L' : 'M') + x(p.age).toFixed(1) + ' ' + y(p.bal).toFixed(1); });
+    var area = line + 'L' + x(hi).toFixed(1) + ' ' + H + 'L0 ' + H + 'Z';
+
+    var marks = '';
+    if (!res.ok && res.depletionAge <= state.maxAge) {
+      var dx = x(res.depletionAge).toFixed(1);
+      marks = '<line x1="' + dx + '" y1="0" x2="' + dx + '" y2="' + H +
+              '" stroke="#b3231f" stroke-width="1" stroke-dasharray="2 2"/>' +
+              '<circle cx="' + dx + '" cy="' + H + '" r="2.8" fill="#b3231f"/>';
+    }
+
+    $('chart').innerHTML =
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="108" role="img" aria-label="Your pot, year by year">' +
+        '<path d="' + area + '" fill="rgba(47,38,24,.075)" stroke="none"/>' +
+        '<path d="' + line + '" fill="none" stroke="#2f2618" stroke-width="1.4" vector-effect="non-scaling-stroke"/>' +
+        '<line x1="0" y1="' + H + '" x2="' + W + '" y2="' + H + '" stroke="rgba(47,38,24,.35)" stroke-width="1"/>' +
+        marks +
+      '</svg>';
+    $('ch-a').textContent = String(pts[0].age);
+    $('ch-b').textContent = String(pts[pts.length - 1].age);
+  }
+
+  function render() {
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var sun = simulate(Object.assign({}, state, { sky: 'sun' }));
+    var ok = res.ok;
+    var lasts = lastsLabel(res);
+    var gap = ok ? 0 : (state.maxAge - res.depletionAge);
+    var idea = suggest(state);
+
+    /* edit strip */
+    $('val-retire').textContent = String(state.retireAge);
+    $('val-spend').textContent = money(state.spending);
+    $('val-saved').textContent = money(state.savings);
+    $('m-span').textContent = String(state.currentAge);
+    $('m-max').textContent = String(state.maxAge);
+
+    /* TL;DR */
+    var t;
+    if (ok) {
+      t = 'Good morning. As your plan stands, <strong>your money lasts to ' + lasts +
+          ', which is past the ' + state.maxAge + ' you have in mind, with ' +
+          money(res.leftAtMax) + ' left over.</strong> ';
+      t += storm.ok
+        ? 'Even in a stormy market it holds to ' + lastsLabel(storm) + '.'
+        : 'In a stormy market it runs out at ' + lastsLabel(storm) + ', which is the one worth fixing.';
+    } else {
+      t = 'Good morning. As your plan stands, <strong>your money runs out at ' +
+          res.depletionAge + ' — that is ' + gap + (gap === 1 ? ' year' : ' years') +
+          ' short of the ' + state.maxAge + ' you have in mind, and nothing is left over.</strong> ';
+      t += idea || 'Nothing small repairs this; something larger has to give.';
+    }
+    $('tldr').innerHTML = t;
+
+    /* the numbers */
+    $('n-lasts').textContent = lasts;
+    $('n-lasts').style.color = ok ? '#2f2618' : '#b3231f';
+    $('n-left').textContent = ok ? money(res.leftAtMax) : '$0';
+    $('n-storm').textContent = lastsLabel(storm);
+    $('n-sun').textContent = lastsLabel(sun);
+
+    chart(res);
+
+    /* what to watch — live bullets, each one a real computed result */
+    var bullets = [];
+    if (!ok) {
+      bullets.push('The <strong>stormy-market</strong> test lasts to ' + lastsLabel(storm) +
+        '. That is the honest one to plan around, and it is ' + Math.max(0, state.maxAge - storm.depletionAge) +
+        ' years short at present.');
+    } else if (!storm.ok) {
+      bullets.push('The plan holds in ordinary weather but the <strong>stormy-market</strong> test runs out at ' +
+        lastsLabel(storm) + ' — ' + (state.maxAge - storm.depletionAge) + ' years short. Worth a cushion.');
+    } else {
+      bullets.push('The plan holds in ordinary weather <strong>and</strong> in a stormy market, to ' +
+        lastsLabel(storm) + '. The next thing to watch is spending creep.');
+    }
+    if (state.benefitAge > state.retireAge) {
+      bullets.push('There is a gap between stopping work at ' + state.retireAge + ' and your benefits joining at ' +
+        state.benefitAge + ' — <strong>' + (state.benefitAge - state.retireAge) +
+        (state.benefitAge - state.retireAge === 1 ? ' year' : ' years') + ' paid for out of the pot alone</strong>.');
+    } else {
+      bullets.push('Your benefits join at ' + state.benefitAge +
+        ', the same year or before you stop working — <strong>no gap to fund</strong>.');
+    }
+    var t05 = simulate(Object.assign({}, state, { spending: Math.round(state.spending * 0.95 / 500) * 500 }));
+    if (ok) {
+      bullets.push('Spend five per cent less a year and you would finish with <strong>' +
+        money(Math.max(0, t05.leftAtMax - res.leftAtMax)) + ' more</strong> left over.');
+    } else {
+      bullets.push('Spend five per cent less a year and your money would last to <strong>' +
+        lastsLabel(t05) + '</strong> instead.');
+    }
+    $('watch').innerHTML = bullets.map(function (b) { return '<li>' + b + '</li>'; }).join('');
+
+    /* one idea */
+    $('idea').textContent = idea ||
+      (ok ? 'Nothing here needs fixing. The kindest thing you can do now is leave it alone.'
+          : 'Nothing small repairs this; something larger has to give.');
+  }
+
+  $('ctl-retire').addEventListener('input', function (e) { state.retireAge = Number(e.target.value); render(); });
+  $('ctl-spend').addEventListener('input',  function (e) { state.spending  = Number(e.target.value); render(); });
+  $('ctl-saved').addEventListener('input',  function (e) { state.savings   = Number(e.target.value); render(); });
+
+  dated();
+  render();
+})();
+</script>
+</body>
+</html>

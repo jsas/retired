@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>28 — The Rings</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  .ring { transition: stroke-dashoffset .6s cubic-bezier(.2,.7,.3,1); }
+  input[type=range].rg { -webkit-appearance:none; appearance:none; height:6px; border-radius:3px; background:#3f3f46; outline:none; }
+  input[type=range].rg::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%;
+    background:#fafafa; border:2.5px solid currentColor; cursor:grab; box-shadow:0 1px 4px rgba(0,0,0,.5);
+  }
+  input[type=range].rg::-moz-range-thumb {
+    width:22px; height:22px; border-radius:50%; background:#fafafa; border:2.5px solid currentColor;
+    cursor:grab; box-shadow:0 1px 4px rgba(0,0,0,.5);
+  }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(10px);} to { opacity:1; transform:none;} }
+  .fu { animation: fadeUp .5s ease-out both; }
+</style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+
+<header class="flex items-center justify-between px-5 py-3 border-b border-zinc-800">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-zinc-500">28 — The Rings</span>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 md:px-6 py-8 grid md:grid-cols-[1fr_1fr] gap-10 items-center">
+
+  <!-- ═══ THE RINGS ═══ -->
+  <section class="fu flex flex-col items-center">
+    <svg viewBox="0 0 300 300" class="w-72 h-72 md:w-80 md:h-80">
+      <!-- Outlast: outer ring -->
+      <circle cx="150" cy="150" r="120" fill="none" stroke="#27272a" stroke-width="18"/>
+      <circle id="ring1" class="ring" cx="150" cy="150" r="120" fill="none" stroke="#f43f5e" stroke-width="18"
+              stroke-linecap="round" stroke-dasharray="753.98" stroke-dashoffset="753.98"
+              transform="rotate(-90 150 150)"/>
+      <!-- Cushion: middle ring -->
+      <circle cx="150" cy="150" r="94" fill="none" stroke="#27272a" stroke-width="18"/>
+      <circle id="ring2" class="ring" cx="150" cy="150" r="94" fill="none" stroke="#fbbf24" stroke-width="18"
+              stroke-linecap="round" stroke-dasharray="590.62" stroke-dashoffset="590.62"
+              transform="rotate(-90 150 150)"/>
+      <!-- Weatherproof: inner ring -->
+      <circle cx="150" cy="150" r="68" fill="none" stroke="#27272a" stroke-width="18"/>
+      <circle id="ring3" class="ring" cx="150" cy="150" r="68" fill="none" stroke="#34d399" stroke-width="18"
+              stroke-linecap="round" stroke-dasharray="427.26" stroke-dashoffset="427.26"
+              transform="rotate(-90 150 150)"/>
+      <!-- center readout -->
+      <text id="centerAge" x="150" y="142" text-anchor="middle" font-size="44" font-weight="800" fill="#fafafa" class="num">—</text>
+      <text id="centerLabel" x="150" y="168" text-anchor="middle" font-size="12" fill="#a1a1aa">money lasts to</text>
+    </svg>
+
+    <div class="grid grid-cols-3 gap-6 mt-6 w-full max-w-sm text-center">
+      <div>
+        <div class="flex items-center justify-center gap-1.5 text-[12px] font-semibold text-rose-400">
+          <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Outlast
+        </div>
+        <div id="pct1" class="text-lg font-bold num mt-0.5">—</div>
+      </div>
+      <div>
+        <div class="flex items-center justify-center gap-1.5 text-[12px] font-semibold text-amber-400">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Cushion
+        </div>
+        <div id="pct2" class="text-lg font-bold num mt-0.5">—</div>
+      </div>
+      <div>
+        <div class="flex items-center justify-center gap-1.5 text-[12px] font-semibold text-emerald-400">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Weatherproof
+        </div>
+        <div id="pct3" class="text-lg font-bold num mt-0.5">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ EXPLANATIONS + CONTROLS ═══ -->
+  <section class="fu space-y-5">
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+      <h1 class="text-xl font-bold mb-1" id="verdict"></h1>
+      <p id="diagnosis" class="text-[13px] text-zinc-400 leading-relaxed"></p>
+      <p id="fix" class="mt-2 text-[13px] font-medium text-emerald-400"></p>
+    </div>
+
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-4">
+      <p class="text-[12px] text-zinc-400 leading-relaxed">
+        <strong class="text-rose-400">Outlast</strong> — does the money outlast the age you're planning for?<br/>
+        <strong class="text-amber-400">Cushion</strong> — how much is left over at 95 (a 3-year safety margin fills the ring)?<br/>
+        <strong class="text-emerald-400">Weatherproof</strong> — would it still hold if markets turned stormy?
+      </p>
+      <div class="pt-2 space-y-4 border-t border-zinc-800">
+        <div>
+          <div class="flex justify-between text-[12px] mb-1.5"><span class="text-zinc-400">Stop working at</span><span id="vRetire" class="num font-bold">62</span></div>
+          <input id="sRetire" type="range" class="rg w-full text-rose-500" min="55" max="75" value="62">
+        </div>
+        <div>
+          <div class="flex justify-between text-[12px] mb-1.5"><span class="text-zinc-400">Spend each year</span><span id="vSpend" class="num font-bold">$85,000</span></div>
+          <input id="sSpend" type="range" class="rg w-full text-amber-500" min="40000" max="160000" step="1000" value="85000">
+        </div>
+        <div>
+          <div class="flex justify-between text-[12px] mb-1.5"><span class="text-zinc-400">Saved so far</span><span id="vSaved" class="num font-bold">$850,000</span></div>
+          <input id="sSaved" type="range" class="rg w-full text-emerald-500" min="100000" max="3000000" step="10000" value="850000">
+        </div>
+        <div class="pt-1">
+          <div class="text-[12px] text-zinc-400 mb-1.5">Markets</div>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button data-sky="storm"  class="sky py-1.5 text-xs rounded-lg border border-zinc-700">stormy</button>
+            <button data-sky="normal" class="sky py-1.5 text-xs rounded-lg border border-zinc-700">ordinary</button>
+            <button data-sky="sun"    class="sky py-1.5 text-xs rounded-lg border border-zinc-700">kind</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="text-center py-6 text-[11px] text-zinc-600">
+  28 · The Rings — three ingredients, three circles: close every ring and the plan is bulletproof.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const C = { r1: 2 * Math.PI * 120, r2: 2 * Math.PI * 94, r3: 2 * Math.PI * 68 };
+
+  // ingredient scores 0..100
+  function scores(s) {
+    const res = simulate(s);
+    const storm = simulate({ ...s, sky: 'storm' });
+    // Outlast: 100 if ok; else decays with years short (6+ short = 0)
+    const outlast = res.ok ? 100 : Math.max(0, Math.round(100 * (1 - (s.maxAge - res.depletionAge) / 10)));
+    // Cushion: full marks at 3 years of spending left over at maxAge
+    const target = 3 * s.spending;
+    const cushion = Math.max(0, Math.min(100, Math.round(100 * res.leftAtMax / target)));
+    // Weatherproof: same outlast logic against the storm run
+    const weather = storm.ok ? 100 : Math.max(0, Math.round(100 * (1 - (s.maxAge - storm.depletionAge) / 10)));
+    return { res, storm, outlast, cushion, weather };
+  }
+
+  function setRing(el, frac, circ) {
+    el.setAttribute('stroke-dashoffset', String(circ * (1 - Math.max(0, Math.min(1, frac)))));
+  }
+
+  function render() {
+    const { res, storm, outlast, cushion, weather } = scores(state);
+    setRing($('ring1'), outlast / 100, C.r1);
+    setRing($('ring2'), cushion / 100, C.r2);
+    setRing($('ring3'), weather / 100, C.r3);
+    $('pct1').textContent = outlast;
+    $('pct2').textContent = cushion;
+    $('pct3').textContent = weather;
+
+    $('centerAge').textContent = lastsLabel(res);
+    $('centerLabel').textContent = res.ok ? 'money lasts to' : 'runs out at';
+
+    const v = $('verdict'), d = $('diagnosis'), f = $('fix');
+    if (res.ok && storm.ok && cushion >= 100) {
+      v.textContent = 'Every ring closed. Bulletproof.';
+      d.textContent = `Money lasts to ${lastsLabel(res)}, ${fmtMoney(res.leftAtMax)} left over, and it survives stormy markets.`;
+      f.textContent = '';
+    } else if (res.ok) {
+      v.textContent = 'Passing, with room to harden.';
+      d.textContent = `The money lasts to ${lastsLabel(res)}${cushion < 100 ? `, but only ${fmtMoney(res.leftAtMax)} would be left — a thin cushion` : ''}${storm.ok ? '' : `, and stormy markets would drain it by ${storm.depletionAge}`}.`;
+      f.textContent = suggest(state) ?? '';
+    } else {
+      const gap = state.maxAge - res.depletionAge;
+      v.textContent = 'One ring wide open.';
+      d.textContent = `It runs out at ${res.depletionAge} — ${gap} year${gap === 1 ? '' : 's'} short of ${state.maxAge}. Storm test: ${storm.ok ? 'survives' : 'fails at ' + storm.depletionAge}.`;
+      f.textContent = suggest(state) ?? '';
+    }
+
+    $('vRetire').textContent = state.retireAge;
+    $('vSpend').textContent = fmtMoney(state.spending);
+    $('vSaved').textContent = fmtMoney(state.savings);
+    document.querySelectorAll('.sky').forEach(b =>
+      b.className = 'sky py-1.5 text-xs rounded-lg border ' + (b.dataset.sky === state.sky
+        ? 'bg-zinc-100 text-zinc-900 border-zinc-100 font-medium'
+        : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'));
+  }
+
+  $('sRetire').addEventListener('input', e => { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', e => { state.spending = +e.target.value; render(); });
+  $('sSaved').addEventListener('input', e => { state.savings = +e.target.value; render(); });
+  document.querySelectorAll('.sky').forEach(b => b.addEventListener('click', () => { state.sky = b.dataset.sky; render(); }));
+
+  render();
+</script>
+</body>
+</html>

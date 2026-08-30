@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>15 — Glass Night</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* frosted sliders with a glowing thumb */
+  input[type=range].glass { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px;
+    background:rgba(255,255,255,.14); outline:none; cursor:grab; accent-color:#818cf8; }
+  input[type=range].glass::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%;
+    background:#fff; border:2px solid #818cf8;
+    box-shadow:0 0 14px rgba(129,140,248,.85), 0 0 34px rgba(129,140,248,.45), 0 2px 6px rgba(0,0,0,.55);
+    cursor:grab; transition: box-shadow .2s; }
+  input[type=range].glass::-webkit-slider-thumb:hover {
+    box-shadow:0 0 18px rgba(165,180,252,1), 0 0 44px rgba(129,140,248,.6), 0 2px 6px rgba(0,0,0,.55); }
+  input[type=range].glass::-webkit-slider-thumb:active { cursor:grabbing; }
+  input[type=range].glass::-moz-range-thumb {
+    width:22px; height:22px; border-radius:50%; background:#fff; border:2px solid #818cf8;
+    box-shadow:0 0 14px rgba(129,140,248,.85), 0 0 34px rgba(129,140,248,.45), 0 2px 6px rgba(0,0,0,.55);
+    cursor:grab; }
+  input[type=range].glass::-moz-range-track { height:6px; border-radius:999px; background:rgba(255,255,255,.14); }
+
+  /* soft breathing on the ambient blobs */
+  @keyframes floatBlob { 0%,100% { transform:translate(0,0) scale(1); } 50% { transform:translate(34px,-26px) scale(1.07); } }
+  .blob { animation:floatBlob 16s ease-in-out infinite; }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+  .fu { animation:fadeUp .65s cubic-bezier(.2,.7,.3,1) both; }
+  .fu2 { animation-delay:.08s; } .fu3 { animation-delay:.16s; } .fu4 { animation-delay:.24s; }
+
+  /* the glow that sits behind the verdict number */
+  .verdictGlow { transition: background .4s, opacity .4s; }
+  .glow-red  { background:radial-gradient(closest-side, rgba(251,113,133,.34), rgba(251,113,133,0)); }
+  .glow-good { background:radial-gradient(closest-side, rgba(129,140,248,.38), rgba(129,140,248,0)); }
+</style>
+</head>
+<body class="text-slate-100 min-h-screen relative overflow-x-hidden"
+      style="background:linear-gradient(158deg,#141348 0%,#0c0d26 42%,#0a0a18 72%,#120a24 100%)">
+
+<!-- ambient color blobs -->
+<div class="blob pointer-events-none absolute -top-40 -left-32 w-[560px] h-[560px] rounded-full bg-blue-600/25 blur-[130px]"></div>
+<div class="blob pointer-events-none absolute top-1/3 -right-40 w-[620px] h-[620px] rounded-full bg-violet-600/25 blur-[140px]" style="animation-delay:-8s"></div>
+<div class="pointer-events-none absolute bottom-0 left-1/3 w-[420px] h-[420px] rounded-full bg-indigo-500/10 blur-[120px]"></div>
+
+<div class="relative max-w-5xl mx-auto px-5 pt-6 pb-10">
+
+  <!-- ═══ chrome ═══ -->
+  <header class="flex items-center gap-2.5 mb-9">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+    <span class="font-semibold text-sm tracking-tight">tired</span>
+    <span class="text-xs text-slate-500 ml-1.5">15 · Glass Night</span>
+  </header>
+
+  <!-- ═══ verdict ═══ -->
+  <section class="fu relative overflow-hidden bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-7 md:p-9 mb-5">
+    <div class="pointer-events-none absolute -top-24 -right-16 w-80 h-80 rounded-full bg-indigo-500/20 blur-[90px]"></div>
+
+    <div class="relative flex flex-col md:flex-row md:items-end gap-8">
+      <div class="flex-1 min-w-0">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-300/90 mb-5">The answer</p>
+
+        <div class="relative inline-block">
+          <div id="glow" class="verdictGlow glow-good absolute -inset-x-10 -inset-y-6 rounded-full blur-2xl"></div>
+          <div class="relative flex items-baseline gap-3 flex-wrap">
+            <span id="vAge" class="num text-7xl md:text-8xl font-bold leading-none tracking-tight text-white"
+                  style="text-shadow:0 0 42px rgba(199,210,254,.55)">96</span>
+            <span id="vTone" class="text-base md:text-lg font-medium text-indigo-200/90 pb-2"></span>
+          </div>
+        </div>
+
+        <p id="vLine" class="mt-5 text-[15px] leading-relaxed text-slate-300 max-w-md"></p>
+        <p id="vTip" class="mt-2.5 text-[13px] font-medium text-indigo-300 min-h-[18px]"></p>
+      </div>
+
+      <!-- frosted segmented weather control -->
+      <div class="shrink-0 md:text-right">
+        <p class="text-[11px] uppercase tracking-wider text-slate-400 mb-2.5">If the markets are</p>
+        <div class="inline-flex rounded-xl bg-white/5 border border-white/10 p-1 backdrop-blur-xl shadow-inner">
+          <button data-sky="storm"  class="sky px-4 py-2 text-[13px] rounded-lg transition-all">stormy</button>
+          <button data-sky="normal" class="sky px-4 py-2 text-[13px] rounded-lg transition-all">ordinary</button>
+          <button data-sky="sun"    class="sky px-4 py-2 text-[13px] rounded-lg transition-all">kind</button>
+        </div>
+        <p id="stormNote" class="mt-3 text-[12px] text-slate-400 max-w-[190px] md:ml-auto leading-relaxed num"></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid md:grid-cols-5 gap-5">
+
+    <!-- ═══ three frosted dials ═══ -->
+    <section class="fu fu2 md:col-span-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-7">
+      <div class="space-y-7">
+        <div>
+          <div class="flex items-baseline justify-between mb-3">
+            <label for="d1" class="text-[13.5px] text-slate-300">I stop working at</label>
+            <span id="v1" class="num text-2xl font-bold text-white">62</span>
+          </div>
+          <input id="d1" type="range" class="glass" min="55" max="75" step="1" value="62">
+          <div class="flex justify-between text-[10.5px] text-slate-500 mt-1.5 num"><span>55</span><span>75</span></div>
+        </div>
+        <div>
+          <div class="flex items-baseline justify-between mb-3">
+            <label for="d2" class="text-[13.5px] text-slate-300">I spend each year</label>
+            <span id="v2" class="num text-2xl font-bold text-white">$85,000</span>
+          </div>
+          <input id="d2" type="range" class="glass" min="40000" max="160000" step="1000" value="85000">
+          <div class="flex justify-between text-[10.5px] text-slate-500 mt-1.5 num"><span>$40k</span><span>$160k</span></div>
+        </div>
+        <div>
+          <div class="flex items-baseline justify-between mb-3">
+            <label for="d3" class="text-[13.5px] text-slate-300">I've saved so far</label>
+            <span id="v3" class="num text-2xl font-bold text-white">$850,000</span>
+          </div>
+          <input id="d3" type="range" class="glass" min="100000" max="3000000" step="10000" value="850000">
+          <div class="flex justify-between text-[10.5px] text-slate-500 mt-1.5 num"><span>$100k</span><span>$3M</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ balance path + leftovers ═══ -->
+    <section class="fu fu3 md:col-span-2 flex flex-col gap-5">
+      <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 flex-1">
+        <p class="text-[11px] uppercase tracking-wider text-slate-400 mb-3">Your money, 55 → 110</p>
+        <svg viewBox="0 0 300 120" class="w-full block" aria-hidden="true">
+          <defs>
+            <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#818cf8" stop-opacity=".5"/>
+              <stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <line x1="6" y1="104" x2="294" y2="104" stroke="rgba(255,255,255,.14)" stroke-width="1"/>
+          <path id="sparkFill" fill="url(#sg)" d=""></path>
+          <path id="sparkLine" fill="none" stroke="#a5b4fc" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" d=""></path>
+          <line id="sparkDry" x1="0" y1="10" x2="0" y2="104" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="3 3" opacity="0"/>
+          <text id="sparkDryLbl" x="0" y="9" font-size="9" fill="#fb7185" text-anchor="middle" opacity="0" class="num"></text>
+        </svg>
+      </div>
+      <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
+        <p class="text-[11px] uppercase tracking-wider text-slate-400 mb-1">Left over at 95</p>
+        <p id="leftover" class="num text-2xl font-bold text-white">—</p>
+      </div>
+    </section>
+  </div>
+
+  <p class="mt-9 text-center text-[11px] text-slate-600">
+    15 · Glass Night — premium fintech after dark: frosted glass, one glowing verdict.
+  </p>
+</div>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+
+  // fixed chart domain (55 → 110) so the shape never rescales while you drag
+  const CW = 300, CH = 120, CX0 = 6, CX1 = 294, CY0 = 10, CY1 = 104;
+  const AGE_MAX = 110;
+  const cx = age => CX0 + (age - state.currentAge) / (AGE_MAX - state.currentAge) * (CX1 - CX0);
+
+  function drawSpark(rows) {
+    if (!rows.length) return;
+    const peak = Math.max(1, ...rows.map(r => r.bal));
+    const cy = v => CY0 + (1 - v / peak) * (CY1 - CY0);
+    let line = 'M ' + cx(rows[0].age).toFixed(1) + ' ' + cy(rows[0].bal).toFixed(1);
+    for (let i = 1; i < rows.length; i++) line += ' L ' + cx(rows[i].age).toFixed(1) + ' ' + cy(rows[i].bal).toFixed(1);
+    $('sparkLine').setAttribute('d', line);
+    const last = rows[rows.length - 1];
+    $('sparkFill').setAttribute('d', line + ' L ' + cx(last.age).toFixed(1) + ' ' + CY1 + ' L ' + cx(rows[0].age).toFixed(1) + ' ' + CY1 + ' Z');
+
+    // dry marker
+    const dry = res.depletionAge;
+    const dl = $('sparkDry'), lbl = $('sparkDryLbl');
+    if (dry != null) {
+      const x = cx(dry);
+      dl.setAttribute('x1', x); dl.setAttribute('x2', x);
+      dl.style.opacity = .85;
+      lbl.setAttribute('x', Math.min(CX1 - 14, Math.max(CX0 + 14, x)));
+      lbl.textContent = 'dry at ' + dry;
+      lbl.style.opacity = .9;
+    } else { dl.style.opacity = 0; lbl.style.opacity = 0; }
+  }
+
+  let res = null;
+
+  function render() {
+    res = simulate(state);
+
+    // ---- verdict ----
+    const good = res.ok;
+    if (good) {
+      $('vAge').textContent = lastsLabel(res);
+      $('vTone').textContent = res.leftAtMax > 25000 ? 'with room to spare' : 'and just enough';
+      $('vLine').textContent = res.leftAtMax > 25000
+        ? 'Your money lasts past ' + state.maxAge + ' — about ' + fmtMoney(res.leftAtMax) + ' still there at ' + state.maxAge + '.'
+        : 'Your money carries you past ' + state.maxAge + ', the age you\'re planning for.';
+      $('vTip').textContent = '';
+      $('vAge').style.textShadow = '0 0 42px rgba(199,210,254,.6)';
+      $('glow').className = 'verdictGlow glow-good absolute -inset-x-10 -inset-y-6 rounded-full blur-2xl';
+    } else {
+      $('vAge').textContent = res.depletionAge;
+      $('vTone').textContent = 'runs short';
+      const gap = state.maxAge - res.depletionAge;
+      $('vLine').textContent = 'Your money runs out when you\'re ' + res.depletionAge
+        + ' — ' + gap + ' year' + (gap === 1 ? '' : 's') + ' short of ' + state.maxAge + '.';
+      $('vTip').textContent = suggest(state) ?? '';
+      $('vAge').style.textShadow = '0 0 46px rgba(251,113,133,.55)';
+      $('glow').className = 'verdictGlow glow-red absolute -inset-x-10 -inset-y-6 rounded-full blur-2xl';
+    }
+
+    // ---- what stormy markets would do ----
+    const storm = simulate({ ...state, sky: 'storm' });
+    $('stormNote').textContent = 'In stormy markets: ' + (storm.ok
+      ? 'still lasts to ' + lastsLabel(storm)
+      : 'runs out at ' + storm.depletionAge);
+
+    // ---- sparkline + leftovers ----
+    drawSpark(res.rows);
+    $('leftover').textContent = res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) : 'nothing';
+
+    // ---- dial readouts ----
+    $('v1').textContent = state.retireAge;
+    $('v2').textContent = fmtMoney(state.spending);
+    $('v3').textContent = fmtMoney(state.savings);
+
+    // ---- weather buttons ----
+    document.querySelectorAll('.sky').forEach(b => {
+      const on = b.dataset.sky === state.sky;
+      b.className = 'sky px-4 py-2 text-[13px] rounded-lg transition-all ' + (on
+        ? 'bg-indigo-500/80 text-white shadow-lg shadow-indigo-500/30'
+        : 'text-slate-400 hover:text-slate-200');
+    });
+  }
+
+  $('d1').addEventListener('input', e => { state.retireAge = +e.target.value; render(); });
+  $('d2').addEventListener('input', e => { state.spending = +e.target.value; render(); });
+  $('d3').addEventListener('input', e => { state.savings = +e.target.value; render(); });
+  document.querySelectorAll('.sky').forEach(b =>
+    b.addEventListener('click', () => { state.sky = b.dataset.sky; render(); }));
+
+  render();
+</script>
+</body>
+</html>

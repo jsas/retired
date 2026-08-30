@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>19 — The Year Strip</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range].rsl {
+    -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px;
+    background: #3f3f46; outline: none; width: 100%; cursor: pointer;
+  }
+  input[type=range].rsl::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #fafafa; border: 1px solid #18181b; box-shadow: 0 1px 3px rgba(0,0,0,.6); cursor: grab;
+  }
+  input[type=range].rsl::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: #fafafa;
+    border: 1px solid #18181b; cursor: grab;
+  }
+  input[type=range].scrub {
+    -webkit-appearance: none; appearance: none; height: 26px; background: transparent; outline: none; width: 100%;
+  }
+  input[type=range].scrub::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 12px; height: 40px; border-radius: 3px;
+    background: #fafafa; border: 1px solid #71717a; cursor: ew-resize; box-shadow: 0 0 10px rgba(255,255,255,.25);
+  }
+  input[type=range].scrub::-moz-range-thumb {
+    width: 12px; height: 40px; border-radius: 3px; background: #fafafa;
+    border: 1px solid #71717a; cursor: ew-resize;
+  }
+  input[type=range].scrub::-webkit-slider-runnable-track { height: 26px; background: transparent; }
+  input[type=range].scrub::-moz-range-track { height: 26px; background: transparent; }
+  .bar { transition: fill .25s ease; }
+  .seg { padding: 3px 11px; border-radius: 9999px; font-size: 11px; color: #a1a1aa; transition: all .18s; }
+  .seg:hover { color: #e4e4e7; }
+  .seg.on { background: #fafafa; color: #18181b; font-weight: 600; }
+  .pop { transition: opacity .12s ease; }
+  #scrubLine { transition: left .05s linear; }
+</style>
+</head>
+<body class="bg-zinc-950 text-zinc-300 min-h-screen flex flex-col">
+
+<!-- top chrome + slim control bar -->
+<header class="border-b border-zinc-800/80 bg-zinc-950/90 sticky top-0 z-30 backdrop-blur">
+  <div class="max-w-[1500px] mx-auto px-5 h-14 flex items-center gap-3">
+    <div class="flex items-center gap-2.5 shrink-0">
+      <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+      <span class="font-semibold text-sm text-zinc-100">tired</span>
+      <span class="text-[11px] text-zinc-500 hidden lg:inline">· 19 — the year strip</span>
+    </div>
+    <div class="flex-1"></div>
+    <div class="flex items-center gap-1.5">
+      <span class="text-[11px] text-zinc-500 mr-1 hidden sm:inline">markets</span>
+      <button data-sky="storm"  class="seg">stormy</button>
+      <button data-sky="normal" class="seg on">ordinary</button>
+      <button data-sky="sun"    class="seg">kind</button>
+    </div>
+  </div>
+
+  <!-- slim sliders -->
+  <div class="max-w-[1500px] mx-auto px-5 py-3 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-zinc-800/60">
+    <label class="flex items-center gap-3">
+      <span class="text-[11px] text-zinc-500 w-[74px] shrink-0">retire at</span>
+      <input id="sRetire" type="range" class="rsl flex-1" min="55" max="75" step="1" value="62">
+      <span id="vRetire" class="num text-sm font-semibold text-zinc-100 w-9 text-right">62</span>
+    </label>
+    <label class="flex items-center gap-3">
+      <span class="text-[11px] text-zinc-500 w-[74px] shrink-0">spend a yr</span>
+      <input id="sSpend" type="range" class="rsl flex-1" min="40000" max="160000" step="1000" value="85000">
+      <span id="vSpend" class="num text-sm font-semibold text-zinc-100 w-16 text-right">$85k</span>
+    </label>
+    <label class="flex items-center gap-3">
+      <span class="text-[11px] text-zinc-500 w-[74px] shrink-0">saved now</span>
+      <input id="sSaved" type="range" class="rsl flex-1" min="100000" max="3000000" step="10000" value="850000">
+      <span id="vSaved" class="num text-sm font-semibold text-zinc-100 w-16 text-right">$850k</span>
+    </label>
+  </div>
+</header>
+
+<main class="flex-1 w-full max-w-[1500px] mx-auto px-5 pt-8 pb-10">
+
+  <!-- the readout for the scrubbed year -->
+  <div class="flex items-end justify-between gap-6 flex-wrap mb-3">
+    <div>
+      <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">One year at a time</p>
+      <p class="mt-1">
+        <span id="scrubAge" class="num text-4xl sm:text-5xl font-bold text-zinc-100">62</span>
+        <span class="text-zinc-500 text-lg ml-1">years old</span>
+      </p>
+    </div>
+    <div class="text-right">
+      <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Still saved</p>
+      <p id="scrubBal" class="num text-4xl sm:text-5xl font-bold text-emerald-400">$1.02M</p>
+    </div>
+    <div class="text-right max-w-[240px]">
+      <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">The whole strip</p>
+      <p id="verdict" class="text-lg font-semibold text-emerald-400 leading-snug">Your money lasts until you're 96</p>
+      <p id="verdictSub" class="text-[12px] text-zinc-500 mt-0.5"></p>
+    </div>
+  </div>
+
+  <!-- ═══ THE STRIP ═══ -->
+  <div class="relative">
+    <svg id="strip" viewBox="0 0 1440 300" preserveAspectRatio="none" class="w-full block" style="height:300px"></svg>
+    <!-- highlight line that follows the scrubber -->
+    <div id="scrubLine" class="absolute top-0 bottom-0 w-px bg-zinc-100/70 pointer-events-none" style="left:0">
+      <div class="absolute -top-1 -left-[3px] w-[7px] h-[7px] rounded-full bg-zinc-100"></div>
+      <div class="absolute -bottom-1 -left-[3px] w-[7px] h-[7px] rounded-full bg-zinc-100"></div>
+    </div>
+    <!-- hover/tap popover -->
+    <div id="pop" class="pop absolute z-20 opacity-0 pointer-events-none bg-zinc-900 border border-zinc-700 rounded-md px-2.5 py-1.5 shadow-xl whitespace-nowrap">
+      <span id="popText" class="num text-[12px] text-zinc-100">age 71 · $612k</span>
+    </div>
+  </div>
+
+  <!-- scrubber, aligned to the strip -->
+  <div class="mt-1 relative">
+    <input id="scrub" type="range" class="scrub" min="55" max="100" step="1" value="62" aria-label="pick a year to look at">
+    <div id="axis" class="absolute inset-x-0 num text-[10px] text-zinc-600" style="height:14px"></div>
+  </div>
+
+  <!-- legend -->
+  <div class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-zinc-500">
+    <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:#34d399"></span>plenty left</span>
+    <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:#f59e0b"></span>below a quarter of your peak</span>
+    <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm" style="background:#ef4444"></span>the year it runs out</span>
+    <span class="flex items-center gap-1.5"><span class="w-3 h-[3px] rounded-full" style="background:#fafafa"></span>the age you're planning to</span>
+    <span class="ml-auto">Hover or tap any bar. Drag the white handle along the years.</span>
+  </div>
+</main>
+
+<footer class="px-5 py-4 text-center text-[11px] text-zinc-600">
+  19 · The Year Strip — every year of your life as one bar you can hover and scrub.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = Object.assign({}, DEMO_DEFAULTS);
+  const $ = id => document.getElementById(id);
+
+  const AGE0 = 55, AGE1 = 100, W = 1440, H = 300;
+  const PADL = 22, PADR = 22, TOP = 16, BOT = 26;
+  const plotW = W - PADL - PADR, plotH = H - TOP - BOT;
+  const xFor = age => PADL + (age - AGE0) / (AGE1 - AGE0) * plotW;
+  const SLOT = plotW / (AGE1 - AGE0);
+  /* percentages of the strip box, so nothing depends on live layout */
+  const pctX = x => x / W * 100;
+  const pctY = y => y / H * 100;
+
+  let rows = [], peak = 1, lastScale = 1;
+
+  function kfmt(v) {
+    if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+    return '$' + Math.round(v / 1000) + 'k';
+  }
+
+  function render() {
+    const res = simulate(state);
+    /* the strip only shows 55..100; the sim can run to 110 when the money never runs out */
+    rows = res.rows.filter(r => r.age <= AGE1);
+    peak = Math.max.apply(null, rows.map(r => r.bal).concat([1]));
+    lastScale = (plotH * 0.97) / peak;
+
+    /* ── bars ── */
+    const bw = Math.max(2, SLOT - Math.min(4, SLOT * 0.42));
+    let g = '<g id="bars">';
+    rows.forEach(r => {
+      const h = Math.max(2, r.bal * lastScale);
+      const x = xFor(r.age) - bw / 2, y = TOP + plotH - h;
+      let fill = '#34d399';
+      if (res.depletionAge != null && r.age === res.depletionAge) fill = '#ef4444';
+      else if (r.bal < peak * 0.25) fill = '#f59e0b';
+      g += '<rect class="bar" data-age="' + r.age + '" data-bal="' + Math.round(r.bal) + '"' +
+           ' x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + bw.toFixed(2) + '"' +
+           ' height="' + h.toFixed(2) + '" rx="' + Math.min(2, bw / 2).toFixed(2) + '"' +
+           ' fill="' + fill + '"/>';
+    });
+    g += '</g>';
+
+    /* ── baseline + planning-age tick ── */
+    const base = TOP + plotH;
+    let chrome = '<line x1="' + PADL + '" y1="' + (base + 3) + '" x2="' + (W - PADR) + '" y2="' + (base + 3) + '" stroke="#27272a" stroke-width="1"/>';
+    const mx = Math.min(W - PADR, xFor(state.maxAge));
+    chrome += '<line id="maxTick" x1="' + mx.toFixed(2) + '" y1="' + (TOP - 8) + '" x2="' + mx.toFixed(2) + '" y2="' + (base + 3) + '" stroke="#fafafa" stroke-width="1.5" stroke-dasharray="3 4" opacity=".85"/>';
+    chrome += '<text x="' + mx.toFixed(2) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="#a1a1aa" class="num">' + state.maxAge + '</text>';
+
+    /* ── retirement marker ── */
+    const rx = xFor(state.retireAge);
+    chrome += '<line x1="' + rx.toFixed(2) + '" y1="' + (TOP - 4) + '" x2="' + rx.toFixed(2) + '" y2="' + (base + 3) + '" stroke="#71717a" stroke-width="1" stroke-dasharray="2 3"/>';
+    chrome += '<text x="' + rx.toFixed(2) + '" y="' + (TOP - 8) + '" text-anchor="middle" font-size="10" fill="#a1a1aa" class="num">retire ' + state.retireAge + '</text>';
+
+    $('strip').innerHTML = chrome + g;
+
+    /* ── x axis labels ── */
+    let ax = '';
+    for (let a = AGE0; a <= AGE1; a += 5) {
+      const pct = (a - AGE0) / (AGE1 - AGE0) * 100;
+      ax += '<span style="position:absolute;left:' + pct.toFixed(2) + '%;transform:translateX(-50%)">' + a + '</span>';
+    }
+    $('axis').innerHTML = ax;
+
+    /* ── verdict ── */
+    const v = $('verdict'), vs = $('verdictSub');
+    if (res.ok) {
+      const left = res.leftAtMax;
+      v.textContent = "Your money lasts until you're " + lastsLabel(res);
+      v.style.color = '#34d399';
+      vs.textContent = left > 25000
+        ? 'about ' + fmtMoney(left) + ' still there at ' + state.maxAge
+        : "past the " + state.maxAge + " you're planning for";
+    } else {
+      v.textContent = "Your money runs out when you're " + res.depletionAge;
+      v.style.color = '#f87171';
+      vs.textContent = (state.maxAge - res.depletionAge) + ' years before ' + state.maxAge;
+    }
+
+    /* ── header slider labels ── */
+    $('vRetire').textContent = state.retireAge;
+    $('vSpend').textContent = kfmt(state.spending);
+    $('vSaved').textContent = kfmt(state.savings);
+
+    /* ── clamp the scrubber into the lived years, then redraw the highlight ── */
+    const sc = $('scrub');
+    const lastAge = rows[rows.length - 1].age;
+    sc.max = String(AGE1);
+    if (+sc.value > lastAge) sc.value = String(lastAge);
+    updateScrub();
+  }
+
+  function updateScrub() {
+    const age = +$('scrub').value;
+    const r = rows.find(x => x.age === age);
+    $('scrubAge').textContent = String(age);
+    const bal = r ? r.bal : 0;
+    $('scrubBal').textContent = kfmt(bal);
+    $('scrubBal').style.color = (r && r.bal <= 0) ? '#f87171' : (r && r.bal < peak * 0.25 ? '#fbbf24' : '#34d399');
+
+    $('scrubLine').style.left = pctX(xFor(age)).toFixed(3) + '%';
+    $('scrubLine').style.opacity = r ? '1' : '0.25';
+  }
+
+  /* ── hover / tap popover ── */
+  function showPop(e) {
+    const target = e.target.closest ? e.target.closest('rect[data-age]') : null;
+    if (!target) { hidePop(); return; }
+    const age = target.getAttribute('data-age');
+    const bal = +target.getAttribute('data-bal');
+    $('popText').textContent = 'age ' + age + ' · ' + kfmt(bal);
+    const cx = pctX(parseFloat(target.getAttribute('x')) + parseFloat(target.getAttribute('width')) / 2);
+    const cy = pctY(parseFloat(target.getAttribute('y')));
+    const pop = $('pop');
+    pop.style.left = 'min(calc(' + cx.toFixed(3) + '% - 50px), calc(100% - 120px))';
+    pop.style.top = 'max(0px, calc(' + cy.toFixed(3) + '% - 40px))';
+    pop.style.opacity = '1';
+  }
+  function hidePop() { $('pop').style.opacity = '0'; }
+
+  const stripEl = $('strip');
+  stripEl.addEventListener('mousemove', showPop);
+  stripEl.addEventListener('mouseleave', hidePop);
+  stripEl.addEventListener('touchstart', e => { showPop(e); }, { passive: true });
+  stripEl.addEventListener('touchend', () => setTimeout(hidePop, 1400), { passive: true });
+  stripEl.addEventListener('click', e => {
+    const target = e.target.closest ? e.target.closest('rect[data-age]') : null;
+    if (target) { $('scrub').value = target.getAttribute('data-age'); updateScrub(); }
+  });
+
+  $('scrub').addEventListener('input', updateScrub);
+
+  $('sRetire').addEventListener('input', e => { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', e => { state.spending = +e.target.value; render(); });
+  $('sSaved').addEventListener('input', e => { state.savings = +e.target.value; render(); });
+
+  document.querySelectorAll('[data-sky]').forEach(b => b.addEventListener('click', () => {
+    state.sky = b.dataset.sky;
+    document.querySelectorAll('[data-sky]').forEach(x => x.classList.toggle('on', x === b));
+    render();
+  }));
+
+  render();
+</script>
+</body>
+</html>

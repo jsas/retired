@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>33 — Blueprint</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #112233; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
+  .num { font-variant-numeric: tabular-nums; }
+  #dwg text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
+
+  .sheet {
+    background-color: #112233;
+    background-image:
+      linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px),
+      linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+    background-size: 140px 140px, 140px 140px, 28px 28px, 28px 28px;
+  }
+
+  input[type=range].bp {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 20px;
+    background: transparent; cursor: ew-resize;
+  }
+  input[type=range].bp::-webkit-slider-runnable-track { height: 2px; background: rgba(255,255,255,.38); }
+  input[type=range].bp::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 12px; height: 12px; margin-top: -5px;
+    border-radius: 2px; background: #112233; border: 1.5px solid #fff;
+    box-shadow: 0 0 0 3px rgba(255,255,255,.10);
+  }
+  input[type=range].bp::-moz-range-track { height: 2px; background: rgba(255,255,255,.38); }
+  input[type=range].bp::-moz-range-thumb {
+    width: 10px; height: 10px; border-radius: 2px; background: #112233; border: 1.5px solid #fff;
+  }
+  input[type=range].bp:focus-visible { outline: 1px dashed rgba(255,255,255,.7); outline-offset: 3px; }
+
+  .chan { border: 1px solid rgba(255,255,255,.32); color: rgba(255,255,255,.66); }
+  .chan:hover { border-color: rgba(255,255,255,.6); color: #fff; }
+  .chan.on { background: #fff; color: #112233; border-color: #fff; font-weight: 600; }
+</style>
+</head>
+<body class="min-h-screen text-white flex flex-col sheet">
+
+<header class="flex items-center gap-2.5 px-5 py-3.5">
+  <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+  <span class="font-semibold text-sm">tired</span>
+  <span class="text-[11px] text-white/40 ml-1 mono">· 33 — Blueprint</span>
+</header>
+
+<main class="flex-1 px-4 sm:px-8 pb-10 max-w-[1180px] w-full mx-auto">
+
+  <div class="flex flex-wrap items-end justify-between gap-3 border-b border-white/25 pb-3">
+    <div>
+      <p class="mono text-[11px] tracking-[0.3em] text-white/50">ELEVATION · LONG SECTION</p>
+      <h1 id="verdict" class="num text-2xl sm:text-3xl mt-1.5 font-light">—</h1>
+    </div>
+    <p id="note" class="mono text-[11px] leading-relaxed text-white/60 max-w-[380px] text-right"></p>
+  </div>
+
+  <svg id="dwg" viewBox="0 0 1000 552" class="w-full mt-2 select-none" role="img" aria-label="Your money drawn as a building elevation"></svg>
+
+  <div class="border border-white/25 mt-2 px-4 py-4">
+    <div class="flex items-center justify-between mb-3">
+      <p class="mono text-[10px] tracking-[0.3em] text-white/50">CONTROLS · SITE DATA</p>
+      <div class="flex items-center gap-1.5">
+        <span class="mono text-[10px] tracking-[0.2em] text-white/40 mr-1">MARKETS</span>
+        <button data-sky="storm"  class="chan mono text-[10px] tracking-[0.15em] px-2 py-1">STORMY</button>
+        <button data-sky="normal" class="chan on mono text-[10px] tracking-[0.15em] px-2 py-1">ORDINARY</button>
+        <button data-sky="sun"    class="chan mono text-[10px] tracking-[0.15em] px-2 py-1">KIND</button>
+      </div>
+    </div>
+    <div class="grid sm:grid-cols-3 gap-5">
+      <label class="block">
+        <span class="flex justify-between mono text-[11px] text-white/60 mb-0.5">
+          <span>STOP WORKING AT</span><span id="vRetire" class="num text-white">62</span>
+        </span>
+        <input id="sRetire" type="range" class="bp" min="55" max="75" step="1" value="62">
+      </label>
+      <label class="block">
+        <span class="flex justify-between mono text-[11px] text-white/60 mb-0.5">
+          <span>SPEND EACH YEAR</span><span id="vSpend" class="num text-white">$85,000</span>
+        </span>
+        <input id="sSpend" type="range" class="bp" min="40000" max="160000" step="1000" value="85000">
+      </label>
+      <label class="block">
+        <span class="flex justify-between mono text-[11px] text-white/60 mb-0.5">
+          <span>SAVED SO FAR</span><span id="vSaved" class="num text-white">$850,000</span>
+        </span>
+        <input id="sSaved" type="range" class="bp" min="100000" max="3000000" step="10000" value="850000">
+      </label>
+    </div>
+  </div>
+</main>
+
+<footer class="px-5 py-4 text-[11px] text-white/40 mono">33 · Blueprint — your plan drawn as a technical elevation, dimensioned to the year.</footer>
+<script src="model.js"></script>
+<script>
+  var state = Object.assign({}, DEMO_DEFAULTS);
+  function $(id) { return document.getElementById(id); }
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  var AGE_TICKS = [60, 65, 70, 75, 80, 85, 90, 95];
+  var PLOT_L = 70, PLOT_R = 955, GROUND_Y = 400, TOP_Y = 96;
+
+  function el(name, attrs) {
+    var e = document.createElementNS(SVGNS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function txt(s, x, y, size, anchor, fill, extra) {
+    var t = el('text', { x: x, y: y, 'font-size': size, 'text-anchor': anchor || 'start', fill: fill || 'rgba(255,255,255,.72)' });
+    if (extra) for (var k in extra) t.setAttribute(k, extra[k]);
+    t.textContent = s;
+    return t;
+  }
+  function xFor(age) { return PLOT_L + (age - state.currentAge) / (HARD_CAP - state.currentAge) * (PLOT_R - PLOT_L); }
+
+  /* blue "ink" colours — the stamp colour carries the verdict */
+  var RED = '#ff8080';
+  var LINE = 'rgba(255,255,255,.82)';
+  var HAIR = 'rgba(255,255,255,.34)';
+  var FAINT = 'rgba(255,255,255,.18)';
+
+  function draw(res, sug) {
+    var svg = $('dwg');
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var ok = res.ok;
+    var ink = ok ? LINE : RED;
+
+    /* defs: crosshatch fill for anything below the water table */
+    var defs = el('defs', {});
+    var pat = el('pattern', { id: 'xh', width: 9, height: 9, patternUnits: 'userSpaceOnUse' });
+    pat.appendChild(el('path', { d: 'M0 9 L9 0', stroke: ok ? 'rgba(255,255,255,.30)' : 'rgba(255,128,128,.34)', 'stroke-width': '0.8' }));
+    pat.appendChild(el('path', { d: 'M0 0 L9 9', stroke: ok ? 'rgba(255,255,255,.16)' : 'rgba(255,128,128,.18)', 'stroke-width': '0.8' }));
+    defs.appendChild(pat);
+    var arrowM = el('marker', { id: 'adim', viewBox: '0 0 8 8', refX: '4', refY: '4', markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse' });
+    arrowM.appendChild(el('path', { d: 'M1 4 L7 4 M4 1 L7 4 L4 7', stroke: HAIR, 'stroke-width': '1', fill: 'none' }));
+    defs.appendChild(arrowM);
+    svg.appendChild(defs);
+
+    /* ---- the ground line: the age axis ---- */
+    svg.appendChild(el('line', { x1: PLOT_L - 26, y1: GROUND_Y, x2: PLOT_R + 14, y2: GROUND_Y, stroke: LINE, 'stroke-width': '1.6' }));
+    svg.appendChild(el('line', { x1: PLOT_L - 26, y1: GROUND_Y + 5, x2: PLOT_R + 14, y2: GROUND_Y + 5, stroke: FAINT, 'stroke-width': '0.8' }));
+    /* hatching below ground, the drawing convention for solid earth */
+    for (var hx = PLOT_L - 24; hx < PLOT_R + 10; hx += 15) {
+      svg.appendChild(el('line', { x1: hx, y1: GROUND_Y + 6, x2: hx - 9, y2: GROUND_Y + 15, stroke: FAINT, 'stroke-width': '0.7' }));
+    }
+
+    /* ---- piers: one column per labelled age, height to scale ---- */
+    var peak = 1;
+    res.rows.forEach(function (r) { if (r.bal > peak) peak = r.bal; });
+    var ticks = AGE_TICKS.filter(function (a) { return a >= state.currentAge && a <= state.maxAge; });
+    if (ticks.indexOf(state.maxAge) < 0) ticks.push(state.maxAge);
+    ticks.sort(function (a, b) { return a - b; });
+
+    var rowAt = {};
+    res.rows.forEach(function (r) { rowAt[r.age] = r.bal; });
+
+    ticks.forEach(function (age) {
+      var x = xFor(age);
+      var b = rowAt[age];
+      if (b === undefined) b = 0;
+      var h = Math.round((b / peak) * (GROUND_Y - TOP_Y));
+      var y = GROUND_Y - h;
+
+      if (b > 0) {
+        svg.appendChild(el('rect', { x: x - 19, y: y, width: 38, height: h, fill: 'rgba(255,255,255,.055)', stroke: LINE, 'stroke-width': '1' }));
+        /* mortar joints, so it reads as masonry */
+        for (var jy = y + 22; jy < GROUND_Y - 8; jy += 22) {
+          svg.appendChild(el('line', { x1: x - 19, y1: jy, x2: x + 19, y2: jy, stroke: FAINT, 'stroke-width': '0.7' }));
+        }
+      } else {
+        /* a pier that has been demolished: dashed outline to the ground */
+        svg.appendChild(el('rect', { x: x - 19, y: GROUND_Y - 30, width: 38, height: 30, fill: 'none', stroke: ok ? FAINT : 'rgba(255,128,128,.55)', 'stroke-width': '1', 'stroke-dasharray': '3 4' }));
+      }
+
+      /* dimension line up the left side of the pier with arrowheads both ends */
+      var dx = x - 30;
+      if (b > 0) {
+        svg.appendChild(el('line', { x1: dx, y1: y, x2: dx, y2: GROUND_Y, stroke: HAIR, 'stroke-width': '0.8', 'marker-start': 'url(#adim)', 'marker-end': 'url(#adim)' }));
+        svg.appendChild(el('line', { x1: x - 19, y1: y, x2: dx - 3, y2: y, stroke: FAINT, 'stroke-width': '0.7' }));
+        svg.appendChild(txt(fmtMoney(b), dx - 4, y - 7, 11, 'end', ink));
+      } else {
+        svg.appendChild(txt('0', dx - 4, GROUND_Y - 7, 11, 'end', ok ? FAINT : 'rgba(255,128,128,.7)'));
+      }
+
+      /* the age, on the ground line, in a small surveyor's tick box */
+      svg.appendChild(el('line', { x1: x, y1: GROUND_Y, x2: x, y2: GROUND_Y + 9, stroke: HAIR, 'stroke-width': '0.9' }));
+      svg.appendChild(txt('AGE ' + age, x, GROUND_Y + 24, 11, 'middle', 'rgba(255,255,255,.6)'));
+    });
+
+    /* ---- water table: where the money runs out ---- */
+    if (res.depletionAge != null && res.depletionAge <= HARD_CAP) {
+      var wx = xFor(res.depletionAge);
+      var flip = wx > 790;
+      svg.appendChild(el('line', { x1: wx, y1: TOP_Y - 10, x2: wx, y2: GROUND_Y + 15, stroke: RED, 'stroke-width': '1.3', 'stroke-dasharray': '7 5' }));
+      svg.appendChild(txt('WATER TABLE · AGE ' + res.depletionAge, wx + (flip ? -7 : 7), TOP_Y - 2, 11, flip ? 'end' : 'start', RED, { 'font-weight': 'bold' }));
+      /* flood everything to the right of the water table with crosshatch */
+      svg.appendChild(el('rect', { x: wx, y: TOP_Y - 12, width: Math.max(0, PLOT_R + 12 - wx), height: GROUND_Y - TOP_Y + 27, fill: 'url(#xh)', opacity: '0.5' }));
+      svg.appendChild(txt('UNSUPPORTED', wx + (flip ? -7 : 7), TOP_Y + 14, 9.5, flip ? 'end' : 'start', 'rgba(255,128,128,.85)', { 'letter-spacing': '0.18em' }));
+    }
+
+    /* ---- the "you are here" marker at today's age ---- */
+    var cx = xFor(state.currentAge);
+    svg.appendChild(el('path', { d: 'M' + cx + ' ' + (GROUND_Y - 2) + ' l -6 -13 l 12 0 z', fill: ink }));
+    svg.appendChild(txt('TODAY', cx - 10, GROUND_Y - 20, 10, 'end', ink, { 'letter-spacing': '0.16em' }));
+
+    /* ---- title block, bottom right ---- */
+    var tbX = 666, tbY = 480, tbW = 322, tbH = 56;
+    svg.appendChild(el('rect', { x: tbX, y: tbY, width: tbW, height: tbH, fill: 'rgba(255,255,255,.03)', stroke: LINE, 'stroke-width': '1' }));
+    svg.appendChild(el('line', { x1: tbX + 200, y1: tbY, x2: tbX + 200, y2: tbY + tbH, stroke: HAIR, 'stroke-width': '0.8' }));
+    svg.appendChild(txt('RE:tired — RETIREMENT PLAN', tbX + 7, tbY + 16, 10, 'start', 'rgba(255,255,255,.62)', { 'letter-spacing': '0.1em' }));
+    svg.appendChild(txt('DWG 33-A', tbX + 207, tbY + 16, 10, 'start', 'rgba(255,255,255,.5)'));
+    svg.appendChild(txt('PREPARED FOR: YOU', tbX + 7, tbY + 32, 10, 'start', 'rgba(255,255,255,.62)'));
+    svg.appendChild(txt('SPAN: ' + state.currentAge + '–' + state.maxAge, tbX + 207, tbY + 32, 10, 'start', 'rgba(255,255,255,.5)'));
+    svg.appendChild(txt('SCALE: 1 YEAR = ' + ((PLOT_R - PLOT_L) / (HARD_CAP - state.currentAge)).toFixed(1) + ' PX', tbX + 7, tbY + 48, 9, 'start', 'rgba(255,255,255,.35)'));
+    svg.appendChild(txt('GROWTH: ' + ({ storm: 'STORMY', normal: 'ORDINARY', sun: 'KIND' })[state.sky], tbX + 207, tbY + 48, 9, 'start', 'rgba(255,255,255,.35)'));
+
+    /* ---- the stamp: APPROVED / REVISION REQUIRED ---- */
+    var stW = 236, stH = 58;
+    var stX = 700, stY = 16;
+    var g = el('g', { transform: 'rotate(-4 ' + (stX + stW / 2) + ' ' + (stY + stH / 2) + ')' });
+    g.appendChild(el('rect', { x: stX, y: stY, width: stW, height: stH, fill: 'none', stroke: ink, 'stroke-width': '2.4', rx: '3' }));
+    g.appendChild(el('rect', { x: stX + 5, y: stY + 5, width: stW - 10, height: stH - 10, fill: 'none', stroke: ink, 'stroke-width': '0.9', rx: '2' }));
+    var big = txt(ok ? 'APPROVED' : 'REVISION REQUIRED', stX + stW / 2, stY + (ok ? 33 : 28), ok ? 21 : 14, 'middle', ink, { 'font-weight': 'bold', 'letter-spacing': ok ? '0.14em' : '0.06em' });
+    g.appendChild(big);
+
+    g.appendChild(txt(ok ? 'PLAN HOLDS TO AGE ' + state.maxAge : 'PLAN FALLS SHORT AT AGE ' + res.depletionAge, stX + stW / 2, stY + 50, 9.5, 'middle', ok ? 'rgba(255,255,255,.6)' : 'rgba(255,128,128,.85)', { 'letter-spacing': '0.1em' }));
+    svg.appendChild(g);
+  }
+
+  function render() {
+    var res = simulate(state);
+    var ok = res.ok;
+    var sug = suggest(state);
+
+    $('verdict').textContent = ok
+      ? 'Lasts to ' + lastsLabel(res) + (res.leftAtMax > 0 ? ' · ' + fmtMoney(res.leftAtMax) + ' left over at ' + state.maxAge : '')
+      : 'Runs out at ' + res.depletionAge;
+
+    var note = ok
+      ? 'The piers carry past age ' + state.maxAge + '. Nothing to revise.'
+      : (sug ? 'REVISION: ' + sug.toUpperCase() : 'REVISION: the piers stop carrying before age ' + state.maxAge + '.');
+    $('note').textContent = note;
+
+    $('vRetire').textContent = state.retireAge;
+    $('vSpend').textContent = fmtMoney(state.spending);
+    $('vSaved').textContent = fmtMoney(state.savings);
+    draw(res, sug);
+  }
+
+  $('sRetire').addEventListener('input', function (e) { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', function (e) { state.spending = +e.target.value; render(); });
+  $('sSaved').addEventListener('input', function (e) { state.savings = +e.target.value; render(); });
+
+  var chans = Array.prototype.slice.call(document.querySelectorAll('[data-sky]'));
+  chans.forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.sky = b.getAttribute('data-sky');
+      chans.forEach(function (x) { x.classList.toggle('on', x === b); });
+      render();
+    });
+  });
+
+  render();
+</script>
+</body>
+</html>

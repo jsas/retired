@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>16 — Contour Map</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  #terrain { touch-action: none; cursor: crosshair; }
+  #terrain.grabbing { cursor: grabbing; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  .fu { animation: fadeUp .6s ease-out both; }
+</style>
+</head>
+<body class="bg-[#f7f5f0] text-stone-900 min-h-screen flex flex-col">
+
+<!-- ═══ chrome ═══ -->
+<header class="flex items-center gap-2.5 px-5 py-3">
+  <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+  <span class="font-semibold text-sm tracking-tight">tired</span>
+  <span class="text-xs text-stone-500 ml-1.5">16 · Contour Map</span>
+</header>
+
+<!-- ═══ full-bleed terrain ═══ -->
+<main class="flex-1 relative w-full">
+  <svg id="terrain" viewBox="0 0 1220 800" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
+
+    <!-- paper wash -->
+    <rect x="0" y="0" width="1220" height="800" fill="#f7f5f0"/>
+
+    <!-- success regions: green = safest high ground, clay = low ground -->
+    <defs>
+      <linearGradient id="safeGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stop-color="#cfe0c4" stop-opacity=".95"/>
+        <stop offset="45%" stop-color="#e3e7cd" stop-opacity=".85"/>
+        <stop offset="100%" stop-color="#f0e6cf" stop-opacity=".70"/>
+      </linearGradient>
+      <linearGradient id="midGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stop-color="#e8e9cd" stop-opacity=".80"/>
+        <stop offset="100%" stop-color="#f2e3c6" stop-opacity=".62"/>
+      </linearGradient>
+      <linearGradient id="lowGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stop-color="#f2e6cb" stop-opacity=".65"/>
+        <stop offset="100%" stop-color="#f5e0cb" stop-opacity=".50"/>
+      </linearGradient>
+      <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="1.1"/>
+      </filter>
+    </defs>
+
+    <!-- 50% region (and everything below it) -->
+    <path fill="url(#lowGrad)"  d="M 70.0 98.1C90.0 105.8 150.0 127.9 190.0 144.0C230.0 160.2 270.0 178.4 310.0 195.2C350.0 212.0 390.0 228.1 430.0 244.9C470.0 261.8 510.0 277.0 550.0 296.1C590.0 315.2 630.0 338.7 670.0 359.4C710.0 380.0 750.0 397.0 790.0 419.8C830.0 442.5 870.0 468.6 910.0 496.0C950.0 523.3 990.0 554.8 1030.0 583.8C1070.0 612.9 1130.0 655.8 1150.0 670.3L1150 55L70.0 55Z"/>
+    <!-- 70% region -->
+    <path fill="url(#midGrad)"  d="M 76.8 55.0C96.6 59.3 156.3 72.2 196.0 80.8C235.8 89.3 275.5 96.1 315.2 106.4C355.0 116.7 394.7 130.2 434.5 142.3C474.3 154.5 514.0 167.7 553.8 179.2C593.5 190.7 633.3 199.5 673.0 211.4C712.8 223.4 752.5 238.0 792.3 251.1C832.0 264.2 871.7 275.2 911.5 290.0C951.2 304.8 991.0 322.5 1030.8 339.9C1070.5 357.2 1130.1 385.2 1150.0 394.3L1150 55L76.8 55Z"/>
+    <!-- 85% region -->
+    <path fill="url(#safeGrad)" d="M 73.4 55.0C93.3 55.8 153.1 58.1 193.0 59.6C232.9 61.0 272.8 59.2 312.6 63.8C352.5 68.4 392.4 79.2 432.3 87.3C472.1 95.5 512.0 105.2 551.9 112.7C591.8 120.2 631.6 125.9 671.5 132.6C711.4 139.3 751.3 145.2 791.1 152.9C831.0 160.5 870.9 168.3 910.7 178.6C950.6 188.9 990.5 203.1 1030.4 214.6C1070.3 226.1 1130.1 242.1 1150.0 247.6L1150 55L73.4 55Z"/>
+    <!-- 95% region (the peak) -->
+    <path fill="#c7dcbb" fill-opacity=".92" d="M 80.1 55.0C99.9 55.2 159.4 55.7 199.0 56.0C238.6 56.4 278.3 56.5 317.9 57.1C357.5 57.7 397.1 56.9 436.7 59.6C476.4 62.3 516.0 67.8 555.6 73.3C595.3 78.7 634.9 85.7 674.5 92.4C714.1 99.0 753.7 105.5 793.4 113.1C833.0 120.7 872.6 129.8 912.3 138.1C951.9 146.5 991.5 155.3 1031.1 163.0C1070.8 170.7 1130.2 180.8 1150.0 184.4L1150 55L80.1 55Z"/>
+
+    <!-- contour strokes (hand-drawn feel: slightly heavier, uneven) -->
+    <g fill="none" stroke-linecap="round">
+      <path d="M 70.0 98.1C90.0 105.8 150.0 127.9 190.0 144.0C230.0 160.2 270.0 178.4 310.0 195.2C350.0 212.0 390.0 228.1 430.0 244.9C470.0 261.8 510.0 277.0 550.0 296.1C590.0 315.2 630.0 338.7 670.0 359.4C710.0 380.0 750.0 397.0 790.0 419.8C830.0 442.5 870.0 468.6 910.0 496.0C950.0 523.3 990.0 554.8 1030.0 583.8C1070.0 612.9 1130.0 655.8 1150.0 670.3" stroke="#c9a882" stroke-width="2.4" opacity=".85" filter="url(#soft)"/>
+      <path d="M 76.8 55.0C96.6 59.3 156.3 72.2 196.0 80.8C235.8 89.3 275.5 96.1 315.2 106.4C355.0 116.7 394.7 130.2 434.5 142.3C474.3 154.5 514.0 167.7 553.8 179.2C593.5 190.7 633.3 199.5 673.0 211.4C712.8 223.4 752.5 238.0 792.3 251.1C832.0 264.2 871.7 275.2 911.5 290.0C951.2 304.8 991.0 322.5 1030.8 339.9C1070.5 357.2 1130.1 385.2 1150.0 394.3" stroke="#b3a97e" stroke-width="2.2" opacity=".9" filter="url(#soft)"/>
+      <path d="M 73.4 55.0C93.3 55.8 153.1 58.1 193.0 59.6C232.9 61.0 272.8 59.2 312.6 63.8C352.5 68.4 392.4 79.2 432.3 87.3C472.1 95.5 512.0 105.2 551.9 112.7C591.8 120.2 631.6 125.9 671.5 132.6C711.4 139.3 751.3 145.2 791.1 152.9C831.0 160.5 870.9 168.3 910.7 178.6C950.6 188.9 990.5 203.1 1030.4 214.6C1070.3 226.1 1130.1 242.1 1150.0 247.6" stroke="#8fa07a" stroke-width="2.4" opacity=".95" filter="url(#soft)"/>
+      <path d="M 80.1 55.0C99.9 55.2 159.4 55.7 199.0 56.0C238.6 56.4 278.3 56.5 317.9 57.1C357.5 57.7 397.1 56.9 436.7 59.6C476.4 62.3 516.0 67.8 555.6 73.3C595.3 78.7 634.9 85.7 674.5 92.4C714.1 99.0 753.7 105.5 793.4 113.1C833.0 120.7 872.6 129.8 912.3 138.1C951.9 146.5 991.5 155.3 1031.1 163.0C1070.8 170.7 1130.2 180.8 1150.0 184.4" stroke="#6f8a5f" stroke-width="2.8" filter="url(#soft)"/>
+    </g>
+
+    <!-- contour labels, like a topo sheet -->
+    <g font-size="20" font-weight="700" class="num" font-style="italic">
+      <text x="560" y="288" fill="#b08968">50%</text>
+      <text x="566" y="172" fill="#97906a">70%</text>
+      <text x="572" y="66"  fill="#8fa07a">85%</text>
+      <text x="200" y="44"  fill="#6f8a5f">95%</text>
+      <text x="330" y="700" fill="#c29a70" opacity=".9">below 50%</text>
+    </g>
+
+    <!-- axis labels: quiet, at the edges -->
+    <g font-size="19" fill="#a29a8a" class="num" font-weight="600">
+      <text x="70"   y="782" text-anchor="middle">55</text>
+      <text x="340"  y="782" text-anchor="middle">60</text>
+      <text x="610"  y="782" text-anchor="middle">65</text>
+      <text x="880"  y="782" text-anchor="middle">70</text>
+      <text x="1150" y="782" text-anchor="middle">75</text>
+    </g>
+    <g font-size="19" fill="#a29a8a" class="num" font-weight="600" text-anchor="end">
+      <text x="56" y="762">$40k</text>
+      <text x="56" y="593">$70k</text>
+      <text x="56" y="421">$100k</text>
+      <text x="56" y="249">$130k</text>
+      <text x="56" y="70">$160k</text>
+    </g>
+    <text x="610" y="816" text-anchor="middle" font-size="20" fill="#8f887a" font-weight="600">the age you stop working →</text>
+    <text x="26" y="400" text-anchor="middle" font-size="20" fill="#8f887a" font-weight="600" transform="rotate(-90 26 400)">what you spend each year →</text>
+
+    <!-- "you are here" pill + dot -->
+    <g id="youG">
+      <rect id="youPill" x="0" y="0" width="230" height="36" rx="18" fill="#b45309" fill-opacity=".92"/>
+      <text id="youText" x="0" y="0" text-anchor="middle" font-size="16" font-weight="700" fill="#fdf6ec" class="num">you are here</text>
+      <line id="youStem" x1="0" y1="0" x2="0" y2="0" stroke="#b45309" stroke-width="1.6" opacity=".55"/>
+    </g>
+    <circle id="dotHalo" cx="448" cy="314" r="26" fill="#b45309" opacity=".13"/>
+    <circle id="dot" cx="448" cy="314" r="13" fill="#b45309" stroke="#fdfbf7" stroke-width="3.5" style="cursor:grab"/>
+  </svg>
+</main>
+
+<!-- ═══ floating readout, the only chrome over the terrain ═══ -->
+<aside class="fu absolute right-5 top-5 w-[290px] bg-white/85 backdrop-blur-md rounded-2xl border border-stone-300/60 shadow-lg shadow-stone-900/5 p-5">
+  <p class="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-stone-500 mb-2.5">Where you stand</p>
+  <p id="verdict" class="text-[16px] leading-snug font-semibold text-stone-900"></p>
+  <p id="verdictSub" class="mt-1.5 text-[12.5px] text-stone-600 leading-relaxed"></p>
+
+  <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-stone-200">
+    <div>
+      <p class="text-[10.5px] uppercase tracking-wider text-stone-500 mb-0.5">Money lasts to</p>
+      <p id="rLasts" class="num text-xl font-bold text-stone-900">—</p>
+    </div>
+    <div>
+      <p class="text-[10.5px] uppercase tracking-wider text-stone-500 mb-0.5">Left at 95</p>
+      <p id="rLeft" class="num text-xl font-bold text-stone-900">—</p>
+    </div>
+  </div>
+
+  <div class="mt-4 pt-3 border-t border-stone-200 flex items-center justify-between gap-2">
+    <span class="text-[11.5px] text-stone-600">Markets</span>
+    <span class="flex gap-1">
+      <button data-sky="storm"  class="sky text-[11px] px-2 py-0.5 rounded border transition-all">stormy</button>
+      <button data-sky="normal" class="sky text-[11px] px-2 py-0.5 rounded border transition-all">ordinary</button>
+      <button data-sky="sun"    class="sky text-[11px] px-2 py-0.5 rounded border transition-all">kind</button>
+    </span>
+  </div>
+  <p id="tip" class="mt-3 text-[12px] text-amber-800 font-medium leading-snug min-h-[16px]"></p>
+</aside>
+
+<footer class="px-5 py-3 text-[11px] text-stone-400">
+  16 · Contour Map — quiet terrain you can drag: walk uphill until the ground holds you.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+
+  // ---- map ↔ state mapping (must match the pre-drawn paths) ----
+  const VW = 1220, VH = 800, PL = 70, PR = 1150, PT = 55, PB = 745;
+  const A0 = 55, A1 = 75, S0 = 160000, S1 = 40000;
+  const xFor = age  => PL + (age - A0) / (A1 - A0) * (PR - PL);
+  const yFor = spend => PT + (S0 - spend) / (S0 - S1) * (PB - PT);
+  const ageForX = x => A0 + (x - PL) / (PR - PL) * (A1 - A0);
+  const spendForY = y => S1 + (PB - y) / (PB - PT) * (S0 - S1);
+
+  const pad = $('terrain');
+
+  function toSvg(evt) {
+    const pt = pad.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    const m = pad.getScreenCTM();
+    return m ? pt.matrixTransform(m.inverse()) : null;
+  }
+
+  function apply(evt) {
+    const p = toSvg(evt);
+    if (!p) return;
+    const age = Math.round(Math.min(A1, Math.max(A0, ageForX(p.x))));
+    const spend = Math.round(Math.min(S0, Math.max(S1, spendForY(p.y))) / 1000) * 1000;
+    state.retireAge = age;
+    state.spending = spend;
+    render();
+  }
+
+  let dragging = false;
+  pad.addEventListener('pointerdown', e => { dragging = true; pad.classList.add('grabbing'); try { pad.setPointerCapture(e.pointerId); } catch (_) {} apply(e); });
+  pad.addEventListener('pointermove', e => { if (dragging) apply(e); });
+  pad.addEventListener('pointerup',   () => { dragging = false; pad.classList.remove('grabbing'); });
+  pad.addEventListener('pointercancel', () => { dragging = false; pad.classList.remove('grabbing'); });
+
+  function render() {
+    const res = simulate(state);
+    const dx = xFor(state.retireAge), dy = yFor(state.spending);
+
+    // dot + halo
+    $('dot').setAttribute('cx', dx);      $('dot').setAttribute('cy', dy);
+    $('dotHalo').setAttribute('cx', dx);  $('dotHalo').setAttribute('cy', dy);
+
+    // "you are here" pill, sitting above the dot (flipped below when near the top)
+    const pillH = 36, labelPad = 16;
+    $('youText').textContent = 'you are here · ' + fmtMoney(state.spending) + ' at ' + state.retireAge;
+    // measure the label so the pill always fits its text
+    const approxW = Math.round($('youText').textContent.length * 8.4) + labelPad * 2;
+    const pillW = Math.max(150, Math.min(300, approxW));
+    const above = dy > PT + 80;
+    const px = Math.min(VW - pillW - 12, Math.max(12, dx - pillW / 2));
+    const py = above ? dy - 62 : dy + 36;
+    $('youPill').setAttribute('x', px); $('youPill').setAttribute('y', py);
+    $('youPill').setAttribute('width', pillW);
+    $('youPill').setAttribute('height', pillH);
+    $('youText').setAttribute('x', px + pillW / 2);
+    $('youText').setAttribute('y', py + pillH / 2 + 6);
+    $('youStem').setAttribute('x1', dx); $('youStem').setAttribute('x2', dx);
+    $('youStem').setAttribute('y1', above ? py + pillH : dy);
+    $('youStem').setAttribute('y2', above ? dy - 16 : py);
+
+    // verdict
+    if (res.ok) {
+      $('verdict').innerHTML = 'Your money lasts until you\'re <span class="num text-emerald-700">'
+        + lastsLabel(res) + '</span> — this ground holds you.';
+      $('verdictSub').textContent = res.leftAtMax > 25000
+        ? 'About ' + fmtMoney(res.leftAtMax) + ' would still be there at ' + state.maxAge + '.'
+        : 'It carries you just past ' + state.maxAge + ', the age you\'re planning for.';
+      $('tip').textContent = '';
+    } else {
+      const gap = state.maxAge - res.depletionAge;
+      $('verdict').innerHTML = 'Your money runs out at <span class="num text-rose-700">'
+        + res.depletionAge + '</span> — ' + gap + ' year' + (gap === 1 ? '' : 's') + ' short.';
+      $('verdictSub').textContent = 'Drag uphill: spend less, or keep working longer.';
+      $('tip').textContent = suggest(state) ?? '';
+    }
+
+    $('rLasts').textContent = lastsLabel(res);
+    $('rLeft').textContent = res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) : 'nothing';
+
+    document.querySelectorAll('.sky').forEach(b => {
+      const on = b.dataset.sky === state.sky;
+      b.className = 'sky text-[11px] px-2 py-0.5 rounded border transition-all ' + (on
+        ? 'bg-stone-800 text-white border-stone-800'
+        : 'border-stone-300 text-stone-600 hover:bg-stone-100');
+    });
+  }
+
+  document.querySelectorAll('.sky').forEach(b =>
+    b.addEventListener('click', () => { state.sky = b.dataset.sky; render(); }));
+
+  render();
+</script>
+</body>
+</html>

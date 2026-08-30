@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>31 — Card Deck</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 9px; border-radius: 999px;
+    background: #e2e8f0; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #4f46e5; border: 3px solid #ffffff;
+    box-shadow: 0 1px 5px rgba(30,27,75,.35); cursor: grab;
+  }
+  input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; background: #4338ca; }
+  input[type=range]::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #4f46e5; border: 3px solid #ffffff;
+    box-shadow: 0 1px 5px rgba(30,27,75,.35); cursor: grab;
+  }
+  input[type=range]:focus-visible { outline: 2px solid #4f46e5; outline-offset: 3px; }
+
+  .card { transition: opacity .28s ease, transform .28s ease; }
+  .card.off-right { opacity: 0; transform: translateX(30px); }
+  .card.off-left  { opacity: 0; transform: translateX(-30px); }
+  .card.on        { opacity: 1; transform: none; }
+  .dot { transition: all .2s; }
+</style>
+</head>
+<body class="bg-[#f8fafc] text-slate-800 min-h-screen flex flex-col">
+
+<header class="flex items-center justify-between px-5 py-3">
+  <div class="flex items-center gap-2">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[9px] font-bold text-white leading-none">RE:</div>
+    <span class="font-semibold text-sm tracking-tight">tired</span>
+  </div>
+  <span class="text-xs text-slate-500">31 — Card Deck</span>
+</header>
+
+<main class="flex-1 w-full max-w-md mx-auto px-5 pt-4 pb-8">
+
+  <div id="dots" class="flex items-center justify-center gap-2 mb-6"></div>
+
+  <div id="stack" class="relative min-h-[27rem]"></div>
+
+  <div class="mt-8 flex items-center justify-between gap-3">
+    <button id="prev" class="px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-[14px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">← Back</button>
+    <span id="counter" class="num text-[12.5px] text-slate-400"></span>
+    <button id="next" class="px-4 py-2.5 rounded-xl bg-indigo-600 text-[14px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
+  </div>
+
+  <p class="mt-5 text-[12px] text-slate-400 text-center leading-relaxed">
+    Arrow keys work too. Every card is recomputed from your own numbers the moment it appears.
+  </p>
+</main>
+
+<footer class="px-5 py-4 text-xs text-slate-500 border-t border-slate-200">
+  31 · Card Deck — one fact at a time, recomputed on arrival.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  const CARDS = [
+    { id: 'verdict', title: 'Your plan, in one line' },
+    { id: 'nest',    title: 'What you retire with' },
+    { id: 'lasts',   title: 'How long it lasts' },
+    { id: 'storm',   title: 'The stormy test' },
+    { id: 'tune',    title: 'Tune it' },
+    { id: 'spark',   title: 'The whole road' },
+  ];
+
+  const SLIDERS = [
+    { key: 'retireAge', min: 58,   max: 75,      step: 1,     label: 'Work ends at',    fmt: v => 'age ' + v },
+    { key: 'spending',  min: 30000, max: 150000, step: 2500,  label: 'Spending a year', fmt: fmtMoney },
+    { key: 'savings',   min: 100000, max: 2500000, step: 10000, label: 'Savings today',   fmt: fmtMoney },
+  ];
+
+  let cur = 0;
+  let animating = false;
+
+  /* ---------- build the stack ---------- */
+  const stack = $('stack');
+  CARDS.forEach((c, i) => {
+    const el = document.createElement('section');
+    el.className = 'card absolute inset-0 flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm' + (i === 0 ? ' on' : ' off-right');
+    el.setAttribute('data-card', c.id);
+    el.setAttribute('aria-hidden', i === 0 ? 'false' : 'true');
+    stack.appendChild(el);
+    c.el = el;
+  });
+
+  const dotsEl = $('dots');
+  CARDS.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.className = 'dot rounded-full';
+    b.setAttribute('aria-label', 'Go to card ' + (i + 1) + ' of ' + CARDS.length);
+    b.addEventListener('click', () => go(i));
+    dotsEl.appendChild(b);
+    c.dot = b;
+  });
+
+  /* ---------- shared card shell ---------- */
+  function shell(kicker, big, sub, body) {
+    return '<div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600 mb-3">' + kicker + '</div>' +
+      '<div class="num text-[44px] leading-[1.05] font-extrabold tracking-tight">' + big + '</div>' +
+      '<div class="text-[17px] font-semibold text-slate-700 mt-2">' + sub + '</div>' +
+      '<p class="mt-4 text-[14px] text-slate-600 leading-relaxed">' + body + '</p>';
+  }
+
+  /* ---------- painters, one per card ---------- */
+  const PAINTERS = {
+    verdict() {
+      const res = simulate(state);
+      if (res.ok) {
+        return shell('Verdict',
+          '<span class="text-emerald-700">' + lastsLabel(res) + '</span>',
+          'your money lasts to this age',
+          'You asked it to reach ' + state.maxAge + '. It does — with <span class="num font-semibold">' + fmtMoney(res.leftAtMax) + '</span> left over.');
+      }
+      const gap = state.maxAge - res.depletionAge;
+      return shell('Verdict',
+        '<span class="text-rose-700">' + res.depletionAge + '</span>',
+        'the age your money runs out',
+        (suggest(state) ?? 'Nothing small fixes this — but the next cards show exactly where it gets tight.') +
+        ' That is <span class="num font-semibold">' + gap + '</span> year' + (gap === 1 ? '' : 's') + ' short of ' + state.maxAge + '.');
+    },
+
+    nest() {
+      const res = simulate(state);
+      const row = res.rows.find(r => r.age === state.retireAge);
+      const bal = row ? row.bal : state.savings;
+      return shell('The pot',
+        fmtMoney(bal),
+        'when work ends at ' + state.retireAge,
+        'You start with <span class="num font-semibold">' + fmtMoney(state.savings) + '</span> today' +
+        (state.contrib > 0 ? ', add <span class="num font-semibold">' + fmtMoney(state.contrib) + '</span> a year until then' : ', and add nothing more') +
+        ', and growth does the rest.');
+    },
+
+    lasts() {
+      const res = simulate(state);
+      const ok = res.ok;
+      return shell('How long',
+        '<span class="' + (ok ? 'text-emerald-700' : 'text-rose-700') + '">' + lastsLabel(res) + '</span>',
+        ok ? 'that is past the ' + state.maxAge + ' you planned for'
+           : 'that is ' + (state.maxAge - res.depletionAge) + ' year' + (state.maxAge - res.depletionAge === 1 ? '' : 's') + ' short of ' + state.maxAge,
+        ok
+          ? 'Every year after ' + state.maxAge + ' is borrowed time you do not need. Left over at ' + state.maxAge + ': <span class="num font-semibold">' + fmtMoney(res.leftAtMax) + '</span>.'
+          : 'It runs dry at ' + res.depletionAge + '. Card 5 lets you move the levers that change it.');
+    },
+
+    storm() {
+      const bad = simulate({ ...state, sky: 'storm' });
+      const norm = simulate(state);
+      const mark = bad.ok
+        ? '<span class="inline-grid place-items-center w-11 h-11 rounded-full bg-emerald-100 mb-3"><svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-8.5" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'
+        : '<span class="inline-grid place-items-center w-11 h-11 rounded-full bg-rose-100 mb-3"><svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9" stroke="#e11d48" stroke-width="2.5" stroke-linecap="round"/></svg></span>';
+      return '<div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600 mb-3">The stormy test</div>' + mark +
+        '<div class="num text-[44px] leading-[1.05] font-extrabold tracking-tight ' + (bad.ok ? 'text-emerald-700' : 'text-rose-700') + '">' + lastsLabel(bad) + '</div>' +
+        '<div class="text-[17px] font-semibold text-slate-700 mt-2">' + (bad.ok ? 'still standing in stormy markets' : 'that is where a bad market ends it') + '</div>' +
+        '<p class="mt-4 text-[14px] text-slate-600 leading-relaxed">Stormy here means about <span class="num font-semibold">1.2%</span> growth a year instead of <span class="num font-semibold">3%</span>. In ordinary markets you last to <span class="num font-semibold">' + lastsLabel(norm) + '</span>.</p>';
+    },
+
+    tune() {
+      const res = simulate(state);
+      const good = res.ok;
+      return '<div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600 mb-1">Tune it</div>' +
+        '<p class="text-[13.5px] text-slate-500 leading-relaxed mb-4">Three levers. Move one and the answer below moves with it.</p>' +
+        '<div class="space-y-5">' +
+        SLIDERS.map((s, i) =>
+          '<div>' +
+            '<div class="flex items-baseline justify-between mb-2">' +
+              '<label class="text-[13px] font-medium text-slate-600" for="sl' + i + '">' + s.label + '</label>' +
+              '<span class="num text-[14px] font-bold text-indigo-700" id="out' + i + '">' + s.fmt(state[s.key]) + '</span>' +
+            '</div>' +
+            '<input id="sl' + i + '" type="range" min="' + s.min + '" max="' + s.max + '" step="' + s.step + '" value="' + state[s.key] + '" aria-label="' + s.label + '">' +
+          '</div>'
+        ).join('') +
+        '</div>' +
+        '<div id="tuneLive" class="pt-4 border-t border-slate-100 text-[15px] font-bold leading-snug ' +
+          (good ? 'text-emerald-700' : 'text-rose-700') + '">' +
+          (good
+            ? 'Now lasts to ' + lastsLabel(res) + ' — ' + fmtMoney(res.leftAtMax) + ' left over at ' + state.maxAge + '.'
+            : 'Now runs out at ' + res.depletionAge + ' — still ' + (state.maxAge - res.depletionAge) + ' year' + (state.maxAge - res.depletionAge === 1 ? '' : 's') + ' short.') +
+        '</div>';
+    },
+
+    spark() {
+      const res = simulate(state);
+      const stormRes = simulate({ ...state, sky: 'storm' });
+      const ok = res.ok;
+      return '<div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600 mb-2">The whole road</div>' +
+        '<p class="text-[13.5px] text-slate-500 leading-relaxed mb-4">From age <span class="num font-semibold">' + state.currentAge + '</span> to <span class="num font-semibold">' + (res.rows.length ? res.rows[res.rows.length - 1].age : state.currentAge) + '</span>. The faint line is stormy markets.</p>' +
+        '<div class="mt-auto">' +
+          '<svg id="spark" viewBox="0 0 320 130" class="w-full h-auto" role="img" aria-label="Balance by age"></svg>' +
+          '<div class="flex justify-between mt-1 text-[11px] text-slate-400 num"><span>age ' + state.currentAge + '</span><span>age ' + (res.rows.length ? res.rows[res.rows.length - 1].age : state.currentAge) + '</span></div>' +
+        '</div>' +
+        '<p class="mt-4 text-[14px] font-semibold ' + (ok ? 'text-emerald-700' : 'text-rose-700') + '">' +
+          (ok ? 'Lasts to ' + lastsLabel(res) + ', with ' + fmtMoney(res.leftAtMax) + ' left over.'
+              : 'Runs out at ' + res.depletionAge + ', ' + (state.maxAge - res.depletionAge) + ' years early.') +
+        '</p>';
+    },
+  };
+
+  /* ---------- sparkline ---------- */
+  function drawSpark() {
+    const svg = $('spark');
+    if (!svg) return;
+    const a = simulate(state), b = simulate({ ...state, sky: 'storm' });
+    const all = a.rows.concat(b.rows);
+    if (!all.length) return;
+    const max = Math.max(...all.map(r => r.bal)) || 1;
+    const lastAge = Math.max(a.rows.length ? a.rows[a.rows.length - 1].age : 0,
+                             b.rows.length ? b.rows[b.rows.length - 1].age : 0);
+    const W = 320, H = 130, PAD = 8;
+    const x = age => PAD + (age - state.currentAge) / Math.max(1, lastAge - state.currentAge) * (W - 2 * PAD);
+    const y = v => H - PAD - (v / max) * (H - 2 * PAD);
+    const path = rows => rows.map((r, i) => (i ? 'L' : 'M') + x(r.age).toFixed(1) + ' ' + y(r.bal).toFixed(1)).join(' ');
+
+    const tx = x(state.maxAge);
+    let s = '';
+    if (state.maxAge <= lastAge) {
+      s += '<line x1="' + tx + '" y1="' + PAD + '" x2="' + tx + '" y2="' + (H - PAD) + '" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4"/>';
+      s += '<text x="' + (tx + 4) + '" y="' + (PAD + 9) + '" font-size="10" fill="#94a3b8">' + state.maxAge + '</text>';
+    }
+    s += '<path d="' + path(b.rows) + '" fill="none" stroke="#cbd5e1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 6"/>';
+    s += '<path d="' + path(a.rows) + '" fill="none" stroke="' + (a.ok ? '#4f46e5' : '#e11d48') + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+    const lastRow = a.rows[a.rows.length - 1];
+    if (lastRow) s += '<circle cx="' + x(lastRow.age).toFixed(1) + '" cy="' + y(lastRow.bal).toFixed(1) + '" r="4" fill="' + (a.ok ? '#4f46e5' : '#e11d48') + '"/>';
+    svg.innerHTML = s;
+  }
+
+  /* ---------- paint whichever card is showing ---------- */
+  function paintCard(i) {
+    const c = CARDS[i];
+    c.el.innerHTML = PAINTERS[c.id]();
+    if (c.id === 'tune') {
+      SLIDERS.forEach((s, i2) => {
+        const inp = $('sl' + i2), out = $('out' + i2);
+        if (!inp) return;
+        inp.addEventListener('input', () => {
+          state[s.key] = parseInt(inp.value, 10);
+          out.textContent = s.fmt(state[s.key]);
+          const r2 = simulate(state);
+          const box = $('tuneLive');
+          box.className = 'pt-4 border-t border-slate-100 text-[15px] font-bold leading-snug ' + (r2.ok ? 'text-emerald-700' : 'text-rose-700');
+          box.textContent = r2.ok
+            ? 'Now lasts to ' + lastsLabel(r2) + ' — ' + fmtMoney(r2.leftAtMax) + ' left over at ' + state.maxAge + '.'
+            : 'Now runs out at ' + r2.depletionAge + ' — still ' + (state.maxAge - r2.depletionAge) + ' year' + (state.maxAge - r2.depletionAge === 1 ? '' : 's') + ' short.';
+        });
+      });
+    }
+    if (c.id === 'spark') drawSpark();
+  }
+
+  /* ---------- navigation ---------- */
+  function go(i) {
+    if (i < 0 || i >= CARDS.length || i === cur) return;
+    const dir = i > cur ? 1 : -1;
+    cur = i;
+    CARDS.forEach((c, j) => {
+      c.el.className = 'card absolute inset-0 flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ' +
+        (j === cur ? 'on' : (j < cur ? 'off-left' : 'off-right'));
+      c.el.setAttribute('aria-hidden', j === cur ? 'false' : 'true');
+      c.dot.style.width = j === cur ? '22px' : '8px';
+      c.dot.style.height = '8px';
+      c.dot.style.background = j === cur ? '#4f46e5' : (j < cur ? '#a5b4fc' : '#cbd5e1');
+    });
+    paintCard(cur);
+    $('prev').disabled = cur === 0;
+    $('next').disabled = cur === CARDS.length - 1;
+    $('counter').textContent = (cur + 1) + ' / ' + CARDS.length + ' · ' + CARDS[cur].title;
+  }
+
+  $('prev').addEventListener('click', () => go(cur - 1));
+  $('next').addEventListener('click', () => go(cur + 1));
+  stack.addEventListener('click', e => {
+    if (e.target.closest('input,button,label')) return;
+    go(Math.min(CARDS.length - 1, cur + 1));
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(cur + 1); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); go(cur - 1); }
+  });
+
+  paintCard(0);
+  CARDS.forEach((c, j) => {
+    c.dot.style.width = j === 0 ? '22px' : '8px';
+    c.dot.style.height = '8px';
+    c.dot.style.background = j === 0 ? '#4f46e5' : (j < 0 ? '#a5b4fc' : '#cbd5e1');
+  });
+  $('prev').disabled = true;
+  $('next').disabled = false;
+  $('counter').textContent = '1 / ' + CARDS.length + ' · ' + CARDS[0].title;
+</script>
+</body>
+</html>

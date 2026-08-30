@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>26 — Big Canvas</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  .panel { background: #fff; }
+  .plabel { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; }
+  input[type=range].r { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px;
+    background: #e2e8f0; outline: none; width: 100%; cursor: pointer; }
+  input[type=range].r::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px;
+    height: 13px; border-radius: 50%; background: #1d4ed8; border: 2px solid #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,.25); cursor: grab; }
+  input[type=range].r::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%;
+    background: #1d4ed8; border: 2px solid #fff; cursor: grab; }
+  .seg { font-size: 10px; padding: 3px 9px; border-radius: 9999px; color: #64748b;
+         border: 1px solid #e2e8f0; background: #fff; transition: all .15s; }
+  .seg:hover { color: #0f172a; border-color: #cbd5e1; }
+  .seg.on { background: #0f172a; color: #fff; border-color: #0f172a; font-weight: 600; }
+  .heat { aspect-ratio: 1 / 1; border-radius: 1px; cursor: pointer; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-[1560px] mx-auto px-4 h-11 flex items-center gap-2.5">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white shrink-0">RE:</div>
+    <span class="font-semibold text-sm text-slate-800">tired</span>
+    <span class="text-[11px] text-slate-400">26 — Big Canvas</span>
+    <div class="flex-1"></div>
+    <span class="text-[10px] text-slate-400 num" id="hudAge">age 55 → 95</span>
+    <span class="text-[10px] text-slate-300">·</span>
+    <span class="text-[10px] text-slate-400 num" id="hudSky">ordinary</span>
+  </div>
+</header>
+
+<main class="flex-1 w-full max-w-[1560px] mx-auto my-3">
+
+  <div class="grid grid-cols-12 gap-px bg-slate-200 border border-slate-200">
+
+    <!-- verdict panel -->
+    <section class="panel col-span-12 lg:col-span-7 p-4">
+      <p class="plabel">The verdict</p>
+      <p id="vMain" class="num mt-2 text-[30px] leading-[1.12] font-semibold text-slate-900">—</p>
+      <p id="vSub" class="mt-1.5 text-[12px] text-slate-500 leading-snug max-w-[46ch]"></p>
+    </section>
+
+    <!-- area chart -->
+    <section class="panel col-span-12 lg:col-span-5 p-4">
+      <p class="plabel">Your balance, year by year</p>
+      <svg id="area" viewBox="0 0 600 190" class="w-full block mt-2" style="height:160px" preserveAspectRatio="none"></svg>
+      <div class="flex items-center justify-between text-[10px] text-slate-400 num mt-1">
+        <span>55</span><span id="axRet">retire 62</span><span>95</span><span id="axPeak">peak —</span>
+      </div>
+    </section>
+
+    <!-- four sparkline stats -->
+    <section class="panel col-span-6 md:col-span-3 p-2.5">
+      <p class="plabel">wealth now</p>
+      <p id="kNow" class="num text-[15px] font-semibold text-slate-900 mt-1">—</p>
+      <svg id="svgNow" viewBox="0 0 100 20" class="w-full h-[20px] mt-1 block" preserveAspectRatio="none"></svg>
+    </section>
+    <section class="panel col-span-6 md:col-span-3 p-2.5">
+      <p class="plabel">at retirement</p>
+      <p id="kRet" class="num text-[15px] font-semibold text-slate-900 mt-1">—</p>
+      <svg id="svgRet" viewBox="0 0 100 20" class="w-full h-[20px] mt-1 block" preserveAspectRatio="none"></svg>
+    </section>
+    <section class="panel col-span-6 md:col-span-3 p-2.5">
+      <p class="plabel">left at 95</p>
+      <p id="kLeft" class="num text-[15px] font-semibold text-slate-900 mt-1">—</p>
+      <svg id="svgLeft" viewBox="0 0 100 20" class="w-full h-[20px] mt-1 block" preserveAspectRatio="none"></svg>
+    </section>
+    <section class="panel col-span-6 md:col-span-3 p-2.5">
+      <p class="plabel">worst-year buffer</p>
+      <p id="kWorst" class="num text-[15px] font-semibold text-slate-900 mt-1">—</p>
+      <svg id="svgWorst" viewBox="0 0 100 20" class="w-full h-[20px] mt-1 block" preserveAspectRatio="none"></svg>
+    </section>
+
+    <!-- controls rail -->
+    <section class="panel col-span-12 lg:col-span-3 p-4">
+      <p class="plabel">Move the plan</p>
+      <label class="block mt-3">
+        <span class="flex justify-between text-[11px] text-slate-600"><span>retire at</span>
+          <span id="vRet" class="num font-semibold text-slate-900">62</span></span>
+        <input id="sRetire" type="range" class="r mt-1" min="56" max="75" step="1" value="62">
+      </label>
+      <label class="block mt-3">
+        <span class="flex justify-between text-[11px] text-slate-600"><span>spend a year</span>
+          <span id="vSpend" class="num font-semibold text-slate-900">—</span></span>
+        <input id="sSpend" type="range" class="r mt-1" min="40000" max="160000" step="1000" value="85000">
+      </label>
+      <label class="block mt-3">
+        <span class="flex justify-between text-[11px] text-slate-600"><span>saved now</span>
+          <span id="vSaved" class="num font-semibold text-slate-900">—</span></span>
+        <input id="sSaved" type="range" class="r mt-1" min="100000" max="3000000" step="10000" value="850000">
+      </label>
+      <p class="plabel mt-5">Markets</p>
+      <div class="flex gap-1.5 mt-1.5">
+        <button class="seg" data-sky="storm">stormy</button>
+        <button class="seg on" data-sky="normal">ordinary</button>
+        <button class="seg" data-sky="sun">kind</button>
+      </div>
+      <p class="text-[10px] text-slate-400 mt-4 leading-snug">Worst-year buffer is the same plan again, with stormy markets.</p>
+    </section>
+
+    <!-- heatmap -->
+    <section class="panel col-span-12 lg:col-span-9 p-4">
+      <p class="plabel">Every year, colored by how healthy the pot is</p>
+      <div id="heat" class="grid grid-cols-10 sm:grid-cols-12 md:grid-cols-20 lg:grid-cols-41 gap-[3px] mt-2"></div>
+      <div class="flex items-center gap-2 mt-3 text-[10px] text-slate-400">
+        <span>thin</span>
+        <span class="h-2 w-16" style="background:linear-gradient(90deg,#e2e8f0,#bfdbfe,#60a5fa,#10b981)"></span>
+        <span>comfortable</span>
+        <span class="w-2 h-2 ml-3" style="background:#dc2626"></span>
+        <span>the year it runs out</span>
+      </div>
+      <p id="heatNote" class="text-[11px] text-slate-500 mt-1.5 num">—</p>
+    </section>
+  </div>
+
+  <!-- status bar -->
+  <div class="bg-[#0f172a] text-slate-300 text-[11px] px-4 py-2 flex items-center gap-3 flex-wrap num">
+    <span class="flex items-center gap-1.5">
+      <span id="dot" class="w-1.5 h-1.5 rounded-full" style="background:#34d399"></span>
+      <span id="sbVerdict">—</span>
+    </span>
+    <span class="text-slate-600">|</span>
+    <span id="sbMs">solved in 0 ms</span>
+    <span class="text-slate-600">|</span>
+    <span id="sbBuffer">—</span>
+    <div class="flex-1"></div>
+    <span class="text-slate-500">not advice — a sketch</span>
+  </div>
+
+  <footer class="px-1 py-4 text-center text-[11px] text-slate-500">
+    26 · Big Canvas — a whole plan on one dense screen; everything recomputes as you move it.
+  </footer>
+</main>
+
+<script src="model.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var state = { currentAge: DEMO_DEFAULTS.currentAge, maxAge: DEMO_DEFAULTS.maxAge,
+    retireAge: DEMO_DEFAULTS.retireAge, spending: DEMO_DEFAULTS.spending,
+    savings: DEMO_DEFAULTS.savings, contrib: DEMO_DEFAULTS.contrib,
+    benefits: DEMO_DEFAULTS.benefits, benefitAge: DEMO_DEFAULTS.benefitAge, sky: DEMO_DEFAULTS.sky };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var A0 = 55, A1 = 95;
+
+  function kfmt(v) {
+    if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+    return '$' + Math.round(v / 1000) + 'k';
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function skyWord(s) { return { storm: 'stormy', normal: 'ordinary', sun: 'kind' }[s] || 'ordinary'; }
+  function health(bal, peak) { return Math.max(0, Math.min(1, bal / Math.max(1, peak * 0.75))); }
+  function colorScale(h) {
+    var stops = ['#e2e8f0', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#10b981', '#047857'];
+    var i = Math.max(0, Math.min(6, Math.floor(h * 7)));
+    return stops[i];
+  }
+  function spark(rows, peak, color) {
+    var pts = [];
+    for (var i = 0; i < rows.length; i++) {
+      var v = rows[i].bal / Math.max(1, peak);
+      pts.push((i / Math.max(1, rows.length - 1) * 100).toFixed(2) + ',' + (19 - v * 18).toFixed(2));
+    }
+    return '<polyline fill="none" stroke="' + color + '" stroke-width="1.6" points="' + pts.join(' ') + '"/>';
+  }
+
+  function render() {
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var rows = res.rows.filter(function (r) { return r.age <= A1; });
+    var stormRows = storm.rows.filter(function (r) { return r.age <= A1; });
+    var peak = Math.max.apply(null, rows.map(function (r) { return r.bal; }).concat([1]));
+    var stormPeak = Math.max.apply(null, stormRows.map(function (r) { return r.bal; }).concat([1]));
+
+    /* verdict */
+    if (res.ok) {
+      $('vMain').textContent = 'Money lasts to ' + lastsLabel(res);
+      $('vMain').style.color = '#065f46';
+      $('vSub').textContent = 'You get to 95 with ' + fmtMoney(res.leftAtMax) +
+        ' still in the pot, with ' + skyWord(state.sky) + ' markets.';
+    } else {
+      $('vMain').textContent = 'Runs out at ' + res.depletionAge;
+      $('vMain').style.color = '#b91c1c';
+      $('vSub').textContent = 'That is ' + (state.maxAge - res.depletionAge) + ' years short of ' +
+        state.maxAge + ', with ' + skyWord(state.sky) + ' markets.';
+    }
+
+    /* stats */
+    var balAtRet = 0;
+    for (var i = 0; i < res.rows.length; i++) if (res.rows[i].age === state.retireAge) balAtRet = res.rows[i].bal;
+    $('kNow').textContent = kfmt(state.savings);
+    $('kRet').textContent = kfmt(balAtRet);
+    $('kLeft').textContent = kfmt(res.leftAtMax);
+    $('kWorst').textContent = kfmt(storm.leftAtMax);
+    $('svgNow').innerHTML = spark(rows, peak, '#1d4ed8');
+    $('svgRet').innerHTML = spark(rows, peak, '#1d4ed8');
+    $('svgLeft').innerHTML = spark(rows, peak, '#1d4ed8');
+    $('svgWorst').innerHTML = spark(stormRows, stormPeak, '#b45309');
+
+    /* area chart */
+    var W = 600, H = 190, pad = 8;
+    var x = function (age) { return pad + (age - A0) / (A1 - A0) * (W - pad * 2); };
+    var y = function (bal) { return H - pad - (bal / peak) * (H - pad * 2); };
+    var line = rows.map(function (r) { return x(r.age).toFixed(1) + ',' + y(r.bal).toFixed(1); }).join(' ');
+    var g = '';
+    for (var gy = 1; gy <= 3; gy++) {
+      var yy = pad + (H - pad * 2) * gy / 3;
+      g += '<line x1="' + pad + '" y1="' + yy.toFixed(1) + '" x2="' + (W - pad) + '" y2="' + yy.toFixed(1) +
+           '" stroke="#eef2f6" stroke-width="1"/>';
+    }
+    var rx = x(state.retireAge).toFixed(1);
+    g += '<line x1="' + rx + '" y1="' + (pad - 4) + '" x2="' + rx + '" y2="' + (H - pad) +
+         '" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3"/>';
+    var mx = x(state.maxAge).toFixed(1);
+    g += '<line x1="' + mx + '" y1="' + (pad - 4) + '" x2="' + mx + '" y2="' + (H - pad) +
+         '" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>';
+    g += '<polygon points="' + pad + ',' + (H - pad) + ' ' + line + ' ' + x(rows[rows.length - 1].age).toFixed(1) + ',' + (H - pad) +
+         '" fill="rgba(29,78,216,.10)"/>';
+    g += '<polyline points="' + line + '" fill="none" stroke="#1d4ed8" stroke-width="2"/>';
+    if (res.depletionAge != null && res.depletionAge <= A1) {
+      var dx = x(res.depletionAge).toFixed(1);
+      g += '<circle cx="' + dx + '" cy="' + (H - pad) + '" r="3.5" fill="#dc2626"/>';
+      g += '<text x="' + dx + '" y="' + (pad + 8) + '" font-size="9" fill="#dc2626" text-anchor="middle">' + res.depletionAge + '</text>';
+    }
+    $('area').innerHTML = g;
+    $('axPeak').textContent = 'peak ' + kfmt(peak);
+    $('axRet').textContent = 'retire ' + state.retireAge;
+
+    /* heatmap */
+    var cells = '';
+    for (var a = A0; a <= A1; a++) {
+      var row = null;
+      for (var j = 0; j < rows.length; j++) if (rows[j].age === a) { row = rows[j]; break; }
+      var dry = res.depletionAge != null && a >= res.depletionAge;
+      var bal = row ? row.bal : 0;
+      var col = dry ? '#dc2626' : colorScale(health(bal, peak));
+      cells += '<div class="heat" data-age="' + a + '" data-bal="' + Math.round(bal) +
+               '" style="background:' + col + '" title="age ' + a + '"></div>';
+    }
+    $('heat').innerHTML = cells;
+    $('heatNote').textContent = 'Tap a cell. Ages ' + A0 + ' to ' + A1 + ', one per year. ' +
+      (res.depletionAge != null && res.depletionAge <= A1
+        ? 'Red starts at ' + res.depletionAge + '.'
+        : 'No red — it holds all the way.');
+
+    /* status bar */
+    $('sbVerdict').textContent = res.ok ? 'lasts to ' + lastsLabel(res) : 'runs out at ' + res.depletionAge;
+    $('dot').style.background = res.ok ? '#34d399' : '#f87171';
+    $('sbMs').textContent = 'solved in ' + (((window.performance && performance.now) ? performance.now() : Date.now()) - t0).toFixed(2) + ' ms';
+    $('sbBuffer').textContent = 'worst-year buffer ' + kfmt(storm.leftAtMax);
+
+    /* hud + control labels */
+    $('hudSky').textContent = skyWord(state.sky);
+    $('hudAge').textContent = 'age ' + A0 + ' → ' + A1;
+    $('vRet').textContent = String(state.retireAge);
+    $('vSpend').textContent = kfmt(state.spending);
+    $('vSaved').textContent = kfmt(state.savings);
+  }
+
+  $('sRetire').addEventListener('input', function (e) { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', function (e) { state.spending = +e.target.value; render(); });
+  $('sSaved').addEventListener('input', function (e) { state.savings = +e.target.value; render(); });
+
+  document.querySelectorAll('[data-sky]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.sky = b.getAttribute('data-sky');
+      document.querySelectorAll('[data-sky]').forEach(function (x) {
+        x.classList.toggle('on', x === b);
+      });
+      render();
+    });
+  });
+
+  $('heat').addEventListener('click', function (e) {
+    var c = e.target && e.target.closest ? e.target.closest('[data-age]') : null;
+    if (!c) return;
+    $('heatNote').textContent = 'At ' + c.getAttribute('data-age') + ' you have ' +
+      kfmt(+c.getAttribute('data-bal')) + '.';
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

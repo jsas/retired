@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 39 · Voice Briefing</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background:
+      radial-gradient(90% 60% at 50% -10%, rgba(255, 196, 120, .13), rgba(0,0,0,0) 60%),
+      radial-gradient(70% 50% at 85% 110%, rgba(255, 140, 80, .08), rgba(0,0,0,0) 60%),
+      #1a1512;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- play button ---------- */
+  #play {
+    width: 84px; height: 84px; border-radius: 999px;
+    background: linear-gradient(180deg, #f59e0b, #d97706);
+    box-shadow: 0 10px 30px -8px rgba(245, 158, 11, .55), inset 0 1px 0 rgba(255,255,255,.35);
+    transition: transform .16s ease, box-shadow .16s ease, background .2s ease;
+  }
+  #play:hover { transform: scale(1.04); }
+  #play:active { transform: scale(.98); }
+  #play:focus-visible { outline: 2px solid #fcd34d; outline-offset: 4px; }
+  #play.playing { animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 10px 30px -8px rgba(245,158,11,.5), 0 0 0 0 rgba(245,158,11,.30); }
+    50%      { box-shadow: 0 10px 30px -8px rgba(245,158,11,.65), 0 0 0 14px rgba(245,158,11,0); }
+  }
+
+  /* ---------- spoken lines ---------- */
+  .line {
+    opacity: 0; transform: translateY(10px);
+    transition: opacity .6s ease, transform .6s ease;
+    pointer-events: none;
+  }
+  .line.delivered { opacity: 1; transform: none; pointer-events: auto; cursor: pointer; }
+  .line.delivered:hover { background: rgba(255,255,255,.045); }
+  .line.speaking { background: rgba(245,158,11,.07); }
+  .line:focus-visible { outline: 2px solid rgba(252,211,77,.6); outline-offset: 2px; border-radius: 10px; }
+
+  .beat { display: inline-flex; gap: 3px; align-items: center; }
+  .beat i {
+    width: 4px; height: 4px; border-radius: 999px; background: #f59e0b;
+    display: inline-block; animation: hop 1.1s ease-in-out infinite;
+  }
+  .beat i:nth-child(2) { animation-delay: .15s; }
+  .beat i:nth-child(3) { animation-delay: .3s; }
+  @keyframes hop { 0%,100% { opacity:.25; transform: translateY(0); } 50% { opacity:1; transform: translateY(-3px); } }
+
+  /* ---------- progress bar ---------- */
+  .seg { height: 3px; border-radius: 999px; background: rgba(255,255,255,.13); flex: 1 1 0; overflow: hidden; }
+  .seg > span { display: block; height: 100%; width: 0; background: #f59e0b; transition: width .5s ease; }
+  .seg.on > span { width: 100%; }
+  .seg.now > span { animation: sweep 1.8s linear forwards; }
+  @keyframes sweep { from { width: 0; } to { width: 100%; } }
+
+  /* ---------- sliders ---------- */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; background: transparent; cursor: pointer;
+    --p: 50%;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 999px;
+    background: linear-gradient(90deg, #f59e0b var(--p), rgba(255,255,255,.16) var(--p));
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px; border-radius: 999px;
+    background: linear-gradient(90deg, #f59e0b var(--p), rgba(255,255,255,.16) var(--p));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    height: 15px; width: 15px; margin-top: -5.5px; border-radius: 999px;
+    background: #fdf8ef; border: 2px solid #f59e0b;
+    box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 13px; width: 13px; border-radius: 999px;
+    background: #fdf8ef; border: 2px solid #f59e0b;
+    box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+  input[type="range"]:focus-visible { outline: none; }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(245,158,11,.3); }
+
+  .skybtn {
+    font-size: 12px; padding: 4px 11px 5px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.16); color: #d6cec2; background: rgba(255,255,255,.05);
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .skybtn:hover { background: rgba(255,255,255,.1); }
+  .skybtn[aria-pressed="true"] { background: #f59e0b; border-color: #f59e0b; color: #1a1512; font-weight: 600; }
+
+  #sheet { transition: opacity .4s ease, box-shadow .4s ease; }
+  #sheet.quiet { opacity: .5; }
+  #sheet.revealed { opacity: 1; box-shadow: 0 0 0 1px rgba(245,158,11,.4), 0 18px 40px -20px rgba(0,0,0,.8); }
+
+  .skip {
+    font-size: 12px; padding: 6px 14px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.18); color: #cfc6b8; background: rgba(255,255,255,.04);
+    transition: background-color .15s ease, color .15s ease;
+  }
+  .skip:hover { background: rgba(255,255,255,.1); color: #fff; }
+  .skip:focus-visible { outline: 2px solid #fcd34d; outline-offset: 2px; }
+
+  ::selection { background: rgba(245,158,11,.3); }
+</style>
+</head>
+<body class="min-h-screen text-stone-200 antialiased">
+
+<div class="mx-auto flex min-h-screen max-w-2xl flex-col px-5 py-7 sm:px-8 sm:py-10">
+
+  <!-- top chrome -->
+  <header class="mb-8 flex items-center gap-2.5">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-stone-500">39 — Voice Briefing</span>
+  </header>
+
+  <!-- PLAY -->
+  <div class="flex flex-col items-center">
+    <button id="play" type="button" class="flex items-center justify-center" aria-label="Play your briefing">
+      <svg id="icon-play" viewBox="0 0 24 24" class="h-8 w-8 translate-x-[2px] fill-[#2a1c08]">
+        <path d="M8 5.2v13.6L19 12z" />
+      </svg>
+      <svg id="icon-pause" viewBox="0 0 24 24" class="hidden h-7 w-7 fill-[#2a1c08]">
+        <path d="M7 5h3.4v14H7zM13.6 5H17v14h-3.6z" />
+      </svg>
+      <svg id="icon-again" viewBox="0 0 24 24" class="hidden h-7 w-7 fill-[#2a1c08]">
+        <path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" />
+      </svg>
+    </button>
+    <p id="play-hint" class="mt-4 text-[13px] text-stone-400">Play your thirty-second briefing</p>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="mt-7 flex items-center gap-2" role="img" aria-label="Briefing progress: 5 parts">
+    <div class="seg" data-seg><span></span></div>
+    <div class="seg" data-seg><span></span></div>
+    <div class="seg" data-seg><span></span></div>
+    <div class="seg" data-seg><span></span></div>
+    <div class="seg" data-seg><span></span></div>
+  </div>
+
+  <!-- TRANSCRIPT -->
+  <div id="transcript" class="mt-2 flex-1 space-y-1">
+
+    <div class="line rounded-xl px-3 py-3.5 transition-colors" data-line tabindex="0">
+      <div class="flex items-baseline gap-3">
+        <span class="num w-9 shrink-0 text-[11px] text-stone-600">0:00</span>
+        <p class="text-[17px] leading-relaxed text-stone-100" data-text></p>
+      </div>
+    </div>
+
+    <div class="line rounded-xl px-3 py-3.5 transition-colors" data-line tabindex="0">
+      <div class="flex items-baseline gap-3">
+        <span class="num w-9 shrink-0 text-[11px] text-stone-600">0:06</span>
+        <p class="text-[17px] leading-relaxed text-stone-100" data-text></p>
+      </div>
+    </div>
+
+    <div class="line rounded-xl px-3 py-3.5 transition-colors" data-line tabindex="0">
+      <div class="flex items-baseline gap-3">
+        <span class="num w-9 shrink-0 text-[11px] text-stone-600">0:13</span>
+        <p class="text-[17px] leading-relaxed text-stone-100" data-text></p>
+      </div>
+    </div>
+
+    <div class="line rounded-xl px-3 py-3.5 transition-colors" data-line tabindex="0">
+      <div class="flex items-baseline gap-3">
+        <span class="num w-9 shrink-0 text-[11px] text-stone-600">0:20</span>
+        <p class="text-[17px] leading-relaxed text-stone-100" data-text></p>
+      </div>
+    </div>
+
+    <div class="line rounded-xl px-3 py-3.5 transition-colors" data-line tabindex="0">
+      <div class="flex items-baseline gap-3">
+        <span class="num w-9 shrink-0 text-[11px] text-stone-600">0:27</span>
+        <p class="text-[17px] leading-relaxed text-stone-100" data-text></p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SKIP -->
+  <div class="mt-6 flex items-center justify-between gap-4">
+    <p class="text-[12px] text-stone-500">Tap any line above to hear it again from there.</p>
+    <button id="skip" type="button" class="skip">Skip to the end</button>
+  </div>
+
+  <!-- QUIET FOOTER SHEET -->
+  <div id="sheet" class="quiet mt-5 rounded-2xl border border-white/10 bg-white/[.04] px-4 py-4 backdrop-blur">
+    <div class="flex items-baseline justify-between">
+      <span class="text-[10px] font-semibold uppercase tracking-[.18em] text-stone-500">Your numbers</span>
+      <span class="num text-[12px] text-stone-400">money lasts to <span id="s-lasts" class="font-semibold text-amber-400">89</span></span>
+    </div>
+
+    <div class="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+      <label class="block">
+        <span class="mb-1 flex items-baseline justify-between text-[11.5px] text-stone-400">
+          <span>saved so far</span>
+          <span id="v-savings" class="num font-semibold text-stone-200">$850,000</span>
+        </span>
+        <input id="in-savings" type="range" min="100000" max="2500000" step="25000" value="850000" aria-label="Saved so far" />
+      </label>
+      <label class="block">
+        <span class="mb-1 flex items-baseline justify-between text-[11.5px] text-stone-400">
+          <span>spending a year</span>
+          <span id="v-spending" class="num font-semibold text-stone-200">$85,000</span>
+        </span>
+        <input id="in-spending" type="range" min="40000" max="150000" step="2500" value="85000" aria-label="Spending a year" />
+      </label>
+      <label class="block">
+        <span class="mb-1 flex items-baseline justify-between text-[11.5px] text-stone-400">
+          <span>stop working at</span>
+          <span id="v-retire" class="num font-semibold text-stone-200">62</span>
+        </span>
+        <input id="in-retire" type="range" min="50" max="75" step="1" value="62" aria-label="Age you stop working" />
+      </label>
+    </div>
+
+    <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+      <span class="text-[11px] uppercase tracking-[.14em] text-stone-500">markets</span>
+      <button type="button" class="skybtn" data-sky="storm" aria-pressed="false">stormy</button>
+      <button type="button" class="skybtn" data-sky="normal" aria-pressed="true">ordinary</button>
+      <button type="button" class="skybtn" data-sky="sun" aria-pressed="false">kind</button>
+      <span class="num ml-auto text-[11.5px] text-stone-500">counted in today's dollars</span>
+    </div>
+  </div>
+
+  <footer class="mt-6 text-[11.5px] text-stone-600">
+    39 · Voice Briefing — five sentences, no jargon, no charts to decode.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    spending: DEMO_DEFAULTS.spending,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+
+  var SKYWORD = { storm: 'stormy', normal: 'ordinary', sun: 'kind' };
+  var STEP = 1700; /* ms between lines */
+
+  function el(id) { return document.getElementById(id); }
+  function money(v) { return '$' + Math.round(Math.abs(v)).toLocaleString('en-CA'); }
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+
+  var lines = Array.prototype.slice.call(document.querySelectorAll('[data-line]'));
+  var segs = Array.prototype.slice.call(document.querySelectorAll('[data-seg]'));
+  var N = lines.length;
+
+  var delivered = 0;   /* how many lines are visible */
+  var playing = false;
+  var timer = null;
+
+  /* ---------- script ---------- */
+  function script() {
+    var res = simulate(state);
+    var lasts = lastsLabel(res);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var gap = state.maxAge - (res.depletionAge != null ? res.depletionAge : state.maxAge);
+    var idea = suggest(state);
+    var out = [];
+
+    /* 1 · greeting */
+    out.push('Hi. Thirty seconds on where you stand.');
+
+    /* 2 · verdict sentence */
+    if (res.ok) {
+      out.push('Good news first: your money lasts to ' + lasts +
+        ' — past the ' + state.maxAge + ' you had in mind, with ' + money(res.leftAtMax) + ' left over.');
+    } else {
+      out.push('Your money runs out at ' + lasts + '. That is ' + gap + ' ' + yearWord(gap) +
+        ' short of the ' + state.maxAge + ' you had in mind.');
+    }
+
+    /* 3 · the one risk */
+    if (!storm.ok && storm.depletionAge != null) {
+      var drop = (res.depletionAge != null ? res.depletionAge : state.maxAge) - storm.depletionAge;
+      out.push('The one risk is weather. In a stormy stretch that falls to ' + lastsLabel(storm) +
+        (drop > 0 ? ' — ' + drop + ' ' + yearWord(drop) + ' gone, just from bad markets.' : '.'));
+    } else if (!storm.ok) {
+      out.push('The one risk is weather. A stormy stretch would finish the money off.');
+    } else {
+      out.push('The one risk is weather, and you clear it: even stormy, you hold to ' + lastsLabel(storm) + '.');
+    }
+
+    /* 4 · the one idea */
+    if (res.ok) {
+      out.push('One idea: you have room. ' + money(res.leftAtMax) + ' still left at ' + state.maxAge +
+        ' — spend a little more, or stop working sooner.');
+    } else if (idea) {
+      out.push('One idea, and it is enough: ' + idea.charAt(0).toLowerCase() + idea.slice(1));
+    } else {
+      out.push('One idea: nothing small fixes this. Something bigger has to give — a longer working life, or less going out.');
+    }
+
+    /* 5 · sign-off */
+    out.push('That is the brief. ' + SKYWORD[state.sky] + ' weather today — the numbers are below if you want to push on them.');
+
+    return out;
+  }
+
+  function paintText() {
+    var s = script();
+    for (var i = 0; i < N; i++) {
+      lines[i].querySelector('[data-text]').textContent = s[i] || '';
+    }
+  }
+
+  /* ---------- delivery ---------- */
+  function showUpTo(n) {
+    for (var i = 0; i < N; i++) {
+      lines[i].classList.toggle('delivered', i < n);
+      lines[i].classList.toggle('speaking', playing && i === n - 1);
+    }
+    for (var j = 0; j < segs.length; j++) {
+      segs[j].classList.toggle('on', j < n);
+      segs[j].classList.remove('now');
+    }
+    if (playing && n > 0 && n <= segs.length) segs[n - 1].classList.add('now');
+    delivered = n;
+    syncPlay();
+  }
+
+  function syncPlay() {
+    var done = delivered >= N;
+    el('icon-play').classList.toggle('hidden', playing || done);
+    el('icon-pause').classList.toggle('hidden', !playing);
+    el('icon-again').classList.toggle('hidden', playing || !done);
+    el('play').classList.toggle('playing', playing);
+    el('play').setAttribute('aria-label', playing ? 'Pause your briefing'
+      : (done ? 'Hear it again' : 'Play your briefing'));
+    el('play-hint').textContent = playing ? 'Speaking…'
+      : (done ? 'That is the whole briefing. Tap a line to replay it.'
+              : 'Play your thirty-second briefing');
+    lines.forEach(function (l, i) { l.classList.toggle('speaking', playing && i === delivered - 1); });
+  }
+
+  function tick() {
+    if (!playing) return;
+    if (delivered >= N) { pause(); return; }
+    showUpTo(delivered + 1);
+    if (delivered >= N) { pause(); }
+  }
+
+  function play() {
+    if (delivered >= N) { showUpTo(0); }
+    playing = true;
+    syncPlay();
+    showUpTo(Math.max(delivered, 1));
+    clearInterval(timer);
+    timer = setInterval(tick, STEP);
+  }
+
+  function pause() {
+    playing = false;
+    clearInterval(timer);
+    timer = null;
+    lines.forEach(function (l) { l.classList.remove('speaking'); });
+    segs.forEach(function (s) { s.classList.remove('now'); });
+    for (var j = 0; j < segs.length; j++) segs[j].classList.toggle('on', j < delivered);
+    syncPlay();
+  }
+
+  el('play').addEventListener('click', function () {
+    if (playing) pause(); else play();
+  });
+
+  /* replay from any delivered line */
+  lines.forEach(function (line, i) {
+    function from(e) {
+      if (i >= delivered) return;
+      e.preventDefault();
+      showUpTo(i);
+      play();
+    }
+    line.addEventListener('click', from);
+    line.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') from(e);
+    });
+  });
+
+  /* skip */
+  el('skip').addEventListener('click', function () {
+    playing = false;
+    clearInterval(timer);
+    timer = null;
+    showUpTo(N);
+    pause();
+    var sheet = el('sheet');
+    sheet.classList.add('revealed');
+    sheet.classList.remove('quiet');
+    if (typeof sheet.scrollIntoView === 'function') {
+      sheet.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    el('play-hint').textContent = 'Whole briefing above. Push the numbers below and it all rewrites itself.';
+  });
+
+  /* ---------- controls ---------- */
+  var MAP = [
+    { key: 'savings', id: 'savings', out: 'v-savings', isMoney: true },
+    { key: 'spending', id: 'spending', out: 'v-spending', isMoney: true },
+    { key: 'retireAge', id: 'retire', out: 'v-retire', isMoney: false }
+  ];
+  MAP.forEach(function (m) {
+    var input = el('in-' + m.id);
+    var paint = function () {
+      var pct = ((Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min))) * 100;
+      input.style.setProperty('--p', pct.toFixed(2) + '%');
+    };
+    input.addEventListener('input', function () {
+      state[m.key] = Number(input.value);
+      el(m.out).textContent = m.isMoney ? money(state[m.key]) : String(state[m.key]);
+      paint();
+      render();
+    });
+    paint();
+  });
+
+  var skyBtns = Array.prototype.slice.call(document.querySelectorAll('.skybtn'));
+  skyBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.sky = b.getAttribute('data-sky');
+      skyBtns.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      render();
+    });
+  });
+
+  function render() {
+    paintText();
+    el('s-lasts').textContent = lastsLabel(simulate(state));
+  }
+
+  render();
+  showUpTo(0);
+})();
+</script>
+</body>
+</html>

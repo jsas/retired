@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>35 — Crayon</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #fbf6ea;
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(0,0,0,.022) 0 1px, transparent 1px),
+      radial-gradient(circle at 74% 31%, rgba(0,0,0,.018) 0 1px, transparent 1px),
+      radial-gradient(circle at 41% 66%, rgba(0,0,0,.020) 0 1px, transparent 1px),
+      radial-gradient(circle at 88% 82%, rgba(0,0,0,.016) 0 1px, transparent 1px);
+    background-size: 37px 41px, 53px 47px, 61px 59px, 71px 73px;
+    color: #3b3226;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .cray { font-family: 'Comic Sans MS', 'Segoe Print', 'Bradley Hand', Chalkboard, system-ui, sans-serif; }
+
+  /* ruled workbook page */
+  .page {
+    background: #fffdf7;
+    border-radius: 8px;
+    box-shadow: 0 2px 3px rgba(90,70,40,.10), 0 14px 34px rgba(90,70,40,.13);
+    position: relative;
+  }
+  .page::before {
+    content: ''; position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
+    background: repeating-linear-gradient(180deg, transparent 0 30px, rgba(120,150,190,.14) 30px 31px);
+    background-position: 0 14px;
+  }
+  .page > * { position: relative; }
+
+  /* marker highlight behind the verdict */
+  .hl {
+    background: linear-gradient(180deg, transparent 12%, rgba(255, 214, 90, .75) 14%, rgba(255, 214, 90, .75) 86%, transparent 88%);
+    padding: 0 .18em;
+    border-radius: 3px;
+  }
+  .hl.bad { background: linear-gradient(180deg, transparent 12%, rgba(255, 168, 168, .72) 14%, rgba(255, 168, 168, .72) 86%, transparent 88%); }
+
+  /* wobbly ink boxes */
+  .wob { border: 2.5px solid #3b3226; border-radius: 14px 6px 16px 8px / 7px 15px 5px 14px; }
+  .wob.b { border-radius: 7px 15px 6px 17px / 16px 6px 15px 7px; }
+
+  /* sticker */
+  .sticker {
+    transform: rotate(-6deg);
+    border: 3px dashed #b8452f;
+    background: #fff3d6;
+    border-radius: 9999px;
+    box-shadow: 0 3px 0 rgba(90,70,40,.18), 0 10px 20px rgba(90,70,40,.16);
+    transition: transform .25s cubic-bezier(.3,1.6,.5,1);
+  }
+  .sticker:hover { transform: rotate(-2deg) scale(1.03); }
+  .sticker.good { border-color: #2f8f5b; background: #e8fbef; }
+  .sticker.bad  { border-color: #d9654a; background: #ffeede; }
+
+  /* wooden knob sliders */
+  input[type=range].wood {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 34px;
+    background: transparent; cursor: grab;
+  }
+  input[type=range].wood:active { cursor: grabbing; }
+  input[type=range].wood::-webkit-slider-runnable-track {
+    height: 12px; border-radius: 8px;
+    background: repeating-linear-gradient(90deg, #e7d9bd 0 10px, #dfcfae 10px 20px);
+    border: 2px solid #c9b48c;
+  }
+  input[type=range].wood::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 34px; height: 34px; margin-top: -13px;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 34% 28%, #e0b184 0%, #c98d54 42%, #a4653a 72%, #7e4a28 100%);
+    border: 3px solid #6d3f21;
+    box-shadow: 0 3px 6px rgba(90,60,30,.4), inset 0 2px 3px rgba(255,255,255,.35);
+  }
+  input[type=range].wood::-webkit-slider-thumb::after {
+    content: ''; display: block; width: 3px; height: 10px; background: #6d3f21; margin: 4px auto 0; border-radius: 2px;
+  }
+  input[type=range].wood::-moz-range-track {
+    height: 12px; border-radius: 8px; background: #e7d9bd; border: 2px solid #c9b48c;
+  }
+  input[type=range].wood::-moz-range-thumb {
+    width: 30px; height: 30px; border-radius: 9999px; border: 3px solid #6d3f21;
+    background: radial-gradient(circle at 34% 28%, #e0b184 0%, #c98d54 42%, #a4653a 72%, #7e4a28 100%);
+  }
+
+  .chip {
+    border: 2.5px solid #c9b48c; background: #fffdf7; border-radius: 9999px;
+    padding: 5px 14px; font-size: 14px; transition: transform .16s, background .16s, border-color .16s;
+  }
+  .chip:hover { transform: translateY(-1px) rotate(-1deg); }
+  .chip.on { background: #ffe9a8; border-color: #b8452f; font-weight: 700; }
+  .cray-svg text { font-family: 'Comic Sans MS', 'Segoe Print', 'Bradley Hand', Chalkboard, system-ui, sans-serif; }
+</style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<header class="flex items-center gap-2.5 px-5 py-3.5">
+  <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+  <span class="font-semibold text-sm">tired</span>
+  <span class="text-[11px] text-[#a3907a] ml-1 cray">· 35 — Crayon</span>
+</header>
+
+<main class="flex-1 px-3 sm:px-6 pb-8">
+  <div class="page max-w-[900px] mx-auto px-5 sm:px-9 pt-7 pb-9">
+
+    <!-- the workbook heading -->
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <p class="cray text-[15px] text-[#8b7a63]">Name: <span class="underline decoration-wavy decoration-[#c9b48c]">you</span> &nbsp; Date: <span class="underline decoration-wavy decoration-[#c9b48c]">today</span></p>
+        <h1 class="cray text-[30px] sm:text-[38px] leading-tight mt-1 text-[#2f5d8a]">My money story</h1>
+      </div>
+      <div id="sticker" class="sticker px-5 py-3 text-center">
+        <p id="stickerBig" class="cray font-bold text-[19px] leading-none text-[#b8452f]">NOT YET</p>
+        <p id="stickerSmall" class="cray text-[11px] mt-1 text-[#8b7a63]">keep going!</p>
+      </div>
+    </div>
+
+    <!-- MY MONEY STORY: the sentence -->
+    <div class="mt-5 wob px-5 py-5 sm:px-7">
+      <p id="story" class="cray text-[19px] sm:text-[22px] leading-[1.65]"></p>
+      <p id="hint" class="cray text-[15px] mt-3 text-[#6d5c46]"></p>
+    </div>
+
+    <!-- MY DRAWING: the crayon chart -->
+    <div class="mt-7">
+      <h2 class="cray text-[22px] text-[#2f5d8a]">My drawing</h2>
+      <p class="cray text-[13px] text-[#8b7a63]">the tall bits are when you have lots. the flat bit is when it runs out.</p>
+      <div class="mt-2 wob b px-2 pt-2 pb-1">
+        <svg id="draw" viewBox="0 0 760 300" class="w-full cray-svg" role="img" aria-label="A crayon drawing of your money over the years"></svg>
+      </div>
+      <div class="mt-2 flex flex-wrap items-center gap-2.5">
+        <span class="cray text-[15px] text-[#6d5c46]">How are the markets treating you?</span>
+        <button data-sky="storm"  class="chip cray">stormy</button>
+        <button data-sky="normal" class="chip cray on">ordinary</button>
+        <button data-sky="sun"    class="chip cray">kind</button>
+      </div>
+    </div>
+
+    <!-- MY DIALS -->
+    <div class="mt-8">
+      <h2 class="cray text-[22px] text-[#2f5d8a]">My dials</h2>
+      <p class="cray text-[13px] text-[#8b7a63]">turn these and watch the drawing change.</p>
+
+      <div class="mt-3 grid sm:grid-cols-3 gap-x-7 gap-y-4">
+        <label class="block">
+          <span class="cray flex justify-between text-[15px] mb-1">
+            <span>when I stop working</span>
+            <span id="vRetire" class="num font-bold text-[#b8452f]">62</span>
+          </span>
+          <input id="sRetire" type="range" class="wood" min="55" max="75" step="1" value="62">
+        </label>
+        <label class="block">
+          <span class="cray flex justify-between text-[15px] mb-1">
+            <span>what I spend each year</span>
+            <span id="vSpend" class="num font-bold text-[#b8452f]">$85,000</span>
+          </span>
+          <input id="sSpend" type="range" class="wood" min="40000" max="160000" step="1000" value="85000">
+        </label>
+        <label class="block">
+          <span class="cray flex justify-between text-[15px] mb-1">
+            <span>what I have saved</span>
+            <span id="vSaved" class="num font-bold text-[#b8452f]">$850,000</span>
+          </span>
+          <input id="sSaved" type="range" class="wood" min="100000" max="3000000" step="10000" value="850000">
+        </label>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="px-5 py-4 text-[11px] text-[#a3907a] cray">35 · Crayon — a workbook page for people who would rather not see a spreadsheet.</footer>
+
+<script src="model.js"></script>
+<script>
+  var state = Object.assign({}, DEMO_DEFAULTS);
+  function $(id) { return document.getElementById(id); }
+  var NS = 'http://www.w3.org/2000/svg';
+
+  function el(n, a) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); return e; }
+
+  /* a tiny seeded random, so the wobble stays put while you drag a slider */
+  var seed = 20260830;
+  function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+  function jit(n) { return (rnd() * 2 - 1) * n; }
+
+  /* crayon stroke: a thick, slightly wobbly line between two points */
+  function wobbleLine(x1, y1, x2, y2, wob) {
+    var steps = 8, d = 'M' + (x1 + jit(wob)).toFixed(1) + ' ' + (y1 + jit(wob)).toFixed(1);
+    for (var i = 1; i <= steps; i++) {
+      var t = i / steps;
+      d += ' L' + (x1 + (x2 - x1) * t + jit(wob)).toFixed(1) + ' ' + (y1 + (y2 - y1) * t + jit(wob)).toFixed(1);
+    }
+    return d;
+  }
+
+  /* a hand-drawn box out of four wobbly strokes */
+  function wobBox(x, y, w, h, wob) {
+    var d = wobbleLine(x, y, x + w, y, wob) + ' '
+          + wobbleLine(x + w, y, x + w, y + h, wob) + ' '
+          + wobbleLine(x + w, y + h, x, y + h, wob) + ' '
+          + wobbleLine(x, y + h, x, y, wob);
+    var p = el('path', { d: d, fill: 'none', stroke: '#3b3226', 'stroke-width': '2.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: '.82' });
+    return p;
+  }
+
+  function wobbleText(s, x, y, size, anchor, fill, rot) {
+    var t = el('text', { x: x, y: y, 'font-size': size, 'text-anchor': anchor || 'start', fill: fill });
+    if (rot) t.setAttribute('transform', 'rotate(' + rot.toFixed(1) + ' ' + x + ' ' + y + ')');
+    t.textContent = s;
+    return t;
+  }
+
+  /* the crayon scribble for the balance curve, jitter baked into the data */
+  function scribblePath(pts) {
+    var d = '';
+    for (var i = 0; i < pts.length; i++) {
+      var x = pts[i].x, y = pts[i].y;
+      if (i === 0) { d += 'M' + x.toFixed(1) + ' ' + y.toFixed(1); continue; }
+      var px = pts[i - 1].x, py = pts[i - 1].y;
+      var mx = (px + x) / 2 + jit(2.2), my = (py + y) / 2 + jit(2.2);
+      d += ' Q' + mx.toFixed(1) + ' ' + my.toFixed(1) + ' ' + x.toFixed(1) + ' ' + y.toFixed(1);
+    }
+    return d;
+  }
+
+  var W = 760, H = 300, L = 58, R = 742, TOP = 34, BOT = 258;
+
+  function drawChart(res) {
+    var svg = $('draw');
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var ok = res.ok;
+
+    /* paper margin frame, drawn by hand */
+    svg.appendChild(wobBox(6, 6, W - 12, H - 12, 2.2));
+
+    /* the ground: wobbly, twice, like a kid pressing hard */
+    svg.appendChild(el('path', { d: wobbleLine(L, BOT, R, BOT, 1.6), stroke: '#7c6a52', 'stroke-width': '4', fill: 'none', 'stroke-linecap': 'round', opacity: '.55' }));
+    svg.appendChild(el('path', { d: wobbleLine(L, BOT + 3, R, BOT + 3, 2.2), stroke: '#7c6a52', 'stroke-width': '2', fill: 'none', 'stroke-linecap': 'round', opacity: '.28' }));
+
+    /* a little grass, because it is a drawing */
+    for (var g = L + 24; g < R - 10; g += 46) {
+      svg.appendChild(el('path', { d: 'M' + g + ' ' + (BOT + 1) + ' q' + jit(4).toFixed(1) + ' -7 ' + jit(9).toFixed(1) + ' -10', stroke: '#5aa06f', 'stroke-width': '2', fill: 'none', 'stroke-linecap': 'round', opacity: '.6' }));
+    }
+
+    /* scale: tallest bar in the story */
+    var rows = res.rows;
+    var peak = 1;
+    for (var i = 0; i < rows.length; i++) if (rows[i].bal > peak) peak = rows[i].bal;
+    var xFor = function (a) { return L + (a - state.currentAge) / (HARD_CAP - state.currentAge) * (R - L); };
+    var yFor = function (b) { return BOT - (b / peak) * (BOT - TOP); };
+
+    /* age stickers along the ground */
+    for (var a = 60; a <= 90; a += 10) {
+      if (a < state.currentAge) continue;
+      var x = xFor(a);
+      svg.appendChild(el('path', { d: wobbleLine(x, BOT, x, BOT + 9, 1), stroke: '#7c6a52', 'stroke-width': '2.4', fill: 'none', 'stroke-linecap': 'round', opacity: '.7' }));
+      svg.appendChild(wobbleText('age ' + a, x, BOT + 26, 13, 'middle', '#8b7a63', jit(3)));
+    }
+    svg.appendChild(wobbleText('how much money I have', 16, 20, 13, 'start', '#8b7a63', -1.5));
+
+    /* the scribble, drawn as sampled points so the wobble lands between them */
+    var pts = [];
+    var step = Math.max(1, Math.round(rows.length / 90));
+    for (var r = 0; r < rows.length; r += step) {
+      pts.push({ x: xFor(rows[r].age), y: yFor(rows[r].bal) });
+    }
+    var lastRow = rows[rows.length - 1];
+    pts.push({ x: xFor(lastRow.age), y: yFor(lastRow.bal) });
+
+    var d = scribblePath(pts);
+    var col = ok ? '#e0573f' : '#c9464f';
+
+    /* three passes, slightly offset, so it reads as waxy crayon */
+    svg.appendChild(el('path', { d: d, fill: 'none', stroke: col, 'stroke-width': '13', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: '.22' }));
+    svg.appendChild(el('path', { d: d, fill: 'none', stroke: col, 'stroke-width': '8.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: '.55' }));
+    svg.appendChild(el('path', { d: d, fill: 'none', stroke: col, 'stroke-width': '4.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: '.95' }));
+
+    /* a sun if the plan works, a rain cloud if it does not */
+    if (ok) {
+      var sx = R - 66, sy = 54;
+      svg.appendChild(el('circle', { cx: sx, cy: sy, r: 19, fill: '#ffd35c', opacity: '.92' }));
+      for (var k = 0; k < 9; k++) {
+        var ang = (k / 9) * Math.PI * 2;
+        svg.appendChild(el('path', {
+          d: wobbleLine(sx + Math.cos(ang) * 25, sy + Math.sin(ang) * 25, sx + Math.cos(ang) * 34, sy + Math.sin(ang) * 34, 1.2),
+          stroke: '#f0a92e', 'stroke-width': '3.2', fill: 'none', 'stroke-linecap': 'round', opacity: '.8'
+        }));
+      }
+      svg.appendChild(wobbleText('yay!', sx, sy + 46, 14, 'middle', '#e0961f', 3));
+    } else {
+      var cx2 = R - 74, cy2 = 52;
+      svg.appendChild(el('ellipse', { cx: cx2, cy: cy2, rx: 30, ry: 17, fill: '#b9c4d2', opacity: '.85' }));
+      svg.appendChild(el('ellipse', { cx: cx2 + 20, cy: cy2 + 6, rx: 22, ry: 13, fill: '#a8b4c4', opacity: '.85' }));
+      for (var q = 0; q < 4; q++) {
+        var rx = cx2 - 18 + q * 13;
+        svg.appendChild(el('path', { d: wobbleLine(rx, cy2 + 24, rx - 4, cy2 + 38, 1), stroke: '#5b7fb0', 'stroke-width': '2.8', fill: 'none', 'stroke-linecap': 'round', opacity: '.75' }));
+      }
+      svg.appendChild(wobbleText('uh oh', cx2, cy2 + 54, 14, 'middle', '#5b7fb0', -2.5));
+    }
+
+    /* a big X where the money stops, plus a label in kid handwriting */
+    if (res.depletionAge != null) {
+      var dx = xFor(res.depletionAge);
+      var dy = yFor(0);
+      svg.appendChild(el('path', { d: wobbleLine(dx - 15, dy - 15, dx + 15, dy + 15, 1.4), stroke: '#b8452f', 'stroke-width': '6', fill: 'none', 'stroke-linecap': 'round', opacity: '.9' }));
+      svg.appendChild(el('path', { d: wobbleLine(dx + 15, dy - 15, dx - 15, dy + 15, 1.4), stroke: '#b8452f', 'stroke-width': '6', fill: 'none', 'stroke-linecap': 'round', opacity: '.9' }));
+      svg.appendChild(wobbleText('money gone at age ' + res.depletionAge, Math.min(dx, R - 150), dy + 32, 14, dx > R - 190 ? 'end' : 'start', '#b8452f', 1.5));
+    }
+
+    /* a star where you are today */
+    var tx = xFor(state.currentAge);
+    svg.appendChild(wobbleText('me', tx + 4, TOP + 4, 13, 'start', '#2f5d8a', -4));
+    svg.appendChild(el('path', { d: 'M' + tx + ' ' + (TOP + 10) + ' l 5 11 l -10 0 z', fill: '#2f5d8a', opacity: '.85' }));
+  }
+
+  function render() {
+    var res = simulate(state);
+    var ok = res.ok;
+    var sug = suggest(state);
+
+    /* the sentence */
+    var story;
+    if (ok) {
+      story = 'I have <span class="hl">' + fmtMoney(state.savings) + '</span> saved up. '
+            + 'I stop working at <span class="hl">' + state.retireAge + '</span> and spend about '
+            + '<span class="hl">' + fmtMoney(state.spending) + '</span> each year after that. '
+            + 'My money lasts until I am <span class="hl num">' + lastsLabel(res) + '</span>';
+      story += res.leftAtMax > 0
+        ? ', and I would still have about <span class="hl num">' + fmtMoney(res.leftAtMax) + '</span> left at ' + state.maxAge + '.'
+        : ', which is past the ' + state.maxAge + ' I am planning for.';
+    } else {
+      story = 'I have <span class="hl bad">' + fmtMoney(state.savings) + '</span> saved up. '
+            + 'I stop working at <span class="hl bad">' + state.retireAge + '</span> and spend about '
+            + '<span class="hl bad">' + fmtMoney(state.spending) + '</span> each year after that. '
+            + 'My money runs out when I am <span class="hl bad num">' + res.depletionAge + '</span>, '
+            + 'which is <span class="hl bad num">' + (state.maxAge - res.depletionAge) + '</span> years before ' + state.maxAge + '.';
+    }
+    $('story').innerHTML = story;
+
+    $('hint').textContent = ok
+      ? 'Nice work. You can nudge the dials below and see what changes.'
+      : (sug ? 'That is okay — one small change fixes it. ' + sug
+             : 'That is okay. Try turning a dial below and watch the drawing move.');
+
+    /* the sticker */
+    var st = $('sticker');
+    st.classList.toggle('good', ok);
+    st.classList.toggle('bad', !ok);
+    $('stickerBig').textContent = ok ? 'PASS' : 'NOT YET';
+    $('stickerBig').style.color = ok ? '#2f8f5b' : '#b8452f';
+    $('stickerSmall').textContent = ok
+      ? (res.leftAtMax > 0 ? fmtMoney(res.leftAtMax) + ' to spare' : 'made it to ' + state.maxAge)
+      : (state.maxAge - res.depletionAge) + ' years short';
+
+    /* dials */
+    $('vRetire').textContent = state.retireAge;
+    $('vSpend').textContent = fmtMoney(state.spending);
+    $('vSaved').textContent = fmtMoney(state.savings);
+
+    drawChart(res);
+  }
+
+  $('sRetire').addEventListener('input', function (e) { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', function (e) { state.spending = +e.target.value; render(); });
+  $('sSaved').addEventListener('input', function (e) { state.savings = +e.target.value; render(); });
+
+  var chips = Array.prototype.slice.call(document.querySelectorAll('[data-sky]'));
+  chips.forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.sky = b.getAttribute('data-sky');
+      chips.forEach(function (x) { x.classList.toggle('on', x === b); });
+      render();
+    });
+  });
+
+  render();
+</script>
+</body>
+</html>

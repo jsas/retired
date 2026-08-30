@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>07 — Calm Focus</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  .stepbtn {
+    width: 34px; height: 34px; border-radius: 9999px; background: #fff;
+    border: 1px solid #e7e5e4; color: #57534e; font-size: 19px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color .15s, color .15s, transform .1s; user-select: none; touch-action: manipulation;
+  }
+  .stepbtn:hover { border-color: #047857; color: #047857; }
+  .stepbtn:active { transform: scale(.93); }
+  .wx { background: none; border: 0; padding: 0; cursor: pointer; color: #a8a29e; transition: color .15s; }
+  .wx:hover { color: #1c1917; }
+  .wx.on { color: #1c1917; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 1.5px; text-decoration-color: #047857; }
+  #details { max-height: 0; overflow: hidden; transition: max-height .4s ease; }
+  #details.open { max-height: 620px; }
+  .caret { display: inline-block; transition: transform .25s; }
+  .caret.open { transform: rotate(180deg); }
+  #verdict { letter-spacing: -.045em; }
+</style>
+</head>
+<body class="bg-[#fafaf8] text-stone-900 min-h-screen flex flex-col antialiased">
+
+<header class="flex items-center justify-between px-5 py-4">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[9px] font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-stone-400">07 · Calm Focus</span>
+</header>
+
+<main class="flex-1 flex flex-col items-center justify-center px-6 pb-16">
+
+  <!-- ═══ THE ANSWER ═══ -->
+  <div class="text-center pt-6">
+    <p class="text-[11px] uppercase tracking-[0.18em] text-stone-400 mb-3">your money lasts until you're</p>
+    <div id="verdict" class="num font-light leading-[0.85] text-[104px] sm:text-[124px]">89</div>
+    <p id="sentence" class="mt-6 text-[15px] sm:text-base text-stone-600 max-w-md mx-auto leading-relaxed"></p>
+  </div>
+
+  <!-- ═══ MARKET WEATHER ═══ -->
+  <div class="mt-10 flex items-center gap-4 text-[13px]">
+    <span class="text-stone-400">if the markets are</span>
+    <button class="wx" data-sky="storm">stormy</button>
+    <button class="wx on" data-sky="normal">ordinary</button>
+    <button class="wx" data-sky="sun">kind</button>
+  </div>
+
+  <!-- ═══ THREE STEPPERS ═══ -->
+  <div class="mt-12 w-full max-w-sm divide-y divide-stone-200/80 border-y border-stone-200/80">
+
+    <div class="flex items-center justify-between py-4">
+      <div>
+        <div class="text-[13px] text-stone-500">I stop working at</div>
+        <div class="text-xl font-medium num mt-0.5" id="vRetire">62</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="stepbtn" id="mRetire" aria-label="work one year less">&minus;</button>
+        <button class="stepbtn" id="pRetire" aria-label="work one year more">+</button>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between py-4">
+      <div>
+        <div class="text-[13px] text-stone-500">I spend</div>
+        <div class="text-xl font-medium num mt-0.5" id="vSpend">$85,000 <span class="text-[13px] font-normal text-stone-400">a year</span></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="stepbtn" id="mSpend" aria-label="spend less">&minus;</button>
+        <button class="stepbtn" id="pSpend" aria-label="spend more">+</button>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between py-4">
+      <div>
+        <div class="text-[13px] text-stone-500">I've saved</div>
+        <div class="text-xl font-medium num mt-0.5" id="vSaved">$850,000</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="stepbtn" id="mSaved" aria-label="save less">&minus;</button>
+        <button class="stepbtn" id="pSaved" aria-label="save more">+</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ DETAILS ═══ -->
+  <button id="toggle" class="mt-9 text-[13px] text-stone-400 hover:text-stone-700 transition-colors">
+    details <span class="caret" id="caret">&#9662;</span>
+  </button>
+
+  <div id="details" class="w-full max-w-sm">
+    <div class="pt-6 pb-2">
+      <svg id="spark" viewBox="0 0 320 64" preserveAspectRatio="none" class="w-full h-16 block"></svg>
+      <div class="flex justify-between text-[11px] text-stone-400 num mt-1">
+        <span id="sparkFrom">55</span><span id="sparkTo">95</span>
+      </div>
+      <ul class="mt-5 space-y-2.5 text-[13px] leading-relaxed">
+        <li id="fact1" class="flex gap-2.5"><span class="text-emerald-700 mt-px">&#9642;</span><span class="text-stone-600"></span></li>
+        <li id="fact2" class="flex gap-2.5"><span class="text-emerald-700 mt-px">&#9642;</span><span class="text-stone-600"></span></li>
+        <li id="fact3" class="flex gap-2.5"><span class="text-emerald-700 mt-px">&#9642;</span><span class="text-stone-600"></span></li>
+      </ul>
+      <p class="mt-5 text-[11px] text-stone-400 leading-relaxed">
+        Assumes $25,000 a year still going in until you stop, and $22,000 a year from CPP and OAS starting at 65.
+      </p>
+    </div>
+  </div>
+
+</main>
+
+<footer class="px-5 py-4 text-[11px] text-stone-400">
+  07 · Calm Focus — one enormous number, three dials, and nothing else on the page.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const ACCENT = '#047857';
+
+  const STEP = {
+    retireAge: { lo: 50, hi: 75, by: 1,      set: v => { $('vRetire').textContent = v; } },
+    spending:  { lo: 30000, hi: 220000, by: 1000,  set: v => { $('vSpend').innerHTML = fmtMoney(v) + ' <span class="text-[13px] font-normal text-stone-400">a year</span>'; } },
+    savings:   { lo: 0, hi: 4000000, by: 10000, set: v => { $('vSaved').textContent = fmtMoney(v); } },
+  };
+
+  function bump(key, dir) {
+    const s = STEP[key];
+    state[key] = clamp(state[key] + dir * s.by, s.lo, s.hi);
+    render();
+  }
+
+  /* press-and-hold repeats; a real click (keyboard) still steps once */
+  function holdable(el, key, dir) {
+    let t = null, iv = null;
+    const stop = () => { clearTimeout(t); clearInterval(iv); t = iv = null; };
+    el.addEventListener('pointerdown', () => {
+      stop(); bump(key, dir);
+      t = setTimeout(() => { iv = setInterval(() => bump(key, dir), 75); }, 420);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, stop));
+    window.addEventListener('blur', stop);
+    el.addEventListener('click', e => { if (e.detail === 0) bump(key, dir); });
+  }
+  holdable($('mRetire'), 'retireAge', -1);  holdable($('pRetire'), 'retireAge', 1);
+  holdable($('mSpend'),  'spending',  -1);  holdable($('pSpend'),  'spending',  1);
+  holdable($('mSaved'),  'savings',   -1);  holdable($('pSaved'),  'savings',   1);
+
+  document.querySelectorAll('[data-sky]').forEach(b => b.addEventListener('click', () => {
+    state.sky = b.dataset.sky;
+    document.querySelectorAll('[data-sky]').forEach(x => x.classList.toggle('on', x === b));
+    render();
+  }));
+
+  $('toggle').addEventListener('click', () => {
+    $('details').classList.toggle('open');
+    $('caret').classList.toggle('open');
+  });
+
+  /* tiny sparkline of the balance, 55 → wherever it ends */
+  function drawSpark(rows) {
+    const w = 320, h = 64, top = 6, bot = h - 4;
+    const max = Math.max(...rows.map(r => r.bal), 1);
+    const n = rows.length;
+    const x = i => n < 2 ? 0 : (i / (n - 1)) * w;
+    const y = v => bot - (v / max) * (bot - top);
+    let d = 'M ' + x(0).toFixed(1) + ' ' + y(rows[0].bal).toFixed(1);
+    for (let i = 1; i < n; i++) d += ' L ' + x(i).toFixed(1) + ' ' + y(rows[i].bal).toFixed(1);
+    const area = d + ' L ' + x(n - 1).toFixed(1) + ' ' + bot + ' L 0 ' + bot + ' Z';
+    const reach = clamp((rows[n - 1].age - rows[0].age) / (state.maxAge - rows[0].age) * w, 0, w);
+    $('spark').innerHTML =
+      '<path d="' + area + '" fill="' + ACCENT + '" fill-opacity="0.09"/>' +
+      '<path d="' + d + '" fill="none" stroke="' + ACCENT + '" stroke-width="1.75" stroke-linejoin="round"/>' +
+      '<line x1="' + reach.toFixed(1) + '" y1="' + top + '" x2="' + reach.toFixed(1) + '" y2="' + bot + '" stroke="#d6d3d1" stroke-width="1" stroke-dasharray="3 3"/>';
+    $('sparkFrom').textContent = rows[0].age;
+    $('sparkTo').textContent = 'plan to ' + state.maxAge;
+  }
+
+  function render() {
+    Object.keys(STEP).forEach(k => STEP[k].set(state[k]));
+    const res = simulate(state);
+    const v = $('verdict'), s = $('sentence');
+
+    if (res.ok) {
+      v.textContent = lastsLabel(res);
+      v.style.color = ACCENT;
+      s.innerHTML = (res.leftAtMax > 25000
+        ? 'and you’d still have about <strong class="text-stone-900">' + fmtMoney(res.leftAtMax) + '</strong> left at ' + state.maxAge + '.'
+        : 'past the ' + state.maxAge + ' you’re planning for.');
+    } else {
+      v.textContent = res.depletionAge;
+      v.style.color = '#9f1239';
+      s.innerHTML = 'your money runs out at <strong class="text-stone-900">' + res.depletionAge + '</strong> — '
+        + (state.maxAge - res.depletionAge) + ' year' + (state.maxAge - res.depletionAge === 1 ? '' : 's') + ' short of ' + state.maxAge + '.';
+    }
+
+    drawSpark(res.rows);
+
+    const storm = lastsLabel(simulate({ ...state, sky: 'storm' }));
+    const sun = lastsLabel(simulate({ ...state, sky: 'sun' }));
+    const yearsOfSpending = Math.floor(state.savings / Math.max(state.spending, 1));
+
+    $('fact1').lastElementChild.innerHTML = res.ok
+      ? 'Left over at ' + state.maxAge + ': <strong class="text-stone-900 num">' + fmtMoney(res.leftAtMax) + '</strong>.'
+      : 'That is <strong class="text-stone-900 num">' + (state.maxAge - res.depletionAge) + ' years</strong> of spending you’d have to find.';
+    $('fact2').lastElementChild.innerHTML =
+      'In a stormy market the money lasts to <strong class="text-stone-900 num">' + storm + '</strong>; in a kind one, <strong class="text-stone-900 num">' + sun + '</strong>.';
+    $('fact3').lastElementChild.textContent = suggest(state)
+      ?? 'You have about ' + yearsOfSpending + ' years of spending banked today, before any growth.';
+  }
+
+  render();
+</script>
+</body>
+</html>

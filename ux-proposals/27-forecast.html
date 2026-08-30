@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>27 — The Forecast</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  input[type=range].fc { -webkit-appearance:none; appearance:none; height:6px; border-radius:3px; background:#dbeafe; outline:none; }
+  input[type=range].fc::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%;
+    background:#fff; border:2.5px solid #0284c7; box-shadow:0 1px 4px rgba(2,132,199,.3); cursor:grab;
+  }
+  input[type=range].fc::-moz-range-thumb {
+    width:22px; height:22px; border-radius:50%; background:#fff; border:2.5px solid #0284c7;
+    box-shadow:0 1px 4px rgba(2,132,199,.3); cursor:grab;
+  }
+  .chip { transition: all .2s; }
+  .chip.sel { transform: translateY(-2px); }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(10px);} to { opacity:1; transform:none;} }
+  .fu { animation: fadeUp .5s ease-out both; }
+</style>
+</head>
+<body class="bg-sky-50 text-slate-900 min-h-screen">
+
+<header class="flex items-center justify-between px-5 py-3 border-b border-sky-100 bg-white/60">
+  <div class="flex items-center gap-2 font-semibold text-sm">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
+    <span>tired</span>
+  </div>
+  <span class="text-xs text-slate-500">27 — The Forecast</span>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 md:px-6 py-8">
+
+  <!-- masthead -->
+  <div class="fu mb-6">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-600 mb-1">Your retirement forecast</p>
+    <div class="flex items-start gap-4 flex-wrap">
+      <svg id="condIcon" viewBox="0 0 64 64" class="w-16 h-16 shrink-0"></svg>
+      <div>
+        <h1 id="headline" class="text-2xl md:text-3xl font-bold tracking-tight leading-snug"></h1>
+        <p id="outlook" class="mt-1 text-[14px] text-slate-600"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-[1fr_300px] gap-6">
+
+    <!-- left: forecast + detail -->
+    <section>
+      <!-- the five period chips -->
+      <div class="fu grid grid-cols-5 gap-2 mb-4" id="chips"></div>
+
+      <!-- detail panel for selected chip -->
+      <div class="fu bg-white rounded-2xl border border-sky-100 p-6 shadow-sm">
+        <div class="flex items-baseline justify-between mb-3">
+          <h2 id="dTitle" class="text-[15px] font-bold"></h2>
+          <span id="dHealth" class="text-[11px] font-bold px-2 py-0.5 rounded-full"></span>
+        </div>
+        <p id="dLine" class="text-[13.5px] text-slate-600 leading-relaxed"></p>
+        <div class="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-3">
+          <div>
+            <div class="text-[11px] text-slate-500">Balance at start</div>
+            <div id="dStart" class="text-[15px] font-bold num">—</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500">Balance at end</div>
+            <div id="dEnd" class="text-[15px] font-bold num">—</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500">Change</div>
+            <div id="dDelta" class="text-[15px] font-bold num">—</div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <!-- sparkline of the whole life -->
+      <div class="fu mt-4 bg-white rounded-2xl border border-sky-100 p-6 shadow-sm">
+        <h3 class="text-[13px] font-semibold text-slate-700 mb-2">The whole picture, 55 → 100</h3>
+        <svg id="whole" viewBox="0 0 640 120" class="w-full">
+          <defs>
+            <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#0ea5e9" stop-opacity=".25"/>
+              <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path id="wholeFill" fill="url(#wg)" d=""></path>
+          <path id="wholeLine" fill="none" stroke="#0284c7" stroke-width="2.5" d=""></path>
+          <g id="wholeMarks" font-size="10" fill="#94a3b8" class="num"></g>
+        </svg>
+      </div>
+    </section>
+
+    <!-- right: controls -->
+    <aside class="fu space-y-4">
+      <div class="bg-white rounded-2xl border border-sky-100 p-5 shadow-sm">
+        <h3 class="text-[13px] font-bold text-slate-800 mb-4">Adjust the outlook</h3>
+        <div class="space-y-5">
+          <div>
+            <div class="flex justify-between text-[12px] mb-1.5"><span class="text-slate-600">Stop working at</span><span id="vRetire" class="num font-bold">62</span></div>
+            <input id="sRetire" type="range" class="fc w-full" min="55" max="75" value="62">
+          </div>
+          <div>
+            <div class="flex justify-between text-[12px] mb-1.5"><span class="text-slate-600">Spend each year</span><span id="vSpend" class="num font-bold">$85,000</span></div>
+            <input id="sSpend" type="range" class="fc w-full" min="40000" max="160000" step="1000" value="85000">
+          </div>
+          <div>
+            <div class="flex justify-between text-[12px] mb-1.5"><span class="text-slate-600">Saved so far</span><span id="vSaved" class="num font-bold">$850,000</span></div>
+            <input id="sSaved" type="range" class="fc w-full" min="100000" max="3000000" step="10000" value="850000">
+          </div>
+          <div>
+            <div class="text-[12px] text-slate-600 mb-1.5">Markets will be</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button data-sky="storm"  class="sky py-1.5 text-xs rounded-lg border border-slate-200">stormy</button>
+              <button data-sky="normal" class="sky py-1.5 text-xs rounded-lg border border-slate-200">ordinary</button>
+              <button data-sky="sun"    class="sky py-1.5 text-xs rounded-lg border border-slate-200">kind</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p id="advice" class="text-[12.5px] text-sky-800 leading-relaxed px-1"></p>
+    </aside>
+  </div>
+</main>
+
+<footer class="text-center py-6 text-[11px] text-slate-400">
+  27 · The Forecast — risk read as weather: small risk / turning stormy / storm warning.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  let sel = 1; // selected period index (default: the retirement decade)
+
+  const PERIODS = [
+    { from: 55, to: 64, label: '55–64', name: 'The working years' },
+    { from: 65, to: 74, label: '65–74', name: 'The first decade' },
+    { from: 75, to: 84, label: '75–84', name: 'The steady stretch' },
+    { from: 85, to: 94, label: '85–94', name: 'The later years' },
+    { from: 95, to: 100, label: '95+',   name: 'The far shore' },
+  ];
+
+  function health(bal, maxBal) {
+    if (bal <= 0) return 'dry';
+    if (maxBal === 0) return 'ok';
+    const f = bal / maxBal;
+    return f > 0.5 ? 'ok' : f > 0.15 ? 'thin' : 'dry';
+  }
+
+  function render() {
+    const res = simulate(state);
+    const rows = res.rows;
+    const maxBal = Math.max(1, ...rows.map(r => r.bal));
+    const balAt = age => { const r = rows.find(r => r.age === age); return r ? r.bal : (rows.length ? rows[rows.length - 1].bal : 0); };
+
+    // risk headline from the two simulations
+    const storm = simulate({ ...state, sky: 'storm' });
+    let risk, icon;
+    if (res.ok && storm.ok) { risk = 'low'; icon = 'sun'; }
+    else if (!res.ok) { risk = 'high'; icon = 'storm'; }
+    else { risk = 'small'; icon = 'cloud'; }
+    $('condIcon').innerHTML = icon === 'sun'
+      ? '<circle cx="32" cy="32" r="13" fill="#f59e0b"/><g stroke="#f59e0b" stroke-width="3" stroke-linecap="round"><line x1="32" y1="8" x2="32" y2="14"/><line x1="32" y1="50" x2="32" y2="56"/><line x1="8" y1="32" x2="14" y2="32"/><line x1="50" y1="32" x2="56" y2="32"/><line x1="15" y1="15" x2="19" y2="19"/><line x1="45" y1="45" x2="49" y2="49"/><line x1="49" y1="15" x2="45" y2="19"/><line x1="19" y1="45" x2="15" y2="49"/></g>'
+      : icon === 'cloud'
+      ? '<circle cx="26" cy="26" r="10" fill="#f59e0b"/><path d="M 20 44 a 10 10 0 0 1 2 -19 a 13 13 0 0 1 25 4 a 9 9 0 0 1 -2 15 z" fill="#94a3b8"/>'
+      : '<path d="M 18 42 a 10 10 0 0 1 2 -19 a 13 13 0 0 1 25 4 a 9 9 0 0 1 -2 15 z" fill="#64748b"/><line x1="24" y1="50" x2="20" y2="58" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/><line x1="34" y1="50" x2="30" y2="58" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/><line x1="44" y1="50" x2="40" y2="58" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>';
+
+    const H = $('headline'), O = $('outlook');
+    if (risk === 'high') {
+      H.innerHTML = `Storm warning: it runs out at <span class="num text-rose-600">${res.depletionAge}</span>.`;
+      O.textContent = `${state.maxAge - res.depletionAge} years short of the ${state.maxAge} you're planning for.`;
+    } else if (risk === 'small') {
+      H.innerHTML = `Fair today — <span class="text-amber-600">turning stormy</span> is the risk.`;
+      O.textContent = `Ordinary markets last to ${lastsLabel(res)}, but stormy ones run out at ${storm.depletionAge}.`;
+    } else {
+      H.innerHTML = `Clear skies: money lasts to <span class="num text-emerald-600">${lastsLabel(res)}</span>, even stormy.`;
+      O.textContent = `Past ${state.maxAge} in both ordinary and stormy markets${res.leftAtMax > 25000 ? `, with ${fmtMoney(res.leftAtMax)} left` : ''}.`;
+    }
+
+    // chips
+    $('chips').innerHTML = PERIODS.map((p, i) => {
+      const startBal = balAt(p.from);
+      const h = health(startBal, maxBal);
+      const cls = h === 'ok' ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+        : h === 'thin' ? 'bg-amber-100 text-amber-800 border-amber-200'
+        : 'bg-rose-100 text-rose-800 border-rose-200';
+      const dot = h === 'ok' ? 'bg-emerald-500' : h === 'thin' ? 'bg-amber-500' : 'bg-rose-500';
+      return `<button data-i="${i}" class="chip ${i === sel ? 'sel ring-2 ring-sky-400' : ''} rounded-xl border ${cls} px-2 py-3 text-center">
+        <div class="text-[11px] font-semibold">${p.label}</div>
+        <div class="text-[10px] mt-1 opacity-70">${p.name}</div>
+        <div class="w-2 h-2 rounded-full ${dot} mx-auto mt-1.5"></div>
+      </button>`;
+    }).join('');
+    document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { sel = +c.dataset.i; render(); }));
+
+    // detail for selected period
+    const p = PERIODS[sel];
+    const sBal = balAt(p.from), eBal = balAt(p.to);
+    const delta = eBal - sBal;
+    $('dTitle').textContent = `${p.name}, ages ${p.label}`;
+    const h = health(sBal, maxBal);
+    $('dHealth').textContent = h === 'ok' ? 'healthy' : h === 'thin' ? 'running thin' : 'run out';
+    $('dHealth').className = 'text-[11px] font-bold px-2 py-0.5 rounded-full ' + (h === 'ok' ? 'bg-emerald-100 text-emerald-700' : h === 'thin' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700');
+    $('dLine').textContent = h === 'dry'
+      ? `By this stretch the money is gone — it ran out at ${res.depletionAge}.`
+      : sBal < eBal
+        ? `This stretch is still filling — contributions and growth outpace the draw.`
+        : `This stretch draws down about ${fmtMoney(sBal - eBal)} over the decade.`;
+    $('dStart').textContent = fmtMoney(sBal);
+    $('dEnd').textContent = fmtMoney(eBal);
+    $('dDelta').textContent = (delta >= 0 ? '+' : '−') + fmtMoney(Math.abs(delta));
+    $('dDelta').className = 'text-[15px] font-bold num ' + (delta >= 0 ? 'text-emerald-600' : 'text-slate-700');
+
+    // whole-life sparkline
+    const W = 640, HH = 120, L = 30, R = 10, T = 8, B = 20;
+    const x = age => L + (age - rows[0].age) / (100 - rows[0].age) * (W - L - R);
+    const y = v => T + (1 - v / maxBal) * (HH - T - B);
+    let line = `M ${x(rows[0].age)} ${y(rows[0].bal)}`;
+    rows.forEach(r => { line += ` L ${x(r.age)} ${y(r.bal)}`; });
+    $('wholeLine').setAttribute('d', line);
+    $('wholeFill').setAttribute('d', line + ` L ${x(100)} ${HH-B} L ${x(rows[0].age)} ${HH-B} Z`);
+    let marks = '';
+    [55, 65, 75, 85, 95].forEach(a => { marks += `<text x="${x(a)}" y="${HH-6}" text-anchor="middle">${a}</text>`; });
+    $('wholeMarks').innerHTML = marks;
+
+    // controls + advice
+    $('vRetire').textContent = state.retireAge;
+    $('vSpend').textContent = fmtMoney(state.spending);
+    $('vSaved').textContent = fmtMoney(state.savings);
+    $('advice').textContent = suggest(state) ?? 'The outlook is good in every weather — enjoy it.';
+    document.querySelectorAll('.sky').forEach(b =>
+      b.className = 'sky py-1.5 text-xs rounded-lg border ' + (b.dataset.sky === state.sky
+        ? 'bg-sky-600 text-white border-sky-600 font-medium'
+        : 'border-slate-200 text-slate-600 hover:bg-slate-50'));
+  }
+
+  $('sRetire').addEventListener('input', e => { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', e => { state.spending = +e.target.value; render(); });
+  $('sSaved').addEventListener('input', e => { state.savings = +e.target.value; render(); });
+  document.querySelectorAll('.sky').forEach(b => b.addEventListener('click', () => { state.sky = b.dataset.sky; render(); }));
+
+  render();
+</script>
+</body>
+</html>

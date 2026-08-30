@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 12 · Plan Score</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; background: transparent; cursor: pointer;
+    accent-color: #059669;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 999px; background: #e4e7e4;
+  }
+  input[type="range"]::-moz-range-track { height: 4px; border-radius: 999px; background: #e4e7e4; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    height: 16px; width: 16px; margin-top: -6px; border-radius: 999px;
+    background: #fff; border: 2px solid #059669;
+    box-shadow: 0 1px 3px rgba(6,78,59,.18);
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 14px; width: 14px; border-radius: 999px;
+    background: #fff; border: 2px solid #059669;
+    box-shadow: 0 1px 3px rgba(6,78,59,.18);
+  }
+
+  #ring-fg { transition: stroke-dashoffset .9s cubic-bezier(.22,.8,.3,1), stroke .4s ease; }
+  .bar-fill { transition: width .7s cubic-bezier(.22,.8,.3,1), background-color .4s ease; }
+
+  /* hover explainer */
+  .tip { opacity: 0; transform: translateY(2px); pointer-events: none; transition: opacity .15s ease, transform .15s ease; }
+  .tip-host:hover .tip, .tip-host:focus-within .tip { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body class="min-h-screen bg-[#f7f9f8] text-slate-900 antialiased">
+
+<div class="mx-auto max-w-4xl px-5 py-8 sm:px-8 sm:py-10">
+
+  <!-- top chrome -->
+  <header class="mb-7 flex items-center gap-2.5">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-slate-400">· 12 Plan Score</span>
+  </header>
+
+  <h1 class="text-[22px] font-bold tracking-tight">How good is this plan, honestly?</h1>
+  <p class="mt-1 max-w-2xl text-[13px] leading-relaxed text-slate-500">
+    One number out of 100, made of three plain things. No black box — every point is accounted for below.
+  </p>
+
+  <!-- HERO: ring + verdict -->
+  <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+    <div class="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8">
+
+      <!-- ring -->
+      <div class="relative shrink-0">
+        <svg width="196" height="196" viewBox="0 0 196 196" class="block" aria-hidden="true">
+          <circle cx="98" cy="98" r="82" fill="none" stroke="#e8ebe8" stroke-width="13" />
+          <circle id="ring-fg" cx="98" cy="98" r="82" fill="none" stroke="#059669" stroke-width="13"
+                  stroke-linecap="round" stroke-dasharray="515.22" stroke-dashoffset="515.22"
+                  transform="rotate(-90 98 98)" />
+          <circle cx="98" cy="98" r="66" fill="none" stroke="#f1f5f3" stroke-width="1" />
+        </svg>
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+          <div class="num text-[46px] font-bold leading-none tracking-tight" id="score-num">0</div>
+          <div class="mt-1 text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400">out of 100</div>
+        </div>
+      </div>
+
+      <!-- verdict -->
+      <div class="min-w-0 flex-1 text-center sm:text-left">
+        <div id="verdict-word" class="text-[11px] font-semibold uppercase tracking-[.16em] text-emerald-600">Shaky</div>
+        <h2 id="verdict-line" class="num mt-1.5 text-[20px] font-bold leading-snug tracking-tight sm:text-[24px]">
+          Your money lasts until you're 89.
+        </h2>
+        <p id="diagnosis" class="num mt-2 text-[13.5px] leading-relaxed text-slate-600">
+          That's 6 years short of the 95 you planned for.
+        </p>
+        <p id="suggestion" class="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-[13px] font-medium leading-relaxed text-emerald-800">
+          Working 2 more years would close the gap.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- INGREDIENTS -->
+  <section class="mt-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+    <div class="mb-4 flex items-baseline justify-between gap-3">
+      <h3 class="text-[11px] font-semibold uppercase tracking-[.16em] text-slate-400">The three ingredients</h3>
+      <span class="text-[11px] text-slate-400">they add up to the score</span>
+    </div>
+
+    <div class="space-y-5">
+
+      <!-- 1 outlasts -->
+      <div>
+        <div class="flex items-baseline justify-between gap-3">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[13.5px] font-semibold text-slate-800">Outlasts your plan</span>
+            <span class="tip-host relative inline-flex">
+              <button type="button" aria-label="What does this mean?"
+                class="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-400 hover:border-emerald-400 hover:text-emerald-600">i</button>
+              <span class="tip absolute bottom-6 left-1/2 z-20 w-64 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-[11.5px] leading-relaxed text-slate-100 shadow-lg">
+                Does the money last past the age you're planning to? Full marks if it does; partial credit for how far short it falls. Worth 40% of the score.
+              </span>
+            </span>
+            <span class="num text-[10.5px] text-slate-400">40% of the score</span>
+          </div>
+          <span class="num text-[13.5px] font-bold text-slate-900" id="b1-val">85</span>
+        </div>
+        <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div id="b1-fill" class="bar-fill h-full rounded-full bg-amber-500" style="width:0%"></div>
+        </div>
+        <p class="num mt-1.5 text-[11.5px] leading-snug text-slate-500" id="b1-note">
+          Lasts until you're 89 — 6 years short of 95.
+        </p>
+      </div>
+
+      <!-- 2 cushion -->
+      <div>
+        <div class="flex items-baseline justify-between gap-3">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[13.5px] font-semibold text-slate-800">Cushion</span>
+            <span class="tip-host relative inline-flex">
+              <button type="button" aria-label="What does this mean?"
+                class="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-400 hover:border-emerald-400 hover:text-emerald-600">i</button>
+              <span class="tip absolute bottom-6 left-1/2 z-20 w-64 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-[11.5px] leading-relaxed text-slate-100 shadow-lg">
+                What's still there at 95. Leftovers are room for surprises — care bills, a bad year, help for the kids. Full marks at about three years of spending. Worth 35%.
+              </span>
+            </span>
+            <span class="num text-[10.5px] text-slate-400">35% of the score</span>
+          </div>
+          <span class="num text-[13.5px] font-bold text-slate-900" id="b2-val">0</span>
+        </div>
+        <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div id="b2-fill" class="bar-fill h-full rounded-full bg-rose-500" style="width:0%"></div>
+        </div>
+        <p class="num mt-1.5 text-[11.5px] leading-snug text-slate-500" id="b2-note">
+          Nothing left at 95 — no room for a surprise.
+        </p>
+      </div>
+
+      <!-- 3 weatherproof -->
+      <div>
+        <div class="flex items-baseline justify-between gap-3">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[13.5px] font-semibold text-slate-800">Weatherproof</span>
+            <span class="tip-host relative inline-flex">
+              <button type="button" aria-label="What does this mean?"
+                class="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-400 hover:border-emerald-400 hover:text-emerald-600">i</button>
+              <span class="tip absolute bottom-6 left-1/2 z-20 w-64 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-[11.5px] leading-relaxed text-slate-100 shadow-lg">
+                The same plan run again in stormy markets. If it still holds, your plan doesn't depend on luck — which is the whole point. Worth 25%.
+              </span>
+            </span>
+            <span class="num text-[10.5px] text-slate-400">25% of the score</span>
+          </div>
+          <span class="num text-[13.5px] font-bold text-slate-900" id="b3-val">63</span>
+        </div>
+        <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div id="b3-fill" class="bar-fill h-full rounded-full bg-amber-500" style="width:0%"></div>
+        </div>
+        <p class="num mt-1.5 text-[11.5px] leading-snug text-slate-500" id="b3-note">
+          In a storm the money lasts until you're 80.
+        </p>
+      </div>
+    </div>
+
+    <!-- dials -->
+    <div class="mt-6 grid grid-cols-1 gap-x-8 gap-y-4 border-t border-slate-100 pt-5 sm:grid-cols-3">
+      <div>
+        <div class="mb-1 flex items-baseline justify-between">
+          <label for="d-retire" class="text-[12.5px] font-medium text-slate-600">Stop working at</label>
+          <span class="num text-[12.5px] font-semibold text-slate-900" id="d-retire-val">62</span>
+        </div>
+        <input id="d-retire" type="range" min="50" max="75" step="1" value="62" />
+      </div>
+      <div>
+        <div class="mb-1 flex items-baseline justify-between">
+          <label for="d-spend" class="text-[12.5px] font-medium text-slate-600">Spending a year</label>
+          <span class="num text-[12.5px] font-semibold text-slate-900" id="d-spend-val">$85,000</span>
+        </div>
+        <input id="d-spend" type="range" min="40000" max="150000" step="2500" value="85000" />
+      </div>
+      <div>
+        <div class="mb-1 flex items-baseline justify-between">
+          <label for="d-saved" class="text-[12.5px] font-medium text-slate-600">Saved so far</label>
+          <span class="num text-[12.5px] font-semibold text-slate-900" id="d-saved-val">$850,000</span>
+        </div>
+        <input id="d-saved" type="range" min="100000" max="2500000" step="25000" value="850000" />
+      </div>
+    </div>
+  </section>
+
+  <!-- notes -->
+  <section class="mt-4 rounded-2xl border border-slate-200 bg-white/60 p-5">
+    <h3 class="text-[11px] font-semibold uppercase tracking-[.16em] text-slate-400">Where the number comes from</h3>
+    <p class="mt-2 text-[13px] leading-relaxed text-slate-600">
+      The score is the three bars above, weighted 40 / 35 / 25 and added up. It moves when your plan moves,
+      and it never rewards luck: a plan that only works in kind markets scores lower than one that survives a storm.
+    </p>
+  </section>
+
+  <footer class="mt-8 text-[11.5px] text-slate-400">
+    12 · Plan Score — one honest number out of 100, and the three things it's made of.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge: DEMO_DEFAULTS.maxAge,
+    retireAge: DEMO_DEFAULTS.retireAge,
+    spending: DEMO_DEFAULTS.spending,
+    savings: DEMO_DEFAULTS.savings,
+    contrib: DEMO_DEFAULTS.contrib,
+    benefits: DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky: DEMO_DEFAULTS.sky
+  };
+
+  var el = function (id) { return document.getElementById(id); };
+  var $ = {
+    ring: el('ring-fg'), scoreNum: el('score-num'),
+    word: el('verdict-word'), line: el('verdict-line'),
+    diag: el('diagnosis'), sugg: el('suggestion'),
+    b1v: el('b1-val'), b1f: el('b1-fill'), b1n: el('b1-note'),
+    b2v: el('b2-val'), b2f: el('b2-fill'), b2n: el('b2-note'),
+    b3v: el('b3-val'), b3f: el('b3-fill'), b3n: el('b3-note'),
+    rRetire: el('d-retire'), rSpend: el('d-spend'), rSaved: el('d-saved'),
+    vRetire: el('d-retire-val'), vSpend: el('d-spend-val'), vSaved: el('d-saved-val')
+  };
+
+  var R = 82;
+  var C = 2 * Math.PI * R; /* 515.22 */
+
+  function yearWord(n) { return n === 1 ? 'year' : 'years'; }
+
+  /* --- ingredient scores (0-100) --- */
+  function scoreOutlast(o, res) {
+    if (res.ok) return 100;
+    var span = Math.max(1, o.maxAge - o.currentAge);
+    return Math.max(0, Math.round(100 * ((res.depletionAge - o.currentAge) / span)));
+  }
+  function scoreCushion(o, res) {
+    return Math.min(100, Math.round(100 * res.leftAtMax / (3 * o.spending)));
+  }
+  function scoreWeather(o, stormRes) { return scoreOutlast(o, stormRes); }
+
+  function bandColor(v) {
+    if (v < 45) return { stroke: '#e11d48', cls: 'bg-rose-500', text: 'text-rose-600' };
+    if (v < 70) return { stroke: '#d97706', cls: 'bg-amber-500', text: 'text-amber-600' };
+    return { stroke: '#059669', cls: 'bg-emerald-600', text: 'text-emerald-600' };
+  }
+
+  function scoreWord(v) {
+    if (v < 20) return 'In trouble';
+    if (v < 40) return 'Fragile';
+    if (v < 60) return 'Shaky';
+    if (v < 75) return 'Getting there';
+    if (v < 90) return 'Solid';
+    return 'Strong';
+  }
+
+  var lastShown = 0;
+  var rafId = null;
+  function tweenScore(to) {
+    if (rafId) cancelAnimationFrame(rafId);
+    var from = lastShown, t0 = null;
+    lastShown = to;
+    function step(t) {
+      if (t0 === null) t0 = t;
+      var p = Math.min(1, (t - t0) / 550);
+      var eased = 1 - Math.pow(1 - p, 3);
+      $.scoreNum.textContent = String(Math.round(from + (to - from) * eased));
+      if (p < 1) rafId = requestAnimationFrame(step);
+    }
+    rafId = requestAnimationFrame(step);
+  }
+
+  function render(first) {
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+
+    var s1 = scoreOutlast(state, res);
+    var s2 = scoreCushion(state, res);
+    var s3 = scoreWeather(state, storm);
+    var total = Math.max(0, Math.min(100, Math.round(0.40 * s1 + 0.35 * s2 + 0.25 * s3)));
+
+    /* ring */
+    $.ring.setAttribute('stroke-dashoffset', String(C * (1 - total / 100)));
+    var bc = bandColor(total);
+    $.ring.setAttribute('stroke', bc.stroke);
+    tweenScore(total);
+
+    /* verdict */
+    $.word.textContent = scoreWord(total);
+    $.word.className = 'text-[11px] font-semibold uppercase tracking-[.16em] ' + bc.text;
+
+    var gap = state.maxAge - (res.depletionAge != null ? res.depletionAge : state.maxAge);
+    $.line.textContent = 'Your money lasts until you’re ' + lastsLabel(res) + '.';
+    $.line.className = 'num mt-1.5 text-[20px] font-bold leading-snug tracking-tight sm:text-[24px] ' +
+      (res.ok ? 'text-emerald-800' : 'text-amber-900');
+
+    if (res.ok) {
+      $.diag.textContent = 'That’s past the ' + state.maxAge + ' you planned for, with ' +
+        fmtMoney(res.leftAtMax) + ' still there.';
+    } else {
+      $.diag.textContent = 'That’s ' + gap + ' ' + yearWord(gap) + ' short of the ' + state.maxAge +
+        ' you planned for.';
+    }
+
+    var s = suggest(state);
+    $.sugg.textContent = s || 'Nothing small fixes this. Something bigger has to give.';
+    $.sugg.className = res.ok
+      ? 'mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-[13px] font-medium leading-relaxed text-emerald-800'
+      : 'mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[13px] font-medium leading-relaxed text-amber-900';
+
+    /* bars */
+    var c1 = bandColor(s1);
+    $.b1v.textContent = String(s1);
+    $.b1v.className = 'num text-[13.5px] font-bold ' + c1.text;
+    $.b1f.style.width = s1 + '%';
+    $.b1f.className = 'bar-fill h-full rounded-full ' + c1.cls;
+    $.b1n.textContent = res.ok
+      ? 'Outlasts your plan — money still there at ' + state.maxAge + '.'
+      : 'Money runs out at ' + res.depletionAge + ', ' + gap + ' ' + yearWord(gap) + ' before ' + state.maxAge + '.';
+
+    var c2 = bandColor(s2);
+    $.b2v.textContent = String(s2);
+    $.b2v.className = 'num text-[13.5px] font-bold ' + c2.text;
+    $.b2f.style.width = s2 + '%';
+    $.b2f.className = 'bar-fill h-full rounded-full ' + c2.cls;
+    $.b2n.textContent = res.leftAtMax > 0
+      ? fmtMoney(res.leftAtMax) + ' left at ' + state.maxAge + '.'
+      : 'Nothing left at ' + state.maxAge + ' — no room for a surprise.';
+
+    var c3 = bandColor(s3);
+    $.b3v.textContent = String(s3);
+    $.b3v.className = 'num text-[13.5px] font-bold ' + c3.text;
+    $.b3f.style.width = s3 + '%';
+    $.b3f.className = 'bar-fill h-full rounded-full ' + c3.cls;
+    $.b3n.textContent = storm.ok
+      ? 'In a storm the money still lasts past ' + state.maxAge + '.'
+      : 'In a storm the money lasts until you’re ' + lastsLabel(storm) + '.';
+
+    /* dial labels */
+    $.vRetire.textContent = String(state.retireAge);
+    $.vSpend.textContent = fmtMoney(state.spending);
+    $.vSaved.textContent = fmtMoney(state.savings);
+
+    if (first) {
+      /* let the browser paint the empty ring, then fill it */
+      requestAnimationFrame(function () {
+        $.ring.setAttribute('stroke-dashoffset', String(C * (1 - total / 100)));
+      });
+    }
+  }
+
+  /* wiring */
+  $.rRetire.addEventListener('input', function () {
+    state.retireAge = parseInt(this.value, 10); render(false);
+  });
+  $.rSpend.addEventListener('input', function () {
+    state.spending = parseInt(this.value, 10); render(false);
+  });
+  $.rSaved.addEventListener('input', function () {
+    state.savings = parseInt(this.value, 10); render(false);
+  });
+
+  /* initial: ring starts empty, then animates up */
+  $.ring.setAttribute('stroke-dashoffset', String(C));
+  render(true);
+})();
+</script>
+</body>
+</html>

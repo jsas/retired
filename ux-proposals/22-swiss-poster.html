@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 22 · Swiss Poster</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* tiny caps labels — the only decoration is the type itself */
+  .cap {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; color: #6b6b6b;
+  }
+
+  .hair  { border-top: 1px solid #d6d6d6; }
+  .hairb { border-top: 2px solid #111; }
+
+  /* --- sliders: square ink thumb on a hairline track --- */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px; background: transparent; cursor: pointer; margin: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 2px; background: #111;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; margin-top: -5.5px;
+    background: #fff; border: 2px solid #111; border-radius: 0;
+  }
+  input[type=range]::-moz-range-track { height: 2px; background: #111; }
+  input[type=range]::-moz-range-thumb {
+    width: 11px; height: 11px; background: #fff;
+    border: 2px solid #111; border-radius: 0;
+  }
+  input[type=range]:focus-visible { outline: 2px solid #111; outline-offset: 4px; }
+
+  /* weather selector: black is active, red only when the plan fails */
+  .wx {
+    background: none; border: none; padding: 0 0 2px 0;
+    font: inherit; font-size: 11px; letter-spacing: .06em;
+    color: #9a9a9a; border-bottom: 2px solid transparent;
+    transition: color .12s ease, border-color .12s ease;
+  }
+  .wx:hover { color: #111; }
+  .wx[aria-pressed="true"] { color: #111; border-bottom-color: #111; font-weight: 700; }
+  .wx:focus-visible { outline: 2px solid #111; outline-offset: 3px; }
+
+  .ghost {
+    background: none; border: none; padding: 0;
+    font: inherit; font-size: 11px; letter-spacing: .06em; color: #9a9a9a;
+    text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+  }
+  .ghost:hover { color: #111; }
+
+  ::selection { background: #111; color: #fff; }
+</style>
+</head>
+<body class="min-h-screen bg-white text-[#111] antialiased">
+
+<div class="mx-auto max-w-[1180px] px-5 py-6 sm:px-10 sm:py-8">
+
+  <!-- top chrome -->
+  <header class="mb-5 flex items-center gap-2.5">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-[#a3a3a3]">22 — Swiss Poster</span>
+  </header>
+
+  <!-- MASTHEAD -->
+  <div class="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+    <div>
+      <div class="cap">The plan, set plainly</div>
+      <h1 class="mt-1.5 text-[22px] font-extrabold leading-none tracking-[-.02em]">Ages <span id="m-span" class="num">55–95</span></h1>
+    </div>
+    <div class="flex items-center gap-5">
+      <span class="cap">Weather</span>
+      <div class="flex items-end gap-4">
+        <button id="wx-storm" class="wx" type="button" aria-pressed="false">stormy</button>
+        <button id="wx-normal" class="wx" type="button" aria-pressed="true">ordinary</button>
+        <button id="wx-sun" class="wx" type="button" aria-pressed="false">kind</button>
+      </div>
+      <button id="reset" class="ghost" type="button">reset</button>
+    </div>
+  </div>
+
+  <div class="hairb mt-4"></div>
+
+  <!-- HERO: the verdict, at poster scale -->
+  <section class="flex flex-wrap items-end gap-x-10 gap-y-4 py-6" aria-live="polite">
+    <div>
+      <div class="cap">Your money lasts to</div>
+      <div id="hero" class="num -ml-[3px] mt-1 leading-[.82] tracking-[-.045em] font-extrabold"
+           style="font-size:clamp(76px,13.5vw,140px);">89</div>
+    </div>
+    <div class="flex flex-1 flex-wrap items-end justify-end gap-x-10 gap-y-4 pb-2">
+      <div class="min-w-[150px]">
+        <div class="cap">Against a plan to</div>
+        <div class="num mt-1 text-[38px] font-extrabold leading-none tracking-[-.03em]">95</div>
+      </div>
+      <div class="min-w-[150px]">
+        <div class="cap">The gap</div>
+        <div id="hero-gap" class="num mt-1 text-[38px] font-extrabold leading-none tracking-[-.03em]">6 yrs</div>
+      </div>
+      <div class="min-w-[170px] max-w-[240px]">
+        <div class="cap">In a stormy market</div>
+        <div id="hero-storm" class="num mt-1 text-[38px] font-extrabold leading-none tracking-[-.03em]">80</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="hairb"></div>
+
+  <!-- FOUR-COLUMN GRID: sentence / controls / stats / chart -->
+  <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+
+    <!-- col 1: the sentence -->
+    <div class="border-b border-[#d6d6d6] py-6 pr-0 lg:border-b-0 lg:border-r lg:pr-7">
+      <div class="cap">What this means</div>
+      <p id="sentence" class="mt-4 text-[16px] leading-[1.55] tracking-[-.005em]">
+        Your money runs out at 89 — six years short of the 95 you are planning for, and nothing is
+        left over. Working two more years would close the gap.
+      </p>
+    </div>
+
+    <!-- col 2: the three controls -->
+    <div class="border-b border-[#d6d6d6] py-6 lg:border-b-0 lg:border-r lg:px-7">
+      <div class="cap">Three levers</div>
+
+      <div class="mt-5">
+        <div class="flex items-baseline justify-between">
+          <label for="ctl-retire" class="cap">Stop working at</label>
+          <span id="val-retire" class="num text-[30px] font-extrabold leading-none tracking-[-.03em]">62</span>
+        </div>
+        <input id="ctl-retire" type="range" min="50" max="75" step="1" value="62" class="mt-1.5" />
+      </div>
+
+      <div class="mt-6">
+        <div class="flex items-baseline justify-between">
+          <label for="ctl-spend" class="cap">Spend a year</label>
+          <span id="val-spend" class="num text-[30px] font-extrabold leading-none tracking-[-.03em]">$85,000</span>
+        </div>
+        <input id="ctl-spend" type="range" min="40000" max="150000" step="2500" value="85000" class="mt-1.5" />
+      </div>
+
+      <div class="mt-6">
+        <div class="flex items-baseline justify-between">
+          <label for="ctl-saved" class="cap">Saved</label>
+          <span id="val-saved" class="num text-[30px] font-extrabold leading-none tracking-[-.03em]">$850k</span>
+        </div>
+        <input id="ctl-saved" type="range" min="100000" max="2500000" step="25000" value="850000" class="mt-1.5" />
+      </div>
+    </div>
+
+    <!-- col 3: three computed stats -->
+    <div class="border-b border-[#d6d6d6] py-6 lg:border-b-0 lg:border-r lg:px-7">
+      <div class="cap">Worked out</div>
+
+      <div class="mt-5 border-t border-[#111] pt-3">
+        <div class="cap">Left over at 95</div>
+        <div id="st-left" class="num mt-1.5 text-[34px] font-extrabold leading-none tracking-[-.03em]">$0</div>
+      </div>
+
+      <div class="mt-5 border-t border-[#d6d6d6] pt-3">
+        <div class="cap">Taken out, in total</div>
+        <div id="st-out" class="num mt-1.5 text-[34px] font-extrabold leading-none tracking-[-.03em]">$0</div>
+      </div>
+
+      <div class="mt-5 border-t border-[#d6d6d6] pt-3">
+        <div class="cap">Money in, in total</div>
+        <div id="st-in" class="num mt-1.5 text-[34px] font-extrabold leading-none tracking-[-.03em]">$0</div>
+      </div>
+    </div>
+
+    <!-- col 4: hairline area chart -->
+    <div class="py-6 lg:pl-7">
+      <div class="cap">The pot, year by year</div>
+      <div id="chart" class="mt-5"></div>
+      <div class="hair mt-3"></div>
+      <div class="flex items-baseline justify-between pt-2">
+        <span id="ch-a" class="num text-[11px] text-[#6b6b6b]">55</span>
+        <span id="ch-mid" class="num text-[11px] text-[#6b6b6b]">75</span>
+        <span id="ch-b" class="num text-[11px] text-[#6b6b6b]">95</span>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="hairb"></div>
+
+  <footer class="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-4">
+    <span class="text-[11.5px] text-[#9a9a9a]">22 · Swiss Poster</span>
+    <span class="text-[11.5px] text-[#9a9a9a]">—</span>
+    <span class="text-[11.5px] text-[#9a9a9a]">Everything on this page is one number, said three ways.</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    spending:   DEMO_DEFAULTS.spending,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+
+  function $(id) { return document.getElementById(id); }
+  function money(v) { return '$' + Math.round(v).toLocaleString('en-CA'); }
+  function shortMoney(v) {
+    if (Math.abs(v) >= 1000000) return '$' + (Math.round(v / 100000) / 10).toFixed(1).replace(/\.0$/, '') + 'm';
+    return '$' + Math.round(v / 1000) + 'k';
+  }
+  function setWx() {
+    $('wx-storm').setAttribute('aria-pressed', String(state.sky === 'storm'));
+    $('wx-normal').setAttribute('aria-pressed', String(state.sky === 'normal'));
+    $('wx-sun').setAttribute('aria-pressed', String(state.sky === 'sun'));
+  }
+
+  /* total money in / out across the planned span */
+  function flowsTotal(res) {
+    var tin = 0, tout = 0;
+    res.rows.forEach(function (r) {
+      if (r.age > state.maxAge) return;
+      var working = r.age < state.retireAge;
+      tin  += working ? state.contrib : (r.age >= state.benefitAge ? state.benefits : 0);
+      tout += working ? 0 : state.spending;
+    });
+    return { tin: tin, tout: tout };
+  }
+
+  function chart(res) {
+    var pts = res.rows.filter(function (r) { return r.age <= state.maxAge; });
+    var W = 320, H = 150;
+    if (!pts.length) { $('chart').innerHTML = ''; return; }
+    var top = 0;
+    pts.forEach(function (p) { if (p.bal > top) top = p.bal; });
+    if (top <= 0) top = 1;
+    var x = function (age) {
+      var lo = pts[0].age, hi = pts[pts.length - 1].age;
+      return (hi === lo) ? 0 : ((age - lo) / (hi - lo)) * W;
+    };
+    var y = function (b) { return H - (b / top) * H; };
+
+    var line = '';
+    pts.forEach(function (p, i) { line += (i ? 'L' : 'M') + x(p.age).toFixed(2) + ' ' + y(p.bal).toFixed(2); });
+    var area = line + 'L' + x(pts[pts.length - 1].age).toFixed(2) + ' ' + H + 'L0 ' + H + 'Z';
+
+    var dry = (res.depletionAge != null && res.depletionAge <= state.maxAge);
+    var marks = '';
+    if (dry) {
+      var dx = x(res.depletionAge).toFixed(2);
+      marks = '<line x1="' + dx + '" y1="0" x2="' + dx + '" y2="' + H + '" stroke="#d92b21" stroke-width="1"/>' +
+              '<circle cx="' + dx + '" cy="' + H + '" r="3" fill="#d92b21"/>';
+    }
+
+    $('chart').innerHTML =
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="150" role="img" aria-label="Balance each year">' +
+        '<rect x="0" y="' + H + '" width="' + W + '" height="1" fill="#111"/>' +
+        '<path d="' + area + '" fill="rgba(17,17,17,.055)" stroke="none"/>' +
+        '<path d="' + line + '" fill="none" stroke="#111" stroke-width="1.25" vector-effect="non-scaling-stroke"/>' +
+        marks +
+      '</svg>';
+    $('ch-a').textContent = String(pts[0].age);
+    $('ch-b').textContent = String(pts[pts.length - 1].age);
+  }
+
+  function render() {
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var tot = flowsTotal(res);
+    var ok = res.ok;
+    var lasts = lastsLabel(res);
+    var gap = ok ? 0 : (state.maxAge - res.depletionAge);
+    var idea = suggest(state);
+
+    setWx();
+
+    /* masthead */
+    $('m-span').textContent = state.currentAge + '–' + state.maxAge;
+
+    /* hero */
+    var hero = $('hero');
+    hero.textContent = lasts;
+    hero.style.color = ok ? '#111' : '#d92b21';
+    $('hero-gap').textContent = ok
+      ? '+' + Math.round(res.leftAtMax / 1000) + 'k'
+      : gap + (gap === 1 ? ' yr' : ' yrs');
+    $('hero-gap').style.color = ok ? '#111' : '#d92b21';
+    $('hero-storm').textContent = lastsLabel(storm);
+    $('hero-storm').style.color = storm.ok ? '#111' : '#d92b21';
+
+    /* sentence */
+    var s;
+    if (ok) {
+      s = 'Your money lasts to ' + lasts + ' — past the ' + state.maxAge +
+          ' you are planning for, with ' + money(res.leftAtMax) + ' left over. ';
+      s += storm.ok
+        ? 'In a stormy market it still lasts to ' + lastsLabel(storm) + '.'
+        : 'In a stormy market it runs out at ' + lastsLabel(storm) + '. ' +
+          (idea || 'Something larger has to give.');
+    } else {
+      s = 'Your money runs out at ' + lasts + ' — ' + gap + (gap === 1 ? ' year' : ' years') +
+          ' short of the ' + state.maxAge + ' you are planning for, and nothing is left over. ';
+      s += idea || 'Nothing small repairs this; something larger has to give.';
+    }
+    $('sentence').textContent = s;
+
+    /* controls */
+    $('val-retire').textContent = String(state.retireAge);
+    $('val-spend').textContent = money(state.spending);
+    $('val-saved').textContent = shortMoney(state.savings);
+
+    /* stats */
+    $('st-left').textContent = ok ? money(res.leftAtMax) : '$0';
+    $('st-out').textContent = shortMoney(tot.tout);
+    $('st-in').textContent = shortMoney(tot.tin);
+
+    chart(res);
+  }
+
+  /* controls */
+  $('ctl-retire').addEventListener('input', function (e) {
+    state.retireAge = Number(e.target.value); render();
+  });
+  $('ctl-spend').addEventListener('input', function (e) {
+    state.spending = Number(e.target.value); render();
+  });
+  $('ctl-saved').addEventListener('input', function (e) {
+    state.savings = Number(e.target.value); render();
+  });
+
+  function pick(sky) { state.sky = sky; render(); }
+  $('wx-storm').addEventListener('click', function () { pick('storm'); });
+  $('wx-normal').addEventListener('click', function () { pick('normal'); });
+  $('wx-sun').addEventListener('click', function () { pick('sun'); });
+
+  $('reset').addEventListener('click', function () {
+    state.retireAge = DEMO_DEFAULTS.retireAge;
+    state.spending  = DEMO_DEFAULTS.spending;
+    state.savings   = DEMO_DEFAULTS.savings;
+    state.sky       = DEMO_DEFAULTS.sky;
+    syncInputs();
+    render();
+  });
+
+  function syncInputs() {
+    $('ctl-retire').value = String(state.retireAge);
+    $('ctl-spend').value = String(state.spending);
+    $('ctl-saved').value = String(state.savings);
+  }
+
+  syncInputs();
+  render();
+})();
+</script>
+</body>
+</html>

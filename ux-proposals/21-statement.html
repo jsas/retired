@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — 21 · The Statement</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+  .num { font-variant-numeric: tabular-nums; }
+  .sc  { font-variant-caps: all-small-caps; letter-spacing: .17em; }
+
+  /* --- the statement table: quiet hairlines, right-aligned figures --- */
+  table { border-collapse: collapse; width: 100%; }
+  thead th {
+    font-size: 9.5px; font-weight: 600; letter-spacing: .13em; text-transform: uppercase;
+    color: #8a8474; text-align: right; white-space: nowrap;
+    padding: 0 12px 8px 12px; border-bottom: 1.5px solid #29251c;
+  }
+  tbody td {
+    font-size: 12.75px; color: #29251c; text-align: right; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    padding: 6px 12px; border-bottom: 1px solid rgba(41, 37, 28, .085);
+  }
+  th.l, td.l { text-align: left; }
+  thead th:first-child, tbody td:first-child { padding-left: 0; }
+  thead th:last-child,  tbody td:last-child  { padding-right: 0; }
+  tbody tr:hover td { background: rgba(41, 37, 28, .028); }
+
+  /* the one red accent: the year the money runs out */
+  tr.dry td {
+    color: #b3231f; border-bottom-color: rgba(179, 35, 31, .30);
+    background: rgba(179, 35, 31, .038); font-weight: 600;
+  }
+  tr.dry:hover td { background: rgba(179, 35, 31, .06); }
+  tr.dry td:first-child { box-shadow: inset 2px 0 0 #b3231f; padding-left: 10px; }
+
+  .memo { font-size: 11px; color: #8a8474; letter-spacing: .01em; }
+  tr.dry .memo { color: #b3231f; }
+
+  .tot td { border-bottom: none; border-top: 1.5px solid #29251c; font-weight: 600; padding-top: 8px; }
+
+  /* --- steppers --- */
+  .step-btn {
+    width: 24px; height: 24px; line-height: 1; flex: none;
+    border: 1px solid rgba(41, 37, 28, .22); border-radius: 4px;
+    background: #fff; color: #29251c; font-size: 14px; font-weight: 500;
+    transition: background-color .14s ease, border-color .14s ease, transform .1s ease;
+  }
+  .step-btn:hover { background: rgba(41, 37, 28, .05); border-color: rgba(41, 37, 28, .42); }
+  .step-btn:active { transform: translateY(1px); }
+  .step-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+
+  /* --- show more --- */
+  .more-btn {
+    border: 1px solid rgba(41, 37, 28, .22); border-radius: 4px; background: #fff;
+    padding: 7px 16px; font-size: 12px; letter-spacing: .05em; color: #29251c;
+    transition: background-color .14s ease, border-color .14s ease;
+  }
+  .more-btn:hover { background: rgba(41, 37, 28, .05); border-color: rgba(41, 37, 28, .42); }
+
+  ::selection { background: rgba(37, 99, 235, .14); }
+</style>
+</head>
+<body class="min-h-screen bg-[#f7f7f5] text-[#29251c] antialiased">
+
+<div class="mx-auto max-w-4xl px-4 py-7 sm:px-8 sm:py-10">
+
+  <!-- top chrome -->
+  <header class="mb-6 flex items-center gap-2.5">
+    <div class="flex h-6 w-6 items-center justify-center rounded bg-blue-600 text-[9px] font-bold text-white">RE:</div>
+    <span class="text-sm font-semibold tracking-tight">tired</span>
+    <span class="text-[11px] text-[#a8a294]">21 — The Statement</span>
+    <button id="reset" type="button"
+            class="ml-auto text-[11px] text-[#a8a294] underline decoration-dotted underline-offset-2 hover:text-[#29251c]">
+      reset to your plan
+    </button>
+  </header>
+
+  <!-- CONTROLS: three steppers. They change nothing about the page — the statement just re-prints. -->
+  <div class="mb-5 rounded-lg border border-[#29251c]/12 bg-white px-4 py-3.5 sm:px-5">
+    <div class="flex flex-wrap items-center gap-x-8 gap-y-3.5">
+
+      <span class="sc text-[11px] text-[#a8a294]">Adjust, then read again</span>
+
+      <div class="flex items-center gap-2.5">
+        <span class="text-[12.5px] text-[#6b6552]">stop working at</span>
+        <button id="r-minus" class="step-btn" type="button" aria-label="Stop working one year earlier">&minus;</button>
+        <span id="v-retire" class="num w-8 text-center text-[14px] font-semibold">62</span>
+        <button id="r-plus" class="step-btn" type="button" aria-label="Stop working one year later">+</button>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <span class="text-[12.5px] text-[#6b6552]">spend a year</span>
+        <button id="s-minus" class="step-btn" type="button" aria-label="Spend less each year">&minus;</button>
+        <span id="v-spend" class="num w-[68px] text-center text-[14px] font-semibold">$85,000</span>
+        <button id="s-plus" class="step-btn" type="button" aria-label="Spend more each year">+</button>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <span class="text-[12.5px] text-[#6b6552]">saved</span>
+        <button id="v-minus" class="step-btn" type="button" aria-label="Start with less saved">&minus;</button>
+        <span id="v-saved" class="num w-[78px] text-center text-[14px] font-semibold">$850,000</span>
+        <button id="v-plus" class="step-btn" type="button" aria-label="Start with more saved">+</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- THE STATEMENT -->
+  <article class="rounded-sm border border-[#29251c]/15 bg-white px-5 py-7 shadow-[0_1px_2px_rgba(41,37,28,.04),0_14px_34px_-22px_rgba(41,37,28,.30)] sm:px-10 sm:py-10">
+
+    <!-- letterhead -->
+    <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+      <div class="flex items-baseline gap-2">
+        <span class="text-[15px] font-bold tracking-tight">RE:tired</span>
+        <span class="text-[12px] text-[#8a8474]">Plan statement</span>
+      </div>
+      <div id="lh-period" class="num text-[12px] text-[#6b6552]">Ages 55 – 95</div>
+    </div>
+    <div class="mt-3.5 border-t-[3px] border-double border-[#29251c]" style="border-top-width:3px;"></div>
+    <div class="mt-[3px] border-t border-[#29251c]/25"></div>
+
+    <!-- summary box: the verdict in words -->
+    <section class="mt-6 rounded-md bg-[#faf9f6] px-4 py-5 sm:px-6" aria-live="polite">
+      <div class="sc text-[11px] text-[#8a8474]">The short version</div>
+      <p class="mt-2.5 max-w-[62ch] text-[15.5px] leading-[1.65]">
+        <span id="sum-lead" class="font-semibold">Your money runs out at 89.</span>
+        <span id="sum-body" class="text-[#4a4638]">That is six years short of the 95 you are planning for,
+        and nothing is left over.</span>
+      </p>
+      <p id="sum-fix" class="mt-2.5 max-w-[62ch] text-[13.5px] leading-[1.6] text-[#6b6552]">
+        Working two more years would close the gap. In a stormy market it lasts to 80.
+      </p>
+      <div class="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-[#29251c]/12 pt-4 sm:grid-cols-4">
+        <div>
+          <div class="sc text-[10.5px] text-[#a8a294]">Lasts to</div>
+          <div id="s-lasts" class="num mt-1 text-[19px] font-semibold">89</div>
+        </div>
+        <div>
+          <div class="sc text-[10.5px] text-[#a8a294]">Left over at 95</div>
+          <div id="s-left" class="num mt-1 text-[19px] font-semibold">$0</div>
+        </div>
+        <div>
+          <div class="sc text-[10.5px] text-[#a8a294]">In a stormy market</div>
+          <div id="s-storm" class="num mt-1 text-[19px] font-semibold">80</div>
+        </div>
+        <div>
+          <div class="sc text-[10.5px] text-[#a8a294]">Total drawn out</div>
+          <div id="s-out" class="num mt-1 text-[19px] font-semibold">$0</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- the yearly rows -->
+    <section class="mt-8">
+      <div class="flex items-baseline justify-between">
+        <div class="sc text-[11px] text-[#8a8474]">Year by year</div>
+        <div class="num text-[10.5px] text-[#a8a294]">All figures in today's dollars</div>
+      </div>
+      <table class="mt-3.5">
+        <thead>
+          <tr>
+            <th class="l" scope="col">Age</th>
+            <th class="l" scope="col">Note</th>
+            <th scope="col">Money in</th>
+            <th scope="col">Money out</th>
+            <th scope="col">Balance after</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+        <tfoot>
+          <tr class="tot">
+            <td class="l num" id="t-count">41 yrs</td>
+            <td class="l memo"></td>
+            <td class="num" id="t-in">$0</td>
+            <td class="num" id="t-out">$0</td>
+            <td class="num" id="t-end">$0</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div class="mt-5 flex justify-center">
+        <button id="more" class="more-btn" type="button">Show all 41 years</button>
+      </div>
+    </section>
+
+    <div class="mt-9 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-[#29251c]/15 pt-4">
+      <span class="sc text-[11px] text-[#a8a294]">End of statement</span>
+      <span class="text-[11px] italic text-[#a8a294]">Drawn from your own numbers, not a table of averages.</span>
+    </div>
+  </article>
+
+  <footer class="mt-7 text-[11.5px] text-[#a8a294]">
+    21 · The Statement — your retirement, itemised like the statement you already read.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    currentAge: DEMO_DEFAULTS.currentAge,
+    maxAge:     DEMO_DEFAULTS.maxAge,
+    retireAge:  DEMO_DEFAULTS.retireAge,
+    spending:   DEMO_DEFAULTS.spending,
+    savings:    DEMO_DEFAULTS.savings,
+    contrib:    DEMO_DEFAULTS.contrib,
+    benefits:   DEMO_DEFAULTS.benefits,
+    benefitAge: DEMO_DEFAULTS.benefitAge,
+    sky:        DEMO_DEFAULTS.sky
+  };
+  var START = JSON.parse(JSON.stringify(state));
+
+  var LIMITS = {
+    retireAge: { min: 50, max: 75, step: 1 },
+    spending:  { min: 40000, max: 150000, step: 2500 },
+    savings:   { min: 100000, max: 2500000, step: 25000 }
+  };
+  var FIRST_N = 12;
+  var expanded = false;
+
+  function $(id) { return document.getElementById(id); }
+  function clamp(v, l) { return Math.min(l.max, Math.max(l.min, v)); }
+  function money(v) { return '$' + Math.round(v).toLocaleString('en-CA'); }
+
+  /* flow for one year, straight out of the model's own rules */
+  function flows(age) {
+    var working = age < state.retireAge;
+    return {
+      tin:  working ? state.contrib : (age >= state.benefitAge ? state.benefits : 0),
+      tout: working ? 0 : state.spending
+    };
+  }
+
+  function memoFor(age, res) {
+    var bits = [];
+    if (age === state.currentAge) bits.push('today');
+    if (age === state.retireAge) bits.push('you stop working');
+    if (age === state.benefitAge) bits.push('CPP + OAS begin');
+    if (res.depletionAge === age) bits.push('the money runs out here');
+    if (age === state.maxAge && res.ok) bits.push('the age you had in mind');
+    return bits.join(' · ');
+  }
+
+  function render() {
+    var res = simulate(state);
+    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    var byAge = {};
+    res.rows.forEach(function (r) { byAge[r.age] = r.bal; });
+
+    /* --- controls readouts --- */
+    $('v-retire').textContent = String(state.retireAge);
+    $('v-spend').textContent = money(state.spending);
+    $('v-saved').textContent = money(state.savings);
+    $('lh-period').textContent = 'Ages ' + state.currentAge + ' – ' + state.maxAge;
+
+    /* --- summary --- */
+    var ok = res.ok;
+    var gap = ok ? 0 : (state.maxAge - res.depletionAge);
+    var lead = $('sum-lead'), body = $('sum-body'), fix = $('sum-fix');
+
+    if (ok) {
+      lead.textContent = 'Your money lasts to ' + lastsLabel(res) + '.';
+      lead.style.color = '';
+      body.textContent = ' That is past the ' + state.maxAge + ' you are planning for, and ' +
+        fmtMoney(res.leftAtMax) + ' is left over at ' + state.maxAge + '.';
+    } else {
+      lead.textContent = 'Your money runs out at ' + res.depletionAge + '.';
+      lead.style.color = '#b3231f';
+      body.textContent = ' That is ' + gap + ' ' + (gap === 1 ? 'year' : 'years') +
+        ' short of the ' + state.maxAge + ' you are planning for, and nothing is left over.';
+    }
+    fix.textContent = 'In a stormy market it lasts to ' + lastsLabel(storm) + '. ' +
+      (suggest(state) || (ok ? 'Nothing here needs fixing.' : 'Something larger has to give.'));
+
+    $('s-lasts').textContent = lastsLabel(res);
+    $('s-left').textContent = fmtMoney(res.leftAtMax);
+    $('s-storm').textContent = lastsLabel(storm);
+
+    /* --- the yearly rows, up to the age you are planning to --- */
+    var shown = res.rows.filter(function (r) { return r.age <= state.maxAge; });
+    var totalIn = 0, totalOut = 0;
+    shown.forEach(function (r) {
+      var f = flows(r.age);
+      totalIn += f.tin; totalOut += f.tout;
+    });
+
+    var tbody = $('rows');
+    tbody.textContent = '';
+    var n = expanded ? shown.length : Math.min(FIRST_N, shown.length);
+
+    for (var i = 0; i < n; i++) {
+      var r = shown[i];
+      var f = flows(r.age);
+      var dry = (res.depletionAge === r.age);
+      var tr = document.createElement('tr');
+      if (dry) tr.className = 'dry';
+
+      var tdAge = document.createElement('td');
+      tdAge.className = 'l num';
+      tdAge.textContent = String(r.age);
+      tr.appendChild(tdAge);
+
+      var tdMemo = document.createElement('td');
+      tdMemo.className = 'l memo';
+      tdMemo.textContent = memoFor(r.age, res);
+      tr.appendChild(tdMemo);
+
+      var tdIn = document.createElement('td');
+      tdIn.className = 'num';
+      tdIn.textContent = f.tin ? money(f.tin) : '—';
+      tr.appendChild(tdIn);
+
+      var tdOut = document.createElement('td');
+      tdOut.className = 'num';
+      tdOut.textContent = f.tout ? money(f.tout) : '—';
+      tr.appendChild(tdOut);
+
+      var tdBal = document.createElement('td');
+      tdBal.className = 'num font-semibold';
+      tdBal.textContent = money(r.bal);
+      tr.appendChild(tdBal);
+
+      tbody.appendChild(tr);
+    }
+
+    /* --- totals --- */
+    $('t-count').textContent = shown.length + (shown.length === 1 ? ' yr' : ' yrs');
+    $('t-in').textContent = money(totalIn);
+    $('t-out').textContent = money(totalOut);
+    $('s-out').textContent = money(totalOut);
+    var lastBal = shown.length ? shown[shown.length - 1].bal : 0;
+    $('t-end').textContent = money(lastBal);
+
+    /* --- show more / show fewer --- */
+    var btn = $('more');
+    if (shown.length <= FIRST_N) {
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = '';
+      btn.textContent = !expanded
+        ? 'Show all ' + shown.length + ' years'
+        : 'Show the first ' + FIRST_N + ' years';
+    }
+  }
+
+  /* --- steppers --- */
+  function step(key, dir) {
+    state[key] = clamp(state[key] + dir * LIMITS[key].step, LIMITS[key]);
+    render();
+  }
+  $('r-minus').addEventListener('click', function () { step('retireAge', -1); });
+  $('r-plus').addEventListener('click',  function () { step('retireAge', 1); });
+  $('s-minus').addEventListener('click', function () { step('spending', -1); });
+  $('s-plus').addEventListener('click',  function () { step('spending', 1); });
+  $('v-minus').addEventListener('click', function () { step('savings', -1); });
+  $('v-plus').addEventListener('click',  function () { step('savings', 1); });
+
+  $('more').addEventListener('click', function () {
+    expanded = !expanded;
+    render();
+  });
+
+  $('reset').addEventListener('click', function () {
+    state = JSON.parse(JSON.stringify(START));
+    expanded = false;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

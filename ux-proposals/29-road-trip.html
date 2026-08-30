@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>29 — Road Trip</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* styled range inputs */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 12px; border-radius: 999px;
+    background: #ddd9d3; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #f59e0b; border: 3px solid #fffdf8;
+    box-shadow: 0 2px 6px rgba(68,64,60,.45); cursor: grab;
+  }
+  input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; background: #d97706; }
+  input[type=range]::-moz-range-thumb {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #f59e0b; border: 3px solid #fffdf8;
+    box-shadow: 0 2px 6px rgba(68,64,60,.45); cursor: grab;
+  }
+  input[type=range]:focus-visible { outline: 2px solid #d97706; outline-offset: 3px; }
+
+  .skybtn { transition: background .15s, color .15s, box-shadow .15s; }
+  .skybtn[aria-pressed="true"] { background: #fffdf8; color: #44403c; box-shadow: 0 1px 3px rgba(68,64,60,.25); }
+
+  #road text { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  .pin { cursor: ew-resize; }
+  .fadein { animation: fi .5s ease-out both; }
+  @keyframes fi { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body class="bg-[#f5f4f1] text-stone-800 min-h-screen flex flex-col">
+
+<header class="flex items-center justify-between px-5 py-3">
+  <div class="flex items-center gap-2">
+    <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[9px] font-bold text-white leading-none">RE:</div>
+    <span class="font-semibold text-sm tracking-tight">tired</span>
+  </div>
+  <span class="text-xs text-stone-500">29 — Road Trip</span>
+</header>
+
+<main class="flex-1 w-full max-w-6xl mx-auto px-4 pb-10">
+
+  <div class="fadein">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700 mb-1">The whole plan, as a highway</p>
+    <h1 class="text-lg md:text-xl font-semibold text-stone-700">One tank of money, one road, age 55 to 105.</h1>
+  </div>
+
+  <!-- ═══ THE ROAD ═══ -->
+  <div class="mt-4 rounded-2xl bg-white border border-stone-200 shadow-sm p-2 md:p-4">
+    <svg id="road" viewBox="0 0 1080 380" class="w-full h-auto touch-none select-none" role="img" aria-label="A road from age 55 to 105 with a car, a work-ends flag, a CPP and OAS station, and an end marker">
+      <rect x="0" y="0" width="1080" height="380" fill="#faf9f7"/>
+
+      <!-- zones on the asphalt -->
+      <rect id="goalZone" x="0" y="180" width="0" height="52" fill="#16a34a" opacity="0.15" pointer-events="none"/>
+      <rect id="shortZone" x="0" y="180" width="0" height="52" fill="#e11d48" opacity="0.17" pointer-events="none"/>
+
+      <!-- asphalt -->
+      <rect x="46" y="180" width="996" height="52" rx="10" fill="#44403c"/>
+      <rect x="50" y="180" width="988" height="4" rx="2" fill="#57534e"/>
+      <line x1="58" y1="198" x2="1030" y2="198" stroke="#fbbf24" stroke-width="3.5" stroke-dasharray="30 20" stroke-linecap="round" opacity="0.92"/>
+      <g id="ticks" pointer-events="none"></g>
+
+      <!-- target line -->
+      <g pointer-events="none">
+        <line id="targetLine" x1="840" y1="56" x2="840" y2="180" stroke="#78716c" stroke-width="2" stroke-dasharray="6 6"/>
+        <text id="targetLabel" x="840" y="48" text-anchor="middle" font-size="13" font-weight="600" fill="#57534e">target 95</text>
+      </g>
+
+      <!-- work-ends flag -->
+      <g id="flagG" transform="translate(246,0)" pointer-events="none">
+        <rect x="-3" y="180" width="6" height="18" rx="2" fill="#f59e0b"/>
+        <line x1="0" y1="196" x2="0" y2="116" stroke="#44403c" stroke-width="3.5" stroke-linecap="round"/>
+        <polygon id="flagCloth" points="0,116 46,127 0,138" fill="#f59e0b" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>
+        <text id="flagLabel" x="0" y="105" text-anchor="middle" font-size="13.5" font-weight="700" fill="#92400e">work ends · 62</text>
+      </g>
+
+      <!-- out of fuel -->
+      <g id="endFail" transform="translate(732,0)" opacity="0" pointer-events="none">
+        <text id="failCap" x="0" y="56" text-anchor="middle" font-size="12.5" font-weight="600" fill="#b91c1c">dry at 89</text>
+        <line x1="0" y1="144" x2="0" y2="180" stroke="#78716c" stroke-width="4" stroke-linecap="round"/>
+        <g transform="translate(0,105)">
+          <polygon id="octa" points="" fill="#dc2626" stroke="#991b1b" stroke-width="2.5" stroke-linejoin="round"/>
+          <text x="0" y="-3" text-anchor="middle" font-size="12" font-weight="800" fill="#fff">OUT OF</text>
+          <text x="0" y="11" text-anchor="middle" font-size="12" font-weight="800" fill="#fff">FUEL</text>
+        </g>
+      </g>
+
+      <!-- still driving banner -->
+      <g id="endPass" transform="translate(840,0)" opacity="0" pointer-events="none">
+        <line x1="0" y1="136" x2="0" y2="180" stroke="#166534" stroke-width="4" stroke-linecap="round"/>
+        <rect x="-2" y="96" width="184" height="40" rx="9" fill="#16a34a"/>
+        <text x="90" y="122" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff" letter-spacing="0.6">STILL DRIVING</text>
+        <text id="passCap" x="90" y="156" text-anchor="middle" font-size="12.5" font-weight="600" fill="#166534" class="num">left over: $0</text>
+      </g>
+
+      <!-- service station -->
+      <g id="stationG" transform="translate(300,232)" pointer-events="none">
+        <line x1="0" y1="0" x2="0" y2="32" stroke="#16a34a" stroke-width="2" stroke-dasharray="5 5"/>
+        <rect x="-34" y="32" width="68" height="9" rx="4" fill="#16a34a"/>
+        <line x1="-26" y1="41" x2="-26" y2="52" stroke="#16a34a" stroke-width="3"/>
+        <line x1="26" y1="41" x2="26" y2="52" stroke="#16a34a" stroke-width="3"/>
+        <rect x="-26" y="52" width="52" height="42" rx="5" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+        <rect x="-20" y="66" width="15" height="28" rx="2" fill="#86efac"/>
+        <rect x="8" y="62" width="15" height="28" rx="3" fill="#16a34a"/>
+        <text id="stationLabel" x="0" y="114" text-anchor="middle" font-size="13.5" font-weight="700" fill="#166534">CPP + OAS join · 65</text>
+      </g>
+
+      <!-- the car -->
+      <g id="carG" transform="translate(120,180)" pointer-events="none">
+        <line x1="0" y1="-112" x2="0" y2="-40" stroke="#fcd34d" stroke-width="2" stroke-dasharray="4 4"/>
+        <rect x="-70" y="-158" width="140" height="46" rx="13" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+        <text id="odoT1" x="0" y="-140" text-anchor="middle" font-size="10.5" font-weight="600" fill="#b45309">today, age 55</text>
+        <text id="odoT2" x="0" y="-121" text-anchor="middle" font-size="16" font-weight="800" fill="#451a03" class="num">$850,000</text>
+        <rect x="-27" y="-26" width="54" height="17" rx="6" fill="#f59e0b"/>
+        <rect x="-15" y="-36" width="27" height="13" rx="5" fill="#f59e0b"/>
+        <rect x="-12" y="-33" width="9" height="8" rx="2" fill="#fef3c7"/>
+        <rect x="1" y="-33" width="8" height="8" rx="2" fill="#fef3c7"/>
+        <circle cx="26" cy="-19" r="2.6" fill="#fffbeb"/>
+        <circle cx="-15" cy="-7" r="7.5" fill="#1c1917"/><circle cx="-15" cy="-7" r="2.6" fill="#d6d3d1"/>
+        <circle cx="15" cy="-7" r="7.5" fill="#1c1917"/><circle cx="15" cy="-7" r="2.6" fill="#d6d3d1"/>
+      </g>
+
+      <!-- interaction overlays -->
+      <rect id="probeHit" x="46" y="180" width="996" height="52" fill="transparent"/>
+      <rect id="dragFlag" class="pin" x="230" y="150" width="32" height="92" fill="transparent"/>
+      <rect id="dragStation" class="pin" x="284" y="180" width="32" height="130" fill="transparent"/>
+
+      <!-- hover probe (on top) -->
+      <g id="probe" opacity="0" pointer-events="none">
+        <rect x="-76" y="136" width="152" height="40" rx="11" fill="#1c1917" opacity="0.93"/>
+        <text id="probeT1" x="0" y="153" text-anchor="middle" font-size="11" fill="#d6d3d1">age 74</text>
+        <text id="probeT2" x="0" y="169" text-anchor="middle" font-size="13.5" font-weight="700" fill="#ffffff" class="num">$412,000</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- ═══ READOUT ═══ -->
+  <div class="mt-5 flex flex-col md:flex-row md:items-end gap-4">
+    <div class="flex-1 min-w-0">
+      <p id="verdict" class="text-[22px] md:text-[26px] font-bold leading-snug"></p>
+      <p id="advice" class="mt-1.5 text-sm text-stone-500 leading-relaxed"></p>
+    </div>
+    <div id="skySeg" class="flex rounded-full bg-stone-200/70 p-1 text-sm shrink-0 self-start" role="group" aria-label="Market mood">
+      <button class="skybtn px-3 py-1.5 rounded-full font-medium text-stone-500" data-sky="storm" aria-pressed="false">stormy</button>
+      <button class="skybtn px-3 py-1.5 rounded-full font-medium text-stone-500" data-sky="normal" aria-pressed="true">ordinary</button>
+      <button class="skybtn px-3 py-1.5 rounded-full font-medium text-stone-500" data-sky="sun" aria-pressed="false">kind</button>
+    </div>
+  </div>
+
+  <!-- ═══ THREE SLIDERS ═══ -->
+  <div class="mt-6 grid gap-3 md:gap-4 md:grid-cols-3">
+    <div class="rounded-xl bg-white border border-stone-200 p-3.5">
+      <div class="flex items-baseline justify-between mb-2.5">
+        <span class="text-[13px] font-semibold text-stone-600">Work ends at</span>
+        <span id="vRetire" class="num text-[15px] font-bold text-amber-700">age 62</span>
+      </div>
+      <input id="sRetire" type="range" min="58" max="75" step="1" value="62" aria-label="Age work ends">
+    </div>
+    <div class="rounded-xl bg-white border border-stone-200 p-3.5">
+      <div class="flex items-baseline justify-between mb-2.5">
+        <span class="text-[13px] font-semibold text-stone-600">Spending a year</span>
+        <span id="vSpend" class="num text-[15px] font-bold text-amber-700">$85,000</span>
+      </div>
+      <input id="sSpend" type="range" min="30000" max="150000" step="2500" value="85000" aria-label="Spending per year">
+    </div>
+    <div class="rounded-xl bg-white border border-stone-200 p-3.5">
+      <div class="flex items-baseline justify-between mb-2.5">
+        <span class="text-[13px] font-semibold text-stone-600">CPP + OAS join at</span>
+        <span id="vBenefit" class="num text-[15px] font-bold text-emerald-700">age 65</span>
+      </div>
+      <input id="sBenefit" type="range" min="60" max="70" step="1" value="65" aria-label="Age CPP and OAS start">
+    </div>
+  </div>
+
+  <p class="mt-4 text-[12.5px] text-stone-500 leading-relaxed">
+    Starting fuel <span id="footSav" class="num font-semibold text-stone-700">$850,000</span> · planning to <span id="footMax" class="num font-semibold text-stone-700">95</span>.
+    Drag the flag or the service station right on the road, or slide below — the sign at the end moves with you.
+  </p>
+</main>
+
+<footer class="px-5 py-4 text-xs text-stone-500 border-t border-stone-200">
+  29 · Road Trip — the plan as one highway, and the sign that waits at the end of it.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = { ...DEMO_DEFAULTS };
+  const $ = id => document.getElementById(id);
+  const road = $('road');
+
+  const A0 = 55, A1 = 105, X0 = 120, PPY = 18;
+  const xOf = a => X0 + (a - A0) * PPY;
+  const aOf = x => A0 + (x - X0) / PPY;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  /* ---- static mileage markers ---- */
+  (function ticks() {
+    let s = '';
+    for (let a = A0; a <= A1; a += 5) {
+      const x = xOf(a);
+      s += `<line x1="${x}" y1="180" x2="${x}" y2="187" stroke="#78716c" stroke-width="2"/>`;
+      const col = a === A0 ? '#fbbf24' : (a === 95 ? '#ffffff' : '#d6d3d1');
+      if (a % 10 === 5) s += `<text x="${x}" y="224" text-anchor="middle" font-size="12.5" font-weight="600" fill="${col}" class="num">${a}</text>`;
+    }
+    $('ticks').innerHTML = s;
+  })();
+
+  /* ---- octagon for the out-of-fuel sign ---- */
+  (function octa() {
+    const r = 40, k = r * 0.4142, p = [
+      [-k, -r], [k, -r], [r, -k], [r, k], [k, r], [-k, r], [-r, k], [-r, -k]
+    ];
+    $('octa').setAttribute('points', p.map(q => q.map(n => n.toFixed(1)).join(',')).join(' '));
+  })();
+
+  const carG = $('carG'), flagG = $('flagG'), stationG = $('stationG'),
+        endFail = $('endFail'), endPass = $('endPass'),
+        dragFlag = $('dragFlag'), dragStation = $('dragStation'),
+        probe = $('probe'), verdict = $('verdict'), advice = $('advice');
+
+  /* ---- the one render ---- */
+  function render() {
+    const res = simulate(state);
+    const dry = res.depletionAge;
+    const tx = xOf(state.maxAge);
+
+    $('goalZone').setAttribute('x', tx);
+    $('goalZone').setAttribute('width', Math.max(0, xOf(A1) + 6 - tx));
+    $('targetLine').setAttribute('x1', tx); $('targetLine').setAttribute('x2', tx);
+    $('targetLabel').setAttribute('x', tx);
+    $('targetLabel').textContent = 'target ' + state.maxAge;
+
+    /* car + odometer */
+    carG.setAttribute('transform', `translate(${xOf(state.currentAge)},180)`);
+    $('odoT1').textContent = 'today, age ' + state.currentAge;
+    $('odoT2').textContent = fmtMoney(state.savings);
+    $('footSav').textContent = fmtMoney(state.savings);
+    $('footMax').textContent = state.maxAge;
+
+    /* work-ends flag */
+    const fx = xOf(state.retireAge);
+    flagG.setAttribute('transform', `translate(${fx},0)`);
+    $('flagLabel').textContent = 'work ends · ' + state.retireAge;
+    dragFlag.setAttribute('x', fx - 16);
+
+    /* service station */
+    const sx = xOf(state.benefitAge);
+    stationG.setAttribute('transform', `translate(${sx},232)`);
+    $('stationLabel').textContent = 'CPP + OAS join · ' + state.benefitAge;
+    dragStation.setAttribute('x', sx - 16);
+
+    /* the sign at the end */
+    if (dry != null && dry <= state.maxAge) {
+      endFail.setAttribute('opacity', '1'); endPass.setAttribute('opacity', '0');
+      const dx = xOf(dry);
+      endFail.setAttribute('transform', `translate(${dx},0)`);
+      $('failCap').textContent = 'dry at ' + dry;
+      $('shortZone').setAttribute('x', dx);
+      $('shortZone').setAttribute('width', Math.max(0, tx - dx));
+      verdict.innerHTML = `Runs out at <span class="num text-rose-700">${dry}</span> — ${state.maxAge - dry} year${state.maxAge - dry === 1 ? '' : 's'} short of ${state.maxAge}.`;
+      advice.textContent = suggest(state) ?? 'The sliders below move the sign.';
+    } else {
+      endFail.setAttribute('opacity', '0'); endPass.setAttribute('opacity', '1');
+      endPass.setAttribute('transform', `translate(${tx},0)`);
+      $('passCap').textContent = 'left over: ' + fmtMoney(res.leftAtMax);
+      $('shortZone').setAttribute('width', '0');
+      verdict.innerHTML = `Still driving at <span class="num text-emerald-700">${state.maxAge}</span> — <span class="num">${fmtMoney(res.leftAtMax)}</span> left over.`;
+      const storm = simulate({ ...state, sky: 'storm' });
+      advice.textContent = storm.ok
+        ? `In stormy markets too: still driving at ${state.maxAge}.`
+        : `But in stormy markets it runs out at ${storm.depletionAge} — try a bigger cushion.`;
+    }
+  }
+
+  /* ---- sliders ---- */
+  function bindSlider(id, key, out, fmt) {
+    const el = $(id);
+    el.addEventListener('input', () => {
+      state[key] = parseInt(el.value, 10);
+      $(out).textContent = fmt(state[key]);
+      render();
+    });
+    return el;
+  }
+  const sRetire = bindSlider('sRetire', 'retireAge', 'vRetire', v => 'age ' + v);
+  bindSlider('sSpend', 'spending', 'vSpend', fmtMoney);
+  bindSlider('sBenefit', 'benefitAge', 'vBenefit', v => 'age ' + v);
+
+  /* ---- sky segmented control ---- */
+  $('skySeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-sky]');
+    if (!b) return;
+    state.sky = b.dataset.sky;
+    [...$('skySeg').children].forEach(c => c.setAttribute('aria-pressed', String(c === b)));
+    render();
+  });
+
+  /* ---- dragging the pins ---- */
+  /* the svg keeps a fixed 1080x380 aspect (h-auto), so a uniform scale maps
+     screen x to viewBox x — no matrix juggling needed */
+  function localX(e) {
+    const r = road.getBoundingClientRect();
+    if (!r.width) return null;
+    return (e.clientX - r.left) * (1080 / r.width);
+  }
+  let drag = null;
+  function startDrag(key, el, e) {
+    drag = key; el.setPointerCapture && (() => { try { el.setPointerCapture(e.pointerId); } catch (_) {} })();
+    moveDrag(e);
+  }
+  function moveDrag(e) {
+    if (!drag) return;
+    const x = localX(e);
+    if (x == null) return;
+    if (drag === 'retireAge') {
+      const a = clamp(Math.round(aOf(x)), 58, 75);
+      if (a !== state.retireAge) { state.retireAge = a; sRetire.value = a; $('vRetire').textContent = 'age ' + a; render(); }
+    } else {
+      const a = clamp(Math.round(aOf(x)), 60, 70);
+      if (a !== state.benefitAge) { state.benefitAge = a; $('sBenefit').value = a; $('vBenefit').textContent = 'age ' + a; render(); }
+    }
+  }
+  dragFlag.addEventListener('pointerdown', e => startDrag('retireAge', dragFlag, e));
+  dragStation.addEventListener('pointerdown', e => startDrag('benefitAge', dragStation, e));
+  road.addEventListener('pointermove', moveDrag);
+  road.addEventListener('pointerup', () => { drag = null; });
+  road.addEventListener('pointercancel', () => { drag = null; });
+
+  /* ---- hover probe: balance at any age on the road ---- */
+  const probeHit = $('probeHit');
+  let probeRes = null, probeKey = '';
+  const keyOf = () => [state.retireAge, state.spending, state.savings, state.benefitAge, state.sky].join('|');
+  probeHit.addEventListener('pointermove', e => {
+    if (drag) return;
+    const x = localX(e);
+    if (x == null) return;
+    const a = clamp(Math.round(aOf(x)), A0, A1);
+    const k = keyOf();
+    if (!probeRes || probeKey !== k) { probeRes = simulate(state); probeKey = k; }
+    const row = probeRes.rows.find(r => r.age === a);
+    $('probeT1').textContent = 'age ' + a;
+    $('probeT2').textContent = row ? fmtMoney(row.bal) : 'gone';
+    /* keep the bubble inside the drawing */
+    probe.setAttribute('transform', `translate(${clamp(xOf(a), 80, 1000)},0)`);
+    probe.setAttribute('opacity', '1');
+  });
+  probeHit.addEventListener('pointerleave', () => probe.setAttribute('opacity', '0'));
+
+  render();
+</script>
+</body>
+</html>

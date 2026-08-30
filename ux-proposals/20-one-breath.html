@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>20 — One Breath</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fcfcfa; }
+  .num { font-variant-numeric: tabular-nums; }
+  .arrow {
+    width: 54px; height: 54px; border-radius: 9999px; color: #78716c;
+    border: 1px solid #e7e5e1; background: rgba(255,255,255,.65);
+    display: flex; align-items: center; justify-content: center;
+    transition: color .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+  }
+  .arrow:hover { color: #1c1917; border-color: #d6d3cd; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(28,25,23,.07); }
+  .arrow:active { transform: none; box-shadow: none; }
+  .arrow:disabled { opacity: .28; cursor: default; transform: none; box-shadow: none; }
+  input[type=range].rsl {
+    -webkit-appearance: none; appearance: none; height: 3px; border-radius: 2px;
+    background: #e7e5e1; outline: none; width: 100%; cursor: pointer;
+  }
+  input[type=range].rsl::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: #fcfcfa; border: 1px solid #a8a29e; cursor: grab; box-shadow: 0 1px 3px rgba(28,25,23,.2);
+  }
+  input[type=range].rsl::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%; background: #fcfcfa;
+    border: 1px solid #a8a29e; cursor: grab;
+  }
+  .seg { padding: 3px 12px; border-radius: 9999px; font-size: 12px; color: #78716c; transition: all .18s; }
+  .seg:hover { color: #1c1917; }
+  .seg.on { background: #1c1917; color: #fcfcfa; }
+  #sheet {
+    transform: translateY(102%); transition: transform .34s cubic-bezier(.22,.8,.28,1);
+    will-change: transform;
+  }
+  #sheet.up { transform: translateY(0); }
+  #scrim { transition: opacity .3s ease; }
+</style>
+</head>
+<body class="min-h-screen text-stone-900 flex flex-col relative overflow-x-hidden">
+
+<header class="flex items-center gap-2.5 px-5 py-3.5">
+  <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-[11px] font-bold text-white">RE:</div>
+  <span class="font-semibold text-sm">tired</span>
+  <span class="text-[11px] text-stone-400 ml-1">· 20 — one breath</span>
+</header>
+
+<main class="flex-1 flex flex-col items-center justify-center px-6 pb-28">
+  <p id="skyNote" class="text-[11px] tracking-[0.28em] uppercase text-stone-400 mb-3">ordinary markets</p>
+
+  <p id="ageOut" class="num font-bold text-[26vw] sm:text-[19vw] leading-[0.85] tracking-tighter">96</p>
+
+  <p id="sentence" class="mt-5 text-lg sm:text-xl text-stone-600 max-w-md text-center leading-relaxed">
+    Your money lasts until you're 96.
+  </p>
+
+  <div class="flex items-center gap-5 mt-9">
+    <button id="earlier" class="arrow" aria-label="stop working one year earlier">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>
+      </svg>
+    </button>
+    <span id="retireOut" class="num text-sm text-stone-500 w-[132px] text-center">stop working at 62</span>
+    <button id="later" class="arrow" aria-label="stop working one year later">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5v14"/><path d="M5 17l7 7 7-7"/>
+      </svg>
+    </button>
+  </div>
+</main>
+
+<div class="fixed bottom-5 inset-x-0 flex justify-center">
+  <button id="more" class="px-5 py-1.5 rounded-full bg-white/70 border border-stone-200 text-stone-500 text-sm tracking-[0.2em] hover:text-stone-900 hover:border-stone-300 transition-colors">···</button>
+</div>
+
+<div id="scrim" class="fixed inset-0 z-40 bg-stone-900/20 opacity-0 pointer-events-none"></div>
+
+<div id="sheet" class="fixed inset-x-0 bottom-0 z-50 bg-[#fcfcfa] rounded-t-2xl border-t border-stone-200 shadow-[0_-10px_40px_rgba(28,25,23,.10)]">
+  <div class="max-w-xl mx-auto px-6 pt-3 pb-7">
+    <div class="flex items-start justify-between">
+      <p class="text-[11px] tracking-[0.28em] uppercase text-stone-400 pt-2.5">The details</p>
+      <button id="close" class="text-stone-400 hover:text-stone-900 text-2xl leading-none px-1" aria-label="close">&times;</button>
+    </div>
+
+    <div class="mt-4 space-y-4">
+      <label class="block">
+        <span class="flex justify-between text-[12px] text-stone-500 mb-1.5">
+          <span>stop working at</span><span id="vRetire" class="num font-semibold text-stone-800">62</span>
+        </span>
+        <input id="sRetire" type="range" class="rsl" min="55" max="75" step="1" value="62">
+      </label>
+      <label class="block">
+        <span class="flex justify-between text-[12px] text-stone-500 mb-1.5">
+          <span>spend each year</span><span id="vSpend" class="num font-semibold text-stone-800">$85,000</span>
+        </span>
+        <input id="sSpend" type="range" class="rsl" min="40000" max="160000" step="1000" value="85000">
+      </label>
+      <label class="block">
+        <span class="flex justify-between text-[12px] text-stone-500 mb-1.5">
+          <span>saved so far</span><span id="vSaved" class="num font-semibold text-stone-800">$850,000</span>
+        </span>
+        <input id="sSaved" type="range" class="rsl" min="100000" max="3000000" step="10000" value="850000">
+      </label>
+    </div>
+
+    <div class="mt-5 flex items-center gap-1.5">
+      <button data-sky="storm"  class="seg">stormy</button>
+      <button data-sky="normal" class="seg on">ordinary</button>
+      <button data-sky="sun"    class="seg">kind</button>
+      <span id="skyWord" class="text-[11px] text-stone-400 ml-auto">ordinary markets</span>
+    </div>
+
+    <div class="mt-5">
+      <p class="text-[11px] text-stone-400 mb-1">Your money, year by year</p>
+      <svg id="spark" viewBox="0 0 520 60" preserveAspectRatio="none" class="w-full h-[60px] block"></svg>
+      <p id="sparkCap" class="text-[11px] text-stone-400 mt-1"></p>
+    </div>
+  </div>
+</div>
+
+<footer class="px-5 pt-4 pb-16 text-center text-[11px] text-stone-400">
+  20 · One Breath — one number, two arrows, everything else tucked away.
+</footer>
+
+<script src="model.js"></script>
+<script>
+  const state = Object.assign({}, DEMO_DEFAULTS);
+  const $ = id => document.getElementById(id);
+
+  const SKY_WORD = { storm: 'stormy markets', normal: 'ordinary markets', sun: 'kind markets' };
+
+  function render() {
+    const res = simulate(state);
+    const ok = res.ok;
+
+    $('ageOut').textContent = lastsLabel(res);
+    $('ageOut').style.color = ok ? '#1c1917' : '#b91c1c';
+
+    if (ok) {
+      const left = res.leftAtMax;
+      $('sentence').textContent = left > 25000
+        ? "Your money lasts until you're " + lastsLabel(res) + ", with about " + fmtMoney(left) + " left at " + state.maxAge + "."
+        : "Your money lasts until you're " + lastsLabel(res) + ", past the " + state.maxAge + " you're planning for.";
+    } else {
+      $('sentence').textContent = "Your money runs out when you're " + res.depletionAge + ", " + (state.maxAge - res.depletionAge) + " years short of " + state.maxAge + ".";
+    }
+
+    $('retireOut').textContent = 'stop working at ' + state.retireAge;
+    $('earlier').disabled = state.retireAge <= 55;
+    $('later').disabled = state.retireAge >= 75;
+
+    $('vRetire').textContent = state.retireAge;
+    $('vSpend').textContent = fmtMoney(state.spending);
+    $('vSaved').textContent = fmtMoney(state.savings);
+
+    $('skyNote').textContent = SKY_WORD[state.sky];
+    $('skyWord').textContent = SKY_WORD[state.sky];
+
+    /* sparkline of the run, drawn to age 100 */
+    const rows = res.rows.filter(r => r.age <= 100);
+    const peak = Math.max.apply(null, rows.map(r => r.bal).concat([1]));
+    const xFor = a => (a - state.currentAge) / (100 - state.currentAge) * 520;
+    const yFor = b => 56 - (b / peak) * 52;
+    let d = '';
+    rows.forEach((r, i) => {
+      d += (i ? ' L ' : 'M ') + xFor(r.age).toFixed(1) + ' ' + yFor(r.bal).toFixed(1);
+    });
+    const lastAge = rows[rows.length - 1].age;
+    const area = d + ' L ' + xFor(lastAge).toFixed(1) + ' 58 L ' + xFor(state.currentAge).toFixed(1) + ' 58 Z';
+    const balAtMaxRow = rows.find(r => r.age === state.maxAge);
+    const balAtMax = balAtMaxRow ? balAtMaxRow.bal : 0;
+
+    $('spark').innerHTML =
+      '<line x1="0" y1="58" x2="520" y2="58" stroke="#e7e5e1" stroke-width="1"/>' +
+      '<line x1="' + xFor(state.maxAge).toFixed(1) + '" y1="4" x2="' + xFor(state.maxAge).toFixed(1) + '" y2="58" stroke="#e7e5e1" stroke-width="1" stroke-dasharray="2 3"/>' +
+      '<path d="' + area + '" fill="#1c1917" opacity="0.05"/>' +
+      '<path d="' + d + '" fill="none" stroke="' + (ok ? '#1c1917' : '#b91c1c') + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<circle cx="' + xFor(state.maxAge).toFixed(1) + '" cy="' + yFor(balAtMax).toFixed(1) + '" r="2.5" fill="' + (ok ? '#1c1917' : '#b91c1c') + '"/>';
+
+    $('sparkCap').textContent = balAtMax > 0
+      ? "At " + state.maxAge + " you'd still have about " + fmtMoney(balAtMax) + "."
+      : "The line hits the floor at " + res.depletionAge + ".";
+  }
+
+  /* the two arrows nudge retirement age */
+  $('earlier').addEventListener('click', () => { state.retireAge = Math.max(55, state.retireAge - 1); syncInputs(); render(); });
+  $('later').addEventListener('click', () => { state.retireAge = Math.min(75, state.retireAge + 1); syncInputs(); render(); });
+
+  /* the bottom sheet */
+  function openSheet() {
+    $('sheet').classList.add('up');
+    $('scrim').classList.remove('pointer-events-none');
+    $('scrim').style.opacity = '1';
+  }
+  function closeSheet() {
+    $('sheet').classList.remove('up');
+    $('scrim').style.opacity = '0';
+    $('scrim').classList.add('pointer-events-none');
+  }
+  $('more').addEventListener('click', e => { e.stopPropagation(); openSheet(); });
+  $('close').addEventListener('click', closeSheet);
+  $('scrim').addEventListener('click', closeSheet);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+  /* clicking anywhere outside the sheet also closes it */
+  document.addEventListener('click', e => {
+    if (!$('sheet').classList.contains('up')) return;
+    if ($('sheet').contains(e.target) || $('more').contains(e.target)) return;
+    closeSheet();
+  });
+
+  document.querySelectorAll('[data-sky]').forEach(b => b.addEventListener('click', () => {
+    state.sky = b.dataset.sky;
+    document.querySelectorAll('[data-sky]').forEach(x => x.classList.toggle('on', x === b));
+    render();
+  }));
+
+  /* keep the sheet's sliders and the arrows in agreement */
+  function syncInputs() {
+    $('sRetire').value = state.retireAge;
+    $('sSpend').value = state.spending;
+    $('sSaved').value = state.savings;
+  }
+  $('sRetire').addEventListener('input', e => { state.retireAge = +e.target.value; render(); });
+  $('sSpend').addEventListener('input', e => { state.spending = +e.target.value; render(); });
+  $('sSaved').addEventListener('input', e => { state.savings = +e.target.value; render(); });
+
+  syncInputs();
+  render();
+</script>
+</body>
+</html>
