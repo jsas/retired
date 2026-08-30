@@ -154,15 +154,30 @@ export class AppDatabase {
 
   /** Serialize and stash the whole database. Write-through: OPFS first (the
    *  durable home), then localStorage as the best-effort compatibility
-   *  mirror. OPFS failures are awaited (and logged) since that's the primary
-   *  copy; localStorage failures are swallowed — quota there is a known
-   *  ceiling, and OPFS already has the bytes. */
+   *  mirror — but ONLY after OPFS has the bytes. A failed OPFS write must not
+   *  leave localStorage newer than OPFS: `open()` prefers OPFS, so a stale
+   *  OPFS + fresh localStorage pair would silently roll the user back to the
+   *  previous session on next load (issue #18). With the mirror sequenced
+   *  after the durable write, the two can never diverge — at worst this
+   *  session's changes stay in memory until OPFS recovers.
+   *  localStorage failures are swallowed — quota there is a known ceiling,
+   *  and OPFS already has the bytes. */
   save(): void {
     const bytes = this.db.export();
     if (this.backend) {
-      this.backend.write(bytes).catch(err =>
-        console.warn('Failed to persist the database to OPFS:', err));
+      this.backend.write(bytes)
+        .then(() => {
+          try {
+            localStorage.setItem(STORAGE_KEY, bytesToBase64(bytes));
+          } catch (err) {
+            console.warn('Failed to persist the database to localStorage:', err);
+          }
+        })
+        .catch(err =>
+          console.warn('Failed to persist the database to OPFS:', err));
+      return;
     }
+    // No OPFS backend: localStorage is the only mirror.
     try {
       localStorage.setItem(STORAGE_KEY, bytesToBase64(bytes));
     } catch (err) {

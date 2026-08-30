@@ -283,7 +283,7 @@ _(pending)_
 
 ### B.5 Data layer — `src/data/*`, `scenarioStorage`, `appConfig`, `appDb`, `planTransfer`, `shareLink`, revisions
 
-**D-01 · MEDIUM (low-probability, data-loss-shaped) · OPFS-write failure → one-session
+**D-01 · MEDIUM (low-probability, data-loss-shaped) → ✅ FIXED 2026-08-30 · OPFS-write failure → one-session
 rollback.** (== issue #18, confirmed) `AppDatabase.save()` (db.ts:150-161) fires
 `backend.write(bytes)` and only `console.warn`s on failure, then synchronously writes
 the same bytes to the localStorage mirror. Load precedence is OPFS-first (db.ts:108-115).
@@ -292,6 +292,9 @@ session loads the stale OPFS and silently rolls back the most recent save. Comme
 db.ts:146-149 acknowledges OPFS is "the primary copy." Tracked by open issue #18.
 *(Aside: issue #18's body says the write is "fire-and-forget, failures only console.warn'd
 then writes the same bytes to the localStorage mirror synchronously" — accurate.)*
+**Fix:** `save()` now sequences the localStorage mirror behind the OPFS write (Option A
+from PLAN D-01). On OPFS failure the mirror is skipped, so localStorage can never be
+newer than OPFS — no silent rollback. Branch `issue/18-opfs-rollback`.
 
 **D-02 · LOW · Silent config reset on corruption.** (== issue #19, confirmed) On load,
 `validateAppConfig` replaces any failing block with defaults (store.ts:83, db.ts:302) with
@@ -579,7 +582,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | E-04 | Engine | MEDIUM | RRIF-min excess redeposit / ACB-free handling — verify | Actionable (verify) |
 | E-02 | Engine | MEDIUM (plausible) | Inter-spousal transfer re-run may be one oscillation stale | Verify |
 | S-01 | Strategies | MEDIUM | `runOne` scores household outcome vs `inputs`, not `merged` | Actionable |
-| D-01 | Data | MEDIUM | OPFS-write failure → one-session rollback (== #18) | Actionable |
+| ~~D-01~~ | Data | ~~MEDIUM~~ ✅ | OPFS-write failure → one-session rollback (== #18) — **FIXED** (`issue/18-opfs-rollback`, mirror sequenced behind OPFS) | **Fixed** |
 | D-04 | Data | MEDIUM | Legacy localStorage dual-source still live (== #21) | Actionable (refactor) |
 | U-01 | UI (App) | MEDIUM | Full export opens a 2nd SQLite connection, can snapshot stale bytes | Actionable |
 | U-02 | UI (App) | MEDIUM | Persist effects fire-and-forget; no durability feedback | Actionable |
@@ -647,7 +650,6 @@ Everything not struck through above. These are the items that still need doing.
 - **S-03 · LOW · == #40 family** — Strategy orderings omit RDSP.
 
 ### Data layer (== open issues #18–#21)
-- **D-01 · MEDIUM · == #18** — OPFS-write failure → one-session rollback of the last save.
 - **D-04 · MEDIUM · == #21** — Legacy localStorage dual-source still live (refactor).
 - **D-02 · LOW · == #19** — Hand-corrupted config silently resets to defaults, no warning.
 - **D-03 · LOW · == #20** — UI-preference keys bypass the store's kv table.
@@ -695,15 +697,22 @@ Everything not struck through above. These are the items that still need doing.
   issue #27 auto-closed). Also merged by the user independently: PRs #54/#55 (agent
   string coercion, #52), #57 (eqsolver CI timeouts), #58 (scenario revisions, #41),
   plus ancestry merges of stale feature/worktree branches.
+- **2026-08-30** — **E-06** (#26) fixed on `issue/26-gis-couple-discretionary`: couple
+  GIS now counts both partners' discretionary draws via fixed-point iteration.
+  756/756 tests, `tsc` clean; golden master unaffected. **Merged** (PR #69, issue #26
+  auto-closed).
+- **2026-08-30** — **D-01** (#18) fixed on `issue/18-opfs-rollback`: `save()` now
+  sequences the localStorage mirror behind the OPFS write, so a failed OPFS write
+  can never leave localStorage newer than OPFS (the silent-rollback trigger).
+  761/761 tests, `tsc` clean.
 
 ---
 
 ## Where to start (suggested priority — remaining)
 
-1. **Engine money-correctness MEDIUMs** — E-06 (#26 GIS) is the last one.
-   (E-07 / #25 and E-08 / #27 are merged.)
-2. **Data-durability MEDIUMs** — D-01 (#18 OPFS rollback), U-01 (stale export), U-02
-   (no durability feedback). Real user-facing data risk.
+1. **Engine money-correctness MEDIUMs** — all fixed (E-06 #26, E-07 #25, E-08 #27).
+2. **Data-durability MEDIUMs** — U-01 (stale export), U-02 (no durability feedback).
+   D-01 (#18 OPFS rollback) fixed on `issue/18-opfs-rollback` (PR pending).
 3. **S-01** — strategy scoring vs `merged`.
 4. **Quick wins** — U-15 (RDSP print column), A-03 (household verdict strings), D-02
    (#19 warning), X-04 (comment).

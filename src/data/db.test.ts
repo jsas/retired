@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { AppDatabase } from './db';
+import { AppDatabase, DB_STORAGE_KEY } from './db';
 import { baseInputs } from '../test/helpers';
 import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
 import type { Scenario } from '../lib/scenarioStorage';
@@ -184,5 +184,43 @@ describe('AppDatabase', () => {
     const foreign = await AppDatabase.open();
     expect(foreign.salvageableContents()).toBeNull(); // fresh/empty: nothing of ours
     foreign.close();
+  });
+
+  it('a failed OPFS write never leaves localStorage newer than OPFS (D-01 / #18)', async () => {
+    // Regression test for the silent one-session rollback: OPFS write fails,
+    // localStorage mirror succeeds → next load prefers OPFS and rolls back.
+    // After the fix, save() only mirrors to localStorage AFTER the OPFS write
+    // succeeds, so the pair can never diverge.
+    const db = await AppDatabase.open();
+    // Node has no OPFS, so the backend is null — attach a fake one whose write
+    // always rejects, then observe what save() does with the localStorage mirror.
+    const fakeBackend = {
+      write: () => Promise.reject(new Error('OPFS write failed (forced)')),
+      read: () => Promise.resolve(null),
+      clear: () => Promise.resolve(),
+    };
+    (db as unknown as { backend: typeof fakeBackend | null }).backend = fakeBackend;
+    db.saveScenarios(scenarios());
+    db.save(); // OPFS rejects → localStorage must NOT receive a newer mirror
+    // Flush the microtask queue so the .then() chain has a chance to run.
+    await new Promise(r => setTimeout(r, 0));
+    expect(localStorage.getItem(DB_STORAGE_KEY)).toBeNull();
+    db.close();
+  });
+
+  it('a successful OPFS write still mirrors to localStorage (D-01 / #18)', async () => {
+    // The complement: when OPFS succeeds, localStorage gets the mirror.
+    const db = await AppDatabase.open();
+    const fakeBackend = {
+      write: () => Promise.resolve(),
+      read: () => Promise.resolve(null),
+      clear: () => Promise.resolve(),
+    };
+    (db as unknown as { backend: typeof fakeBackend | null }).backend = fakeBackend;
+    db.saveScenarios(scenarios());
+    db.save();
+    await new Promise(r => setTimeout(r, 0));
+    expect(localStorage.getItem(DB_STORAGE_KEY)).not.toBeNull();
+    db.close();
   });
 });
