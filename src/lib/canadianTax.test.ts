@@ -251,6 +251,15 @@ describe('oasAnnualGross', () => {
     expect(oasAnnualGross(64, 65, 40, config)).toBe(0);
     expect(oasAnnualGross(65, 65, 5, config)).toBe(0);
   });
+
+  it('pro-rating and deferral compose: partial residency still defers (T-03)', () => {
+    // 20 years' residency (half pension) deferred to 70 (+36%): the residency
+    // fraction applies to the whole deferred amount — (20/40) × 742.31 ×
+    // 1.36 × 12 — never the full pension, and the deferral is not lost.
+    const partial = oasAnnualGross(70, 70, 20, config);
+    expect(closeTo(partial, 6057.25, 1)).toBe(true);
+    expect(closeTo(partial, oasAnnualGross(70, 70, 40, config) / 2, 1)).toBe(true);
+  });
 });
 
 describe('indexConfig (full-table scaling)', () => {

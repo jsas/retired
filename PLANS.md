@@ -790,7 +790,7 @@ credits use different rates).
 
 ---
 
-## [ ] PLAN T-03 · OAS `yearsInCanada` not re-pro-rated for partial residency (VERIFY)
+## [x] PLAN T-03 · OAS `yearsInCanada` not re-pro-rated for partial residency (VERIFY)
 **Maps to:** REVIEW.md **T-03** · Severity LOW
 **File:** `src/lib/canadianTax.ts`
 

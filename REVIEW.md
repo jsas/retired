@@ -232,9 +232,18 @@ shipped table lists its lowest rate first. Pinned with tests: one asserting
 table edits that would silently misprice the BPA), one hand-computed federal case at
 $100k (`14392.725`).
 
-**T-03 · LOW · OAS `yearsInCanada` is not re-pro-rated when residency < full but
-start-age deferral is applied.** oasAnnualGross pro-rates by residency then multiplies
-by the deferral multiplier — order matches CRA. Verified OK (no bug).
+~~**T-03 · LOW · OAS `yearsInCanada` is not re-pro-rated when residency < full but
+start-age deferral is applied.**~~ ✅ **VERIFIED OK 2026-08-30**
+(`verify/t03-oas-residency`) — Info, no bug. `oasAnnualGross` (canadianTax.ts) is the
+single OAS computation path: residency fraction (`min(years,40)/40`, floored at 10),
+the 75+ bump, and the deferral multiplier compose multiplicatively in one formula —
+the deferral is a pure rate (1.36 at 70), not an amount, so "pro-rate then defer" ≡
+"defer then pro-rate" and nothing can re-derive a deferred amount that escapes the
+residency fraction. Both callers pass residency through (primary's yearly row,
+retirementEngine.ts:1215; spouse's GIS `hasOas` check, :672 — <10 years → single-max
+couple GIS, correctly). Strategies patching `oasStartAge` re-run the same path.
+Pinned with a test for the partial-residency + deferral-to-70 combination
+(20/40 × 1.36 = exactly half of the full-residency deferred amount).
 
 **T-04 · INFO · GIS single-vs-couple reduction base.** `gisAnnual` reduces on
 income-excluding-OAS (correct); `gisAnnualCouple` reduces on combined fixed + own
@@ -660,7 +669,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | E-09 | Engine | LOW | `depletionAge` per-person vs household semantics — resolved (see X-02) | Info |
 | ~~T-01~~ | Tax | ~~LOW~~ ✅ | `findGrossIncomeForTakeHome` upper-bound loop unbounded — **FIXED** (`fix/grossup-loop-caps`) | **Fixed** |
 | ~~T-02~~ | Tax | ~~LOW~~ ✅ | `taxOnTable` BPA credit at lowest rate — verified CRA-correct (`verify/t02-taxontable-exemption`) | **Verified OK** |
-| T-03 | Tax | LOW | OAS `yearsInCanada` not re-pro-rated for partial residency | Actionable (verify) |
+| ~~T-03~~ | Tax | ~~LOW~~ ✅ | OAS residency pro-rating — verified correct incl. deferral combo (`verify/t03-oas-residency`) | **Verified OK** |
 | T-04 | Tax | INFO | GIS single-vs-couple reduction base — documented, correct | Info |
 | S-02 | Strategies | LOW | `sustainableSpending` hi-expansion edge | Actionable |
 | S-03 | Strategies | LOW | Strategy orderings omit RDSP (== #40 family) | Actionable |
@@ -730,7 +739,7 @@ Everything not struck through above. These are the items that still need doing.
 
 ### Tax (verify-before-fix)
 - ~~**T-02 · LOW** — `taxOnTable` basic-exemption assumes the lowest bracket rate.~~ ✅ VERIFIED OK (`verify/t02-taxontable-exemption`)
-- **T-03 · LOW** — OAS `yearsInCanada` not re-pro-rated for partial residency.
+- ~~**T-03 · LOW** — OAS `yearsInCanada` not re-pro-rated for partial residency.~~ ✅ VERIFIED OK (`verify/t03-oas-residency`)
 
 ### AI / other
 - ~~**A-03 · LOW** — Agent verdict strings use per-person status, not household.~~ ✅ FIXED (`fix/a03-agent-household-verdict`)
@@ -824,6 +833,12 @@ Everything not struck through above. These are the items that still need doing.
   shipped table), and provinces compute credits the same way on Form 428. New tests
   pin `rates[0] === min(rates)` for the federal table and all 13 provinces, plus a
   hand-computed $100k federal case. 800/800 tests, `tsc` clean.
+- **2026-08-30** — **T-03** verified OK on `verify/t03-oas-residency`: `oasAnnualGross`
+  is the single OAS path — residency fraction, 75+ bump and deferral multiplier
+  compose multiplicatively there (the deferral is a rate, not an amount, so
+  pro-rating can't be escaped), and both callers pass `yearsInCanada` through.
+  New test pins the partial-residency + deferral-to-70 combination the finding was
+  worried about. 801/801 tests, `tsc` clean.
 
 ---
 
@@ -834,7 +849,7 @@ Everything not struck through above. These are the items that still need doing.
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
 4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05, D-07 fixed. Remaining: none.
-5. **Verify-before-fix** — E-04, E-02, T-02 verified OK; remaining: T-03.
+5. **Verify-before-fix** — E-04, E-02, T-02, T-03 all verified OK. Remaining: none.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 
 ---
