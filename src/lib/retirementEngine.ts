@@ -1075,6 +1075,13 @@ export function calculatePerson(
       rrsp = 0;
     }
 
+    // Jan-1 RRIF balance: the CRA bases the year's mandatory minimum on the
+    // balance at the start of the year. Capture it now, before the transfer
+    // loop and any draws shrink `rrif` — a same-year RRSP-meltdown transfer
+    // must NOT reduce the mandatory minimum (discretionary moves later in the
+    // year don't lower it either).
+    const rrifJan1 = rrif;
+
     const startingTotal = totalBalance();
     const yearConfig = configAt(age);
 
@@ -1243,10 +1250,12 @@ export function calculatePerson(
       else if (a === 'cash') { wd.cash += t.gross; actualWithdrawals += t.gross; }
     }
 
-    // 1. Mandatory RRIF minimum — forced out first. After-tax excess over the
-    //    spending need is redeposited into taxable (still withdrawn & taxed).
-    if (isRrifMandatory(age, config) && rrif > 0) {
-      const minimum = calculateRrifMinimum(age, rrif, config);
+    // 1. Mandatory RRIF minimum — forced out first, computed on the Jan-1
+    //    balance (rrifJan1) per CRA, not the post-transfer balance. After-tax
+    //    excess over the spending need is redeposited into taxable (still
+    //    withdrawn & taxed).
+    if (isRrifMandatory(age, config) && rrifJan1 > 0) {
+      const minimum = Math.min(calculateRrifMinimum(age, rrifJan1, config), rrif);
       rrif -= minimum;
       actualWithdrawals += minimum;
       registeredGross += minimum;
