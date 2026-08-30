@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { prefKV } from '../lib/prefKv';
 
 const STORAGE_KEY = 'wealthconsole_panel_state';
 
 function loadPanelState(): Record<string, boolean> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = prefKV().getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
   return {};
@@ -13,7 +14,7 @@ function loadPanelState(): Record<string, boolean> {
 
 function savePanelState(state: Record<string, boolean>) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    prefKV().setItem(STORAGE_KEY, JSON.stringify(state));
   } catch { /* ignore */ }
 }
 

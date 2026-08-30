@@ -1,6 +1,7 @@
 // Print-summary section toggles, persisted in the same panel-state store the
 // collapsible panels and the welcome dismissal use, so the user's choices
-// survive reloads.
+// survive reloads and travel with .sqlite backups (issue #20 — via the
+// prefKv facade: store kv row + localStorage mirror).
 
 export interface PrintOptions {
   includeTimeline: boolean;
@@ -16,12 +17,14 @@ export const DEFAULT_PRINT_OPTIONS: PrintOptions = {
   includeDetailedTable: false
 };
 
+import { prefKV } from './prefKv';
+
 const PANEL_STATE_KEY = 'wealthconsole_panel_state';
 const OPTS_KEY = 'print_opts';
 
 export function loadPrintOptions(): PrintOptions {
   try {
-    const raw = localStorage.getItem(PANEL_STATE_KEY);
+    const raw = prefKV().getItem(PANEL_STATE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw)[OPTS_KEY];
       if (parsed && typeof parsed === 'object') {
@@ -39,9 +42,10 @@ export function loadPrintOptions(): PrintOptions {
 
 export function savePrintOptions(opts: PrintOptions): void {
   try {
-    const raw = localStorage.getItem(PANEL_STATE_KEY);
+    const kv = prefKV();
+    const raw = kv.getItem(PANEL_STATE_KEY);
     const state = raw ? JSON.parse(raw) : {};
     state[OPTS_KEY] = opts;
-    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(state));
+    kv.setItem(PANEL_STATE_KEY, JSON.stringify(state));
   } catch { /* ignore */ }
 }

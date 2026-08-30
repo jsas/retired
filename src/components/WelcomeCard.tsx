@@ -1,11 +1,12 @@
 import { PanelLeft, LineChart, Sparkles, ShieldCheck, ArrowRight } from 'lucide-react';
+import { prefKV } from '../lib/prefKv';
 
 const PANEL_STATE_KEY = 'wealthconsole_panel_state';
 const DISMISS_KEY = 'welcome_dismissed';
 
 export function isWelcomeDismissed(): boolean {
   try {
-    const raw = localStorage.getItem(PANEL_STATE_KEY);
+    const raw = prefKV().getItem(PANEL_STATE_KEY);
     if (raw) return JSON.parse(raw)[DISMISS_KEY] === true;
   } catch { /* ignore */ }
   return false;
@@ -13,10 +14,11 @@ export function isWelcomeDismissed(): boolean {
 
 function persistDismissed(dismissed: boolean) {
   try {
-    const raw = localStorage.getItem(PANEL_STATE_KEY);
+    const kv = prefKV();
+    const raw = kv.getItem(PANEL_STATE_KEY);
     const state = raw ? JSON.parse(raw) : {};
     state[DISMISS_KEY] = dismissed;
-    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(state));
+    kv.setItem(PANEL_STATE_KEY, JSON.stringify(state));
   } catch { /* ignore */ }
 }
 

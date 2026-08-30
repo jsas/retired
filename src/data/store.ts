@@ -3,6 +3,7 @@ import type { AppConfig } from '../lib/appConfig';
 import type { RetirementInputs } from '../lib/retirementEngine';
 import { validateAppConfig } from '../lib/appConfig';
 import { AppDatabase, DB_STORAGE_KEY } from './db';
+import { attachPrefKv, reconcilePrefKv } from '../lib/prefKv';
 import type { AppDbDoc } from './schemas';
 import { MemoryStore } from '../lib/memory/store';
 import { SqliteMemoryAdapter } from '../lib/memory/sqliteAdapter';
@@ -65,6 +66,13 @@ export class AppStore {
   static async open(buildDefaults: () => Scenario[]): Promise<{ store: AppStore; state: AppState }> {
     const db = await AppDatabase.open();
     const store = new AppStore(db);
+    // Issue #20: the UI-preference facade writes into this store's kv table
+    // from here on. Reconcile first — mirror-only blobs (pre-#20 localStorage
+    // keys, or a pref set while the wasm was still loading) migrate INTO the
+    // store; store-only blobs (an imported backup's prefs) surface to the
+    // mirror that first paint reads.
+    attachPrefKv(db);
+    if (reconcilePrefKv()) db.save();
     store.revisionStore = new SqliteRevisionStore(db);
     store.revisions = store.revisionStore.loadAll();
     seedRevSeq(store.revisions); // D-05: never re-mint a suffix the history already used

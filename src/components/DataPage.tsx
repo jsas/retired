@@ -16,6 +16,21 @@ import { AppDatabase } from '../data/db';
 import { buildTemplateCsv, parseTemplateCsv, TEMPLATE_FILENAME } from '../lib/importTemplate';
 import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';
 import { AI_SETTINGS_STORAGE_KEY } from '../lib/aiSettings';
+import { PREF_KEYS } from '../lib/prefKv';
+
+/** Read every UI-preference kv row (issue #20) out of a backup, parsed —
+ *  undefined when the row is absent or unparseable. */
+function readPrefPayloads(db: AppDatabase): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  let any = false;
+  for (const key of PREF_KEYS) {
+    const raw = db.getKv(key);
+    if (raw === null) continue;
+    const parsed = safeJson(raw);
+    if (parsed !== undefined) { out[key] = parsed; any = true; }
+  }
+  return any ? out : undefined;
+}
 
 /** Parse a raw kv value, tolerating corruption (returns undefined). */
 function safeJson(raw: string): unknown {
@@ -32,6 +47,10 @@ export interface FullBackupSelection {
    *  chose to include it. Undefined when the file had none / it was excluded. */
   aiChats?: unknown;
   aiSettings?: unknown;
+  /** UI preferences carried in the backup (issue #20), keyed by their kv key;
+   *  applied when the user ticks the checkbox. Undefined when the file had
+   *  none. */
+  prefs?: Record<string, unknown>;
 }
 
 // A projection JSON (our own export format) re-imported as a new scenario.
@@ -357,8 +376,8 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
 // 3 · Import — a full backup (choose what to apply) or a projection JSON.
 // ---------------------------------------------------------------------------
 type ParsedFile =
-  | { kind: 'backup'; db: AppDb; aiChats?: unknown; aiSettings?: unknown }
-  | { kind: 'partial'; config?: AppConfig; aiChats?: unknown; aiSettings?: unknown }
+  | { kind: 'backup'; db: AppDb; aiChats?: unknown; aiSettings?: unknown; prefs?: Record<string, unknown> }
+  | { kind: 'partial'; config?: AppConfig; aiChats?: unknown; aiSettings?: unknown; prefs?: Record<string, unknown> }
   | { kind: 'projection'; name: string; inputs: RetirementInputs };
 
 function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
@@ -373,6 +392,8 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
   // AI data packed in the file (checked by default when present)
   const [applyChats, setApplyChats] = useState(false);
   const [applyAiSettings, setApplyAiSettings] = useState(false);
+  // UI preferences packed in the file (issue #20; checked by default when present)
+  const [applyPrefs, setApplyPrefs] = useState(false);
   // Projection choice
   const [projName, setProjName] = useState('');
 
@@ -407,6 +428,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           // read the raw values (validated on apply) before closing.
           const aiChatsRaw = db.getKv(AI_CHATS_STORAGE_KEY);
           const aiSettingsRaw = db.getKv(AI_SETTINGS_STORAGE_KEY);
+          const prefs = readPrefPayloads(db);
           if (!doc) {
             // No scenarios — but a backup that lost its scenarios (e.g. saved
             // after the store was wiped by a crash/quota eviction) can still
@@ -419,19 +441,23 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
                 config: salvage.config,
                 aiChats: aiChatsRaw ? safeJson(aiChatsRaw) : undefined,
                 aiSettings: aiSettingsRaw ? safeJson(aiSettingsRaw) : undefined,
+                prefs,
               });
               setIncludeConfig(true);
               setApplyChats(aiChatsRaw !== null);
               setApplyAiSettings(aiSettingsRaw !== null);
+              setApplyPrefs(prefs !== undefined);
             } else if (salvage?.kind === 'ai-only') {
               setParsed({
                 kind: 'partial',
                 aiChats: aiChatsRaw ? safeJson(aiChatsRaw) : undefined,
                 aiSettings: aiSettingsRaw ? safeJson(aiSettingsRaw) : undefined,
+                prefs,
               });
               setIncludeConfig(false);
               setApplyChats(aiChatsRaw !== null);
               setApplyAiSettings(aiSettingsRaw !== null);
+              setApplyPrefs(prefs !== undefined);
             } else {
               setError('That SQLite file is not a RE: tired backup.');
               setParsed(null);
@@ -455,11 +481,13 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
             },
             aiChats,
             aiSettings,
+            prefs,
           });
           setChecked(new Set(doc.scenarios.map(s => s.id)));
           setIncludeConfig(true);
           setApplyChats(aiChats !== undefined);
           setApplyAiSettings(aiSettings !== undefined);
+          setApplyPrefs(prefs !== undefined);
         } catch {
           setError('That file could not be opened as a SQLite database.');
           setParsed(null);
@@ -567,6 +595,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       config: includeConfig ? parsed.db.config : undefined,
       aiChats: applyChats ? parsed.aiChats : undefined,
       aiSettings: applyAiSettings ? parsed.aiSettings : undefined,
+      prefs: applyPrefs ? parsed.prefs : undefined,
     });
     reset();
   };
@@ -591,6 +620,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       config: includeConfig && parsed.config ? parsed.config : undefined,
       aiChats: applyChats ? parsed.aiChats : undefined,
       aiSettings: applyAiSettings ? parsed.aiSettings : undefined,
+      prefs: applyPrefs ? parsed.prefs : undefined,
     });
     reset();
   };
@@ -673,6 +703,15 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
                 <span>
                   <span className="font-medium">Replace AI connections &amp; model settings with the file's</span>
                   <span className="block text-[10px] text-amber-600">This brings in the API keys saved in that backup</span>
+                </span>
+              </label>
+            )}
+            {parsed.prefs !== undefined && (
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
+                <input type="checkbox" checked={applyPrefs} onChange={e => setApplyPrefs(e.target.checked)} />
+                <span>
+                  <span className="font-medium">Also apply UI preferences from the file</span>
+                  <span className="block text-[10px] text-slate-400">Panel layout, print &amp; export options, welcome setting, steering crops</span>
                 </span>
               </label>
             )}

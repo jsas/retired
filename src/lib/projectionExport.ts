@@ -48,13 +48,16 @@ export const DEFAULT_PROJECTION_EXPORT: ProjectionExportOptions = {
   metadataSections: ['profile', 'options', 'settings'],
 };
 
-// Persisted in the same panel-state store as print options.
+// Persisted in the same panel-state store as print options (via the prefKv
+// facade — store kv row + localStorage mirror, issue #20).
+import { prefKV } from './prefKv';
+
 const PANEL_STATE_KEY = 'wealthconsole_panel_state';
 const OPTS_KEY = 'export_opts';
 
 export function loadProjectionExportOptions(): ProjectionExportOptions {
   try {
-    const raw = localStorage.getItem(PANEL_STATE_KEY);
+    const raw = prefKV().getItem(PANEL_STATE_KEY);
     if (raw) {
       const p = JSON.parse(raw)[OPTS_KEY];
       if (p && typeof p === 'object') {
@@ -78,10 +81,11 @@ export function loadProjectionExportOptions(): ProjectionExportOptions {
 
 export function saveProjectionExportOptions(opts: ProjectionExportOptions): void {
   try {
-    const raw = localStorage.getItem(PANEL_STATE_KEY);
+    const kv = prefKV();
+    const raw = kv.getItem(PANEL_STATE_KEY);
     const state = raw ? JSON.parse(raw) : {};
     state[OPTS_KEY] = opts;
-    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(state));
+    kv.setItem(PANEL_STATE_KEY, JSON.stringify(state));
   } catch { /* ignore */ }
 }
 

@@ -7,7 +7,10 @@
 // saved as "the middle 60%" still means the middle 60% — rehydrated by scaling
 // back onto whatever the axis's current range is.
 import { AXES, fullBand, normalizeBand, type Band, type EqAxis } from './eqConstraints';
+import { prefKV } from './prefKv';
 
+// Issue #20: persisted through the prefKv facade (store kv row + localStorage
+// mirror) so the crops travel with .sqlite backups under the same key.
 const STORAGE_KEY = 'wealthconsole_eq';
 
 /** A crop as axis fractions: 0 = axis min, 1 = axis max. */
@@ -53,9 +56,9 @@ export function saveEqBands(bands: EqBands): void {
   try {
     const bandsFrac: Record<string, BandFrac> = {};
     for (const a of ALL_EQ_AXES) bandsFrac[a] = bandToFrac(a, bands[a] ?? fullBand(a));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ bandsFrac }));
+    prefKV().setItem(STORAGE_KEY, JSON.stringify({ bandsFrac }));
   } catch (err) {
-    console.warn('Failed to persist EQ state to localStorage:', err);
+    console.warn('Failed to persist EQ state:', err);
   }
 }
 
@@ -63,7 +66,7 @@ export function saveEqBands(bands: EqBands): void {
 export function loadEqBands(): EqBands {
   const fallback = defaultEqBands();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = prefKV().getItem(STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as { bandsFrac?: Record<string, BandFrac> };
     const bands = {} as EqBands;

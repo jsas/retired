@@ -63,8 +63,9 @@ none are complete. Cross-references point at the detailed finding.
   localStorage mirror. One-session rollback risk is real. → Finding **D-01**.
 - **#19** silent config reset — **KEPT OPEN.** Confirmed: `validateAppConfig`
   back-fills defaults for added fields without surfacing a warning. → Finding **D-02**.
-- **#20** UI-pref keys not in kv table — **KEPT OPEN.** Confirmed: five UI-preference
-  keys still bypass the store. → Finding **D-03**.
+- **#20** UI-pref keys not in kv table — **RESOLVED** (2026-08-30). The five pref
+  blobs now live in the store's `kv` table via `lib/prefKv` and travel with every
+  .sqlite backup. → Finding **D-03** (fixed).
 - **#21** legacy localStorage removal — **KEPT OPEN.** Large refactor; dual-source
   still live (`getSyncSeed` App.tsx:61-68, `importLegacyKeys` store.ts:200). → Finding **D-04**.
 - **#24** TFSA/RRSP room tracking — **KEPT OPEN (feature, not a bug).** Not implemented;
@@ -347,10 +348,11 @@ returned `AppState`, and App.tsx banners it ("Your saved engine settings could n
 read and were reset to defaults…"). Tests: corrupted blob → error spy + warning + null
 config; valid config (incl. back-fill) → no warning. 790/790 tests, `tsc` clean.
 
-**D-03 · LOW · UI-preference keys bypass the store.** (== issue #20, confirmed) Five
-modules still read/write raw `localStorage` (printOptions, projectionExport, eqStorage,
-WelcomeCard, CollapsiblePanel) so they don't travel with the .sqlite backup. Tracked by
-open issue #20.
+**D-03 · LOW · UI-preference keys bypass the store.** (== issue #20) **FIXED** — the
+five pref blobs (panel state incl. print/export options + welcome dismissal, EQ crops)
+now live in the store's `kv` table via `lib/prefKv` (store row + localStorage mirror,
+reconciled fill-only both ways on open), ride every .sqlite backup, and migrate from
+the pre-#20 raw-localStorage layout on first open. See `src/lib/prefKv.ts`.
 
 **D-04 · MEDIUM (refactor, not a bug) · Legacy localStorage dual-source still live.**
 (== issue #21, confirmed) `importLegacyKeys` (store.ts:200) + `LEGACY_*` constants still
