@@ -447,7 +447,7 @@ that `colCount` never counted, so the expanded drill-down row spanned one column
 of the header. **Fix:** `colCount = 19 + (anyDetail?1:0) + (hasRm?1:0) + (hasRdsp?1:0)`
 (and hoisted `anyDetail` above it). Purely cosmetic. ~~LOW~~ → resolved.
 
-**U-15 · LOW · PrintSummary detailed table omits the RDSP column.** The on-screen
+~~**U-15 · LOW · PrintSummary detailed table omits the RDSP column.**~~ ✅ **FIXED 2026-08-30** (`fix/u15-print-rdsp-column`) The on-screen
 ScheduleTable adds an RDSP balance column when any person has an RDSP
 (`hasRdsp`, ScheduleTable.tsx:194,226). The print `DetailedTablePrint` (PrintSummary.tsx:288-379)
 has RM handling (`hasRm`, `colSpan = 17 + (hasRm?1:0)`) but **no RDSP branch** — no
@@ -457,6 +457,10 @@ out). Also note its base `colSpan = 17` vs the on-screen 19 — print drops the
 Total Tax / Tax Burden columns (a deliberate space tradeoff, acceptable) — but RDSP
 is an *omission*, not a tradeoff. **Needed:** add an RDSP column mirroring
 ScheduleTable when `hasRdsp`.
+**Fix:** `DetailedTablePrint` now computes `hasRdsp` (any person's row has
+`rdspBalance !== undefined`), adds the guarded `<th>RDSP</th>`/`<td>` after Cash with
+the same title text ScheduleTable uses, and bumps `colSpan` by `(hasRdsp ? 1 : 0)`.
+785/785 tests, `tsc` clean.
 
 **U-16 · INFO · EqPage + eqConstraints clean & household-first.** `deterministicOutcome`
 (eqConstraints.ts:341-344) runs `calculateHousehold` → `householdOutcome`, so the EQ
@@ -629,7 +633,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | U-12 | UI (MonteCarloChart) | INFO | Clean | Info |
 | U-13 | UI (Optimize/Compare) | INFO | Clean | Info |
 | ~~U-14~~ | UI (ScheduleTable) | ~~LOW~~ ✅ | Detail-row `colSpan` one short when expandable — **FIXED** (`fix/schedule-colspan`) | **Fixed** |
-| U-15 | UI (PrintSummary) | LOW | Print detailed table omits RDSP column | Actionable |
+| ~~U-15~~ | UI (PrintSummary) | ~~LOW~~ ✅ | Print detailed table omitted RDSP column — **FIXED** (`fix/u15-print-rdsp-column`) | **Fixed** |
 | U-16 | UI (EqPage) | INFO | EqPage + eqConstraints clean, household-first | Info |
 | H-01 | Backtest | INFO | `runBacktest` sound; horizon clamped | Info |
 | H-02 | Backtest | LOW | Backtest is primary-only (spouse stripped) | Actionable (optional) |
@@ -675,7 +679,7 @@ Everything not struck through above. These are the items that still need doing.
 ### UI
 - ~~**U-01 · MEDIUM** — Full export opens a 2nd SQLite connection; can snapshot stale bytes.~~ ✅ FIXED (`fix/u01-stale-export`)
 - ~~**U-02 · MEDIUM** — Persist effects are fire-and-forget; no durability feedback.~~ ✅ FIXED (`fix/u02-durability-feedback`)
-- **U-15 · LOW** — PrintSummary detailed table omits the RDSP column.
+- ~~**U-15 · LOW** — PrintSummary detailed table omits the RDSP column.~~ ✅ FIXED (`fix/u15-print-rdsp-column`)
 
 ### Tax (verify-before-fix)
 - **T-02 · LOW** — `taxOnTable` basic-exemption assumes the lowest bracket rate.
@@ -742,8 +746,8 @@ Everything not struck through above. These are the items that still need doing.
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
-4. **Quick wins** — U-15 (RDSP print column), A-03 (household verdict strings), D-02
-   (#19 warning), X-04 (comment).
+4. **Quick wins** — U-15 fixed (`fix/u15-print-rdsp-column`). Remaining: A-03
+   (household verdict strings), D-02 (#19 warning), X-04 (comment).
 5. **Verify-before-fix** — E-02 (fixed-point oracle), E-04, T-02, T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 

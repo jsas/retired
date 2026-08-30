@@ -710,7 +710,7 @@ consider RDSP in its permutations when the plan has one.
 
 ---
 
-## [ ] PLAN U-15 · PrintSummary detailed table omits the RDSP column
+## [x] PLAN U-15 · PrintSummary detailed table omits the RDSP column
 **Maps to:** REVIEW.md **U-15** · Severity LOW
 **File:** `src/components/PrintSummary.tsx`
 

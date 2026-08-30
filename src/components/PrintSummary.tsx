@@ -297,7 +297,9 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
   const money = (v: number) => fmtShort(v);
   // RM columns appear only when the feature produced them (matches ScheduleTable).
   const hasRm = people.some(p => p.rows.some(r => r.netHomeEquity !== undefined));
-  const colSpan = 17 + (hasRm ? 1 : 0);
+  // RDSP column appears only when a person has an RDSP (matches ScheduleTable).
+  const hasRdsp = people.some(p => p.rows.some(r => r.rdspBalance !== undefined));
+  const colSpan = 17 + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0);
   return (
     <div style={{ marginTop: '14px' }}>
       <div style={sectionTitle}>Detailed year-by-year</div>
@@ -326,6 +328,7 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
                 <th style={HEAD_CELL}>TFSA</th>
                 <th style={HEAD_CELL}>Taxable</th>
                 <th style={HEAD_CELL}>Cash</th>
+                {hasRdsp && <th style={HEAD_CELL} title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>}
                 {hasRm && <th style={HEAD_CELL}>Home eq.</th>}
               </tr>
             </thead>
@@ -351,6 +354,12 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
                     <td style={CELL}>{money(row.tfsaBalance)}</td>
                     <td style={CELL}>{money(row.taxableBalance)}</td>
                     <td style={CELL}>{money(row.cashCushionBalance)}</td>
+                    {hasRdsp && (
+                      <td style={CELL}
+                        title={row.detail?.rdsp ? `Contribution basis ${fmtShort(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
+                        {row.rdspBalance !== undefined ? money(row.rdspBalance) : '—'}
+                      </td>
+                    )}
                     {hasRm && (
                       <td style={{ ...CELL, color: (row.netHomeEquity ?? 0) < 0 ? '#dc2626' : CELL.color }}>
                         {row.netHomeEquity !== undefined ? money(row.netHomeEquity) : '—'}
