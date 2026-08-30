@@ -5,8 +5,10 @@ import {
   memoryKV, effectiveGeneration,
   DEFAULT_MAX_TOKENS, DEFAULT_LOCAL_TEMPERATURE,
   DEFAULT_LOCAL_REPETITION_PENALTY, DEFAULT_LOCAL_PRESENCE_PENALTY,
+  DEFAULT_LOCAL_FREQUENCY_PENALTY, MODEL_SAMPLER_DEFAULTS,
   type AiConnection,
 } from './aiSettings';
+import { WEBLLM_MODELS } from './ai/webLlmModels';
 
 function conn(over: Partial<AiConnection> = {}): AiConnection {
   return {
@@ -117,6 +119,7 @@ describe('generation settings', () => {
     expect(g.temperature).toBeUndefined(); // cloud: provider's own default
     expect(g.repetitionPenalty).toBe(DEFAULT_LOCAL_REPETITION_PENALTY);
     expect(g.presencePenalty).toBe(DEFAULT_LOCAL_PRESENCE_PENALTY);
+    expect(g.frequencyPenalty).toBe(DEFAULT_LOCAL_FREQUENCY_PENALTY);
   });
 
   it('effectiveGeneration prefers per-connection overrides', () => {
@@ -127,10 +130,48 @@ describe('generation settings', () => {
     expect(g.temperature).toBe(0.2);
     expect(g.repetitionPenalty).toBe(1.3);
     expect(g.presencePenalty).toBe(DEFAULT_LOCAL_PRESENCE_PENALTY); // untouched
+    expect(g.frequencyPenalty).toBe(DEFAULT_LOCAL_FREQUENCY_PENALTY); // untouched
   });
 
   it('local defaults keep deterministic-ish sampling', () => {
     expect(DEFAULT_LOCAL_TEMPERATURE).toBeLessThanOrEqual(0.5);
     expect(DEFAULT_LOCAL_REPETITION_PENALTY).toBeGreaterThan(1);
+  });
+
+  it('a loop-prone local model picks up its own sampler defaults', () => {
+    const phi = conn({ provider: 'webllm', apiKey: '', model: 'Phi-4-mini-instruct-q4f16_1-MLC' });
+    const g = effectiveGeneration(phi);
+    const tuned = MODEL_SAMPLER_DEFAULTS['Phi-4-mini-instruct-q4f16_1-MLC'];
+    // The model's profile overrides the generic local defaults…
+    expect(g.temperature).toBe(tuned.temperature);
+    expect(g.repetitionPenalty).toBe(tuned.repetitionPenalty);
+    expect(g.presencePenalty).toBe(tuned.presencePenalty);
+    expect(g.frequencyPenalty).toBe(tuned.frequencyPenalty);
+    // …and it's actually stronger than the generic anti-repeat floor.
+    expect(g.repetitionPenalty).toBeGreaterThan(DEFAULT_LOCAL_REPETITION_PENALTY);
+    // …but a user's explicit setting still wins.
+    const overridden = effectiveGeneration({
+      ...phi, generation: { repetitionPenalty: 1.1 },
+    });
+    expect(overridden.repetitionPenalty).toBe(1.1);
+    expect(overridden.presencePenalty).toBe(tuned.presencePenalty); // untouched
+  });
+
+  it('other local models keep the generic sampler defaults', () => {
+    const qwen = conn({ provider: 'webllm', apiKey: '', model: 'Qwen3.5-4B-q4f16_1-MLC' });
+    const g = effectiveGeneration(qwen);
+    // No model profile: temperature stays undefined here and the provider
+    // applies DEFAULT_LOCAL_TEMPERATURE at request time (unchanged behavior).
+    expect(g.temperature).toBeUndefined();
+    expect(g.repetitionPenalty).toBe(DEFAULT_LOCAL_REPETITION_PENALTY);
+    expect(g.presencePenalty).toBe(DEFAULT_LOCAL_PRESENCE_PENALTY);
+    expect(g.frequencyPenalty).toBe(DEFAULT_LOCAL_FREQUENCY_PENALTY);
+  });
+
+  it('every sampler-tuned model id is a real curated model', () => {
+    const ids = new Set(WEBLLM_MODELS.map(m => m.id));
+    for (const id of Object.keys(MODEL_SAMPLER_DEFAULTS)) {
+      expect(ids.has(id), `${id} is not in WEBLLM_MODELS`).toBe(true);
+    }
   });
 });

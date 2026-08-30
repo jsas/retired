@@ -70,6 +70,8 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     sizeGB: 2.5,
     toolCapable: true,
     maxWindow: 16384,
+    // Loop-prone: see MODEL_SAMPLER_DEFAULTS in aiSettings for its stronger
+    // anti-repeat profile (diverse word-salad is its failure mode).
     blurb: 'Microsoft\'s small instruct model; reliable at following formats.',
   },
   {
