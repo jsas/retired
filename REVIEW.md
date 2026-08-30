@@ -169,11 +169,15 @@ too much GIS. The comment (engine:497-498) rationalizes it as "partner's draws l
 year," but own draws count in-year → asymmetric. **Needed:** household fixed-point for
 GIS, or document the deliberate simplification; tracked by open issue #26.
 
-**E-07 · MEDIUM · Pre-retirement registered transfer taxed from $0.** (== issue #25,
-confirmed) accumulation-phase `applyTransferEvent` uses `accumTransferBaseGross` starting
-at 0 (engine:941, 982), so a pre-retirement meltdown is taxed as the year's only income
-(no income floor). Post-retirement it stacks on `stackBase`. Asymmetric; the honest floor
-is 0 today (no pre-retirement salary modelled). Tracked by open issue #25.
+**E-07 · MEDIUM → ✅ FIXED 2026-08-30 · Pre-retirement registered transfer taxed from
+$0.** (== issue #25; branch `fix/preretirement-transfer-tax-floor`). The accumulation
+phase seeded the transfer-tax base at 0, so a pre-retirement meltdown was taxed as the
+year's only income even when wages/pensions were active. **Fix:** the accumulation loop
+now computes a pre-retirement income floor (employment + DB/bridge pensions active that
+year, with the same window/indexation rules as the decumulation phase) and seeds
+`accumTransferBaseGross` with it. Used only as the transfer-tax base — reported
+pre-retirement balances/contributions are unchanged. Two regression tests added.
+~~MEDIUM~~ → resolved.
 
 **E-08 · MEDIUM · Re-homed past-dated transfer silently dropped.** (== issue #27,
 confirmed) `rehome` (engine:1658-1666) shifts the event age by the current-age gap; if
@@ -565,7 +569,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | ~~U-08~~ | UI (TimelineChart) | ~~HIGH~~ ✅ | Spending-band drag wrote `pctOfBase` against the wrong reference age — **FIXED** (`fix/timeline-band-drag`, analytic `nominalBaseAt`) | **Fixed** |
 | ~~E-03~~ | Engine | ~~MEDIUM~~ ✅ | RRIF minimum computed on post-transfer balance — **FIXED** (`fix/rrif-min-jan1`, Jan-1 `rrifJan1`) | **Fixed** |
 | E-06 | Engine | MEDIUM | Couple GIS counts own draws in-year, partner's never (== #26) | Actionable |
-| E-07 | Engine | MEDIUM | Pre-retirement registered transfer taxed from $0 (== #25) | Actionable |
+| ~~E-07~~ | Engine | ~~MEDIUM~~ ✅ | Pre-retirement registered transfer taxed from $0 — **FIXED** (`fix/preretirement-transfer-tax-floor`) | **Fixed** |
 | E-08 | Engine | MEDIUM | Re-homed past-dated transfer silently dropped (== #27) | Actionable |
 | E-04 | Engine | MEDIUM | RRIF-min excess redeposit / ACB-free handling — verify | Actionable (verify) |
 | E-02 | Engine | MEDIUM (plausible) | Inter-spousal transfer re-run may be one oscillation stale | Verify |
@@ -620,14 +624,12 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 
 Everything not struck through above. These are the items that still need doing.
 **Fixed & merged:** E-01, E-03, E-05, T-01, U-07, U-08, U-09, U-10, U-14, A-02 (and
-X-01 housekeeping). **Closed issues:** #28, #33.
+X-01 housekeeping). **Fixed on branches (PR pending):** E-07. **Closed issues:** #28, #33.
 
 ### Engine — money correctness (highest value)
 - **E-06 · MEDIUM · == #26** — Couple GIS counts the person's own discretionary draws
   in-year but never the partner's. Needs a household fixed-point for GIS, or a
   documented simplification.
-- **E-07 · MEDIUM · == #25** — Pre-retirement RRSP-meltdown transfer taxed from a $0
-  income floor (no stacking on the year's other income pre-retirement).
 - **E-08 · MEDIUM · == #27** — A cross-age transfer re-homed to a date before the
   receiver's current age is silently dropped by the `e.age >= currentAge` filter.
 - **E-04 · MEDIUM (verify)** — Confirm the RRIF-min excess redeposit isn't double-taxed
@@ -679,13 +681,17 @@ X-01 housekeeping). **Closed issues:** #28, #33.
   branches deleted. Issue **#28** auto-closed by PR #48. Post-merge tree: **735/735
   tests green, `tsc` clean**. Remaining open issues (#18–#21, #24–#27, #40) are all
   still-outstanding findings above — none resolved by these merges.
+- **2026-08-30** — **E-07** (#25) fixed on `fix/preretirement-transfer-tax-floor`:
+  accumulation-phase transfer tax now stacks on the year's employment/pension income.
+  737/737 tests, `tsc` clean; golden master unaffected.
 
 ---
 
 ## Where to start (suggested priority — remaining)
 
-1. **Engine money-correctness MEDIUMs** — E-06 (#26 GIS), E-07 (#25 meltdown), E-08
-   (#27 re-home). These map to open issues and are the largest remaining money bugs.
+1. **Engine money-correctness MEDIUMs** — E-06 (#26 GIS), E-08 (#27 re-home).
+   These map to open issues and are the largest remaining money bugs.
+   (E-07 / #25 is fixed on `fix/preretirement-transfer-tax-floor` — PR pending.)
 2. **Data-durability MEDIUMs** — D-01 (#18 OPFS rollback), U-01 (stale export), U-02
    (no durability feedback). Real user-facing data risk.
 3. **S-01** — strategy scoring vs `merged`.

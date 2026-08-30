@@ -950,15 +950,32 @@ export function calculatePerson(
     // Cash events fire pre-retirement too — a house sale at 51 lands in its
     // account and then grows; an outflow is funded by drawing down accounts in
     // the configured withdrawal order. Pre-retirement the engine models no
-    // employment income, so plain in/out draws are tax-free — but a TRANSFER
+    // benefit income and doesn't tax plain in/out draws — but a TRANSFER
     // from a registered account is always a taxable RRSP withdrawal (the
     // meltdown), so that path taxes the draw before redepositing the net.
     const accumDeposit = { rrsp: 0, rrif: 0, tfsa: 0, taxable: 0, cash: 0 };
     const accumTransfers: NonNullable<YearCalc['transfers']> = [];
     let accumTransferTax = 0;
+    // Pre-retirement income floor: wages + DB/bridge pensions active this year,
+    // using the exact window/indexation rules of the decumulation phase so the
+    // two phases agree. A registered meltdown stacks on TOP of this — taxing
+    // it from a $0 floor would under-state the tax for someone still working
+    // (issue #25). Used only as the transfer-tax base: reported pre-retirement
+    // balances/contributions are unchanged.
+    let preRetIncome = 0;
+    for (const e of employmentList) {
+      if (age < e.startAge || age > e.endAge) continue;
+      preRetIncome += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+    for (const p of pensionList) {
+      if (age < p.startAge) continue;
+      if (p.endAge != null && age > p.endAge) continue;
+      preRetIncome += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
     // Registered transfer draws stack as income within the year so a second
-    // transfer the same year is taxed at the right marginal rate.
-    let accumTransferBaseGross = 0;
+    // transfer the same year is taxed at the right marginal rate. Seeded with
+    // the year's income floor above.
+    let accumTransferBaseGross = preRetIncome;
     // Inbound inter-spousal transfers land here as after-tax money.
     for (const d of inboundAt(age)) {
       if (d.account === 'rrsp') { rrsp += d.amount; accumDeposit.rrsp += d.amount; }
