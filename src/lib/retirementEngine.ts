@@ -20,6 +20,51 @@ import {
 
 export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable' | 'rdsp';
 
+// ---------------------------------------------------------------------------
+// Income register (issue #24, Phase 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * The tax character of one income source. This drives how the engine treats
+ * the source: earned kinds (employment / self-employment) build RRSP room and
+ * stack for tax like wages; pension is eligible for pension-splitting and
+ * carries a pension adjustment that reduces RRSP room; rental is taxable
+ * investment income. Phase 1 only READS 'pension' and 'employment' kinds —
+ * 'selfEmployment' and 'rental' are accepted by the schema (so the register's
+ * shape is final) but have no engine effect until the full income model lands.
+ */
+export type IncomeKind = 'employment' | 'pension' | 'selfEmployment' | 'rental';
+
+/**
+ * One source of a person's income — the unified register that replaces the
+ * separate `pensions[]` and `employment[]` arrays. Every source has an amount,
+ * an active window, and an indexation flag; the KIND carries the tax character
+ * and any kind-specific behaviour.
+ *
+ * endAge convention: `null` = lifetime (the common case for pensions). Earned
+ * kinds (employment/selfEmployment) should set a finite endAge — working
+ * forever is rarely intended — but the field stays nullable uniformly so the
+ * register has one shape; a null endAge on an earned kind simply runs to the
+ * horizon.
+ */
+export interface IncomeSource {
+  id: string;
+  label: string;
+  kind: IncomeKind;
+  annualAmount: number;            // gross $/yr at startAge, today's dollars
+  startAge: number;
+  endAge: number | null;           // null = lifetime
+  indexedToCpi: boolean;
+  // Earned kinds only: where the after-tax net is saved in save-mode, and
+  // whether the source tops up spending first (RM-style) instead of saving.
+  destAccount?: 'rrsp' | 'tfsa' | 'taxable' | 'cash';
+  topUpSpending?: boolean;
+  // Pension kind only (Phase 2 room tracking): whether this pension's pension
+  // adjustment (PA) reduces RRSP room, and the annual PA dollars. Default 0.
+  rrspEligible?: boolean;
+  pensionAdjustment?: number;
+}
+
 export interface RetirementInputs {
   currentAge: number;
   retirementAge: number;
@@ -65,13 +110,12 @@ export interface RetirementInputs {
   // sees a concrete SpouseInputs. The reference is the source of truth;
   // `spouse` is its materialized view.
   spouseSource?: SpouseSource;
-  // DB / bridge pensions: taxable income stacked with CPP/OAS. Bridge benefits
-  // have endAge set; lifetime pensions leave it null.
-  pensions?: Pension[];
-  // Semi-retirement / post-retirement work: earned income, taxed in the year
-  // earned, then saved (destAccount) or used to top up spending. See
-  // EmploymentIncome. Absent/empty = not working.
-  employment?: EmploymentIncome[];
+  // The person's income register: DB/bridge pensions (kind 'pension') and
+  // semi-/post-retirement work (kind 'employment') — see IncomeSource. This
+  // replaces the legacy separate `pensions[]`/`employment[]` arrays (older
+  // payloads are migrated to `income[]` on load). Absent/empty = no income
+  // beyond CPP/OAS.
+  income?: IncomeSource[];
   // Optional reverse mortgage: borrow against home equity via scheduled draws
   // and/or a last-resort top-up. Proceeds are tax-free (no GIS/clawback impact);
   // the loan compounds against the home and erodes net equity.
@@ -103,8 +147,7 @@ export interface SpouseInputs {
   oasYearsInCanada: number;
   desiredSpending: number; // the spouse's own after-tax income goal (today's $)
   withdrawalOrder?: WithdrawalAccount[];
-  pensions?: Pension[]; // the spouse's own DB / bridge pensions
-  employment?: EmploymentIncome[]; // the spouse's own work income
+  income?: IncomeSource[]; // the spouse's own income register (pensions + work)
   // Full-person parity fields. Optional so scenarios saved before the spouse
   // carried them still parse; absent = none (an empty list / no reverse
   // mortgage). These make the spouse a first-class person: their own one-time
@@ -162,7 +205,7 @@ export interface ReverseMortgage {
   // from startAge for durationYears. Optional — combine with top-up or use alone.
   // Convention: `startAge`/`durationYears` are OPTIONAL — omit them entirely
   // (never pass an explicit `null`, which the schema rejects) when no schedule
-  // is wanted. Contrast with Pension.endAge below, which is the opposite
+  // is wanted. Contrast with IncomeSource.endAge above, which is the opposite
   // contract: required, with an explicit `null` meaning "lifetime".
   drawAmount?: number;
   startAge?: number;
@@ -170,39 +213,6 @@ export interface ReverseMortgage {
   // Top-up mode: after every account is drained, borrow just enough each year
   // to cover the remaining spending need (the true last resort).
   topUp?: boolean;
-}
-
-export interface Pension {
-  id: string;
-  label: string;
-  annualAmount: number;   // $/yr at startAge, in today's dollars
-  startAge: number;
-  // Convention (X-04): endAge is REQUIRED — pass an explicit `null` for a
-  // lifetime pension; never omit the field (that fails validation). This is
-  // the opposite of the ReverseMortgage schedule fields above, which are
-  // optional and must be OMITTED rather than set to null.
-  endAge: number | null;  // null = lifetime; set = bridge/temporary (pays through endAge)
-  indexedToCpi: boolean;  // grow with CPI (when indexTaxTables is on) vs flat nominal
-}
-
-/**
- * Semi-retirement / post-retirement work. Earned income — taxed in the year
- * it's earned (stacks with CPP/OAS/pensions/RRIF for the marginal rate, OAS
- * clawback and GIS), then the after-tax net either:
- *  - topUpSpending=false (save mode): lands in destAccount and compounds, or
- *  - topUpSpending=true  (top-up mode, RM-style): covers that year's spending
- *    first (displacing portfolio withdrawals); only net above the need is saved.
- * Contribution-room limits are ignored, consistent with the rest of the app.
- */
-export interface EmploymentIncome {
-  id: string;
-  label: string;
-  annualAmount: number;   // gross $/yr at startAge, today's dollars
-  startAge: number;
-  endAge: number;         // inclusive — work through this age
-  destAccount: 'rrsp' | 'tfsa' | 'taxable' | 'cash';
-  topUpSpending: boolean;
-  indexedToCpi: boolean;
 }
 
 export interface SpendingBand {
@@ -516,8 +526,7 @@ export function calculatePerson(
       oasStartAge: number | null;
       oasYearsInCanada: number;
       currentAge: number;
-      pensions?: Pension[];
-      employment?: EmploymentIncome[];
+      income?: IncomeSource[];
       // The partner's non-OAS draw income per THEIR age (registered draws +
       // realized capital gains + RDSP taxable portion) — the same "own" base
       // this run feeds into its own GIS. Absent on the first household pass
@@ -551,8 +560,7 @@ export function calculatePerson(
     oasStartAge,
     oasYearsInCanada,
     withdrawalOrder,
-    pensions,
-    employment
+    income
   } = person;
   const { maxAge, investmentReturn, provinceCode } = shared;
 
@@ -581,8 +589,11 @@ export function calculatePerson(
         })()
       : order;
 
-  const pensionList: Pension[] = Array.isArray(pensions) ? pensions : [];
-  const employmentList: EmploymentIncome[] = Array.isArray(employment) ? employment : [];
+  // The unified income register, split by kind into the two lists the rest of
+  // the run consumes. (Phase 1 only reads 'pension' and 'employment' kinds.)
+  const incomeSources: IncomeSource[] = Array.isArray(income) ? income : [];
+  const pensionList: IncomeSource[] = incomeSources.filter(s => s.kind === 'pension');
+  const employmentList: IncomeSource[] = incomeSources.filter(s => s.kind === 'employment');
 
   const cushionRate = config.engine.cashCushionRate;
   const rrifAge = config.engine.rrifConversionAge;
@@ -657,14 +668,15 @@ export function calculatePerson(
         * cppAdjustmentMultiplier(spouseCtx.cppStartAge, config)
         * 12 * (indexTables ? factorAt(age) : 1);
     }
-    for (const p of spouseCtx.pensions ?? []) {
+    for (const p of (spouseCtx.income ?? []).filter(s => s.kind === 'pension')) {
       if (spouseAge < p.startAge) continue;
       if (p.endAge != null && spouseAge > p.endAge) continue;
       fixed += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
     // The spouse's employment income counts toward the couple's GIS base too.
-    for (const e of spouseCtx.employment ?? []) {
-      if (spouseAge < e.startAge || spouseAge > e.endAge) continue;
+    for (const e of (spouseCtx.income ?? []).filter(s => s.kind === 'employment')) {
+      if (spouseAge < e.startAge) continue;
+      if (e.endAge != null && spouseAge > e.endAge) continue;
       fixed += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
     const hasOas = spouseCtx.oasStartAge != null
@@ -992,7 +1004,8 @@ export function calculatePerson(
     // balances/contributions are unchanged.
     let preRetIncome = 0;
     for (const e of employmentList) {
-      if (age < e.startAge || age > e.endAge) continue;
+      if (age < e.startAge) continue;
+      if (e.endAge != null && age > e.endAge) continue;
       preRetIncome += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
     for (const p of pensionList) {
@@ -1230,9 +1243,10 @@ export function calculatePerson(
     // net is deposited into its account below.
     let employmentTopUpGross = 0;
     let employmentSaveGross = 0;
-    const employmentSaveActive: EmploymentIncome[] = [];
+    const employmentSaveActive: IncomeSource[] = [];
     for (const e of employmentList) {
-      if (age < e.startAge || age > e.endAge) continue;
+      if (age < e.startAge) continue;
+      if (e.endAge != null && age > e.endAge) continue;
       const amt = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
       if (e.topUpSpending) employmentTopUpGross += amt;
       else { employmentSaveGross += amt; employmentSaveActive.push(e); }
@@ -1494,22 +1508,25 @@ export function calculatePerson(
       const afterBenefits = Math.max(0, yearSpending - netBenefits);
       const topUpExcess = Math.max(0, employmentTopUpNet - afterBenefits);
       // Save-mode: split the save net across active save jobs by gross share.
-      const perJob: Array<{ e: EmploymentIncome; net: number }> = [];
+      const perJob: Array<{ e: IncomeSource; net: number }> = [];
       for (const e of employmentSaveActive) {
         const g = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
         perJob.push({ e, net: employmentSaveGross > 0 ? employmentSaveNet * (g / employmentSaveGross) : 0 });
       }
-      const depositEmployment = (e: EmploymentIncome, amt: number) => {
+      const depositEmployment = (e: IncomeSource, amt: number) => {
         if (amt <= 0) return;
-        if (e.destAccount === 'rrsp') { rrsp += amt; deposit.rrsp += amt; }
-        else if (e.destAccount === 'tfsa') { tfsa += amt; deposit.tfsa += amt; }
-        else if (e.destAccount === 'cash') { cashCushion += amt; deposit.cash += amt; }
+        // destAccount is optional on the register; absent = taxable (the
+        // legacy default for employment savings).
+        const dest = e.destAccount ?? 'taxable';
+        if (dest === 'rrsp') { rrsp += amt; deposit.rrsp += amt; }
+        else if (dest === 'tfsa') { tfsa += amt; deposit.tfsa += amt; }
+        else if (dest === 'cash') { cashCushion += amt; deposit.cash += amt; }
         else { taxable += amt; taxableAcb += amt; deposit.taxable += amt; }
       };
       for (const { e, net } of perJob) depositEmployment(e, net);
       // Top-up excess goes to the first top-up job's account (or taxable).
       if (topUpExcess > 0) {
-        const firstTopUp = employmentList.find(e => e.topUpSpending && age >= e.startAge && age <= e.endAge);
+        const firstTopUp = employmentList.find(e => e.topUpSpending && age >= e.startAge && (e.endAge == null || age <= e.endAge));
         if (firstTopUp) depositEmployment(firstTopUp, topUpExcess);
         else { taxable += topUpExcess; taxableAcb += topUpExcess; deposit.taxable += topUpExcess; }
       }
@@ -1717,8 +1734,7 @@ export function calculateHousehold(
     oasStartAge: sp.oasStartAge,
     oasYearsInCanada: sp.oasYearsInCanada,
     currentAge: sp.currentAge,
-    pensions: sp.pensions,
-    employment: sp.employment,
+    income: sp.income,
   } : undefined;
 
   // --- Re-home mis-filed transfer events -----------------------------------

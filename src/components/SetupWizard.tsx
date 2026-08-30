@@ -132,9 +132,9 @@ export function spouseWizardDataFrom(host: RetirementInputs): WizardData {
 }
 
 /** Write the spouse pass's collected values into the host plan's spouse block,
- *  enabling it. Fields the spouse pass doesn't ask about (pensions, events,
- *  spending bands, withdrawal order, an already-linked spouse RM) survive from
- *  the existing spouse if there is one. */
+ *  enabling it. Fields the spouse pass doesn't ask about (income sources,
+ *  events, spending bands, withdrawal order, an already-linked spouse RM)
+ *  survive from the existing spouse if there is one. */
 export function applySpouseWizardData(host: RetirementInputs, data: WizardData): RetirementInputs {
   const prev = host.spouse;
   return {

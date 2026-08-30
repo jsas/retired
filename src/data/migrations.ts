@@ -3,7 +3,60 @@
 // the SQL store became the single source of truth; lives under data/ because
 // it's part of the persistence boundary, not the engine.
 
-import type { RetirementInputs } from '../lib/retirementEngine';
+import type { RetirementInputs, IncomeSource } from '../lib/retirementEngine';
+
+// The legacy array element shapes, defined structurally here because the engine
+// no longer exports them (no-legacy cutover). They describe what OLD payloads
+// looked like at the persistence boundary; nothing outside this module reads
+// them. A legacy pension had a nullable endAge (null = lifetime); a legacy
+// employment row had a required finite endAge plus save-mode fields.
+interface LegacyPension {
+  id: string; label: string; annualAmount: number; startAge: number;
+  endAge: number | null; indexedToCpi: boolean;
+}
+interface LegacyEmployment {
+  id: string; label: string; annualAmount: number; startAge: number;
+  endAge: number; destAccount?: 'rrsp' | 'tfsa' | 'taxable' | 'cash';
+  topUpSpending?: boolean; indexedToCpi: boolean;
+}
+
+/**
+ * Fold the legacy `pensions[]` + `employment[]` arrays into the unified
+ * `income[]` register (issue #24). Deterministic order: pensions first, then
+ * employment — this matches the order the two arrays were conceptually applied
+ * and keeps checkpoint/strategy diffs stable. Each entry keeps its id/label/
+ * window/amount/indexation; the kind carries its tax character. The legacy
+ * arrays are DELETED so downstream code reads `income[]` only (no dual state).
+ * Already-migrated payloads (income present, legacy absent) are returned
+ * untouched; `income` always wins when both somehow coexist.
+ */
+function foldToIncome(record: Record<string, unknown>): void {
+  const pensions = Array.isArray(record.pensions) ? (record.pensions as LegacyPension[]) : [];
+  const employment = Array.isArray(record.employment) ? (record.employment as LegacyEmployment[]) : [];
+  const existing = Array.isArray(record.income) ? (record.income as IncomeSource[]) : null;
+
+  if (!existing) {
+    const income: IncomeSource[] = [
+      ...pensions.map((p): IncomeSource => ({
+        id: p.id, label: p.label, kind: 'pension',
+        annualAmount: p.annualAmount, startAge: p.startAge,
+        endAge: p.endAge, indexedToCpi: p.indexedToCpi,
+      })),
+      ...employment.map((e): IncomeSource => ({
+        id: e.id, label: e.label, kind: 'employment',
+        annualAmount: e.annualAmount, startAge: e.startAge,
+        endAge: e.endAge, indexedToCpi: e.indexedToCpi,
+        destAccount: e.destAccount, topUpSpending: e.topUpSpending,
+      })),
+    ];
+    if (income.length > 0 || pensions.length > 0 || employment.length > 0) {
+      record.income = income;
+    }
+  }
+
+  delete record.pensions;
+  delete record.employment;
+}
 
 /** Fill in inputs fields added after a scenario was saved. */
 export function migrateInputs(inputs: object): RetirementInputs {
@@ -33,18 +86,14 @@ function migrateRecord(inputs: Record<string, unknown>): RetirementInputs {
     migrated.cppAdjustedAmount = true;
   }
 
-  // Pensions added later — back-fill an empty list for pre-existing scenarios.
-  if (!Array.isArray(migrated.pensions)) {
-    migrated.pensions = [];
-  }
-  // Employment income added later — same treatment.
-  if (!Array.isArray(migrated.employment)) {
-    migrated.employment = [];
-  }
+  // Income register (issue #24): fold legacy pensions[]+employment[] into
+  // income[] and drop the old keys. Runs BEFORE any consumer reads the record
+  // so the engine/UI/tools only ever see the unified register.
+  foldToIncome(migrated);
   const sp = migrated.spouse as Record<string, unknown> | undefined;
   if (sp && typeof sp === 'object') {
-    if (!Array.isArray(sp.pensions)) sp.pensions = [];
-    if (!Array.isArray(sp.employment)) sp.employment = [];
+    // The spouse is a first-class person — fold their income the same way.
+    foldToIncome(sp);
     // Full-person parity fields (events, spending bands) — back-fill empty
     // lists so downstream code can treat them as arrays. reverseMortgage stays
     // genuinely optional (absent = no reverse mortgage).

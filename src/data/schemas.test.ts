@@ -29,8 +29,10 @@ describe('schemas — persisted shapes', () => {
         events: [{ id: 'e', age: 70, label: 'x', amount: 100, direction: 'out', from: { kind: 'account', person: 'spouse', account: 'rrsp' }, to: { kind: 'external' } }],
       },
       reverseMortgage: { enabled: false, homeValue: 700000, appreciationRate: 0.02, interestRate: 0.065, topUp: true },
-      pensions: [{ id: 'p', label: 'DB', annualAmount: 10000, startAge: 60, endAge: 65, indexedToCpi: false }],
-      employment: [{ id: 'j', label: 'part-time', annualAmount: 15000, startAge: 65, endAge: 70, destAccount: 'tfsa', topUpSpending: true, indexedToCpi: false }],
+      income: [
+        { id: 'p', label: 'DB', kind: 'pension', annualAmount: 10000, startAge: 60, endAge: 65, indexedToCpi: false },
+        { id: 'j', label: 'part-time', kind: 'employment', annualAmount: 15000, startAge: 65, endAge: 70, destAccount: 'tfsa', topUpSpending: true, indexedToCpi: false },
+      ],
       spendingBands: [{ fromAge: 80, pctOfBase: 0.8 }],
       events: [{ id: 'ev', age: 68, label: 'sale', amount: 200000, direction: 'in', account: 'taxable' }],
     });
@@ -40,7 +42,7 @@ describe('schemas — persisted shapes', () => {
   it('rejects an employment row with a bad destAccount', () => {
     const bad = {
       ...baseInputs(),
-      employment: [{ id: 'j', label: 'x', annualAmount: 1000, startAge: 65, endAge: 66, destAccount: 'crypto', topUpSpending: false, indexedToCpi: false }],
+      income: [{ id: 'j', label: 'x', kind: 'employment', annualAmount: 1000, startAge: 65, endAge: 66, destAccount: 'crypto', topUpSpending: false, indexedToCpi: false }],
     };
     expect(retirementInputsSchema.safeParse(bad).success).toBe(false);
   });

@@ -5,8 +5,9 @@ import type { RetirementInputs } from './retirementEngine';
 // interop" for retirement plans, since no financial program exports plan
 // inputs in a standard shape. The template is deliberately limited to the
 // fields a spreadsheet user can sensibly type (ages, balances, benefits,
-// spending); strategy structures (spending bands, events, pensions, reverse
-// mortgage, withdrawal order) stay app-side and fall back to defaults here.
+// spending); strategy structures (spending bands, events, income sources,
+// reverse mortgage, withdrawal order) stay app-side and fall back to defaults
+// here.
 //
 // Format:
 //   key,value          — header row (required)
@@ -14,6 +15,9 @@ import type { RetirementInputs } from './retirementEngine';
 //   currentAge,45      — one field per row; blank values = use the default
 // spouse fields are prefixed `spouse.`; spouse is enabled when any spouse row
 // has a non-blank value.
+//
+// Income sources (pensions/work) are deliberately NOT in the flat template —
+// a kind-tagged register doesn't fit one-key-per-row; they stay app-side.
 export const TEMPLATE_FILENAME = 'retirement-import-template.csv';
 
 /** Keys in the order they appear in the downloadable template. */
@@ -154,7 +158,7 @@ export function parseTemplateCsv(text: string): CsvTemplateResult {
     oasYearsInCanada: num(fields.get('oasYearsInCanada'), 40),
     annualWithdrawal: 0,
     withdrawalOrder: ['taxable', 'rrsp', 'tfsa'],
-    pensions: [],
+    income: [],
   };
 
   // Spouse: enabled when any spouse.* row has a non-blank value. Host fields

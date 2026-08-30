@@ -177,8 +177,9 @@ describe('SetupWizard — spouse pass', () => {
   });
 
   it('applySpouseWizardData preserves spouse fields the wizard never asks about', () => {
-    // Pensions, events, bands and a withdrawal order set earlier must survive a
-    // spouse-wizard re-run (the pass edits the basics, not the whole person).
+    // Income sources, events, bands and a withdrawal order set earlier must
+    // survive a spouse-wizard re-run (the pass edits the basics, not the whole
+    // person).
     const host = baseInputs({
       spouse: {
         enabled: true, currentAge: 58, retirementAge: 63,
@@ -187,7 +188,7 @@ describe('SetupWizard — spouse pass', () => {
         cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
         desiredSpending: 20000,
         withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
-        pensions: [{ id: 'p1', label: 'DB', annualAmount: 12000, startAge: 60, endAge: null, indexedToCpi: true }],
+        income: [{ id: 'p1', label: 'DB', kind: 'pension', annualAmount: 12000, startAge: 60, endAge: null, indexedToCpi: true }],
         events: [{ id: 'e1', age: 70, label: 'gift', amount: 5000, direction: 'in', account: 'tfsa' }],
       },
     });
@@ -196,7 +197,7 @@ describe('SetupWizard — spouse pass', () => {
     const out = applySpouseWizardData(host, d);
     expect(out.spouse?.rrspBalance).toBe(150000);
     expect(out.spouse?.withdrawalOrder).toEqual(['rrsp', 'tfsa', 'taxable']);
-    expect(out.spouse?.pensions).toHaveLength(1);
+    expect(out.spouse?.income).toHaveLength(1);
     expect(out.spouse?.events).toHaveLength(1);
   });
 });

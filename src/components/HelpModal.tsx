@@ -113,24 +113,14 @@ const SECTIONS: HelpSection[] = [
         body: <P>Post-age-18 residency. Full OAS needs 40 years; fewer years scale the pension proportionally. Under 10 years pays nothing.</P>
       },
       {
-        term: 'Pensions (defined-benefit / bridge)',
+        term: 'Income (pensions & work)',
         body: (
           <>
-            <P>The Pensions section models employer <strong>defined-benefit</strong> income: a fixed $/yr starting at the age you choose, taxed as ordinary income and stacked with CPP/OAS — so it directly shrinks how much the portfolio must supply. Tick <em>indexed</em> if the pension grows with CPI (many DB plans do, fully or partially); leave it unticked for a flat nominal pension.</P>
-            <P>Set an <strong>end age</strong> for a <strong>bridge / temporary</strong> benefit (e.g. $12k/yr from 60–65 that stops when CPP begins); leave it blank for a lifetime pension. Pension income counts toward the GIS and OAS clawbacks, exactly like CPP does. The spouse plan has its own pension list.</P>
-            <P>The <strong>start age is a lever</strong>, not just an input: the Optimize tab's Strategy Explorer sweeps each pension's start age (yours and your spouse's) the same way it sweeps CPP/OAS — take it early to shrink portfolio draws, or defer it for a larger cheque and bridge the gap from savings. With several pensions it also tries the natural pairing (start the small one early to bridge, defer the larger one). One click applies the winning start age back into the pension.</P>
-            <P>A <strong>DC / LIRA</strong> lump sum is not entered here — it's already modelled by your RRSP/RRIF balance (it converts to a RRIF and is drawn down like registered savings).</P>
-          </>
-        )
-      },
-      {
-        term: 'Employment income (semi- / post-retirement work)',
-        body: (
-          <>
-            <P>The Employment Income section models <strong>earned income</strong> — a part-time job or consulting gig in the early retirement years. Unlike a pension this is wages: it stacks on top of CPP/OAS/pension for tax (taxed at your marginal rate), counts toward the OAS clawback, and reduces GIS. Set a gross $/yr and a start–end age window (inclusive).</P>
-            <P>Two modes per job. With <strong>tops up spending</strong> on, the after-tax pay covers spending first — so portfolio withdrawals shrink dollar-for-dollar and the savings keep compounding; any excess over the year's need is saved. With it off, the whole after-tax pay is saved. Either way the net lands in the account you pick (Taxable / TFSA / RRSP / Cash). Tick <em>indexed</em> if the pay grows with CPI.</P>
-            <P>The destination defaults to <strong>Taxable</strong>: the app doesn't track TFSA/RRSP contribution room yet, so a registered destination could silently over-contribute. If you pick TFSA or RRSP, an amber note appears when the yearly amount exceeds the annual limit ({new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit)}/yr TFSA) — only use a registered destination if you know you have the room.</P>
-            <P>The Optimize tab's Strategy Explorer suggests work stints automatically: fixed rows (e.g. "$10k/yr to 70") and, when the plan runs a shortfall, a gap-targeted stint sized to the first depleted window. The spouse plan has its own employment list, and a spouse's earnings count toward the couple's GIS.</P>
+            <P>The Income section is one register of everything you earn besides CPP/OAS. Each source has a <strong>kind</strong>, a gross $/yr, a start age, and an <em>indexed</em> flag (grows with CPI). Two kinds are modelled today:</P>
+            <P><strong>Pension (defined-benefit / bridge)</strong> — a fixed $/yr from the start age, taxed as ordinary income and stacked with CPP/OAS. Leave the <strong>end age</strong> blank for a lifetime pension, or set one for a <strong>bridge / temporary</strong> benefit (e.g. $12k/yr from 60–65 that stops when CPP begins). Pension income counts toward the GIS and OAS clawbacks, exactly like CPP. A <strong>DC / LIRA</strong> lump sum isn't entered here — that's your RRSP/RRIF balance.</P>
+            <P><strong>Employment (semi- / post-retirement work)</strong> — wages from a part-time job or consulting gig. Unlike a pension this is earned income: it stacks on CPP/OAS/pension for tax (at your marginal rate), counts toward the OAS clawback, and reduces GIS. Set a start–end age window. Two modes: with <strong>tops up spending</strong> on, the after-tax pay covers spending first (portfolio withdrawals shrink dollar-for-dollar) and any excess is saved; with it off, the whole after-tax pay is saved. The net lands in the account you pick (Taxable / TFSA / RRSP / Cash).</P>
+            <P>Registered destinations default to <strong>Taxable</strong>: the app doesn't track TFSA/RRSP contribution room yet, so a registered destination could silently over-contribute. If you pick TFSA or RRSP, an amber note appears when the yearly amount exceeds the annual limit ({new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit)}/yr TFSA) — only use a registered destination if you know you have the room.</P>
+            <P>The Optimize tab's Strategy Explorer works on both kinds: it sweeps each pension's <strong>start age</strong> (yours and your spouse's) like CPP/OAS — take it early to shrink portfolio draws, or defer it and bridge from savings — and it suggests work stints (fixed rows like "$10k/yr to 70", plus a gap-targeted stint when the plan runs a shortfall). One click applies a winner back into the source. The spouse plan has its own income register, and a spouse's earnings count toward the couple's GIS.</P>
           </>
         )
       },

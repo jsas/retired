@@ -11,7 +11,7 @@ const gisSensitive = () => baseInputs({
   currentAge: 64, retirementAge: 65, maxAge: 90,
   rrspBalance: 200000, tfsaBalance: 200000, taxableBalance: 0,
   cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
-  desiredSpending: 26000, pensions: [],
+  desiredSpending: 26000, income: [],
 });
 
 describe('runStrategies', () => {
@@ -72,7 +72,7 @@ const rmHomeowner = () => baseInputs({
   currentAge: 65, retirementAge: 65, maxAge: 95,
   rrspBalance: 0, tfsaBalance: 150000, taxableBalance: 0,
   cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
-  desiredSpending: 40000, pensions: [],
+  desiredSpending: 40000, income: [],
   reverseMortgage: { enabled: false, homeValue: 700000, appreciationRate: 0.02, interestRate: 0.065, maxLtv: 0.55 },
 });
 
@@ -129,18 +129,19 @@ describe('work strategies (employment, issue #22)', () => {
     currentAge: 65, retirementAge: 65, maxAge: 90,
     rrspBalance: 300000, tfsaBalance: 100000, taxableBalance: 0,
     cppStartAge: 70, cppMonthlyAmount: 800, oasStartAge: 70, oasYearsInCanada: 40,
-    desiredSpending: 40000, pensions: [],
+    desiredSpending: 40000, income: [],
   });
 
   it('offers fixed part-time work variants', () => {
     const report = runStrategies(worker(), config);
     const jobs = report.strategies.filter(s => s.id.startsWith('work-') && !s.id.startsWith('work-gap'));
     expect(jobs.length).toBeGreaterThanOrEqual(2);
-    // Each adds an employment row on top of the existing (empty) list.
+    // Each adds an employment source on top of the existing (empty) register.
     for (const j of jobs) {
-      expect(Array.isArray(j.patch.employment)).toBe(true);
-      expect(j.patch.employment!.length).toBe(1);
-      expect(j.patch.employment![0].topUpSpending).toBe(true);
+      expect(Array.isArray(j.patch.income)).toBe(true);
+      expect(j.patch.income!.length).toBe(1);
+      expect(j.patch.income![0].kind).toBe('employment');
+      expect(j.patch.income![0].topUpSpending).toBe(true);
     }
   });
 
@@ -156,14 +157,14 @@ describe('work strategies (employment, issue #22)', () => {
     const jobs = report.strategies.filter(s => s.id.startsWith('work-'));
     expect(jobs.length).toBeGreaterThan(0);
     for (const j of jobs) {
-      expect(j.patch.employment![0].destAccount).toBe('taxable');
+      expect(j.patch.income![0].destAccount).toBe('taxable');
     }
   });
 
   it('skips a fixed variant already in the plan', () => {
     const inputs = worker();
-    inputs.employment = [{
-      id: 'mine', label: 'my job', annualAmount: 10000, startAge: 65, endAge: 70,
+    inputs.income = [{
+      id: 'mine', label: 'my job', kind: 'employment', annualAmount: 10000, startAge: 65, endAge: 70,
       destAccount: 'tfsa', topUpSpending: true, indexedToCpi: false,
     }];
     const report = runStrategies(inputs, config);
@@ -176,10 +177,11 @@ describe('work strategies (employment, issue #22)', () => {
     const report = runStrategies(inputs, config);
     const gap = report.strategies.filter(s => s.id.startsWith('work-gap'));
     expect(gap.length).toBe(1);
-    const job = gap[0].patch.employment![0];
+    const job = gap[0].patch.income![0];
+    expect(job.kind).toBe('employment');
     expect(job.topUpSpending).toBe(true);
     expect(job.annualAmount).toBeGreaterThan(0);
-    expect(job.startAge).toBeLessThanOrEqual(job.endAge);
+    expect(job.startAge).toBeLessThanOrEqual(job.endAge!);
   });
 
   it('no gap-targeted stint when the plan is healthy', () => {
@@ -198,9 +200,9 @@ describe('runStrategies — employer pension timing (issue #40)', () => {
     rrspBalance: 200000, tfsaBalance: 100000, taxableBalance: 0,
     cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
     desiredSpending: 45000,
-    pensions: [
-      { id: 'bridge', label: 'Bridge', annualAmount: 6000, startAge: 60, endAge: 65, indexedToCpi: false },
-      { id: 'db', label: 'Work DB', annualAmount: 24000, startAge: 65, endAge: null, indexedToCpi: true },
+    income: [
+      { id: 'bridge', label: 'Bridge', kind: 'pension' as const, annualAmount: 6000, startAge: 60, endAge: 65, indexedToCpi: false },
+      { id: 'db', label: 'Work DB', kind: 'pension' as const, annualAmount: 24000, startAge: 65, endAge: null, indexedToCpi: true },
     ],
   });
 
@@ -210,18 +212,18 @@ describe('runStrategies — employer pension timing (issue #40)', () => {
     // Bridge is at 60 → variants at 55/65/70; Work DB is at 65 → 55/60/70.
     const bridge = pt.filter(s => s.id.startsWith('pension-primary-0-'));
     const db = pt.filter(s => s.id.startsWith('pension-primary-1-'));
-    expect(new Set(bridge.map(s => s.patch.pensions![0].startAge))).toEqual(new Set([55, 65, 70]));
-    expect(new Set(db.map(s => s.patch.pensions![1].startAge))).toEqual(new Set([55, 60, 70]));
+    expect(new Set(bridge.map(s => s.patch.income![0].startAge))).toEqual(new Set([55, 65, 70]));
+    expect(new Set(db.map(s => s.patch.income![1].startAge))).toEqual(new Set([55, 60, 70]));
   });
 
   it('each single-pension variant patches only that pension start age', () => {
     const report = runStrategies(pensioner(), config);
     const v = report.strategies.find(s => s.id === 'pension-primary-1-70')!;
     // Defers the Work DB from 65 to 70, leaves the bridge at 60.
-    expect(v.patch.pensions![1].startAge).toBe(70);
-    expect(v.patch.pensions![0].startAge).toBe(60);
-    expect(v.patch.pensions![1].endAge).toBeNull(); // other fields preserved
-    expect(v.patch.pensions![1].indexedToCpi).toBe(true);
+    expect(v.patch.income![1].startAge).toBe(70);
+    expect(v.patch.income![0].startAge).toBe(60);
+    expect(v.patch.income![1].endAge).toBeNull(); // other fields preserved
+    expect(v.patch.income![1].indexedToCpi).toBe(true);
   });
 
   it('a pension variant changes lifetime GIS (DB income is clawback income)', () => {
@@ -232,8 +234,8 @@ describe('runStrategies — employer pension timing (issue #40)', () => {
       rrspBalance: 40000, tfsaBalance: 30000, taxableBalance: 0,
       cppStartAge: 65, cppMonthlyAmount: 400, oasStartAge: 65, oasYearsInCanada: 40,
       desiredSpending: 22000,
-      pensions: [
-        { id: 'db', label: 'Work DB', annualAmount: 6000, startAge: 65, endAge: null, indexedToCpi: true },
+      income: [
+        { id: 'db', label: 'Work DB', kind: 'pension' as const, annualAmount: 6000, startAge: 65, endAge: null, indexedToCpi: true },
       ],
     });
     const report = runStrategies(inputs, config);
@@ -249,19 +251,19 @@ describe('runStrategies — employer pension timing (issue #40)', () => {
     const report = runStrategies(pensioner(), config);
     const pair = report.strategies.find(s => s.id === 'pension-pair-early-small-defer-large')!;
     expect(pair).toBeDefined();
-    // Both pensions belong to the primary → one merged list patch.
-    expect(pair.patch.pensions![0].startAge).toBeLessThan(60);   // small bridge pulled early
-    expect(pair.patch.pensions![1].startAge).toBeGreaterThan(65); // large DB deferred
+    // Both pensions belong to the primary → one merged register patch.
+    expect(pair.patch.income![0].startAge).toBeLessThan(60);   // small bridge pulled early
+    expect(pair.patch.income![1].startAge).toBeGreaterThan(65); // large DB deferred
   });
 
   it('no pension variants at all when the plan has no pensions', () => {
-    const report = runStrategies(gisSensitive(), config); // pensions: []
+    const report = runStrategies(gisSensitive(), config); // income: []
     expect(report.strategies.filter(s => s.categories.includes('pension_timing')).length).toBe(0);
   });
 
   it('a single pension gets start-age variants but no pairwise flagship', () => {
     const inputs = pensioner();
-    inputs.pensions = [inputs.pensions![1]]; // only the big DB
+    inputs.income = [inputs.income![1]]; // only the big DB
     const report = runStrategies(inputs, config);
     const pt = report.strategies.filter(s => s.categories.includes('pension_timing'));
     expect(pt.length).toBeGreaterThan(0);
@@ -278,17 +280,17 @@ describe('runStrategies — employer pension timing (issue #40)', () => {
     expect(report.strategies.some(s => s.id.startsWith('order-'))).toBe(false);
   });
 
-  it('spouse pensions are swept under spouse.pensions (patched via the spouse object)', () => {
+  it('spouse pensions are swept under spouse.income (patched via the spouse object)', () => {
     const inputs = pensioner();
-    inputs.pensions = [];
+    inputs.income = [];
     inputs.spouse = {
       enabled: true, currentAge: 60, retirementAge: 60,
       rrspBalance: 100000, tfsaBalance: 50000, taxableBalance: 0, cashCushionBalance: 0,
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: 65, cppMonthlyAmount: 500, oasStartAge: 65, oasYearsInCanada: 40,
       desiredSpending: 20000,
-      pensions: [
-        { id: 'sp-db', label: 'Spouse DB', annualAmount: 15000, startAge: 65, endAge: null, indexedToCpi: true },
+      income: [
+        { id: 'sp-db', label: 'Spouse DB', kind: 'pension' as const, annualAmount: 15000, startAge: 65, endAge: null, indexedToCpi: true },
       ],
     };
     const report = runStrategies(inputs, config);
@@ -296,9 +298,9 @@ describe('runStrategies — employer pension timing (issue #40)', () => {
     expect(sp.length).toBeGreaterThan(0);
     // The variant patches the spouse's pension start age through the spouse object.
     const v = sp.find(s => s.id === 'pension-spouse-0-60')!;
-    expect(v.patch.spouse!.pensions![0].startAge).toBe(60);
-    // The primary's own (empty) pension list is untouched.
-    expect(v.patch.pensions).toBeUndefined();
+    expect(v.patch.spouse!.income![0].startAge).toBe(60);
+    // The primary's own (empty) register is untouched.
+    expect(v.patch.income).toBeUndefined();
   });
 
   it('pension results reflect the post-split tax pass, not pre-split amounts', () => {
@@ -313,7 +315,7 @@ describe('runStrategies — employer pension timing (issue #40)', () => {
       rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
       cppStartAge: 65, cppMonthlyAmount: 300, oasStartAge: 65, oasYearsInCanada: 40,
       desiredSpending: 15000,
-      pensions: [],
+      income: [],
     };
     const report = runStrategies(inputs, config);
     const defer70 = report.strategies.find(s => s.id === 'pension-primary-1-70')!;
@@ -382,7 +384,7 @@ describe('runOne — verdict scored against the patched inputs (S-01)', () => {
     currentAge: 65, retirementAge: 65, maxAge: 90,
     rrspBalance: 300000, tfsaBalance: 0, taxableBalance: 0,
     cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
-    desiredSpending: 40000, pensions: [],
+    desiredSpending: 40000, income: [],
   });
 
   it('runOne agrees with householdOutcome scored against the MERGED inputs', () => {

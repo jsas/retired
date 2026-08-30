@@ -38,7 +38,7 @@ describe('metricsFromResults', () => {
         rrspBalance: 0, tfsaBalance: 40000, taxableBalance: 0, cashCushionBalance: 0,
         rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
         cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-        desiredSpending: 50000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], pensions: [],
+        desiredSpending: 50000, withdrawalOrder: ['tfsa', 'taxable', 'rrsp'], income: [],
       },
     });
     const r = calculateHousehold(inputs, config);

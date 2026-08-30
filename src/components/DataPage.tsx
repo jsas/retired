@@ -473,9 +473,13 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       if (!obj || typeof obj !== 'object') { setError('That JSON is not a RE: tired file.'); setParsed(null); return; }
       const rec = obj as Record<string, unknown>;
 
-      // Full backup: has a scenarios array.
+      // Full backup: has a scenarios array. Migrate each scenario's inputs so
+      // older backups (legacy pensions[]/employment[]) fold into the income[]
+      // register rather than reaching the engine in a stale shape.
       if (Array.isArray(rec.scenarios)) {
-        const scenarios = (rec.scenarios as Scenario[]).filter(s => s && typeof s.id === 'string' && typeof s.name === 'string' && s.inputs);
+        const scenarios = (rec.scenarios as Scenario[])
+          .filter(s => s && typeof s.id === 'string' && typeof s.name === 'string' && s.inputs)
+          .map(s => ({ ...s, inputs: migrateInputs(s.inputs as unknown as Record<string, unknown>) }));
         if (scenarios.length === 0) { setError('That backup has no usable scenarios.'); setParsed(null); return; }
         const db = rec as unknown as AppDb;
         const activeId = scenarios.some(s => s.id === db.activeScenarioId) ? db.activeScenarioId : scenarios[0].id;
@@ -531,7 +535,11 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       oasStartAge: oas.startAge ?? 65, oasYearsInCanada: oas.yearsInCanada ?? 40,
       withdrawalOrder: (opts.withdrawalOrder as RetirementInputs['withdrawalOrder']) ?? ['taxable', 'rrsp', 'tfsa'],
       ...(opts.spendingBands ? { spendingBands: opts.spendingBands } : {}),
-      ...(opts.pensions ? { pensions: opts.pensions } : {}),
+      // The income register travels whole. (A legacy export that embedded a
+      // `pensions` option instead has no income field here; such old exports
+      // predate the register and lose their pension option on import — accepted
+      // per the no-legacy cutover.)
+      ...(opts.income ? { income: opts.income } : {}),
       ...(opts.events ? { events: opts.events } : {}),
       ...(opts.reverseMortgage ? { reverseMortgage: opts.reverseMortgage } : {}),
       ...(sp ? {

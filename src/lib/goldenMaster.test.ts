@@ -34,7 +34,7 @@ const richInputs = () => baseInputs({
     { id: 'reno', age: 68, label: 'Reno', amount: 40000, direction: 'out' },
     { id: 'inherit', age: 70, label: 'Inheritance', amount: 100000, direction: 'in', account: 'taxable' },
   ],
-  pensions: [{ id: 'db', label: 'DB Pension', annualAmount: 15000, startAge: 65, endAge: null, indexedToCpi: false }],
+  income: [{ id: 'db', label: 'DB Pension', kind: 'pension', annualAmount: 15000, startAge: 65, endAge: null, indexedToCpi: false }],
   reverseMortgage: {
     enabled: true, homeValue: 800000, appreciationRate: 0.02, interestRate: 0.055,
     drawAmount: 0, topUp: true,
@@ -45,7 +45,7 @@ const richInputs = () => baseInputs({
     rrspContribution: 8000, tfsaContribution: 5000, taxableContribution: 2000,
     cppStartAge: 65, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 40,
     desiredSpending: 0, withdrawalOrder: ['rrsp', 'taxable', 'tfsa'],
-    pensions: [],
+    income: [],
   },
 });
 
