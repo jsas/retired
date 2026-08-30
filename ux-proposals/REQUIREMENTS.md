@@ -176,3 +176,64 @@ The caller keeps the handle: the website passes one opened from OPFS/localStorag
 **Where the bytes live (app-side, unchanged):** OPFS primary + localStorage mirror, exactly as today (`src/data/opfs.ts`, `save()` in `src/data/db.ts`). A user-picked file via File System Access can come later as an app-side choice — the engine doesn't care.
 
 **Tests** (per [[tests-with-every-feature]]): EngineStore round-trips against an in-memory sql.js db in plain node (no DOM); corrupt/truncated-bytes restore paths; version-mismatch refusal; golden master untouched; cross-boundary proof — bytes exported in one runtime restore in the other.
+
+## 8. Current-UI inventory (scraped) — what any winning design must hold
+
+**Rule:** whichever design wins must support *all* of this without it looking like a bolt-on. If the design is a "verdict + three dials" surface, the rest needs a deliberate home — otherwise we haven't redesigned, we've deleted features.
+
+### 8.1 The two-site split
+
+- **Site 1 — landing.** Public, static, zero app weight: what it is, privacy promise (no servers, no accounts, data never leaves your browser), **legal** (not financial/tax/investment advice — currently one sentence in `WelcomeCard.tsx:112`; landing makes it a real page), open-source note, donate, and one door: **"Open the app."** Mockups 02 (dark editorial welcome) and 23 (morning briefing) are the natural shapes.
+- **Site 2 — the app.** The dashboard itself. Everything below lives here. Same origin, different routes — `#/` landing vs `#/app/…` — or a separate build; decide with the winner.
+
+### 8.2 Views (17 hash routes in `viewRoutes.ts`)
+
+| Route | What it is today | Where it goes in the new site |
+|---|---|---|
+| `projection` | the dashboard: TimelineChart + MetricCards + ScheduleTable | the core of Site 2 |
+| `year-math` | per-year receipts (MathPage) | "the receipts" — one level under a stat |
+| `steering` | EqPage: XY pad (retire age × spending) + RangeFader guardrails + spending bands | the dials page — closest to the mockups |
+| `optimize` | withdrawal-strategy optimizer (OptimizeCard) | a "what would a machine do" card |
+| `compare` | side-by-side scenario comparison (CompareCard) | keep, or fold into scenario manager |
+| `monte-carlo` | Monte Carlo runs + chart | part of the verdict's storm test |
+| `backtest` | historical-sequence backtest (BacktestPanel) | sibling of Monte Carlo |
+| `print` | PrintSummary (the printable plan) | becomes the "one-page plan" export |
+| `export` | DataPage: projection export, full backup, import | Site 2 settings/data |
+| `scenarios` | ScenarioManager: list, revisions, rollback | the "plans" surface |
+| `sharing` | share-link import/export (SharingPage) | small surface, keep |
+| `donate` | DonateCard | moves to Site 1 |
+| `assistant` | AgentPage: in-browser AI with tools | its own site-2 page, keep |
+| `connections` | AI provider connections | nested under assistant |
+| `welcome` | WelcomeCard first-run | becomes Site 1 |
+| `help` | HelpModal documentation | keep, linkable from both sites |
+| `settings` | engine settings (SettingsModal) | Site 2 settings |
+
+### 8.3 The input surface (SidebarForm, ~900 lines, 13 collapsible sections)
+
+Personal Profile · Account Balances · Contribution Rates · RDSP · Government Benefits (CPP/OAS/GIS, start ages) · Pensions (multiple, windows, indexation) · Employment Income (part-time work, dest account, top-up spending) · Cash Events (one-time/recurring, transfers between accounts/spouses) · Spending Phases (bands: from-age + % of desired) · Spouse (full second input set + baseline toggle) · Withdrawal Strategy (account order) · Home Equity (reverse mortgage / HELOC) · Market Hypotheses (returns, volatility, inflation).
+
+**Requirement:** the three mockup dials (stop working · spend · saved) are a *progressive-disclosure layer over this*, not a replacement. Every section must still be reachable — the design needs a "more detail" path that doesn't feel like falling into a form-dungeon.
+
+### 8.4 Engine outputs that must stay visible
+
+Verdict (money lasts to N) · end balance at max age · tax paid / lifetime tax drag · CPP/OAS/GIS amounts with clawback · per-account balances over time (RRSP/TFSA/taxable/RDSP) · year-by-year table (ScheduleTable) · household combined + per-person breakdowns · Monte Carlo percentiles · backtest worst/best historical windows · milestone ages (retire, benefit start, depletion, OAS clawback thresholds).
+
+### 8.5 The AI agent (AgentPage + lib/ai)
+
+In-browser LLM (web-llm) with tool access: reads the plan, runs `calculateHousehold`, applies input patches, creates scenarios, compares. Tool names defined in `ai/tools.ts`. **Requirement:** the agent is a first-class surface, not a chat box glued to the side — the design needs a home for it (its own page today; could be a panel that *shows its work* inline with the plan).
+
+### 8.6 Data & safety surfaces
+
+Save/dirty-state flow (SavePromptModal) · scenario revisions with rollback (ScenarioManager) · full backup/restore JSON (DataPage, incl. optional AI data) · projection export (CSV/PDF options) · share links · localStorage/OPFS persistence (→ §7.5 handle) · setup wizard (first-run, applies to plan inputs) · help modal · engine settings (tax tables, RRIF rates, volatility presets) · connections (AI provider setup).
+
+### 8.7 Bolt-on test
+
+For each item in 8.2–8.6, the winning design must name its home: (a) visible by default, (b) one click away in a named place, or (c) deliberately dropped with a reason. Anything without a home is a bolt-on. The review of the winner = walking this table.
+
+### 8.8 Landing/legal checklist (Site 1)
+
+- What it is, in one sentence (verdict-first: "knows if your money outlasts you")
+- Privacy: no servers/accounts, data stays in the browser (from DonateCard copy — keep that voice)
+- **Legal page:** not financial/tax/investment advice; educational modeling only; rules are Canadian tax & benefit approximations (expand WelcomeCard:112 into a real page)
+- Open-source link, donate link, help/docs link
+- The door: "Open the app" → Site 2
