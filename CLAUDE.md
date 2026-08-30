@@ -30,6 +30,17 @@ npm run build          # production build -> dist/
    locks the engine's numeric output. If a fix legitimately changes results,
    regenerate the golden values in the same commit and say so in the message —
    never let it fail silently.
+3. **Every feature touches four surfaces.** A user-facing capability is not
+   done when the engine change lands. Consider, in the same PR:
+   - **Engine** — the math/behaviour in `src/lib/**`.
+   - **Tests** — Vitest coverage proving it (rule 1).
+   - **Help** — the matching entry in `src/components/HelpModal.tsx`, so the
+     in-app help explains the feature in plain language.
+   - **Assistant tools API** — if the AI assistant should read or drive it,
+     the tool schema + description in `src/lib/ai/tools.ts` (and any new
+     `propose_*`/`manage_*` tool), so the chat can see and act on it.
+   Skip a surface only with a stated reason (e.g. an internal refactor with no
+   user-visible or assistant-visible change).
 
 ## Workflow — track every change
 

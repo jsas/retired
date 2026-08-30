@@ -118,6 +118,7 @@ const SECTIONS: HelpSection[] = [
           <>
             <P>The Pensions section models employer <strong>defined-benefit</strong> income: a fixed $/yr starting at the age you choose, taxed as ordinary income and stacked with CPP/OAS — so it directly shrinks how much the portfolio must supply. Tick <em>indexed</em> if the pension grows with CPI (many DB plans do, fully or partially); leave it unticked for a flat nominal pension.</P>
             <P>Set an <strong>end age</strong> for a <strong>bridge / temporary</strong> benefit (e.g. $12k/yr from 60–65 that stops when CPP begins); leave it blank for a lifetime pension. Pension income counts toward the GIS and OAS clawbacks, exactly like CPP does. The spouse plan has its own pension list.</P>
+            <P>The <strong>start age is a lever</strong>, not just an input: the Optimize tab's Strategy Explorer sweeps each pension's start age (yours and your spouse's) the same way it sweeps CPP/OAS — take it early to shrink portfolio draws, or defer it for a larger cheque and bridge the gap from savings. With several pensions it also tries the natural pairing (start the small one early to bridge, defer the larger one). One click applies the winning start age back into the pension.</P>
             <P>A <strong>DC / LIRA</strong> lump sum is not entered here — it's already modelled by your RRSP/RRIF balance (it converts to a RRIF and is drawn down like registered savings).</P>
           </>
         )
@@ -393,7 +394,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Strategy ranking',
-        body: <P>Re-runs your plan under a menu of alternatives — CPP/OAS timing (take at 60, 65, or defer to 70), withdrawal orders (TFSA-first, RRSP meltdown, and more), and, when a home value is recorded in the Reverse Mortgage section, reverse-mortgage start ages and draw sizes. Each is scored on the sustainable after-tax spending it supports; the best rises to the top with a one-click Apply that writes the changes into your inputs (unsaved until you Save).</P>
+        body: <P>Re-runs your plan under a menu of alternatives — CPP/OAS timing (take at 60, 65, or defer to 70), employer-pension start ages (each DB/bridge pension's start age, for you and your spouse, plus a "bridge with the small one, defer the large one" pairing), withdrawal orders (TFSA-first, RRSP meltdown, and more), and, when a home value is recorded in the Reverse Mortgage section, reverse-mortgage start ages and draw sizes. Each is scored on the sustainable after-tax spending it supports; the best rises to the top with a one-click Apply that writes the changes into your inputs (unsaved until you Save). Because pension income is GIS-clawback income, the lifetime-GIS column moves with pension timing too.</P>
       },
       {
         term: 'Sustainable spending',
