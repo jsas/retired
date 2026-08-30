@@ -116,25 +116,25 @@ unaffected (injection only fires when an RDSP is enabled). ~~BLOCKER~~ → resol
 
 **E-02 · MEDIUM (plausible, not confirmed-wrong) · Inter-spousal transfer re-run may
 leave the primary one oscillation stale.**
-`calculateHousehold` runs primary → spouse → (if spouse→primary deposits exist) primary
+~~`calculateHousehold` runs primary → spouse → (if spouse→primary deposits exist) primary
 again → spouse again (engine:1672-1742). When a spouse→primary transfer exists, the
 spouse is re-run with `pToS2` (from the re-run primary) but the **primary keeps `sToP`
 from the first spouse run** — it is not re-run a third time after the final spouse run.
 If the final spouse run's cross-deposits differ from the first's (possible when the
 spouse's second run had different inbound `pToS2`, changing its balances → meltdown tax →
-net sent back), the primary's injected `sToP` reflects a stale spouse state.
-**Probed 2026-08-29:** with benign inputs (zero/low tax) the two-way case conserves
-exactly (primary TFSA 8,000 = spouse's net; spouse TFSA 10,000 = primary's net). With
-taxable CPP income both directions still reconcile to the dollar (primary TFSA 6,476 =
-spouse net; spouse TFSA 8,095 = primary net). No consumer-visible divergence found in
-these probes — the residual risk is a second-order tax-bracket wobble in narrow
-two-way-recurring cases, bounded by one oscillation. There is no fixed-point oracle to
-diff against, so this stays *plausible*, not confirmed-wrong.
-**Needed:** either iterate to a fixed point (≤3 passes, stop when cross-deposits stabilize
-within a tolerance) or assert single-oscillation convergence with a two-way recurring
-conservation test. The committed `src/test/tmp/bug2.test.ts` probes exactly this but uses
-`console.log` (swallowed by vitest — the anti-pattern CLAUDE.md forbids) and lives in a
-`tmp/` dir; it should be promoted to a real assertion or deleted. (See X-01.)
+net sent back), the primary's injected `sToP` reflects a stale spouse state.~~
+✅ **VERIFIED OK 2026-08-30** (`verify/e02-fixed-point-oracle`) — the current engine
+iterates the whole pair (Gauss-Seidel, ≤5 passes, break on $1 GIS + byte-stable
+cross-deposits both directions), and a **fixed-point oracle test** now proves the
+returned pair is the true fixed point. The oracle replicates the engine's passes
+exactly (same rehome/translate, same feed order, same pass-0 seeding) but runs to
+byte-stable convergence with no pass cap, on two fixtures: (1) two-way recurring
+RRSP→partner-TFSA meltdowns with differing ages and no GIS — the deposit coupling alone
+forces ≥2 oracle passes; (2) two-way meltdowns + low income where couple GIS is live on
+both sides — the partner-draw feedback also converges. Engine per-year rows, balances
+and cross-deposit schedules match the settled pair exactly in both. The stale-state
+hypothesis (one-oscillation lag) is refuted. ~~Probes above from 2026-08-29 were
+superseded by the committed oracle.~~
 
 **E-03 · MEDIUM → confirmed → ✅ FIXED 2026-08-29 · RRIF minimum was computed on the
 post-transfer balance.** (branch `fix/rrif-min-jan1`, commit `603c904`). The transfer
@@ -642,7 +642,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | ~~E-07~~ | Engine | ~~MEDIUM~~ ✅ | Pre-retirement registered transfer taxed from $0 — **FIXED** (`fix/preretirement-transfer-tax-floor`) | **Fixed** |
 | ~~E-08~~ | Engine | ~~MEDIUM~~ ✅ | Re-homed past-dated transfer silently dropped — **FIXED** (`fix/rehome-pastdated-transfer`, clamps to fire now) | **Fixed** |
 | ~~E-04~~ | Engine | ~~MEDIUM~~ ✅ | RRIF-min excess redeposit — verified not double-taxed, pinned by test (`verify/e04-rrif-redeposit`) | **Verified OK** |
-| E-02 | Engine | MEDIUM (plausible) | Inter-spousal transfer re-run may be one oscillation stale | Verify |
+| ~~E-02~~ | Engine | ~~MEDIUM (plausible)~~ ✅ | Re-run oscillation — refuted by fixed-point oracle (`verify/e02-fixed-point-oracle`) | **Verified OK** |
 | ~~S-01~~ | Strategies | ~~MEDIUM~~ ✅ | `runOne` scored household outcome vs `inputs`, not `merged` — **FIXED** (`fix/s01-strategy-scoring`) | **Fixed** |
 | ~~D-01~~ | Data | ~~MEDIUM~~ ✅ | OPFS-write failure → one-session rollback (== #18) — **FIXED** (`issue/18-opfs-rollback`, mirror sequenced behind OPFS) | **Fixed** |
 | D-04 | Data | MEDIUM | Legacy localStorage dual-source still live (== #21) | Actionable (refactor) |
@@ -703,8 +703,8 @@ Everything not struck through above. These are the items that still need doing.
   documented simplification.
 - ~~**E-04 · MEDIUM (verify)** — Confirm the RRIF-min excess redeposit isn't double-taxed
   (believed OK; needs a confirm pass, not a fix).~~ ✅ VERIFIED OK (`verify/e04-rrif-redeposit`)
-- **E-02 · MEDIUM (verify)** — Two-way inter-spousal transfer re-run may sit one
-  oscillation stale; build a fixed-point oracle to confirm.
+- ~~**E-02 · MEDIUM (verify)** — Two-way inter-spousal transfer re-run may sit one
+  oscillation stale; build a fixed-point oracle to confirm.~~ ✅ VERIFIED OK (`verify/e02-fixed-point-oracle`)
 
 ### Strategies / solvers
 - ~~**S-01 · MEDIUM** — `runOne` scores household outcome against `inputs`, not `merged`.~~ ✅ FIXED (`fix/s01-strategy-scoring`)
@@ -805,6 +805,14 @@ Everything not struck through above. These are the items that still need doing.
   once, the redeposit carries full ACB (`gainsFraction` 0), and the taxable account's
   embedded gain after a second year is exactly the first redeposit's growth.
   796/796 tests, `tsc` clean.
+- **2026-08-30** — **E-02** verified OK on `verify/e02-fixed-point-oracle`: the
+  household re-run loop's returned pair IS the true fixed point. New oracle test
+  replicates the engine's Gauss-Seidel passes exactly (same rehome/translate, feed
+  order, pass-0 seeding) but runs to byte-stable convergence with no pass cap, on two
+  fixtures — two-way recurring meltdowns (deposit coupling alone) and two-way meltdowns
+  + live couple GIS (partner-draw feedback). Per-year rows, balances and cross-deposit
+  schedules match the settled pair exactly; the one-oscillation-stale hypothesis is
+  refuted. 798/798 tests, `tsc` clean.
 
 ---
 
@@ -815,8 +823,7 @@ Everything not struck through above. These are the items that still need doing.
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
 4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05, D-07 fixed. Remaining: none.
-5. **Verify-before-fix** — E-04 verified OK; remaining: E-02 (fixed-point oracle),
-   T-02, T-03.
+5. **Verify-before-fix** — E-04, E-02 verified OK; remaining: T-02, T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 
 ---
