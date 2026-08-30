@@ -21,7 +21,7 @@ import { solveSustainableSpending } from '../spendingSolver';
 import { runMonteCarlo } from '../monteCarlo';
 import {
   retirementInputsSchema, spouseSchema, pensionSchema, employmentIncomeSchema,
-  cashEventSchema, reverseMortgageSchema,
+  cashEventSchema, reverseMortgageSchema, rdspSchema,
 } from '../../data/schemas';
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
 import { MemoryStore } from '../memory/store';
@@ -100,6 +100,12 @@ const proposeCashEventArgs = cashEventSchema
 const proposeReverseMortgageArgs = z.object({
   changes: reverseMortgageSchema.partial()
     .describe('Reverse-mortgage fields to set. Use {"enabled":true,...} to turn it on (homeValue, interestRate, draws/top-up), {"enabled":false} to turn it off.'),
+  rationale: z.string().optional(),
+});
+
+const proposeRdspArgs = z.object({
+  changes: rdspSchema.partial()
+    .describe('RDSP fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, familyIncome, dtcEligible), {"enabled":false} to turn it off.'),
   rationale: z.string().optional(),
 });
 
@@ -211,6 +217,7 @@ const TOOL_SCHEMAS = {
   propose_spending_bands: proposeSpendingBandsArgs,
   propose_cash_event: proposeCashEventArgs,
   propose_reverse_mortgage: proposeReverseMortgageArgs,
+  propose_rdsp: proposeRdspArgs,
   propose_revert: proposeRevertArgs,
   manage_cash_event: manageCashEventArgs,
   manage_pension: managePensionArgs,
@@ -243,7 +250,7 @@ export const EDITABLE_FIELDS = new Set([
 /** Structural top-level keys that are refused in flat override patches — they
  *  have dedicated propose_* tools with element-level validation. */
 const STRUCTURAL_FIELDS = new Set([
-  'spouse', 'spouseSource', 'events', 'pensions', 'employment', 'spendingBands', 'reverseMortgage',
+  'spouse', 'spouseSource', 'events', 'pensions', 'employment', 'spendingBands', 'reverseMortgage', 'rdsp',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -302,6 +309,9 @@ export function toolSpecs(): ToolSpec[] {
     spec('propose_reverse_mortgage',
       'PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.',
       proposeReverseMortgageArgs),
+    spec('propose_rdsp',
+      'PROPOSE enabling/configuring (or disabling) an RDSP (Registered Disability Savings Plan). Models CDSG grants, CDSB bonds, tax-sheltered growth, and taxable-fraction withdrawals. User confirms.',
+      proposeRdspArgs),
     spec('propose_revert',
       'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.',
       proposeRevertArgs),
@@ -466,6 +476,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return proposeElement(ctx, 'events', cashEventSchema, parsed.data, 'cash event');
     case 'propose_reverse_mortgage':
       return proposeReverseMortgage(ctx, parsed.data as z.infer<typeof proposeReverseMortgageArgs>);
+    case 'propose_rdsp':
+      return proposeRdsp(ctx, parsed.data as z.infer<typeof proposeRdspArgs>);
     case 'propose_revert':
       return proposeRevert(ctx, parsed.data as z.infer<typeof proposeRevertArgs>);
     case 'manage_cash_event':
@@ -504,6 +516,12 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
     rrsp: i.rrspBalance, tfsa: i.tfsaBalance, taxable: i.taxableBalance,
     cashCushion: i.cashCushionBalance,
     contributionsPerYear: { rrsp: i.rrspContribution, tfsa: i.tfsaContribution, taxable: i.taxableContribution },
+    ...(i.rdsp?.enabled ? {
+      rdsp: {
+        balance: i.rdsp.balance, contribution: i.rdsp.contribution,
+        familyIncome: i.rdsp.familyIncome, dtcEligible: i.rdsp.dtcEligible,
+      },
+    } : {}),
     withdrawalOrder: i.withdrawalOrder,
   };
   const benefits = {
@@ -851,6 +869,36 @@ function proposeReverseMortgage(
     label: disabling ? 'Disable reverse mortgage' : enabling ? 'Enable reverse mortgage' : 'Update reverse mortgage',
     rationale: args.rationale,
     preview: { reverseMortgage: res.data },
+  };
+}
+
+/** Enable/configure/disable the RDSP. Follows the same merge-then-validate
+ *  pattern as the reverse mortgage: partial changes over the existing block,
+ *  full schema re-validation, one confirm card. */
+function proposeRdsp(
+  ctx: ToolContext,
+  args: { changes: Record<string, unknown>; rationale?: string },
+): ToolOutcome {
+  const existing = ctx.inputs.rdsp;
+  const merged = { ...(existing ?? {}), ...args.changes };
+  const res = rdspSchema.safeParse(merged);
+  if (!res.success) {
+    return {
+      kind: 'error',
+      content: `Invalid RDSP: ${zodIssues(res.error)}.` +
+        (!existing && args.changes.enabled !== false
+          ? ' To ENABLE it you must supply balance, contribution, familyIncome, and dtcEligible.'
+          : ''),
+    };
+  }
+  const enabling = args.changes.enabled === true && !existing?.enabled;
+  const disabling = args.changes.enabled === false;
+  return {
+    kind: 'mutation',
+    patch: { rdsp: res.data },
+    label: disabling ? 'Disable RDSP' : enabling ? 'Enable RDSP' : 'Update RDSP',
+    rationale: args.rationale,
+    preview: { rdsp: res.data },
   };
 }
 
