@@ -720,7 +720,7 @@ Everything not struck through above. These are the items that still need doing.
 
 1. **Engine money-correctness MEDIUMs** — all fixed (E-06 #26, E-07 #25, E-08 #27).
 2. **Data-durability MEDIUMs** — U-02 (no durability feedback).
-   D-01 (#18 OPFS rollback) and U-01 (stale export) fixed on `fix/u01-stale-export`.
+   D-01 (#18 OPFS rollback) fixed & merged (PR #76); U-01 (stale export) fixed & merged (PR #79).
 3. **S-01** — strategy scoring vs `merged`.
 4. **Quick wins** — U-15 (RDSP print column), A-03 (household verdict strings), D-02
    (#19 warning), X-04 (comment).
