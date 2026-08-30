@@ -346,9 +346,16 @@ inside a transaction — fine at this scale (dozens of plans), and the comment j
 rollback doesn't fabricate duplicate revisions. Verified sound.
 
 **D-07 · LOW · `toDoc()` returns null when `validateAppConfig` yields null, silently
-dropping the export** (db.ts:302-303). A store whose config block is entirely absent
+dropping the export** (db.ts:302-303). ~~A store whose config block is entirely absent
 (config never saved) can't be exported as a doc even though scenarios are valid. Edge
-case (config is always written on first persist); note only.
+case (config is always written on first persist); note only.~~ ✅ **FIXED 2026-08-30**
+(`fix/d07-todoc-config-warning`) — a missing or unreadable config no longer nulls the
+doc: valid scenarios are the backup's whole point, so `toDoc()` now substitutes
+`DEFAULT_APP_CONFIG`, attaches a `configWarning` ("settings could not be read; defaults
+will be used"), and the Data page import flow shows that warning instead of rejecting
+the whole file as "not a RE: tired backup" (which the old null path caused for any
+backup exported with "include engine settings" unchecked). Null is now reserved for
+stores with no valid scenarios.
 
 ### B.6 AI subsystem — `src/lib/ai/*`, `agentIngest`, `agentQA`, `memory/*`
 
@@ -651,7 +658,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | D-03 | Data | LOW | UI-pref keys bypass the store (== #20) | Actionable |
 | ~~D-05~~ | Data | ~~LOW~~ ✅ | `revSeq` resets per session → cross-session revision-id collision — **FIXED** (`fix/revseq-seed`) | **Fixed** |
 | D-06 | Data | INFO | Full DELETE+re-INSERT per persist — acceptable at this scale | Info |
-| D-07 | Data | LOW | `toDoc()` returns null on invalid config, drops config silently | Actionable |
+| ~~D-07~~ | Data | ~~LOW~~ ✅ | `toDoc()` nulls the whole export on invalid config — **FIXED** (`fix/d07-todoc-config-warning`) | **Fixed** |
 | U-03 | UI (App) | LOW | `getSyncSeed` reads legacy localStorage (== #21, known) | Info |
 | U-04 | UI (App) | LOW | `revisionNonce` double-bump on rollback — fragile, correct today | Info |
 | U-05 | UI (App) | INFO | Store-adoption effect guards unsaved edits correctly | Info |
@@ -702,7 +709,7 @@ Everything not struck through above. These are the items that still need doing.
 - ~~**D-02 · LOW · == #19** — Hand-corrupted config silently resets to defaults, no warning.~~ ✅ FIXED (`fix/d02-config-corrupt-warning`)
 - **D-03 · LOW · == #20** — UI-preference keys bypass the store's kv table.
 - ~~**D-05 · LOW** — `revSeq` resets per session (revision-id collision, theoretical).~~ ✅ FIXED (`fix/revseq-seed`)
-- **D-07 · LOW** — `toDoc()` returns null on invalid config, dropping config silently.
+- ~~**D-07 · LOW** — `toDoc()` returns null on invalid config, dropping config silently.~~ ✅ FIXED (`fix/d07-todoc-config-warning`)
 
 ### UI
 - ~~**U-01 · MEDIUM** — Full export opens a 2nd SQLite connection; can snapshot stale bytes.~~ ✅ FIXED (`fix/u01-stale-export`)
@@ -779,6 +786,12 @@ Everything not struck through above. These are the items that still need doing.
   used (even in the same millisecond or after a clock step back) — a colliding id
   would silently overwrite an existing revision row. Test uses two fresh module
   registries over the same persisted bytes with a pinned clock. 791/791 tests, `tsc` clean.
+- **2026-08-30** — **D-07** fixed on `fix/d07-todoc-config-warning`: `toDoc()` no longer
+  nulls the whole export when the config blob is missing or unreadable — it substitutes
+  `DEFAULT_APP_CONFIG` and attaches a `configWarning`, which the Data page import flow
+  surfaces. Previously a backup exported with "include engine settings" unchecked (or
+  from a corrupt config) was rejected wholesale as "not a RE: tired backup", throwing
+  away every valid scenario. 792/792 tests, `tsc` clean.
 
 ---
 
@@ -788,7 +801,7 @@ Everything not struck through above. These are the items that still need doing.
 2. **Data-durability MEDIUMs** — all fixed: D-01 (#18 OPFS rollback, PR #76),
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
-4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05 fixed. Remaining: D-07 (toDoc null).
+4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05, D-07 fixed. Remaining: none.
 5. **Verify-before-fix** — E-02 (fixed-point oracle), E-04, T-02, T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 

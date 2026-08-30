@@ -2,7 +2,7 @@ import initSqlJs, { type Database } from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import type { Scenario } from '../lib/scenarioStorage';
 import { migrateInputs } from '../lib/scenarioStorage';
-import { validateAppConfig, type AppConfig } from '../lib/appConfig';
+import { validateAppConfig, DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
 import { appDbDocSchema, type AppDbDoc } from './schemas';
 import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './opfs';
 
@@ -348,19 +348,31 @@ export class AppDatabase {
   // ---- whole-document interchange ------------------------------------------
 
   /** Snapshot the store as the validated app-database document, or null when
-   *  the contents don't parse (a store the app has never written to). The
-   *  scenarios-or-nothing shape matches what the rest of the app REPLACES on
-   *  loadDoc — partial salvage of an empty-scenarios store is the importer's
-   *  call (salvageableContents), not this document's shape. */
-  toDoc(): AppDbDoc | null {
+   *  the scenarios don't parse (a store the app has never written to). A
+   *  missing or unreadable config does NOT null the doc: valid scenarios are
+   *  the backup's whole point, so the doc carries DEFAULT_APP_CONFIG instead
+   *  and `configWarning` says so — silently rejecting the whole file (the old
+   *  behaviour) threw away every scenario over a settings blob the importer
+   *  could have skipped anyway. The scenarios-or-nothing shape still matches
+   *  what the rest of the app REPLACES on loadDoc — partial salvage of an
+   *  empty-scenarios store is the importer's call (salvageableContents), not
+   *  this document's shape. */
+  toDoc(): (AppDbDoc & { configWarning?: string }) | null {
     const scenarios = this.loadScenarios();
     if (scenarios.length === 0) return null;
     const configRaw = this.loadConfig();
     const config = configRaw ? validateAppConfig(configRaw) : null;
-    if (!config) return null;
+    const configWarning = config
+      ? undefined
+      : 'Engine settings in this backup could not be read; defaults will be used. '
+        + 'Custom tax tables or engine settings are not included.';
     const activeScenarioId = this.loadActiveScenarioId() ?? scenarios[0].id;
-    const parsed = appDbDocSchema.safeParse({ version: SCHEMA_VERSION, scenarios, activeScenarioId, config });
-    return parsed.success ? parsed.data : null;
+    const effectiveConfig = config ?? DEFAULT_APP_CONFIG;
+    const parsed = appDbDocSchema.safeParse({
+      version: SCHEMA_VERSION, scenarios, activeScenarioId, config: effectiveConfig,
+    });
+    if (!parsed.success) return null;
+    return configWarning ? { ...parsed.data, configWarning } : parsed.data;
   }
 
   /** What remains importable in a store whose scenarios table is empty —

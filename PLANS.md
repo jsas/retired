@@ -915,7 +915,7 @@ next id from the max existing id instead of a session counter.
 
 ---
 
-## [ ] PLAN D-07 · `toDoc()` returns null on invalid config (drops config silently)
+## [x] PLAN D-07 · `toDoc()` returns null on invalid config (drops config silently)
 **Maps to:** REVIEW.md **D-07** · Severity LOW
 **File:** `src/lib/projectionExport.ts` (or wherever `toDoc` lives)
 
