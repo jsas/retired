@@ -2,7 +2,7 @@ import initSqlJs, { type Database } from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import type { Scenario } from '../lib/scenarioStorage';
 import { migrateInputs } from '../lib/scenarioStorage';
-import { validateAppConfig } from '../lib/appConfig';
+import { validateAppConfig, type AppConfig } from '../lib/appConfig';
 import { appDbDocSchema, type AppDbDoc } from './schemas';
 import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './opfs';
 
@@ -294,7 +294,10 @@ export class AppDatabase {
   // ---- whole-document interchange ------------------------------------------
 
   /** Snapshot the store as the validated app-database document, or null when
-   *  the contents don't parse (a store the app has never written to). */
+   *  the contents don't parse (a store the app has never written to). The
+   *  scenarios-or-nothing shape matches what the rest of the app REPLACES on
+   *  loadDoc — partial salvage of an empty-scenarios store is the importer's
+   *  call (salvageableContents), not this document's shape. */
   toDoc(): AppDbDoc | null {
     const scenarios = this.loadScenarios();
     if (scenarios.length === 0) return null;
@@ -304,6 +307,28 @@ export class AppDatabase {
     const activeScenarioId = this.loadActiveScenarioId() ?? scenarios[0].id;
     const parsed = appDbDocSchema.safeParse({ version: SCHEMA_VERSION, scenarios, activeScenarioId, config });
     return parsed.success ? parsed.data : null;
+  }
+
+  /** What remains importable in a store whose scenarios table is empty —
+   *  `kind` tells the importer which path to offer:
+   *  - 'config': the kv config validates (settings-only backup).
+   *  - 'ai-only': no config, but some kv payload (AI chats/settings) is
+   *    present. The store's fingerprints (meta.active_scenario_id, companion
+   *    tables like scenario_revisions/memories) are deliberately NOT checked:
+   *    they survive in truncated backups and would mislabel any SQLite file
+   *    that merely shares our table names as a backup. The AI blob itself is
+   *    not deep-validated here — chat payloads already self-validate on load
+   *    (corrupt → empty), same as a corrupt blob in a full backup.
+   *  - null: nothing of ours — not a backup of this app. */
+  salvageableContents(): { kind: 'config'; config: AppConfig } | { kind: 'ai-only' } | null {
+    if (this.loadScenarios().length > 0) return null; // a full store — toDoc handles it
+    const configRaw = this.loadConfig();
+    const config = configRaw ? validateAppConfig(configRaw) : null;
+    if (config) return { kind: 'config', config };
+    for (const key of ['retirement_ai_chats', 'retirement_ai_settings']) {
+      if (this.getKv(key) !== null) return { kind: 'ai-only' };
+    }
+    return null;
   }
 
   /** Replace the store's contents with a validated document. */

@@ -358,6 +358,7 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
 // ---------------------------------------------------------------------------
 type ParsedFile =
   | { kind: 'backup'; db: AppDb; aiChats?: unknown; aiSettings?: unknown }
+  | { kind: 'partial'; config?: AppConfig; aiChats?: unknown; aiSettings?: unknown }
   | { kind: 'projection'; name: string; inputs: RetirementInputs };
 
 function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
@@ -406,8 +407,38 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           // read the raw values (validated on apply) before closing.
           const aiChatsRaw = db.getKv(AI_CHATS_STORAGE_KEY);
           const aiSettingsRaw = db.getKv(AI_SETTINGS_STORAGE_KEY);
+          if (!doc) {
+            // No scenarios — but a backup that lost its scenarios (e.g. saved
+            // after the store was wiped by a crash/quota eviction) can still
+            // carry engine settings and AI data worth recovering.
+            const salvage = db.salvageableContents();
+            db.close();
+            if (salvage?.kind === 'config') {
+              setParsed({
+                kind: 'partial',
+                config: salvage.config,
+                aiChats: aiChatsRaw ? safeJson(aiChatsRaw) : undefined,
+                aiSettings: aiSettingsRaw ? safeJson(aiSettingsRaw) : undefined,
+              });
+              setIncludeConfig(true);
+              setApplyChats(aiChatsRaw !== null);
+              setApplyAiSettings(aiSettingsRaw !== null);
+            } else if (salvage?.kind === 'ai-only') {
+              setParsed({
+                kind: 'partial',
+                aiChats: aiChatsRaw ? safeJson(aiChatsRaw) : undefined,
+                aiSettings: aiSettingsRaw ? safeJson(aiSettingsRaw) : undefined,
+              });
+              setIncludeConfig(false);
+              setApplyChats(aiChatsRaw !== null);
+              setApplyAiSettings(aiSettingsRaw !== null);
+            } else {
+              setError('That SQLite file is not a RE: tired backup.');
+              setParsed(null);
+            }
+            return;
+          }
           db.close();
-          if (!doc) { setError('That SQLite file is not a RE: tired backup.'); setParsed(null); return; }
           const aiChats = aiChatsRaw ? safeJson(aiChatsRaw) : undefined;
           const aiSettings = aiSettingsRaw ? safeJson(aiSettingsRaw) : undefined;
           setParsed({
@@ -543,6 +574,24 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
     reset();
   };
 
+  // Partial backup: no scenarios survived in the file, so the current scenario
+  // list must not be touched — only the config and/or AI payloads the user
+  // ticks get applied. handleImportFull already treats an empty scenarios
+  // array as "keep the current list", so reuse the same import channel rather
+  // than a special-case apply. The user-facing copy below is what promises the
+  // no-touch; that contract lives on the applier.
+  const confirmPartial = () => {
+    if (parsed?.kind !== 'partial') return;
+    onImportFull({
+      scenarios: [],
+      activeScenarioId: '',
+      config: includeConfig && parsed.config ? parsed.config : undefined,
+      aiChats: applyChats ? parsed.aiChats : undefined,
+      aiSettings: applyAiSettings ? parsed.aiSettings : undefined,
+    });
+    reset();
+  };
+
   return (
     <section>
       <div className={SECTION}>Import</div>
@@ -632,6 +681,54 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
             <button
               onClick={confirmBackup}
               disabled={checked.size === 0 && !includeConfig}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Check size={13} /> Apply import
+            </button>
+            <button onClick={reset} className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Partial backup — no scenarios survived, settings/AI data did */}
+      {parsed?.kind === 'partial' && (
+        <div className="rounded border border-slate-200 bg-white p-3 max-w-3xl">
+          <div className="text-xs font-semibold text-slate-800 mb-2">Partial backup — no scenarios inside</div>
+          <p className="text-[11px] text-slate-500 leading-snug mb-3">
+            This backup's scenario list is empty (it was likely saved after the browser cleared the app's stored
+            plans — recovery tip: if an AI chat in this file discussed your numbers, its plan checkpoints may still
+            hold them). What's left can still be restored:
+          </p>
+          <div className="grid grid-cols-1 gap-y-1.5 mb-3">
+            {parsed.config !== undefined && (
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={includeConfig} onChange={e => setIncludeConfig(e.target.checked)} />
+                <span className="font-medium">Apply engine settings from the file</span>
+              </label>
+            )}
+            {parsed.aiChats !== undefined && (
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={applyChats} onChange={e => setApplyChats(e.target.checked)} />
+                <span className="font-medium">Replace AI chats with the ones in the file</span>
+              </label>
+            )}
+            {parsed.aiSettings !== undefined && (
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={applyAiSettings} onChange={e => setApplyAiSettings(e.target.checked)} />
+                <span>
+                  <span className="font-medium">Replace AI connections &amp; model settings with the file's</span>
+                  <span className="block text-[10px] text-amber-600">This brings in the API keys saved in that backup</span>
+                </span>
+              </label>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 mb-3">
+            Your current scenarios are <span className="font-medium">not touched</span> — only what you tick above is applied.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={confirmPartial}
+              disabled={(!includeConfig || parsed.config === undefined) && !applyChats && !applyAiSettings}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check size={13} /> Apply import
