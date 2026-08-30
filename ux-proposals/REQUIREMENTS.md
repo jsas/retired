@@ -112,7 +112,7 @@ This is the makeovers' precondition: §5 says "new components only, additive" be
 - **Known extraction wrinkles** (audit before moving): `appConfig.ts` mixes pure validation with `loadConfig`/`saveConfig` localStorage calls — split into `config-schema.ts` (types + `validateAppConfig`, moves) and `config-storage.ts` (localStorage, stays); `retirementEngine.ts` and `strategies.ts` matches were comment-only (verified — no browser APIs).
 - **Public API** (one barrel export, versioned): `calculatePerson`, `calculateRetirement`, `calculateHousehold`, `combineHouseholdBreakdown`, `householdOutcome`, `cppAdjustmentMultiplier`, `runMonteCarlo`, solvers, all input/result types, `AppConfig` types + `validateAppConfig`, and `plainEnglish` mappers.
 - **Engine tests travel with the code** (golden master, engineMath, etc. keep running against the package); they double as the extraction's regression net.
-- **Packaging:** ESM, `type: module`, TS strict, zero runtime deps, exports map for both `import` and types; no browser globals reachable from any module entry.
+- **Packaging:** ESM, `type: module`, TS strict, one runtime dep — sql.js (already used by the app; pure wasm, identical in browser and node) — exports map for both `import` and types; no browser globals reachable from any module entry.
 
 ### 7.2 Datasource classes
 
@@ -129,7 +129,7 @@ One class per data domain, each: holds state, emits change events, exposes an as
 | `AiDatasource` | chat, provider, streaming state | `message`, `status` | `lib/ai/*` |
 
 - **Tiny event emitter** (~30 lines, `on/off/once/emit`) in the package — no RxJS, no external deps. One `EventEmitter` base class, subclasses call `this.emit('change', payload)`.
-- **One `DatasourceHost`** wires them together and owns cross-datasource reactions (inputs change → results recompute → MC invalidates). Datasources stay ignorant of each other where possible; the host sequences reactions. The host also owns the **storage backend choice** (§7.5): it opens the sqlite database through whichever `StorageBackend` the user picked, and every datasource persists through that one seam.
+- **One `DatasourceHost`** wires them together and owns cross-datasource reactions (inputs change → results recompute → MC invalidates). Datasources stay ignorant of each other where possible; the host sequences reactions. The host also owns the **sql.js handle** (§7.5): it constructs the `Database` from wherever the user's bytes live and passes it to the engine; every datasource persists through that one handle.
 - **Subscribe via `useSyncExternalStore`** (React 19) — one 15-line hook `useDatasource(ds, selector)`, replacing the ~40 `useState`/`useMemo`/`useEffect` chains in `App.tsx` over time. Components get data by subscription, not props-drilled state.
 
 ### 7.3 Migration contract
@@ -149,41 +149,30 @@ One class per data domain, each: holds state, emits change events, exposes an as
 - After each datasource step, that domain's UI flow works identically (manual checklist per domain).
 - A reskin test: build one mockup (e.g. 01) against the datasource layer with **zero changes to any datasource** — that's the proof the skin is thin.
 
-### 7.5 Storage abstraction: the database is a sqlite file whose location is pluggable
+### 7.5 Storage: the engine takes a sql.js handle
 
-**The ask:** one storage interface; the database stays a real sqlite file, but *where it lives* becomes a choice — browser-private storage by default, a user-picked file, or the lib consumer's own sqlite db when running locally in node. Plus library-level backup/restore that the website's Data page uses.
+**The ask:** no backend zoo — the engine just takes an open sql.js `Database` handle. Whoever constructs it decides where the bytes live; the engine never knows.
 
-**Core shape — bytes in, bytes out.** sql.js (already the engine, works in browser and node) serializes the whole database to `Uint8Array` and rehydrates from bytes, so every "location" is just a home for bytes. The package defines:
+**The seam.** sql.js works identically in browser and node and serializes/rehydrates whole databases via `export()` / `new Database(bytes)`. So the package's constructor is:
 
 ```ts
-interface StorageBackend {
-  read(): Promise<Uint8Array | null>;   // null = nothing stored yet
-  write(bytes: Uint8Array): Promise<void>;
-  clear(): Promise<void>;
-}
+import initSqlJs, { Database } from 'sql.js';
+
+const SQL = await initSqlJs();                          // wasm, either runtime
+const db = new Database(myBytesOrUndefined);            // caller's bytes or fresh
+const engine = new EngineStore(db);                     // engine owns schema + queries
 ```
 
-This is today's `OpfsBackend` (`src/data/opfs.ts:24`) generalized and moved into the package. `AppDatabase` keeps its sql.js surface and write-through semantics (durable home first, best-effort mirror second — `save()` in `src/data/db.ts`); only the byte homes swap.
+The caller keeps the handle: the website passes one opened from OPFS/localStorage bytes (existing code, unchanged behavior); a node lib consumer passes one opened from their own file (`fs.readFileSync('plan.sqlite')`) or an in-memory db. Same schema (`APP_DB_VERSION`), same file, both sides.
 
-**Shipped backends** (subpath exports, tree-shakeable):
+**EngineStore surface** (replaces today's `AppDatabase`'s storage concerns, keeps its query surface): `loadScenarios`, `saveScenarios`, `loadConfig`, `saveConfig`, `save()`, `export(): Uint8Array`, `close()` — plus kv/meta passthroughs for the memory store's table. The engine does **not** auto-persist: the handle's owner decides when bytes hit disk (`db.export()` → write wherever). The website keeps its write-through OPFS+mirror semantics in the caller; the lib consumer just writes the file.
 
-| Backend | For |
-|---|---|
-| `OpfsBackend` | browser default (existing code, moves as-is) |
-| `LocalStorageBackend` | compatibility mirror (existing fallback, moves) |
-| `MemoryBackend` | tests |
-| `FileHandleBackend` | user-picked `.sqlite` file via File System Access; handle persisted so it reopens next visit |
-| `NodeFileBackend` | a plain file path — the local-lib consumer's own db |
+**Backup/restore in the library** (the website calls it; raw sqlite bytes need no new container):
 
-**Asking for an sqlite db.** The website asks on first run: "Where should your plan live?" — *browser-private* (default, zero setup) or *my own file* (picker; we remember the handle, and re-ask if the browser loses it). The lib never requires a path: `new EngineStore({ backend })` with `NodeFileBackend` as simply one option. The user's own sqlite db is *ours* too — same schema, same `APP_DB_VERSION`, so they can open the same file from either side.
+- `createBackup(db): Uint8Array` — `db.export()` (already the format).
+- `restoreBackup(db, bytes): RestoreReport` — validate sqlite header + `schema_version` against `APP_DB_VERSION`, restore inside a transaction, per-table salvage (same semantics as `salvageableContents`), report what was skipped and why.
+- `'restored'` event → host drops all datasource caches and reloads.
 
-**Backup/restore in the library** (not the app — the app just calls it):
+**Where the bytes live (app-side, unchanged):** OPFS primary + localStorage mirror, exactly as today (`src/data/opfs.ts`, `save()` in `src/data/db.ts`). A user-picked file via File System Access can come later as an app-side choice — the engine doesn't care.
 
-- `createBackup(): Uint8Array` — raw sqlite bytes (they already are the export format; no new container, no JSON escaping).
-- `restoreBackup(bytes): RestoreReport` — validate the sqlite header + `schema_version` against `APP_DB_VERSION`, then restore inside a transaction (`withTransaction` exists); per-table salvage of whatever parses (same semantics as `salvageableContents`); report counts + what was skipped and why.
-- `on('restored')` — the host drops all cached datasource state and reloads, so every open view reflects the restored file.
-- Website wiring: Data page gains **Download .sqlite backup** / **Restore from .sqlite** beside the existing JSON backup. JSON stays for human-readable diffs and share links; `.sqlite` is the full-fidelity path — AI memories included, since they live in the same file.
-
-**Events.** Backends emit `wrote` / `error` / `quota` (debounced); `ScenariosDatasource` relays them as save-state chips ("Saving… / Saved / Storage full"). Restore is the one event that invalidates *all* datasources.
-
-**Tests** (per [[tests-with-every-feature]]): round-trip per backend (Memory + NodeFile run in plain node; OPFS/localStorage under the existing jsdom setup), corrupt/truncated-bytes restore paths, version-mismatch downgrade refusal, golden master untouched, and a cross-boundary test: a backup written in the browser must restore in a node-run lib (and vice versa) — that's the abstraction proof.
+**Tests** (per [[tests-with-every-feature]]): EngineStore round-trips against an in-memory sql.js db in plain node (no DOM); corrupt/truncated-bytes restore paths; version-mismatch refusal; golden master untouched; cross-boundary proof — bytes exported in one runtime restore in the other.

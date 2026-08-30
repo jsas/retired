@@ -9,6 +9,18 @@
   body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   .tile:hover .arrow { transform: translateX(3px); }
   .tile .arrow { transition: transform .15s; }
+  /* rating pill row, injected on every rateable card */
+  .ratebar { display: flex; gap: 4px; margin-top: 10px; align-items: center; }
+  .ratebar button { min-width: 30px; height: 26px; border-radius: 6px; border: 1px solid #e2e8f0;
+    background: #f8fafc; font-size: 11px; font-weight: 600; color: #94a3b8; cursor: pointer;
+    transition: all .12s; line-height: 1; padding: 0 6px; }
+  .ratebar button:hover { border-color: #94a3b8; color: #475569; }
+  .ratebar button.on.keep { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .ratebar button.on.meh { background: #d97706; border-color: #d97706; color: #fff; }
+  .ratebar button.on.no { background: #dc2626; border-color: #dc2626; color: #fff; }
+  .tile.hidden-weak { display: none; }
+  #rate-tools { position: sticky; top: 0; z-index: 40; }
+  .tile { position: relative; }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
@@ -25,10 +37,24 @@
     Every one is a live, interactive mockup of the same idea — a retirement plan reduced to one
     honest answer — expressed forty different ways. Drag things, click numbers, change the weather.
   </p>
-  <p class="text-slate-500 text-xs mb-10">
+  <p class="text-slate-500 text-xs mb-4">
     Same engine behind all of them: three dials (stop working · spend · saved) + a market mood.
     Sample plan runs slightly short on purpose — every design must say so honestly.
   </p>
+
+  <div id="rate-tools" class="bg-white/95 backdrop-blur border border-slate-200 rounded-xl p-3 mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" style="position:sticky;top:0;z-index:40;">
+    <span class="font-semibold text-slate-700">Whittle down:</span>
+    <span class="text-slate-400">rate each design —</span>
+    <span class="inline-flex items-center gap-1"><b class="text-blue-600">Keep</b> worth building</span>
+    <span class="inline-flex items-center gap-1"><b class="text-amber-600">Meh</b> has a piece</span>
+    <span class="inline-flex items-center gap-1"><b class="text-red-600">No</b> drop it</span>
+    <span class="ml-auto flex items-center gap-2">
+      <button id="show-keeps" class="px-2.5 py-1 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700">Show keeps only</button>
+      <button id="show-all" class="px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:border-slate-400">Show all</button>
+      <button id="clear-all" class="px-2.5 py-1 rounded-md border border-slate-200 text-slate-500 hover:border-slate-400">Reset</button>
+    </span>
+    <div id="rate-summary" class="w-full text-slate-500"></div>
+  </div>
 
   <!-- ═══ START HERE ═══ -->
   <div class="grid md:grid-cols-2 gap-3 mb-12">
@@ -60,18 +86,36 @@
       <h3 class="text-[15px] font-bold group-hover:text-blue-700">Verdict-first dashboard</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">The answer to "am I OK?" is the hero, with the timeline as evidence. Stress tests become "what could go wrong?" cards.</p>
       <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+    
+      <div class="ratebar" data-file="01-verdict-dashboard.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="02-welcome-editorial.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-violet-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-violet-600 mb-1">02</div>
       <h3 class="text-[15px] font-bold group-hover:text-violet-700">Dark editorial welcome</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">"Will your money outlast you?" set huge on a dark landing, with a living taste of the product and privacy as a promise.</p>
       <span class="arrow inline-block mt-2 text-xs text-violet-600">Open →</span>
+    
+      <div class="ratebar" data-file="02-welcome-editorial.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="03-steering-control-room.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">03</div>
       <h3 class="text-[15px] font-bold group-hover:text-amber-700">Steering control room</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Success score pinned on top, the drag pad dominant, each fader stating its own consequence. Guardrails make experimenting safe.</p>
       <span class="arrow inline-block mt-2 text-xs text-amber-600">Open →</span>
+    
+      <div class="ratebar" data-file="03-steering-control-room.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -83,18 +127,36 @@
       <h3 class="text-[15px] font-bold group-hover:text-blue-700">Range — the fuel gauge</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">One arc from 55 to 105, one needle: the age your money lasts to. Three dials move it; weather switches stand in for Monte Carlo.</p>
       <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+    
+      <div class="ratebar" data-file="04-range-gauge.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="05-the-sentence.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-violet-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-violet-600 mb-1">05</div>
       <h3 class="text-[15px] font-bold group-hover:text-violet-700">The Sentence</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">"I'm 55. I've saved $850,000…" — the plan as one editable first-person sentence; click any number, the ending rewrites itself.</p>
       <span class="arrow inline-block mt-2 text-xs text-violet-600">Open →</span>
+    
+      <div class="ratebar" data-file="05-the-sentence.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="06-the-river.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">06</div>
       <h3 class="text-[15px] font-bold group-hover:text-amber-700">The River</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Scroll your life downstream: paycheques widen the river, benefits join as a tributary, spending drains it — see where it runs dry.</p>
       <span class="arrow inline-block mt-2 text-xs text-amber-600">Open →</span>
+    
+      <div class="ratebar" data-file="06-the-river.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -106,24 +168,48 @@
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">Calm Focus</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A nearly blank page, one enormous verdict, three quiet steppers. Nothing else unless you ask.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="07-calm-focus.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="08-life-timeline.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">08</div>
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">Life Timeline</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A precise age axis with draggable milestone pins — work ends, CPP + OAS — and the ending computed live.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="08-life-timeline.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="09-card-wizard.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">09</div>
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">One Question at a Time</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A typeform-calm card asking four questions, then the answer. Enter advances; nothing overwhelms.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="09-card-wizard.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="10-split-answer.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">10</div>
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">Split Answer</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Controls left, live consequence per row; the sticky verdict and chart never scroll away. Linear-style restraint.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="10-split-answer.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -135,24 +221,48 @@
       <h3 class="text-[15px] font-bold group-hover:text-sky-700">Bento Board</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">The whole plan as a grid of balanced tiles — verdict, dials, weather, leftovers — each with its own accent.</p>
       <span class="arrow inline-block mt-2 text-xs text-sky-600">Open →</span>
+    
+      <div class="ratebar" data-file="11-bento.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="12-plan-score.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">12</div>
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">Plan Score</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">One honest 0–100 score in a ring, with three explained ingredients: outlasts, cushion, weatherproof.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="12-plan-score.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="13-printed-plan.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">13</div>
       <h3 class="text-[15px] font-bold group-hover:text-amber-700">The Printed Plan</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Your plan as a typeset private-bank letter — serif prose, footnotes on hover, a "Conclusion." that is the verdict.</p>
       <span class="arrow inline-block mt-2 text-xs text-amber-600">Open →</span>
+    
+      <div class="ratebar" data-file="13-printed-plan.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="14-terminal.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-slate-500 mb-1">14</div>
       <h3 class="text-[15px] font-bold group-hover:text-slate-700">Terminal</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">plan&gt; retire 64 · spend 70k. A green-on-black console for people who think in commands.</p>
       <span class="arrow inline-block mt-2 text-xs text-slate-600">Open →</span>
+    
+      <div class="ratebar" data-file="14-terminal.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -164,18 +274,36 @@
       <h3 class="text-[15px] font-bold group-hover:text-indigo-700">Glass Night</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Deep indigo night, frosted glass cards, glowing thumbs. Premium fintech after dark.</p>
       <span class="arrow inline-block mt-2 text-xs text-indigo-600">Open →</span>
+    
+      <div class="ratebar" data-file="15-glass-night.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="16-contour-map.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">16</div>
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">Contour Map</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Success-rate regions as quiet topo lines. Drag the dot to where the terrain is safe; readouts follow.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="16-contour-map.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="17-conversation.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">17</div>
       <h3 class="text-[15px] font-bold group-hover:text-rose-700">Conversation</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Four questions asked in a warm chat thread; the verdict arrives as a message, follow-ups as chips.</p>
       <span class="arrow inline-block mt-2 text-xs text-rose-600">Open →</span>
+    
+      <div class="ratebar" data-file="17-conversation.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
   <div class="grid md:grid-cols-3 gap-3 mb-10">
@@ -184,18 +312,36 @@
       <h3 class="text-[15px] font-bold group-hover:text-amber-700">Instrument Dials</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Machined-dark panel, three rotary knobs you drag, a backlit amber readout: LASTS TO 96. Hi-fi amp feel.</p>
       <span class="arrow inline-block mt-2 text-xs text-amber-600">Open →</span>
+    
+      <div class="ratebar" data-file="18-instrument-dials.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="19-year-strip.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-zinc-400 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-zinc-500 mb-1">19</div>
       <h3 class="text-[15px] font-bold group-hover:text-zinc-700">The Year Strip</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">One bar per year, height = balance, color = health. Scrub across it and watch any year's number.</p>
       <span class="arrow inline-block mt-2 text-xs text-zinc-600">Open →</span>
+    
+      <div class="ratebar" data-file="19-year-strip.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="20-one-breath.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-slate-500 mb-1">20</div>
       <h3 class="text-[15px] font-bold group-hover:text-slate-700">One Breath</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Ninety percent empty: one huge number, two arrows, everything else in a bottom sheet. Total focus.</p>
       <span class="arrow inline-block mt-2 text-xs text-slate-600">Open →</span>
+    
+      <div class="ratebar" data-file="20-one-breath.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -207,24 +353,48 @@
       <h3 class="text-[15px] font-bold group-hover:text-blue-700">The Statement</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A bank statement for your future: letterhead, verdict box, yearly rows — and the dry year in red.</p>
       <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+    
+      <div class="ratebar" data-file="21-statement.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="22-swiss-poster.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">22</div>
       <h3 class="text-[15px] font-bold group-hover:text-rose-700">Swiss Poster</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A 140px verdict on a strict typographic grid — four columns, one red, alignment as the design.</p>
       <span class="arrow inline-block mt-2 text-xs text-rose-600">Open →</span>
+    
+      <div class="ratebar" data-file="22-swiss-poster.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="23-morning-briefing.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">23</div>
       <h3 class="text-[15px] font-bold group-hover:text-amber-700">Morning Briefing</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Your plan as a morning email: TL;DR verdict, the numbers, what to watch, one idea.</p>
       <span class="arrow inline-block mt-2 text-xs text-amber-600">Open →</span>
+    
+      <div class="ratebar" data-file="23-morning-briefing.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="24-ledger.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-stone-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-stone-600 mb-1">24</div>
       <h3 class="text-[15px] font-bold group-hover:text-stone-700">The Ledger</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A ruled notebook with margin notes at the turning points and a verdict stamped in ink.</p>
       <span class="arrow inline-block mt-2 text-xs text-stone-600">Open →</span>
+    
+      <div class="ratebar" data-file="24-ledger.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -236,24 +406,48 @@
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">The Spreadsheet</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A live spreadsheet whose formula bar explains each year in plain words instead of formulas.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="25-spreadsheet.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="26-big-canvas.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-slate-500 mb-1">26</div>
       <h3 class="text-[15px] font-bold group-hover:text-slate-700">Big Canvas</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A dense 12-column panel dashboard: verdict, chart, sparklines, yearly heatmap, controls rail.</p>
       <span class="arrow inline-block mt-2 text-xs text-slate-600">Open →</span>
+    
+      <div class="ratebar" data-file="26-big-canvas.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="27-forecast.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-sky-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-sky-600 mb-1">27</div>
       <h3 class="text-[15px] font-bold group-hover:text-sky-700">The Forecast</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A weather report for your money: condition icon, risk headline, five decade-chips to tap.</p>
       <span class="arrow inline-block mt-2 text-xs text-sky-600">Open →</span>
+    
+      <div class="ratebar" data-file="27-forecast.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="28-fitness-rings.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">28</div>
       <h3 class="text-[15px] font-bold group-hover:text-rose-700">The Rings</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Apple-Watch rings for your plan: Outlast, Cushion, Weatherproof — feeding three sliders.</p>
       <span class="arrow inline-block mt-2 text-xs text-rose-600">Open →</span>
+    
+      <div class="ratebar" data-file="28-fitness-rings.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -265,24 +459,48 @@
       <h3 class="text-[15px] font-bold group-hover:text-amber-700">Road Trip</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Your life as a highway: a fuel stop at CPP + OAS, an out-of-fuel sign — or a finish banner.</p>
       <span class="arrow inline-block mt-2 text-xs text-amber-600">Open →</span>
+    
+      <div class="ratebar" data-file="29-road-trip.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="30-checklist.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">30</div>
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">The Checklist</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Aviation preflight for your plan: PASS/CHECK rows, each CHECK opening its own fix.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="30-checklist.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="31-card-deck.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-indigo-600 mb-1">31</div>
       <h3 class="text-[15px] font-bold group-hover:text-indigo-700">Card Deck</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">One fact per card — verdict, retirement wealth, storm test — stepped with keys or taps.</p>
       <span class="arrow inline-block mt-2 text-xs text-indigo-600">Open →</span>
+    
+      <div class="ratebar" data-file="31-card-deck.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="32-comic.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">32</div>
       <h3 class="text-[15px] font-bold group-hover:text-rose-700">The Comic</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Three drawn panels with live speech bubbles: the working years, the turn, the ending.</p>
       <span class="arrow inline-block mt-2 text-xs text-rose-600">Open →</span>
+    
+      <div class="ratebar" data-file="32-comic.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -294,24 +512,48 @@
       <h3 class="text-[15px] font-bold group-hover:text-blue-700">Blueprint</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Your plan as a technical drawing: piers of balance, water table at the dry age, verdict stamp.</p>
       <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+    
+      <div class="ratebar" data-file="33-blueprint.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="34-retro-broadcast.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-emerald-600 mb-1">34</div>
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">Retro Broadcast</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A CRT broadcast of your plan: ticker, lower-third verdict, phosphor-green curve, channel knob.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="34-retro-broadcast.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="35-crayon.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">35</div>
       <h3 class="text-[15px] font-bold group-hover:text-amber-700">Crayon</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">A hand-drawn workbook for people who fear spreadsheets: scribble charts, sticker verdicts.</p>
       <span class="arrow inline-block mt-2 text-xs text-amber-600">Open →</span>
+    
+      <div class="ratebar" data-file="35-crayon.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="36-ambient.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-teal-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-teal-600 mb-1">36</div>
       <h3 class="text-[15px] font-bold group-hover:text-teal-700">Ambient</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">No UI at all: a breathing number on a gradient that shifts with your plan's health.</p>
       <span class="arrow inline-block mt-2 text-xs text-teal-600">Open →</span>
+    
+      <div class="ratebar" data-file="36-ambient.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -323,24 +565,48 @@
       <h3 class="text-[15px] font-bold group-hover:text-emerald-700">The Paystub</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">An inverse paystub for any future age: what arrives, what goes out, balance after.</p>
       <span class="arrow inline-block mt-2 text-xs text-emerald-600">Open →</span>
+    
+      <div class="ratebar" data-file="37-paystub.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="38-kitchen-table.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-amber-600 mb-1">38</div>
       <h3 class="text-[15px] font-bold group-hover:text-amber-700">Kitchen Table</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Paper cards on a wood table you can drag around — verdict, plan, notes, a polaroid chart.</p>
       <span class="arrow inline-block mt-2 text-xs text-amber-600">Open →</span>
+    
+      <div class="ratebar" data-file="38-kitchen-table.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="39-voice.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-violet-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-violet-600 mb-1">39</div>
       <h3 class="text-[15px] font-bold group-hover:text-violet-700">Voice Briefing</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Five spoken lines that fade in: the verdict, the risk, the one idea. Tap any line to replay.</p>
       <span class="arrow inline-block mt-2 text-xs text-violet-600">Open →</span>
+    
+      <div class="ratebar" data-file="39-voice.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
     <a href="40-split-worlds.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-md transition-all">
       <div class="text-[11px] font-semibold text-rose-600 mb-1">40</div>
       <h3 class="text-[15px] font-bold group-hover:text-rose-700">Split Worlds</h3>
       <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Two live plans split by a draggable divider — nudge world B until it beats world A.</p>
       <span class="arrow inline-block mt-2 text-xs text-rose-600">Open →</span>
+    
+      <div class="ratebar" data-file="40-split-worlds.html">
+        <button data-rate="keep" title="worth building">Keep</button>
+        <button data-rate="meh" title="has a piece worth stealing">Meh</button>
+        <button data-rate="no" title="drop it">No</button>
+      </div>
     </a>
   </div>
 
@@ -356,5 +622,85 @@
   </div>
 </div>
 
+
+<script>
+(function () {
+  var KEY = 'retired_rateings_v1';
+  var rates = {};
+  try { rates = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { rates = {}; }
+
+  var summary = document.getElementById('rate-summary');
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(rates)); } catch (e) {} }
+
+  function apply(file, btn) {
+    btn.classList.toggle('on', !!rates[file]);
+    btn.parentElement.querySelectorAll('button').forEach(function (b) {
+      b.classList.toggle('on', rates[file] === b.dataset.rate);
+    });
+  }
+
+  var bars = document.querySelectorAll('.ratebar');
+  bars.forEach(function (bar) {
+    var file = bar.dataset.file;
+    bar.querySelectorAll('button').forEach(function (btn) {
+      if (rates[file]) btn.classList.toggle('on', rates[file] === btn.dataset.rate);
+      btn.addEventListener('click', function () {
+        // click the active rating again to clear it
+        if (rates[file] === btn.dataset.rate) delete rates[file];
+        else rates[file] = btn.dataset.rate;
+        save();
+        bars.forEach(function (b2) {
+          b2.querySelectorAll('button').forEach(function (b3) {
+            b3.classList.toggle('on', rates[b2.dataset.file] === b3.dataset.rate);
+          });
+        });
+        updateSummary();
+        applyFilters();
+      });
+    });
+  });
+
+  function counts() {
+    var k = 0, m = 0, n = 0;
+    Object.keys(rates).forEach(function (f) {
+      if (rates[f] === 'keep') k++; else if (rates[f] === 'meh') m++; else if (rates[f] === 'no') n++;
+    });
+    return { k: k, m: m, n: n, total: Object.keys(rates).length };
+  }
+
+  function updateSummary() {
+    var c = counts();
+    var total = bars.length;
+    var left = total - c.total;
+    summary.textContent = c.total === 0
+      ? '0 of ' + total + ' rated'
+      : c.k + ' keep · ' + c.m + ' meh · ' + c.n + ' no — ' + left + ' left to rate';
+  }
+
+  var filtering = false;
+  function applyFilters() {
+    document.querySelectorAll('a[href]').forEach(function (a) {
+      var bar = a.querySelector('.ratebar');
+      if (!bar) return;
+      var file = bar.dataset.file;
+      var hide = filtering && rates[file] !== 'keep';
+      a.classList.toggle('hidden-weak', hide);
+    });
+  }
+
+  document.getElementById('show-keeps').addEventListener('click', function () { filtering = true; applyFilters(); });
+  document.getElementById('show-all').addEventListener('click', function () { filtering = false; applyFilters(); });
+  document.getElementById('clear-all').addEventListener('click', function () {
+    rates = {}; save();
+    bars.forEach(function (b2) {
+      b2.querySelectorAll('button').forEach(function (b3) { b3.classList.remove('on'); });
+    });
+    updateSummary(); applyFilters();
+  });
+
+  updateSummary();
+})();
+</script>
 </body>
 </html>
