@@ -388,7 +388,7 @@ year`, ~engine test:428) for the exact couple-fixture shape.
 
 ---
 
-## [ ] PLAN D-01 · OPFS-write failure → one-session rollback of the last save
+## [x] PLAN D-01 · OPFS-write failure → one-session rollback of the last save
 **Maps to:** open issue **#18** · REVIEW.md **D-01** · Severity MEDIUM
 **File:** `src/data/db.ts`
 
