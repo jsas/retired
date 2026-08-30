@@ -133,6 +133,14 @@ export function withAxis(inputs: RetirementInputs, axis: EqAxis, value: number):
     // the taxable account on top of them. The axis floor is rrsp+tfsa (taxable
     // = 0); raising the value adds the difference to taxable, which has no
     // contribution limit to collide with.
+    //
+    // With contribution-room tracking on (issue #24), the engine independently
+    // caps the locked RRSP/TFSA portion and overflows the excess to taxable.
+    // That is NOT double-counting: this axis never writes the registered fields,
+    // only taxableContribution, so the engine's overflow and the axis's taxable
+    // top-up are separate money. The axis floor still reads rrsp+tfsa even when
+    // some of it would overflow — it marks the configured registered intent, and
+    // the engine reports the landed/overflow split honestly via detail.overflow.
     const locked = inputs.rrspContribution + inputs.tfsaContribution;
     const taxable = Math.max(0, Math.round(v - locked));
     return { ...inputs, taxableContribution: taxable };

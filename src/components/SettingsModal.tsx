@@ -429,6 +429,16 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={v => update(c => { c.engine.rrifConversionAge = v; })} />
               <PercentField label="Inflation rate / CPI (%)" value={draft.engine.inflationRate}
                 onChange={v => update(c => { c.engine.inflationRate = v; })} />
+              <NumberField label="TFSA annual limit ($/yr)" value={draft.engine.tfsaAnnualLimit} step="500"
+                onChange={v => update(c => { c.engine.tfsaAnnualLimit = v; })} />
+              <NumberField label="RRSP annual maximum ($/yr)" value={draft.engine.rrspAnnualMax} step="500"
+                onChange={v => update(c => { c.engine.rrspAnnualMax = v; })} />
+              <p className="text-[11px] text-slate-500 leading-snug -mt-1">
+                Used only when a scenario tracks contribution room (TFSA/RRSP room set on the sidebar).
+                Each year TFSA room grows by this limit; RRSP room grows by 18% of earned income up to
+                this maximum (minus any pension adjustment). When "Index tax tables" is on, both grow
+                with CPI like the real CRA limits.
+              </p>
               <PercentField label="Max pension income split (%)" value={draft.engine.pensionSplitMaxRate}
                 onChange={v => update(c => { c.engine.pensionSplitMaxRate = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug -mt-1">

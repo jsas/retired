@@ -661,6 +661,8 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
           rrspContribution: linkedScenario.inputs.rrspContribution,
           tfsaContribution: linkedScenario.inputs.tfsaContribution,
           taxableContribution: linkedScenario.inputs.taxableContribution,
+          tfsaRoom: linkedScenario.inputs.tfsaRoom ?? null,
+          rrspRoom: linkedScenario.inputs.rrspRoom ?? null,
           cppStartAge: linkedScenario.inputs.cppStartAge,
           cppMonthlyAmount: linkedScenario.inputs.cppMonthlyAmount,
           oasStartAge: linkedScenario.inputs.oasStartAge,
@@ -908,6 +910,57 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 onChange={(e) => updateField('taxableContribution', parseInt(e.target.value) || 0)}
                 className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
               />
+            </div>
+
+            {/* Contribution room (issue #24). Blank = unlimited = the engine
+                doesn't enforce room (pre-#24 behavior). A number turns tracking
+                on: room accrues each year and deposits are capped at what
+                remains, the excess spilling to taxable. */}
+            <div className="pt-2 border-t border-neutral-800">
+              <div className="text-[11px] font-medium text-neutral-400 mb-1.5">Contribution Room (optional)</div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] text-neutral-500 mb-1">TFSA room today ($)</label>
+                  <input
+                    type="number"
+                    step="1000"
+                    placeholder="blank = no limit"
+                    value={inputs.tfsaRoom ?? ''}
+                    onChange={(e) => updateField('tfsaRoom', e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-neutral-500 mb-1">RRSP room today ($)</label>
+                  <input
+                    type="number"
+                    step="1000"
+                    placeholder="blank = no limit"
+                    value={inputs.rrspRoom ?? ''}
+                    onChange={(e) => updateField('rrspRoom', e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <p className="text-[10px] text-neutral-500 leading-snug">
+                  From your CRA notice of assessment. Room grows each year (TFSA by the annual limit;
+                  RRSP by 18% of earned income, capped, minus pension adjustments). Over-limit deposits
+                  spill into the non-registered account. Leave blank to skip enforcement.
+                </p>
+                {inputs.tfsaRoom != null && (inputs.tfsaContribution ?? 0) > config.engine.tfsaAnnualLimit && (
+                  <div className="text-[10px] text-amber-400 leading-snug">
+                    Your {formatMoney(inputs.tfsaContribution ?? 0)}/yr TFSA contribution exceeds the
+                    {' '}{formatMoney(config.engine.tfsaAnnualLimit)}/yr limit — it will fit only while
+                    you have carried-forward room, then overflow to non-registered.
+                  </div>
+                )}
+                {inputs.rrspRoom != null && (inputs.rrspContribution ?? 0) > config.engine.rrspAnnualMax && (
+                  <div className="text-[10px] text-amber-400 leading-snug">
+                    Your {formatMoney(inputs.rrspContribution ?? 0)}/yr RRSP contribution exceeds the
+                    {' '}{formatMoney(config.engine.rrspAnnualMax)}/yr maximum — it will fit only while
+                    you have carried-forward room, then overflow to non-registered.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </CollapsibleSection>
@@ -1219,6 +1272,16 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                             onChange={(e) => updateLinkedDraft({ tfsaContribution: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
                         </div>
                         <div>
+                          <label className={LABEL_CLS}>TFSA room $</label>
+                          <input type="number" step="1000" placeholder="blank = no limit" value={linkedDraft.tfsaRoom ?? ''}
+                            onChange={(e) => updateLinkedDraft({ tfsaRoom: e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                        </div>
+                        <div>
+                          <label className={LABEL_CLS}>RRSP room $</label>
+                          <input type="number" step="1000" placeholder="blank = no limit" value={linkedDraft.rrspRoom ?? ''}
+                            onChange={(e) => updateLinkedDraft({ rrspRoom: e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                        </div>
+                        <div>
                           <label className={LABEL_CLS}>CPP start</label>
                           <input type="number" min="60" max="70" value={linkedDraft.cppStartAge ?? ''}
                             onChange={(e) => updateLinkedDraft({ cppStartAge: e.target.value ? parseInt(e.target.value) : null })} className={INPUT_CLS} />
@@ -1317,6 +1380,16 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                   <label className={LABEL_CLS}>TFSA contrib $/yr</label>
                   <input type="number" step="1000" value={inputs.spouse.tfsaContribution}
                     onChange={(e) => updateSpouse({ tfsaContribution: parseInt(e.target.value) || 0 })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>TFSA room $</label>
+                  <input type="number" step="1000" placeholder="blank = no limit" value={inputs.spouse.tfsaRoom ?? ''}
+                    onChange={(e) => updateSpouse({ tfsaRoom: e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>RRSP room $</label>
+                  <input type="number" step="1000" placeholder="blank = no limit" value={inputs.spouse.rrspRoom ?? ''}
+                    onChange={(e) => updateSpouse({ rrspRoom: e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>CPP start</label>
