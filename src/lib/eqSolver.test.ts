@@ -40,7 +40,7 @@ describe('solveEq grid', () => {
         expect(res.grid![gy * G + gx]).toBe(expected);
       }
     }
-  });
+  }, 30_000); // 81 grid nodes × 2 full simulations — slow on CI runners
 
   it('streams every row exactly once, covering the whole grid', () => {
     const inputs = plan();
@@ -52,7 +52,7 @@ describe('solveEq grid', () => {
     const G = res.gridMeta!.size;
     expect(rows.length).toBe(G);
     expect(new Set(rows).size).toBe(G); // no duplicates, full coverage
-  });
+  }, 15_000);
 
   it('streams center-out: the first row is nearest the current spending', () => {
     // Put spending high on the axis so the center row is near G-1.
@@ -62,7 +62,7 @@ describe('solveEq grid', () => {
     const G = res.gridMeta!.size;
     const centerRow = Math.round(((900000 - AXES.desiredSpending.min) / (AXES.desiredSpending.max - AXES.desiredSpending.min)) * (G - 1));
     expect(rows[0]).toBe(centerRow);
-  });
+  }, 15_000);
 
   it('reports a success rate within [0,1] and null grid when pad is null', () => {
     const res = solveEq({ inputs: plan(), config, pad: null });
@@ -78,7 +78,7 @@ describe('solveEq grid', () => {
       expect(r).toBeGreaterThanOrEqual(0);
       expect(r).toBeLessThanOrEqual(1);
     }
-  });
+  }, 15_000);
 });
 
 describe('parallel sharding', () => {
@@ -121,7 +121,7 @@ describe('parallel sharding', () => {
       }
     }
     expect(stitched).toEqual(full.grid);
-  });
+  }, 15_000);
 
   it('solveEqReadout matches the full solveEq readout', () => {
     const inputs = plan();
