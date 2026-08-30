@@ -57,6 +57,10 @@ export interface PersonInputs {
   rrspContribution: number;
   tfsaContribution: number;
   taxableContribution: number;
+  // Contribution room (issue #24 Phase 2): null/absent = unlimited (no
+  // enforcement); a number turns room-capping on. See RetirementInputs.
+  tfsaRoom?: number | null;
+  rrspRoom?: number | null;
   cppStartAge: number | null;
   cppMonthlyAmount: number;      // monthly CPP at 65; engine applies early/deferral adjustment
   cppAdjustedAmount: boolean;    // true = amount already adjusted for the start age
@@ -109,6 +113,8 @@ export function legacyToPerson(inputs: RetirementInputs): PersonInputs {
     rrspContribution: inputs.rrspContribution,
     tfsaContribution: inputs.tfsaContribution,
     taxableContribution: inputs.taxableContribution,
+    tfsaRoom: inputs.tfsaRoom,
+    rrspRoom: inputs.rrspRoom,
     cppStartAge: inputs.cppStartAge,
     cppMonthlyAmount: inputs.cppMonthlyAmount,
     cppAdjustedAmount: inputs.cppAdjustedAmount,
@@ -175,6 +181,8 @@ export function legacySpouseToPerson(sp: SpouseInputs): PersonInputs {
     rrspContribution: sp.rrspContribution,
     tfsaContribution: sp.tfsaContribution,
     taxableContribution: sp.taxableContribution,
+    tfsaRoom: sp.tfsaRoom,
+    rrspRoom: sp.rrspRoom,
     cppStartAge: sp.cppStartAge,
     cppMonthlyAmount: sp.cppMonthlyAmount,
     // Legacy spouses always entered an already-adjusted CPP amount is NOT true —
@@ -307,6 +315,8 @@ export function resolveSpouseSource(
     rrspContribution: their.rrspContribution,
     tfsaContribution: their.tfsaContribution,
     taxableContribution: their.taxableContribution,
+    tfsaRoom: their.tfsaRoom,
+    rrspRoom: their.rrspRoom,
     cppStartAge: their.cppStartAge,
     cppMonthlyAmount: their.cppMonthlyAmount,
     oasStartAge: their.oasStartAge,

@@ -90,7 +90,11 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'RRSP / TFSA / Non-Registered Contribution ($/yr)',
-        body: <P>Added to each account every year during accumulation, after that year's growth. The engine does not model RRSP tax refunds on contributions or contribution-room limits.</P>
+        body: <P>Added to each account every year during accumulation, after that year's growth. The engine does not model RRSP tax refunds on contributions. Contribution-room limits are optional: set your TFSA/RRSP room (the "Contribution Room" fields just below) and the engine caps each year's registered deposits at the room you have left, spilling any excess into the non-registered account. Leave room blank to skip enforcement.</P>
+      },
+      {
+        term: 'Contribution Room (TFSA / RRSP, optional)',
+        body: <P>Your available contribution room from your CRA notice of assessment. Blank means "no limit" — the engine won't enforce room (how older plans behaved). Enter a number and room is tracked: each year TFSA room grows by the annual limit ({new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit)}/yr, set in Settings → Engine) and RRSP room grows by 18% of your employment/self-employment income up to the RRSP maximum, minus any pension adjustment. A TFSA withdrawal re-adds to your room the <em>following</em> year (the CRA rule); an RRSP withdrawal never does. Deposits beyond your remaining room overflow into non-registered, so an RRSP→TFSA meltdown is now capped at your TFSA room rather than over-contributing.</P>
       },
       {
         term: 'Desired Spending ($)',
@@ -119,7 +123,7 @@ const SECTIONS: HelpSection[] = [
             <P>The Income section is one register of everything you earn besides CPP/OAS. Each source has a <strong>kind</strong>, a gross $/yr, a start age, and an <em>indexed</em> flag (grows with CPI). Two kinds are modelled today:</P>
             <P><strong>Pension (defined-benefit / bridge)</strong> — a fixed $/yr from the start age, taxed as ordinary income and stacked with CPP/OAS. Leave the <strong>end age</strong> blank for a lifetime pension, or set one for a <strong>bridge / temporary</strong> benefit (e.g. $12k/yr from 60–65 that stops when CPP begins). Pension income counts toward the GIS and OAS clawbacks, exactly like CPP. A <strong>DC / LIRA</strong> lump sum isn't entered here — that's your RRSP/RRIF balance.</P>
             <P><strong>Employment (semi- / post-retirement work)</strong> — wages from a part-time job or consulting gig. Unlike a pension this is earned income: it stacks on CPP/OAS/pension for tax (at your marginal rate), counts toward the OAS clawback, and reduces GIS. Set a start–end age window. Two modes: with <strong>tops up spending</strong> on, the after-tax pay covers spending first (portfolio withdrawals shrink dollar-for-dollar) and any excess is saved; with it off, the whole after-tax pay is saved. The net lands in the account you pick (Taxable / TFSA / RRSP / Cash).</P>
-            <P>Registered destinations default to <strong>Taxable</strong>: the app doesn't track TFSA/RRSP contribution room yet, so a registered destination could silently over-contribute. If you pick TFSA or RRSP, an amber note appears when the yearly amount exceeds the annual limit ({new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit)}/yr TFSA) — only use a registered destination if you know you have the room.</P>
+            <P>Registered destinations default to <strong>Taxable</strong>. If you pick TFSA or RRSP and you've set contribution room (Contribution Rates → Contribution Room), the engine caps the deposit at your remaining room and spills the excess to Taxable; an amber note also appears when the yearly amount exceeds the annual limit ({new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit)}/yr TFSA). If you haven't set room, a registered destination is deposited in full — only do that if you know you have the room. A pension can also carry a <strong>pension adjustment (PA)</strong>, which reduces the RRSP room you accrue each year while the pension is active.</P>
             <P>The Optimize tab's Strategy Explorer works on both kinds: it sweeps each pension's <strong>start age</strong> (yours and your spouse's) like CPP/OAS — take it early to shrink portfolio draws, or defer it and bridge from savings — and it suggests work stints (fixed rows like "$10k/yr to 70", plus a gap-targeted stint when the plan runs a shortfall). One click applies a winner back into the source. The spouse plan has its own income register, and a spouse's earnings count toward the couple's GIS.</P>
           </>
         )
@@ -265,7 +269,7 @@ const SECTIONS: HelpSection[] = [
         body: ul([
           <><strong>Taxable account:</strong> capital gains are modelled with an adjusted cost base (Settings → Capital Gains) — only the embedded-gain fraction of each withdrawal is taxed, at the 50% inclusion rate. The fraction is computed once per withdrawal (it drifts slightly within a year as ACB leaves pro-rata). Dividend gross-up/credits and deemed disposition at death are not modelled.</>,
           <><strong>Other provinces' surtaxes and credits</strong> (beyond Ontario's, which is modelled) are not included — e.g. BC/NS low-income reductions, dividend credits.</>,
-          <>No RRSP contribution refunds and no contribution-room limits. Pension-income splitting is modelled for couples (reported tax only; the transfer direction is chosen per year and the maximum is applied — a partial transfer near a bracket boundary could in theory do slightly better). GIS is modelled for singles and couples (combined-income assessment); the quarterly Service Canada recalculation is approximated annually.</>
+          <>No RRSP contribution refunds. Contribution-room limits are optional and off by default — set TFSA/RRSP room on the sidebar to enforce them (deposits then cap at remaining room and spill to non-registered). Pension-income splitting is modelled for couples (reported tax only; the transfer direction is chosen per year and the maximum is applied — a partial transfer near a bracket boundary could in theory do slightly better). GIS is modelled for singles and couples (combined-income assessment); the quarterly Service Canada recalculation is approximated annually.</>
         ])
       },
       {
@@ -333,7 +337,7 @@ const SECTIONS: HelpSection[] = [
             <P>Each slider is a major lever: annual spending, retirement age, expected return, annual savings, plan-to age, return volatility, CPP start age, and OAS start age.</P>
             {ul([
               <>Drag the two edge handles to crop a range (<em>at least / at most</em>); the middle knob moves the value inside it. A range with both edges together is a hard pin — the control won't move.</>,
-              <><strong>Annual savings</strong> only moves the taxable account on top of your locked RRSP+TFSA — so it never runs into a contribution limit. Its floor is your current RRSP+TFSA total.</>,
+              <><strong>Annual savings</strong> only moves the taxable account on top of your locked RRSP+TFSA — so the slider itself never adds to a registered account. Its floor is your current RRSP+TFSA total. If you've set contribution room, the locked RRSP+TFSA portion is still capped by the engine (any over-limit part spills to taxable); this slider's own top-up always lands in taxable regardless.</>,
               <>Ranges adapt to the plan: retirement age starts at your current age, and an axis grows if you set a value past its end.</>,
             ])}
           </>
@@ -644,7 +648,7 @@ const SECTIONS: HelpSection[] = [
               investment, tax, or legal advice, and it does not consider your complete circumstances.
             </P>
             {ul([
-              <>The tax model omits real-world details (dividend credits, most provincial credits, deemed disposition at death, contribution-room limits — see the Tax Model section).</>,
+              <>The tax model omits real-world details (dividend credits, most provincial credits, deemed disposition at death — see the Tax Model section). Contribution-room limits are modelled only when you enter your room; the engine does not fetch your actual CRA room, so verify against your notice of assessment.</>,
               <>Tax figures are 2026 defaults that go stale; benefit rules change by legislation.</>,
               <>Projections assume constant average returns or stylized randomness; actual markets will not cooperate.</>,
               <>No warranty is given that any calculation is correct, complete, or suitable for any purpose. Use of this tool is entirely at your own risk.</>

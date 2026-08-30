@@ -236,6 +236,9 @@ export const EDITABLE_FIELDS = new Set([
   'currentAge', 'retirementAge', 'maxAge',
   'rrspBalance', 'tfsaBalance', 'taxableBalance', 'cashCushionBalance',
   'rrspContribution', 'tfsaContribution', 'taxableContribution',
+  // Contribution room (issue #24): a number turns room-tracking on; null clears
+  // it back to unlimited (no enforcement).
+  'tfsaRoom', 'rrspRoom',
   'investmentReturn', 'returnVolatility',
   'provinceCode',
   'cppStartAge', 'cppMonthlyAmount', 'oasStartAge', 'oasYearsInCanada',
@@ -506,6 +509,15 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
     rrsp: i.rrspBalance, tfsa: i.tfsaBalance, taxable: i.taxableBalance,
     cashCushion: i.cashCushionBalance,
     contributionsPerYear: { rrsp: i.rrspContribution, tfsa: i.tfsaContribution, taxable: i.taxableContribution },
+    // Contribution room (issue #24): shown only when tracking is on (a number),
+    // so the agent knows deposits are being capped. Absent/null = unlimited.
+    ...((i.tfsaRoom != null || i.rrspRoom != null) ? {
+      contributionRoom: {
+        ...(i.tfsaRoom != null ? { tfsa: i.tfsaRoom } : { tfsa: 'unlimited' }),
+        ...(i.rrspRoom != null ? { rrsp: i.rrspRoom } : { rrsp: 'unlimited' }),
+        note: 'deposits are capped at remaining room; excess spills to non-registered',
+      },
+    } : {}),
     ...(i.rdsp?.enabled ? {
       rdsp: {
         balance: i.rdsp.balance, contribution: i.rdsp.contribution,
@@ -1263,10 +1275,18 @@ function getScheduleTool(ctx: ToolContext, args: z.infer<typeof getScheduleArgs>
     const fmtRow = (r: YearlyBreakdown) => {
       const rm = r.loanBalance != null ? `, RM loan ${money(r.loanBalance)} / equity ${money(r.netHomeEquity ?? 0)}` : '';
       const emp = (r.employmentGross ?? 0) > 0 ? `, work net ${money(r.employmentNet ?? 0)}` : '';
+      // Contribution room left at year end (issue #24), when tracking is on.
+      const room = r.detail?.roomRemaining;
+      const roomStr = room
+        ? `, room left [tfsa ${room.tfsa != null ? money(room.tfsa) : '∞'} rrsp ${room.rrsp != null ? money(room.rrsp) : '∞'}]`
+        : '';
+      const over = (r.detail?.overflow?.tfsa ?? 0) > 0 || (r.detail?.overflow?.rrsp ?? 0) > 0
+        ? `, OVER-LIMIT spill ${money((r.detail?.overflow?.tfsa ?? 0) + (r.detail?.overflow?.rrsp ?? 0))}`
+        : '';
       return `age ${r.age}: start ${money(r.startingBalance)} → end ${money(r.endingBalance)}, ` +
         `withdrew ${money(r.withdrawals)}, tax ${money(r.incomeTax)}, ` +
         `cpp ${money(r.cppIncome)} oas ${money(r.oasIncome)} gis ${money(r.gisIncome)} pension ${money(r.pensionIncome)}` +
-        emp + rm + ((r.shortfall ?? 0) > 0 ? `, SHORT ${money(r.shortfall ?? 0)}` : '');
+        emp + rm + roomStr + over + ((r.shortfall ?? 0) > 0 ? `, SHORT ${money(r.shortfall ?? 0)}` : '');
     };
     const strideNote = stride > 1 && rows.length < inRange.length
       ? [`(showing every ${stride}nd/rd/th year of ${inRange.length} in range ${from}–${to}; the final year is always included)`]
