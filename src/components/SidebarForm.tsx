@@ -263,10 +263,27 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
     onChange({ ...inputs, [field]: value });
   };
 
-  const withdrawalOrder: WithdrawalAccount[] =
+  const storedOrder: WithdrawalAccount[] =
     Array.isArray(inputs.withdrawalOrder) && inputs.withdrawalOrder.length > 0
       ? inputs.withdrawalOrder
       : ['tfsa', 'taxable', 'rrsp'];
+
+  // Mirror the engine's effective order (E-01): when an RDSP is active but the
+  // stored order doesn't mention it, show it in the widget (inserted ahead of
+  // taxable, matching retirementEngine). The engine draws from the RDSP whether
+  // or not it's listed, so the widget must reflect that; the first reorder the
+  // user makes persists the RDSP slot explicitly.
+  const rdspActive =
+    inputs.rdsp?.enabled === true && inputs.rdsp?.dtcEligible === true && (inputs.rdsp?.balance ?? 0) > 0;
+  const withdrawalOrder: WithdrawalAccount[] =
+    rdspActive && !storedOrder.includes('rdsp')
+      ? (() => {
+          const idx = storedOrder.indexOf('taxable');
+          const next = [...storedOrder];
+          next.splice(idx === -1 ? next.length : idx, 0, 'rdsp');
+          return next;
+        })()
+      : storedOrder;
 
   const moveAccount = (index: number, direction: -1 | 1) => {
     const next = [...withdrawalOrder];
