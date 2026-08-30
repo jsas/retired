@@ -768,7 +768,7 @@ screen already use `householdOutcome()` (#33); the agent should match.
 
 ---
 
-## [ ] PLAN T-02 · `taxOnTable` basic-exemption assumes lowest bracket rate (VERIFY)
+## [x] PLAN T-02 · `taxOnTable` basic-exemption assumes lowest bracket rate (VERIFY)
 **Maps to:** REVIEW.md **T-02** · Severity LOW
 **File:** `src/lib/canadianTax.ts`
 

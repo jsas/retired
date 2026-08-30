@@ -220,12 +220,17 @@ upperBound *= 1.5;`. **Fix:** capped at `MAX_BOUND_EXPANSION` (60). Regression t
 with a flat 100%-marginal config proving the solver terminates and returns a finite
 number instead of hanging. Together with E-05 this closes #28. ~~LOW~~ → resolved.
 
-**T-02 · LOW · `taxOnTable` basic-exemption assumes the lowest bracket rate.**
-canadianTax.ts:38 `raw − table.exemption * table.rates[0]`. This models the basic
-personal amount as a *credit at the lowest marginal rate* — correct for Canada. But it
-hard-assumes `rates[0]` is the credit rate; if a province's table is ever given a
-non-standard first rate the BPA credit is mis-valued. Documented behaviour, fine for
-shipped tables; note only.
+~~**T-02 · LOW · `taxOnTable` basic-exemption assumes the lowest bracket rate.**~~
+✅ **VERIFIED OK 2026-08-30** (`verify/t02-taxontable-exemption`) — Info, no bug.
+canadianTax.ts `taxOnTable` credits `table.exemption` at `table.rates[0]`. That is
+exactly CRA's non-refundable-credit model: federally the credit rate is legislated to
+track the bottom marginal rate (ITA 117(2)(a); 14% for 2026 under the Tax Cut for All
+Canadians Act, matching the shipped 0.14), and provinces compute credits the same way
+on Form 428 (e.g. ON 5.05%, BC 5.06%, AB 8% — all match the shipped `rates[0]`). Every
+shipped table lists its lowest rate first. Pinned with tests: one asserting
+`rates[0] === min(rates)` for the federal table and all 13 provinces (guards future
+table edits that would silently misprice the BPA), one hand-computed federal case at
+$100k (`14392.725`).
 
 **T-03 · LOW · OAS `yearsInCanada` is not re-pro-rated when residency < full but
 start-age deferral is applied.** oasAnnualGross pro-rates by residency then multiplies
@@ -654,7 +659,7 @@ re-audited. (E-02 is listed under Medium as plausible-but-unconfirmed.)
 | ~~E-05~~ | Engine | ~~LOW~~ ✅ | `grossTaxableWithdrawal` upper-bound loop unbounded — **FIXED** (`fix/grossup-loop-caps`) | **Fixed** |
 | E-09 | Engine | LOW | `depletionAge` per-person vs household semantics — resolved (see X-02) | Info |
 | ~~T-01~~ | Tax | ~~LOW~~ ✅ | `findGrossIncomeForTakeHome` upper-bound loop unbounded — **FIXED** (`fix/grossup-loop-caps`) | **Fixed** |
-| T-02 | Tax | LOW | `taxOnTable` basic-exemption assumes lowest bracket rate | Actionable (verify) |
+| ~~T-02~~ | Tax | ~~LOW~~ ✅ | `taxOnTable` BPA credit at lowest rate — verified CRA-correct (`verify/t02-taxontable-exemption`) | **Verified OK** |
 | T-03 | Tax | LOW | OAS `yearsInCanada` not re-pro-rated for partial residency | Actionable (verify) |
 | T-04 | Tax | INFO | GIS single-vs-couple reduction base — documented, correct | Info |
 | S-02 | Strategies | LOW | `sustainableSpending` hi-expansion edge | Actionable |
@@ -724,7 +729,7 @@ Everything not struck through above. These are the items that still need doing.
 - ~~**U-15 · LOW** — PrintSummary detailed table omits the RDSP column.~~ ✅ FIXED (`fix/u15-print-rdsp-column`)
 
 ### Tax (verify-before-fix)
-- **T-02 · LOW** — `taxOnTable` basic-exemption assumes the lowest bracket rate.
+- ~~**T-02 · LOW** — `taxOnTable` basic-exemption assumes the lowest bracket rate.~~ ✅ VERIFIED OK (`verify/t02-taxontable-exemption`)
 - **T-03 · LOW** — OAS `yearsInCanada` not re-pro-rated for partial residency.
 
 ### AI / other
@@ -813,6 +818,12 @@ Everything not struck through above. These are the items that still need doing.
   + live couple GIS (partner-draw feedback). Per-year rows, balances and cross-deposit
   schedules match the settled pair exactly; the one-oscillation-stale hypothesis is
   refuted. 798/798 tests, `tsc` clean.
+- **2026-08-30** — **T-02** verified OK on `verify/t02-taxontable-exemption`: crediting
+  the basic exemption at `rates[0]` IS CRA's model — the federal non-refundable-credit
+  rate is legislated to track the bottom marginal rate (14% for 2026, matching the
+  shipped table), and provinces compute credits the same way on Form 428. New tests
+  pin `rates[0] === min(rates)` for the federal table and all 13 provinces, plus a
+  hand-computed $100k federal case. 800/800 tests, `tsc` clean.
 
 ---
 
@@ -823,7 +834,7 @@ Everything not struck through above. These are the items that still need doing.
    U-01 (stale export, PR #79), U-02 (durability feedback, `fix/u02-durability-feedback`).
 3. **S-01** — fixed (`fix/s01-strategy-scoring`).
 4. **Quick wins** — U-15, A-03, D-02 (#19), X-04, D-05, D-07 fixed. Remaining: none.
-5. **Verify-before-fix** — E-04, E-02 verified OK; remaining: T-02, T-03.
+5. **Verify-before-fix** — E-04, E-02, T-02 verified OK; remaining: T-03.
 6. **Features** — #24 (contribution room), #40 (pension start ages).
 
 ---

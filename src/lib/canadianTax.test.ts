@@ -59,6 +59,31 @@ describe('calculateTax', () => {
   });
 });
 
+describe('basic personal amount credit (T-02)', () => {
+  // taxOnTable credits the exemption at the table's FIRST rate. CRA computes
+  // non-refundable credits at the LOWEST rate of each jurisdiction — federally
+  // the credit rate is legislated to track the bottom marginal rate (ITA
+  // 117(2)(a); 14% for 2026 under the Tax Cut for All Canadians Act), and
+  // provinces use the same model (Form 428). So every shipped table must list
+  // its lowest rate first; if a future table edit breaks that ordering, the
+  // exemption credit silently misprices every income level.
+  it('every shipped table lists its lowest rate first (the credit rate)', () => {
+    expect(config.federal.rates[0]).toBe(Math.min(...config.federal.rates));
+    for (const table of Object.values(config.provinces)) {
+      expect(table.rates[0]).toBe(Math.min(...table.rates));
+    }
+  });
+
+  it('federal exemption credit equals exemption × lowest rate (hand-computed, 2026)', () => {
+    // 100_000 gross, federal only (unknown province → no provincial tax):
+    // raw = 58_523×0.14 + (100_000−58_523)×0.205 = 16_696.005
+    // credit = 16_452×0.14 = 2_303.28 → tax 14_392.725
+    const t = calculateTax(100000, 'ZZ', config);
+    expect(closeTo(t.federalTax, 14392.725, 0.01)).toBe(true);
+    // Crediting at any other bracket rate would land far from this value.
+  });
+});
+
 describe('gisAnnual (single)', () => {
   it('pays the full amount at zero income', () => {
     expect(gisAnnual(0, config)).toBe(S);
