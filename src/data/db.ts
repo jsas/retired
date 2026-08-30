@@ -35,14 +35,24 @@ let wasmPromise: Promise<Awaited<ReturnType<typeof initSqlJs>>> | null = null;
 
 /** sql.js needs its .wasm file; Vite gives us a URL (multi-file build) or an
  *  inlined base64 data URI (the single-file build, via assetsInlineLimit).
- *  Under Vitest (Node), that URL is the project-relative path — resolve it
- *  against the working directory so the file can be read from disk. */
-function loadSqlJs() {
+ *  Under Vitest (Node) that URL is a root-absolute POSIX path
+ *  ('/node_modules/sql.js/dist/...') which fs resolves against the current
+ *  drive — joining it with cwd breaks in worktrees, where the repo lives
+ *  deeper than the cwd root. Resolve through the package's own export map
+ *  instead: anchored at this module, it lands on the real file wherever the
+ *  project is checked out. Built lazily so the Node-only module never loads
+ *  in the browser bundle. */
+type NodeRequire = { resolve(specifier: string): string };
+let nodeRequire: NodeRequire | null = null;
+
+async function loadSqlJs() {
+  if (typeof window === 'undefined' && !sqlWasmUrl.startsWith('data:')) {
+    const { createRequire } = await import('node:module');
+    nodeRequire ??= createRequire(import.meta.url) as unknown as NodeRequire;
+  }
   wasmPromise ??= initSqlJs({
-    locateFile: () =>
-      typeof window === 'undefined' && !sqlWasmUrl.startsWith('data:')
-        ? `${(globalThis as { process?: { cwd(): string } }).process?.cwd() ?? '.'}/${sqlWasmUrl}`
-        : sqlWasmUrl,
+    locateFile: (file: string) =>
+      nodeRequire ? nodeRequire.resolve(`sql.js/dist/${file}`) : sqlWasmUrl,
   });
   return wasmPromise;
 }
