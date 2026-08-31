@@ -48,31 +48,18 @@ const MIME = { '.html': 'text/html', '.mjs': 'text/javascript', '.js': 'text/jav
 
 function serve() {
   const root = resolve(here);
-  return new Promise((resolve) => {
-    const server = createServer((req, res) => {
-      try {
-        // Chrome sends the absolute URL; Node sees it as req.url. Normalize to
-        // a PATH (/dashboard.html) so the allowlist can validate it cleanly.
-        const rawHostMatch = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/]+(.*)$/.exec(String(req.url ?? ''));
-        const hostStripped = rawHostMatch ? rawHostMatch[1] : String(req.url ?? '');
-        const url = String(hostStripped).split('?')[0];
-        const urlPath = url === '/' ? '/dashboard.html' : url;
-        if (!urlPath || typeof urlPath !== 'string') { res.writeHead(403); res.end('forbidden'); return; }
-        if (!/^\/[A-Za-z0-9._\-/]*$/.test(urlPath) || urlPath.includes('..')) {
-          res.writeHead(403); res.end('forbidden'); return;
-        }
-        const file = resolve(root, `.${urlPath}`);
-        if (typeof file !== 'string' || !file.startsWith(root + sep)) { res.writeHead(403); res.end('forbidden'); return; }
-        if (!existsSync(file)) { res.writeHead(404); res.end('nope'); return; }
-        res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'text/plain' });
-        res.end(readFileSync(file));
-      } catch (e) {
-        console.error('[serve] error:', e.message);
-        res.writeHead(500); res.end('error');
-      }
-    });
-    resolve(server.listen(SERVE_PORT));
+  const server = createServer((req, res) => {
+    const urlPath = req.url === '/' ? '/dashboard.html' : req.url.split('?')[0];
+    if (!/^\/[A-Za-z0-9._\-/]*$/.test(urlPath) || urlPath.includes('..')) {
+      res.writeHead(403); res.end('forbidden'); return;
+    }
+    const file = resolve(root, `.${urlPath}`);
+    if (!file.startsWith(root + sep)) { res.writeHead(403); res.end('forbidden'); return; }
+    if (!existsSync(file)) { res.writeHead(404); res.end('nope'); return; }
+    res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'text/plain' });
+    res.end(readFileSync(file));
   });
+  return new Promise((resolve) => server.listen(SERVE_PORT, () => resolve(server)));
 }
 
 async function findTsxCli() {
