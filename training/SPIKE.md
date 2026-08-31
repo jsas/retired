@@ -247,51 +247,66 @@ surface.
 
 ## 6. Eval gate + baseline (how we know it beat #108)
 
-- **Baseline ("before"):** run the #106 probe's scoring harness
-  (`probe/repetition.ts` + `drive.mjs`) on the current smallest tool-capable
-  model (Qwen3 4B) *and* on the stock Qwen3-1.7B, against the frozen corpus
-  eval split. The metric is **protocol-validity** = % of turns emitting a
-  parseable, in-catalog `TOOL_CALL` — `training/protocol.ts#scoreToolReply`
-  already computes exactly this by delegating to the app's real parser.
-- **Gate:** the fine-tuned model must beat stock-1.7B by a wide margin and
-  approach stock-4B protocol-validity **at its size/VRAM**, *without* regressing
-  out-of-domain sanity (the #104 breaker suite) or crossing the
-  calculator-not-planner line (refusal records must stay refusals).
+**The gate now exists** (`training/eval.ts` + `training/runGate.ts`) and is
+CI-gateable. `scoreReply` grades one assistant reply across four tiers of
+increasing strictness:
+
+| tier | meaning |
+|---|---|
+| `parseable` | the app parser extracts a call with no error |
+| `inCatalog` | the call names a real tool (not a hallucinated name) |
+| `argsValid` | the args satisfy the tool's **Zod schema** — the executor would accept it, not just the parser |
+| `toolMatch` | the model picked the *expected* tool for the question (precision on tool choice) |
+
+`valid` (the strictest) = exactly one call ∧ in-catalog ∧ args-valid ∧
+tool-match. `gateReport` aggregates a model's replies over the frozen eval
+split into **protocol-validity** + per-failure-reason triage, and passes/fails
+vs `THRESHOLDS.postSftShipBar` (95%). **Corpus self-check = 100%, exit 0** — the
+sanity floor that must hold before any real model is measured. Run it:
+`npx tsx training/runGate.ts` (self-check) or `--replies replies.json --model
+<id>` to score an actual base.
+
+**How the bake-off uses it.** For each base in `CANDIDATES_SMALLEST_FIRST`
+(smallest-first): load it in a WebGPU browser, feed each eval record's question
+(+ the production system prompt), capture the reply, write `replies.json`, and
+run the gate. Stop at the **first base that clears the bar** — that's the
+smallest viable mobile base. The browser-driving piece reuses the #106 probe's
+CDP plumbing (`probe/drive.mjs` + `run-triage.sh`), pointed at the eval records
+instead of the loop-provoking sweep prompts.
+
+- **Baseline ("before"):** also run the gate on the current smallest
+  tool-capable model (Qwen3 4B) and the #108 short-persona variant — that's the
+  "before" number a custom tiny model must approach **at its size/VRAM**,
+  *without* regressing out-of-domain sanity (the #104 breaker suite) or crossing
+  calculator-not-planner (refusal records must stay refusals).
 - **Golden the corpus hash** so the shipped model is always scored against the
-  same frozen set (rule 2 analogue for the spike).
-- **Decision:** if a short persona (#108) on a stock 4B already gets ~95% of
-  protocol-validity, a custom 1.5B may not be worth the pipeline — the baseline
-  run answers this *before* committing to training.
+  same frozen set (rule-2 analogue; determinism proven by `generate.test.ts`).
+- **Decision:** if a short persona (#108) on a stock 4B already gets ~95%, a
+  custom tiny model may not be worth the pipeline — the baseline run answers
+  this *before* committing training compute.
 
-**Probe-harness findings (what #106 already gives us, and the gaps).** The
-`probe/` harness (in the main checkout, gitignored — *not* on the deploy path)
-already: builds the **exact production system prompt** (`buildSystemPrompt` +
-`buildPromptToolInstructions`), drives models in a WebGPU browser
-(`main.ts#generate`, streamed), and scores output with `repetitionScore` +
-production tripwires `isTokenEcho`/`detectRepetitionCut`. Crucially it scores
-tool calls via the **same `extractPromptToolCalls`** our `training/protocol.ts`
-uses — so "protocol-valid" means the same thing in the probe, the corpus, and
-the app.
+**Gap status vs the #106 probe** (from the probe-harness map):
 
-The gaps a protocol-validity **gate** must add (none exist in the probe today):
-1. **Arg-schema validation** — the parser checks `name ∈ catalog` and that
-   `args` is an object, but does *not* Zod-validate args. The gate must apply
-   `TOOL_SCHEMAS[name].safeParse(args)` per call so `{"field":"bogus"}` counts
-   invalid.
-2. **Multi-turn + execution** — the probe is single-turn and never feeds a tool
-   result back. The gate threads `formatPromptToolResults` over N turns so the
-   model must read a result and continue to a final answer.
-3. **Expected-call ground truth** — `SWEEP_PROMPTS` has no `expect` field, so
-   there's no precision/recall on tool choice. The corpus eval split *is* that
-   ground truth (`CorpusRecord.expect`).
-4. **Scenario injection** — the probe uses a hardcoded `'Probe plan'`; the gate
-   must inject crafted scenarios that deterministically require a specific tool.
-5. **Pass/fail aggregation** — each `triage-*.jsonl` stands alone; the gate
-   needs a threshold (e.g. protocol-validity ≥ X% on the frozen set) and a CI
-   hookup.
+1. **Arg-schema validation** ✅ done — `scoreReply` applies
+   `TOOL_SCHEMAS[name].safeParse(args)` per call. (Honest edge: free-string
+   fields like `set_scenario_value.field` are schema-valid even when not in
+   `EDITABLE_FIELDS` — that's executor-side, documented in the test.)
+2. **Expected-call ground truth** ✅ done — `CorpusRecord.expect.toolName`.
+3. **Pass/fail aggregation** ✅ done — `gateReport` + threshold + exit code.
+4. **Scenario injection** ✅ done (for the single-turn gate) — the corpus is
+   built *from* injected scenarios (`scenarios.ts`), each deterministically
+   requiring its tool.
+5. **Multi-turn + execution** ⏳ **the remaining gap.** The probe is single-turn
+   and never feeds a result back; the gate's unit is likewise one reply. A
+   follow-up stage threads `formatPromptToolResults` over N turns so the model
+   must read a result and reach a final answer. This matters for the *follow-up*
+   corpus records (`tool-followup`, `mutation-confirm`) — scoring those needs
+   the model to continue after a `[OK]`/APPROVED/REJECTED message. Not required
+   to run the first single-turn bake-off.
 
-These five define the build for `training/eval/`. `scoreToolReply` covers (1) in
-part and the parsing core; the rest is the follow-up work below.
+The next build is (5) — extending the gate to multi-turn so the full corpus
+(including follow-ups and mutation confirms) is scoreable — followed by wiring
+the browser driver to actually run the bake-off.
 
 ---
 
