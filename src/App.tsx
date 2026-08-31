@@ -2,6 +2,12 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { BetaApp } from './components/BetaApp';
 import { StyleGuide } from './design/StyleGuide';
 import { applyBetaAtBoot } from './lib/betaSkin';
+import { BetaPage } from './components/beta/BetaPage';
+import { DetailsPage } from './components/beta/DetailsPage';
+import {
+  BetaSchedulePage, BetaInsightsPage, BetaPlansPage, BetaDataPage,
+  BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
+} from './components/beta/pages';
 import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot, AlertTriangle, X } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
@@ -97,10 +103,16 @@ function App() {
 
   // Keep the URL hash in sync with the current view (push a history entry per
   // navigation), and follow hash changes so back/forward and pasted links work.
+  // The details page carries a ?section=… deep-link (Details ▾ scrolls to the
+  // tapped section); preserve it across the sync so it isn't stripped.
   useEffect(() => {
     const route = hashForView(view);
-    if (window.location.hash !== route) {
-      window.history.pushState(null, '', window.location.pathname + window.location.search + route);
+    const current = window.location.hash;
+    const section = view === 'details' && current.includes('?section=')
+      ? current.slice(current.indexOf('?section='))
+      : '';
+    if (current !== route + section) {
+      window.history.pushState(null, '', window.location.pathname + window.location.search + route + section);
     }
   }, [view]);
 
@@ -733,19 +745,110 @@ function App() {
     if (view === 'styleguide') {
       return <StyleGuide />;
     }
-    return (
-      <BetaApp
-        scenarios={scenarios}
-        activeScenarioId={activeScenarioId}
-        onScenarioChange={handleScenarioChange}
-        inputs={inputs}
-        onInputsChange={handleInputsChange}
-        results={results}
-        config={config}
-        hasUnsavedChanges={hasUnsavedChanges}
-        onSave={handleSaveScenario}
-      />
-    );
+
+    // The persistent verdict chip — the answer, always top-right.
+    const chip: import('./components/beta/BetaPage').VerdictChip = (() => {
+      const holds = results.status === 'ON_TRACK';
+      const borderline = !holds && results.depletionAge != null && (inputs.maxAge - results.depletionAge) <= 6;
+      return {
+        tone: holds ? 'holds' : borderline ? 'borderline' : 'short',
+        age: holds ? `${inputs.maxAge}+` : `${results.depletionAge ?? '—'}`,
+        label: holds ? 'the plan holds' : borderline ? 'borderline' : 'runs short',
+      };
+    })();
+
+    // The section deep-link for the details page (Details ▾ scrolls to it).
+    const detailsSection = (() => {
+      const m = window.location.hash.match(/[?&]section=([a-z]+)/);
+      return m ? m[1] : null;
+    })();
+
+    switch (view) {
+      case 'details':
+        return (
+          <BetaPage title="The details" chip={chip}>
+            <DetailsPage inputs={inputs} onChange={handleInputsChange} section={detailsSection} />
+          </BetaPage>
+        );
+      case 'math':
+        return (
+          <BetaSchedulePage chip={chip}
+            breakdown={householdBreakdown}
+            retirementAge={results.retirementAge}
+            primaryBreakdown={results.spouse ? results.yearlyBreakdown : undefined}
+            spouseBreakdown={results.spouse?.yearlyBreakdown}
+            spouseAgeOffset={spouseAgeOffset}
+          />
+        );
+      case 'eq':
+        return (
+          <BetaInsightsPage chip={chip}
+            eqProps={{ inputs: resolvedInputs, config, onChange: handleInputsChange, bands: eqBands, onBandsChange: setEqBands, solved: eqSolved, projection: { results, breakdown: householdBreakdown } }}
+            optimizeProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
+            mcProps={mcRequest ? { request: mcRequest, retirementAge: results.retirementAge, onRefresh: () => setMcRefreshNonce(n => n + 1) } : null}
+            backtestProps={backtestResult ? { result: backtestResult } : null}
+          />
+        );
+      case 'scenarios':
+      case 'compare':
+        return (
+          <BetaPlansPage chip={chip}
+            managerProps={{
+              scenarios, activeScenarioId, onScenariosChange: setScenarios, revisions, onRollback: handleRollback,
+              onSelectScenario: (id) => { handleScenarioChange(id); setView('projection'); },
+              onCreateScenario: (scenario) => {
+                setScenarios(prev => [...prev, scenario]);
+                setActiveScenarioId(scenario.id);
+                setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
+                setHasUnsavedChanges(false);
+                setView('projection');
+              },
+            }}
+            compareProps={{ scenarios, activeScenarioId, config }}
+          />
+        );
+      case 'data':
+      case 'sharing':
+        return <BetaDataPage chip={chip} inputs={inputs} scenarioName={activeScenario.name} onImport={handleSharingImport} />;
+      case 'settings':
+        return <BetaSettingsPage chip={chip} config={config} onSave={setConfig} />;
+      case 'connections':
+        return <BetaConnectionsPage chip={chip} onClose={() => setView('projection')} />;
+      case 'help':
+        return <BetaHelpPage chip={chip} />;
+      case 'agent':
+        return (
+          <BetaPage title="Assistant" chip={chip}>
+            <AgentPage
+              inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
+              scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
+              activeScenarioId={activeScenarioId}
+              scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
+              onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+              onOpenConnections={() => setView('connections')}
+              memory={store?.memory}
+              memoryScenarioId={activeScenarioId}
+              onOpenScenario={agentOpenScenario}
+              onSaveScenarioAs={agentSaveScenarioAs}
+            />
+          </BetaPage>
+        );
+      default:
+        // projection / welcome / everything else → the dashboard
+        return (
+          <BetaApp
+            scenarios={scenarios}
+            activeScenarioId={activeScenarioId}
+            onScenarioChange={handleScenarioChange}
+            inputs={inputs}
+            onInputsChange={handleInputsChange}
+            results={results}
+            config={config}
+            hasUnsavedChanges={hasUnsavedChanges}
+            onSave={handleSaveScenario}
+          />
+        );
+    }
   }
 
   return (

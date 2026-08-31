@@ -19,6 +19,8 @@ describe('viewFromHash', () => {
     expect(viewFromHash('#/help')).toBe('help');
     expect(viewFromHash('#/settings')).toBe('settings');
     expect(viewFromHash('#/styleguide')).toBe('styleguide');
+    expect(viewFromHash('#/details')).toBe('details');
+    expect(viewFromHash('#/data')).toBe('data');
   });
 
   it('accepts hashes without the leading slash', () => {
@@ -49,7 +51,7 @@ describe('hashForView', () => {
     const views: View[] = [
       'projection', 'math', 'eq', 'optimize', 'compare', 'montecarlo',
       'backtest', 'print', 'export', 'scenarios', 'sharing', 'donate',
-      'welcome', 'help', 'settings', 'styleguide',
+      'welcome', 'help', 'settings', 'styleguide', 'details', 'data',
     ];
     for (const v of views) {
       expect(viewFromHash(hashForView(v))).toBe(v);

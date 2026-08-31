@@ -10,8 +10,9 @@ import type { RetirementInputs, RetirementResults } from '@retired/engine-core/r
 import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
-import { AppHeader, VerdictHero, Panel, Fader, Footnote } from '../design/primitives';
+import { VerdictHero, Panel, Fader, Footnote } from '../design/primitives';
 import { cls } from '../design/tokens';
+import { BetaPage, type VerdictChip } from './beta/BetaPage';
 import { ContourMap } from './beta/ContourMap';
 import { MarketDial } from './beta/MarketDial';
 import { DownMarketCheck } from './beta/DownMarketCheck';
@@ -50,18 +51,22 @@ export function BetaApp({
 }: BetaAppProps) {
   const v = verdict(inputs, results);
   const breakdown = results.yearlyBreakdown ?? [];
+  const chip: VerdictChip = {
+    tone: v.holds ? 'holds' : (results.depletionAge != null && inputs.maxAge - results.depletionAge <= 6) ? 'borderline' : 'short',
+    age: v.holds ? `${inputs.maxAge}+` : `${results.depletionAge ?? '—'}`,
+    label: v.holds ? 'the plan holds' : 'runs short',
+  };
   return (
-    <div className="flex min-h-screen flex-col bg-white text-slate-800">
-      <AppHeader>
+    <BetaPage chip={chip} actions={
+      <>
         <select
-          className="min-w-0 max-w-[40vw] cursor-pointer appearance-none border-b border-transparent bg-transparent py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
+          className="min-w-0 max-w-[30vw] cursor-pointer appearance-none border-b border-transparent bg-transparent py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
           value={activeScenarioId}
           onChange={(e) => onScenarioChange(e.target.value)}
           aria-label="Active scenario"
         >
           {scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <div className="flex-1" />
         <button
           className={hasUnsavedChanges ? cls.primaryBtn : 'px-3 py-1.5 text-xs font-medium text-slate-400'}
           onClick={onSave}
@@ -69,9 +74,8 @@ export function BetaApp({
         >
           Save{hasUnsavedChanges ? ' · unsaved' : 'd'}
         </button>
-      </AppHeader>
-
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4">
+      </>
+    }>
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="min-w-0 flex-1">
             <VerdictHero
@@ -133,8 +137,7 @@ export function BetaApp({
         <Footnote>
           Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, levers ranked and backtests live one level down. · Beta reskin · {BETA_COOKIE_NAME} cookie · <a className="underline" href="?beta=off">leave beta</a>
         </Footnote>
-      </main>
-    </div>
+    </BetaPage>
   );
 }
 

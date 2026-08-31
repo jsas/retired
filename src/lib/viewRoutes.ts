@@ -23,7 +23,12 @@ export type View =
   // Beta-skin only: the design-system style guide. Not part of the stable UI —
   // App renders it from the beta branch, but it must be a recognized view so
   // the URL-sync effect doesn't rewrite #/styleguide back to the default view.
-  | 'styleguide';
+  | 'styleguide'
+  // Beta-skin pages (the f7 rebuild). These reuse the stable routes where one
+  // already exists (schedule→year-math, insights→steering, plans→scenarios,
+  // settings) and add the two new ones (details, data).
+  | 'details'
+  | 'data';
 
 export const VIEW_ROUTES: Record<View, string> = {
   projection: 'projection',
@@ -44,6 +49,8 @@ export const VIEW_ROUTES: Record<View, string> = {
   help: 'help',
   settings: 'settings',
   styleguide: 'styleguide',
+  details: 'details',
+  data: 'data',
 };
 
 // Map a location hash ('#/steering', '#steering', '#/steering/') to its view.
