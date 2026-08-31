@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- WebGPU bake-off harness. The CDP driver opens this page, then drives the
+     global `window.BAKEOFF` channel via Runtime.evaluate(awaitPromise):
+       await BAKEOFF.load(modelId)                 → downloads + warms the model
+       await BAKEOFF.reply(systemPrompt, question) → one chat completion
+     web-llm is loaded from the CDN so the harness needs no bundler. Everything
+     runs client-side in the tab — no server, no proxy (the issue's guardrail). -->
+<html>
+<head><meta charset="utf-8"><title>bake-off harness</title></head>
+<body>
+<pre id="log">harness up</pre>
+<script type="module">
+  import * as webllm from 'https://esm.run/@mlc-ai/web-llm';
+
+  const logEl = document.getElementById('log');
+  const log = (m) => { logEl.textContent += '\n' + m; };
+
+  let engine = null;
+  let loadedId = null;
+
+  async function load(modelId) {
+    if (engine && loadedId === modelId) return { ok: true, cached: true, modelId };
+    if (engine) { try { await engine.unload(); } catch {} engine = null; loadedId = null; }
+    log('loading ' + modelId + ' …');
+    engine = await webllm.CreateMLCEngine(modelId, {
+      initProgressCallback: (p) => { logEl.textContent = logEl.textContent.split('\n')[0] + '\n' + (p.text ?? ''); },
+    });
+    loadedId = modelId;
+    log('loaded ' + modelId);
+    return { ok: true, modelId };
+  }
+
+  async function reply(systemPrompt, question) {
+    if (!engine) throw new Error('no model loaded');
+    const out = await engine.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: question },
+      ],
+      temperature: 0,          // deterministic: the eval wants the model's best answer
+      max_tokens: 400,
+    });
+    return out.choices[0]?.message?.content ?? '';
+  }
+
+  async function hasWebGPU() {
+    if (!navigator.gpu) return false;
+    try { return !!(await navigator.gpu.requestAdapter()); } catch { return false; }
+  }
+
+  window.BAKEOFF = { load, reply, hasWebGPU, version: webllm.MODEL_VERSION ?? 'unknown' };
+  window.BAKEOFF_READY = true;
+  log('BAKEOFF channel ready');
+</script>
+</body>
+</html>

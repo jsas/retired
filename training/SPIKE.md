@@ -144,10 +144,14 @@ records deflect recommendation-seeking ("should I…?", "which is best?") toward
 *showing consequences* ("I can run both and show you the numbers — I can't tell
 you which to choose"), in that exact register.
 
-**Sizing.** For format-behavior SFT at 1.5–2B, a focused corpus of **~5–20k
-high-quality, deduped, engine-grounded turns** is a sensible first rung — far
-more valuable than 100k noisy ones. Start ~8k, eval, scale only if
-protocol-validity hasn't saturated.
+**Sizing.** The minter currently produces **~1,900 records** (1,525 train / 340
+eval) across a 19-scenario sweep covering all 13 provinces/territories. For
+format-behavior SFT at ≤2B that's a workable first rung — the paraphrase bank
+(many phrasings → one canonical call) is what teaches the muscle memory. If the
+eval gate shows protocol-validity hasn't saturated after the first SFT rung,
+scale by widening the paraphrase banks and the scenario sweep, not by adding
+noise. Kind mix: tool-call 627, tool-followup 399, mutation-confirm 684,
+refusal 95, clarify 57, domain-explain 3 — all 23 catalog tools covered.
 
 ---
 
@@ -270,9 +274,25 @@ sanity floor that must hold before any real model is measured. Run it:
 (smallest-first): load it in a WebGPU browser, feed each eval record's question
 (+ the production system prompt), capture the reply, write `replies.json`, and
 run the gate. Stop at the **first base that clears the bar** — that's the
-smallest viable mobile base. The browser-driving piece reuses the #106 probe's
-CDP plumbing (`probe/drive.mjs` + `run-triage.sh`), pointed at the eval records
-instead of the loop-provoking sweep prompts.
+smallest viable mobile base.
+
+**The browser driver is built and smoke-tested** (`training/driver/`). The
+original plan was to reuse the #106 probe's CDP plumbing, but those scripts
+weren't on disk — so the driver is a fresh, dependency-free CDP client
+(`cdp.mjs`, raw WebSocket, no puppeteer) driving a WebGPU harness page
+(`harness.html`) that loads web-llm from the CDN and exposes a `BAKEOFF`
+channel. `runBakeoff.mjs` walks the candidates smallest-first, extracts the
+exact eval set + production system prompt via `extractEvalSet.ts` (so the
+questions are byte-for-byte what the gate scores), and writes
+`training/data/bakeoff/<modelId>.replies.json`. Smoke test (`smoke.mjs`)
+confirms the plumbing + a live WebGPU adapter with **no model download**. Run a
+real bake-off:
+
+```bash
+node training/driver/runBakeoff.mjs --only Qwen3-0.6B --limit 20   # smoke one base
+node training/driver/runBakeoff.mjs                                 # full smallest-first sweep
+npx tsx training/runGate.ts --replies data/bakeoff/<id>.replies.json --model <id>
+```
 
 - **Baseline ("before"):** also run the gate on the current smallest
   tool-capable model (Qwen3 4B) and the #108 short-persona variant — that's the
@@ -296,17 +316,16 @@ instead of the loop-provoking sweep prompts.
 4. **Scenario injection** ✅ done (for the single-turn gate) — the corpus is
    built *from* injected scenarios (`scenarios.ts`), each deterministically
    requiring its tool.
-5. **Multi-turn + execution** ⏳ **the remaining gap.** The probe is single-turn
-   and never feeds a result back; the gate's unit is likewise one reply. A
-   follow-up stage threads `formatPromptToolResults` over N turns so the model
-   must read a result and reach a final answer. This matters for the *follow-up*
-   corpus records (`tool-followup`, `mutation-confirm`) — scoring those needs
-   the model to continue after a `[OK]`/APPROVED/REJECTED message. Not required
-   to run the first single-turn bake-off.
+5. **Multi-turn + execution** ✅ done — `scoreFollowup` / `scoreMutationConfirm`
+   grade the continuation after a fed-back `[OK]` result or an APPROVED/REJECTED
+   message: grounded (references a figure from the result), non-advisory, and —
+   for mutations — never re-proposing after a confirm. The full corpus
+   (follow-ups + mutation confirms) is scoreable.
 
-The next build is (5) — extending the gate to multi-turn so the full corpus
-(including follow-ups and mutation confirms) is scoreable — followed by wiring
-the browser driver to actually run the bake-off.
+All five probe gaps are now closed. **Corpus minter, eval gate, and browser
+driver are all built** — the remaining work is the off-repo effort: run the
+bake-off (the driver above), SFT the winner, MLC compile, and verify on a real
+phone browser.
 
 ---
 
