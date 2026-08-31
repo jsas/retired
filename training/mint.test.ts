@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mintCorpus, mintGuardrailRecords, mintMutationRecords, mintReadRecords, toJsonl } from './mint';
+import { mintCorpus, mintGuardrailRecords, mintMutationRecords, mintOptionFramingRecords, mintReadRecords, toJsonl } from './mint';
 import { scoreToolReply, TOOL_NAMES } from './protocol';
 import { SCENARIOS } from './scenarios';
 import { executeToolCall, type ToolContext } from '../src/lib/ai/tools';
@@ -132,9 +132,11 @@ describe('guardrail records', () => {
     }
   });
 
-  it('the full corpus combines engine-grounded, mutation, and guardrail records', () => {
+  it('the full corpus combines engine-grounded, mutation, guardrail, and option records', () => {
     const full = mintCorpus();
-    expect(full.length).toBe(mintReadRecords().length + mintMutationRecords().length + guard.length);
+    expect(full.length).toBe(
+      mintReadRecords().length + mintMutationRecords().length + guard.length + mintOptionFramingRecords().length,
+    );
   }, 120000);
 });
 
@@ -166,4 +168,30 @@ describe('mutation records', () => {
       if (scored.kind === 'valid') expect(scored.name).toBe(r.expect.toolName);
     }
   });
+});
+
+describe('option-framing records', () => {
+  const options = mintOptionFramingRecords();
+
+  it('surveys options via run_strategies, never a bare directive', () => {
+    expect(options.length).toBeGreaterThan(0);
+    for (const r of options) expect(r.expect.toolName).toBe('run_strategies');
+  });
+
+  it('the framing reply names levers + numbers but never prescribes one', () => {
+    const follows = options.filter((r) => r.messages.length === 4);
+    expect(follows.length).toBeGreaterThan(0);
+    for (const r of follows) {
+      const reply = r.messages[3].content.toLowerCase();
+      expect(reply).toContain('lever');
+      // Grounded in the real result: references a $ figure from run_strategies.
+      expect(reply).toMatch(/\$/);
+      // Calculator-not-planner: no directive language.
+      for (const banned of ['you should', 'i recommend', 'the best option', 'you ought to']) {
+        expect(reply).not.toContain(banned);
+      }
+      // And it hands the choice back to the user.
+      expect(reply).toMatch(/choice is yours|your call|depends on what you value/);
+    }
+  }, 120000);
 });

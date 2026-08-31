@@ -146,6 +146,62 @@ export const SCENARIOS: NamedScenario[] = [
     cppStartAge: 65, cppMonthlyAmount: 1250, oasStartAge: 65, oasYearsInCanada: 40,
     desiredSpending: 100000, provinceCode: 'QC',
   }),
+  // --- coupled + structural households: teach the model to read a PERSON, not ---
+  // --- just a set of balances (spouse, reverse mortgage, RDSP, spending bands) ---
+  s('couple-ont', 'Couple, both retiring (Ontario)', {
+    currentAge: 62, retirementAge: 65, maxAge: 95,
+    rrspBalance: 400000, tfsaBalance: 120000, taxableBalance: 60000,
+    cppStartAge: 65, cppMonthlyAmount: 1100, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 62000, provinceCode: 'ONT',
+    spouse: {
+      enabled: true, currentAge: 60, retirementAge: 63,
+      rrspBalance: 250000, tfsaBalance: 90000, taxableBalance: 30000,
+      cashCushionBalance: 0, rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 900, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 30000,
+    },
+  }),
+  s('couple-age-gap', 'Couple with an age gap (BC)', {
+    currentAge: 65, retirementAge: 66, maxAge: 95,
+    rrspBalance: 500000, tfsaBalance: 100000, taxableBalance: 80000,
+    cppStartAge: 66, cppMonthlyAmount: 1200, oasStartAge: 67, oasYearsInCanada: 40,
+    desiredSpending: 70000, provinceCode: 'BC',
+    spouse: {
+      enabled: true, currentAge: 55, retirementAge: 60,
+      rrspBalance: 150000, tfsaBalance: 60000, taxableBalance: 20000,
+      cashCushionBalance: 0, rrspContribution: 8000, tfsaContribution: 5000, taxableContribution: 0,
+      cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 38,
+      desiredSpending: 35000,
+    },
+  }),
+  s('reverse-mortgage', 'House-rich, cash-poor (reverse mortgage)', {
+    currentAge: 70, retirementAge: 70, maxAge: 95,
+    rrspBalance: 80000, tfsaBalance: 50000, taxableBalance: 10000,
+    cppStartAge: 65, cppMonthlyAmount: 950, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 46000, provinceCode: 'ONT',
+    reverseMortgage: {
+      enabled: true, homeValue: 850000, appreciationRate: 0.02, interestRate: 0.065,
+      drawAmount: 12000, startAge: 72, durationYears: 15,
+    },
+  }),
+  s('rdsp-family', 'Family with an RDSP beneficiary', {
+    currentAge: 58, retirementAge: 63, maxAge: 95,
+    rrspBalance: 350000, tfsaBalance: 100000, taxableBalance: 40000,
+    cppStartAge: 65, cppMonthlyAmount: 1050, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 58000, provinceCode: 'MB',
+    rdsp: { enabled: true, balance: 60000, contribution: 1500, familyIncome: 38000 },
+  }),
+  s('spending-bands', 'Go-go / slow-go / no-go spending phases', {
+    currentAge: 60, retirementAge: 62, maxAge: 95,
+    rrspBalance: 550000, tfsaBalance: 130000, taxableBalance: 70000,
+    cppStartAge: 65, cppMonthlyAmount: 1150, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 72000, provinceCode: 'AB',
+    spendingBands: [
+      { fromAge: 62, pctOfBase: 1.0 },
+      { fromAge: 75, pctOfBase: 0.85 },
+      { fromAge: 85, pctOfBase: 0.7 },
+    ],
+  }),
 ];
 
 /** Scenario used for exemplars that need a guaranteed shortfall to explain. */

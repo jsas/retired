@@ -1,5 +1,10 @@
 # Spike #112 — fine-tune a small open-weight model for this app's tool protocol
 
+> **Companion docs:** [USAGE.md](./USAGE.md) — operator's guide (generate, test,
+> bake off, score). [METHODOLOGY.md](./METHODOLOGY.md) — how the input data +
+> training method make the model understand a person, lay out their options,
+> and stay in the calculator-not-planner lane.
+
 Status: **scoping / pre-training.** This doc answers the two questions the spike
 opened with — *what can we train?* and *how do we do it?* — and lands the
 reusable groundwork (a protocol contract + corpus builder skeleton) that both
@@ -112,6 +117,7 @@ emitter/scorer wired to the live app. Record kinds:
 | `refusal` | out-of-guardrail ask ("should I retire at 60?") → deflect, "I can show the consequences, not advise" | ~8% |
 | `clarify` | ambiguous ask → ask a question, don't guess a tool | ~6% |
 | `domain-explain` | projection digest → plain-words explanation (no tool needed) | ~6% |
+| `option-framing` | "what can I optimize?" → `run_strategies` + survey the levers with real deltas, frame the trade-off, hand the choice back | ~9% |
 
 \* target mix, tuned after the first eval. **Every tool gets ≥1 tool-call and
 ≥1 follow-up exemplar; every mutation tool gets both an APPROVED and a REJECTED
@@ -144,14 +150,17 @@ records deflect recommendation-seeking ("should I…?", "which is best?") toward
 *showing consequences* ("I can run both and show you the numbers — I can't tell
 you which to choose"), in that exact register.
 
-**Sizing.** The minter currently produces **~1,900 records** (1,525 train / 340
-eval) across a 19-scenario sweep covering all 13 provinces/territories. For
-format-behavior SFT at ≤2B that's a workable first rung — the paraphrase bank
-(many phrasings → one canonical call) is what teaches the muscle memory. If the
-eval gate shows protocol-validity hasn't saturated after the first SFT rung,
-scale by widening the paraphrase banks and the scenario sweep, not by adding
-noise. Kind mix: tool-call 627, tool-followup 399, mutation-confirm 684,
-refusal 95, clarify 57, domain-explain 3 — all 23 catalog tools covered.
+**Sizing.** The minter currently produces **~2,600 records** (2,117 train / 478
+eval) across a 24-household sweep: all 13 provinces/territories **plus** the
+structural situations that change a plan's shape — couples (two CPP/OAS
+timelines), a reverse-mortgage household, an RDSP beneficiary, and
+go-go/slow-go/no-go spending bands. For format-behavior SFT at ≤2B that's a
+workable first rung — the paraphrase bank (many phrasings → one canonical call)
+is what teaches the muscle memory. If the eval gate shows protocol-validity
+hasn't saturated after the first SFT rung, scale by widening the paraphrase
+banks and the scenario sweep, not by adding noise. Kind mix: tool-call 792,
+tool-followup 504, mutation-confirm 864, option-framing 240, refusal 120,
+clarify 72, domain-explain 3 — all 23 catalog tools covered.
 
 ---
 

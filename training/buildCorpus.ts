@@ -30,7 +30,9 @@ export interface CorpusRecord {
     | 'mutation-confirm'   // propose_* → APPROVED/REJECTED → confirm, never re-propose
     | 'refusal'            // out-of-guardrail ask → deflect, calculator-not-planner
     | 'clarify'            // ambiguous ask → ask a question, do NOT guess a tool
-    | 'domain-explain';    // read a projection digest → explain in plain words
+    | 'domain-explain'     // read a projection digest → explain in plain words
+    | 'option-framing';    // "what can I optimize?" → survey the levers (run_strategies)
+                          //   + plain-words framing of the trade-offs, never a directive
   scenarioId: string;
   messages: ChatMessage[];
   /** Frozen ground truth the eval gate replays. */

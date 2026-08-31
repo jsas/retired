@@ -475,9 +475,90 @@ export function mintGuardrailRecords(): CorpusRecord[] {
   return records;
 }
 
-/** The full corpus: engine-grounded reads + mutations + guardrail records. */
+// ---------------------------------------------------------------------------
+// Option-framing records: the behavior the user asked the model to be GOOD at.
+// "What can I optimize / what are my options?" is NOT an advice ask to deflect
+// — it's a request to survey the levers. The right move is: run_strategies to
+// ground the options in THIS person's numbers, then frame the trade-offs in
+// plain words WITHOUT recommending one (calculator-not-planner). This is the
+// "understands the scenario/person, shows options, never dictates" register.
+// ---------------------------------------------------------------------------
+
+const OPTION_ASKS: Array<(sc: NamedScenario) => string> = [
+  () => 'What can I do to improve my retirement?',
+  () => 'What are my options for making my savings last longer?',
+  () => 'Where can I optimize my plan?',
+  () => 'What levers do I have to work with?',
+  () => 'How could I spend more without running out?',
+];
+
+/** Turn a real run_strategies result into the option-framing reply: name the
+ *  top levers + their numbers, framed as "here's what moves the needle and by
+ *  how much", with an explicit "your call" close — never "you should". */
+function frameOptions(resultText: string): string {
+  const lines = resultText.split('\n').map((l) => l.trim()).filter(Boolean);
+  const baseline = lines.find((l) => l.startsWith('CURRENT plan')) ?? '';
+  // Pull up to two strategy rows (the "$x/yr (+$y vs current)" lines) as the
+  // concrete options, so the reply is grounded in the real deltas.
+  const leverRows = lines.filter((l) => /sustainable spending \$/.test(l)).slice(0, 2);
+  const options = leverRows.length
+    ? `For example:\n${leverRows.map((l) => `  • ${l}`).join('\n')}`
+    : '';
+  return [
+    `Every plan has a few levers that move the needle — benefit timing, withdrawal order, how much you draw, and (if it applies) a pension or your home. ${baseline}`,
+    options,
+    'Which of those is worth trading off depends on what you value — I can run any of them side by side on your numbers so you can see the consequences, but the choice is yours.',
+  ].filter(Boolean).join('\n');
+}
+
+/** Mint option-framing exemplars: question → run_strategies call → real result
+ *  → grounded, non-advisory survey of the options. Two records per (ask ×
+ *  scenario): the tool-call and the follow-up. */
+export function mintOptionFramingRecords(evalEvery = 5): CorpusRecord[] {
+  const records: CorpusRecord[] = [];
+  let seq = 0;
+  for (const sc of SCENARIOS) {
+    const args = { maxVariants: 5 };
+    const resultText = runRead(sc, 'run_strategies', args);
+    for (const q of OPTION_ASKS) {
+      const question = q(sc);
+      const split = ++seq % evalEvery === 0 ? 'eval' : 'train';
+      const base = `option-framing:${sc.id}:q${seq}`;
+      records.push({
+        id: `${base}:call`, split, kind: 'option-framing', scenarioId: sc.id,
+        messages: [
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('run_strategies', args) },
+        ],
+        expect: { toolName: 'run_strategies' },
+      });
+      records.push({
+        id: `${base}:follow`, split, kind: 'option-framing', scenarioId: sc.id,
+        messages: [
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('run_strategies', args) },
+          { role: 'user', content: wrapToolResult(resultText) },
+          { role: 'assistant', content: frameOptions(resultText) },
+        ],
+        expect: {
+          toolName: 'run_strategies',
+          mustContain: ['lever'],
+          mustNotContain: ['you should', 'i recommend', 'the best option', 'you ought to'],
+        },
+      });
+    }
+  }
+  return records;
+}
+
+/** The full corpus: engine-grounded reads + mutations + guardrail + options. */
 export function mintCorpus(): CorpusRecord[] {
-  return [...mintReadRecords(), ...mintMutationRecords(), ...mintGuardrailRecords()];
+  return [
+    ...mintReadRecords(),
+    ...mintMutationRecords(),
+    ...mintGuardrailRecords(),
+    ...mintOptionFramingRecords(),
+  ];
 }
 
 /** Serialize records to JSONL (one record per line). */
