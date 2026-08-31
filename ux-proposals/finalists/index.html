@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>RE:tired — 5 finalists</title>
+<title>RE:tired — the finalists</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -17,15 +17,16 @@
 
   <div class="flex items-center gap-2 font-semibold text-sm mb-8">
     <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">RE:</div>
-    <span>tired — five finalists from your second-round ratings</span>
+    <span>tired — the finalists, and the composite they converged on</span>
     <a href="../winners/index.html" class="ml-auto text-xs text-slate-400 hover:text-slate-600">← winners</a>
   </div>
 
-  <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Five finalists</h1>
+  <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">The finalists</h1>
   <p class="text-slate-600 text-sm leading-relaxed mb-4 max-w-2xl">
     Your verdicts from the winners round, applied: <b>no cards, no rounded corners, light and plain.</b>
     The drag pad and the contour curve survive; the conversation stays as the assistant on-ramp;
-    everything busy or dark is gone.
+    everything busy or dark is gone. <b>F6 · The final</b> fuses the best of all of them —
+    start there.
   </p>
 
   <div class="bg-white/95 backdrop-blur border border-slate-200 rounded-xl p-3 mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" style="position:sticky;top:0;z-index:40;">
@@ -145,6 +146,28 @@
         <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
         <h3 class="text-[15px] font-bold">Controls above, the same line below</h3>
         <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">Smooth-curved success pad + small faders on top; drag them and the landing's strip redraws live.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══ F6 — THE FINAL ═══ -->
+  <div class="mb-10">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="text-lg font-bold">6 · The final <span class="ml-2 inline-block bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider">composite</span></h2>
+      <span class="text-xs text-slate-400">f3's conversation on-ramp + f2's true contour terrain + f1's light editorial tone — what the three rounds converged on</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <a href="f6-final.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">LANDING</div>
+        <h3 class="text-[15px] font-bold">Talk it through, then two doors</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">The five-question chat builds the plan and delivers the honest verdict — then offers the dashboard or keeping talking with the on-device assistant.</p>
+        <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
+      </a>
+      <a href="f6-final-app.html" class="tile group bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-md transition-all">
+        <div class="text-[11px] font-semibold text-slate-400 mb-1">APP</div>
+        <h3 class="text-[15px] font-bold">Contour terrain + the assistant docked</h3>
+        <p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed">f2's real bisection-computed topographic curves (cached, so dragging stays smooth) under the draggable dot, with f3's assistant docked right — full-screen sheet on phones.</p>
         <span class="arrow inline-block mt-2 text-xs text-blue-600">Open →</span>
       </a>
     </div>
@@ -365,9 +388,10 @@
       if (r === 'keep') k++; else if (r === 'meh') m++; else if (r === 'no') n++;
     });
     var total = k + m + n;
+    var N = Object.keys(titles).length;
     el.textContent = total === 0
-      ? '0 of 10 rated — keep the winners, meh the maybes, no the rest'
-      : k + ' keep · ' + m + ' meh · ' + n + ' no — ' + (10 - total) + ' left';
+      ? '0 of ' + N + ' rated — keep the winners, meh the maybes, no the rest'
+      : k + ' keep · ' + m + ' meh · ' + n + ' no — ' + (N - total) + ' left';
   }
 
   function copyText(text, done) {
@@ -386,7 +410,7 @@
 
   var copyBtn = document.getElementById('copy-wratings');
   if (copyBtn) copyBtn.addEventListener('click', function () {
-    var lines = ['# My ratings of the 5 finalist pairs (10 pages)', ''];
+    var lines = ['# My ratings of the finalists (' + Object.keys(titles).length + ' pages)', ''];
     Object.keys(titles).sort().forEach(function (f) {
       var d = entry(f);
       if (!d) return;
