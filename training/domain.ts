@@ -190,6 +190,7 @@ const FACTS: FactSpec[] = [
     phrasings: [
       'Should I save in an RRSP or a TFSA?',
       'How is a taxable account different from registered accounts?',
+      'What accounts can I hold retirement savings in?',
     ],
     answer: () =>
       `An RRSP defers tax: contributions are deductible, growth is sheltered, and withdrawals are fully taxed as income (that's why the drawdown order matters). A TFSA is the reverse: after-tax in, but growth and withdrawals are tax-free. A taxable (non-registered) account has no shelter — interest, dividends, and realized gains are taxed each year, with only ${pct(cfg.engine.capitalGainsInclusion)} of a capital gain counted as income. ${OFFER}`,
@@ -202,6 +203,32 @@ const FACTS: FactSpec[] = [
     answer: () =>
       `The 2026 TFSA dollar limit is ${money0(cfg.engine.tfsaAnnualLimit)}/yr (unused room carries forward). RRSP room is 18% of prior-year earned income up to a ${money0(cfg.engine.rrspAnnualMax)} max. In retirement you're usually drawing down rather than contributing, but the order you draw from each account changes the tax you pay. ${OFFER}`,
     mustContain: ['TFSA', 'RRSP', 'room'],
+  },
+  // ---- FHSA (First Home Savings Account) --------------------------------
+  {
+    id: 'fhsa',
+    ask: 'What is an FHSA and how does it work?',
+    phrasings: [
+      'Should I use an FHSA to save for a home?',
+      'How much can I put in a First Home Savings Account?',
+    ],
+    answer: () => {
+      const f = cfg.fhsa;
+      return `A First Home Savings Account (FHSA) is the best of an RRSP and a TFSA for a first home: contributions are tax-deductible (like an RRSP) and qualifying withdrawals to buy a first home are tax-free (like a TFSA). You can put in up to ${money0(f.annualLimit)}/yr, to a ${money0(f.lifetimeLimit)} lifetime max, and the account can stay open ${f.maxYears} years. If you don't buy, it can transfer to your RRSP with no contribution room needed — so it's not wasted. It's accumulation-only (for pre-retirement saving), not a drawdown account. ${OFFER}`;
+    },
+    mustContain: ['FHSA', 'deductible', 'home'],
+  },
+  // ---- Contribution-room tracking (issue #24) ---------------------------
+  {
+    id: 'room-tracking',
+    ask: 'What happens if I contribute more than my TFSA or RRSP room?',
+    phrasings: [
+      'Can I over-contribute to my TFSA?',
+      'How does contribution room affect my deposits?',
+    ],
+    answer: () =>
+      `Each registered account has a legal limit: TFSA room accrues ${money0(cfg.engine.tfsaAnnualLimit)}/yr (unused carries forward), and RRSP room is 18% of prior-year earned income up to ${money0(cfg.engine.rrspAnnualMax)}. If you turn room-tracking on in Settings, the engine caps each year's deposits at your remaining room and spills any excess into a non-registered (taxable) account — so an over-limit contribution doesn't just vanish, it lands somewhere taxable. That changes the long-run tax on the overflow. ${OFFER}`,
+    mustContain: ['room', 'TFSA', 'RRSP'],
   },
   // ---- Federal brackets -------------------------------------------------
   {
@@ -258,6 +285,25 @@ const FACTS: FactSpec[] = [
       return `Yes. Since you're planning as a couple, up to ${pct(cfg.engine.pensionSplitMaxRate)} of eligible pension income can be shifted to the lower-income spouse. Between your CPP (about ${money0(yourCpp)}/yr) and your spouse's (${money0(spCpp)}/yr), plus your larger RRSP (${money0(inputs.rrspBalance ?? 0)} vs ${money0(sp?.rrspBalance ?? 0)}), the higher earner's RRIF withdrawals are the natural thing to split — moving income into the lower bracket can cut the household's combined tax. The engine models both of you together, so it can show that effect directly. ${OFFER}`;
     },
     mustContain: ['split', 'spouse', 'tax'],
+  },
+  // ---- Pre-retirement & part-time income (the income register) ----------
+  {
+    id: 'income-register',
+    ask: 'Does income I earn before or during retirement actually help my plan?',
+    phrasings: [
+      'I plan to work part-time in retirement — does that count?',
+      'How is rental or consulting income treated?',
+    ],
+    appliedTo: ['on-employment'],
+    appliedAsk: () => 'I\'ll keep consulting part-time — how does that feed my plan?',
+    answer: () =>
+      `Yes — the plan models income beyond CPP/OAS. Each source has a kind: a pension (DB/bridge, taxable, split-eligible), employment (a T4 job), self-employment (consulting/business — earned income that builds RRSP room), or rental (net rental income, taxed as investment income, not split-eligible). Earned kinds are taxed at your marginal rate and the after-tax net (times a savings rate) is saved into an account — so a job before or during retirement genuinely funds the plan rather than just adding taxable income. ${OFFER}`,
+    appliedAnswer: (inputs) => {
+      const job = inputs.income?.[0];
+      const amt = job?.annualAmount ?? 0;
+      return `Your part-time consulting (${money0(amt)}/yr${job?.endAge ? ` from ${job.startAge} to ${job.endAge}` : ''}) is treated as self-employment/employment income: it's taxed at your marginal rate, and the after-tax net is saved into your accounts — so during those years it directly reduces how much you draw from savings. That's real money into the plan, not just extra taxable income. Once it stops, the plan goes back to drawing down your balances. I can run the projection with and without it so you see the difference.`;
+    },
+    mustContain: ['income', 'tax', 'savings'],
   },
   // ---- RDSP --------------------------------------------------------------
   {

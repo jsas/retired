@@ -322,6 +322,16 @@ const MUTATION_SPECS: MutationSpec[] = [
     rejectedReply: () => 'Understood — inheritance not added.',
   },
   {
+    tool: 'propose_fhsa',
+    questions: [
+      () => 'I want to start saving for a first home — set up an FHSA.',
+      () => 'Open an FHSA and put in $8,000 a year.',
+    ],
+    args: (sc) => ({ changes: { enabled: true, balance: 0, contribution: 8000, contributionBasis: 0, openAge: sc.inputs.currentAge } }),
+    approvedReply: () => 'FHSA set up — deductible in, tax-sheltered growth, and it transfers to your RRSP at retirement if you don\'t buy. Want me to show the effect on your plan?',
+    rejectedReply: () => 'Okay — FHSA left off.',
+  },
+  {
     tool: 'remember',
     questions: [
       () => 'Remember that I plan to downsize the house in a few years.',

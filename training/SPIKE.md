@@ -72,10 +72,11 @@ corpus can't drift from shipped behavior):
   numbers") or **REJECTED** ("NOT applied … do not repeat unprompted"). The
   model must learn: approved → confirm + fresh `run_projection`; never
   re-propose after approval, never repeat after rejection.
-- **The 23-tool catalog** (`src/lib/ai/tools.ts`): 9 pure reads
+- **The 24-tool catalog** (`src/lib/ai/tools.ts`): 9 pure reads
   (`get_scenario`, `run_projection`, `compare_scenarios`, `run_strategies`,
   `solve_spending`, `run_monte_carlo`, `get_schedule`, `recall`,
-  `list_scenarios`), 11 mutation proposals, 3 direct writes (`remember`,
+  `list_scenarios`), 12 mutation proposals (incl. `propose_fhsa`, added with
+  the income-register/FHSA feature #123), 3 direct writes (`remember`,
   `open_scenario`, `save_scenario_as`). Full arg shapes + result text templates
   are enumerated in the agent-produced spec (see `training/protocol.ts` and the
   tool-report in the spike notes).
