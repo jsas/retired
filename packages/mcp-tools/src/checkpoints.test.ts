@@ -3,7 +3,7 @@ import {
   captureCheckpoint, appendCheckpoint, diffInputs, buildRevertPlan,
   encodeRevertPatch, decodeRevertPatch, CHECKPOINT_LIMIT, UNDEFINED_SENTINEL,
 } from './checkpoints';
-import { baseInputs } from '../../test/helpers';
+import { baseInputs } from '@retired/engine-core/test/helpers';
 
 describe('checkpoints', () => {
   it('capture deep-copies: later edits to the plan must not leak in', () => {

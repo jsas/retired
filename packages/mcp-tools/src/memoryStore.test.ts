@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   MemoryStore, rank, recencyFactor, MAX_PER_SCOPE,
   type MemoryAdapter, type MemoryRecord,
-} from './store';
+} from './memoryStore';
 
 /** Deterministic in-memory adapter + a settable clock so decay tests are
  *  exact rather than timing-dependent. */

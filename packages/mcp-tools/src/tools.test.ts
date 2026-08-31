@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { executeToolCall, toolSpecs, EDITABLE_FIELDS, type ToolContext } from './tools';
-import { calculateHousehold, householdOutcome } from '../retirementEngine';
-import { baseInputs, testConfig } from '../../test/helpers';
+import { calculateHousehold, householdOutcome } from '@retired/engine-core/retirementEngine';
+import { baseInputs, testConfig } from '@retired/engine-core/test/helpers';
 import { captureCheckpoint, UNDEFINED_SENTINEL } from './checkpoints';
-import { MemoryStore } from '../memory/store';
-import type { MemoryAdapter, MemoryRecord } from '../memory/store';
-import type { RetirementInputs } from '../retirementEngine';
-import { toHousehold } from '../householdTypes';
+import { MemoryStore } from './memoryStore';
+import type { MemoryAdapter, MemoryRecord } from './memoryStore';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import { toHousehold } from '@retired/engine-core/householdTypes';
 
 /** Deterministic in-memory memory adapter (same shape the store tests use). */
 class InMemoryAdapter implements MemoryAdapter {
