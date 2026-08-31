@@ -741,6 +741,7 @@ function App() {
         inputs={inputs}
         onInputsChange={handleInputsChange}
         results={results}
+        config={config}
         hasUnsavedChanges={hasUnsavedChanges}
         onSave={handleSaveScenario}
       />

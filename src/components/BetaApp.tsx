@@ -3,12 +3,20 @@
 // surface composes those primitives (per STYLEGUIDE.md / REQUIREMENTS §8.10)
 // so the vocabulary stays consistent as the skin grows toward f7. It renders
 // the REAL engine's verdict on the REAL active scenario and lets the two
-// biggest levers — annual spending and retirement age — steer it.
+// biggest levers — annual spending and retirement age — steer it, on the map
+// and on the faders.
 import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
 import type { Scenario } from '@retired/engine-core/types';
+import type { AppConfig } from '@retired/engine-core/appConfig';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
 import { AppHeader, VerdictHero, Panel, Fader, Footnote } from '../design/primitives';
 import { cls } from '../design/tokens';
+import { ContourMap } from './beta/ContourMap';
+
+// The map's axis window — retire age × spending. The faders use the same
+// ranges so the dot and the sliders always agree. (Spending/return ranges are
+// the runaway-able ones earmarked for a Settings pref — see BETA-MAP.md §2.)
+const MAP_WINDOW = { ageMin: 55, ageMax: 75, spendTop: 160000, spendBottom: 20000 };
 
 interface BetaAppProps {
   scenarios: Scenario[];
@@ -17,6 +25,7 @@ interface BetaAppProps {
   inputs: RetirementInputs;
   onInputsChange: (next: RetirementInputs) => void;
   results: RetirementResults;
+  config: AppConfig;
   hasUnsavedChanges: boolean;
   onSave: () => void;
 }
@@ -32,7 +41,7 @@ function verdict(inputs: RetirementInputs, results: RetirementResults) {
 
 export function BetaApp({
   scenarios, activeScenarioId, onScenarioChange,
-  inputs, onInputsChange, results, hasUnsavedChanges, onSave,
+  inputs, onInputsChange, results, config, hasUnsavedChanges, onSave,
 }: BetaAppProps) {
   const v = verdict(inputs, results);
   return (
@@ -66,22 +75,33 @@ export function BetaApp({
           }
         />
 
-        <Panel label="The two levers">
-          <div className="grid gap-6 md:grid-cols-2">
-            <Fader
-              label="Spend a year"
-              value={inputs.desiredSpending}
-              min={20000} max={200000} step={1000}
-              format={fmtMoney}
-              onChange={(val) => onInputsChange({ ...inputs, desiredSpending: val })}
+        <Panel label="The ground your plan stands on" action={
+          <span className="text-[11px] text-slate-400">drag the dot, or use the faders</span>
+        }>
+          <div className="grid gap-8 lg:grid-cols-[1.6fr_1fr]">
+            <ContourMap
+              inputs={inputs}
+              config={config}
+              window={MAP_WINDOW}
+              onChange={onInputsChange}
             />
-            <Fader
-              label="Stop working at"
-              value={inputs.retirementAge}
-              min={inputs.currentAge} max={80} step={1}
-              format={(val) => `${val}`}
-              onChange={(val) => onInputsChange({ ...inputs, retirementAge: val })}
-            />
+
+            <div className="space-y-7">
+              <Fader
+                label="Stop working at"
+                value={inputs.retirementAge}
+                min={MAP_WINDOW.ageMin} max={MAP_WINDOW.ageMax} step={1}
+                format={(val) => `${val}`}
+                onChange={(val) => onInputsChange({ ...inputs, retirementAge: val })}
+              />
+              <Fader
+                label="Spend a year"
+                value={inputs.desiredSpending}
+                min={MAP_WINDOW.spendBottom} max={MAP_WINDOW.spendTop} step={1000}
+                format={fmtMoney}
+                onChange={(val) => onInputsChange({ ...inputs, desiredSpending: val })}
+              />
+            </div>
           </div>
         </Panel>
 
