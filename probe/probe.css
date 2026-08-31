@@ -40,13 +40,12 @@ pre { background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; fo
 .hint { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--mut); font-size: 11px; }
 
 /* --- coverage grid ------------------------------------------------------------
-   One table per model: 4 prompts × 2 personas (rows) × sampler profiles (cols).
+   One table per model: 4 prompts (rows) × sampler profiles (cols).
    Cell background = state, text = score. Click a filled cell to clear it. */
 table.grid { margin-bottom: 14px; }
 table.grid td { padding: 3px 6px; text-align: center; font-variant-numeric: tabular-nums; }
 table.grid th { text-align: center; }
 table.grid td.rowh { text-align: left; white-space: nowrap; }
-table.grid td.rowh .per { color: var(--mut); font-size: 10px; margin-left: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 0 5px; }
 table.grid h3 { display: inline; }
 table.grid td.pending { background: #f8fafc; }
 table.grid td.na { color: #cbd5e1; }

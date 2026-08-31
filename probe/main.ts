@@ -2,20 +2,24 @@
 //
 // NOT part of the app bundle or the deploy. `npm run probe` → open
 // http://localhost:5174/probe/. For each web-llm model × loop-prone prompt ×
-// sampler profile × persona, this generates a RAW reply (deliberately
-// bypassing the streaming circuit breakers so the full degenerate tail is
-// visible), scores it with repetition.ts, and records whether the production
-// breakers WOULD have fired.
+// sampler profile, this generates a RAW reply (deliberately bypassing the
+// streaming circuit breakers so the full degenerate tail is visible), scores
+// it with repetition.ts, and records whether the production breakers WOULD
+// have fired. Persona is no longer a dimension: the app standardized on the
+// single full system prompt (#109 closed unmerged; #120 pruned the weak
+// models), and the probe measures exactly what ships.
 //
 // Everything shares ONE store: results persist in localStorage and completed
 // cells are skipped, so any run resumes after a stop / reload / crash. "Run
-// everything" walks the full coverage grid at once — the production-shaped
-// pass, the forced-simple A/B pass, and the whole 8-profile sampler grid.
-// The grid shows planned / running / done per cell; click a filled cell to
-// clear just that one and re-measure it.
+// everything" walks the whole 8-profile sampler grid at once. The grid shows
+// planned / running / done per cell; click a filled cell to clear just that
+// one and re-measure it.
 //
-// The point: replace guesswork in MODEL_SAMPLER_DEFAULTS (#104) and the
-// simple-persona tier choice (#108) with measured loop rates per profile.
+// The point: replace guesswork in MODEL_SAMPLER_DEFAULTS (#104) with measured
+// loop rates per profile — and serve as the before/after harness for the
+// fine-tune work (#112/#117): the pre-training grid is committed at
+// probe/results/baseline-*.json, so a trained checkpoint can be diffed
+// against it cell by cell.
 
 import { WEBLLM_MODELS, webGpuAvailable, fmtSize, fmtVram } from '../src/lib/ai/webLlmModels';
 import { loadWebLlmEngine, unloadWebLlmEngine, isWebLlmModelCached, loadedWebLlmWindow, isTokenEcho, detectRepetitionCut } from '../src/lib/ai/webLlmProvider';
@@ -24,7 +28,6 @@ import { buildSystemPrompt } from '../src/lib/ai/agentLoop';
 import { toolSpecs } from '../src/lib/ai/tools';
 import { buildPromptToolInstructions, extractPromptToolCalls } from '../src/lib/ai/promptTools';
 import { defaultAppConfig } from '../src/lib/appConfig';
-import { PROBE_SIMPLE_PERSONA } from './sweep';
 import { SWEEP_PROMPTS, SWEEP_PROFILES, SWEEP_MAX_TOKENS } from './sweep';
 import {
   repetitionScore, ttr, maxWordRepeat, loopOnset, tokenize,
@@ -38,13 +41,15 @@ interface Engine {
   resetChat?(keepStats?: boolean): Promise<void>;
 }
 
-type Persona = 'full' | 'simple';
-
+/** Stored cells keep the persona field (the pre-#127 sweeps used it); the
+ *  v3 store maps any 'simple' cell to 'full' on load so old runs still count
+ *  as coverage for the single prompt that now ships. New cells always read
+ *  'full'. */
 interface Cell {
   modelId: string;
   promptId: string;
   profile: string;
-  persona: Persona;
+  persona: 'full' | 'simple';
   text: string;
   score: number;
   ttr: number;
@@ -56,52 +61,67 @@ interface Cell {
   /** Only on imported rows whose text wasn't kept (see importRaw): the
    *  original reply length, used for the floor marker. */
   textLen?: number;
+  /** Old exports carry a persona field; harmless — always folded to full. */
 }
 
-// v2 = cell-keyed store (model|prompt|profile|persona) with resume + the
-// coverage grid. v1 was the append-only list every earlier sweep wrote —
-// migrateLegacy() folds it forward on first load so no run is ever lost.
+// v3 = v2 with the persona dimension collapsed: every stored cell is 'full'
+// (the one prompt the app ships now; #109's simple tier never landed). Old
+// simple-persona cells upgrade to 'full' as coverage for that single prompt —
+// same model, same prompt text, same sampler; the only difference was the
+// system preamble, and treating them as full keeps the 262-cell fine-tune
+// baseline usable instead of forcing a re-run. v2/v1 still migrate forward
+// on first load, so no run is ever lost.
 // (Declared before the loadStored() call below — everything here runs at
 // module init, in source order.)
-const STORE_KEY = 'retirement_probe_results_v2';
+const STORE_KEY = 'retirement_probe_results_v3';
+const V2_STORE_KEY = 'retirement_probe_results_v2';
 const LEGACY_STORE_KEY = 'retirement_probe_results_v1';
 const cellKey = (m: string, p: string, f: string, persona: string) => `${m}|${p}|${f}|${persona}`;
 const pendingLogs: string[] = [];
 
 function loadStored(): Cell[] {
-  const v2 = localStorage.getItem(STORE_KEY);
-  if (v2 !== null) {
-    try { return JSON.parse(v2); } catch { return []; }
+  const v3 = localStorage.getItem(STORE_KEY);
+  if (v3 !== null) {
+    try { return JSON.parse(v3); } catch { return []; }
   }
-  return migrateLegacy();
+  // No v3 yet — fold the newest older store into v3, deduping by key: where a
+  // cell was measured under BOTH personas keep the full copy; a simple-only
+  // cell survives as full per the comment above.
+  const older = loadOlder();
+  if (!older.length) return [];
+  const byKey = new Map<string, { cell: Cell; simple: boolean }>();
+  for (const c of older) {
+    if (!c || typeof c.modelId !== 'string' || typeof c.promptId !== 'string') continue;
+    const profile = c.profile ?? 'baseline';
+    const simple = c.persona === 'simple';
+    const k = cellKey(c.modelId, c.promptId, profile, 'full');
+    const existing = byKey.get(k);
+    if (!existing || (existing.simple && !simple)) {
+      byKey.set(k, { cell: { ...c, profile, persona: 'full' }, simple });
+    }
+  }
+  const upgraded = [...byKey.values()].map(v => v.cell);
+  const simples = [...byKey.values()].filter(v => v.simple).length;
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(upgraded));
+    pendingLogs.push(`migrated ${upgraded.length} stored cell(s) to the single-prompt v3 store (${simples} simple-persona row(s) folded to full)`);
+  } catch { /* too big — the array still serves this session */ }
+  return upgraded;
 }
 
-/** Fold the v1 append-only store into the v2 cell store so every run made
- *  before the grid existed survives the upgrade. v1 cells carry the same
- *  fields; duplicates (a cell re-measured in an older append-style run)
- *  collapse to the LAST one written. v1 is left untouched as a backup —
- *  "Clear results" removes both. */
-function migrateLegacy(): Cell[] {
-  const raw = localStorage.getItem(LEGACY_STORE_KEY);
-  if (!raw) return [];
-  let legacy: Cell[];
-  try { legacy = JSON.parse(raw); } catch { return []; }
-  if (!Array.isArray(legacy) || !legacy.length) return [];
-  const byKey = new Map<string, Cell>();
-  for (const c of legacy) {
-    if (!c || typeof c.modelId !== 'string' || typeof c.promptId !== 'string') continue;
-    byKey.set(cellKey(c.modelId, c.promptId, c.profile ?? 'baseline', c.persona ?? 'full'), {
-      ...c,
-      profile: c.profile ?? 'baseline',
-      persona: c.persona ?? 'full',
-    });
+/** Read the newest pre-v3 store present (v2 preferred, else v1 raw rows —
+ *  field-defaulting for v1 rows happens in loadStored's dedup loop, so this
+ *  doesn't need the old migrateLegacy write side effects). */
+function loadOlder(): Cell[] {
+  for (const key of [V2_STORE_KEY, LEGACY_STORE_KEY]) {
+    const raw = localStorage.getItem(key);
+    if (raw === null) continue;
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) return arr;
+    } catch { /* try the next older key */ }
   }
-  const migrated = [...byKey.values()];
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(migrated));
-    pendingLogs.push(`migrated ${migrated.length} stored cell(s) from the v1 probe store (${legacy.length} raw rows)`);
-  } catch { /* too big — the array still serves this session */ }
-  return migrated;
+  return [];
 }
 
 const results: Cell[] = loadStored();
@@ -166,7 +186,9 @@ function importRaw(raw: string): [number, number] {
   for (const r of rows) {
     if (!r || typeof r.modelId !== 'string' || typeof r.promptId !== 'string') continue;
     const profile = typeof r.profile === 'string' && r.profile ? r.profile : 'baseline';
-    const persona: Persona = r.persona === 'simple' ? 'simple' : 'full';
+    // Persona is collapsed to full everywhere (v3 store, single shipped prompt);
+    // imports of pre-#127 exports with persona:'simple' merge as full too.
+    const persona = 'full' as const;
     const key = cellKey(r.modelId, r.promptId, profile, persona);
     let cell: Cell;
     if (typeof r.text === 'string' && r.text) {
@@ -205,23 +227,14 @@ const done = (m: string, p: string, f: string, persona: string) =>
 
 // --- the run plan -------------------------------------------------------------
 //
-// A plan cell is one (model, prompt, sampler profile, persona) measurement.
-// The production shape of each cell mirrors the app: tool mode from the
-// model's toolCapable flag, persona from the simplePrompt/!toolCapable rule
-// (#108's auto-pick), sampler from MODEL_SAMPLER_DEFAULTS (#104) when present
-// or the generic baseline otherwise.
+// A plan cell is one (model, prompt, sampler profile) measurement, always at
+// the single full system prompt. The production shape of each cell mirrors
+// the app: tool mode from the model's toolCapable flag, sampler from
+// MODEL_SAMPLER_DEFAULTS (#104) when present or the generic baseline
+// otherwise.
 
 function autoToolMode(modelId: string): 'prompt' | 'off' {
   return WEBLLM_MODELS.find(m => m.id === modelId)?.toolCapable ? 'prompt' : 'off';
-}
-
-/** Simple persona for models flagged simplePrompt (#108's field, when that
- *  lands) — falling back to !toolCapable so the tiny Q&A model already gets
- *  the short persona on today's main. */
-function autoPersona(modelId: string): Persona {
-  const m = WEBLLM_MODELS.find(x => x.id === modelId);
-  if (!m) return 'full';
-  return ((m as { simplePrompt?: boolean }).simplePrompt ?? !m.toolCapable) ? 'simple' : 'full';
 }
 
 /** The sampler profile the app would ship for this model today (#104's
@@ -241,15 +254,12 @@ function shippedProfile(modelId: string): SamplerProfile {
 }
 
 /** System prompt built the SAME way the app does, so what we measure is what
- *  ships: persona + prompt-mode tool mechanics + live program rules +
- *  scenario name + the fenced tool catalog. The persona rides through
- *  `basePrompt` (works on main today; once #108 lands, `tier` could replace
- *  the PROBE_SIMPLE_PERSONA copy). */
-function sysFor(modelId: string, persona: Persona): string {
+ *  ships: the full persona + prompt-mode tool mechanics + live program rules
+ *  + scenario name + the fenced tool catalog. */
+function sysFor(modelId: string): string {
   const toolMode = autoToolMode(modelId);
   const base = buildSystemPrompt('Probe plan', {
     toolMode,
-    basePrompt: persona === 'simple' ? PROBE_SIMPLE_PERSONA : undefined,
     config: defaultAppConfig(),
   });
   return base + (toolMode === 'prompt' ? '\n\n' + buildPromptToolInstructions(toolSpecs()) : '');
@@ -259,23 +269,21 @@ interface PlanCell {
   modelId: string;
   promptId: string;
   profile: SamplerProfile;
-  persona: Persona;
+  /** Always 'full' for new cells — the field stays only because the stored
+   *  Cell type carries it (v3 maps old simple rows forward). */
+  persona: 'full';
 }
 
 interface PlanOpts {
   models?: string[];
-  /** 'auto' keeps the per-model production persona; 'full'/'simple' force it
-   *  on the shipped-profile cells (the #108 A/B). The sampler grid always
-   *  runs at the full persona — knobs and persona are measured separately. */
-  persona?: 'auto' | Persona;
 }
 
 /** Build the work list.
- *  'triage': one production-shaped pass (what the app would actually send).
- *  'all':    triage + the forced-simple A/B at the shipped profile + the
- *            whole 8-profile sampler grid at the full persona. Identical
- *            cells (e.g. a non-Phi model's 'baseline' from both passes)
- *            dedup by key, so 'all' never measures the same thing twice. */
+ *  'triage': one production-shaped pass (shipped profile, what the app would
+ *            actually send).
+ *  'all':    the whole 8-profile sampler grid — the shipped/baseline cells
+ *            the grid shares with triage dedup by key, so 'all' never
+ *            measures the same thing twice. */
 function buildPlan(scope: 'triage' | 'all', opts: PlanOpts = {}): PlanCell[] {
   const modelIds = opts.models ?? WEBLLM_MODELS.map(m => m.id);
   const byKey = new Map<string, PlanCell>();
@@ -285,11 +293,10 @@ function buildPlan(scope: 'triage' | 'all', opts: PlanOpts = {}): PlanCell[] {
   };
   for (const modelId of modelIds) {
     const ship = shippedProfile(modelId);
-    const normal: Persona = opts.persona && opts.persona !== 'auto' ? opts.persona : autoPersona(modelId);
     for (const prompt of SWEEP_PROMPTS) {
-      add({ modelId, promptId: prompt.id, profile: ship, persona: normal });
-      if (scope === 'all') {
-        add({ modelId, promptId: prompt.id, profile: ship, persona: 'simple' });
+      if (scope === 'triage') {
+        add({ modelId, promptId: prompt.id, profile: ship, persona: 'full' });
+      } else {
         for (const profile of SWEEP_PROFILES) {
           add({ modelId, promptId: prompt.id, profile, persona: 'full' });
         }
@@ -389,24 +396,22 @@ async function runPlan(cells: PlanCell[], opts: RunOpts) {
         const toolMode = autoToolMode(modelId);
         if (opts.streamEvents) emit('load-done', { modelId, window: loadedWebLlmWindow(), toolMode });
         log(`loaded ${label} (window ${loadedWebLlmWindow()}, tools ${toolMode})`);
-        // Persona only changes the system string — one engine serves both tiers.
-        const sysCache = new Map<Persona, string>();
+        // One system prompt per model now (persona is gone as a dimension).
+        const sys = sysFor(modelId);
         for (const pc of planCells) {
           n++;
           const key = cellKey(modelId, pc.promptId, pc.profile.label, pc.persona);
           if (done(modelId, pc.promptId, pc.profile.label, pc.persona)) {
             skipped++;
-            setBar(n / total, `skip ${pc.profile.label}/${pc.persona}/${pc.promptId} (stored)`);
+            setBar(n / total, `skip ${pc.profile.label}/${pc.promptId} (stored)`);
             continue;
           }
           if (abortFlag) break;
           runningCell = key;
           if (opts.streamEvents) emit('cell-start', { modelId, promptId: pc.promptId, profile: pc.profile.label, persona: pc.persona });
-          setBar(n / total, `${label} · ${pc.promptId} · ${pc.profile.label}/${pc.persona} — ${n - skipped}/${total - skipped} this run`);
+          setBar(n / total, `${label} · ${pc.promptId} · ${pc.profile.label} — ${n - skipped}/${total - skipped} this run`);
           render();
           try {
-            let sys = sysCache.get(pc.persona);
-            if (!sys) { sys = sysFor(modelId, pc.persona); sysCache.set(pc.persona, sys); }
             const user = SWEEP_PROMPTS.find(p => p.id === pc.promptId)!.user;
             const { text, seconds } = await generate(engine, sys, user, pc.profile, opts.maxTokens);
             const tokens = tokenize(text);
@@ -433,12 +438,12 @@ async function runPlan(cells: PlanCell[], opts: RunOpts) {
                 rawHead: text.slice(0, 140),
               });
             }
-            log(`${label} ${pc.promptId}/${pc.profile.label}/${pc.persona}: score ${cell.score.toFixed(2)}` +
+            log(`${label} ${pc.promptId}/${pc.profile.label}: score ${cell.score.toFixed(2)}` +
               `${cell.breakerEcho ? ' ⚑echo' : ''}${cell.breakerBlock ? ' ⚑block' : ''}` +
               `${parsed.calls.length ? ` calls[${parsed.calls.map(x => x.name).join(',')}]` : ' no-calls'} (${seconds.toFixed(1)}s)`);
           } catch (err) {
             if (opts.streamEvents) emit('cell-fail', { modelId, promptId: pc.promptId, profile: pc.profile.label, persona: pc.persona, error: String(err).slice(0, 200) });
-            log(`FAILED ${label} ${pc.promptId}/${pc.profile.label}/${pc.persona}: ${String(err).slice(0, 120)}`);
+            log(`FAILED ${label} ${pc.promptId}/${pc.profile.label}: ${String(err).slice(0, 120)}`);
           }
           runningCell = null;
           try { await engine.resetChat?.(true); } catch { /* best effort between cells */ }
@@ -477,8 +482,6 @@ for (const m of WEBLLM_MODELS) {
   label.append(cb, document.createTextNode(`${m.label} `));
   const meta = document.createElement('span');
   meta.className = 'meta';
-  // (No reference to #108's simplePrompt field — the probe stays self-contained
-  //  against main; the persona is chosen by the plan, not the model list.)
   meta.textContent = `${fmtVram(m.vramMB)} · ${fmtSize(m.sizeGB)} · ${m.toolCapable ? 'tools' : 'Q&A only'}`;
   label.append(meta);
   modelList.append(label);
@@ -529,11 +532,10 @@ $('cacheAll').addEventListener('click', async () => {
 $('run').addEventListener('click', () => {
   const models = selectedModels();
   const profiles = selectedProfiles();
-  const persona: Persona = ($('personaSimple') as HTMLInputElement).checked ? 'simple' : 'full';
   if (!models.length || !profiles.length) { log('pick at least one model and one profile'); return; }
   const cells: PlanCell[] = models.flatMap(modelId =>
     SWEEP_PROMPTS.flatMap(prompt =>
-      profiles.map(profile => ({ modelId, promptId: prompt.id, profile, persona }))));
+      profiles.map(profile => ({ modelId, promptId: prompt.id, profile, persona: 'full' as const }))));
   void runPlan(cells, { maxTokens: SWEEP_MAX_TOKENS, streamEvents: false });
 });
 
@@ -548,7 +550,8 @@ $('clear').addEventListener('click', () => {
   if (!confirm('Discard all stored probe results?')) return;
   results.length = 0;
   localStorage.removeItem(STORE_KEY);
-  localStorage.removeItem(LEGACY_STORE_KEY);   // so the migration can't resurrect them
+  localStorage.removeItem(V2_STORE_KEY);      // so the migration can't resurrect them
+  localStorage.removeItem(LEGACY_STORE_KEY);
   render();
 });
 
@@ -672,10 +675,9 @@ function render() {
   };
 }
 
-/** The coverage grid: every planned (profile × persona) cell per model,
- *  coloured by state — filled = stored score, pulsing = running now, light =
- *  pending, dim dot = not in the plan (e.g. simple×grid combos — reachable
- *  via "Run selected" but not auto-planned). Click a filled cell to clear it. */
+/** The coverage grid: every planned (profile) cell per model, coloured by
+ *  state — filled = stored score, pulsing = running now, light = pending,
+ *  dim dot = not in the plan. Click a filled cell to clear it. */
 function renderGrid() {
   const storedKeys = new Set(results.map(r => cellKey(r.modelId, r.promptId, r.profile, r.persona)));
   const plannedCount = [...PLANNED_KEYS].filter(k => storedKeys.has(k)).length;
@@ -693,31 +695,29 @@ function renderGrid() {
   for (const m of WEBLLM_MODELS) {
     const cols = allCols.filter(col => col !== 'shipped' || MODEL_SAMPLER_DEFAULTS[m.id]);
     html += `<h3>${m.label}<span class="meta">${m.toolCapable ? 'tools' : 'Q&A only'}</span></h3>`;
-    html += '<table class="grid"><tr><th>prompt · persona</th>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr>';
+    html += '<table class="grid"><tr><th>prompt</th>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr>';
     for (const prompt of SWEEP_PROMPTS) {
-      for (const persona of ['full', 'simple'] as const) {
-        html += `<tr><td class="rowh">${prompt.id}<span class="per">${persona}</span></td>`;
-        for (const col of cols) {
-          const key = cellKey(m.id, prompt.id, col, persona);
-          const mine = results.filter(r => cellKey(r.modelId, r.promptId, r.profile, r.persona) === key);
-          if (mine.length) {
-            const c = mine[mine.length - 1];
-            const floor = isFloorCell(c);   // repetitionScore's floor: 0.00 here means "too short to judge", not "clean"
-            const cls = floor ? 'sc-floor' : c.score < 0.15 ? 'sc-ok' : c.score < 0.3 ? 'sc-mid' : 'sc-bad';
-            const flag = c.breakerEcho || c.breakerBlock ? '<span class="flag">⚑</span>' : '';
-            const chars = hasRealText(c) ? `${c.text.length} ch` : `imported${c.textLen ? ` ${c.textLen} ch` : ''}`;
-            const tip = `${c.score.toFixed(3)}${floor ? ' · under 60-token floor — not judgeable' : ''} · ttr ${c.ttr.toFixed(2)} · top-word ${(c.maxRepeat * 100).toFixed(0)}% · onset ${(c.onset * 100).toFixed(0)}% · ${c.seconds.toFixed(0)}s · ${chars}${c.breakerEcho || c.breakerBlock ? ' · breaker would fire' : ''} · click to clear`;
-            html += `<td class="num ${cls}" data-clear="${key}" title="${tip.replace(/"/g, '&quot;')}">${c.score.toFixed(2)}${flag}${floor ? '°' : ''}</td>`;
-          } else if (runningCell === key) {
-            html += '<td class="running" title="running now">⏳</td>';
-          } else if (PLANNED_KEYS.has(key)) {
-            html += '<td class="pending"></td>';
-          } else {
-            html += '<td class="na">·</td>';
-          }
+      html += `<tr><td class="rowh">${prompt.id}</td>`;
+      for (const col of cols) {
+        const key = cellKey(m.id, prompt.id, col, 'full');
+        const mine = results.filter(r => cellKey(r.modelId, r.promptId, r.profile, r.persona) === key);
+        if (mine.length) {
+          const c = mine[mine.length - 1];
+          const floor = isFloorCell(c);   // repetitionScore's floor: 0.00 here means "too short to judge", not "clean"
+          const cls = floor ? 'sc-floor' : c.score < 0.15 ? 'sc-ok' : c.score < 0.3 ? 'sc-mid' : 'sc-bad';
+          const flag = c.breakerEcho || c.breakerBlock ? '<span class="flag">⚑</span>' : '';
+          const chars = hasRealText(c) ? `${c.text.length} ch` : `imported${c.textLen ? ` ${c.textLen} ch` : ''}`;
+          const tip = `${c.score.toFixed(3)}${floor ? ' · under 60-token floor — not judgeable' : ''} · ttr ${c.ttr.toFixed(2)} · top-word ${(c.maxRepeat * 100).toFixed(0)}% · onset ${(c.onset * 100).toFixed(0)}% · ${c.seconds.toFixed(0)}s · ${chars}${c.breakerEcho || c.breakerBlock ? ' · breaker would fire' : ''} · click to clear`;
+          html += `<td class="num ${cls}" data-clear="${key}" title="${tip.replace(/"/g, '&quot;')}">${c.score.toFixed(2)}${flag}${floor ? '°' : ''}</td>`;
+        } else if (runningCell === key) {
+          html += '<td class="running" title="running now">⏳</td>';
+        } else if (PLANNED_KEYS.has(key)) {
+          html += '<td class="pending"></td>';
+        } else {
+          html += '<td class="na">·</td>';
         }
-        html += '</tr>';
       }
+      html += '</tr>';
     }
     html += '</table>';
   }
@@ -733,30 +733,28 @@ render();
 //
 // Launched by probe/run-triage.sh in a SEPARATE visible Chrome window (its own
 // profile — never touches the user's browsers). Runs the same plan machinery
-// (default: the FULL coverage grid — production pass + simple A/B + sampler
-// grid; ?auto=1,plan=triage keeps it to the quick production pass) and streams
-// one PROBE_EVENT console line per cell (including the head of the raw text)
-// so probe/drive.mjs can grade tool-protocol compliance and word-salad that
-// the numeric metrics alone miss. Like the interactive path, every cell
-// persists to localStorage and is skipped when already done — rerunning the
-// script after a crash resumes exactly where it stopped.
+// (default: the quick production pass; ?auto=1,plan=all runs the whole
+// 8-profile sampler grid) and streams one PROBE_EVENT console line per cell
+// (including the head of the raw text) so probe/drive.mjs can grade
+// tool-protocol compliance and word-salad that the numeric metrics alone
+// miss. Like the interactive path, every cell persists to localStorage and is
+// skipped when already done — rerunning the script after a crash resumes
+// exactly where it stopped.
 
 interface AutoConfig {
   models: 'all' | string;
   maxTokens: number;
-  persona: 'auto' | 'full' | 'simple';
   plan: 'triage' | 'all';
 }
 
 function parseAutoParam(): AutoConfig | null {
   const raw = new URLSearchParams(location.search).get('auto');
   if (raw === null) return null;
-  const cfg: AutoConfig = { models: 'all', maxTokens: SWEEP_MAX_TOKENS, persona: 'auto', plan: 'triage' };
+  const cfg: AutoConfig = { models: 'all', maxTokens: SWEEP_MAX_TOKENS, plan: 'triage' };
   for (const part of raw.split(',')) {
     const [k, v] = part.split('=');
     if (k === 'models' && v) cfg.models = v;
     if (k === 'maxtokens' && v) cfg.maxTokens = Math.max(64, Number(v) || cfg.maxTokens);
-    if (k === 'persona' && (v === 'full' || v === 'simple' || v === 'auto')) cfg.persona = v;
     if (k === 'plan' && (v === 'triage' || v === 'all' || v === 'everything')) {
       cfg.plan = v === 'triage' ? 'triage' : 'all';
     }
@@ -777,7 +775,7 @@ async function runAutoTriage(cfg: AutoConfig) {
     ? WEBLLM_MODELS.map(m => m.id)
     : cfg.models.split('|').map(s => s.trim()).filter(Boolean);
 
-  let cells = buildPlan(cfg.plan, { models: wanted, persona: cfg.persona });
+  let cells = buildPlan(cfg.plan, { models: wanted });
 
   // ?profile=<label> forces one sampler profile on every cell (the override
   // collapses grid duplicates — dedup again by key).

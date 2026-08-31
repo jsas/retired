@@ -34,10 +34,9 @@
           <h2>2 · Sweep</h2>
           <label class="check"><input type="checkbox" id="allProfiles" checked /> all 8 sampler profiles</label>
           <div id="profileList" class="list small"></div>
-          <label class="check"><input type="checkbox" id="personaSimple" /> use the short persona (simple tier) — for "Run selected" only</label>
           <div class="row">
-            <button id="runAll" class="primary" title="Full coverage in one run: production-shaped pass + forced-simple pass + all 8 sampler profiles. Skips cells already measured, so re-running resumes.">Run everything</button>
-            <button id="run" class="ghost" title="Sweep just the selected models × profiles × persona above">Run selected</button>
+            <button id="runAll" class="primary" title="Full coverage in one run: all 8 sampler profiles × 4 prompts at the shipped system prompt. Skips cells already measured, so re-running resumes.">Run everything</button>
+            <button id="run" class="ghost" title="Sweep just the selected models × profiles above">Run selected</button>
             <button id="stop" class="ghost" disabled>Stop</button>
             <button id="clear" class="ghost danger" title="Discard stored results and re-run everything">Clear results</button>
           </div>
