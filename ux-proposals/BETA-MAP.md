@@ -22,11 +22,11 @@ below and find nothing homeless.
 | **Header** (sticky, h-12, hairline) | app chrome | Brand · Details ▾ · Plans ▾ · Assistant · Data · Print/Export · **persistent verdict chip** |
 | **Verdict hero** | the answer, plain English | "Your money lasts until you're N" + market dial (down↔up) |
 | **The map** | blue contour pad, draggable dot | retire-age × spending terrain, boundary line, you-are-here |
-| **The two levers** | the biggest dials | Stop working at · Spend a year + live consequence lines |
+| **The two levers** | the biggest dials | Stop working at · Spend a year — single faders, fixed ranges (the old min/max limiter slider is gone) + live consequence lines |
 | **Down-market check** | the stress test, demoted from header | one line + dot: holds/warns at the down-market return |
 | **Life timeline** | the plan on one line | working/retired/run-out ticks, funded baseline |
 | **Evidence row** | the receipts | per-account balances over time + key numbers |
-| **Details ▾** | the rest of the plan, one click away | every input section, on one page → scrolls to the tapped section |
+| **Details ▾** | the rest of the plan, one click away | one page (`#/details`): the 3 levers + every input section, open in a single scroll → Details ▾ scrolls to the tapped section |
 | **Plans ▾** | scenario management | list / new / compare / revision history |
 | **Docked assistant** | the front door, right side (sheet on mobile) | chat that reads the plan, shows its work, proposes changes |
 
@@ -48,42 +48,60 @@ section is a `Panel` (hairline + uppercase label — an existing `src/design/`
 primitive), not a card. Everything is editable in place; the verdict, map and
 dock recompute off the same engine call.
 
-**Grouped in plain terms** (the order they appear top-to-bottom):
+**The whole profile in one place — levers included.** The details page also
+carries the three top-level controls — **retirement age**, **desired spending**,
+and the **market assumption** — so the entire plan is editable here, not just the
+drawer sections. Same levers as the dashboard, just present on this page too.
 
-| Group | Sections | Why together |
+The old steering page's triple-slider `RangeFader` (a value knob plus two
+crop-edge thumbs that set an allowed min–max band) **goes away**. In its place,
+each lever is a single fader over a **sensible fixed min–max range** — no user
+"limiters":
+
+| Lever | Fader range | Where it appears |
 |---|---|---|
-| **You** | Personal Profile · Spouse | who the plan is for — ages, province, partner |
-| **What you have** | Account Balances · Home Equity · Debts | the balances and property today |
-| **What goes in** | Contribution Rates · Income · Government Benefits · Cash Events | money arriving: savings, work/pension, CPP/OAS, one-offs |
-| **How you take it out** | Spending Phases · Withdrawal Strategy | the spend shape + the order you draw down |
-| **Special accounts** | RDSP · FHSA | conditional — appear when enabled |
+| Stop working at | 55 – 80 | door lever · map x-axis · details page |
+| Spend a year | $20k – $200k | door lever · map y-axis · details page |
+| Markets (avg return) | 1.2% – 4.5% | verdict-hero dial · details page |
+
+**Groups = plain names** (no metaphors). Sections are grouped the way a person
+actually looks for them, each under a one-word header, top-to-bottom:
+
+| Group | Sections |
+|---|---|
+| **People** | Personal Profile · Spouse |
+| **Accounts** | Account Balances · Contribution Rates · RDSP · FHSA |
+| **Income** | Income (work/pension) · Government Benefits · Cash Events |
+| **Spending** | Spending Phases · Withdrawal Strategy · Debts |
+| **Property** | Home Equity |
 
 Per-section homes (all on `#/details`, scrolled to):
 
-| # | Section | Deep-link | Feeds |
+| # | Section | Deep-link | Notes |
 |---|---|---|---|
-| 1 | Personal Profile | `#/details?section=profile` | current/max age, province — the map's x-origin |
-| 2 | Spouse | `#/details?section=spouse` | partner plan / linked scenario — household totals |
-| 3 | Account Balances | `#/details?section=accounts` | Evidence row + map "saved so far" |
-| 4 | Home Equity | `#/details?section=home` | reverse mortgage; conditional in Schedule |
-| 5 | Debts | `#/details?section=debts` | payments raise withdrawals |
-| 6 | Contribution Rates | `#/details?section=contributions` | per-account savings rates |
-| 7 | Income | `#/details?section=income` | pension/employment/self/rental sources |
-| 8 | Government Benefits | `#/details?section=benefits` | CPP/OAS/GIS — feeds map benefits |
+| 1 | Personal Profile | `#/details?section=profile` | current/max age, province |
+| 2 | Spouse | `#/details?section=spouse` | partner plan / linked scenario |
+| 3 | Account Balances | `#/details?section=accounts` | feeds Evidence row + "saved so far" |
+| 4 | Contribution Rates | `#/details?section=contributions` | per-account savings rates |
+| 5 | RDSP | `#/details?section=rdsp` | conditional — appears when enabled |
+| 6 | FHSA | `#/details?section=fhsa` | accumulation-only → RRSP at retirement |
+| 7 | Income | `#/details?section=income` | work/pension/self/rental sources |
+| 8 | Government Benefits | `#/details?section=benefits` | CPP/OAS/GIS |
 | 9 | Cash Events | `#/details?section=events` | one-time/recurring in- & out-flows |
-| 10 | Spending Phases | `#/details?section=spending` | go-go/slow-go/no-go; base spend is Lever 2 |
+| 10 | Spending Phases | `#/details?section=spending` | go-go/slow-go/no-go |
 | 11 | Withdrawal Strategy | `#/details?section=withdrawal` | drawdown order; also an assistant lever |
-| 12 | RDSP | `#/details?section=rdsp` | conditional in Schedule |
-| 13 | FHSA | `#/details?section=fhsa` | accumulation-only → RRSP at retirement |
-| 14 | Market Hypotheses | **Verdict hero — the Markets dial** | the only section *promoted* to the door (down↔up 1.2–4.5%) |
-| 15 | **Retirement age** | **Lever 1 on the door** | "Stop working at" — also the map's x-axis |
-| 16 | **Desired spending** | **Lever 2 on the door** | "Spend a year" — also the map's y-axis |
+| 12 | Debts | `#/details?section=debts` | payments raise withdrawals |
+| 13 | Home Equity | `#/details?section=home` | reverse mortgage; conditional in Schedule |
+| — | **Retirement age** | top of page (lever) | also door Lever 1 · map x-axis |
+| — | **Desired spending** | top of page (lever) | also door Lever 2 · map y-axis |
+| — | **Market assumption** | top of page (lever) | also verdict-hero dial |
 
-**The mapping answer to "where do the old sidebar sections go":** two become the
-door's levers + map axes, one becomes the door's market dial, and the other
-thirteen all live on **one Details page, open in a single scroll** — grouped in
-plain terms, reachable in one click via the Details ▾ menu (which scrolls to the
-tapped section).
+**The mapping answer to "where do the old sidebar sections go":** the three
+top-level levers (retire age, spending, market) live on the door AND on the
+details page — plain single faders over fixed ranges, the old min/max limiter
+triple-slider dropped. The thirteen drawer sections all live on **one Details
+page, open in a single scroll** under plain-name groups, reachable in one click
+via the Details ▾ menu (which scrolls to the tapped section).
 
 ---
 
@@ -93,7 +111,7 @@ tapped section).
 |---|---|---|
 | projection | `#/projection` | **The dashboard itself** (map + levers + life + evidence) |
 | math | `#/year-math` | **Schedule page** (year-by-year) — one click from the numbers it explains; gets the §8.9 column picker |
-| eq | `#/steering` | **Insights page** (levers ranked) + assistant `run_strategies` |
+| eq | `#/steering` | **Insights page** (levers ranked) + assistant `run_strategies`. The steering page's min/max limiter triple-slider is dropped — levers become plain single faders over fixed ranges |
 | optimize | `#/optimize` | **Insights page** (spending solve) + assistant `solve_spending` |
 | compare | `#/compare` | **Plans ▾ → Compare** |
 | montecarlo | `#/monte-carlo` | **Down-market check** (door) + **Insights page** (full MC) |
@@ -138,7 +156,7 @@ Every page composes `src/design/` primitives — no one-off styles (§8.10).
 - [ ] **Contour lib** — `src/lib/contour.ts`: port the f7 terrain math (bisection boundary, Catmull-Rom smoothing, hold-wash) onto `calculateHousehold` — **pure + Vitest-tested** before any SVG
 - [ ] **Schedule** — year-by-year table + **§8.9 column picker** (prefKV-persisted)
 - [ ] **Insights** — levers ranked (eq/optimize) + Monte Carlo + backtest, one level down
-- [ ] **The details page** (`#/details`) — all 13 sections, one scroll, grouped in plain terms; Details ▾ scrolls to the tapped section; two-col on desktop, one-col on mobile
+- [ ] **The details page** (`#/details`) — the 3 levers + all 13 sections, one scroll, plain-name groups; Details ▾ scrolls to the tapped section; two-col on desktop, one-col on mobile
 - [ ] **Plans** — list / new / compare / revision history
 - [ ] **Data** — backup / restore / import / share
 - [ ] **Settings** — app config + AI provider/connection
@@ -149,6 +167,7 @@ Every page composes `src/design/` primitives — no one-off styles (§8.10).
 ## 6. The bolt-on checklist (walk this before calling any slice done)
 
 - [ ] Every sidebar section in table §2 has a named home on `#/details` (deep-linked) — none dropped silently
+- [ ] The 3 levers (retire age, spending, market) are editable on the door AND the details page; single faders over fixed ranges, no min/max limiter slider
 - [ ] Every old view in table §3 routes somewhere real
 - [ ] Every assistant tool in table §4 still executes through the dock
 - [ ] Conditional sections (RDSP, Home Equity, FHSA) auto-appear in Schedule when enabled (§8.9)
