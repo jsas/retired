@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { BetaApp } from './components/BetaApp';
+import { applyBetaAtBoot } from './lib/betaSkin';
 import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot, AlertTriangle, X } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
@@ -71,6 +73,12 @@ const getSyncSeed = () => {
 
 function App() {
   const [initialState] = useState(getSyncSeed);
+  // Beta reskin channel (?beta → beta-version cookie; see lib/betaSkin). The
+  // flag is resolved once, synchronously, on the very first render — writing
+  // the cookie is a side effect React must not replay, so it lives in the
+  // useState initializer, not an effect. The whole hook set below stays
+  // unconditional; only the render output branches.
+  const [beta] = useState(applyBetaAtBoot);
 
   const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
   const [activeScenarioId, setActiveScenarioId] = useState<string>(initialState.activeScenarioId);
@@ -707,6 +715,25 @@ function App() {
     setBacktestResult(runBacktest(resolvedInputs, realConfig, calculateHousehold));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resolvedInputs, config]);
+
+  // The beta skin replaces the whole view; every hook above has already run
+  // unconditionally, so toggling ?beta off just re-renders the stable UI.
+  // `inputs` here is the RAW plan (like SidebarForm) — the two levers touch
+  // host-won household fields, so it matches the resolved numbers on screen.
+  if (beta) {
+    return (
+      <BetaApp
+        scenarios={scenarios}
+        activeScenarioId={activeScenarioId}
+        onScenarioChange={handleScenarioChange}
+        inputs={inputs}
+        onInputsChange={handleInputsChange}
+        results={results}
+        hasUnsavedChanges={hasUnsavedChanges}
+        onSave={handleSaveScenario}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
