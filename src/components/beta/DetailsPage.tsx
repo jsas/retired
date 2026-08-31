@@ -5,7 +5,7 @@
 // field edits the real plan; the verdict, map and dock recompute together.
 import { useEffect, useRef } from 'react';
 import type { RetirementInputs, WithdrawalAccount, SpendingBand } from '@retired/engine-core/retirementEngine';
-import { Panel, Fader } from '../../design/primitives';
+import { Panel, Fader, HelpHint } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
 
@@ -34,10 +34,10 @@ function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
   );
 }
 
-function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+function Section({ id, title, hint, children }: { id: string; title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section id={`details-${id}`} className="border-b border-slate-200 py-6">
-      <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{title}</h3>
+      <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{title}{hint && <HelpHint topic={hint} />}</h3>
       <div className="space-y-3">{children}</div>
     </section>
   );
@@ -87,9 +87,9 @@ export function DetailsPage({ inputs, onChange, section }: {
         <div className="grid gap-6 md:grid-cols-3">
           <Fader label="Stop working at" value={inputs.retirementAge} min={inputs.currentAge} max={75} step={1}
             format={(v) => `${v}`} onChange={(v) => set({ retirementAge: v })} />
-          <Fader label="Spend a year" value={inputs.desiredSpending} min={0} max={ranges.spendingMax} step={1000}
+          <Fader label="Spend a year" help="desired-spending" value={inputs.desiredSpending} min={0} max={ranges.spendingMax} step={1000}
             format={fmtMoney} onChange={(v) => set({ desiredSpending: v })} />
-          <Fader label="Markets" value={Math.round(inputs.investmentReturn * 1000) / 10} min={ranges.returnMin * 100} max={ranges.returnMax * 100} step={0.1}
+          <Fader label="Markets" help="expected-return" value={Math.round(inputs.investmentReturn * 1000) / 10} min={ranges.returnMin * 100} max={ranges.returnMax * 100} step={0.1}
             format={(v) => `${v.toFixed(1)}%`} onChange={(v) => set({ investmentReturn: v / 100 })} />
         </div>
       </Panel>
@@ -127,7 +127,7 @@ function renderSection(id: string, ctx: {
   switch (id) {
     case 'profile':
       return (
-        <Section id="profile" title="Personal Profile">
+        <Section id="profile" title="Personal Profile" hint="current-retirement-max-age">
           <div className="grid grid-cols-2 gap-3">
             <Num label="Current age" value={inp.currentAge} step={1} onChange={(v) => set({ currentAge: v })} />
             <Num label="Plan to age" value={inp.maxAge} step={1} onChange={(v) => set({ maxAge: v })} />
@@ -141,7 +141,7 @@ function renderSection(id: string, ctx: {
       );
     case 'spouse':
       return (
-        <Section id="spouse" title="Spouse">
+        <Section id="spouse" title="Spouse" hint="include-spouse">
           <p className="text-[12.5px] leading-relaxed text-slate-500">
             {inp.spouse?.enabled
               ? 'A partner plan is combined for household totals. Edit the partner\'s balances and benefits in the stable app\'s Spouse section for now — the combined verdict already shows here.'
@@ -151,7 +151,7 @@ function renderSection(id: string, ctx: {
       );
     case 'accounts':
       return (
-        <Section id="accounts" title="Account Balances">
+        <Section id="accounts" title="Account Balances" hint="rrsp">
           <div className="grid grid-cols-2 gap-3">
             <Num label="RRSP" value={inp.rrspBalance} onChange={(v) => set({ rrspBalance: v })} />
             <Num label="TFSA" value={inp.tfsaBalance} onChange={(v) => set({ tfsaBalance: v })} />
@@ -162,7 +162,7 @@ function renderSection(id: string, ctx: {
       );
     case 'contributions':
       return (
-        <Section id="contributions" title="Contribution Rates">
+        <Section id="contributions" title="Contribution Rates" hint="contributions">
           <div className="grid grid-cols-2 gap-3">
             <Num label="RRSP / yr" value={inp.rrspContribution} onChange={(v) => set({ rrspContribution: v })} />
             <Num label="TFSA / yr" value={inp.tfsaContribution} onChange={(v) => set({ tfsaContribution: v })} />
@@ -172,7 +172,7 @@ function renderSection(id: string, ctx: {
       );
     case 'income':
       return (
-        <Section id="income" title="Income">
+        <Section id="income" title="Income" hint="income">
           <p className="text-[12.5px] leading-relaxed text-slate-500">
             {(inp.income ?? []).length} source{(inp.income ?? []).length === 1 ? '' : 's'} on the plan
             {(inp.income ?? []).length > 0 ? ` — ${(inp.income ?? []).map(s => s.label || s.kind).join(', ')}` : ''}.
@@ -182,7 +182,7 @@ function renderSection(id: string, ctx: {
       );
     case 'benefits':
       return (
-        <Section id="benefits" title="Government Benefits">
+        <Section id="benefits" title="Government Benefits" hint="cpp-start-age">
           <div className="grid grid-cols-2 gap-3">
             <Num label="CPP start age" value={inp.cppStartAge ?? 65} step={1} min={60} onChange={(v) => set({ cppStartAge: v })} />
             <Num label="CPP monthly (at 65)" value={inp.cppMonthlyAmount} step={50} onChange={(v) => set({ cppMonthlyAmount: v })} />
@@ -193,7 +193,7 @@ function renderSection(id: string, ctx: {
       );
     case 'events':
       return (
-        <Section id="events" title="Cash Events">
+        <Section id="events" title="Cash Events" hint="cash-events">
           <p className="text-[12.5px] leading-relaxed text-slate-500">
             {(inp.events ?? []).length} event{(inp.events ?? []).length === 1 ? '' : 's'} on the plan
             {(inp.events ?? []).length > 0 ? ` — ${(inp.events ?? []).map(e => e.label || 'event').join(', ')}` : ''}.
@@ -203,7 +203,7 @@ function renderSection(id: string, ctx: {
       );
     case 'spending':
       return (
-        <Section id="spending" title="Spending Phases">
+        <Section id="spending" title="Spending Phases" hint="spending-phases">
           <p className="text-[12px] text-slate-500">Base spending is the "Spend a year" lever above. Phases scale it by age (go-go / slow-go / no-go).</p>
           {bands.length === 0 && <p className="text-[12.5px] text-slate-400">No phases — spending stays flat.</p>}
           <div className="space-y-2">
@@ -228,7 +228,7 @@ function renderSection(id: string, ctx: {
       );
     case 'withdrawal':
       return (
-        <Section id="withdrawal" title="Withdrawal Strategy">
+        <Section id="withdrawal" title="Withdrawal Strategy" hint="withdrawal-order">
           <p className="text-[12px] text-slate-500">The order accounts are drawn down.</p>
           <ol className="space-y-1.5">
             {order.map((acc, i) => (
@@ -246,7 +246,7 @@ function renderSection(id: string, ctx: {
       );
     case 'debts':
       return (
-        <Section id="debts" title="Debts">
+        <Section id="debts" title="Debts" hint="debts">
           <p className="text-[12.5px] leading-relaxed text-slate-500">
             Mortgages and consumer debts raise yearly withdrawals until paid off. Manage them in the stable app\'s Debts section; the verdict here already counts the payments.
           </p>
@@ -254,7 +254,7 @@ function renderSection(id: string, ctx: {
       );
     case 'home':
       return (
-        <Section id="home" title="Home Equity">
+        <Section id="home" title="Home Equity" hint="home-equity">
           {inp.reverseMortgage?.enabled ? (
             <div className="grid grid-cols-2 gap-3">
               <Num label="Home value" value={inp.reverseMortgage.homeValue} step={5000} onChange={(v) => set({ reverseMortgage: { ...inp.reverseMortgage!, homeValue: v } })} />
@@ -267,13 +267,13 @@ function renderSection(id: string, ctx: {
       );
     case 'rdsp':
       return (
-        <Section id="rdsp" title="RDSP (Disability Savings)">
+        <Section id="rdsp" title="RDSP (Disability Savings)" hint="rdsp">
           <p className="text-[12.5px] text-slate-500">An RDSP is enabled on this plan. Grants, bonds and withdrawals are configured in the stable app\'s RDSP section.</p>
         </Section>
       );
     case 'fhsa':
       return (
-        <Section id="fhsa" title="FHSA (First Home Savings)">
+        <Section id="fhsa" title="FHSA (First Home Savings)" hint="fhsa">
           <p className="text-[12.5px] text-slate-500">An FHSA is enabled — contributions accumulate and transfer to the RRSP at retirement. Configured in the stable app\'s FHSA section.</p>
         </Section>
       );

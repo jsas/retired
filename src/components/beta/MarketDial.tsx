@@ -12,6 +12,7 @@ export function MarketDial({ value, onChange }: { value: number; onChange: (v: n
     <div className="w-full md:w-56">
       <Fader
         label="Markets"
+        help="expected-return"
         value={Math.round(value * 1000) / 10}
         min={ranges.returnMin * 100}
         max={ranges.returnMax * 100}

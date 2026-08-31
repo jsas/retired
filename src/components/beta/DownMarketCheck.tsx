@@ -8,6 +8,7 @@ import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { BLUE, RED_DOT } from '../../design/tokens';
+import { HelpHint } from '../../design/primitives';
 
 /** The down-market return the check stress-tests against (1.2%). */
 export const DOWN_MARKET_RETURN = 0.012;
@@ -30,6 +31,7 @@ export function DownMarketCheck({ inputs, config }: { inputs: RetirementInputs; 
         <span className="text-[13px] font-medium text-slate-700">
           {check.holds ? 'Down-market check' : 'Down-market warning'}
         </span>
+        <HelpHint topic="down-market-check" />
       </div>
       <p className="num mt-1.5 text-[11.5px] leading-relaxed text-slate-500">
         {check.holds

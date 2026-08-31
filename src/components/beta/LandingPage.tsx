@@ -2,13 +2,14 @@
 // starter plan, the engine answers "does your money outlast you?", and two
 // doors open: the dashboard, or keep editing the details. Nothing leaves the
 // browser. This is the f7 landing (f7-final.html) rebuilt on the real engine.
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { INK, BLUE, RED_TEXT } from '../../design/tokens';
 import { Link } from './nav';
+import { BetaPage, type VerdictChip } from './BetaPage';
 
 interface Answer {
   currentAge?: number;
@@ -93,9 +94,13 @@ function buildPlan(a: Answer): RetirementInputs {
   };
 }
 
-export function LandingPage({ config, onBuild }: {
+export function LandingPage({ config, onBuild, chip, assistant }: {
   config: AppConfig;
   onBuild: (inputs: RetirementInputs) => void;
+  /** The persistent verdict chip + assistant, so the landing sits in the same
+   *  chrome as the rest of the site and every page is one click away. */
+  chip: VerdictChip;
+  assistant?: ReactNode;
 }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answer>({});
@@ -121,13 +126,15 @@ export function LandingPage({ config, onBuild }: {
   const lastsLabel = holds ? `${plan?.maxAge}` : `${results?.depletionAge ?? '—'}`;
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-5 pb-40 pt-10">
-      {/* brand */}
-      <div className="flex items-baseline gap-2">
-        <span className="flex h-6 w-6 items-center justify-center bg-slate-900 text-[9px] font-bold text-white">RE:</span>
-        <span className="text-[15px] font-semibold tracking-tight text-slate-900">tired</span>
-        <span className="text-[12px] text-slate-400">— knows if your money outlasts you</span>
-      </div>
+    <BetaPage chip={chip} assistant={assistant} title="Welcome">
+    <div className="mx-auto flex w-full max-w-2xl flex-col px-1 pb-40 pt-6">
+      {/* the escape — the whole site is up in the header; this is the fast door */}
+      <p className="mb-6 text-[12px] text-slate-400">
+        New here? Five questions below build your first plan.{' '}
+        <Link view="projection" className="font-medium text-blue-700 hover:underline">
+          Skip to the dashboard →
+        </Link>
+      </p>
 
       {/* the conversation */}
       <div className="mt-10 space-y-5">
@@ -213,6 +220,7 @@ export function LandingPage({ config, onBuild }: {
         </div>
       )}
     </div>
+    </BetaPage>
   );
 }
 

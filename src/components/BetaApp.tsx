@@ -11,7 +11,7 @@ import type { RetirementInputs, RetirementResults } from '@retired/engine-core/r
 import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
-import { VerdictHero, Panel, Fader, Footnote } from '../design/primitives';
+import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
 import { cls } from '../design/tokens';
 import { BetaPage, type VerdictChip } from './beta/BetaPage';
 import { ContourMap } from './beta/ContourMap';
@@ -82,6 +82,7 @@ export function BetaApp({
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="min-w-0 flex-1">
             <VerdictHero
+              eyebrow={<>The verdict <HelpHint topic="verdict" /></>}
               verdict={v.text}
               sub={
                 v.holds
@@ -98,7 +99,7 @@ export function BetaApp({
           </div>
         </div>
 
-        <Panel label="The ground your plan stands on" action={
+        <Panel label="The ground your plan stands on" hint="contour-map" action={
           <span className="text-[11px] text-slate-400">drag the dot, or use the faders</span>
         }>
           <div className="grid gap-8 lg:grid-cols-[1.6fr_1fr]">
@@ -129,11 +130,11 @@ export function BetaApp({
           </div>
         </Panel>
 
-        <Panel label="Your life on one line — this exact plan">
+        <Panel label="Your life on one line — this exact plan" hint="life-timeline">
           <LifeTimeline inputs={inputs} breakdown={breakdown} />
         </Panel>
 
-        <Panel label="The receipts">
+        <Panel label="The receipts" hint="evidence-row">
           <EvidenceRow inputs={inputs} results={results} breakdown={breakdown} />
         </Panel>
 

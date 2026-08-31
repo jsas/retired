@@ -40,9 +40,10 @@ export function BetaPage({ title, chip, actions, assistant, children }: {
     <div className="flex min-h-screen flex-col bg-white text-slate-800">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-12 max-w-5xl items-center gap-1 px-4">
-          <Link view="projection" className="flex h-6 w-6 shrink-0 items-center justify-center bg-slate-900 text-[10px] font-bold text-white" aria-label="Dashboard">
+          <Link view="welcome" className="flex h-6 w-6 shrink-0 items-center justify-center bg-slate-900 text-[10px] font-bold text-white" aria-label="Home — the welcome">
             RE:
           </Link>
+          <Link view="projection" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">Dashboard</Link>
 
           <Dropdown label="Details" wide>
             <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">

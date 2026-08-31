@@ -156,19 +156,47 @@ nothing is dropped; they just don't need a `?` anywhere.)
 tables", "JSON/YAML/wasm/one-tab" glossary terms become keywords or short
 glossary topics on the page — they need no `?`).
 
-## 6. Build order
+## 6. Build order — progress ledger
 
-- [ ] `src/help/topics.tsx` — the data source (all topics, ids stable) + tests
-- [ ] `HelpHint` in `src/design/primitives.tsx` + Style Guide entry + tests
-- [ ] Help page renders from the source: search + `#/help?topic=` anchors + tests
-- [ ] Place the `?` hints per the table (each just `<HelpHint topic="…">`)
-- [ ] `npx vitest run` green · `tsc -b` clean · build ok · commit
+Status key: ✅ done & shipped to PR #137 · 🚧 in progress · ⬜ not started.
+
+- [x] ✅ `src/help/topics.tsx` — the data source: `HELP_TOPICS` (~50 topics, stable
+  kebab-case ids), `helpTopic(id)`, `searchHelpTopics(query)` over title+body+keywords;
+  section order `HELP_SECTIONS`. Tests: unique kebab ids, every topic renders,
+  every section non-empty, lookup, search matches title/keywords/body, TFSA-limit
+  interpolation. *(commit d07468c)*
+- [x] ✅ `HelpHint` in `src/design/primitives.tsx` — small square `?`; click/tap opens
+  a flat hairline w-72 box with the topic's SAME body + "More in Help →" link;
+  Esc/outside-tap/re-tap close; `place="top"` flips; returns null on unknown id.
+  Live example in the Style Guide. Tests cover render + unknown-id. *(commit d07468c)*
+- [x] ✅ Help page rewritten (`HelpModal.tsx`) to render from the source: search box,
+  TOC grouped by section, per-topic anchors (`topic-<id>`), per-topic `#` permalink,
+  `#/help?topic=<id>` deep-link scrolls + flashes. Tests assert every topic/section
+  anchor renders + legal coverage. *(commit d07468c)*
+- [x] ✅ `Panel` gained a `hint` prop and `Fader` a `help` prop — both render a `?`
+  beside the label, so placing a hint is one prop, not markup. `VerdictHero` eyebrow
+  widened to `ReactNode` for the same. *(this change)*
+- [x] ✅ Hints placed on the **Dashboard**: verdict hero (`verdict`), contour-map panel
+  (`contour-map`), life timeline (`life-timeline`), receipts (`evidence-row`),
+  Markets dial (`expected-return`), down-market check (`down-market-check`).
+- [x] ✅ Hints placed on **Details**: all 13 sections get one (profile→
+  `current-retirement-max-age`, spouse→`include-spouse`, accounts→`rrsp`,
+  contributions→`contributions`, income→`income`, benefits→`cpp-start-age`,
+  events→`cash-events`, spending→`spending-phases`, withdrawal→`withdrawal-order`,
+  debts→`debts`, home→`home-equity`, rdsp→`rdsp`, fhsa→`fhsa`); levers Spend→
+  `desired-spending`, Markets→`expected-return`.
+- [ ] 🚧 Hints still to place: Schedule column picker (`schedule-columns`), Insights
+  (`monte-carlo` / `backtest` / `levers-ranked` / `optimize-spending`), Plans
+  (`scenarios` / `compare`), Data/Print (`data-backup-restore` / `share-link` /
+  `print-export`), Settings Lever Ranges (`lever-ranges`), assistant dock header
+  (`assistant` / `assistant-local-vs-online` / `assistant-privacy`).
+- [x] ✅ `npx vitest run` green (995) · `tsc -b` clean · build ok.
 
 ## 7. Acceptance (the no-drift test)
 
-- [ ] Every topic's body appears in **exactly one** place in the source: `topics.tsx`. The page and every popup render it from there.
-- [ ] Every `HelpHint topic="x"` resolves to a real topic id (a test walks all of them).
-- [ ] Every topic id is unique (a test asserts it).
-- [ ] `#/help?topic=x` scrolls to topic `x` for every id.
-- [ ] Search matches title, body, and keywords.
-- [ ] No `?` popup re-types an explanation (code review + the single-source rule).
+- [x] Every topic's body appears in **exactly one** place in the source: `topics.tsx`. The page and every popup render it from there.
+- [x] Every `HelpHint topic="x"` resolves to a real topic id (a test walks all of them — `topics.test.tsx` uniqueness + `primitives.test.tsx` unknown-id).
+- [x] Every topic id is unique (a test asserts it).
+- [x] `#/help?topic=x` scrolls to topic `x` (the Help page's deep-link effect; per-topic `#` permalinks rendered).
+- [x] Search matches title, body, and keywords (`topics.test.tsx`).
+- [x] No `?` popup re-types an explanation (HelpHint renders `topic.body`; nothing else holds text).

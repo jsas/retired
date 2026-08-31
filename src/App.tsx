@@ -863,6 +863,8 @@ function App() {
         return (
           <LandingPage
             config={config}
+            chip={chip}
+            assistant={assistantDock}
             onBuild={(plan) => {
               setInputs(JSON.parse(JSON.stringify(plan)));
               setHasUnsavedChanges(true);
