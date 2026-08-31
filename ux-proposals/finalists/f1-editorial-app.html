@@ -12,7 +12,7 @@
 
   /* ── small faders — square thumbs, hairline tracks ── */
   input[type=range].fader {
-    -webkit-appearance:none; appearance:none; width:100%; height:18px;
+    -webkit-appearance:none; appearance:none; width:100%; height:24px; /* finger-friendly hit strip */
     background:transparent; cursor:pointer; outline:none;
   }
   input[type=range].fader::-webkit-slider-runnable-track {
@@ -43,15 +43,15 @@
 
 <!-- ═══════════ APP CHROME — plain text links, hairline bar ═══════════ -->
 <header class="sticky top-0 z-40 border-b border-neutral-200 bg-white">
-  <div class="mx-auto flex h-13 max-w-6xl items-center gap-5 px-4 md:px-6 py-3">
+  <div class="mx-auto flex h-13 max-w-6xl items-center gap-5 max-sm:gap-2.5 px-4 max-sm:px-3 md:px-6 py-3">
 
-    <a href="f1-editorial.html" class="flex items-center gap-2 text-sm font-semibold" title="Back to the landing page">
+    <a href="f1-editorial.html" class="flex shrink-0 items-center gap-2 text-sm font-semibold" title="Back to the landing page">
       <div class="flex h-6 w-6 items-center justify-center bg-neutral-900 text-xs font-bold text-white">RE:</div>
-      <span>tired</span>
+      <span class="hidden sm:inline">tired</span>
     </a>
 
     <!-- scenario switcher -->
-    <select class="cursor-pointer appearance-none bg-transparent py-1 pr-5 text-xs text-neutral-600 hover:text-neutral-900 border-b border-transparent hover:border-neutral-300"
+    <select class="min-w-0 max-sm:w-[120px] cursor-pointer appearance-none bg-transparent py-1 pr-5 text-xs text-neutral-600 hover:text-neutral-900 border-b border-transparent hover:border-neutral-300"
             style="background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 3l3 3 3-3' fill='none' stroke='%23737373' stroke-width='1.5'/%3E%3C/svg%3E&quot;);background-repeat:no-repeat;background-position:right .1rem center;"
             title="Scenarios — switch, compare, roll back revisions">
       <option>Martin &amp; Sasha — base plan</option>

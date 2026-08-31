@@ -21,7 +21,7 @@
 
   /* ── SMALL faders (w2 pattern) — square thumbs to match the flat rule ── */
   input[type=range].fader {
-    -webkit-appearance:none; appearance:none; width:100%; height:16px;
+    -webkit-appearance:none; appearance:none; width:100%; height:24px; /* finger-friendly hit strip */
     background:transparent; cursor:pointer; outline:none;
   }
   input[type=range].fader::-webkit-slider-runnable-track {
@@ -45,6 +45,33 @@
   .dropdown { position: relative; }
   .dropdown-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 50; }
   .dropdown.open .dropdown-panel { display: block; }
+  /* on phones the big panels pin to the viewport — never hang off an edge */
+  @media (max-width: 480px) {
+    .dropdown-panel.wide { min-width: 0; width: auto; position: fixed; top: calc(3rem + 4px); left: 1rem; right: 1rem; max-height: 70vh; overflow-y: auto; }
+  }
+  /* header squeeze for small screens — the Assistant button is the star, it always stays */
+  @media (max-width: 440px) {
+    .dd-btn { padding-left: .5rem; padding-right: .5rem; }
+    #btnAssistant { gap: .375rem; padding-left: .5rem; padding-right: .5rem; }
+    #vchip { gap: .375rem; padding-left: .5rem; }
+    #vchip .num { font-size: 12px; }
+  }
+
+  /* Assistant dock — sticky right panel on desktop, full-screen sheet on phones.
+     On phones it's hidden until you tap Assistant (the conversation continues
+     there — the app works without it, the assistant never traps you). */
+  #dock { display: none; }
+  #dock.open {
+    display: flex; flex-direction: column;
+    position: fixed; inset: 0; z-index: 60; width: 100%; height: 100%;
+  }
+  @media (min-width: 1024px) {
+    #dock {
+      display: flex; flex-direction: column;
+      position: sticky; top: 3rem; height: calc(100vh - 3rem); width: 340px; flex-shrink: 0;
+    }
+    #dock.closed { display: none; }
+  }
 
   /* chat message entrance in the dock */
   @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
@@ -86,7 +113,7 @@
       <button class="dd-btn flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
         Details <span class="text-[10px] text-slate-400">▾</span>
       </button>
-      <div class="dropdown-panel min-w-[300px] border border-slate-200 bg-white p-2">
+      <div class="dropdown-panel wide min-w-[300px] border border-slate-200 bg-white p-2">
         <p class="px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wider text-slate-400">The full plan — every section one click away</p>
         <div class="grid grid-cols-2 gap-x-1 text-[12.5px]">
           <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900">Personal Profile</a>
@@ -324,7 +351,7 @@
 
   <!-- ── RIGHT: THE ASSISTANT, DOCKED. Flat panel, hairline left border,
        square message blocks with left accent borders — no bubbles. ── -->
-  <aside id="dock" class="w-[340px] shrink-0 border-l border-slate-200 bg-white hidden lg:flex lg:flex-col sticky top-12 h-[calc(100vh-3rem)]">
+  <aside id="dock" class="w-[340px] shrink-0 border-l border-slate-200 bg-white">
     <div class="flex items-center gap-2.5 px-4 h-11 border-b border-slate-200">
       <div class="w-5 h-5 bg-slate-900 flex items-center justify-center text-[8px] font-bold text-white">RE</div>
       <div class="text-[13px] font-semibold">Assistant</div>
@@ -838,19 +865,26 @@
     }
   });
 
-  /* dock show/hide */
+  /* dock show/hide — phones: Assistant opens a full-screen sheet, × closes it.
+     Desktop: the dock starts open (the assistant came along from the landing);
+     Assistant toggles it back, × closes it. */
+  function ensureDockSeeded() { if (!dock.dataset.seeded) { dock.dataset.seeded = '1'; seedDock(); } }
   el('btnAssistant').addEventListener('click', function () {
-    dock.classList.toggle('lg:flex');
-    dock.classList.toggle('hidden');
-    if (!dock.dataset.seeded) { dock.dataset.seeded = '1'; seedDock(); }
+    if (window.innerWidth >= 1024) {
+      dock.classList.toggle('closed');
+      if (!dock.classList.contains('closed')) ensureDockSeeded();
+    } else {
+      ensureDockSeeded();
+      dock.classList.add('open');
+    }
   });
   el('dockClose').addEventListener('click', function () {
-    dock.classList.add('hidden');
-    dock.classList.remove('lg:flex');
+    dock.classList.remove('open');
+    dock.classList.add('closed');
   });
 
   /* the dock starts open on wide screens — the assistant came along from the landing */
-  if (window.innerWidth >= 1024) { dock.dataset.seeded = '1'; seedDock(); }
+  if (window.innerWidth >= 1024) ensureDockSeeded();
 
   render();
 })();

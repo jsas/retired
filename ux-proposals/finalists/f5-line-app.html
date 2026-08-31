@@ -16,9 +16,10 @@
   #dot { cursor: grab; }
 
   /* small faders — 4px track, 14px thumb, square */
+  /* 24px tall for fingers; the visible line is the 4px content strip (background-clip). */
   input[type=range].fader {
     -webkit-appearance: none; appearance: none;
-    width: 100%; height: 4px; background: #e5e5e5; outline: none; cursor: pointer;
+    width: 100%; height: 24px; padding: 10px 0; background: #e5e5e5; background-clip: content-box; outline: none; cursor: pointer;
   }
   input[type=range].fader::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
@@ -35,6 +36,16 @@
   .dropdown { position: relative; }
   .dropdown-panel { display: none; position: absolute; top: calc(100% + 2px); left: 0; z-index: 50; }
   .dropdown.open .dropdown-panel { display: block; }
+  /* on phones the big panels pin to the viewport — never hang off an edge */
+  @media (max-width: 480px) {
+    .dropdown-panel.wide { min-width: 0; width: auto; position: fixed; top: calc(3.5rem + 2px); left: 1rem; right: 1rem; max-height: 70vh; overflow-y: auto; }
+  }
+  /* header squeeze for small screens: tighter buttons + verdict chip, nothing wraps */
+  @media (max-width: 440px) {
+    .dd-btn { padding-left: .5rem; padding-right: .5rem; }
+    #vchip { gap: .375rem; padding-left: .5rem; }
+    #vchip .num { font-size: 12px; }
+  }
 
   ::selection { background: #dbeafe; }
 </style>
@@ -64,7 +75,7 @@
       <button class="dd-btn flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100">
         Details <span class="text-[10px] text-neutral-400">▾</span>
       </button>
-      <div class="dropdown-panel min-w-[300px] border border-neutral-200 bg-white p-2">
+      <div class="dropdown-panel wide min-w-[300px] border border-neutral-200 bg-white p-2">
         <p class="px-3 pt-2 pb-1.5 text-[10px] uppercase tracking-wider text-neutral-400">The full plan — every section one click away</p>
         <div class="grid grid-cols-2 gap-x-1 text-[12.5px]">
           <a href="#" class="px-3 py-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Personal Profile</a>

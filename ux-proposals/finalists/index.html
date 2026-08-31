@@ -180,7 +180,18 @@
     ' padding: 6px 8px; font-size: 12px; font-family: inherit; color: #334155; resize: vertical; min-height: 40px; background: #f8fafc; }' +
     '.wnote textarea:focus { outline: none; border-color: #94a3b8; background: #fff; }' +
     '.wnote .wl { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8; display: block; margin-bottom: 3px; }' +
-    '.tile.hidden-weak { display: none; }';
+    '.tile.hidden-weak { display: none; }' +
+    '.wratebar button[data-preview] { color: #475569; }' +
+    '#pv-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.6); z-index: 100; display: none; align-items: center; justify-content: center; }' +
+    '#pv-overlay.show { display: flex; }' +
+    '.pv-box { background: #fff; display: flex; flex-direction: column; }' +
+    '.pv-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }' +
+    '.pv-bar .pv-title { font-weight: 700; margin-right: auto; color: #0f172a; }' +
+    '.pv-bar button, .pv-open { border: 1px solid #e2e8f0; background: #f8fafc; padding: 3px 8px; font-size: 11px; cursor: pointer; color: #475569; }' +
+    '.pv-bar button.on { background: #0f172a; border-color: #0f172a; color: #fff; }' +
+    '.pv-open { text-decoration: none; }' +
+    '.pv-stage { overflow: hidden; }' +
+    '.pv-frame { border: 0; display: block; transform-origin: top left; background: #fff; pointer-events: auto; }';
   document.head.appendChild(st);
 
   // inject ratebars into every tile card
@@ -198,6 +209,7 @@
       '<button data-rate="keep" title="worth building">Keep</button>' +
       '<button data-rate="meh" title="has a piece worth stealing">Meh</button>' +
       '<button data-rate="no" title="drop it">No</button>' +
+      '<button data-preview title="see it at phone size — finger test">📱 phone</button>' +
       '<div class="wnote"><span class="wl">Why?</span>' +
       '<textarea placeholder="what works, what to change, what to steal…" rows="2"></textarea></div>';
     a.appendChild(bar);
@@ -211,7 +223,7 @@
     cards.forEach(function (a) {
       var bar = a.querySelector('.wratebar');
       if (!bar || bar.dataset.file !== f) return;
-      bar.querySelectorAll('button').forEach(function (btn) {
+      bar.querySelectorAll('button[data-rate]').forEach(function (btn) {
         btn.classList.toggle('on', d.rate === btn.dataset.rate);
       });
       var wn = bar.querySelector('.wnote');
@@ -224,7 +236,14 @@
   document.querySelectorAll('.wratebar').forEach(function (bar) {
     var f = bar.dataset.file;
     refreshCard(f);
-    bar.querySelectorAll('button').forEach(function (btn) {
+    bar.querySelectorAll('button[data-preview]').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openPreview(f, titles[f]);
+      });
+    });
+    bar.querySelectorAll('button[data-rate]').forEach(function (btn) {
       btn.addEventListener('click', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
@@ -256,6 +275,86 @@
       ev.stopPropagation();
     }
   }, true);
+
+  /* ── Phone / tablet / desktop preview ──────────────────────────────
+     Renders the actual page in a real iframes at a chosen device width so
+     the media queries fire for true — you can scroll and drag inside it
+     (a finger test on a real phone is still the final word, but this is
+     the fast look). Scales down to fit the window. */
+  var DEVICES = {
+    phone:  { w: 390,  h: 844,  label: 'Phone · 390' },
+    tablet: { w: 834,  h: 1112, label: 'Tablet · 834' },
+    desk:   { w: 1280, h: 800,  label: 'Desktop · 1280' }
+  };
+  var pv = { file: null, dev: 'phone', frame: null };
+
+  function buildPreview() {
+    var ov = document.createElement('div');
+    ov.id = 'pv-overlay';
+    ov.innerHTML =
+      '<div class="pv-box">' +
+        '<div class="pv-bar">' +
+          '<span class="pv-title">—</span>' +
+          '<button data-dev="phone" class="on">📱 phone</button>' +
+          '<button data-dev="tablet">▭ tablet</button>' +
+          '<button data-dev="desk">▢ desktop</button>' +
+          '<a class="pv-open" href="#" target="_blank">open ↗</a>' +
+          '<button data-close aria-label="close">✕</button>' +
+        '</div>' +
+        '<div class="pv-stage"><iframe class="pv-frame" title="preview"></iframe></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    pv.frame = ov.querySelector('.pv-frame');
+
+    ov.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (t === ov || (t.matches && t.matches('[data-close]'))) { closePreview(); return; }
+      if (t.matches && t.matches('[data-dev]')) {
+        pv.dev = t.getAttribute('data-dev');
+        ov.querySelectorAll('[data-dev]').forEach(function (b) { b.classList.toggle('on', b === t); });
+        layoutPreview();
+      }
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') closePreview();
+    });
+    window.addEventListener('resize', function () { if (pv.file) layoutPreview(); });
+  }
+
+  function layoutPreview() {
+    var dev = DEVICES[pv.dev];
+    var stage = pv.frame.parentElement;
+    // fit into the window with room for the bar + margins
+    var availW = window.innerWidth - 60;
+    var availH = window.innerHeight - 90;
+    var scale = Math.min(1, availW / dev.w, availH / dev.h);
+    pv.frame.style.width = dev.w + 'px';
+    pv.frame.style.height = dev.h + 'px';
+    pv.frame.style.transform = 'scale(' + scale + ')';
+    stage.style.width = Math.round(dev.w * scale) + 'px';
+    stage.style.height = Math.round(dev.h * scale) + 'px';
+    pv.frame.style.pointerEvents = 'auto';
+  }
+
+  function openPreview(f, title) {
+    if (!pv.frame) buildPreview();
+    pv.file = f;
+    var ov = document.getElementById('pv-overlay');
+    ov.querySelector('.pv-title').textContent = (title || f) + ' — ' + f;
+    ov.querySelector('.pv-open').setAttribute('href', f);
+    pv.frame.setAttribute('src', f);
+    ov.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    layoutPreview();
+  }
+  function closePreview() {
+    var ov = document.getElementById('pv-overlay');
+    if (!ov) return;
+    ov.classList.remove('show');
+    if (pv.frame) pv.frame.setAttribute('src', 'about:blank');
+    pv.file = null;
+    document.body.style.overflow = '';
+  }
 
   function updateSummary() {
     var el = document.getElementById('wrate-summary');

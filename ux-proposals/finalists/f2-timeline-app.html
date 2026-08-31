@@ -14,10 +14,11 @@
   #map.grabbing { cursor: grabbing; }
   #dot { cursor: grab; }
 
-  /* compact faders — small, quiet, self-explaining. Square track, square thumb. */
+  /* compact faders — small, quiet, self-explaining. Square track, square thumb.
+     24px tall for fingers; the visible line is the 4px content strip (background-clip). */
   input[type=range].fader {
     -webkit-appearance: none; appearance: none;
-    height: 3px; background: #e2e8f0; outline: none; cursor: pointer;
+    height: 24px; padding: 10px 0; background: #e2e8f0; background-clip: content-box; outline: none; cursor: pointer;
   }
   input[type=range].fader::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
@@ -34,6 +35,16 @@
   .dropdown { position: relative; }
   .dropdown-panel { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; }
   .dropdown.open .dropdown-panel { display: block; }
+  /* on phones the big panels pin to the viewport — never hang off an edge */
+  @media (max-width: 480px) {
+    .dropdown-panel.wide { min-width: 0; width: auto; position: fixed; top: calc(3.5rem + 4px); left: 1rem; right: 1rem; max-height: 70vh; overflow-y: auto; }
+  }
+  /* header squeeze for small screens: tighter buttons + verdict chip, nothing wraps */
+  @media (max-width: 440px) {
+    .dd-btn { padding-left: .5rem; padding-right: .5rem; }
+    #vchip { gap: .375rem; padding-left: .5rem; }
+    #vchip .num { font-size: 12px; }
+  }
 
   /* verdict badge square */
   .vdot { transition: background-color .3s; }
@@ -54,7 +65,7 @@
        Verdict      → pinned top-right, always visible
      ══════════════════════════════════════════════════════════════════ -->
 <header class="sticky top-0 z-40 border-b border-slate-200 bg-[#fbfbfa]/95 backdrop-blur">
-  <div class="flex h-14 items-center gap-1 px-4 md:px-6">
+  <div class="flex h-14 items-center gap-1 max-sm:gap-0.5 px-4 max-sm:px-3 md:px-6">
 
     <!-- brand → back to the landing -->
     <a href="f2-timeline.html" class="mr-2 flex shrink-0 items-center gap-2 text-sm font-semibold text-slate-900">
@@ -67,7 +78,7 @@
       <button class="dd-btn flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-900/5 hover:text-slate-900">
         Details <span class="text-[10px] text-slate-400">▾</span>
       </button>
-      <div class="dropdown-panel min-w-[300px] border border-slate-200 bg-white p-2">
+      <div class="dropdown-panel wide min-w-[300px] border border-slate-200 bg-white p-2">
         <p class="px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wider text-slate-400">The full plan — every section one click away</p>
         <div class="grid grid-cols-2 gap-x-1 text-[12.5px]">
           <a href="#" class="px-3 py-1.5 text-slate-600 hover:bg-slate-900/5 hover:text-slate-900">Personal Profile</a>
