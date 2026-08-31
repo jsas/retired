@@ -50,16 +50,23 @@ function serve() {
   const root = resolve(here);
   return new Promise((resolve) => {
     const server = createServer((req, res) => {
-      const url = typeof req.url === 'string' ? req.url.split('?')[0] : '';
-      const urlPath = url === '/' ? '/dashboard.html' : url;
-      if (!/^\/[A-Za-z0-9._\-/]*$/.test(urlPath) || urlPath.includes('..')) {
-        res.writeHead(403); res.end('forbidden'); return;
+      try {
+        const rawUrl = req.url ?? '';
+        const url = String(rawUrl).split('?')[0];
+        const urlPath = url === '/' ? '/dashboard.html' : url;
+        if (!urlPath || typeof urlPath !== 'string') { res.writeHead(403); res.end('forbidden'); return; }
+        if (!/^\/[A-Za-z0-9._\-/]*$/.test(urlPath) || urlPath.includes('..')) {
+          res.writeHead(403); res.end('forbidden'); return;
+        }
+        const file = resolve(root, `.${urlPath}`);
+        if (typeof file !== 'string' || !file.startsWith(root + sep)) { res.writeHead(403); res.end('forbidden'); return; }
+        if (!existsSync(file)) { res.writeHead(404); res.end('nope'); return; }
+        res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'text/plain' });
+        res.end(readFileSync(file));
+      } catch (e) {
+        console.error('[serve] error:', e.message);
+        res.writeHead(500); res.end('error');
       }
-      const file = resolve(root, `.${urlPath}`);
-      if (!file.startsWith(root + sep)) { res.writeHead(403); res.end('forbidden'); return; }
-      if (!existsSync(file)) { res.writeHead(404); res.end('nope'); return; }
-      res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'text/plain' });
-      res.end(readFileSync(file));
     });
     resolve(server.listen(SERVE_PORT));
   });
