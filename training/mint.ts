@@ -397,8 +397,18 @@ const MUTATION_SPECS: MutationSpec[] = [
   {
     tool: 'propose_market_periods',
     questions: [
-      () => 'Actually, forget that crash scenario — go back to the flat assumption.',
-      () => 'Clear that market hypothesis — use the constant return again.',
+      () => 'Model a boom — markets up 15% when I\'m 75.',
+      () => 'What if there\'s a strong year in my mid-70s?',
+    ],
+    args: () => ({ periods: [{ age: 75, return: 0.15 }] }),
+    approvedReply: () => 'Boom year added — the projection follows that one-year lift, then eases back to your flat expected return. Want me to run it?',
+    rejectedReply: () => 'Okay — hypothesis left out.',
+  },
+  {
+    tool: 'propose_market_periods',
+    questions: [
+      () => 'Clear the market hypothesis — back to flat constants.',
+      () => 'Actually, get rid of the crash scenario.',
     ],
     args: () => ({ periods: [] }),
     approvedReply: () => 'Cleared — back to your flat expected return for the whole horizon.',
