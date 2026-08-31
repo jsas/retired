@@ -29,9 +29,8 @@ export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable' | 'rdsp';
  * the source: earned kinds (employment / self-employment) build RRSP room and
  * stack for tax like wages; pension is eligible for pension-splitting and
  * carries a pension adjustment that reduces RRSP room; rental is taxable
- * investment income. Phase 1 only READS 'pension' and 'employment' kinds —
- * 'selfEmployment' and 'rental' are accepted by the schema (so the register's
- * shape is final) but have no engine effect until the full income model lands.
+ * investment income (no RRSP room, no pension-splitting). All four kinds are
+ * live in the engine (issue #119).
  */
 export type IncomeKind = 'employment' | 'pension' | 'selfEmployment' | 'rental';
 
@@ -406,6 +405,10 @@ export interface YearlyBreakdown {
   oasIncome: number;
   gisIncome: number;
   pensionIncome: number; // DB / bridge pension gross income this year (taxable)
+  // Rental (taxable investment income) gross this year. Reported separately
+  // from pensionIncome because rental is NOT eligible for pension-splitting.
+  // Optional so older fixtures compile; the engine sets it (0 when no rental).
+  rentalIncome?: number;
   // Employment (semi-retirement work) this year. gross stacks for tax; net is
   // the after-tax amount saved and/or used to top up spending. Optional so
   // older fixtures compile; the engine always sets them (0 when not working).
@@ -618,11 +621,16 @@ export function calculatePerson(
         })()
       : order;
 
-  // The unified income register, split by kind into the two lists the rest of
-  // the run consumes. (Phase 1 only reads 'pension' and 'employment' kinds.)
+  // The unified income register, split by kind into the lists the rest of the
+  // run consumes. `employmentList` is the EARNED list — employment AND
+  // self-employment both stack for tax like wages, build RRSP room, and save
+  // their after-tax net into a destination account. `rentalList` is taxable
+  // investment income: no RRSP room, no savings vehicle — its net lands in
+  // taxable each year, like a pension (but rental does NOT pension-split).
   const incomeSources: IncomeSource[] = Array.isArray(income) ? income : [];
   const pensionList: IncomeSource[] = incomeSources.filter(s => s.kind === 'pension');
-  const employmentList: IncomeSource[] = incomeSources.filter(s => s.kind === 'employment');
+  const employmentList: IncomeSource[] = incomeSources.filter(s => s.kind === 'employment' || s.kind === 'selfEmployment');
+  const rentalList: IncomeSource[] = incomeSources.filter(s => s.kind === 'rental');
 
   const cushionRate = config.engine.cashCushionRate;
   const rrifAge = config.engine.rrifConversionAge;
@@ -749,8 +757,10 @@ export function calculatePerson(
       if (p.endAge != null && spouseAge > p.endAge) continue;
       fixed += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
-    // The spouse's employment income counts toward the couple's GIS base too.
-    for (const e of (spouseCtx.income ?? []).filter(s => s.kind === 'employment')) {
+    // The spouse's earned + rental income counts toward the couple's GIS base
+    // too (self-employment is earned; rental is taxable investment income —
+    // both reduce the couple's GIS).
+    for (const e of (spouseCtx.income ?? []).filter(s => s.kind === 'employment' || s.kind === 'selfEmployment' || s.kind === 'rental')) {
       if (spouseAge < e.startAge) continue;
       if (e.endAge != null && spouseAge > e.endAge) continue;
       fixed += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
@@ -1135,6 +1145,7 @@ export function calculatePerson(
     const yearCfg = configAt(age);
     let employmentGrossAccum = 0;
     let pensionGrossAccum = 0;
+    let rentalGrossAccum = 0;
     const employmentActiveAccum: Array<{ e: IncomeSource; gross: number }> = [];
     for (const e of employmentList) {
       if (age < e.startAge) continue;
@@ -1148,11 +1159,16 @@ export function calculatePerson(
       if (p.endAge != null && age > p.endAge) continue;
       pensionGrossAccum += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
-    // Marginal tax on the year's earned + pension income (no benefits yet
-    // pre-retirement). Apportioned pro-rata so each stream's net is its gross
-    // minus its share of the tax — the same convention the decumulation loop
-    // uses for employment.
-    const earningsGrossAccum = employmentGrossAccum + pensionGrossAccum;
+    for (const r of rentalList) {
+      if (age < r.startAge) continue;
+      if (r.endAge != null && age > r.endAge) continue;
+      rentalGrossAccum += r.annualAmount * (r.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+    // Marginal tax on the year's earned + pension + rental income (no benefits
+    // yet pre-retirement). Apportioned pro-rata so each stream's net is its
+    // gross minus its share of the tax — the same convention the decumulation
+    // loop uses for employment.
+    const earningsGrossAccum = employmentGrossAccum + pensionGrossAccum + rentalGrossAccum;
     const earningsTaxAccum = earningsGrossAccum > 0
       ? calculateTax(earningsGrossAccum, provinceCode, yearCfg).totalTax
       : 0;
@@ -1175,9 +1191,10 @@ export function calculatePerson(
       else { taxable += amt; taxableAcb += amt; accumDeposit.taxable += amt; }
     }
     // A pre-retirement pension (e.g. a bridge or early DB) is received income,
-    // not a savings vehicle — its whole net lands in taxable.
+    // not a savings vehicle — its whole net lands in taxable. Rental is the
+    // same: taxable investment income, net deposited to taxable.
     {
-      const amt = netOf(pensionGrossAccum);
+      const amt = netOf(pensionGrossAccum + rentalGrossAccum);
       if (amt > 0) { taxable += amt; taxableAcb += amt; accumDeposit.taxable += amt; }
     }
     // Registered transfer draws stack as income within the year so a second
@@ -1276,6 +1293,7 @@ export function calculatePerson(
       oasIncome: 0,
       gisIncome: 0,
       pensionIncome: pensionGrossAccum,
+      rentalIncome: rentalGrossAccum,
       employmentGross: employmentGrossAccum,
       employmentTax: employmentTaxAccum,
       employmentNet: employmentNetAccum,
@@ -1419,6 +1437,15 @@ export function calculatePerson(
       if (p.endAge != null && age > p.endAge) continue;
       pensionGross += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
+    // Rental income: taxable investment income, stacked with CPP/OAS/pension
+    // for tax and the clawbacks, but NOT eligible for pension-splitting. Its
+    // net lands in taxable below (it's income, not a savings vehicle).
+    let rentalGross = 0;
+    for (const r of rentalList) {
+      if (age < r.startAge) continue;
+      if (r.endAge != null && age > r.endAge) continue;
+      rentalGross += r.annualAmount * (r.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
 
     // Employment income: earned, so it stacks for tax like the benefits and is
     // taxed in the year it's earned (regardless of what the money is then used
@@ -1435,7 +1462,7 @@ export function calculatePerson(
       else { employmentSaveGross += amt; employmentSaveActive.push(e); }
     }
     const employmentGross = employmentTopUpGross + employmentSaveGross;
-    const otherGrossNoEmployment = cppGross + oasGross + pensionGross;
+    const otherGrossNoEmployment = cppGross + oasGross + pensionGross + rentalGross;
     const employmentTax = employmentGross > 0
       ? Math.max(0,
           calculateTax(otherGrossNoEmployment + employmentGross, provinceCode, yearConfig).totalTax
@@ -1446,7 +1473,7 @@ export function calculatePerson(
     const employmentTopUpNet = employmentGross > 0 ? employmentNet * (employmentTopUpGross / employmentGross) : 0;
     const employmentSaveNet = employmentGross > 0 ? employmentNet * (employmentSaveGross / employmentGross) : 0;
 
-    const otherGross = cppGross + oasGross + pensionGross;
+    const otherGross = cppGross + oasGross + pensionGross + rentalGross;
     // For all marginal-rate math below, benefits and employment stack together:
     // a registered draw or realized gain lands on TOP of the year's wages, so
     // grossing up on benefits alone would under-estimate withdrawal tax.
@@ -1561,7 +1588,7 @@ export function calculatePerson(
         const sp = spouseFixedIncomeAt(age);
         return gisAnnualCouple(
           registeredGross + capitalGains + rdspTaxable,
-          cppGross + pensionGross + employmentGross + sp.fixed + sp.partnerDraws,
+          cppGross + pensionGross + rentalGross + employmentGross + sp.fixed + sp.partnerDraws,
           sp.hasOas,
           yearConfig
         );
@@ -1825,6 +1852,7 @@ export function calculatePerson(
       oasIncome: oasGross,
       gisIncome: gisGross,
       pensionIncome: pensionGross,
+      rentalIncome: rentalGross,
       employmentGross,
       employmentTax,
       employmentNet,
@@ -2150,6 +2178,7 @@ export function combineHouseholdBreakdown(
       oasIncome: py.oasIncome + sy.oasIncome,
       gisIncome: py.gisIncome + sy.gisIncome,
       pensionIncome: py.pensionIncome + sy.pensionIncome,
+      rentalIncome: (py.rentalIncome ?? 0) + (sy.rentalIncome ?? 0),
       employmentGross: (py.employmentGross ?? 0) + (sy.employmentGross ?? 0),
       employmentTax: (py.employmentTax ?? 0) + (sy.employmentTax ?? 0),
       employmentNet: (py.employmentNet ?? 0) + (sy.employmentNet ?? 0),

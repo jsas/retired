@@ -45,9 +45,10 @@ export const cashEventSchema = z.object({
   to: transferEndpoint.optional(),
 }) satisfies z.ZodType<CashEvent>;
 
-// One entry in a person's income register (kind 'pension' / 'employment' read
-// by the engine in Phase 1; 'selfEmployment' / 'rental' accepted so the
-// register's shape is final). Replaces the legacy pensionSchema /
+// One entry in a person's income register. All four kinds are live in the
+// engine (issue #119): employment/selfEmployment are earned (build RRSP room,
+// save their net), pension is split-eligible retirement income, rental is
+// taxable investment income. Replaces the legacy pensionSchema /
 // employmentIncomeSchema pair.
 export const incomeSourceSchema = z.object({
   id: z.string(),

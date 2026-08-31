@@ -79,14 +79,14 @@ const proposeSpouseArgs = z.object({
 const proposeIncomeArgs = incomeSourceSchema
   .omit({ id: true })
   .extend({ rationale: z.string().optional() })
-  .describe('An income source to add: kind "pension" for a DB/bridge pension (set endAge to a number for a bridge, null for lifetime), kind "employment" for semi-/post-retirement work.');
+  .describe('An income source to add. kind "pension" = DB/bridge pension (split-eligible; endAge a number for a bridge, null for lifetime; optional pensionAdjustment reduces RRSP room). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room like a job). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible).');
 
 const manageIncomeArgs = z.object({
   action: z.enum(['update', 'remove']),
   target: z.string().min(1)
     .describe('Which income source: its id, or its label if unique (e.g. "Work DB").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending, savingsRate). endAge must be a number or explicit null. savingsRate (0–1) is the share of after-tax pay saved.'),
+    .describe('For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending, savingsRate, pensionAdjustment). endAge must be a number or explicit null. savingsRate (0–1) is the share of after-tax pay saved; pensionAdjustment is a DB pension\'s annual RRSP-room offset.'),
   rationale: z.string().optional(),
 });
 
@@ -293,7 +293,7 @@ export function toolSpecs(): ToolSpec[] {
       'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.',
       proposeSpouseArgs),
     spec('propose_income',
-      'PROPOSE adding an income source: kind "pension" for a DB/bridge pension (taxable income stacked with CPP/OAS), kind "employment" for earned work (before or after retirement). Employment is taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part, the rest treated as working-year living costs). A job starting before retirementAge now actually funds the plan. User confirms.',
+      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.',
       proposeIncomeArgs),
     spec('propose_spending_bands',
       'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.',
@@ -314,7 +314,7 @@ export function toolSpecs(): ToolSpec[] {
       'PROPOSE updating or REMOVING an existing cash event (by id or unique label). User confirms. Use propose_cash_event to add a new one.',
       manageCashEventArgs),
     spec('manage_income',
-      'PROPOSE updating or REMOVING an existing income source (pension or employment, by id or unique label). User confirms. Use propose_income to add a new one.',
+      'PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.',
       manageIncomeArgs),
     spec('remember',
       'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.',
