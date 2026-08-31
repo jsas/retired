@@ -6,6 +6,9 @@ import {
   resolveSpouseSource,
   baselineSpouse,
   eventEndpoints,
+  toHousehold,
+  fromHousehold,
+  enabledPeople,
 } from './householdTypes';
 import type { CashEvent } from './retirementEngine';
 import { baseInputs } from '../test/helpers';
@@ -62,6 +65,113 @@ describe('legacy ↔ unified converters', () => {
     // Parity: the fields the stripped spouse type never carried are present.
     expect(sp.cppAdjustedAmount).toBe(false);
     expect(Array.isArray(sp.withdrawalOrder)).toBe(true);
+  });
+});
+
+describe('toHousehold / fromHousehold — the universal operable model', () => {
+  it('derives a single-person household from a spouse-less plan', () => {
+    const legacy = baseInputs({ currentAge: 55, retirementAge: 62, maxAge: 90, provinceCode: 'ONT' });
+    const h = toHousehold(legacy);
+    expect(h.people).toHaveLength(1);
+    expect(h.people[0].ref).toBe('primary');
+    expect(h.people[0].enabled).toBe(true);
+    expect(h.people[0].currentAge).toBe(55);
+    expect(h.shared.maxAge).toBe(90);
+    expect(h.shared.provinceCode).toBe('ONT');
+    expect(enabledPeople(h)).toHaveLength(1);
+  });
+
+  it('derives a two-person household and round-trips every field', () => {
+    const legacy = baseInputs({
+      currentAge: 55, retirementAge: 62, maxAge: 92, investmentReturn: 0.06,
+      provinceCode: 'BC', desiredSpending: 60000, rrspBalance: 250000,
+      tfsaRoom: 30000, rrspRoom: 80000,
+      events: [{ id: 'e1', age: 70, label: 'sale', amount: 400000, direction: 'in', account: 'taxable' }],
+      income: [{ id: 'p', label: 'DB pension', kind: 'pension', annualAmount: 18000, startAge: 62, endAge: null, indexedToCpi: true }],
+      spouse: {
+        enabled: true, currentAge: 53, retirementAge: 60,
+        rrspBalance: 120000, tfsaBalance: 40000, taxableBalance: 8000, cashCushionBalance: 3000,
+        rrspContribution: 5000, tfsaContribution: 6000, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 850, oasStartAge: 65, oasYearsInCanada: 38,
+        desiredSpending: 30000, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+      },
+    });
+    const h = toHousehold(legacy);
+    expect(h.people).toHaveLength(2);
+    expect(h.people.map(p => p.ref)).toEqual(['primary', 'spouse']);
+    expect(enabledPeople(h)).toHaveLength(2);
+    expect(h.people[1].currentAge).toBe(53);
+
+    // Round-trip: every persisted field survives the derive → map-back.
+    const back = fromHousehold(h, legacy);
+    expect(back.currentAge).toBe(55);
+    expect(back.maxAge).toBe(92);
+    expect(back.provinceCode).toBe('BC');
+    expect(back.investmentReturn).toBe(0.06);
+    expect(back.desiredSpending).toBe(60000);
+    expect(back.rrspBalance).toBe(250000);
+    expect(back.tfsaRoom).toBe(30000);
+    expect(back.rrspRoom).toBe(80000);
+    expect(back.events).toHaveLength(1);
+    expect(back.income).toHaveLength(1);
+    expect(back.spouse?.enabled).toBe(true);
+    expect(back.spouse?.currentAge).toBe(53);
+    expect(back.spouse?.rrspBalance).toBe(120000);
+    expect(back.spouse?.withdrawalOrder).toEqual(['rrsp', 'tfsa', 'taxable']);
+    expect(back.spouse?.oasYearsInCanada).toBe(38);
+  });
+
+  it('preserves a DISABLED spouse through the round-trip (carried, not run)', () => {
+    const legacy = baseInputs({
+      spouse: {
+        enabled: false, currentAge: 53, retirementAge: 60,
+        rrspBalance: 99000, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 20000,
+      },
+    });
+    const h = toHousehold(legacy);
+    // Stored spouse is carried in the model (so it can be restored)…
+    expect(h.people).toHaveLength(2);
+    expect(h.people[1].enabled).toBe(false);
+    // …but excluded from the runnable set.
+    expect(enabledPeople(h)).toHaveLength(1);
+    // And it round-trips back intact, still disabled.
+    const back = fromHousehold(h, legacy);
+    expect(back.spouse?.enabled).toBe(false);
+    expect(back.spouse?.rrspBalance).toBe(99000);
+  });
+
+  it('derives a spouse-less household from an undefined spouse (no phantom member)', () => {
+    const h = toHousehold(baseInputs({}));
+    expect(h.people).toHaveLength(1);
+    const back = fromHousehold(h, baseInputs({}));
+    expect(back.spouse).toBeUndefined();
+  });
+
+  it('round-trips a full baseInputs() losslessly (deep equal)', () => {
+    // The strongest guarantee: deriving then mapping back reproduces the input
+    // exactly (base supplies the non-unified legacy fields like annualWithdrawal).
+    const legacy = baseInputs({
+      currentAge: 57, retirementAge: 63, maxAge: 95, investmentReturn: 0.055,
+      returnVolatility: 0.12, provinceCode: 'QC', desiredSpending: 48000,
+      rrspBalance: 300000, tfsaBalance: 90000, taxableBalance: 45000,
+      cashCushionBalance: 12000, rrspContribution: 8000, tfsaContribution: 7000,
+      taxableContribution: 3000, tfsaRoom: 22000, rrspRoom: 65000,
+      cppStartAge: 65, cppMonthlyAmount: 1100, oasStartAge: 67, oasYearsInCanada: 40,
+      withdrawalOrder: ['tfsa', 'taxable', 'rrsp'],
+      spouse: {
+        enabled: true, currentAge: 55, retirementAge: 63,
+        rrspBalance: 150000, tfsaBalance: 60000, taxableBalance: 20000, cashCushionBalance: 8000,
+        rrspContribution: 4000, tfsaContribution: 5000, taxableContribution: 1000,
+        cppStartAge: 60, cppMonthlyAmount: 700, oasStartAge: 65, oasYearsInCanada: 35,
+        desiredSpending: 26000, withdrawalOrder: ['rrsp', 'tfsa', 'taxable'],
+        tfsaRoom: 15000, rrspRoom: 30000,
+      },
+    });
+    const back = fromHousehold(toHousehold(legacy), legacy);
+    expect(back).toEqual(legacy);
   });
 });
 

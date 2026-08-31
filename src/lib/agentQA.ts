@@ -10,6 +10,7 @@
 
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from './retirementEngine';
 import { householdOutcome } from './retirementEngine';
+import { toHousehold } from './householdTypes';
 import type { MonteCarloResults } from './monteCarlo';
 
 export interface QAPreset {
@@ -92,7 +93,7 @@ function yearLine(r: YearlyBreakdown): string {
 // the Monte Carlo screen (#33), which both use householdOutcome. The per-person
 // digests below stay as detail.
 function householdVerdictLine(inputs: RetirementInputs, results: RetirementResults): string {
-  const ho = householdOutcome(results, inputs);
+  const ho = householdOutcome(results, toHousehold(inputs));
   return (
     `HOUSEHOLD VERDICT: ${ho.status === 'ON_TRACK' ? 'ON TRACK' : 'SHORTFALL'} — ` +
     (ho.depletionAge != null

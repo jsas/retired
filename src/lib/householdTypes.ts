@@ -81,6 +81,142 @@ export interface PersonInputs {
 }
 
 // ---------------------------------------------------------------------------
+// Household — the universal, scalable operable model
+// ---------------------------------------------------------------------------
+
+/**
+ * One member of a Household: a full PersonInputs plus the two facts the engine
+ * and result-keying need that PersonInputs deliberately does not carry —
+ * which member this is (`ref`, used to resolve transfer endpoints and to key
+ * per-person results) and whether the member is active (`enabled`, so a
+ * stored-but-disabled spouse round-trips through the model without being run).
+ * `ref` is a PersonRef today ('primary' | 'spouse'); it generalizes to more
+ * members without changing the array shape.
+ */
+export interface Person extends PersonInputs {
+  ref: PersonRef;
+  enabled: boolean;
+}
+
+/**
+ * The universal household model: the shared assumptions plus an ordered list
+ * of people. This is the single operable interface the engine and the read-
+ * side analysis functions (compare / Monte Carlo / strategies / export) take,
+ * so they work uniformly for a single person or a couple — and scale to N
+ * people without a new top-level field per member.
+ *
+ * `Household` is DERIVED, never stored: `RetirementInputs` remains the
+ * persisted source of truth (storage, share links, saved scenarios). Build it
+ * with `toHousehold(inputs)` at the entry point and pass it down; map back
+ * with `fromHousehold` where a write must persist. Deriving (rather than a
+ * stored `household` field or an `isHousehold` flag) keeps one source of truth
+ * — no second copy of the spouse to keep in sync.
+ */
+export interface Household {
+  shared: SharedInputs;
+  people: Person[];
+}
+
+/** The enabled members of a household — the ones the engine actually runs. */
+export function enabledPeople(h: Household): Person[] {
+  return h.people.filter(p => p.enabled);
+}
+
+/**
+ * Derive the universal Household from a legacy RetirementInputs. The primary
+ * is always `people[0]` (ref 'primary', always enabled); an embedded spouse
+ * (present in `inputs.spouse`, whatever its `enabled` flag) becomes `people[1]`
+ * (ref 'spouse'). Absent spouse = a single-person household. A disabled spouse
+ * is carried (enabled:false) so `fromHousehold` can restore it — not run.
+ */
+export function toHousehold(inputs: RetirementInputs): Household {
+  const shared = legacyToShared(inputs);
+  const primary: Person = { ...legacyToPerson(inputs), ref: 'primary', enabled: true };
+  const people: Person[] = [primary];
+  if (inputs.spouse) {
+    people.push({ ...legacySpouseToPerson(inputs.spouse), ref: 'spouse', enabled: inputs.spouse.enabled === true });
+  }
+  return { shared, people };
+}
+
+/**
+ * Map a derived Household back to the legacy RetirementInputs the write-path
+ * and storage are keyed on. The primary (people[0], ref 'primary') supplies
+ * the top-level person + shared fields; a spouse member (ref 'spouse') becomes
+ * `inputs.spouse` (preserving its `enabled` flag). `annualWithdrawal` is a
+ * legacy field the unified model does not carry, so it's taken from `base`
+ * when round-tripping (pass the original inputs) and defaults to 0 otherwise.
+ */
+export function fromHousehold(h: Household, base?: RetirementInputs): RetirementInputs {
+  const primary = h.people.find(p => p.ref === 'primary') ?? h.people[0];
+  if (!primary) throw new Error('fromHousehold: household has no people');
+  const spousePerson = h.people.find(p => p.ref === 'spouse');
+  const { shared } = h;
+  const inputs: RetirementInputs = {
+    currentAge: primary.currentAge,
+    retirementAge: primary.retirementAge,
+    maxAge: shared.maxAge,
+    rrspBalance: primary.rrspBalance,
+    tfsaBalance: primary.tfsaBalance,
+    taxableBalance: primary.taxableBalance,
+    cashCushionBalance: primary.cashCushionBalance,
+    rrspContribution: primary.rrspContribution,
+    tfsaContribution: primary.tfsaContribution,
+    taxableContribution: primary.taxableContribution,
+    tfsaRoom: primary.tfsaRoom,
+    rrspRoom: primary.rrspRoom,
+    annualWithdrawal: base?.annualWithdrawal ?? 0,
+    investmentReturn: shared.investmentReturn,
+    returnVolatility: shared.returnVolatility,
+    provinceCode: shared.provinceCode,
+    cppStartAge: primary.cppStartAge,
+    cppMonthlyAmount: primary.cppMonthlyAmount,
+    cppAdjustedAmount: primary.cppAdjustedAmount,
+    oasStartAge: primary.oasStartAge,
+    oasYearsInCanada: primary.oasYearsInCanada,
+    desiredSpending: primary.desiredSpending,
+    withdrawalOrder: primary.withdrawalOrder,
+    events: primary.events,
+    spendingBands: primary.spendingBands,
+    income: primary.income,
+    reverseMortgage: primary.reverseMortgage,
+    rdsp: primary.rdsp,
+    // Preserve spouse linkage + legacy/optional fields from the base inputs
+    // when round-tripping; they aren't part of the unified model.
+    spouseSource: base?.spouseSource,
+    successFactor: base?.successFactor,
+  };
+  if (spousePerson) {
+    inputs.spouse = {
+      enabled: spousePerson.enabled,
+      currentAge: spousePerson.currentAge,
+      retirementAge: spousePerson.retirementAge,
+      rrspBalance: spousePerson.rrspBalance,
+      tfsaBalance: spousePerson.tfsaBalance,
+      taxableBalance: spousePerson.taxableBalance,
+      cashCushionBalance: spousePerson.cashCushionBalance,
+      rrspContribution: spousePerson.rrspContribution,
+      tfsaContribution: spousePerson.tfsaContribution,
+      taxableContribution: spousePerson.taxableContribution,
+      tfsaRoom: spousePerson.tfsaRoom,
+      rrspRoom: spousePerson.rrspRoom,
+      cppStartAge: spousePerson.cppStartAge,
+      cppMonthlyAmount: spousePerson.cppMonthlyAmount,
+      oasStartAge: spousePerson.oasStartAge,
+      oasYearsInCanada: spousePerson.oasYearsInCanada,
+      desiredSpending: spousePerson.desiredSpending,
+      withdrawalOrder: spousePerson.withdrawalOrder,
+      income: spousePerson.income,
+      events: spousePerson.events,
+      spendingBands: spousePerson.spendingBands,
+      reverseMortgage: spousePerson.reverseMortgage,
+      rdsp: spousePerson.rdsp,
+    };
+  }
+  return inputs;
+}
+
+// ---------------------------------------------------------------------------
 // Shared household assumptions
 // ---------------------------------------------------------------------------
 

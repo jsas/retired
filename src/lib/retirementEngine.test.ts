@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent, type IncomeSource, type RetirementInputs } from './retirementEngine';
-import { legacyToPerson, legacyToShared, legacySpouseToPerson } from './householdTypes';
+import { legacyToPerson, legacyToShared, legacySpouseToPerson, toHousehold } from './householdTypes';
 import { calculateTax } from './canadianTax';
 import { baselineInputs } from '../data/exampleScenarios';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
@@ -749,7 +749,7 @@ describe('spouse toggle / unlink (regression)', () => {
     const r = calculateHousehold(inputs, config);
     expect(r.spouse).toBeUndefined();
     // combineHouseholdBreakdown must fall back to the primary-only rows.
-    expect(combineHouseholdBreakdown(r, inputs)).toBe(r.yearlyBreakdown);
+    expect(combineHouseholdBreakdown(r, toHousehold(inputs))).toBe(r.yearlyBreakdown);
   });
 
   it('a builtin spouseSource with no spouse never re-materializes one', () => {
@@ -1591,13 +1591,13 @@ describe('combineHouseholdBreakdown (household display)', () => {
 
   it('returns the primary breakdown unchanged when there is no spouse', () => {
     const r = calculateRetirement(baseInputs(), config);
-    expect(combineHouseholdBreakdown(r, baseInputs())).toBe(r.yearlyBreakdown);
+    expect(combineHouseholdBreakdown(r, toHousehold(baseInputs()))).toBe(r.yearlyBreakdown);
   });
 
   it('sums balances and income across both spouses for same-age couples', () => {
     const inputs = couple(65);
     const r = calculateHousehold(inputs, config);
-    const combined = combineHouseholdBreakdown(r, inputs);
+    const combined = combineHouseholdBreakdown(r, toHousehold(inputs));
     const age = 70;
     const p = yearAt(r.yearlyBreakdown, age);
     const s = yearAt(r.spouse!.yearlyBreakdown, age);
@@ -1615,7 +1615,7 @@ describe('combineHouseholdBreakdown (household display)', () => {
     // spouse's age-65 row.
     const inputs = couple(60); // spouse currentAge 60, primary 65
     const r = calculateHousehold(inputs, config);
-    const combined = combineHouseholdBreakdown(r, inputs);
+    const combined = combineHouseholdBreakdown(r, toHousehold(inputs));
     const c = yearAt(combined, 70);
     const spouseAt65 = yearAt(r.spouse!.yearlyBreakdown, 65);
     const primaryAt70 = yearAt(r.yearlyBreakdown, 70);
@@ -1635,7 +1635,7 @@ describe('combineHouseholdBreakdown (household display)', () => {
       },
     });
     const r = calculateHousehold(inputs, config);
-    const combined = combineHouseholdBreakdown(r, inputs);
+    const combined = combineHouseholdBreakdown(r, toHousehold(inputs));
     expect(combined.every(y => y.splitTransferred === undefined)).toBe(true);
   });
 
@@ -1644,8 +1644,8 @@ describe('combineHouseholdBreakdown (household display)', () => {
     const richInputs = couple(65);
     richInputs.spouse!.rrspBalance = 900000;
     const rich = calculateHousehold(richInputs, config);
-    const poorEnd = yearAt(combineHouseholdBreakdown(poor, couple(65)), 75).endingBalance;
-    const richEnd = yearAt(combineHouseholdBreakdown(rich, richInputs), 75).endingBalance;
+    const poorEnd = yearAt(combineHouseholdBreakdown(poor, toHousehold(couple(65))), 75).endingBalance;
+    const richEnd = yearAt(combineHouseholdBreakdown(rich, toHousehold(richInputs)), 75).endingBalance;
     expect(richEnd).toBeGreaterThan(poorEnd);
   });
 
@@ -1671,7 +1671,7 @@ describe('combineHouseholdBreakdown (household display)', () => {
       to: { kind: 'account', person: 'spouse', account: 'tfsa' },
     }];
     const r = calculateHousehold(inputs, config);
-    const c = yearAt(combineHouseholdBreakdown(r, inputs), 65);
+    const c = yearAt(combineHouseholdBreakdown(r, toHousehold(inputs)), 65);
     // Taxable source, ACB = balance → no gain, no tax: the full 40k crosses.
     // Combined withdrawals must EXCLUDE the internal move (it changed hands,
     // it didn't leave), so the year reconciles: start + gains − 0 = end.
@@ -1696,7 +1696,7 @@ describe('householdOutcome (household-first verdict)', () => {
   it('matches the primary result for a single person', () => {
     const inputs = baseInputs({ tfsaBalance: 500000, desiredSpending: 20000, cppStartAge: null, oasStartAge: null });
     const r = calculateHousehold(inputs, config);
-    const ho = householdOutcome(r, inputs);
+    const ho = householdOutcome(r, toHousehold(inputs));
     expect(ho.depletionAge).toBe(r.depletionAge);
     expect(ho.status).toBe(r.status);
   });
@@ -1717,7 +1717,7 @@ describe('householdOutcome (household-first verdict)', () => {
     // The spouse silo alone depletes...
     expect(r.spouse!.depletionAge).not.toBeNull();
     // ...but the household-first verdict follows the COMBINED money, which is ample.
-    const ho = householdOutcome(r, inputs);
+    const ho = householdOutcome(r, toHousehold(inputs));
     expect(ho.depletionAge).toBeNull();
     expect(ho.status).toBe('ON_TRACK');
     expect(ho.endingBalance).toBeGreaterThan(0);
@@ -1732,7 +1732,7 @@ describe('householdOutcome (household-first verdict)', () => {
     inputs.spouse!.desiredSpending = 50000;
     inputs.cppStartAge = null; inputs.oasStartAge = null;
     const r = calculateHousehold(inputs, config);
-    const ho = householdOutcome(r, inputs);
+    const ho = householdOutcome(r, toHousehold(inputs));
     expect(ho.depletionAge).not.toBeNull();
     expect(ho.status).toBe('SHORTFALL');
     expect(ho.endingBalance).toBe(0);
@@ -1964,7 +1964,7 @@ describe('year detail (drill-down)', () => {
     expect(r.yearlyBreakdown.every(y => y.detail)).toBe(true);
     expect(r.spouse!.yearlyBreakdown.every(y => y.detail)).toBe(true);
     // …but the combined household rows carry none (per-source numbers don't sum).
-    const combined = combineHouseholdBreakdown(r, inputs);
+    const combined = combineHouseholdBreakdown(r, toHousehold(inputs));
     expect(combined.every(y => y.detail === undefined)).toBe(true);
   });
 });
@@ -2186,7 +2186,7 @@ describe('employment income (issue #22)', () => {
       },
     });
     const r = calculateHousehold(inputs, config);
-    const combined = combineHouseholdBreakdown(r, inputs);
+    const combined = combineHouseholdBreakdown(r, toHousehold(inputs));
     expect(closeTo(yearAt(combined, 65).employmentGross!, 40000, 1)).toBe(true);
   });
 });
@@ -2296,7 +2296,7 @@ describe('totalTaxPaid (total tax on all income)', () => {
       },
     });
     const r = calculateHousehold(inputs, config);
-    const combined = combineHouseholdBreakdown(r, inputs);
+    const combined = combineHouseholdBreakdown(r, toHousehold(inputs));
     const cy = yearAt(combined, 70);
     const py = yearAt(r.yearlyBreakdown, 70);
     const sy = yearAt(r.spouse!.yearlyBreakdown, 70);
@@ -2496,7 +2496,7 @@ describe('RDSP withdrawals (decumulation)', () => {
       },
     });
     const r = calculateHousehold(inputs, config);
-    const combined = combineHouseholdBreakdown(r, inputs);
+    const combined = combineHouseholdBreakdown(r, toHousehold(inputs));
     const cy = yearAt(combined, 65);
     const py = yearAt(r.yearlyBreakdown, 65);
     const sy = yearAt(r.spouse!.yearlyBreakdown, 65);

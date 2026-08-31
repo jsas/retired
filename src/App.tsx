@@ -5,8 +5,8 @@ import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
-import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
-import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson } from './lib/householdTypes';
+import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
+import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson, toHousehold } from './lib/householdTypes';
 import type { Scenario } from './lib/types';
 import { DEFAULT_APP_CONFIG, type AppConfig } from './lib/appConfig';
 import { AppStore } from './data/store';
@@ -545,9 +545,13 @@ function App() {
     }]);
   };
 
+  // The runnable household derived once from the resolved inputs — the engine
+  // and every read-side helper operate on this model (issue #124).
+  const household = useMemo(() => toHousehold(resolvedInputs), [resolvedInputs]);
+
   const results = useMemo(() => {
-    return calculateHousehold(resolvedInputs, config);
-  }, [resolvedInputs, config]);
+    return calculateHouseholdModel(household, config);
+  }, [household, config]);
 
   // The projection export shows the active plan's own computed numbers. When a
   // spouse is disabled the spouse block lingers in the inputs (for re-enabling),
@@ -652,8 +656,8 @@ function App() {
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
   const householdBreakdown = useMemo(
-    () => combineHouseholdBreakdown(results, resolvedInputs),
-    [results, resolvedInputs]
+    () => combineHouseholdBreakdown(results, household),
+    [results, household]
   );
 
   // The age gap between the two partners, for aligning spouse rows to the
@@ -935,7 +939,7 @@ function App() {
               <>
                 {/* KPI Cards */}
                 <CollapsiblePanel id="summary" title="Projection Summary">
-                  <MetricCards results={results} inputs={inputs} />
+                  <MetricCards results={results} household={household} />
                 </CollapsiblePanel>
 
                 {/* Interactive projection timeline (household when a spouse is enabled) */}

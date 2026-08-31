@@ -20,7 +20,8 @@
 // per axis, so the boundary is found by binary search and "slide along the
 // boundary" is well-defined.
 
-import { calculateHousehold, householdOutcome, type RetirementInputs } from './retirementEngine';
+import { calculateHouseholdModel, householdOutcome, type RetirementInputs } from './retirementEngine';
+import { toHousehold } from './householdTypes';
 import type { AppConfig } from './appConfig';
 
 // ---------------------------------------------------------------------------
@@ -347,6 +348,7 @@ export interface DeterministicOutcome {
  *  funded partner covering the other's gap reads ON_TRACK, not a spurious
  *  "Shortfall" from the leaner silo. */
 export function deterministicOutcome(inputs: RetirementInputs, config: AppConfig): DeterministicOutcome {
-  const r = calculateHousehold(inputs, config);
-  return householdOutcome(r, inputs);
+  const household = toHousehold(inputs);
+  const r = calculateHouseholdModel(household, config);
+  return householdOutcome(r, household);
 }
