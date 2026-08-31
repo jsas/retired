@@ -6,6 +6,7 @@
 // the Markets dial, the contour map + the two levers, the down-market check,
 // the life timeline, and the evidence row — all recomputing together off one
 // engine run.
+import type { ReactNode } from 'react';
 import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
 import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
@@ -34,6 +35,8 @@ interface BetaAppProps {
   config: AppConfig;
   hasUnsavedChanges: boolean;
   onSave: () => void;
+  /** The assistant conversation, docked on the right (f7's star). */
+  assistant?: ReactNode;
 }
 
 function verdict(inputs: RetirementInputs, results: RetirementResults) {
@@ -47,7 +50,7 @@ function verdict(inputs: RetirementInputs, results: RetirementResults) {
 
 export function BetaApp({
   scenarios, activeScenarioId, onScenarioChange,
-  inputs, onInputsChange, results, config, hasUnsavedChanges, onSave,
+  inputs, onInputsChange, results, config, hasUnsavedChanges, onSave, assistant,
 }: BetaAppProps) {
   const v = verdict(inputs, results);
   const breakdown = results.yearlyBreakdown ?? [];
@@ -57,7 +60,7 @@ export function BetaApp({
     label: v.holds ? 'the plan holds' : 'runs short',
   };
   return (
-    <BetaPage chip={chip} actions={
+    <BetaPage chip={chip} assistant={assistant} actions={
       <>
         <select
           className="min-w-0 max-w-[30vw] cursor-pointer appearance-none border-b border-transparent bg-transparent py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"

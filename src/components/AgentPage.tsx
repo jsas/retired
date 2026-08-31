@@ -73,6 +73,10 @@ interface AgentPageProps {
   /** Agent scenario navigation: switch active scenario / save-current-as-new. */
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
+  /** Docked mode: render just the conversation column in the beta's narrow
+   *  right rail — no page header, no chat-list sidebar (a slim strip handles
+   *  chat switching so the rail stays 340px). */
+  docked?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +231,7 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -332,52 +336,57 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-11rem)] min-h-[30rem]">
+    <div className={`flex flex-col ${docked ? 'h-full min-h-0' : 'h-[calc(100vh-11rem)] min-h-[30rem]'}`}>
       {/* Header: title + model picker + connections link. Lives on the page so
-          it's visible in chat, empty, and copy/paste modes alike. */}
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        <Bot size={16} className="text-violet-600" />
-        <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
-        <span
-          className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
-          title="Experimental: the assistant is new and still being tuned. It proposes changes for you to approve — it never edits your plan on its own."
-        >
-          Experimental
-        </span>
-        <div className="flex items-center gap-2 ml-auto">
-          <ModelPicker
-            settings={settings}
-            activeId={settings.activeConnectionId}
-            onChoose={chooseConnection}
-            onLoadModel={onOpenConnections}
-          />
-          {connection && (
-            <span
-              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold ${
-                isLocal ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-              }`}
-              title={isLocal
-                ? 'Runs entirely on this device: no account, no key, nothing you type leaves the computer.'
-                : 'Chats go directly from this browser to the provider; the key is stored only in this browser.'}
-            >
-              {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
-              {isLocal ? 'On this device · private' : 'Direct browser → provider'}
-            </span>
-          )}
-          {isLocal && !toolCapable && (
-            <span
-              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
-              title="This model is too small to read your plan or propose changes reliably, so tools are off: it answers questions from a summary of your plan. Pick a larger model (Connections) to let it edit."
-            >
-              Answers only · can't edit plan
-            </span>
-          )}
+          it's visible in chat, empty, and copy/paste modes alike. Docked mode
+          drops it — the rail is too narrow and the beta chrome owns the
+          assistant's on/off. */}
+      {!docked && (
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <Bot size={16} className="text-violet-600" />
+          <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
+          <span
+            className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
+            title="Experimental: the assistant is new and still being tuned. It proposes changes for you to approve — it never edits your plan on its own."
+          >
+            Experimental
+          </span>
+          <div className="flex items-center gap-2 ml-auto">
+            <ModelPicker
+              settings={settings}
+              activeId={settings.activeConnectionId}
+              onChoose={chooseConnection}
+              onLoadModel={onOpenConnections}
+            />
+            {connection && (
+              <span
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold ${
+                  isLocal ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                }`}
+                title={isLocal
+                  ? 'Runs entirely on this device: no account, no key, nothing you type leaves the computer.'
+                  : 'Chats go directly from this browser to the provider; the key is stored only in this browser.'}
+              >
+                {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
+                {isLocal ? 'On this device · private' : 'Direct browser → provider'}
+              </span>
+            )}
+            {isLocal && !toolCapable && (
+              <span
+                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
+                title="This model is too small to read your plan or propose changes reliably, so tools are off: it answers questions from a summary of your plan. Pick a larger model (Connections) to let it edit."
+              >
+                Answers only · can't edit plan
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex gap-3 flex-1 min-h-0">
-        {/* ---- Chat list: pinned open, or collapsed to a slim strip ---- */}
-        {chatsPinned ? (
+      <div className={`flex gap-3 flex-1 min-h-0 ${docked ? 'gap-1.5' : ''}`}>
+        {/* ---- Chat list: pinned open, or collapsed to a slim strip. Docked
+                always uses the slim strip so the rail stays narrow. ---- */}
+        {!docked && chatsPinned ? (
           <aside className="w-52 shrink-0 flex flex-col border border-slate-200 rounded bg-white">
             <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Chats</span>

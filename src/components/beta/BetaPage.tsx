@@ -1,8 +1,12 @@
 // The shared beta page chrome — brand header, the named homes (Details ▾,
-// Plans ▾, Schedule, Insights, Data, style guide), and the persistent verdict
-// chip. Every beta page sits inside this so navigation and the answer are
-// always one glance away. Flat, hairline, sticky.
-import type { ReactNode } from 'react';
+// Plans ▾, Schedule, Insights, Data, style guide), the persistent verdict
+// chip, and the assistant dock. Every beta page sits inside this so navigation
+// and the answer are always one glance away. Flat, hairline, sticky.
+//
+// The dock (f7's star): a 340px right rail on desktop, a full-screen sheet on
+// phones. The app works without it — the Assistant button toggles it and it
+// never traps you.
+import { useState, type ReactNode } from 'react';
 import { Link } from './nav';
 import { Dropdown } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
@@ -18,12 +22,20 @@ function chipDot(tone: VerdictChip['tone']) {
   return tone === 'holds' ? BLUE : tone === 'short' ? RED_DOT : tone === 'borderline' ? AMBER_DOT : '#94a3b8';
 }
 
-export function BetaPage({ title, chip, actions, children }: {
+export function BetaPage({ title, chip, actions, assistant, children }: {
   title?: string;
   chip: VerdictChip;
   actions?: ReactNode;
+  /** The assistant conversation (AgentPage docked). Providing it turns the
+   *  Assistant button + right rail on. */
+  assistant?: ReactNode;
   children: ReactNode;
 }) {
+  // The dock starts open on desktop (the assistant came along from the
+  // landing). On phones it's a sheet that stays hidden until the Assistant
+  // button opens it — the app works without it, it never traps you.
+  const [dockOpen, setDockOpen] = useState(true);
+
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-800">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
@@ -57,6 +69,18 @@ export function BetaPage({ title, chip, actions, children }: {
           <div className="flex-1" />
           {actions}
 
+          {/* the assistant toggle — the pair's star */}
+          {assistant && (
+            <button
+              type="button"
+              onClick={() => setDockOpen((o) => !o)}
+              className="border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-slate-900"
+              title="The assistant — reads your plan, answers questions, shows its work"
+            >
+              Assistant
+            </button>
+          )}
+
           {/* the persistent verdict chip */}
           <Link view="projection" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label="Back to the verdict">
             <span className="inline-block h-2.5 w-2.5" style={{ backgroundColor: chipDot(chip.tone) }} />
@@ -66,14 +90,45 @@ export function BetaPage({ title, chip, actions, children }: {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-16">
-        {title && (
-          <div className="border-b border-slate-200 pb-4 pt-8">
-            <p className={cls.sectionLabel}>{title}</p>
-          </div>
+      <div className="mx-auto flex w-full max-w-5xl flex-1">
+        <main className="w-full min-w-0 flex-1 px-4 pb-16">
+          {title && (
+            <div className="border-b border-slate-200 pb-4 pt-8">
+              <p className={cls.sectionLabel}>{title}</p>
+            </div>
+          )}
+          {children}
+        </main>
+
+        {/* The assistant dock. Desktop: sticky 340px rail beside the content,
+            hidden when closed. Phones: a full-screen sheet when open, gone
+            when closed — the app works without it, it never traps you. */}
+        {assistant && (
+          <aside
+            className={`${
+              dockOpen
+                ? 'fixed inset-0 z-50 flex flex-col lg:sticky lg:top-12 lg:z-0 lg:flex lg:h-[calc(100vh-3rem)] lg:w-[340px] lg:shrink-0'
+                : 'hidden'
+            } border-l border-slate-200 bg-white`}
+            aria-label="Assistant"
+          >
+            <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
+              <div className="flex h-5 w-5 items-center justify-center bg-slate-900 text-[8px] font-bold text-white">RE</div>
+              <div className="text-[13px] font-semibold">Assistant</div>
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setDockOpen(false)}
+                className="px-1 text-lg leading-none text-slate-400 hover:text-slate-600"
+                aria-label="Close the assistant"
+              >
+                ×
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">{assistant}</div>
+          </aside>
         )}
-        {children}
-      </main>
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 // the beta page chrome (BetaPage). This is how the beta reaches feature parity
 // without forking the complex editors: the surface is new, the substance is
 // shared. The Details page and dashboard are native beta; these wrap the rest.
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { BetaPage, type VerdictChip } from './BetaPage';
 import { ScheduleTable } from '../ScheduleTable';
 import { EqPage } from '../EqPage';
@@ -16,23 +16,24 @@ import { SettingsModal } from '../SettingsModal';
 import { ConnectionsPage } from '../ConnectionsPage';
 import { HelpModal } from '../HelpModal';
 
-export function BetaSchedulePage({ chip, ...props }: ComponentProps<typeof ScheduleTable> & { chip: VerdictChip }) {
+export function BetaSchedulePage({ chip, assistant, ...props }: ComponentProps<typeof ScheduleTable> & { chip: VerdictChip; assistant?: ReactNode }) {
   return (
-    <BetaPage title="Year-by-year" chip={chip}>
+    <BetaPage title="Year-by-year" chip={chip} assistant={assistant}>
       <div className="pt-6"><ScheduleTable {...props} /></div>
     </BetaPage>
   );
 }
 
-export function BetaInsightsPage({ chip, eqProps, optimizeProps, mcProps, backtestProps }: {
+export function BetaInsightsPage({ chip, assistant, eqProps, optimizeProps, mcProps, backtestProps }: {
   chip: VerdictChip;
+  assistant?: ReactNode;
   eqProps: ComponentProps<typeof EqPage>;
   optimizeProps: ComponentProps<typeof OptimizeCard>;
   mcProps: ComponentProps<typeof MonteCarloChart> | null;
   backtestProps: ComponentProps<typeof BacktestPanel> | null;
 }) {
   return (
-    <BetaPage title="Insights" chip={chip}>
+    <BetaPage title="Insights" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <section>
           <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">The levers, ranked</h3>
@@ -59,13 +60,14 @@ export function BetaInsightsPage({ chip, eqProps, optimizeProps, mcProps, backte
   );
 }
 
-export function BetaPlansPage({ chip, managerProps, compareProps }: {
+export function BetaPlansPage({ chip, assistant, managerProps, compareProps }: {
   chip: VerdictChip;
+  assistant?: ReactNode;
   managerProps: ComponentProps<typeof ScenarioManager>;
   compareProps: ComponentProps<typeof CompareCard>;
 }) {
   return (
-    <BetaPage title="Plans" chip={chip}>
+    <BetaPage title="Plans" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ScenarioManager {...managerProps} />
         <section>
@@ -77,33 +79,33 @@ export function BetaPlansPage({ chip, managerProps, compareProps }: {
   );
 }
 
-export function BetaDataPage({ chip, ...props }: ComponentProps<typeof SharingPage> & { chip: VerdictChip }) {
+export function BetaDataPage({ chip, assistant, ...props }: ComponentProps<typeof SharingPage> & { chip: VerdictChip; assistant?: ReactNode }) {
   return (
-    <BetaPage title="Data — backup, restore, share" chip={chip}>
+    <BetaPage title="Data — backup, restore, share" chip={chip} assistant={assistant}>
       <div className="pt-6"><SharingPage {...props} /></div>
     </BetaPage>
   );
 }
 
-export function BetaSettingsPage({ chip, ...props }: ComponentProps<typeof SettingsModal> & { chip: VerdictChip }) {
+export function BetaSettingsPage({ chip, assistant, ...props }: ComponentProps<typeof SettingsModal> & { chip: VerdictChip; assistant?: ReactNode }) {
   return (
-    <BetaPage title="Settings" chip={chip}>
+    <BetaPage title="Settings" chip={chip} assistant={assistant}>
       <div className="pt-6"><SettingsModal {...props} /></div>
     </BetaPage>
   );
 }
 
-export function BetaConnectionsPage({ chip, ...props }: ComponentProps<typeof ConnectionsPage> & { chip: VerdictChip }) {
+export function BetaConnectionsPage({ chip, assistant, ...props }: ComponentProps<typeof ConnectionsPage> & { chip: VerdictChip; assistant?: ReactNode }) {
   return (
-    <BetaPage title="Assistant connection" chip={chip}>
+    <BetaPage title="Assistant connection" chip={chip} assistant={assistant}>
       <div className="pt-6"><ConnectionsPage {...props} /></div>
     </BetaPage>
   );
 }
 
-export function BetaHelpPage({ chip }: { chip: VerdictChip }) {
+export function BetaHelpPage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
   return (
-    <BetaPage title="Help" chip={chip}>
+    <BetaPage title="Help" chip={chip} assistant={assistant}>
       <div className="pt-6"><HelpModal /></div>
     </BetaPage>
   );

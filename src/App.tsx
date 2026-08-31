@@ -764,16 +764,35 @@ function App() {
       return m ? m[1] : null;
     })();
 
+    // The assistant dock — one conversation, docked on the right of every beta
+    // page (f7's star). Passing it through BetaPage turns the Assistant
+    // button + rail on everywhere.
+    const assistantDock = (
+      <AgentPage
+        docked
+        inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
+        scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
+        activeScenarioId={activeScenarioId}
+        scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
+        onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+        onOpenConnections={() => setView('connections')}
+        memory={store?.memory}
+        memoryScenarioId={activeScenarioId}
+        onOpenScenario={agentOpenScenario}
+        onSaveScenarioAs={agentSaveScenarioAs}
+      />
+    );
+
     switch (view) {
       case 'details':
         return (
-          <BetaPage title="The details" chip={chip}>
+          <BetaPage title="The details" chip={chip} assistant={assistantDock}>
             <DetailsPage inputs={inputs} onChange={handleInputsChange} section={detailsSection} />
           </BetaPage>
         );
       case 'math':
         return (
-          <BetaSchedulePage chip={chip}
+          <BetaSchedulePage chip={chip} assistant={assistantDock}
             breakdown={householdBreakdown}
             retirementAge={results.retirementAge}
             primaryBreakdown={results.spouse ? results.yearlyBreakdown : undefined}
@@ -783,7 +802,7 @@ function App() {
         );
       case 'eq':
         return (
-          <BetaInsightsPage chip={chip}
+          <BetaInsightsPage chip={chip} assistant={assistantDock}
             eqProps={{ inputs: resolvedInputs, config, onChange: handleInputsChange, bands: eqBands, onBandsChange: setEqBands, solved: eqSolved, projection: { results, breakdown: householdBreakdown } }}
             optimizeProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
             mcProps={mcRequest ? { request: mcRequest, retirementAge: results.retirementAge, onRefresh: () => setMcRefreshNonce(n => n + 1) } : null}
@@ -793,7 +812,7 @@ function App() {
       case 'scenarios':
       case 'compare':
         return (
-          <BetaPlansPage chip={chip}
+          <BetaPlansPage chip={chip} assistant={assistantDock}
             managerProps={{
               scenarios, activeScenarioId, onScenariosChange: setScenarios, revisions, onRollback: handleRollback,
               onSelectScenario: (id) => { handleScenarioChange(id); setView('projection'); },
@@ -810,13 +829,13 @@ function App() {
         );
       case 'data':
       case 'sharing':
-        return <BetaDataPage chip={chip} inputs={inputs} scenarioName={activeScenario.name} onImport={handleSharingImport} />;
+        return <BetaDataPage chip={chip} assistant={assistantDock} inputs={inputs} scenarioName={activeScenario.name} onImport={handleSharingImport} />;
       case 'settings':
-        return <BetaSettingsPage chip={chip} config={config} onSave={setConfig} />;
+        return <BetaSettingsPage chip={chip} assistant={assistantDock} config={config} onSave={setConfig} />;
       case 'connections':
-        return <BetaConnectionsPage chip={chip} onClose={() => setView('projection')} />;
+        return <BetaConnectionsPage chip={chip} assistant={assistantDock} onClose={() => setView('projection')} />;
       case 'help':
-        return <BetaHelpPage chip={chip} />;
+        return <BetaHelpPage chip={chip} assistant={assistantDock} />;
       case 'welcome':
         // The assistant as the front door: five questions build a starter plan,
         // then two doors (dashboard / details). Building loads the plan and
@@ -831,22 +850,6 @@ function App() {
             }}
           />
         );
-        return (
-          <BetaPage title="Assistant" chip={chip}>
-            <AgentPage
-              inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
-              scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
-              activeScenarioId={activeScenarioId}
-              scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
-              onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
-              onOpenConnections={() => setView('connections')}
-              memory={store?.memory}
-              memoryScenarioId={activeScenarioId}
-              onOpenScenario={agentOpenScenario}
-              onSaveScenarioAs={agentSaveScenarioAs}
-            />
-          </BetaPage>
-        );
       default:
         // projection / welcome / everything else → the dashboard
         return (
@@ -860,6 +863,7 @@ function App() {
             config={config}
             hasUnsavedChanges={hasUnsavedChanges}
             onSave={handleSaveScenario}
+            assistant={assistantDock}
           />
         );
     }
