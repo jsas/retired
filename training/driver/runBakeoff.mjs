@@ -112,8 +112,9 @@ async function main() {
   const chrome = await launchChrome({ port: CDP_PORT, gpu: true, headless: !VISIBLE });
 
   try {
-    for (const base of bases) {
-      console.error(`\n=== ${base.label} (${base.modelId}, ~${base.sizeGB}GB) ===`);
+    for (let b = 0; b < bases.length; b++) {
+      const base = bases[b];
+      console.error(`\n=== [base ${b + 1}/${bases.length}] ${base.label} (${base.modelId}, ~${base.sizeGB}GB) ===`);
       const target = await openTab(`http://127.0.0.1:${SERVE_PORT}/harness.html`, CDP_PORT);
       const tab = new TabSession(target.webSocketDebuggerUrl);
       await tab.connect();
@@ -145,9 +146,15 @@ async function main() {
           console.error(`  [${i + 1}/${evalRecords.length}] Q: ${oneLine(q).slice(0, 90)}`);
           console.error(`       A: ${oneLine(text).slice(0, 140)}`);
         } else {
-          // Live one-line progress with a rough ETA so a long run isn't silent.
-          const done = i + 1, per = (Date.now() - t0) / done, eta = Math.round((per * (evalRecords.length - done)) / 1000);
-          process.stderr.write(`\r  ${done}/${evalRecords.length}  last: ${oneLine(text).slice(0, 70)}   (eta ${eta}s)   `);
+          // Live progress line: per-base %, overall run %, ETA. Pad to a fixed
+          // width and clear to end-of-line so a shorter update doesn't leave
+          // residue from the previous (longer) one.
+          const done = i + 1;
+          const basePct = Math.floor((done / evalRecords.length) * 100);
+          const overallPct = Math.floor((((b * evalRecords.length) + done) / (bases.length * evalRecords.length)) * 100);
+          const per = (Date.now() - t0) / done, eta = Math.round((per * (evalRecords.length - done)) / 1000);
+          const line = `  base ${basePct}%  (${done}/${evalRecords.length})  overall ${overallPct}%  eta ${eta}s  last: ${oneLine(text).slice(0, 50)}`;
+          process.stderr.write(`\r${line.padEnd(110, ' ')}\x1b[K`);
           if (done === evalRecords.length) process.stderr.write('\n');
         }
       }
