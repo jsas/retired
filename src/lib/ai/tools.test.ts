@@ -6,6 +6,7 @@ import { captureCheckpoint, UNDEFINED_SENTINEL } from './checkpoints';
 import { MemoryStore } from '../memory/store';
 import type { MemoryAdapter, MemoryRecord } from '../memory/store';
 import type { RetirementInputs } from '../retirementEngine';
+import { toHousehold } from '../householdTypes';
 
 /** Deterministic in-memory memory adapter (same shape the store tests use). */
 class InMemoryAdapter implements MemoryAdapter {
@@ -123,7 +124,7 @@ describe('run_projection', () => {
     // Fixture sanity: the primary's own silo really does deplete, and the
     // household verdict really is ON_TRACK — otherwise this proves nothing.
     expect(hr.status).toBe('SHORTFALL');
-    const ho = householdOutcome(hr, inputs);
+    const ho = householdOutcome(hr, toHousehold(inputs));
     expect(ho.status).toBe('ON_TRACK');
 
     const out = executeToolCall(ctx({ inputs, config: testConfig() }), {

@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { solveSustainableSpending } from './spendingSolver';
 import { mulberry32, generateSequences, simulate, runMonteCarlo } from './monteCarlo';
 import { calculateHousehold, householdOutcome } from './retirementEngine';
+import { toHousehold } from './householdTypes';
 import { runStrategies } from './strategies';
 import { testConfig, baseInputs } from '../test/helpers';
 
@@ -131,7 +132,7 @@ describe('household-first success verdict (issue #33)', () => {
   it('fixture premise: primary silo depletes, household survives', () => {
     const r = calculateHousehold(coupleInputs, config);
     expect(r.depletionAge).not.toBeNull();          // primary-silo verdict: failed
-    const ho = householdOutcome(r, coupleInputs);
+    const ho = householdOutcome(r, toHousehold(coupleInputs));
     expect(ho.depletionAge).toBeNull();             // household verdict: funded
     expect(ho.status).toBe('ON_TRACK');
   });

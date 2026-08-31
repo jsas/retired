@@ -12,8 +12,10 @@ import {
 import {
   legacyToPerson,
   legacyToShared,
-  legacySpouseToPerson,
   eventEndpoints,
+  toHousehold,
+  enabledPeople,
+  type Household,
   type PersonInputs,
   type SharedInputs,
 } from './householdTypes';
@@ -1852,21 +1854,47 @@ export function calculateRetirement(
 }
 
 /**
- * Top-level entry point. Derives each person's plan from the (possibly legacy)
- * inputs and runs both as full persons — giving the spouse feature parity
- * (their own events, spending bands, reverse mortgage). The two runs exchange
- * benefit context so GIS is assessed on COMBINED non-OAS income at the correct
- * (couple vs single) rate — CRA's couple rules. Pension-splitting is applied
- * as a post-pass, and the household verdict reads the combined breakdown.
+ * Legacy public entry point — kept stable (the persisted `RetirementInputs`
+ * shape, and every test/the golden master call it). It derives the universal
+ * Household and delegates to the Household-native core, so the engine genuinely
+ * runs off the scalable model. New code should call `calculateHouseholdModel`
+ * with an already-derived Household instead.
  */
 export function calculateHousehold(
   inputs: RetirementInputs,
   config: AppConfig,
   options?: { returnSequence?: Record<number, number> }
 ): RetirementResults {
-  const shared = legacyToShared(inputs);
-  const primaryPerson = legacyToPerson(inputs);
-  const sp = inputs.spouse?.enabled ? legacySpouseToPerson(inputs.spouse) : undefined;
+  return calculateHouseholdModel(toHousehold(inputs), config, options);
+}
+
+/**
+ * Household-native top-level entry point. Runs each enabled person as a full
+ * person — giving the spouse feature parity (their own events, spending bands,
+ * reverse mortgage). The runs exchange benefit context so GIS is assessed on
+ * COMBINED non-OAS income at the correct (couple vs single) rate — CRA's couple
+ * rules. Pension-splitting is applied as a post-pass, and the household verdict
+ * reads the combined breakdown.
+ *
+ * Driven by the household's `people` array, not two loose variables: the
+ * primary is `people` ref 'primary', the partner ref 'spouse'. A single-person
+ * household reduces to the primary's own run unchanged. (The couple-specific
+ * math — GIS couple rates, pension splitting — is inherently two-person, but
+ * it's selected by the presence of an enabled partner, not by hard-coded shape.)
+ */
+export function calculateHouseholdModel(
+  household: Household,
+  config: AppConfig,
+  options?: { returnSequence?: Record<number, number> }
+): RetirementResults {
+  const { shared } = household;
+  const runnable = enabledPeople(household);
+  const primaryPerson: PersonInputs = runnable.find(p => p.ref === 'primary') ?? runnable[0];
+  const spPerson = runnable.find(p => p.ref === 'spouse');
+  const sp: PersonInputs | undefined = spPerson && spPerson !== primaryPerson ? spPerson : undefined;
+  // Current-age context for the pension-split + combined-breakdown age alignment.
+  const primaryCurrentAge = primaryPerson.currentAge;
+  const spouseCurrentAge = sp?.currentAge ?? primaryCurrentAge;
 
   const primaryCtx = sp ? {
     cppStartAge: sp.cppStartAge,
@@ -2007,7 +2035,7 @@ export function calculateHousehold(
 
     finalPrimary.spouse = spouseResults;
     if (spouseResults.status === 'SHORTFALL') finalPrimary.status = 'SHORTFALL';
-    applyPensionSplitting(finalPrimary, spouseResults, inputs, config, sp.currentAge);
+    applyPensionSplitting(finalPrimary, spouseResults, primaryCurrentAge, shared.provinceCode, config, spouseCurrentAge);
     return finalPrimary;
   }
 
@@ -2028,12 +2056,14 @@ export function calculateHousehold(
  */
 export function combineHouseholdBreakdown(
   results: RetirementResults,
-  inputs: RetirementInputs
+  household: Household
 ): YearlyBreakdown[] {
   const spouse = results.spouse;
   if (!spouse) return results.yearlyBreakdown;
 
-  const ageOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
+  const primaryAge = household.people.find(p => p.ref === 'primary')?.currentAge ?? household.people[0]?.currentAge ?? 0;
+  const spouseAge = household.people.find(p => p.ref === 'spouse')?.currentAge ?? primaryAge;
+  const ageOffset = primaryAge - spouseAge;
   const spouseByCalYear = new Map(spouse.yearlyBreakdown.map(y => [y.age + ageOffset, y]));
 
   // An INTER-SPOUSAL transfer shows up as a withdrawal in the sender's row but
@@ -2124,14 +2154,14 @@ export interface HouseholdOutcome {
  * unfunded spending gap (shortfall > 0) — i.e. the household genuinely can't cover
  * that year. A single person reduces to the primary's own result unchanged.
  */
-export function householdOutcome(results: RetirementResults, inputs: RetirementInputs): HouseholdOutcome {
-  const combined = combineHouseholdBreakdown(results, inputs);
+export function householdOutcome(results: RetirementResults, household: Household): HouseholdOutcome {
+  const combined = combineHouseholdBreakdown(results, household);
   const depletedRow = combined.find(y => y.endingBalance <= 0 && (y.shortfall ?? 0) > 0);
   const depletionAge = depletedRow ? depletedRow.age : null;
   const last = combined[combined.length - 1];
   const endingBalance = depletionAge !== null ? 0 : Math.max(0, last?.endingBalance ?? 0);
   const status: 'ON_TRACK' | 'SHORTFALL' =
-    depletionAge !== null && depletionAge < inputs.maxAge ? 'SHORTFALL' : 'ON_TRACK';
+    depletionAge !== null && depletionAge < household.shared.maxAge ? 'SHORTFALL' : 'ON_TRACK';
   return { depletionAge, endingBalance, status };
 }
 
@@ -2148,7 +2178,8 @@ export function householdOutcome(results: RetirementResults, inputs: RetirementI
 function applyPensionSplitting(
   primary: RetirementResults,
   spouse: RetirementResults,
-  inputs: RetirementInputs,
+  primaryCurrentAge: number,
+  province: string,
   config: AppConfig,
   spouseCurrentAge: number
 ): void {
@@ -2159,7 +2190,7 @@ function applyPensionSplitting(
   const inflation = Math.max(0, config.engine.inflationRate ?? 0);
   // Calendar-year inflation factor: spouse rows are offset in age but share the
   // same calendar year as the primary row they pair with.
-  const factorAt = (calendarAge: number) => Math.pow(1 + inflation, Math.max(0, calendarAge - inputs.currentAge));
+  const factorAt = (calendarAge: number) => Math.pow(1 + inflation, Math.max(0, calendarAge - primaryCurrentAge));
   const configCache = new Map<number, AppConfig>();
   const configAt = (calendarAge: number): AppConfig => {
     if (!indexTables) return config;
@@ -2170,7 +2201,6 @@ function applyPensionSplitting(
     return c;
   };
 
-  const province = inputs.provinceCode;
   // Full-tax on a net income figure (the per-year incomeTax the engine stored
   // is tax on incremental registered income, so here we recompute from the
   // person's total net income to apply the split correctly).
@@ -2185,7 +2215,7 @@ function applyPensionSplitting(
 
   // Match rows by calendar year: the spouse row for the same calendar year has
   // age = primary age − ageOffset (spouse's own age in that year).
-  const ageOffset = inputs.currentAge - spouseCurrentAge;
+  const ageOffset = primaryCurrentAge - spouseCurrentAge;
   const spouseRows = new Map(spouse.yearlyBreakdown.map(y => [y.age + ageOffset, y]));
 
   // Recompute each person's per-year tax with the split, accumulating the

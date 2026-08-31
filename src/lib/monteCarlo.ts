@@ -1,4 +1,5 @@
-import { calculateHousehold, householdOutcome, type RetirementInputs } from './retirementEngine';
+import { calculateHouseholdModel, householdOutcome, type RetirementInputs } from './retirementEngine';
+import { toHousehold } from './householdTypes';
 
 import type { AppConfig } from './appConfig';
 
@@ -108,11 +109,15 @@ export function runMonteCarlo(request: MonteCarloRequest): MonteCarloResults {
   // balanceAtAge[age] = array of ending balances across runs (0 once depleted)
   const balanceAtAge = new Map<number, number[]>();
 
+  // Derive the universal Household ONCE for the whole simulation — every run
+  // shares it (the engine runs off the model directly), rather than re-deriving
+  // it per run inside calculateHousehold.
+  const household = toHousehold(inputs);
   for (let run = 0; run < runs; run++) {
     const seq = generateReturnSequence(inputs.currentAge, inputs.maxAge, inputs.investmentReturn, volatility, rng);
-    const result = calculateHousehold(inputs, config, { returnSequence: seq });
+    const result = calculateHouseholdModel(household, config, { returnSequence: seq });
     // Household-first: a run succeeds when the COMBINED money lasts to max age.
-    const ho = householdOutcome(result, inputs);
+    const ho = householdOutcome(result, household);
 
     const depleted = ho.depletionAge !== null;
     if (!depleted) {
@@ -191,9 +196,10 @@ export function simulate(
 ): SimulationSummary {
   let successCount = 0;
   const finalBalances: number[] = [];
+  const household = toHousehold(inputs);
   for (const seq of sequences) {
-    const result = calculateHousehold(inputs, config, { returnSequence: seq });
-    const ho = householdOutcome(result, inputs);
+    const result = calculateHouseholdModel(household, config, { returnSequence: seq });
+    const ho = householdOutcome(result, household);
     const depleted = ho.depletionAge !== null;
     if (!depleted) successCount++;
     finalBalances.push(depleted ? 0 : ho.endingBalance);

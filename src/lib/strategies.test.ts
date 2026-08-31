@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { runStrategies, runOne, sustainableSpending, type StrategySpec } from './strategies';
 import { calculateHousehold, householdOutcome } from './retirementEngine';
+import { toHousehold } from './householdTypes';
 import { testConfig, baseInputs } from '../test/helpers';
 
 const config = testConfig();
@@ -498,7 +499,7 @@ describe('runOne — verdict scored against the patched inputs (S-01)', () => {
 
     // Ground truth: the engine run on the merged inputs, scored against merged.
     const merged = { ...inputs, ...spec.patch };
-    const truth = householdOutcome(calculateHousehold(merged, config), merged);
+    const truth = householdOutcome(calculateHousehold(merged, config), toHousehold(merged));
     // Sanity: this fixture genuinely exercises the horizon — the merged run
     // depletes at 93, past the base inputs' horizon (90) but within the extended.
     expect(truth.depletionAge).toBe(93);
@@ -518,7 +519,7 @@ describe('runOne — verdict scored against the patched inputs (S-01)', () => {
     const inputs = tight();
     const merged = { ...inputs, maxAge: 95 };
     const r = calculateHousehold(merged, config);
-    expect(householdOutcome(r, merged).status).toBe('SHORTFALL');
-    expect(householdOutcome(r, inputs).status).toBe('ON_TRACK');
+    expect(householdOutcome(r, toHousehold(merged)).status).toBe('SHORTFALL');
+    expect(householdOutcome(r, toHousehold(inputs)).status).toBe('ON_TRACK');
   });
 });

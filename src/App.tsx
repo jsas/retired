@@ -6,7 +6,7 @@ import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
-import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson } from './lib/householdTypes';
+import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson, toHousehold } from './lib/householdTypes';
 import type { Scenario } from './lib/types';
 import { DEFAULT_APP_CONFIG, type AppConfig } from './lib/appConfig';
 import { AppStore } from './data/store';
@@ -652,7 +652,7 @@ function App() {
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.
   const householdBreakdown = useMemo(
-    () => combineHouseholdBreakdown(results, resolvedInputs),
+    () => combineHouseholdBreakdown(results, toHousehold(resolvedInputs)),
     [results, resolvedInputs]
   );
 

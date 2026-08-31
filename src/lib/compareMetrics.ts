@@ -3,7 +3,7 @@
 // plus a signed diff of each against a chosen baseline. Kept separate from the
 // UI so the verdict-derivation and diff logic is unit-testable.
 import { calculateHousehold, householdOutcome, type RetirementResults, type RetirementInputs } from './retirementEngine';
-import { resolveSpouseSource } from './householdTypes';
+import { resolveSpouseSource, toHousehold } from './householdTypes';
 import type { Scenario } from './types';
 import type { AppConfig } from './appConfig';
 
@@ -46,7 +46,7 @@ export interface ScenarioComparison {
  *  out, not when either partner's silo does. */
 export function metricsFromResults(id: string, name: string, results: RetirementResults, inputs?: RetirementInputs): ScenarioMetrics {
   const spouse = results.spouse;
-  const ho = inputs ? householdOutcome(results, inputs) : undefined;
+  const ho = inputs ? householdOutcome(results, toHousehold(inputs)) : undefined;
   return {
     id,
     name,

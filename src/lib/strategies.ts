@@ -14,8 +14,9 @@
 // Ranked primarily on sustainableSpending (a lifestyle measure), with tax and
 // ending balance shown for context.
 
-import { calculateHousehold, householdOutcome } from './retirementEngine';
+import { calculateHousehold, calculateHouseholdModel, householdOutcome } from './retirementEngine';
 import type { RetirementInputs, RetirementResults, WithdrawalAccount, IncomeSource } from './retirementEngine';
+import { toHousehold } from './householdTypes';
 import type { AppConfig } from './appConfig';
 
 export interface StrategyResult {
@@ -106,8 +107,10 @@ function orderingsFor(inputs: RetirementInputs): WithdrawalAccount[][] {
 // invariant) and landing on the expansion overshoot, a value ABOVE the ceiling.
 // Exported for tests: the S-02 regression drives a runaway plan directly.
 export function sustainableSpending(inputs: RetirementInputs, config: AppConfig): number {
-  const survives = (spend: number) =>
-    householdOutcome(calculateHousehold({ ...inputs, desiredSpending: spend }, config), inputs).depletionAge === null;
+  const survives = (spend: number) => {
+    const household = toHousehold({ ...inputs, desiredSpending: spend });
+    return householdOutcome(calculateHouseholdModel(household, config), household).depletionAge === null;
+  };
   if (!survives(0)) return 0; // runs out even at zero spending (huge fixed events)
   const START_CEILING = 500000, ABSOLUTE_CEILING = 5000000;
   let lo = 0, hi = START_CEILING;
@@ -408,18 +411,19 @@ function buildStrategies(inputs: RetirementInputs, config: AppConfig): StrategyS
 // one directly.
 export function runOne(inputs: RetirementInputs, config: AppConfig, spec: StrategySpec): StrategyResult {
   const merged: RetirementInputs = { ...inputs, ...spec.patch };
-  const r: RetirementResults = calculateHousehold(merged, config);
+  const mergedHousehold = toHousehold(merged);
+  const r: RetirementResults = calculateHouseholdModel(mergedHousehold, config);
   const lifetimeTax = r.yearlyBreakdown.reduce((s, y) => s + (y.incomeTax ?? 0), 0);
   const lifetimeGis = r.yearlyBreakdown.reduce((s, y) => s + (y.gisIncome ?? 0), 0);
   const sustainable = sustainableSpending(merged, config);
   // Household-first verdict (combined money + shortfall), matching the Monte
   // Carlo screen and the dashboard — not the primary's own depletionAge. The
   // verdict must be scored against `merged` (the inputs the engine actually
-  // ran on): householdOutcome reads inputs.maxAge for the status horizon and
+  // ran on): householdOutcome reads maxAge for the status horizon and
   // combineHouseholdBreakdown may read other patched fields, so scoring
   // against the unpatched `inputs` would misjudge any strategy whose patch
   // touches a verdict-relevant field (issue S-01).
-  const ho = householdOutcome(r, merged);
+  const ho = householdOutcome(r, mergedHousehold);
   return {
     id: spec.id,
     name: spec.name,

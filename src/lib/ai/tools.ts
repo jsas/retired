@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '../retirementEngine';
 import { calculateHousehold, householdOutcome } from '../retirementEngine';
+import { toHousehold } from '../householdTypes';
 import type { AppConfig } from '../appConfig';
 import { runStrategies, type StrategyFilter } from '../strategies';
 import { solveSustainableSpending } from '../spendingSolver';
@@ -608,7 +609,7 @@ function summarizeResults(label: string, inputs: RetirementInputs, results: Reti
   // partner covers the gap (and vice-versa). Matches the dashboard and the
   // Monte Carlo screen (#33), which both use householdOutcome. The per-person
   // lines below stay as secondary detail.
-  const ho = householdOutcome(results, inputs);
+  const ho = householdOutcome(results, toHousehold(inputs));
   const lines = [
     `${label}: ${ho.status === 'ON_TRACK' ? 'ON TRACK' : 'SHORTFALL'} — ` +
     (ho.depletionAge != null
