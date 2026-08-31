@@ -63,6 +63,15 @@ done
 URL="http://localhost:$PORT/probe/?auto=$AUTO$EXTRA"
 
 # --- 1. probe static server (repo root; page served at /probe/) --------------
+# Free the port first: a stale probe server (e.g. from another checkout) would
+# make vite silently move to 5175 while every health check passes against the
+# old one. Only kills the LISTENING process on OUR port, nothing else.
+STALE=$(powershell -NoProfile -Command "(Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue).OwningProcess" 2>/dev/null | tr -d '\r' | head -1)
+if [ -n "$STALE" ] && [ "$STALE" != "0" ]; then
+  echo "# port $PORT held by pid $STALE — freeing it"
+  powershell -NoProfile -Command "Stop-Process -Id $STALE -Force" 2>/dev/null
+  sleep 1
+fi
 ( cd "$ROOT" && npm run probe ) > /tmp/probe-vite.log 2>&1 &
 VITE_PID=$!
 trap 'echo "# shutting down vite ($VITE_PID)"; kill "$VITE_PID" 2>/dev/null' EXIT INT

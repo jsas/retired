@@ -10,6 +10,10 @@ export default defineConfig({
   base: './',
   server: {
     port: 5174,
+    // Fail loudly if 5174 is taken (a stale server would silently push us to
+    // 5175 while the launcher's health check passes against the OLD server —
+    // which may be serving something else entirely).
+    strictPort: true,
     host: true,
     // The probe is a static dev page — no HMR needed. Watching the whole
     // repo root means a Chrome profile (or any locked file) inside the tree

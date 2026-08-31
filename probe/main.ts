@@ -279,15 +279,20 @@ function render() {
   }
   const tuning: ModelTuning[] = models.map(modelId => ({
     modelId,
-    profiles: [...byProfile.entries()].map(([label, cells]) => {
+    profiles: [...byProfile.entries()].flatMap(([label, cells]) => {
       const mine = cells.filter(c => c.modelId === modelId);
-      return {
-        profile: SWEEP_PROFILES.find(p => p.label === label)!,
-        avgScore: mine.length ? mine.reduce((s, c) => s + c.score, 0) / mine.length : 0,
-        worstScore: mine.length ? Math.max(...mine.map(c => c.score)) : 0,
+      // Auto-triage cells carry the 'shipped' profile label, which isn't in
+      // SWEEP_PROFILES — skip anything the sweep grid doesn't know (it still
+      // shows in the table above; only the ranked export needs a grid entry).
+      const profile = SWEEP_PROFILES.find(p => p.label === label);
+      if (!profile || !mine.length) return [];
+      return [{
+        profile,
+        avgScore: mine.reduce((s, c) => s + c.score, 0) / mine.length,
+        worstScore: Math.max(...mine.map(c => c.score)),
         samples: mine.length,
-      };
-    }).filter(p => p.samples > 0),
+      }];
+    }),
   }));
   const summaryRows = [...byProfile.entries()]
     .map(([label, cells]) => ({
