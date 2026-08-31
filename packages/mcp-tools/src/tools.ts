@@ -276,95 +276,56 @@ const STRUCTURAL_FIELDS = new Set([
 ]);
 
 // ---------------------------------------------------------------------------
-// Tool specs advertised to providers (Zod → JSON Schema)
+// Tool catalog: name → description + zod schema (single source of truth)
 // ---------------------------------------------------------------------------
 
+/** One catalog entry: the description both the LLM and the MCP server
+ *  advertise, and the zod schema that validates the arguments. */
+export interface ToolCatalogEntry {
+  description: string;
+  schema: z.ZodType;
+}
+
+/** The full tool surface as data. `toolSpecs()` renders this for LLM
+ *  providers (zod → JSON Schema); the MCP server (`@retired/mcp-server`)
+ *  registers every entry with the official SDK — so both consumers see the
+ *  same names, descriptions, and argument shapes from one definition. */
+export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
+  get_scenario: { description: 'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
+    run_projection: { description:      'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.', schema: runProjectionArgs },
+    compare_scenarios: { description:      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: compareScenariosArgs },
+    run_strategies: { description:      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.', schema: runStrategiesArgs },
+    solve_spending: { description:      'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"', schema: solveSpendingArgs },
+    run_monte_carlo: { description:      'Run the Monte Carlo simulation on the current plan (optionally with overrides) and return the success rate, median final balance, and depletion spread across market futures.', schema: runMonteCarloArgs },
+    get_schedule: { description:      'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.', schema: getScheduleArgs },
+    set_scenario_value: { description:      'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.', schema: setScenarioValueArgs },
+    propose_patch: { description:      'PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.', schema: proposePatchArgs },
+    propose_spouse: { description:      'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.', schema: proposeSpouseArgs },
+    propose_income: { description:      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.', schema: proposeIncomeArgs },
+    propose_spending_bands: { description:      'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.', schema: proposeSpendingBandsArgs },
+    propose_cash_event: { description:      'PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.', schema: proposeCashEventArgs },
+    propose_reverse_mortgage: { description:      'PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.', schema: proposeReverseMortgageArgs },
+    propose_rdsp: { description:      'PROPOSE enabling/configuring (or disabling) an RDSP (Registered Disability Savings Plan). Models CDSG grants, CDSB bonds, tax-sheltered growth, and taxable-fraction withdrawals. User confirms.', schema: proposeRdspArgs },
+    propose_fhsa: { description:      'PROPOSE enabling/configuring (or disabling) an FHSA (First Home Savings Account). Deductible contributions, tax-sheltered growth, accumulation-only; transfers to the RRSP at retirement. User confirms.', schema: proposeFhsaArgs },
+    propose_revert: { description:      'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.', schema: proposeRevertArgs },
+    manage_cash_event: { description:      'PROPOSE updating or REMOVING an existing cash event (by id or unique label). User confirms. Use propose_cash_event to add a new one.', schema: manageCashEventArgs },
+    manage_income: { description:      'PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.', schema: manageIncomeArgs },
+    propose_debt: { description:      'PROPOSE adding a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending each year until paid off, then stops — so carrying debt into retirement raises withdrawals and can flip the verdict. User confirms.', schema: proposeDebtArgs },
+    manage_debt: { description:      'PROPOSE updating or REMOVING an existing debt (mortgage, credit card, loan, or line of credit, by id or unique label). User confirms. Use propose_debt to add a new one.', schema: manageDebtArgs },
+    remember: { description:      'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
+    recall: { description:      'Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don\'t know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.', schema: recallArgs },
+    open_scenario: { description:      'Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.', schema: openScenarioArgs },
+    save_scenario_as: { description:      'Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.', schema: saveScenarioAsArgs },
+    list_scenarios: { description:      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
+};
+
+/** Tool specs advertised to providers: the catalog rendered as JSON Schema. */
 export function toolSpecs(): ToolSpec[] {
-  const spec = (name: string, description: string, schema: z.ZodType): ToolSpec => ({
+  return Object.entries(TOOL_CATALOG).map(([name, entry]) => ({
     name,
-    description,
-    jsonSchema: z.toJSONSchema(schema) as Record<string, unknown>,
-  });
-  return [
-    spec('get_scenario',
-      'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).',
-      getScenarioArgs),
-    spec('run_projection',
-      'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.',
-      runProjectionArgs),
-    spec('compare_scenarios',
-      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".',
-      compareScenariosArgs),
-    spec('run_strategies',
-      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.',
-      runStrategiesArgs),
-    spec('solve_spending',
-      'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"',
-      solveSpendingArgs),
-    spec('run_monte_carlo',
-      'Run the Monte Carlo simulation on the current plan (optionally with overrides) and return the success rate, median final balance, and depletion spread across market futures.',
-      runMonteCarloArgs),
-    spec('get_schedule',
-      'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.',
-      getScheduleArgs),
-    spec('set_scenario_value',
-      'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.',
-      setScenarioValueArgs),
-    spec('propose_patch',
-      'PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.',
-      proposePatchArgs),
-    spec('propose_spouse',
-      'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.',
-      proposeSpouseArgs),
-    spec('propose_income',
-      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.',
-      proposeIncomeArgs),
-    spec('propose_spending_bands',
-      'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.',
-      proposeSpendingBandsArgs),
-    spec('propose_cash_event',
-      'PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.',
-      proposeCashEventArgs),
-    spec('propose_reverse_mortgage',
-      'PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.',
-      proposeReverseMortgageArgs),
-    spec('propose_rdsp',
-      'PROPOSE enabling/configuring (or disabling) an RDSP (Registered Disability Savings Plan). Models CDSG grants, CDSB bonds, tax-sheltered growth, and taxable-fraction withdrawals. User confirms.',
-      proposeRdspArgs),
-    spec('propose_fhsa',
-      'PROPOSE enabling/configuring (or disabling) an FHSA (First Home Savings Account). Deductible contributions, tax-sheltered growth, accumulation-only; transfers to the RRSP at retirement. User confirms.',
-      proposeFhsaArgs),
-    spec('propose_revert',
-      'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.',
-      proposeRevertArgs),
-    spec('manage_cash_event',
-      'PROPOSE updating or REMOVING an existing cash event (by id or unique label). User confirms. Use propose_cash_event to add a new one.',
-      manageCashEventArgs),
-    spec('manage_income',
-      'PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.',
-      manageIncomeArgs),
-    spec('propose_debt',
-      'PROPOSE adding a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending each year until paid off, then stops — so carrying debt into retirement raises withdrawals and can flip the verdict. User confirms.',
-      proposeDebtArgs),
-    spec('manage_debt',
-      'PROPOSE updating or REMOVING an existing debt (mortgage, credit card, loan, or line of credit, by id or unique label). User confirms. Use propose_debt to add a new one.',
-      manageDebtArgs),
-    spec('remember',
-      'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.',
-      rememberArgs),
-    spec('recall',
-      'Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don\'t know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.',
-      recallArgs),
-    spec('open_scenario',
-      'Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.',
-      openScenarioArgs),
-    spec('save_scenario_as',
-      'Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.',
-      saveScenarioAsArgs),
-    spec('list_scenarios',
-      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.',
-      listScenariosArgs),
-  ];
+    description: entry.description,
+    jsonSchema: z.toJSONSchema(entry.schema) as Record<string, unknown>,
+  }));
 }
 
 // ---------------------------------------------------------------------------
