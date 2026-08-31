@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent } from './retirementEngine';
+import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent, type IncomeSource, type RetirementInputs } from './retirementEngine';
 import { legacyToPerson, legacyToShared, legacySpouseToPerson } from './householdTypes';
 import { calculateTax } from './canadianTax';
 import { baselineInputs } from '../data/exampleScenarios';
@@ -2551,5 +2551,111 @@ describe('RDSP auto-injection into the drawdown order (E-01)', () => {
     // TFSA (tax-free, first) covers the year; RDSP is not drawn at 65.
     expect(y65.detail?.withdraw.tfsa ?? 0).toBeGreaterThan(0);
     expect(y65.detail?.withdraw.rdsp ?? 0).toBe(0);
+  });
+});
+
+describe('FHSA (First Home Savings Account)', () => {
+  // A young person accumulating toward a first home. currentAge 30, retire at
+  // 35 (short horizon keeps the boundary-transfer test cheap), so ages 30..34
+  // are the accumulation years. No other assets or income: isolate the FHSA.
+  const fhsaAccum = (over: Parameters<typeof baseInputs>[0] = {}) => baseInputs({
+    currentAge: 30, retirementAge: 35, maxAge: 40,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    desiredSpending: 0,
+    fhsa: { enabled: true, balance: 0, contribution: 8000 },
+    ...over,
+  });
+
+  it('accumulates the annual contribution and reports it (deductible)', () => {
+    const r = calculateRetirement(fhsaAccum(), config);
+    const y30 = yearAt(r.yearlyBreakdown, 30);
+    expect(y30.detail?.fhsa?.contribution).toBeCloseTo(8000, 0);
+    // Deposits land after the year's growth step, so the year-end balance is
+    // just the (ungrown) contribution; growth starts next year.
+    expect(y30.detail?.fhsa?.balance).toBeCloseTo(8000, 0);
+    expect(y30.fhsaBalance).toBeCloseTo(8000, 0);
+    // Contributed-to-date tracks the lifetime limit.
+    expect(y30.detail?.fhsa?.contributionBasis).toBeCloseTo(8000, 0);
+  });
+
+  it('caps the contribution at the $8,000 annual limit', () => {
+    const r = calculateRetirement(fhsaAccum({
+      fhsa: { enabled: true, balance: 0, contribution: 20000 },
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 30).detail?.fhsa?.contribution).toBeCloseTo(8000, 0);
+  });
+
+  it('caps lifetime contributions at the $40,000 limit', () => {
+    // 6 accumulation years (30..34 → but horizon 30..34 = 5 years). Use a longer
+    // horizon so >5 years of $8k would exceed the $40k lifetime cap.
+    const r = calculateRetirement(fhsaAccum({ retirementAge: 37 }), config);
+    const total = r.yearlyBreakdown.reduce((s, y) => s + (y.detail?.fhsa?.contribution ?? 0), 0);
+    expect(total).toBeLessThanOrEqual(40000 + 0.01);
+    expect(total).toBeGreaterThan(0);
+  });
+
+  it('grows tax-sheltered and includes the balance in net worth', () => {
+    const r = calculateRetirement(fhsaAccum(), config);
+    const y31 = yearAt(r.yearlyBreakdown, 31);
+    // Year 2: prior $8k grew at 5% → $8,400, plus a fresh $8k deposit = $16,400.
+    expect(y31.detail?.fhsa?.growth!).toBeGreaterThan(0);
+    expect(closeTo(y31.fhsaBalance!, 8000 * 1.05 + 8000, 1)).toBe(true);
+    // The FHSA balance is part of the year's ending balance (net worth).
+    expect(closeTo(y31.endingBalance, y31.fhsaBalance!, 1)).toBe(true);
+  });
+
+  it('stops contributing once the 15-year plan window closes', () => {
+    // Opened at 30, so contributions stop at 45. A small $1k/yr contribution
+    // keeps the running total ($15k) under the $40k lifetime cap so the WINDOW
+    // rule (not the lifetime cap) is what stops the contributions.
+    const r = calculateRetirement(fhsaAccum({
+      retirementAge: 48,
+      fhsa: { enabled: true, balance: 0, contribution: 1000 },
+    }), config);
+    // 15 contribution years (30..44 inclusive) then none.
+    expect(yearAt(r.yearlyBreakdown, 44).detail?.fhsa?.contribution).toBeCloseTo(1000, 0);
+    expect(yearAt(r.yearlyBreakdown, 45).detail?.fhsa?.contribution ?? 0).toBe(0);
+  });
+
+  it('transfers the balance to the RRSP at the retirement boundary', () => {
+    const r = calculateRetirement(fhsaAccum(), config);
+    // Last accumulation year (34) still holds the FHSA; the first decumulation
+    // year (35) shows it in the RRSP and the FHSA zeroed.
+    const y34 = yearAt(r.yearlyBreakdown, 34);
+    expect(y34.fhsaBalance!).toBeGreaterThan(0);
+    expect(y34.rrspBalance).toBeCloseTo(0, 0);
+    const y35 = yearAt(r.yearlyBreakdown, 35);
+    expect(y35.fhsaBalance).toBeCloseTo(0, 0);
+    // The whole pre-transfer FHSA balance (grown one more year) is now RRSP.
+    expect(y35.rrspBalance).toBeGreaterThan(0);
+  });
+
+  it('does nothing when disabled (no account, no contribution)', () => {
+    const r = calculateRetirement(fhsaAccum({ fhsa: undefined }), config);
+    const y30 = yearAt(r.yearlyBreakdown, 30);
+    expect(y30.fhsaBalance).toBeUndefined();
+    expect(y30.detail?.fhsa).toBeUndefined();
+  });
+
+  it('reduces the year\'s taxable income (deductible, like an RRSP)', () => {
+    // A working person 30–34, retires at 35. The FHSA contribution lowers the
+    // accumulation earnings-tax base, so the year's income tax drops.
+    const jobIncome = (over: Partial<IncomeSource> = {}): IncomeSource => ({
+      id: 'j', label: 'salary', kind: 'employment', annualAmount: 80000,
+      startAge: 30, endAge: 34, destAccount: 'taxable', indexedToCpi: false, ...over,
+    });
+    const mkWorker = (fhsa: RetirementInputs['fhsa']) =>
+      calculateRetirement(baseInputs({
+        currentAge: 30, retirementAge: 35, maxAge: 37,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        desiredSpending: 0, income: [jobIncome()], fhsa,
+      }), config);
+    const noFhsa = mkWorker(undefined);
+    const withFhsa = mkWorker({ enabled: true, balance: 0, contribution: 8000 });
+    // The FHSA year's income tax is lower than the no-FHSA year's (the $8k
+    // deduction shelters $8k of the $80k salary at the marginal rate).
+    const taxNo = yearAt(noFhsa.yearlyBreakdown, 30).employmentTax ?? 0;
+    const taxWith = yearAt(withFhsa.yearlyBreakdown, 30).employmentTax ?? 0;
+    expect(taxWith).toBeLessThan(taxNo);
   });
 });

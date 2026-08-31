@@ -39,6 +39,15 @@ export interface CppConfig {
   maxDeferralAge: number;       // latest start (70)
   earlyPenaltyPerMonth: number; // reduction per month before standardAge (0.006)
   deferralBonusPerMonth: number; // increase per month after standardAge (0.007)
+  // Self-employed CPP payroll contribution (2026): a self-employed person pays
+  // BOTH the employee and employer shares — selfEmployedRate × pensionable
+  // earnings (net self-employment income between the basic exemption and the
+  // YMPE). That contribution is a DEDUCTION from taxable income (the employee
+  // half as a deduction, the employer half not taxed either — modelled as one
+  // pre-tax deduction). 0 disables the deduction.
+  selfEmployedRate: number;     // combined employee+employer rate (0.119 in 2026)
+  ympe: number;                 // Year's Maximum Pensionable Earnings ($71,300 in 2026)
+  basicExemption: number;       // earnings below this are exempt ($3,500)
 }
 
 export interface EngineConfig {
@@ -99,6 +108,27 @@ export interface RdspConfig {
   contributionEndAge: number;      // (59)
 }
 
+/**
+ * First Home Savings Account parameters (2026). A savings plan for a first
+ * home: contributions are DEDUCTIBLE (like an RRSP, reducing taxable income in
+ * the year), growth is tax-sheltered, and a withdrawal to buy a qualifying
+ * first home is TAX-FREE. If the money isn't used for a qualifying home it can
+ * be transferred to an RRSP/RRIF with no contribution room required (taxed on
+ * later withdrawal), or withdrawn as taxable income. The account must be used
+ * within 15 years of opening. Accumulation-only in this engine: it never
+ * enters the retirement withdrawal order.
+ *
+ * NOT modelled (by design): the qualifying-home withdrawal event itself and
+ * the 15-year forced closure — the balance is assumed transferred to the RRSP
+ * at the retirement boundary (the common "didn't buy" path). Sources: canada.ca
+ * "First Home Savings Account" ($8,000/yr, $40,000 lifetime).
+ */
+export interface FhsaConfig {
+  annualLimit: number;    // max contribution per year (8,000)
+  lifetimeLimit: number;  // max total contributions (40,000)
+  maxYears: number;       // account must be used within this many years of opening (15)
+}
+
 export interface AppConfig {
   federal: TaxTable;
   provinces: Record<string, TaxTable>;
@@ -107,6 +137,7 @@ export interface AppConfig {
   cpp: CppConfig;
   engine: EngineConfig;
   rdsp: RdspConfig;
+  fhsa: FhsaConfig;
   qcFederalAbatement: number;  // Quebec abatement: fraction of federal tax refunded (0.165)
   ontarioSurtax: {             // Ontario surtax on provincial tax above two thresholds
     threshold1: number; rate1: number;
@@ -178,7 +209,11 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     earliestAge: 60,
     maxDeferralAge: 70,
     earlyPenaltyPerMonth: 0.006,
-    deferralBonusPerMonth: 0.007
+    deferralBonusPerMonth: 0.007,
+    // 2026 self-employed CPP: 11.9% combined, $71,300 YMPE, $3,500 exemption.
+    selfEmployedRate: 0.119,
+    ympe: 71300,
+    basicExemption: 3500
   },
   engine: {
     cashCushionRate: 0.005,
@@ -205,6 +240,12 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     bondLifetimeMax: 20000,
     contributionLifetimeMax: 200000,
     contributionEndAge: 59,
+  },
+  // 2026 FHSA parameters (canada.ca "First Home Savings Account").
+  fhsa: {
+    annualLimit: 8000,
+    lifetimeLimit: 40000,
+    maxYears: 15,
   },
   qcFederalAbatement: 0.165,
   // 2026 Ontario surtax thresholds (2025 values × 1.02 CRA indexation).
@@ -256,6 +297,12 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
     cpp.earlyPenaltyPerMonth, cpp.deferralBonusPerMonth
   ].some(v => typeof v !== 'number')) {
     (c as AppConfig).cpp = { ...DEFAULT_APP_CONFIG.cpp };
+  } else {
+    // Self-employed CPP fields were added later — back-fill defaults so configs
+    // saved before they existed keep the deduction available.
+    if (typeof cpp.selfEmployedRate !== 'number') cpp.selfEmployedRate = DEFAULT_APP_CONFIG.cpp.selfEmployedRate;
+    if (typeof cpp.ympe !== 'number') cpp.ympe = DEFAULT_APP_CONFIG.cpp.ympe;
+    if (typeof cpp.basicExemption !== 'number') cpp.basicExemption = DEFAULT_APP_CONFIG.cpp.basicExemption;
   }
   const e = c.engine as Partial<EngineConfig> | undefined;
   if (!e || typeof e.cashCushionRate !== 'number' || typeof e.rrifConversionAge !== 'number') return null;
@@ -283,6 +330,13 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
     ];
     if (!r || nums.some(k => typeof r[k] !== 'number')) {
       (c as AppConfig).rdsp = { ...DEFAULT_APP_CONFIG.rdsp };
+    }
+  }
+  // FHSA config was added later — back-fill the whole block (all-or-nothing).
+  {
+    const f = c.fhsa as Partial<FhsaConfig> | undefined;
+    if (!f || [f.annualLimit, f.lifetimeLimit, f.maxYears].some(v => typeof v !== 'number')) {
+      (c as AppConfig).fhsa = { ...DEFAULT_APP_CONFIG.fhsa };
     }
   }
   // QC abatement / ON surtax were added later — back-fill defaults.

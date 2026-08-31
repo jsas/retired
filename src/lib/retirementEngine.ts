@@ -7,7 +7,8 @@ import {
   oasAnnualGross,
   gisAnnual,
   gisAnnualCouple,
-  indexConfig
+  indexConfig,
+  selfEmployedCppContribution
 } from './canadianTax';
 import {
   legacyToPerson,
@@ -29,9 +30,8 @@ export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable' | 'rdsp';
  * the source: earned kinds (employment / self-employment) build RRSP room and
  * stack for tax like wages; pension is eligible for pension-splitting and
  * carries a pension adjustment that reduces RRSP room; rental is taxable
- * investment income. Phase 1 only READS 'pension' and 'employment' kinds —
- * 'selfEmployment' and 'rental' are accepted by the schema (so the register's
- * shape is final) but have no engine effect until the full income model lands.
+ * investment income (no RRSP room, no pension-splitting). All four kinds are
+ * live in the engine (issue #119).
  */
 export type IncomeKind = 'employment' | 'pension' | 'selfEmployment' | 'rental';
 
@@ -59,6 +59,12 @@ export interface IncomeSource {
   // whether the source tops up spending first (RM-style) instead of saving.
   destAccount?: 'rrsp' | 'tfsa' | 'taxable' | 'cash';
   topUpSpending?: boolean;
+  // Earned kinds only: the share of the after-tax net that is SAVED each year
+  // (0–1); the rest is assumed consumed by working-year living costs, which the
+  // model doesn't track. Unset = 1 (save the whole net) so existing scenarios
+  // are unchanged. Applies in BOTH phases: before retirement it is the only way
+  // earned income enters the plan at all (issue #119).
+  savingsRate?: number;
   // Pension kind only (Phase 2 room tracking): whether this pension's pension
   // adjustment (PA) reduces RRSP room, and the annual PA dollars. Default 0.
   rrspEligible?: boolean;
@@ -132,6 +138,9 @@ export interface RetirementInputs {
   // Registered Disability Savings Plan — the primary person is the beneficiary.
   // Optional; absent = no RDSP.
   rdsp?: RdspInputs;
+  // First Home Savings Account — the primary person's FHSA. Optional; absent =
+  // no FHSA. Accumulation-only (never enters the withdrawal order).
+  fhsa?: FhsaInputs;
 }
 
 /** Where the spouse's plan comes from (see RetirementInputs.spouseSource). */
@@ -171,6 +180,8 @@ export interface SpouseInputs {
   reverseMortgage?: ReverseMortgage;
   // The spouse's own RDSP (they are the beneficiary). Optional; absent = none.
   rdsp?: RdspInputs;
+  // The spouse's own FHSA. Optional; absent = none.
+  fhsa?: FhsaInputs;
 }
 
 export interface CashEvent {
@@ -260,6 +271,28 @@ export interface RdspInputs {
   dtcEligible: boolean;     // Disability Tax Credit eligible — required to hold/receive grants & bonds
 }
 
+/**
+ * A First Home Savings Account. Per-person. Contributions are DEDUCTIBLE (like
+ * an RRSP — they reduce taxable income in the contribution year), growth is
+ * tax-sheltered, and a qualifying first-home withdrawal is tax-free. This
+ * engine models the ACCUMULATION side only: the FHSA never enters the
+ * retirement withdrawal order, and at the retirement boundary any remaining
+ * balance is assumed transferred to the RRSP (the no-qualifying-home path —
+ * CRA allows a direct FHSA→RRSP/RRIF transfer with no contribution room
+ * required). Parameters (annual/lifetime limits, lifespan) live in config.fhsa.
+ * Absent = the person has no FHSA.
+ */
+export interface FhsaInputs {
+  enabled: boolean;
+  balance: number;          // current FHSA market value, today's dollars
+  contribution: number;     // planned contribution $/yr (capped at config.fhsa.annualLimit)
+  // Contributions already made toward the LIFETIME limit (so a plan opened a
+  // few years ago carries its prior contributions). Defaults to `balance` when
+  // omitted — a pre-existing balance is assumed to be all contributed principal.
+  contributionBasis?: number;
+  openAge?: number;         // age the account was opened; the 15-year clock runs from here
+}
+
 export interface AccountBreakdown {
   age: number;
   rrspBalance: number;
@@ -268,6 +301,7 @@ export interface AccountBreakdown {
   taxableBalance: number;
   cashCushionBalance: number;
   rdspBalance?: number; // undefined when the person has no RDSP
+  fhsaBalance?: number;  // undefined when the person has no FHSA
 }
 
 /**
@@ -323,9 +357,9 @@ export interface YearDetail {
   // borrowing (tax-free). Registered and taxable draws are grossed up for tax.
   withdraw: { rrifMin: number; rrif: number; rrsp: number; tfsa: number; taxable: number; cash: number; rmDraw: number; rdsp?: number };
   // Market growth / interest earned per account this year (before it's added).
-  growth: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number; rdsp?: number };
+  growth: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number; rdsp?: number; fhsa?: number };
   // Contributions per account (accumulation years only).
-  contrib?: { rrsp: number; tfsa: number; taxable: number; rdsp?: number };
+  contrib?: { rrsp: number; tfsa: number; taxable: number; rdsp?: number; fhsa?: number };
   // RDSP flow this year, when the account exists. contribution/grant/bond are
   // deposits; growth is the year's sheltered growth; balance/contributionBasis
   // are year-end. taxableFraction is the share of any withdrawal that is
@@ -336,6 +370,13 @@ export interface YearDetail {
     contribution: number; grant: number; bond: number; growth: number;
     balance: number; contributionBasis: number; taxableFraction: number;
     withdrawal?: number; taxablePortion?: number;
+  };
+  // FHSA flow this year, when the account exists. contribution is the year's
+  // (deductible) deposit; growth is the year's sheltered growth; balance and
+  // contributionBasis are year-end. Accumulation-only — never withdrawn in the
+  // plan, so no taxable-fraction split is needed.
+  fhsa?: {
+    contribution: number; growth: number; balance: number; contributionBasis: number;
   };
   // Deposit provenance — gross dollars that LANDED in each account this year
   // from cash events and transfers (inflows + the redeposit side of a
@@ -396,10 +437,18 @@ export interface YearlyBreakdown {
   // RDSP balance (undefined when the person has no RDSP). Included in the
   // ending/total balance; the grant/bond/growth portion is taxable on withdrawal.
   rdspBalance?: number;
+  // FHSA balance (undefined when the person has no FHSA). Included in the
+  // ending/total balance; accumulation-only — transferred to the RRSP at the
+  // retirement boundary, never drawn in the plan.
+  fhsaBalance?: number;
   cppIncome: number;
   oasIncome: number;
   gisIncome: number;
   pensionIncome: number; // DB / bridge pension gross income this year (taxable)
+  // Rental (taxable investment income) gross this year. Reported separately
+  // from pensionIncome because rental is NOT eligible for pension-splitting.
+  // Optional so older fixtures compile; the engine sets it (0 when no rental).
+  rentalIncome?: number;
   // Employment (semi-retirement work) this year. gross stacks for tax; net is
   // the after-tax amount saved and/or used to top up spending. Optional so
   // older fixtures compile; the engine always sets them (0 when not working).
@@ -413,7 +462,7 @@ export interface YearlyBreakdown {
   netHomeEquity?: number;
   // Pension-splitting inputs, captured per-year so the household pass can
   // recompute tax with a split applied. Undefined for singles.
-  splitEligibleIncome?: number; // RRIF/RRSP draws (from conversion age) + DB pensions — NOT CPP/OAS
+  splitEligibleIncome?: number; // DB pensions + registered draws (registered only from age 65) — NOT CPP/OAS
   unsplitNetIncome?: number;    // this person's net income before any split
   // Set on the year the split changes this person's reported tax.
   splitTransferred?: number;    // eligible income moved OUT to the spouse (+) or received IN (−)
@@ -612,11 +661,16 @@ export function calculatePerson(
         })()
       : order;
 
-  // The unified income register, split by kind into the two lists the rest of
-  // the run consumes. (Phase 1 only reads 'pension' and 'employment' kinds.)
+  // The unified income register, split by kind into the lists the rest of the
+  // run consumes. `employmentList` is the EARNED list — employment AND
+  // self-employment both stack for tax like wages, build RRSP room, and save
+  // their after-tax net into a destination account. `rentalList` is taxable
+  // investment income: no RRSP room, no savings vehicle — its net lands in
+  // taxable each year, like a pension (but rental does NOT pension-split).
   const incomeSources: IncomeSource[] = Array.isArray(income) ? income : [];
   const pensionList: IncomeSource[] = incomeSources.filter(s => s.kind === 'pension');
-  const employmentList: IncomeSource[] = incomeSources.filter(s => s.kind === 'employment');
+  const employmentList: IncomeSource[] = incomeSources.filter(s => s.kind === 'employment' || s.kind === 'selfEmployment');
+  const rentalList: IncomeSource[] = incomeSources.filter(s => s.kind === 'rental');
 
   const cushionRate = config.engine.cashCushionRate;
   const rrifAge = config.engine.rrifConversionAge;
@@ -743,8 +797,10 @@ export function calculatePerson(
       if (p.endAge != null && spouseAge > p.endAge) continue;
       fixed += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
-    // The spouse's employment income counts toward the couple's GIS base too.
-    for (const e of (spouseCtx.income ?? []).filter(s => s.kind === 'employment')) {
+    // The spouse's earned + rental income counts toward the couple's GIS base
+    // too (self-employment is earned; rental is taxable investment income —
+    // both reduce the couple's GIS).
+    for (const e of (spouseCtx.income ?? []).filter(s => s.kind === 'employment' || s.kind === 'selfEmployment' || s.kind === 'rental')) {
       if (spouseAge < e.startAge) continue;
       if (e.endAge != null && spouseAge > e.endAge) continue;
       fixed += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
@@ -895,7 +951,20 @@ export function calculatePerson(
   // The fraction of any withdrawal that is TAXABLE (grant + bond + growth).
   const rdspTaxableFraction = () => (rdspBal > 0 ? Math.max(0, Math.min(1, 1 - rdspContribBasis / rdspBal)) : 0);
 
-  const totalBalance = () => rrsp + rrif + tfsa + taxable + cashCushion + rdspBal;
+  // FHSA: deductible-in, tax-sheltered growth, accumulation-only. Tracked by
+  // contribution basis toward the LIFETIME limit (config.fhsa.lifetimeLimit).
+  // At the retirement boundary the balance transfers to the RRSP (the
+  // no-qualifying-home path — CRA allows the transfer with no RRSP room).
+  const fhsaIn = person.fhsa;
+  const fhsaCfg = config.fhsa;
+  const fhsaOn = fhsaIn?.enabled === true;
+  let fhsaBal = fhsaOn ? Math.max(0, fhsaIn.balance) : 0;
+  // Contributions already made toward the lifetime cap. Defaults to the opening
+  // balance (a pre-existing balance is assumed all contributed principal).
+  let fhsaContribBasis = fhsaOn ? Math.min(Math.max(0, fhsaIn.contributionBasis ?? fhsaIn.balance), fhsaCfg.lifetimeLimit) : 0;
+  const fhsaOpenAge = fhsaIn?.openAge ?? currentAge;
+
+  const totalBalance = () => rrsp + rrif + tfsa + taxable + cashCushion + rdspBal + fhsaBal;
 
   // ---- transfer events (account→account / inter-spousal) ----
   // Which household member this run is; transfer endpoints naming this person
@@ -1091,6 +1160,23 @@ export function calculatePerson(
       rdspBondBasis += rdspBond;
     }
 
+    // FHSA: deductible contribution (capped at the annual + lifetime limits),
+    // then tax-sheltered growth on the whole account. The contribution reduces
+    // the year's taxable income (like an RRSP) — subtracted from the earnings
+    // base below. Contributions stop once the 15-year clock runs out.
+    let fhsaContribution = 0, fhsaGains = 0;
+    if (fhsaOn) {
+      if (age < fhsaOpenAge + fhsaCfg.maxYears) {
+        const annualLimit = fhsaCfg.annualLimit * (indexTables ? factorAt(age) : 1);
+        const want = Math.min(Math.max(0, fhsaIn.contribution) * (indexTables ? factorAt(age) : 1), annualLimit);
+        const lifetimeLeft = Math.max(0, fhsaCfg.lifetimeLimit - fhsaContribBasis);
+        fhsaContribution = Math.min(want, lifetimeLeft);
+      }
+      fhsaGains = fhsaBal * r;
+      fhsaBal += fhsaContribution + fhsaGains;
+      fhsaContribBasis += fhsaContribution;
+    }
+
     // Reverse mortgage / HELOC: appreciate the home, accrue interest (reverse)
     // or charge it as an expense (HELOC), take any scheduled draw into the cash
     // cushion (rare pre-retirement, but allowed). Draws are capped at headroom.
@@ -1119,27 +1205,84 @@ export function calculatePerson(
     const accumDeposit = { rrsp: 0, rrif: 0, tfsa: 0, taxable: 0, cash: 0 };
     const accumTransfers: NonNullable<YearCalc['transfers']> = [];
     let accumTransferTax = 0;
-    // Pre-retirement income floor: wages + DB/bridge pensions active this year,
-    // using the exact window/indexation rules of the decumulation phase so the
-    // two phases agree. A registered meltdown stacks on TOP of this — taxing
-    // it from a $0 floor would under-state the tax for someone still working
-    // (issue #25). Used only as the transfer-tax base: reported pre-retirement
-    // balances/contributions are unchanged.
-    let preRetIncome = 0;
+    // Pre-retirement income: wages + DB/bridge pensions active this year, using
+    // the exact window/indexation rules of the decumulation phase so the two
+    // phases agree. This is REAL income — it is taxed and the after-tax net is
+    // saved into the source's account (issue #119: it used to vanish, feeding
+    // only the transfer-tax floor). A registered meltdown stacks on TOP of it —
+    // taxing from a $0 floor would under-state the tax for someone still working
+    // (issue #25).
+    const yearCfg = configAt(age);
+    let employmentGrossAccum = 0;
+    let selfEmploymentGrossAccum = 0; // subset of employmentGross — self-emp only
+    let pensionGrossAccum = 0;
+    let rentalGrossAccum = 0;
+    const employmentActiveAccum: Array<{ e: IncomeSource; gross: number }> = [];
     for (const e of employmentList) {
       if (age < e.startAge) continue;
       if (e.endAge != null && age > e.endAge) continue;
-      preRetIncome += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+      const g = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+      employmentGrossAccum += g;
+      if (e.kind === 'selfEmployment') selfEmploymentGrossAccum += g;
+      employmentActiveAccum.push({ e, gross: g });
     }
     for (const p of pensionList) {
       if (age < p.startAge) continue;
       if (p.endAge != null && age > p.endAge) continue;
-      preRetIncome += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
+      pensionGrossAccum += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+    for (const r of rentalList) {
+      if (age < r.startAge) continue;
+      if (r.endAge != null && age > r.endAge) continue;
+      rentalGrossAccum += r.annualAmount * (r.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+    // Self-employed CPP: the both-sides contribution is a DEDUCTION from taxable
+    // income, so the year's self-employment earnings are taxed net of it. The
+    // FHSA contribution is deductible too (like an RRSP) — both come off the
+    // taxable base.
+    const selfEmpCppAccum = selfEmployedCppContribution(selfEmploymentGrossAccum, yearCfg);
+    // Marginal tax on the year's earned + pension + rental income (no benefits
+    // yet pre-retirement), less the self-employed CPP and FHSA deductions.
+    // Apportioned pro-rata so each stream's net is its gross minus its share of
+    // the tax — the same convention the decumulation loop uses for employment.
+    const earningsGrossAccum = employmentGrossAccum + pensionGrossAccum + rentalGrossAccum;
+    const earningsTaxAccum = earningsGrossAccum > 0
+      ? calculateTax(Math.max(0, earningsGrossAccum - selfEmpCppAccum - fhsaContribution), provinceCode, yearCfg).totalTax
+      : 0;
+    const netOf = (gross: number): number =>
+      earningsGrossAccum > 0 ? gross * (1 - earningsTaxAccum / earningsGrossAccum) : 0;
+    const employmentTaxAccum = earningsGrossAccum > 0 ? earningsTaxAccum * (employmentGrossAccum / earningsGrossAccum) : 0;
+    const employmentNetAccum = employmentGrossAccum - employmentTaxAccum;
+    // Save each active earned source's net × savingsRate into its account
+    // (unset savingsRate = save it all); the rest is consumed by working-year
+    // living costs, which the model doesn't track. Registered destinations
+    // consume room; the overflow spills to taxable via capToRoom. A self-
+    // employment source's take-home is its income-tax net MINUS its CPP
+    // contribution (real money paid, on top of income tax).
+    for (const { e, gross } of employmentActiveAccum) {
+      const rate = e.savingsRate ?? 1;
+      const cpp = e.kind === 'selfEmployment' && selfEmploymentGrossAccum > 0
+        ? selfEmpCppAccum * (gross / selfEmploymentGrossAccum)
+        : 0;
+      const amt = Math.max(0, netOf(gross) - cpp) * Math.min(1, Math.max(0, rate));
+      if (amt <= 0) continue;
+      const dest = e.destAccount ?? 'taxable';
+      if (dest === 'rrsp') { const land = capToRoom('rrsp', amt); rrsp += land; accumDeposit.rrsp += land; }
+      else if (dest === 'tfsa') { const land = capToRoom('tfsa', amt); tfsa += land; accumDeposit.tfsa += land; }
+      else if (dest === 'cash') { cashCushion += amt; accumDeposit.cash += amt; }
+      else { taxable += amt; taxableAcb += amt; accumDeposit.taxable += amt; }
+    }
+    // A pre-retirement pension (e.g. a bridge or early DB) is received income,
+    // not a savings vehicle — its whole net lands in taxable. Rental is the
+    // same: taxable investment income, net deposited to taxable.
+    {
+      const amt = netOf(pensionGrossAccum + rentalGrossAccum);
+      if (amt > 0) { taxable += amt; taxableAcb += amt; accumDeposit.taxable += amt; }
     }
     // Registered transfer draws stack as income within the year so a second
     // transfer the same year is taxed at the right marginal rate. Seeded with
-    // the year's income floor above.
-    let accumTransferBaseGross = preRetIncome;
+    // the year's income floor (earned + pension gross).
+    let accumTransferBaseGross = earningsGrossAccum;
     // Inbound inter-spousal transfers land here as after-tax money. A
     // registered landing is a deposit and consumes room (issue #24).
     for (const d of inboundAt(age)) {
@@ -1204,18 +1347,21 @@ export function calculatePerson(
       drawDown(accRmInterestExpense);
     }
 
-    // A registered transfer draw is a taxable RRSP withdrawal even before
-    // retirement (the meltdown tax). Track it in the year's tax so the
-    // accounting identity and cumulative totals stay honest.
-    cumulativeTax += accumTransferTax;
+    // The year's tax = the earnings tax (on wages + pension) plus the meltdown
+    // transfer tax. Together they equal tax(earnings + transfers) − tax(0): the
+    // transfers are computed incrementally over the earnings base, so nothing is
+    // taxed twice. Track both so the accounting identity and cumulative totals
+    // stay honest.
+    const accumIncomeTax = earningsTaxAccum + accumTransferTax;
+    cumulativeTax += accumIncomeTax;
 
     yearlyBreakdown.push({
       age,
       startingBalance: startingTotal,
-      contributions: rrspContribution + tfsaContribution + taxableContribution + rdspContribution,
-      marketGains: rrspGains + tfsaGains + taxableGains + cashGains + rdspGains,
+      contributions: rrspContribution + tfsaContribution + taxableContribution + rdspContribution + fhsaContribution,
+      marketGains: rrspGains + tfsaGains + taxableGains + cashGains + rdspGains + fhsaGains,
       withdrawals: accumEventOut + accumTransfers.reduce((s, t) => s + t.gross, 0),
-      incomeTax: accumTransferTax,
+      incomeTax: accumIncomeTax,
       cumulativeTax,
       spendingTarget: accumEventOut,
       endingBalance: totalBalance(),
@@ -1225,19 +1371,25 @@ export function calculatePerson(
       taxableBalance: taxable,
       cashCushionBalance: cashCushion,
       ...(rdspOn ? { rdspBalance: rdspBal } : {}),
+      ...(fhsaOn ? { fhsaBalance: fhsaBal } : {}),
       cppIncome: 0,
       oasIncome: 0,
       gisIncome: 0,
-      pensionIncome: 0,
+      pensionIncome: pensionGrossAccum,
+      rentalIncome: rentalGrossAccum,
+      employmentGross: employmentGrossAccum,
+      employmentTax: employmentTaxAccum,
+      employmentNet: employmentNetAccum,
       detail: {
         withdraw: { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 },
-        growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
-        contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution, ...(rdspOn ? { rdsp: rdspContribution } : {}) },
+        growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains, ...(fhsaOn ? { fhsa: fhsaGains } : {}) },
+        contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution, ...(rdspOn ? { rdsp: rdspContribution } : {}), ...(fhsaOn ? { fhsa: fhsaContribution } : {}) },
         deposit: accumDeposit,
         ...(yearOverflow.tfsa > 0 || yearOverflow.rrsp > 0 ? { overflow: { tfsa: yearOverflow.tfsa, rrsp: yearOverflow.rrsp } } : {}),
         ...((tfsaRoom !== null || rrspRoom !== null) ? { roomRemaining: { ...(tfsaRoom !== null ? { tfsa: Math.max(0, tfsaRoom) } : {}), ...(rrspRoom !== null ? { rrsp: Math.max(0, rrspRoom) } : {}) } } : {}),
         tax: { oasClawback: 0, capitalGains: 0, registeredGross: accumTransferBaseGross },
         ...(rdspOn ? { rdsp: { contribution: rdspContribution, grant: rdspGrant, bond: rdspBond, growth: rdspGains, balance: rdspBal, contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction() } } : {}),
+        ...(fhsaOn ? { fhsa: { contribution: fhsaContribution, growth: fhsaGains, balance: fhsaBal, contributionBasis: fhsaContribBasis } } : {}),
         ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: accRmInterestExpense } : {}) } } : {}),
         events: yearEvents,
         // Pre-retirement transfers: surface on the math page too. There is no
@@ -1262,8 +1414,19 @@ export function calculatePerson(
       tfsaBalance: tfsa,
       taxableBalance: taxable,
       cashCushionBalance: cashCushion,
-      ...(rdspOn ? { rdspBalance: rdspBal } : {})
+      ...(rdspOn ? { rdspBalance: rdspBal } : {}),
+      ...(fhsaOn ? { fhsaBalance: fhsaBal } : {})
     });
+  }
+
+  // FHSA → RRSP transfer at the retirement boundary: any remaining FHSA balance
+  // moves into the RRSP (the no-qualifying-home path; CRA allows the direct
+  // transfer with no RRSP contribution room required, so capToRoom is bypassed).
+  // The FHSA never enters the decumulation withdrawal order — it has served its
+  // purpose (or its 15-year window) by the time drawdown begins.
+  if (fhsaOn && fhsaBal > 0) {
+    rrsp += fhsaBal;
+    fhsaBal = 0;
   }
 
   // ---------------- decumulation phase ----------------
@@ -1369,34 +1532,52 @@ export function calculatePerson(
       if (p.endAge != null && age > p.endAge) continue;
       pensionGross += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
+    // Rental income: taxable investment income, stacked with CPP/OAS/pension
+    // for tax and the clawbacks, but NOT eligible for pension-splitting. Its
+    // net lands in taxable below (it's income, not a savings vehicle).
+    let rentalGross = 0;
+    for (const r of rentalList) {
+      if (age < r.startAge) continue;
+      if (r.endAge != null && age > r.endAge) continue;
+      rentalGross += r.annualAmount * (r.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
 
     // Employment income: earned, so it stacks for tax like the benefits and is
     // taxed in the year it's earned (regardless of what the money is then used
     // for). Split by mode: top-up net covers spending first (RM-style), save
-    // net is deposited into its account below.
+    // net is deposited into its account below. Self-employment additionally
+    // owes the both-sides CPP contribution — a deduction from taxable income
+    // AND real money paid out of the year's take-home.
     let employmentTopUpGross = 0;
     let employmentSaveGross = 0;
+    let selfEmploymentGross = 0; // subset of the two above — self-emp only
     const employmentSaveActive: IncomeSource[] = [];
     for (const e of employmentList) {
       if (age < e.startAge) continue;
       if (e.endAge != null && age > e.endAge) continue;
       const amt = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+      if (e.kind === 'selfEmployment') selfEmploymentGross += amt;
       if (e.topUpSpending) employmentTopUpGross += amt;
       else { employmentSaveGross += amt; employmentSaveActive.push(e); }
     }
     const employmentGross = employmentTopUpGross + employmentSaveGross;
-    const otherGrossNoEmployment = cppGross + oasGross + pensionGross;
+    const selfEmpCpp = selfEmployedCppContribution(selfEmploymentGross, yearConfig);
+    const otherGrossNoEmployment = cppGross + oasGross + pensionGross + rentalGross;
+    // Employment's marginal tax, computed on income NET of the self-emp CPP
+    // deduction (the deduction lowers the taxable stack on both sides).
     const employmentTax = employmentGross > 0
       ? Math.max(0,
-          calculateTax(otherGrossNoEmployment + employmentGross, provinceCode, yearConfig).totalTax
+          calculateTax(otherGrossNoEmployment + employmentGross - selfEmpCpp, provinceCode, yearConfig).totalTax
           - calculateTax(otherGrossNoEmployment, provinceCode, yearConfig).totalTax)
       : 0;
-    const employmentNet = employmentGross - employmentTax;
+    // Take-home = gross − income tax − CPP contribution (the contribution is
+    // paid out of the year's earnings, not just deducted for tax).
+    const employmentNet = employmentGross - employmentTax - selfEmpCpp;
     // Apportion the net between the two modes pro-rata to their gross.
     const employmentTopUpNet = employmentGross > 0 ? employmentNet * (employmentTopUpGross / employmentGross) : 0;
     const employmentSaveNet = employmentGross > 0 ? employmentNet * (employmentSaveGross / employmentGross) : 0;
 
-    const otherGross = cppGross + oasGross + pensionGross;
+    const otherGross = cppGross + oasGross + pensionGross + rentalGross;
     // For all marginal-rate math below, benefits and employment stack together:
     // a registered draw or realized gain lands on TOP of the year's wages, so
     // grossing up on benefits alone would under-estimate withdrawal tax.
@@ -1511,7 +1692,7 @@ export function calculatePerson(
         const sp = spouseFixedIncomeAt(age);
         return gisAnnualCouple(
           registeredGross + capitalGains + rdspTaxable,
-          cppGross + pensionGross + employmentGross + sp.fixed + sp.partnerDraws,
+          cppGross + pensionGross + rentalGross + employmentGross + sp.fixed + sp.partnerDraws,
           sp.hasOas,
           yearConfig
         );
@@ -1640,11 +1821,16 @@ export function calculatePerson(
     {
       const afterBenefits = Math.max(0, yearSpending - netBenefits);
       const topUpExcess = Math.max(0, employmentTopUpNet - afterBenefits);
-      // Save-mode: split the save net across active save jobs by gross share.
+      // Save-mode: split the save net across active save jobs by gross share,
+      // then save each job's savingsRate × its share (unset = save it all); the
+      // rest is assumed consumed. Matches the pre-retirement accumulation path
+      // so the field means the same thing in both phases (issue #119).
       const perJob: Array<{ e: IncomeSource; net: number }> = [];
       for (const e of employmentSaveActive) {
         const g = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
-        perJob.push({ e, net: employmentSaveGross > 0 ? employmentSaveNet * (g / employmentSaveGross) : 0 });
+        const share = employmentSaveGross > 0 ? employmentSaveNet * (g / employmentSaveGross) : 0;
+        const rate = Math.min(1, Math.max(0, e.savingsRate ?? 1));
+        perJob.push({ e, net: share * rate });
       }
       const depositEmployment = (e: IncomeSource, amt: number) => {
         if (amt <= 0) return;
@@ -1686,11 +1872,16 @@ export function calculatePerson(
     // threshold. Employment is taxed exactly once: it's inside totalNetIncome
     // (so brackets and clawback see it) and its marginal share — this figure
     // minus what a no-employment year would report — equals employmentTax.
+    // The self-emp CPP contribution is a deduction, so taxable income is net
+    // of it (the clawback base still uses the full gross — CRA's clawback is on
+    // net income BEFORE the CPP deduction, but the deduction is small and the
+    // simplification keeps the two figures consistent).
     const totalNetIncome = otherGross + employmentGross + registeredGross + capitalGains * inclusion + rdspTaxable;
+    const taxableNetIncome = Math.max(0, totalNetIncome - selfEmpCpp);
     const oasClawback = oasGross > 0
       ? Math.min(oasGross, Math.max(0, totalNetIncome - yearConfig.oas.clawbackThreshold) * yearConfig.oas.clawbackRate)
       : 0;
-    const incomeTax = calculateTax(totalNetIncome, provinceCode, yearConfig).totalTax
+    const incomeTax = calculateTax(taxableNetIncome, provinceCode, yearConfig).totalTax
       - calculateTax(otherGross, provinceCode, yearConfig).totalTax
       + oasClawback;
     cumulativeTax += incomeTax;
@@ -1729,11 +1920,12 @@ export function calculatePerson(
       depletionAge = age;
     }
 
-    // Pension-splitting inputs: eligible income is RRIF/RRSP registered draws
-    // (which only exist from the RRIF-conversion age onward, so age ≥ 65 in
-    // practice) plus DB pensions. CPP and OAS are NOT eligible. Captured
+    // Pension-splitting inputs. Eligible income is DB pensions PLUS registered
+    // draws — but CRA only lets you split REGISTERED (RRIF/RRSP annuity) income
+    // from age 65. Before 65, an RRSP/RRIF withdrawal is NOT split-eligible
+    // (a DB pension still is). CPP and OAS are never eligible. Captured
     // pre-split; the household pass applies the split to the reported tax.
-    const splitEligibleIncome = registeredGross + pensionGross;
+    const splitEligibleIncome = pensionGross + (age >= 65 ? registeredGross : 0);
     const unsplitNetIncome = totalNetIncome;
 
     // The GIS base this run actually used — captured per age so the household
@@ -1766,10 +1958,12 @@ export function calculatePerson(
       taxableBalance: Math.max(0, taxable),
       cashCushionBalance: Math.max(0, cashCushion),
       ...(rdspOn ? { rdspBalance: Math.max(0, rdspBal) } : {}),
+      ...(fhsaOn ? { fhsaBalance: Math.max(0, fhsaBal) } : {}),
       cppIncome: cppGross,
       oasIncome: oasGross,
       gisIncome: gisGross,
       pensionIncome: pensionGross,
+      rentalIncome: rentalGross,
       employmentGross,
       employmentTax,
       employmentNet,
@@ -1797,7 +1991,8 @@ export function calculatePerson(
       tfsaBalance: Math.max(0, tfsa),
       taxableBalance: Math.max(0, taxable),
       cashCushionBalance: Math.max(0, cashCushion),
-      ...(rdspOn ? { rdspBalance: Math.max(0, rdspBal) } : {})
+      ...(rdspOn ? { rdspBalance: Math.max(0, rdspBal) } : {}),
+      ...(fhsaOn ? { fhsaBalance: Math.max(0, fhsaBal) } : {})
     });
   }
 
@@ -2091,10 +2286,14 @@ export function combineHouseholdBreakdown(
       ...((py.rdspBalance !== undefined || sy.rdspBalance !== undefined)
         ? { rdspBalance: (py.rdspBalance ?? 0) + (sy.rdspBalance ?? 0) }
         : {}),
+      ...((py.fhsaBalance !== undefined || sy.fhsaBalance !== undefined)
+        ? { fhsaBalance: (py.fhsaBalance ?? 0) + (sy.fhsaBalance ?? 0) }
+        : {}),
       cppIncome: py.cppIncome + sy.cppIncome,
       oasIncome: py.oasIncome + sy.oasIncome,
       gisIncome: py.gisIncome + sy.gisIncome,
       pensionIncome: py.pensionIncome + sy.pensionIncome,
+      rentalIncome: (py.rentalIncome ?? 0) + (sy.rentalIncome ?? 0),
       employmentGross: (py.employmentGross ?? 0) + (sy.employmentGross ?? 0),
       employmentTax: (py.employmentTax ?? 0) + (sy.employmentTax ?? 0),
       employmentNet: (py.employmentNet ?? 0) + (sy.employmentNet ?? 0),

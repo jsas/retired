@@ -32,7 +32,7 @@ describe('toolSpecs', () => {
       'compare_scenarios', 'get_schedule', 'get_scenario',
       'list_scenarios',
       'manage_cash_event', 'manage_income',
-      'propose_cash_event', 'propose_income', 'propose_patch',
+      'propose_cash_event', 'propose_fhsa', 'propose_income', 'propose_patch',
       'propose_rdsp', 'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
       'open_scenario', 'save_scenario_as',

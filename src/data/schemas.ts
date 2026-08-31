@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type {
   RetirementInputs, SpouseInputs, CashEvent, IncomeSource, SpendingBand,
-  ReverseMortgage, WithdrawalAccount, RdspInputs,
+  ReverseMortgage, WithdrawalAccount, RdspInputs, FhsaInputs,
 } from '../lib/retirementEngine';
 import type { AppConfig, TaxTable } from '../lib/appConfig';
 import type { Scenario } from '../lib/types';
@@ -45,9 +45,10 @@ export const cashEventSchema = z.object({
   to: transferEndpoint.optional(),
 }) satisfies z.ZodType<CashEvent>;
 
-// One entry in a person's income register (kind 'pension' / 'employment' read
-// by the engine in Phase 1; 'selfEmployment' / 'rental' accepted so the
-// register's shape is final). Replaces the legacy pensionSchema /
+// One entry in a person's income register. All four kinds are live in the
+// engine (issue #119): employment/selfEmployment are earned (build RRSP room,
+// save their net), pension is split-eligible retirement income, rental is
+// taxable investment income. Replaces the legacy pensionSchema /
 // employmentIncomeSchema pair.
 export const incomeSourceSchema = z.object({
   id: z.string(),
@@ -59,6 +60,7 @@ export const incomeSourceSchema = z.object({
   indexedToCpi: z.boolean(),
   destAccount: z.enum(['rrsp', 'tfsa', 'taxable', 'cash']).optional(),
   topUpSpending: z.boolean().optional(),
+  savingsRate: z.number().min(0).max(1).optional(),
   rrspEligible: z.boolean().optional(),
   pensionAdjustment: z.number().optional(),
 }) satisfies z.ZodType<IncomeSource>;
@@ -90,6 +92,14 @@ export const rdspSchema = z.object({
   dtcEligible: z.boolean(),
 }) satisfies z.ZodType<RdspInputs>;
 
+export const fhsaSchema = z.object({
+  enabled: z.boolean(),
+  balance: z.number(),
+  contribution: z.number(),
+  contributionBasis: z.number().optional(),
+  openAge: z.number().optional(),
+}) satisfies z.ZodType<FhsaInputs>;
+
 const spouseSourceSchema = z.union([
   z.object({ kind: z.literal('builtin') }),
   z.object({ kind: z.literal('scenario'), scenarioId: z.string() }),
@@ -119,6 +129,7 @@ export const spouseSchema = z.object({
   spendingBands: z.array(spendingBandSchema).optional(),
   reverseMortgage: reverseMortgageSchema.optional(),
   rdsp: rdspSchema.optional(),
+  fhsa: fhsaSchema.optional(),
 }) satisfies z.ZodType<SpouseInputs>;
 
 export const retirementInputsSchema = z.object({
@@ -153,6 +164,7 @@ export const retirementInputsSchema = z.object({
   income: z.array(incomeSourceSchema).optional(),
   reverseMortgage: reverseMortgageSchema.optional(),
   rdsp: rdspSchema.optional(),
+  fhsa: fhsaSchema.optional(),
 }) satisfies z.ZodType<RetirementInputs>;
 
 export const scenarioSchema = z.object({
@@ -199,6 +211,9 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
     maxDeferralAge: z.number(),
     earlyPenaltyPerMonth: z.number(),
     deferralBonusPerMonth: z.number(),
+    selfEmployedRate: z.number(),
+    ympe: z.number(),
+    basicExemption: z.number(),
   }),
   engine: z.object({
     cashCushionRate: z.number(),
@@ -223,6 +238,11 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
     bondLifetimeMax: z.number(),
     contributionLifetimeMax: z.number(),
     contributionEndAge: z.number(),
+  }),
+  fhsa: z.object({
+    annualLimit: z.number(),
+    lifetimeLimit: z.number(),
+    maxYears: z.number(),
   }),
   qcFederalAbatement: z.number(),
   ontarioSurtax: z.object({

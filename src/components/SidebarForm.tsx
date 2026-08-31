@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Home, X, Briefcase, HeartHandshake } from 'lucide-react';
-import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, IncomeSource, ReverseMortgage, RdspInputs } from '../lib/retirementEngine';
+import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, IncomeSource, ReverseMortgage, RdspInputs, FhsaInputs } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
 import { baselineSpouse } from '../lib/householdTypes';
 import type { AppConfig } from '../lib/appConfig';
@@ -44,10 +44,14 @@ const newIncomeId = () => `inc-${Date.now().toString(36)}-${(eventSeq++).toStrin
 // Reusable income-register editor (primary plan and spouse plan both render
 // one). One card per IncomeSource: label, $/yr, start/end ages, indexed, plus a
 // kind selector. The endAge convention differs by kind: a pension's endAge is
-// number|null (blank = lifetime); an employment source should end at a finite
-// age, so a null is coerced to startAge+5 rather than left blank. Employment
-// cards add the after-tax destination account and the top-up-spending toggle.
-// Only pension/employment are offered — the engine reads no other kind yet.
+// number|null (blank = lifetime); an earned source should end at a finite age,
+// so a null is coerced to startAge+5 rather than left blank. Earned kinds
+// (employment / self-employment) add the after-tax destination account, the
+// top-up-spending toggle, and the savings-rate knob; pension and rental are
+// received income (no savings fields — the net lands in taxable automatically).
+const EARNED_KINDS: ReadonlyArray<IncomeSource['kind']> = ['employment', 'selfEmployment'];
+const isEarned = (k: IncomeSource['kind']) => EARNED_KINDS.includes(k);
+
 function IncomeList({ income, onChange, tfsaAnnualLimit }: {
   income: IncomeSource[];
   onChange: (next: IncomeSource[]) => void;
@@ -56,14 +60,14 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
   const update = (i: number, patch: Partial<IncomeSource>) =>
     onChange(income.map((s, j) => (j === i ? { ...s, ...patch } : s)));
 
-  // Kind flip pension↔employment: keep the common fields, drop inapplicable
-  // ones. Switching to employment adds destAccount/topUpSpending defaults and
-  // coerces a lifetime (null) endAge to a finite one; switching to pension
-  // strips the employment-only fields.
+  // Kind flip: keep the common fields, drop inapplicable ones. Switching to an
+  // EARNED kind adds destAccount/topUpSpending defaults and coerces a lifetime
+  // (null) endAge to a finite one; switching to pension/rental strips the
+  // earned-only fields (their net is received income, not directed savings).
   const flipKind = (i: number, kind: IncomeSource['kind']) => {
     const s = income[i];
     if (kind === s.kind) return;
-    if (kind === 'employment') {
+    if (isEarned(kind)) {
       const next: IncomeSource = {
         ...s,
         kind,
@@ -76,6 +80,7 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
       const next: IncomeSource = { ...s, kind };
       delete next.destAccount;
       delete next.topUpSpending;
+      delete next.savingsRate;
       update(i, next);
     }
   };
@@ -84,6 +89,10 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
     onChange([...income, { id: newIncomeId(), label: 'Pension', kind: 'pension', annualAmount: 12000, startAge: 60, endAge: null, indexedToCpi: true }]);
   const addJob = () =>
     onChange([...income, { id: newIncomeId(), label: 'Part-time work', kind: 'employment', annualAmount: 15000, startAge: 65, endAge: 70, destAccount: 'taxable', topUpSpending: true, indexedToCpi: false }]);
+  const addSelfEmployed = () =>
+    onChange([...income, { id: newIncomeId(), label: 'Consulting / business', kind: 'selfEmployment', annualAmount: 20000, startAge: 60, endAge: 68, destAccount: 'taxable', topUpSpending: false, indexedToCpi: false }]);
+  const addRental = () =>
+    onChange([...income, { id: newIncomeId(), label: 'Rental property', kind: 'rental', annualAmount: 12000, startAge: 60, endAge: null, indexedToCpi: false }]);
 
   return (
     <div className="space-y-1.5">
@@ -92,12 +101,14 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
           <div className="flex items-center gap-1.5">
             <select
               value={s.kind}
-              title="Income kind (pension = taxable retirement income; employment = earned income)"
+              title="Income kind (pension = split-eligible retirement income; employment / self-employment = earned income that builds RRSP room; rental = taxable investment income)"
               onChange={(e) => flipKind(i, e.target.value as IncomeSource['kind'])}
               className="shrink-0 px-1 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
             >
               <option value="pension">Pension</option>
               <option value="employment">Job</option>
+              <option value="selfEmployment">Self-emp</option>
+              <option value="rental">Rental</option>
             </select>
             <input
               type="text"
@@ -109,7 +120,7 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
             <button
               onClick={() => onChange(income.filter((_, j) => j !== i))}
               className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
-              title={s.kind === 'employment' ? 'Remove job' : 'Remove pension'}
+              title={`Remove ${s.kind === 'pension' ? 'pension' : s.kind === 'rental' ? 'rental' : isEarned(s.kind) ? 'job' : 'source'}`}
             >
               <Trash2 size={12} />
             </button>
@@ -119,7 +130,7 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
               type="number"
               step="1000"
               value={s.annualAmount}
-              title={s.kind === 'employment' ? "Gross annual pay ($/yr, before tax, today's dollars)" : "Annual amount ($/yr, today's dollars)"}
+              title={isEarned(s.kind) ? "Gross annual pay ($/yr, before tax, today's dollars)" : s.kind === 'rental' ? "Net rental income ($/yr after expenses, before income tax, today's dollars)" : "Annual amount ($/yr, today's dollars)"}
               onChange={(e) => update(i, { annualAmount: Math.max(0, parseInt(e.target.value) || 0) })}
               className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
             />
@@ -134,12 +145,12 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
               className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
             />
             <span className="text-[10px] text-neutral-500">to</span>
-            {s.kind === 'pension' ? (
+            {!isEarned(s.kind) ? (
               <input
                 type="number"
                 value={s.endAge ?? ''}
                 placeholder="life"
-                title="End age (blank = lifetime; set for a bridge/temporary pension)"
+                title={s.kind === 'rental' ? 'End age (blank = the property is held for life; set one if it is sold)' : 'End age (blank = lifetime; set for a bridge/temporary pension)'}
                 onChange={(e) => update(i, { endAge: e.target.value ? parseInt(e.target.value) : null })}
                 className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
               />
@@ -153,10 +164,10 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
                 className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
               />
             )}
-            {s.kind === 'employment' && (
+            {isEarned(s.kind) && (
               <select
                 value={s.destAccount ?? 'taxable'}
-                title="Where the after-tax pay is saved"
+                title="Where the after-tax net is saved"
                 onChange={(e) => update(i, { destAccount: e.target.value as NonNullable<IncomeSource['destAccount']> })}
                 className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
               >
@@ -166,7 +177,7 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
                 <option value="cash">Cash</option>
               </select>
             )}
-            {s.kind === 'pension' && (
+            {!isEarned(s.kind) && (
               <label className="flex items-center gap-1 text-[10px] text-neutral-400 cursor-pointer ml-auto" title="Grow with CPI (when table indexation is on)">
                 <input
                   type="checkbox"
@@ -177,21 +188,39 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
               </label>
             )}
           </div>
-          {s.kind === 'employment' && (s.destAccount ?? 'taxable') === 'tfsa' && tfsaAnnualLimit != null && s.annualAmount > tfsaAnnualLimit && (
-            <div className="text-[10px] text-amber-400 leading-snug">
-              Over the {formatMoney(tfsaAnnualLimit)}/yr TFSA limit — the app doesn't track
-              contribution room yet, so a taxable destination is safer unless you have the room.
+          {s.kind === 'pension' && (
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+              <span title="Pension adjustment (PA): the annual deemed value of this DB pension that reduces the RRSP room you accrue each year while it's active (from your T4 / pension statement)">PA</span>
+              <input
+                type="number"
+                step="500"
+                min={0}
+                value={s.pensionAdjustment ?? ''}
+                placeholder="0"
+                title="Pension adjustment (PA): the annual deemed value of this DB pension that reduces the RRSP room you accrue each year while it's active (from your T4 / pension statement)"
+                onChange={(e) => update(i, { pensionAdjustment: e.target.value ? Math.max(0, parseInt(e.target.value) || 0) : undefined })}
+                className="w-20 px-1.5 py-0.5 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+              <span title="Pension adjustment (PA): the annual deemed value of this DB pension that reduces the RRSP room you accrue each year while it's active (from your T4 / pension statement)">$/yr RRSP-room offset</span>
             </div>
           )}
-          {s.kind === 'employment' && (s.destAccount ?? 'taxable') === 'rrsp' && (
+          {isEarned(s.kind) && (s.destAccount ?? 'taxable') === 'tfsa' && tfsaAnnualLimit != null && s.annualAmount > tfsaAnnualLimit && (
             <div className="text-[10px] text-amber-400 leading-snug">
-              The app doesn't track RRSP room — make sure you have the contribution room
-              (18% of earned income/yr, capped) before directing pay here.
+              Over the {formatMoney(tfsaAnnualLimit)}/yr TFSA limit — only the available
+              contribution room fits each year; the rest spills to taxable. Set your TFSA room
+              in the Balances section to track it.
             </div>
           )}
-          {s.kind === 'employment' && (
+          {isEarned(s.kind) && (s.destAccount ?? 'taxable') === 'rrsp' && (
+            <div className="text-[10px] text-amber-400 leading-snug">
+              Directing pay to an RRSP consumes contribution room. Set your starting RRSP room
+              in the Balances section — the plan accrues 18% of this earned income each year
+              and caps the deposit, spilling any excess to taxable.
+            </div>
+          )}
+          {isEarned(s.kind) && (
             <div className="flex items-center gap-3 text-[10px] text-neutral-400">
-              <label className="flex items-center gap-1 cursor-pointer" title="Use the after-tax pay to cover spending first (displaces withdrawals); any excess is saved">
+              <label className="flex items-center gap-1 cursor-pointer" title="Use the after-tax net to cover spending first (displaces withdrawals); any excess is saved">
                 <input
                   type="checkbox"
                   checked={s.topUpSpending ?? false}
@@ -209,20 +238,50 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
               </label>
             </div>
           )}
+          {isEarned(s.kind) && (
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+              <span title="Share of the after-tax pay that's SAVED into the destination account each year; the rest is treated as working-year living costs (100% = save it all)">saves</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={Math.round((s.savingsRate ?? 1) * 100)}
+                title="Share of the after-tax pay that's SAVED into the destination account each year; the rest is treated as working-year living costs (100% = save it all)"
+                onChange={(e) => {
+                  const pct = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                  update(i, { savingsRate: pct >= 100 ? undefined : pct / 100 });
+                }}
+                className="w-14 px-1.5 py-0.5 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+              <span>% of net</span>
+            </div>
+          )}
         </div>
       ))}
-      <div className="flex gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          onClick={addJob}
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+        >
+          <Plus size={12} /> Add job
+        </button>
+        <button
+          onClick={addSelfEmployed}
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+        >
+          <Plus size={12} /> Add self-emp
+        </button>
         <button
           onClick={addPension}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
         >
           <Plus size={12} /> Add pension
         </button>
         <button
-          onClick={addJob}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+          onClick={addRental}
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
         >
-          <Plus size={12} /> Add job
+          <Plus size={12} /> Add rental
         </button>
       </div>
     </div>
@@ -587,6 +646,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
   const spouseStash = useRef<NonNullable<RetirementInputs['spouse']> | null>(null);
   const rmStash = useRef<ReverseMortgage | null>(null);
   const rdspStash = useRef<RdspInputs | null>(null);
+  const fhsaStash = useRef<FhsaInputs | null>(null);
 
   // Single source of truth for a baseline spouse (shared with the setup
   // wizard's "add a spouse" path) so the two ways of adding a spouse don't
@@ -743,6 +803,28 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
     } else {
       if (inputs.rdsp) rdspStash.current = inputs.rdsp;
       updateField('rdsp', undefined);
+    }
+  };
+
+  // FHSA helpers — the primary person's plan. The spouse's FHSA edits go through
+  // updateSpouse (embedded) like their other fields.
+  const updateFhsa = (patch: Partial<FhsaInputs>) => {
+    if (!inputs.fhsa) return;
+    updateField('fhsa', { ...inputs.fhsa, ...patch });
+  };
+  const toggleFhsa = (on: boolean) => {
+    if (on) {
+      const base = fhsaStash.current ?? {
+        enabled: true as const,
+        balance: 0,
+        contribution: 8000,
+        contributionBasis: undefined,
+        openAge: undefined,
+      };
+      updateField('fhsa', { ...base, enabled: true });
+    } else {
+      if (inputs.fhsa) fhsaStash.current = inputs.fhsa;
+      updateField('fhsa', undefined);
     }
   };
 
@@ -960,6 +1042,24 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                     you have carried-forward room, then overflow to non-registered.
                   </div>
                 )}
+                {/* Over-contribution against TODAY'S room (issue #119 T5): the
+                    annual-limit warnings above compare to the per-year cap, but
+                    a deposit can also exceed the room you actually have right
+                    now (which is what the engine caps against). Warn directly. */}
+                {inputs.tfsaRoom != null && (inputs.tfsaContribution ?? 0) > inputs.tfsaRoom && (
+                  <div className="text-[10px] text-amber-400 leading-snug">
+                    Your {formatMoney(inputs.tfsaContribution ?? 0)}/yr TFSA contribution is more than your
+                    {' '}{formatMoney(inputs.tfsaRoom)} of room today — the excess overflows to the
+                    taxable account from year one.
+                  </div>
+                )}
+                {inputs.rrspRoom != null && (inputs.rrspContribution ?? 0) > inputs.rrspRoom && (
+                  <div className="text-[10px] text-amber-400 leading-snug">
+                    Your {formatMoney(inputs.rrspContribution ?? 0)}/yr RRSP contribution is more than your
+                    {' '}{formatMoney(inputs.rrspRoom)} of room today — the excess overflows to the
+                    taxable account from year one.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1016,6 +1116,52 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 only the contribution principal comes back tax-free. <em>Basis</em> is how much of the current balance
                 is contributed principal (defaults to the full balance). Thresholds &amp; caps are editable in Settings.
                 The 10-year AHA clawback and grant/bond carry-forward are not modelled.
+              </p>
+            </div>
+          )}
+        </CollapsibleSection>
+
+        {/* FHSA (First Home Savings Account) */}
+        <CollapsibleSection id="fhsa" icon={<Home size={14} />} title="FHSA (First Home Savings)" open={isOpen('fhsa')} onToggle={toggleSection}>
+          <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer mb-3">
+            <input
+              type="checkbox"
+              checked={inputs.fhsa?.enabled === true}
+              onChange={(e) => toggleFhsa(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>This person has an FHSA</span>
+          </label>
+          {inputs.fhsa?.enabled && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <label className={LABEL_CLS}>Current balance ($)</label>
+                  <input type="number" step="1000" value={inputs.fhsa.balance}
+                    onChange={(e) => updateFhsa({ balance: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Contribution ($/yr)</label>
+                  <input type="number" step="500" value={inputs.fhsa.contribution}
+                    onChange={(e) => updateFhsa({ contribution: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Contributed to date ($)</label>
+                  <input type="number" step="1000" value={inputs.fhsa.contributionBasis ?? inputs.fhsa.balance}
+                    onChange={(e) => updateFhsa({ contributionBasis: Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Age opened (opt.)</label>
+                  <input type="number" step="1" value={inputs.fhsa.openAge ?? ''}
+                    onChange={(e) => updateFhsa({ openAge: e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value) || 0) })} className={INPUT_CLS} />
+                </div>
+              </div>
+              <p className="text-[10px] text-neutral-500 leading-snug">
+                Contributions are <strong className="text-neutral-400">deductible</strong> (like an RRSP) and grow
+                tax-sheltered — capped at $8k/yr and a $40k lifetime total. The plan can stay open 15 years from the
+                age it was opened. On retirement the balance <strong className="text-neutral-400">transfers to the
+                RRSP</strong> (no RRSP room needed). A qualifying first-home withdrawal (tax-free) is not modelled.
+                Limits are editable in Settings.
               </p>
             </div>
           )}
@@ -1473,6 +1619,43 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                         onChange={(e) => updateSpouse({ rdsp: { ...inputs.spouse!.rdsp!, dtcEligible: e.target.checked } })} className="mt-0.5" />
                       <span>DTC-eligible (required for grants/bonds)</span>
                     </label>
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-neutral-800 pt-2">
+                <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={inputs.spouse.fhsa?.enabled === true}
+                    onChange={(e) => updateSpouse(e.target.checked
+                      ? { fhsa: { enabled: true, balance: 0, contribution: 8000, ...(inputs.spouse?.fhsa ?? {}) } }
+                      : { fhsa: undefined })}
+                    className="mt-0.5"
+                  />
+                  <span>Spouse has an FHSA</span>
+                </label>
+                {inputs.spouse.fhsa?.enabled && (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className={LABEL_CLS}>FHSA balance $</label>
+                      <input type="number" step="1000" value={inputs.spouse.fhsa.balance}
+                        onChange={(e) => updateSpouse({ fhsa: { ...inputs.spouse!.fhsa!, balance: Math.max(0, parseInt(e.target.value) || 0) } })} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Contrib $/yr</label>
+                      <input type="number" step="500" value={inputs.spouse.fhsa.contribution}
+                        onChange={(e) => updateSpouse({ fhsa: { ...inputs.spouse!.fhsa!, contribution: Math.max(0, parseInt(e.target.value) || 0) } })} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Contributed $</label>
+                      <input type="number" step="1000" value={inputs.spouse.fhsa.contributionBasis ?? inputs.spouse.fhsa.balance}
+                        onChange={(e) => updateSpouse({ fhsa: { ...inputs.spouse!.fhsa!, contributionBasis: Math.max(0, parseInt(e.target.value) || 0) } })} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS}>Age opened</label>
+                      <input type="number" step="1" value={inputs.spouse.fhsa.openAge ?? ''}
+                        onChange={(e) => updateSpouse({ fhsa: { ...inputs.spouse!.fhsa!, openAge: e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value) || 0) } })} className={INPUT_CLS} />
+                    </div>
                   </div>
                 )}
               </div>

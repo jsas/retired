@@ -9,7 +9,7 @@ import type { RetirementInputs, RetirementResults, YearlyBreakdown } from './ret
 
 export type ExportFormat = 'csv' | 'json' | 'yaml';
 export type Subject = 'household' | 'you' | 'spouse';
-export type ColumnGroup = 'balances' | 'flows' | 'benefits' | 'withdrawalSources' | 'growth' | 'tax' | 'reverseMortgage' | 'rdsp' | 'events';
+export type ColumnGroup = 'balances' | 'flows' | 'benefits' | 'withdrawalSources' | 'growth' | 'tax' | 'reverseMortgage' | 'rdsp' | 'fhsa' | 'events';
 export type MetaSection = 'profile' | 'options' | 'settings';
 
 export interface ProjectionExportOptions {
@@ -30,6 +30,7 @@ export const COLUMN_GROUPS: Array<{ key: ColumnGroup; label: string; hint: strin
   { key: 'tax', label: 'Tax detail', hint: 'Income tax, OAS clawback portion, cumulative tax' },
   { key: 'reverseMortgage', label: 'Reverse mortgage', hint: 'Home value, loan, equity, interest accrued, scheduled vs top-up draws' },
   { key: 'rdsp', label: 'RDSP', hint: 'Balance, contribution, grant (CDSG), bond (CDSB), growth, withdrawal + taxable portion' },
+  { key: 'fhsa', label: 'FHSA', hint: 'Balance, deductible contribution, growth, contributed-to-date (accumulation-only)' },
   { key: 'events', label: 'Cash events', hint: 'One column per labelled event' },
 ];
 
@@ -157,6 +158,12 @@ function rowToRecord(row: YearlyBreakdown, groups: ColumnGroup[], eventKeys: str
     rec.rdspWithdrawal = d?.rdsp?.withdrawal ?? 0;
     rec.rdspTaxablePortion = d?.rdsp?.taxablePortion ?? 0;
     rec.rdspContributionBasis = d?.rdsp?.contributionBasis ?? 0;
+  }
+  if (groups.includes('fhsa') && row.fhsaBalance !== undefined) {
+    rec.fhsaBalance = row.fhsaBalance;
+    rec.fhsaContribution = d?.fhsa?.contribution ?? 0;
+    rec.fhsaGrowth = d?.fhsa?.growth ?? 0;
+    rec.fhsaContributionBasis = d?.fhsa?.contributionBasis ?? 0;
   }
   if (groups.includes('events')) {
     for (const key of eventKeys) {
