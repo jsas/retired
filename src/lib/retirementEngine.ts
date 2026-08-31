@@ -59,6 +59,12 @@ export interface IncomeSource {
   // whether the source tops up spending first (RM-style) instead of saving.
   destAccount?: 'rrsp' | 'tfsa' | 'taxable' | 'cash';
   topUpSpending?: boolean;
+  // Earned kinds only: the share of the after-tax net that is SAVED each year
+  // (0–1); the rest is assumed consumed by working-year living costs, which the
+  // model doesn't track. Unset = 1 (save the whole net) so existing scenarios
+  // are unchanged. Applies in BOTH phases: before retirement it is the only way
+  // earned income enters the plan at all (issue #119).
+  savingsRate?: number;
   // Pension kind only (Phase 2 room tracking): whether this pension's pension
   // adjustment (PA) reduces RRSP room, and the annual PA dollars. Default 0.
   rrspEligible?: boolean;
@@ -1119,27 +1125,65 @@ export function calculatePerson(
     const accumDeposit = { rrsp: 0, rrif: 0, tfsa: 0, taxable: 0, cash: 0 };
     const accumTransfers: NonNullable<YearCalc['transfers']> = [];
     let accumTransferTax = 0;
-    // Pre-retirement income floor: wages + DB/bridge pensions active this year,
-    // using the exact window/indexation rules of the decumulation phase so the
-    // two phases agree. A registered meltdown stacks on TOP of this — taxing
-    // it from a $0 floor would under-state the tax for someone still working
-    // (issue #25). Used only as the transfer-tax base: reported pre-retirement
-    // balances/contributions are unchanged.
-    let preRetIncome = 0;
+    // Pre-retirement income: wages + DB/bridge pensions active this year, using
+    // the exact window/indexation rules of the decumulation phase so the two
+    // phases agree. This is REAL income — it is taxed and the after-tax net is
+    // saved into the source's account (issue #119: it used to vanish, feeding
+    // only the transfer-tax floor). A registered meltdown stacks on TOP of it —
+    // taxing from a $0 floor would under-state the tax for someone still working
+    // (issue #25).
+    const yearCfg = configAt(age);
+    let employmentGrossAccum = 0;
+    let pensionGrossAccum = 0;
+    const employmentActiveAccum: Array<{ e: IncomeSource; gross: number }> = [];
     for (const e of employmentList) {
       if (age < e.startAge) continue;
       if (e.endAge != null && age > e.endAge) continue;
-      preRetIncome += e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+      const g = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+      employmentGrossAccum += g;
+      employmentActiveAccum.push({ e, gross: g });
     }
     for (const p of pensionList) {
       if (age < p.startAge) continue;
       if (p.endAge != null && age > p.endAge) continue;
-      preRetIncome += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
+      pensionGrossAccum += p.annualAmount * (p.indexedToCpi && indexTables ? factorAt(age) : 1);
+    }
+    // Marginal tax on the year's earned + pension income (no benefits yet
+    // pre-retirement). Apportioned pro-rata so each stream's net is its gross
+    // minus its share of the tax — the same convention the decumulation loop
+    // uses for employment.
+    const earningsGrossAccum = employmentGrossAccum + pensionGrossAccum;
+    const earningsTaxAccum = earningsGrossAccum > 0
+      ? calculateTax(earningsGrossAccum, provinceCode, yearCfg).totalTax
+      : 0;
+    const netOf = (gross: number): number =>
+      earningsGrossAccum > 0 ? gross * (1 - earningsTaxAccum / earningsGrossAccum) : 0;
+    const employmentTaxAccum = earningsGrossAccum > 0 ? earningsTaxAccum * (employmentGrossAccum / earningsGrossAccum) : 0;
+    const employmentNetAccum = employmentGrossAccum - employmentTaxAccum;
+    // Save each active earned source's net × savingsRate into its account
+    // (unset savingsRate = save it all); the rest is consumed by working-year
+    // living costs, which the model doesn't track. Registered destinations
+    // consume room; the overflow spills to taxable via capToRoom.
+    for (const { e, gross } of employmentActiveAccum) {
+      const rate = e.savingsRate ?? 1;
+      const amt = netOf(gross) * Math.min(1, Math.max(0, rate));
+      if (amt <= 0) continue;
+      const dest = e.destAccount ?? 'taxable';
+      if (dest === 'rrsp') { const land = capToRoom('rrsp', amt); rrsp += land; accumDeposit.rrsp += land; }
+      else if (dest === 'tfsa') { const land = capToRoom('tfsa', amt); tfsa += land; accumDeposit.tfsa += land; }
+      else if (dest === 'cash') { cashCushion += amt; accumDeposit.cash += amt; }
+      else { taxable += amt; taxableAcb += amt; accumDeposit.taxable += amt; }
+    }
+    // A pre-retirement pension (e.g. a bridge or early DB) is received income,
+    // not a savings vehicle — its whole net lands in taxable.
+    {
+      const amt = netOf(pensionGrossAccum);
+      if (amt > 0) { taxable += amt; taxableAcb += amt; accumDeposit.taxable += amt; }
     }
     // Registered transfer draws stack as income within the year so a second
     // transfer the same year is taxed at the right marginal rate. Seeded with
-    // the year's income floor above.
-    let accumTransferBaseGross = preRetIncome;
+    // the year's income floor (earned + pension gross).
+    let accumTransferBaseGross = earningsGrossAccum;
     // Inbound inter-spousal transfers land here as after-tax money. A
     // registered landing is a deposit and consumes room (issue #24).
     for (const d of inboundAt(age)) {
@@ -1204,10 +1248,13 @@ export function calculatePerson(
       drawDown(accRmInterestExpense);
     }
 
-    // A registered transfer draw is a taxable RRSP withdrawal even before
-    // retirement (the meltdown tax). Track it in the year's tax so the
-    // accounting identity and cumulative totals stay honest.
-    cumulativeTax += accumTransferTax;
+    // The year's tax = the earnings tax (on wages + pension) plus the meltdown
+    // transfer tax. Together they equal tax(earnings + transfers) − tax(0): the
+    // transfers are computed incrementally over the earnings base, so nothing is
+    // taxed twice. Track both so the accounting identity and cumulative totals
+    // stay honest.
+    const accumIncomeTax = earningsTaxAccum + accumTransferTax;
+    cumulativeTax += accumIncomeTax;
 
     yearlyBreakdown.push({
       age,
@@ -1215,7 +1262,7 @@ export function calculatePerson(
       contributions: rrspContribution + tfsaContribution + taxableContribution + rdspContribution,
       marketGains: rrspGains + tfsaGains + taxableGains + cashGains + rdspGains,
       withdrawals: accumEventOut + accumTransfers.reduce((s, t) => s + t.gross, 0),
-      incomeTax: accumTransferTax,
+      incomeTax: accumIncomeTax,
       cumulativeTax,
       spendingTarget: accumEventOut,
       endingBalance: totalBalance(),
@@ -1228,7 +1275,10 @@ export function calculatePerson(
       cppIncome: 0,
       oasIncome: 0,
       gisIncome: 0,
-      pensionIncome: 0,
+      pensionIncome: pensionGrossAccum,
+      employmentGross: employmentGrossAccum,
+      employmentTax: employmentTaxAccum,
+      employmentNet: employmentNetAccum,
       detail: {
         withdraw: { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 },
         growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
@@ -1640,11 +1690,16 @@ export function calculatePerson(
     {
       const afterBenefits = Math.max(0, yearSpending - netBenefits);
       const topUpExcess = Math.max(0, employmentTopUpNet - afterBenefits);
-      // Save-mode: split the save net across active save jobs by gross share.
+      // Save-mode: split the save net across active save jobs by gross share,
+      // then save each job's savingsRate × its share (unset = save it all); the
+      // rest is assumed consumed. Matches the pre-retirement accumulation path
+      // so the field means the same thing in both phases (issue #119).
       const perJob: Array<{ e: IncomeSource; net: number }> = [];
       for (const e of employmentSaveActive) {
         const g = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
-        perJob.push({ e, net: employmentSaveGross > 0 ? employmentSaveNet * (g / employmentSaveGross) : 0 });
+        const share = employmentSaveGross > 0 ? employmentSaveNet * (g / employmentSaveGross) : 0;
+        const rate = Math.min(1, Math.max(0, e.savingsRate ?? 1));
+        perJob.push({ e, net: share * rate });
       }
       const depositEmployment = (e: IncomeSource, amt: number) => {
         if (amt <= 0) return;

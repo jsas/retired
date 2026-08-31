@@ -179,14 +179,16 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
           </div>
           {s.kind === 'employment' && (s.destAccount ?? 'taxable') === 'tfsa' && tfsaAnnualLimit != null && s.annualAmount > tfsaAnnualLimit && (
             <div className="text-[10px] text-amber-400 leading-snug">
-              Over the {formatMoney(tfsaAnnualLimit)}/yr TFSA limit — the app doesn't track
-              contribution room yet, so a taxable destination is safer unless you have the room.
+              Over the {formatMoney(tfsaAnnualLimit)}/yr TFSA limit — only the available
+              contribution room fits each year; the rest spills to taxable. Set your TFSA room
+              in the Balances section to track it.
             </div>
           )}
           {s.kind === 'employment' && (s.destAccount ?? 'taxable') === 'rrsp' && (
             <div className="text-[10px] text-amber-400 leading-snug">
-              The app doesn't track RRSP room — make sure you have the contribution room
-              (18% of earned income/yr, capped) before directing pay here.
+              Directing pay to an RRSP consumes contribution room. Set your starting RRSP room
+              in the Balances section — the plan accrues 18% of this earned income each year
+              and caps the deposit, spilling any excess to taxable.
             </div>
           )}
           {s.kind === 'employment' && (
@@ -207,6 +209,24 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
                 />
                 indexed
               </label>
+            </div>
+          )}
+          {s.kind === 'employment' && (
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+              <span title="Share of the after-tax pay that's SAVED into the destination account each year; the rest is treated as working-year living costs (100% = save it all)">saves</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={Math.round((s.savingsRate ?? 1) * 100)}
+                title="Share of the after-tax pay that's SAVED into the destination account each year; the rest is treated as working-year living costs (100% = save it all)"
+                onChange={(e) => {
+                  const pct = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                  update(i, { savingsRate: pct >= 100 ? undefined : pct / 100 });
+                }}
+                className="w-14 px-1.5 py-0.5 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+              <span>% of net</span>
             </div>
           )}
         </div>

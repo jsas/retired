@@ -86,7 +86,7 @@ const manageIncomeArgs = z.object({
   target: z.string().min(1)
     .describe('Which income source: its id, or its label if unique (e.g. "Work DB").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending). endAge must be a number or explicit null.'),
+    .describe('For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending, savingsRate). endAge must be a number or explicit null. savingsRate (0–1) is the share of after-tax pay saved.'),
   rationale: z.string().optional(),
 });
 
@@ -293,7 +293,7 @@ export function toolSpecs(): ToolSpec[] {
       'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.',
       proposeSpouseArgs),
     spec('propose_income',
-      'PROPOSE adding an income source: kind "pension" for a DB/bridge pension (taxable income stacked with CPP/OAS), kind "employment" for semi-/post-retirement work. User confirms.',
+      'PROPOSE adding an income source: kind "pension" for a DB/bridge pension (taxable income stacked with CPP/OAS), kind "employment" for earned work (before or after retirement). Employment is taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part, the rest treated as working-year living costs). A job starting before retirementAge now actually funds the plan. User confirms.',
       proposeIncomeArgs),
     spec('propose_spending_bands',
       'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.',

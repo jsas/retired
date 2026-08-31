@@ -59,6 +59,7 @@ export const incomeSourceSchema = z.object({
   indexedToCpi: z.boolean(),
   destAccount: z.enum(['rrsp', 'tfsa', 'taxable', 'cash']).optional(),
   topUpSpending: z.boolean().optional(),
+  savingsRate: z.number().min(0).max(1).optional(),
   rrspEligible: z.boolean().optional(),
   pensionAdjustment: z.number().optional(),
 }) satisfies z.ZodType<IncomeSource>;
