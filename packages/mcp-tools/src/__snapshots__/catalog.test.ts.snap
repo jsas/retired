@@ -413,6 +413,49 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
+      "properties": {
+        "periods": {
+          "description": "Market-hypothesis anchors, any order. The engine sorts by age and interpolates linearly between them; outside the outermost anchors the flat investmentReturn/returnVolatility hold. The projection follows the return curve; volatility shapes Monte Carlo only. Empty array clears the hypothesis (back to flat constants). Replaces the whole set.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "age": {
+                "description": "The age this anchor applies at.",
+                "type": "number",
+              },
+              "return": {
+                "description": "Expected annual return (decimal, e.g. -0.30 for a 30% crash, 0.07 for 7% growth). May be negative.",
+                "type": "number",
+              },
+              "volatility": {
+                "description": "Annual return standard deviation at this age (decimal, e.g. 0.25). Omit to keep the plan's flat volatility.",
+                "minimum": 0,
+                "type": "number",
+              },
+            },
+            "required": [
+              "age",
+              "return",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "periods",
+      ],
+      "type": "object",
+    },
+    "name": "propose_market_periods",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
       "description": "A one-time or recurring cash event (inflow to an account, or outflow adding to spending). Set endAge to repeat yearly through that age.",
       "properties": {
         "account": {
@@ -1432,6 +1475,50 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       "type": "object",
     },
     "name": "propose_spending_bands",
+  },
+  {
+    "description": "PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "periods": {
+          "description": "Market-hypothesis anchors, any order. The engine sorts by age and interpolates linearly between them; outside the outermost anchors the flat investmentReturn/returnVolatility hold. The projection follows the return curve; volatility shapes Monte Carlo only. Empty array clears the hypothesis (back to flat constants). Replaces the whole set.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "age": {
+                "description": "The age this anchor applies at.",
+                "type": "number",
+              },
+              "return": {
+                "description": "Expected annual return (decimal, e.g. -0.30 for a 30% crash, 0.07 for 7% growth). May be negative.",
+                "type": "number",
+              },
+              "volatility": {
+                "description": "Annual return standard deviation at this age (decimal, e.g. 0.25). Omit to keep the plan's flat volatility.",
+                "minimum": 0,
+                "type": "number",
+              },
+            },
+            "required": [
+              "age",
+              "return",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "periods",
+      ],
+      "type": "object",
+    },
+    "name": "propose_market_periods",
   },
   {
     "description": "PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.",

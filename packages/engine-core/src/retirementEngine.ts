@@ -20,8 +20,32 @@ import {
   type PersonInputs,
   type SharedInputs,
 } from './householdTypes';
+import { buildReturnSequence } from './marketPeriods';
 
 export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable' | 'rdsp';
+
+// ---------------------------------------------------------------------------
+// Market hypothesis periods (issue #138)
+// ---------------------------------------------------------------------------
+
+/**
+ * One anchor on the market-hypothesis curve: the expected annual return (and
+ * optionally the annual volatility) the plan assumes AT `age`. Anchors are
+ * sorted by age and linearly interpolated between; outside the outermost
+ * anchors the plan's flat `investmentReturn` / `returnVolatility` hold, so a
+ * hypothesis that doesn't cover the whole horizon degrades gracefully to the
+ * constants. Absent/empty `marketPeriods` = the constants apply everywhere
+ * (the pre-#138 behaviour), so existing scenarios are unchanged.
+ *
+ * Both values are decimals (0.05 = 5%); `return` may be negative (a crash),
+ * `volatility` is clamped ≥ 0 (a standard deviation can't be negative).
+ */
+export interface MarketPeriod {
+  id: string;
+  age: number;
+  return: number;
+  volatility?: number;
+}
 
 // ---------------------------------------------------------------------------
 // Income register (issue #24, Phase 1)
@@ -97,6 +121,10 @@ export interface RetirementInputs {
   investmentReturn: number;
   // Annual volatility of returns (standard deviation) — used by Monte Carlo.
   returnVolatility: number;
+  // Market hypothesis periods (issue #138): per-age return/volatility anchors
+  // the curve builder interpolates between. Absent/empty = the flat
+  // `investmentReturn` / `returnVolatility` apply to every year.
+  marketPeriods?: MarketPeriod[];
   provinceCode: string;
   cppStartAge: number | null;
   cppMonthlyAmount: number; // monthly CPP at age 65 — early/deferral adjustments applied by the engine
@@ -2236,8 +2264,19 @@ export function calculateHouseholdModel(
     ? { ...primaryPerson, events: [...(primaryPerson.events ?? []), ...rehome(sp.events, sp.currentAge, 'primary', primaryPerson.currentAge)] }
     : primaryPerson;
 
+  // Market hypothesis (issue #138): when the plan carries periods and the
+  // caller did NOT hand us an explicit sequence, resolve the per-age return
+  // curve and feed it as the returnSequence. An explicit options.returnSequence
+  // (a Monte Carlo run's random future) WINS over the hypothesis — MC samples
+  // around the curve's per-age mean instead. No periods → buildReturnSequence
+  // returns undefined → `options` flows through untouched (no-op).
+  const periodSeq = buildReturnSequence(shared.marketPeriods, primaryPerson.currentAge, shared.maxAge, shared.investmentReturn);
+  const runOptions = options?.returnSequence ?? periodSeq
+    ? { ...options, returnSequence: options?.returnSequence ?? periodSeq }
+    : options;
+
   const primary = calculatePerson(primaryRun, shared, config, {
-    ...options,
+    ...runOptions,
     personRef: 'primary',
     ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
   });
@@ -2275,7 +2314,7 @@ export function calculateHouseholdModel(
     // are already the fixed point and the loop is skipped (Monte Carlo cost).
     let finalPrimary = primary;
     let spouseResults = calculatePerson(spRun, shared, config, {
-      ...options,
+      ...runOptions,
       personRef: 'spouse',
       ...(primaryCtx ? { spouseContext: { ...primaryCtx } } : {}),
       ...(translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge).length > 0
@@ -2297,7 +2336,7 @@ export function calculateHouseholdModel(
         const sToP = translate(spouseResults.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge);
 
         finalPrimary = calculatePerson(primaryRun, shared, config, {
-          ...options,
+          ...runOptions,
           personRef: 'primary',
           ...(primaryCtx
             ? { spouseContext: { ...primaryCtx, partnerDrawsAt: (a: number) => spouseResults.householdDraws?.[a] ?? 0 } }
@@ -2305,7 +2344,7 @@ export function calculateHouseholdModel(
           ...(sToP.length > 0 ? { inboundDeposits: sToP } : {}),
         });
         spouseResults = calculatePerson(spRun, shared, config, {
-          ...options,
+          ...runOptions,
           personRef: 'spouse',
           spouseContext: { ...primaryCtx!, partnerDrawsAt: (a: number) => finalPrimary.householdDraws?.[a] ?? 0 },
           ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
