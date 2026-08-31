@@ -15,6 +15,9 @@ import { SharingPage } from '../SharingPage';
 import { SettingsModal } from '../SettingsModal';
 import { ConnectionsPage } from '../ConnectionsPage';
 import { HelpModal } from '../HelpModal';
+import { PrintOptionsCard } from '../PrintOptionsCard';
+import { DonateCard } from '../DonateCard';
+import { DataPage } from '../DataPage';
 
 export function BetaSchedulePage({ chip, assistant, ...props }: ComponentProps<typeof ScheduleTable> & { chip: VerdictChip; assistant?: ReactNode }) {
   return (
@@ -107,6 +110,30 @@ export function BetaHelpPage({ chip, assistant }: { chip: VerdictChip; assistant
   return (
     <BetaPage title="Help" chip={chip} assistant={assistant}>
       <div className="pt-6"><HelpModal /></div>
+    </BetaPage>
+  );
+}
+
+export function BetaPrintPage({ chip, assistant, ...props }: ComponentProps<typeof PrintOptionsCard> & { chip: VerdictChip; assistant?: ReactNode }) {
+  return (
+    <BetaPage title="Print & export" chip={chip} assistant={assistant}>
+      <div className="pt-6 max-w-2xl"><PrintOptionsCard {...props} /></div>
+    </BetaPage>
+  );
+}
+
+export function BetaDonatePage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
+  return (
+    <BetaPage title="Support this app" chip={chip} assistant={assistant}>
+      <div className="pt-6 max-w-2xl"><DonateCard /></div>
+    </BetaPage>
+  );
+}
+
+export function BetaExportPage({ chip, assistant, ...props }: ComponentProps<typeof DataPage> & { chip: VerdictChip; assistant?: ReactNode }) {
+  return (
+    <BetaPage title="Data — backup, restore, share" chip={chip} assistant={assistant}>
+      <div className="pt-6"><DataPage {...props} /></div>
     </BetaPage>
   );
 }

@@ -64,6 +64,7 @@ export function BetaPage({ title, chip, actions, assistant, children }: {
           <Link view="eq" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">Insights</Link>
           <Link view="scenarios" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">Plans</Link>
           <Link view="data" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Data</Link>
+          <Link view="print" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Print</Link>
           <Link view="settings" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Settings</Link>
 
           <div className="flex-1" />
@@ -129,6 +130,16 @@ export function BetaPage({ title, chip, actions, assistant, children }: {
           </aside>
         )}
       </div>
+
+      {/* Footer: the demoted links — not nav peers, always one click away. */}
+      <footer className="border-t border-slate-200">
+        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-4 text-[11px] text-slate-400">
+          <Link view="help" className="hover:text-slate-600">Help</Link>
+          <Link view="donate" className="hover:text-slate-600">Support this app</Link>
+          <span className="flex-1" />
+          <span>Runs entirely in your browser — nothing is sent anywhere.</span>
+        </div>
+      </footer>
     </div>
   );
 }

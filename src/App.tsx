@@ -8,6 +8,7 @@ import { LandingPage } from './components/beta/LandingPage';
 import {
   BetaSchedulePage, BetaInsightsPage, BetaPlansPage, BetaDataPage,
   BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
+  BetaPrintPage, BetaDonatePage, BetaExportPage,
 } from './components/beta/pages';
 import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot, AlertTriangle, X } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
@@ -830,6 +831,25 @@ function App() {
       case 'data':
       case 'sharing':
         return <BetaDataPage chip={chip} assistant={assistantDock} inputs={inputs} scenarioName={activeScenario.name} onImport={handleSharingImport} />;
+      case 'print':
+        return (
+          <BetaPrintPage chip={chip} assistant={assistantDock}
+            options={printOptions} onChange={updatePrintOptions}
+            onPrint={() => window.print()} mcPending={printMcPending} mcResults={printMc} />
+        );
+      case 'donate':
+        return <BetaDonatePage chip={chip} assistant={assistantDock} />;
+      case 'export':
+        // Full backup / restore / projection import — the heavier sibling of
+        // the share-focused Data page, wrapped like the stable app's view.
+        return (
+          <BetaExportPage chip={chip} assistant={assistantDock}
+            exportOptions={exportOptions} onExportOptionsChange={updateExportOptions}
+            hasSpouse={!!exportResults.spouse} scenarioName={activeScenario.name}
+            inputs={inputs} results={exportResults} config={config}
+            scenarios={scenarios} activeScenarioId={activeScenarioId}
+            onExportFull={handleExportFull} onImportFull={handleImportFull}
+            onImportProjection={handleProjectionImport} />);
       case 'settings':
         return <BetaSettingsPage chip={chip} assistant={assistantDock} config={config} onSave={setConfig} />;
       case 'connections':

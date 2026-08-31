@@ -170,29 +170,29 @@ Nothing is dropped — each tool keeps working through the dock.
 
 Every page composes `src/design/` primitives — no one-off styles (§8.10).
 
-- [ ] **Landing** — the 5-question chat → verdict → two doors (port of `f7-final.html`)
-- [ ] **Dashboard** (home) — verdict hero · market dial · **contour map** · two levers · down-market check · life timeline · evidence row
-- [ ] **Contour lib** — `src/lib/contour.ts`: port the f7 terrain math (bisection boundary, Catmull-Rom smoothing, hold-wash) onto `calculateHousehold` — **pure + Vitest-tested** before any SVG
-- [ ] **Schedule** — year-by-year table + **§8.9 column picker** (prefKV-persisted)
-- [ ] **Insights** — levers ranked (eq/optimize) + Monte Carlo + backtest, one level down
-- [ ] **The details page** (`#/details`) — the 3 levers + all 13 sections, one scroll, plain-name groups; Details ▾ scrolls to the tapped section; two-col on desktop, one-col on mobile
-- [ ] **Plans** — list / new / compare / revision history
-- [ ] **Data** — backup / restore / import / share
-- [ ] **Settings** — app config + AI provider/connection
-- [ ] **Assistant dock** — chat + answer cards + confirm cards (shared message components with the landing)
+- [x] **Landing** — the 5-question chat → verdict → two doors (port of `f7-final.html`) — `LandingPage.tsx`
+- [x] **Dashboard** (home) — verdict hero · market dial · **contour map** · two levers · down-market check · life timeline · evidence row — `BetaApp.tsx`
+- [x] **Contour lib** — `packages/engine-core/src/contour.ts`: the f7 terrain math (bisection boundary, Catmull-Rom smoothing, hold-wash) on `calculateHousehold` — pure + 14 Vitest tests
+- [x] **Schedule** — year-by-year table + **§8.9 column picker** (prefKV-persisted) — `ScheduleTable.tsx` + `scheduleColumns.ts`
+- [x] **Insights** — levers ranked (eq/optimize) + Monte Carlo + backtest, one level down — `BetaInsightsPage`
+- [x] **The details page** (`#/details`) — the 3 levers + all 13 sections, one scroll, plain-name groups; Details ▾ scrolls to the tapped section; two-col on desktop, one-col on mobile — `DetailsPage.tsx`
+- [x] **Plans** — list / new / compare / revision history — `BetaPlansPage` (wraps ScenarioManager + CompareCard)
+- [x] **Data** — backup / restore / import / share — `BetaDataPage` (wraps SharingPage)
+- [x] **Settings** — app config + lever ranges + AI provider/connection — `BetaSettingsPage` (wraps SettingsModal; Lever Ranges tab added)
+- [x] **Assistant dock** — chat + confirm cards in a 340px right rail (sheet on mobile), one conversation across every page — `BetaPage` assistant slot + `AgentPage docked`
 
 ---
 
 ## 6. The bolt-on checklist (walk this before calling any slice done)
 
-- [ ] Every sidebar section in table §2 has a named home on `#/details` (deep-linked) — none dropped silently
-- [ ] The 3 levers (retire age, spending, market) are editable on the door AND the details page; single faders over the real site ranges, no min/max limiter slider
-- [ ] Runaway-able ranges (spending max, savings max, return min/max, volatility max) are user-settable in Settings, persisted via prefKV, and propagate to every fader
-- [ ] Every old view in table §3 routes somewhere real
-- [ ] Every assistant tool in table §4 still executes through the dock
-- [ ] Conditional sections (RDSP, Home Equity, FHSA) auto-appear in Schedule when enabled (§8.9)
-- [ ] Schedule column picker persists via prefKV, starter set per §8.9
-- [ ] Verdict chip + hero + map + down-market check all recompute together off one engine call
-- [ ] Flat/square/hairline rules hold (no cards, no shadows, one blue accent, tabular nums)
-- [ ] Mobile: assistant becomes a sheet; map/faders stay finger-draggable
-- [ ] Tests with every feature; `npx vitest run` green before merge
+- [x] Every sidebar section in table §2 has a named home on `#/details` (deep-linked) — none dropped silently
+- [x] The 3 levers (retire age, spending, market) are editable on the door AND the details page; single faders over the real site ranges, no min/max limiter slider
+- [x] Runaway-able ranges (spending max, savings max, return min/max, volatility max) are user-settable in Settings, persisted via prefKV (`wealthconsole_ranges`), and propagate to every fader
+- [x] Every old view in table §3 routes somewhere real — print + export wrapped as beta pages, donate demoted to the footer
+- [x] Every assistant tool in table §4 still executes through the dock (same AgentPage engine, docked)
+- [x] Conditional sections (RDSP, Home Equity, FHSA) auto-appear in Schedule when enabled (§8.9)
+- [x] Schedule column picker persists via prefKV (`wealthconsole_schedule_cols`), starter set per §8.9
+- [x] Verdict chip + hero + map + down-market check all recompute together off one engine call
+- [x] Flat/square/hairline rules hold (no cards, no shadows, one blue accent, tabular nums)
+- [x] Mobile: assistant becomes a sheet; map/faders stay finger-draggable
+- [x] Tests with every feature; `npx vitest run` green before merge
