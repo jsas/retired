@@ -10,14 +10,16 @@ import {
 } from './protocol';
 
 describe('protocol corpus contract', () => {
-  it('mirrors the live 24-tool catalog', () => {
+  it('mirrors the live 26-tool catalog', () => {
     // Locks the corpus to the shipped catalog; if a tool is added/renamed this
     // forces a conscious regen rather than a silent drift.
-    expect(SPECS.length).toBe(24);
+    expect(SPECS.length).toBe(26);
     expect(TOOL_NAMES.has('run_projection')).toBe(true);
     expect(TOOL_NAMES.has('propose_reverse_mortgage')).toBe(true);
     expect(TOOL_NAMES.has('set_scenario_value')).toBe(true);
     expect(TOOL_NAMES.has('propose_fhsa')).toBe(true);
+    expect(TOOL_NAMES.has('propose_debt')).toBe(true);
+    expect(TOOL_NAMES.has('manage_debt')).toBe(true);
   });
 
   it('renders the taught TOOL_CALL format into the instructions', () => {

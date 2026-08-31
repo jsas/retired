@@ -332,6 +332,46 @@ const MUTATION_SPECS: MutationSpec[] = [
     rejectedReply: () => 'Okay — FHSA left off.',
   },
   {
+    tool: 'propose_debt',
+    questions: [
+      () => 'Add my mortgage — $400,000 left at 5.1% with a $2,400 monthly payment.',
+      () => 'I still owe on the house. Model the mortgage in.',
+    ],
+    // Debt args are the debt fields flat (the tool's schema omits only `id`).
+    // startAge omitted → payments start now; endAge omitted → until paid off.
+    args: () => ({ label: 'Mortgage', kind: 'mortgage', balance: 400000, interestRate: 0.051, monthlyPayment: 2400 }),
+    approvedReply: () => 'Mortgage added — the payments come out of your spending each year until it\'s paid off, so it drags on the plan until then. Want me to show what it does to your numbers?',
+    rejectedReply: () => 'Okay — debt left out of the plan.',
+  },
+  {
+    tool: 'propose_debt',
+    questions: [
+      () => 'I carry a credit-card balance of $18,000 at 19.9%, paying $600 a month.',
+    ],
+    args: () => ({ label: 'Credit card', kind: 'creditCard', balance: 18000, interestRate: 0.199, monthlyPayment: 600 }),
+    approvedReply: () => 'Credit-card debt added. At that rate the interest is a real drag — the payments are funded from spending until the balance is gone. I can run the projection to show the effect.',
+    rejectedReply: () => 'Understood — card balance not added.',
+  },
+  {
+    tool: 'manage_debt',
+    questions: [
+      () => 'Actually, my mortgage balance is down to $350,000 now.',
+      () => 'Update the mortgage — I\'ve paid it down to $350k.',
+    ],
+    args: () => ({ action: 'update', target: 'Mortgage', changes: { balance: 350000 } }),
+    approvedReply: () => 'Mortgage balance updated to $350,000. Want me to re-run the projection on the new figure?',
+    rejectedReply: () => 'No problem — mortgage left as it was.',
+  },
+  {
+    tool: 'manage_debt',
+    questions: [
+      () => 'I paid off the credit card — take it out of the plan.',
+    ],
+    args: () => ({ action: 'remove', target: 'Credit card' }),
+    approvedReply: () => 'Credit-card debt removed — that frees up the payment going forward. I can re-run the plan to show the difference.',
+    rejectedReply: () => 'Okay — card debt kept in the plan.',
+  },
+  {
     tool: 'remember',
     questions: [
       () => 'Remember that I plan to downsize the house in a few years.',

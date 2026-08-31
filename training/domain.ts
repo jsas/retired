@@ -230,6 +230,32 @@ const FACTS: FactSpec[] = [
       `Each registered account has a legal limit: TFSA room accrues ${money0(cfg.engine.tfsaAnnualLimit)}/yr (unused carries forward), and RRSP room is 18% of prior-year earned income up to ${money0(cfg.engine.rrspAnnualMax)}. If you turn room-tracking on in Settings, the engine caps each year's deposits at your remaining room and spills any excess into a non-registered (taxable) account — so an over-limit contribution doesn't just vanish, it lands somewhere taxable. That changes the long-run tax on the overflow. ${OFFER}`,
     mustContain: ['room', 'TFSA', 'RRSP'],
   },
+  // ---- Debt (the unified debt register) ----------------------------------
+  // Behavior-only feature: no config numbers to cite, so the fact grounds in
+  // the engine's documented mechanics (see the Debt interface comment in
+  // retirementEngine.ts). Honest about what the model does, never advice.
+  {
+    id: 'debt-drag',
+    ask: 'How does carrying debt into retirement affect my plan?',
+    phrasings: [
+      'Should I still have a mortgage when I retire?',
+      'What does my credit-card balance do to my retirement?',
+      'How is a loan treated in the drawdown?',
+    ],
+    appliedTo: ['debt-carrying'],
+    appliedAsk: () => 'I still have a mortgage and a card balance — what do they do to my plan?',
+    answer: () =>
+      `The plan treats a debt as a drag, not just a number you owe. You enter the annual interest rate as a decimal — 0.051 means 5.1% — and each year the balance grows by that rate while the year's payments are added to that year's spending need, funded from your accounts like any other expense. So the debt pulls money out of the plan until it's paid off. A mortgage is modelled the same way, just with a much bigger payment that stops at payoff and frees up the cash flow. Because the payments are after-tax money, they never add to taxable income, so they don't trigger GIS or OAS clawback. The payment each year is capped at the remaining balance, so the final year pays less and the debt then stops. ${OFFER}`,
+    appliedAnswer: (inputs) => {
+      const debts = inputs.debts ?? [];
+      const mortgage = debts.find((d) => d.kind === 'mortgage');
+      const cards = debts.filter((d) => d.kind !== 'mortgage');
+      const totalBalance = debts.reduce((sum, d) => sum + d.balance, 0);
+      const totalPayment = debts.reduce((sum, d) => sum + d.monthlyPayment, 0);
+      return `You're carrying ${money0(totalBalance)} of debt in the plan — ${mortgage ? `a ${money0(mortgage.balance)} mortgage at ${pct(mortgage.interestRate)}` : 'a mortgage'}${cards.length ? ` plus ${cards.map((c) => `${money0(c.balance)} on the ${c.label.toLowerCase()} at ${pct(c.interestRate)}`).join(' and ')}` : ''}. Together that's ${money0(totalPayment)}/month serviced out of your spending each year, so the balances drag on the plan until they're paid off. The card's ${cards.length ? pct(cards[0].interestRate) : ''} rate makes its interest a real cost relative to the mortgage. The payments are after-tax, so they don't raise your taxable income or touch GIS/OAS — but they do reduce what's left to live on until each debt is gone. I can run the projection with and without them so you see the dollar effect.`;
+    },
+    mustContain: ['debt', 'spending', 'interest'],
+  },
   // ---- Federal brackets -------------------------------------------------
   {
     id: 'federal-brackets',

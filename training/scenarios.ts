@@ -191,6 +191,19 @@ export const SCENARIOS: NamedScenario[] = [
     desiredSpending: 58000, provinceCode: 'MB',
     rdsp: { enabled: true, balance: 60000, contribution: 1500, familyIncome: 38000 },
   }),
+  // Debt-carrying household: a mortgage plus a consumer card, both serviced out
+  // of spending. Teaches the model to read debts as a drag on the plan, not just
+  // balances. The mortgage runs to payoff; the card is high-rate consumer debt.
+  s('debt-carrying', 'Mortgage + credit-card debt', {
+    currentAge: 60, retirementAge: 65, maxAge: 95,
+    rrspBalance: 320000, tfsaBalance: 85000, taxableBalance: 25000,
+    cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 58000, provinceCode: 'ONT',
+    debts: [
+      { id: 'mort1', label: 'Mortgage', kind: 'mortgage', balance: 400000, interestRate: 0.051, monthlyPayment: 2400 },
+      { id: 'cc1', label: 'Credit card', kind: 'creditCard', balance: 18000, interestRate: 0.199, monthlyPayment: 600 },
+    ],
+  }),
   s('spending-bands', 'Go-go / slow-go / no-go spending phases', {
     currentAge: 60, retirementAge: 62, maxAge: 95,
     rrspBalance: 550000, tfsaBalance: 130000, taxableBalance: 70000,
