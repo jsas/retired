@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- ELECTIVE local-model tuning probe — NOT part of the app or the deploy.
+     Run with `npm run probe`, open http://localhost:5174/probe/ , pick models
+     + prompts, and sweep sampler profiles on real WebGPU hardware. The
+     scoring logic lives in repetition.ts and is unit-tested without a GPU
+     (`npm run probe:test`). -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RE:tired — local model tuning probe</title>
+    <link rel="stylesheet" href="./probe.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Local model tuning probe</h1>
+      <p class="sub">
+        Elective dev tool — sweeps sampler profiles against loop-prone prompts on
+        every curated web-llm model. Nothing here ships to the app.
+        <span id="webgpu" class="badge"></span>
+      </p>
+    </header>
+    <main>
+      <section id="setup">
+        <div class="col">
+          <h2>1 · Models</h2>
+          <div id="modelList" class="list"></div>
+          <div class="row">
+            <button id="cacheAll" class="ghost" title="Download + cache every listed model's weights (one-time, multi-GB each)">Cache all weights</button>
+            <span id="cacheStatus" class="status"></span>
+          </div>
+        </div>
+        <div class="col">
+          <h2>2 · Sweep</h2>
+          <label class="check"><input type="checkbox" id="allProfiles" checked /> all 8 sampler profiles</label>
+          <div id="profileList" class="list small"></div>
+          <label class="check"><input type="checkbox" id="personaSimple" /> use the short persona (simple tier) — for "Run selected" only</label>
+          <div class="row">
+            <button id="runAll" class="primary" title="Full coverage in one run: production-shaped pass + forced-simple pass + all 8 sampler profiles. Skips cells already measured, so re-running resumes.">Run everything</button>
+            <button id="run" class="ghost" title="Sweep just the selected models × profiles × persona above">Run selected</button>
+            <button id="stop" class="ghost" disabled>Stop</button>
+            <button id="clear" class="ghost danger" title="Discard stored results and re-run everything">Clear results</button>
+          </div>
+          <div id="runStatus" class="status"></div>
+        </div>
+      </section>
+      <section id="progress" hidden>
+        <div class="bar"><div id="barFill"></div></div>
+        <div id="barText"></div>
+      </section>
+      <section id="coverage">
+        <h2>3 · Coverage <span class="hint" id="gridStatus"></span></h2>
+        <p class="legend"><span class="sw sc-ok"></span>&lt;0.15 <span class="sw sc-mid"></span>&lt;0.30 <span class="sw sc-bad"></span>≥0.30 <span class="sw pending"></span>planned <span class="sw running">⏳</span>running · ° = under the 60-token score floor · ⚑ = breaker would fire · click a cell to clear + re-measure it</p>
+        <div id="grid"></div>
+        <div class="row">
+          <button id="importJson" class="ghost" title="Merge a saved export or a driver triage-*.jsonl back into localStorage (past runs survive a browser-profile wipe this way)">Import results file…</button>
+          <input type="file" id="importFile" accept=".json,.jsonl,.txt" hidden />
+        </div>
+      </section>
+      <section id="results" hidden>
+        <h2>4 · Results <span class="hint">(lower score = cleaner)</span></h2>
+        <div id="table"></div>
+        <h2>Per-profile summary</h2>
+        <div id="summary"></div>
+        <h2>Export / import</h2>
+        <div class="row">
+          <button id="exportJson" class="ghost">Copy JSON</button>
+          <button id="downloadJson" class="ghost">Download JSON</button>
+          <button id="exportDefaults" class="ghost" title="A MODEL_SAMPLER_DEFAULTS snippet ranked from this sweep">Copy MODEL_SAMPLER_DEFAULTS suggestion</button>
+        </div>
+        <pre id="exportBox" hidden></pre>
+      </section>
+      <section id="log">
+        <h2>Log</h2>
+        <pre id="logBox"></pre>
+      </section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

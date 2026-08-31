@@ -24,3 +24,10 @@ dist-ssr
 *.sln
 *.sw?
 src/test/tmp/
+
+# Claude Code worktree scratch (nested git repos — never commit)
+.claude/worktrees/
+
+# Elective probe: headless Chrome profile scratch + sweep output (never commit)
+.probe-chrome/
+probe/results/
