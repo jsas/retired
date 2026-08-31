@@ -317,7 +317,7 @@ surface.
 
 ---
 
-## 6. Eval gate + baseline (how we know it beat #108)
+## 6. Eval gate + pre-training baseline (how we know the tune worked)
 
 **The gate now exists** (`training/eval.ts` + `training/runGate.ts`) and is
 CI-gateable. `scoreReply` grades one assistant reply across four tiers of
@@ -362,16 +362,41 @@ node training/driver/runBakeoff.mjs                                 # full small
 npx tsx training/runGate.ts --replies data/bakeoff/<id>.replies.json --model <id>
 ```
 
-- **Baseline ("before"):** also run the gate on the current smallest
-  tool-capable model (Qwen3 4B) and the #108 short-persona variant — that's the
-  "before" number a custom tiny model must approach **at its size/VRAM**,
-  *without* regressing out-of-domain sanity (the #104 breaker suite) or crossing
-  calculator-not-planner (refusal records must stay refusals).
 - **Golden the corpus hash** so the shipped model is always scored against the
   same frozen set (rule-2 analogue; determinism proven by `generate.test.ts`).
-- **Decision:** if a short persona (#108) on a stock 4B already gets ~95%, a
-  custom tiny model may not be worth the pipeline — the baseline run answers
-  this *before* committing training compute.
+
+### Pre-training baseline (the probe grid, 2026-08-31)
+
+The "before" numbers already exist — no extra bake-off needed for them. The
+#106 probe swept every tool-capable model in the catalog at the **single full
+system prompt** (the short-persona variant was dropped: #108/#109 closed
+unmerged, the probe's persona dimension removed in #127): 5 models × 4 prompts
+× 8 sampler profiles + fill = **262 cells**, committed at
+`probe/results/baseline-262-2026-08-31.json` (lands on `main` with #128). That
+file is the frozen pre-training reference — diff any checkpoint against it
+with the same probe, the way `goldenMaster.test.ts` locks engine output.
+
+What it says:
+
+- **Reference model: Qwen3-4B.** Median output-token/word ratio 0.136, max
+  0.236, **zero cells ≥ 0.3** across the whole grid, and it already emits a
+  correct `propose_rdsp` call in the propose-rdsp row. This is the "before" a
+  custom model must approach **at its size/VRAM** — without regressing
+  out-of-domain sanity (the #104 breaker suite) or crossing
+  calculator-not-planner (refusals must stay refusals).
+- **Regression canary: Qwen3.5-4B.** Worst single cell in the dataset:
+  `year-walkthrough` × cold profile, **0.591** (plus `tax-rules-dump` × cold at
+  0.322). If a checkpoint starts to fall apart anywhere, cold × walkthrough is
+  where it shows first — always include it in a before/after spot-check.
+- **Profile shape:** aggressive repetition penalty isn't what buys clean
+  output — `pf-pair` (0.135) and `baseline` (0.137) average best; `shipped`
+  (0.184) and `cold` (0.170) worst. The failures are verbosity/looping, not
+  sampling temperature.
+- **Decision input:** if a *stock* 4B at the full prompt already clears the
+  gate's ship bar (95% protocol-validity), a custom tiny model may not be
+  worth the pipeline — score Qwen3-4B's replies through `runGate.ts` before
+  committing training compute. (The baseline JSON is probe grid data, not
+  gate replies; running Qwen3-4B through the gate is still one bake-off step.)
 
 **Gap status vs the #106 probe** (from the probe-harness map):
 
@@ -399,9 +424,10 @@ phone browser.
 
 ## 7. Four surfaces (only if it ships)
 
-- **Engine** — one new `WEBLLM_MODELS` entry (+ a `simplePrompt`-style tier flag
-  from #108 only if the tuned model still needs a reduced persona; a well-tuned
-  model may need neither).
+- **Engine** — one new `WEBLLM_MODELS` entry. The app ships a single system
+  prompt now (#108's reduced-persona tier never landed, and #127 removed the
+  probe's persona dimension), so a well-tuned model targets the full prompt
+  like every other catalog entry — no per-model prompt fork.
 - **Tests** — the protocol-validity eval gate replayed against the frozen corpus
   (`training/protocol.ts` is its seed); golden the corpus hash.
 - **Help** — "Which model should I pick" notes the new option + its ~1 GB /

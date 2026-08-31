@@ -80,9 +80,10 @@ export const CANDIDATES_SMALLEST_FIRST: BakeoffBase[] = BAKEOFF_BASES
 
 /** Protocol-validity threshold a base must reach (stock, before SFT) to be
  *  worth fine-tuning, and the post-SFT target that would make a custom model
- *  worth shipping over a stock 4B persona (#108). Deliberately strict: a model
- *  that can't reliably emit one clean TOOL_CALL line has no business driving
- *  the app on a phone. */
+ *  worth shipping over the stock Qwen3-4B reference (the probe baseline's
+ *  cleanest model — SPIKE.md §6). Deliberately strict: a model that can't
+ *  reliably emit one clean TOOL_CALL line has no business driving the app on
+ *  a phone. */
 export const THRESHOLDS = {
   /** Below this stock score, SFT is unlikely to rescue the base. */
   stockFloorToAttemptSft: 0.30,
