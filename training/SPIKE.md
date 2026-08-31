@@ -300,6 +300,15 @@ measuring the *ceiling*, not benchmarking the whole size curve. Cost note: a
 reach, run the large bracket under QLoRA and note the method difference when
 comparing — the *ceiling* reading stays valid either way.
 
+**Large-rung candidates (user's empirical note, 2026-08-31, for a bigger
+machine).** Stock **Qwen3-4B already works** at the tool protocol, and **Qwen3-8B
+works very well** — both observed on this app's prompt. So when we run the large
+reference rung, **Qwen3-4B and Qwen3-8B are the natural picks** (Qwen3-8B the
+stronger ceiling). These are desktop/server models, not phone candidates — they
+need a larger GPU than the 16 GB local card for full-SFT (QLoRA: 4B ~comfortable,
+8B tight). **Deferred for now** — bake off the small bracket first, decide after
+(see the §5 bracket experiment).
+
 **MLC compile (the gating step to verify early):**
 ```bash
 pip install --pre -U -f https://mlc.ai/wheels mlc-llm-nightly mlc-ai-nightly
