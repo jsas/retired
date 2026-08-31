@@ -231,6 +231,88 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
+/* The docked chat picker: a clickable icon in a slim strip that drops down to
+   select, start, or delete a chat. The rail's width stays for the conversation —
+   no permanent chat list. Flat, hairline, f7. */
+function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete }: {
+  threads: ChatThread[];
+  activeThreadId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const active = threads.find(t => t.id === activeThreadId);
+
+  return (
+    <div ref={ref} className="relative flex items-center gap-1 border-b border-slate-200 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-label="Choose a chat"
+        title="Choose a chat"
+        className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[12px] text-slate-700 hover:text-slate-900"
+      >
+        <MessageSquare size={13} className="shrink-0 text-slate-400" />
+        <span className="min-w-0 flex-1 truncate">{active ? active.title : 'No chat selected'}</span>
+        <ChevronDown size={13} className="shrink-0 text-slate-400" />
+      </button>
+      <button
+        type="button"
+        onClick={onNew}
+        aria-label="Start a new chat"
+        title="Start a new chat"
+        className="shrink-0 p-1 text-slate-500 hover:text-slate-900"
+      >
+        <Plus size={14} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 w-full border border-slate-200 bg-white">
+          {threads.length === 0 && (
+            <p className="px-2.5 py-2 text-[11px] text-slate-400">No chats yet. Start a new one.</p>
+          )}
+          {threads.map(t => (
+            <div
+              key={t.id}
+              className={`group flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[12px] ${
+                t.id === activeThreadId ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+              onClick={() => { onSelect(t.id); setOpen(false); }}
+            >
+              <MessageSquare size={12} className="shrink-0 text-slate-400" />
+              <span className="min-w-0 flex-1 truncate">{t.title}</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDelete(t.id); }}
+                aria-label="Delete this chat"
+                className="shrink-0 text-slate-300 opacity-0 hover:text-rose-600 group-hover:opacity-100"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
@@ -383,10 +465,21 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
         </div>
       )}
 
-      <div className={`flex gap-3 flex-1 min-h-0 ${docked ? 'gap-1.5' : ''}`}>
-        {/* ---- Chat list: pinned open, or collapsed to a slim strip. Docked
-                always uses the slim strip so the rail stays narrow. ---- */}
-        {!docked && chatsPinned ? (
+      <div className={`flex gap-3 flex-1 min-h-0 ${docked ? 'gap-0 flex-col' : ''}`}>
+        {/* Docked: a slim header strip — the chat picker is a clickable icon
+            that drops down to select a chat, so the rail keeps its width for
+            the conversation instead of a permanent list. */}
+        {docked && (
+          <DockChatPicker
+            threads={chatState.threads}
+            activeThreadId={chatState.activeThreadId}
+            onSelect={setActiveThread}
+            onNew={newChat}
+            onDelete={deleteChat}
+          />
+        )}
+        {/* ---- Chat list (full page only): pinned open, or a slim strip. ---- */}
+        {docked ? null : chatsPinned ? (
           <aside className="w-52 shrink-0 flex flex-col border border-slate-200 rounded bg-white">
             <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Chats</span>

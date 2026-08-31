@@ -856,15 +856,36 @@ function App() {
         return <BetaConnectionsPage chip={chip} assistant={assistantDock} onClose={() => setView('projection')} />;
       case 'help':
         return <BetaHelpPage chip={chip} assistant={assistantDock} />;
+      case 'agent':
+        // The full-page assistant: the whole conversation surface, undocked —
+        // room for the chat list beside the thread, the header with the model
+        // picker, and long answers. The same conversation as the dock.
+        return (
+          <BetaPage title="Assistant" hint="assistant" chip={chip}>
+            <div className="pt-6">
+              <AgentPage
+                inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
+                scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
+                activeScenarioId={activeScenarioId}
+                scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
+                onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+                onOpenConnections={() => setView('connections')}
+                memory={store?.memory}
+                memoryScenarioId={activeScenarioId}
+                onOpenScenario={agentOpenScenario}
+                onSaveScenarioAs={agentSaveScenarioAs}
+              />
+            </div>
+          </BetaPage>
+        );
       case 'welcome':
-        // The assistant as the front door: five questions build a starter plan,
-        // then two doors (dashboard / details). Building loads the plan and
-        // lands on the dashboard.
+        // The front door: five questions build a starter plan, then the doors.
+        // NO assistant here — there's no plan to converse about yet, and the
+        // dock never opens on the first page.
         return (
           <LandingPage
             config={config}
             chip={chip}
-            assistant={assistantDock}
             onBuild={(plan) => {
               setInputs(JSON.parse(JSON.stringify(plan)));
               setHasUnsavedChanges(true);

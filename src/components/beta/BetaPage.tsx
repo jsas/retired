@@ -11,6 +11,14 @@ import { Link } from './nav';
 import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { DETAILS_SECTIONS } from './detailsSections';
+import { prefKV } from '../../lib/prefKv';
+
+const DOCK_PREF_KEY = 'wealthconsole_dock_open';
+// Remember the dock's open state across loads (issue #20 prefKV — captured by
+// every full backup). Default open on desktop; closed reads as the literal '0'.
+function readDockOpen(): boolean {
+  return prefKV().getItem(DOCK_PREF_KEY) !== '0';
+}
 
 export interface VerdictChip {
   tone: 'holds' | 'short' | 'borderline' | 'checking';
@@ -33,10 +41,13 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
   assistant?: ReactNode;
   children: ReactNode;
 }) {
-  // The dock starts open on desktop (the assistant came along from the
-  // landing). On phones it's a sheet that stays hidden until the Assistant
-  // button opens it — the app works without it, it never traps you.
-  const [dockOpen, setDockOpen] = useState(true);
+  // The dock's open state is remembered (prefKV) — closing it once keeps it
+  // closed across loads and pages until reopened. Default open.
+  const [dockOpen, setDockOpenState] = useState<boolean>(readDockOpen);
+  const setDockOpen = (open: boolean) => {
+    setDockOpenState(open);
+    try { prefKV().setItem(DOCK_PREF_KEY, open ? '1' : '0'); } catch { /* storage blocked */ }
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-800">
@@ -77,7 +88,7 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
           {assistant && (
             <button
               type="button"
-              onClick={() => setDockOpen((o) => !o)}
+              onClick={() => setDockOpen(!dockOpen)}
               className="border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-slate-900"
               title="The assistant — reads your plan, answers questions, shows its work"
             >
@@ -120,6 +131,13 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
               <div className="flex h-5 w-5 items-center justify-center bg-slate-900 text-[8px] font-bold text-white">RE</div>
               <div className="text-[13px] font-semibold">Assistant<HelpHint topic="assistant" /></div>
               <div className="flex-1" />
+              <Link
+                view="agent"
+                className="px-1 text-[11px] font-medium text-slate-400 hover:text-slate-700"
+                aria-label="Open the assistant full page"
+              >
+                ⤢
+              </Link>
               <button
                 type="button"
                 onClick={() => setDockOpen(false)}
