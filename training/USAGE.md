@@ -7,7 +7,8 @@ generate the corpus, sanity-check it, run the bake-off, and score a model.
 
 > The design rationale (why the data is shaped this way) lives in
 > [METHODOLOGY.md](./METHODOLOGY.md). The plan + guardrails live in
-> [SPIKE.md](./SPIKE.md). This file is just the *how*.
+> [SPIKE.md](./SPIKE.md). This file is just the *how* — for the **repeatable
+> "main changed → re-ground → retrain" loop**, see [UPDATING.md](./UPDATING.md).
 
 ---
 

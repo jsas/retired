@@ -3,7 +3,9 @@
 > **Companion docs:** [USAGE.md](./USAGE.md) — operator's guide (generate, test,
 > bake off, score). [METHODOLOGY.md](./METHODOLOGY.md) — how the input data +
 > training method make the model understand a person, lay out their options,
-> and stay in the calculator-not-planner lane.
+> and stay in the calculator-not-planner lane. [UPDATING.md](./UPDATING.md) —
+> the repeatable loop for re-grounding the corpus + retraining when `main`
+> lands a feature.
 
 Status: **scoping / pre-training.** This doc answers the two questions the spike
 opened with — *what can we train?* and *how do we do it?* — and lands the

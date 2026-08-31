@@ -13,6 +13,9 @@ The whole approach rests on one product axiom that overrides everything else:
 > to the user. Every methodological choice below either reinforces that line or
 > is a bug.
 
+This doc is the *why*. For the *how to run it once* see [USAGE.md](./USAGE.md);
+for the *repeatable loop when the app evolves* see [UPDATING.md](./UPDATING.md).
+
 ---
 
 ## 1. The behavior we're actually training for
