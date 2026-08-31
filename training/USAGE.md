@@ -154,7 +154,8 @@ training/
   protocol.ts        protocol contract — imports the LIVE catalog + parser (can't drift)
   buildCorpus.ts     record shapes + kind taxonomy + tool coverage matrix
   scenarios.ts       the 24-household scenario sweep (all 13 provinces + couples/RM/RDSP/bands)
-  mint.ts            the generator (reads, mutations, guardrails, option-framing)
+  domain.ts          domain-knowledge facts (CPP/OAS/GIS/tax/history) read live from config
+  mint.ts            the generator (reads, mutations, guardrails, option-framing, domain)
   generate.ts        CLI: mint → training/data/*.jsonl (+ eval sha256)
   eval.ts            the gate: scoreReply tiers, follow-up/mutation graders, gateReport
   runGate.ts         CLI: self-check (default) or score --replies

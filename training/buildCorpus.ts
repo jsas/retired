@@ -31,8 +31,11 @@ export interface CorpusRecord {
     | 'refusal'            // out-of-guardrail ask → deflect, calculator-not-planner
     | 'clarify'            // ambiguous ask → ask a question, do NOT guess a tool
     | 'domain-explain'     // read a projection digest → explain in plain words
-    | 'option-framing';    // "what can I optimize?" → survey the levers (run_strategies)
+    | 'option-framing'     // "what can I optimize?" → survey the levers (run_strategies)
                           //   + plain-words framing of the trade-offs, never a directive
+    | 'domain-knowledge';  // Canadian tax / benefit-program / market-history fact,
+                          //   answered from the app's OWN shipped tables (can't drift),
+                          //   always with an offer to ground it in the user's numbers
   scenarioId: string;
   messages: ChatMessage[];
   /** Frozen ground truth the eval gate replays. */

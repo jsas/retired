@@ -25,7 +25,8 @@ corpus, and each has a failure mode the data is built to prevent.
 | 1 | **Drive the tools** — emit ONE clean `TOOL_CALL:` line with valid args | `tool-call` | malformed/hallucinated calls, multi-call spam |
 | 2 | **Read the person** — ground every answer in *their* numbers, not generic rules | `tool-followup`, scenario sweep | vague "it depends" non-answers |
 | 3 | **Lay out options** — survey the levers and show what each is worth | `option-framing`, `compare_scenarios` follow-ups | "I can't help" shrugs, or a single pushy recommendation |
-| 4 | **Stay in the lane** — never prescribe; hand the choice back | `refusal`, the close of every `option-framing` reply | "you should retire at 65" |
+| 4 | **Know the domain** — explain CPP/OAS/GIS/tax/market-history correctly | `domain-knowledge` | confidently-wrong figures, generic non-answers |
+| 5 | **Stay in the lane** — never prescribe; hand the choice back | `refusal`, the close of every `option-framing` reply | "you should retire at 65" |
 
 Behaviors 1–2 are *capability* (can the model do it). Behaviors 3–4 are
 *character* (does it do it the right way). Small models fail on both, so the
@@ -107,7 +108,44 @@ option`, and matches `/choice is yours|your call|depends on what you value/`.
 *decide* ("should I retire at 60 or 65?"), the `refusal` kind teaches the
 complement: deflect to consequences, never pick.
 
-### 2d. Staying in the lane is trained as a first-class target, not an afterthought
+### 2d. Domain knowledge is grounded in the app's own tables, never memorized
+
+The user asked for the model to be **good at financial knowledge, not just the
+tools** — real Canadian tax and benefit-program fluency for everything the app
+supports. `domain.ts` mints these records, and the design decision that matters
+most is *where the facts come from*:
+
+**Every figure is read LIVE from `DEFAULT_APP_CONFIG` and
+`HISTORICAL_REAL_RETURNS` at mint time.** A small model that memorizes "the OAS
+clawback threshold is $X" will be confidently wrong the year the table is
+edited — and the app *lets the user edit tax tables in Settings*. So the corpus
+never hardcodes a number; it interpolates the live value. The corpus always
+teaches the numbers the shipped engine computes with, and the golden eval hash
+turns any table change into a deliberate, visible event.
+
+**Coverage maps 1:1 to features the engine models** (so fluency is always
+relevant, never trivia): CPP timing (early penalty / deferral bonus), OAS
+amounts + deferral + the clawback, GIS (single and couple rules), RRIF
+minimums, RRSP/TFSA/taxable account mechanics + contribution room, federal +
+provincial brackets (incl. the Quebec abatement and Ontario surtax wrinkles),
+capital-gains inclusion, withdrawal-order reasoning, sequence-of-returns risk
+(grounded in the real 1970–2024 series), inflation/indexation, the cash
+cushion, pension splitting, RDSP grants/bonds, and reverse mortgages.
+
+**The register keeps it inside the guardrail.** Each fact explains the concept,
+cites the real figure, and — crucially — **closes by offering to ground the
+rule in the user's own plan** ("I can run this on your numbers"). Domain
+fluency routes *back to the tools* instead of becoming free-standing advice.
+The kind test asserts every answer cites a real figure, satisfies its own
+`mustContain` phrases, contains no directive verbs, and emits no tool call.
+
+**Decision (with the user): figures stay cited** — the model knows the actual
+2026 numbers, grounded in config — rather than deferring every specific number
+to a tool call. This is the right trade for the *stable structural rules* (CPP/
+OAS/RRIF mechanics) where the number is the substance; the offer-to-ground
+close covers the volatile per-person application.
+
+### 2e. Staying in the lane is trained as a first-class target, not an afterthought
 
 - **`refusal`** — recommendation-seeking asks → deflect to "I can show you the
   consequences, I can't tell you which to choose."

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mintCorpus, mintGuardrailRecords, mintMutationRecords, mintOptionFramingRecords, mintReadRecords, toJsonl } from './mint';
+import { mintDomainKnowledgeRecords } from './domain';
 import { scoreToolReply, TOOL_NAMES } from './protocol';
 import { SCENARIOS } from './scenarios';
 import { executeToolCall, type ToolContext } from '../src/lib/ai/tools';
@@ -132,10 +133,11 @@ describe('guardrail records', () => {
     }
   });
 
-  it('the full corpus combines engine-grounded, mutation, guardrail, and option records', () => {
+  it('the full corpus combines engine-grounded, mutation, guardrail, option, and domain records', () => {
     const full = mintCorpus();
     expect(full.length).toBe(
-      mintReadRecords().length + mintMutationRecords().length + guard.length + mintOptionFramingRecords().length,
+      mintReadRecords().length + mintMutationRecords().length + guard.length
+      + mintOptionFramingRecords().length + mintDomainKnowledgeRecords().length,
     );
   }, 120000);
 });
@@ -194,4 +196,41 @@ describe('option-framing records', () => {
       expect(reply).toMatch(/choice is yours|your call|depends on what you value/);
     }
   }, 120000);
+});
+
+describe('domain-knowledge records', () => {
+  const facts = mintDomainKnowledgeRecords();
+
+  it('covers the program areas the engine models', () => {
+    expect(facts.length).toBeGreaterThan(0);
+    const ids = new Set(facts.map((r) => r.id));
+    // The core benefit programs + account types + market history must all be present.
+    for (const area of ['cpp', 'oas', 'gis', 'rrif', 'market-history', 'accounts']) {
+      expect([...ids].some((id) => id.includes(area)), `missing domain area: ${area}`).toBe(true);
+    }
+  });
+
+  it('answers cite real figures and never advise', () => {
+    for (const r of facts) {
+      const reply = r.messages[1].content;
+      // Grounded: mentions a number (a $ amount or a %).
+      expect(reply).toMatch(/[$%0-9]/);
+      // Every fact satisfies its own mustContain phrases.
+      for (const phrase of r.expect.mustContain ?? []) {
+        expect(reply.toLowerCase()).toContain(phrase.toLowerCase());
+      }
+      // Calculator-not-planner: no directive verbs, and no tool call (pure knowledge).
+      for (const banned of ['you should', 'i recommend', 'the best choice is', 'you ought to']) {
+        expect(reply.toLowerCase()).not.toContain(banned);
+      }
+      expect(reply).not.toContain('TOOL_CALL');
+    }
+  });
+
+  it('routes fluency back to the tools (offers to ground in the user\'s numbers)', () => {
+    // Most facts close by offering to run it on the user's plan — that's what keeps
+    // domain knowledge from becoming free-standing advice.
+    const withOffer = facts.filter((r) => /your (own )?(plan|numbers)/i.test(r.messages[1].content));
+    expect(withOffer.length / facts.length).toBeGreaterThan(0.5);
+  });
 });

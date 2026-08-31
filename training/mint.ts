@@ -22,6 +22,7 @@ import { executeToolCall, type ToolContext } from '../src/lib/ai/tools';
 import { testConfig } from '../src/test/helpers';
 import type { ChatMessage, CorpusRecord } from './buildCorpus';
 import { emitToolCall, wrapToolResult, mutationFeedback } from './protocol';
+import { mintDomainKnowledgeRecords } from './domain';
 import { SCENARIOS, type NamedScenario } from './scenarios';
 
 /** A question → read-tool exemplar template. `args` may reference the scenario
@@ -551,13 +552,15 @@ export function mintOptionFramingRecords(evalEvery = 5): CorpusRecord[] {
   return records;
 }
 
-/** The full corpus: engine-grounded reads + mutations + guardrail + options. */
+/** The full corpus: engine-grounded reads + mutations + guardrail + options +
+ *  domain knowledge. */
 export function mintCorpus(): CorpusRecord[] {
   return [
     ...mintReadRecords(),
     ...mintMutationRecords(),
     ...mintGuardrailRecords(),
     ...mintOptionFramingRecords(),
+    ...mintDomainKnowledgeRecords(),
   ];
 }
 
