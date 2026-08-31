@@ -34,3 +34,7 @@ src/test/tmp/
 .probe-chrome/
 probe/results/*
 !probe/results/baseline-*.json
+
+# #112 spike: generated corpus artifacts. The engine is deterministic, so
+# `npx tsx training/generate.ts` reproduces these; don't commit the JSONL.
+training/data/

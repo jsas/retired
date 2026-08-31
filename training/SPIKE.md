@@ -23,8 +23,18 @@ Today's **tool-capability floor is ~3.8B params / a 2.5 GB download / ~3.4 GB
 VRAM** (`WEBLLM_MODELS`, `src/lib/ai/webLlmModels.ts`). Everything smaller
 mangles the `TOOL_CALL:` line and is forced into a tools-off "answer questions
 only" mode (Gemma 2 2B is `toolCapable: false`). The spike asks: can a
-**fine-tuned 1.5–2B** model drive the protocol reliably and fit in a **~1 GB
-download**, so a genuinely tool-capable assistant runs on weak laptop GPUs?
+**fine-tuned small** model drive the protocol reliably and fit in a **sub-GB
+download**, so a genuinely tool-capable assistant runs on weak hardware?
+
+> **Steer (2026-08-30): the smaller the better — target MOBILE.** The real win
+> is a tuned model that runs *well on a phone's WebGPU*, not just a weak laptop
+> GPU. So we optimize for the **smallest base that still clears the
+> protocol-validity bar**, benchmark genuinely tiny bases (0.5–1.7B) rather than
+> assuming 1.5B is the floor, and weight download size / VRAM / wasm memory /
+> sustained-inference thermals alongside raw capability. Mobile WebGPU is
+> stricter than desktop: tighter memory, no guaranteed fp16 everywhere, and
+> battery/thermal throttling on long generations — all reasons to keep both the
+> weights *and* the required context budget small.
 
 The unfair advantage (from the issue): the engine is **deterministic and fully
 client-side**, so we can mint near-unlimited, *correct* supervision for free —
@@ -141,36 +151,39 @@ protocol-validity hasn't saturated.
 
 ---
 
-## 4. Base model — the shortlist (de-risked)
+## 4. Base model — bake-off across the tiny tier (de-risked)
 
 License + an existing MLC prebuilt are the two hard gates. A fine-tune of a base
 that **already has an MLC `q4f16_1` prebuilt** can very likely reuse that
 prebuilt's `model_lib` wasm (same architecture + quant), which collapses the
-compile risk the issue flagged as the gating technical risk. Confirmed present
-in web-llm's `prebuiltAppConfig` (≤2B, `q4f16_1-MLC` unless noted):
+compile risk the issue flagged. **Method (decided with the user): benchmark the
+stock bases size-for-size and let protocol-validity pick the smallest winner**
+— don't pre-commit to 1.7B. The corpus eval split *is* the benchmark set.
+Confirmed present in web-llm's `prebuiltAppConfig` (`q4f16_1-MLC` unless noted):
 
-| base | params | license | MLC prebuilt | fit |
-|---|---|---|---|---|
-| **Qwen3-1.7B** | 1.7B | **Apache-2.0** ✅ | `Qwen3-1.7B-q4f16_1-MLC` | **Top pick.** Strong instruction/tool following for the size, clean license, native chat template. |
-| **Qwen3.5-2B** | 2B | Apache-2.0 ✅ | `Qwen3.5-2B-q4f16_1-MLC` | Newest; check card confirms Apache + a chat template. Slightly bigger download. |
-| **Qwen2.5-1.5B-Instruct** | 1.5B | Apache-2.0 ✅ | `Qwen2.5-1.5B-Instruct-q4f16_1-MLC` | Mature, smallest clean-license Qwen; many existing tool-call fine-tunes to borrow hyperparams from. |
-| SmolLM2-1.7B-Instruct | 1.7B | Apache-2.0 ✅ | `SmolLM2-1.7B-Instruct-q4f16_1-MLC` | Fully open (weights+data); weaker tool-calling OOTB. Fallback. |
-| Gemma 2 2B / Gemma 3 1B | 1–2B | ⚠️ Gemma Terms | `gemma-2-2b-it-…` / `gemma3-1b-it-…` | **Avoid** — redistribution terms are stricter than Apache/MIT; the issue calls this out. |
-| Llama 3.2 1B | 1B | ⚠️ Llama Community | `Llama-3.2-1B-Instruct-…` | Acceptable-use policy; only 1B (thin). Avoid unless needed. |
-| Phi-mini | ≥3.8B | MIT ✅ | — | **No ≤2B Phi exists**; Phi-4-mini is already above the floor. Out of scope for a *smaller* model. |
+| base | params | ≈dl (q4f16) | license | MLC prebuilt | mobile note |
+|---|---|---|---|---|---|
+| **Qwen3-0.6B** | 0.6B | ~0.4 GB | **Apache-2.0** ✅ | `Qwen3-0.6B-q4f16_1-MLC` | **Phone-friendly size.** Can it hold the protocol? Exactly what the bake-off answers. |
+| **Qwen2.5-0.5B-Instruct** | 0.5B | ~0.3 GB | Apache-2.0 ✅ | `Qwen2.5-0.5B-Instruct-q4f16_1-MLC` | Smallest clean-license instruct. Likely too weak — but cheap to test. |
+| **Qwen3.5-0.8B** | 0.8B | ~0.5 GB | Apache-2.0 ✅ | `Qwen3.5-0.8B-q4f16_1-MLC` | Newer tiny; verify license+template. |
+| **Llama-3.2-1B-Instruct** | 1B | ~0.7 GB | ⚠️ Llama Community | `Llama-3.2-1B-Instruct-q4f16_1-MLC` | Strong for 1B, but AUP attached; phone-optimized by Meta. Only if license clears. |
+| **Qwen2.5-1.5B-Instruct** | 1.5B | ~0.9 GB | Apache-2.0 ✅ | `Qwen2.5-1.5B-Instruct-q4f16_1-MLC` | Mature; many tool-call fine-tunes to borrow hyperparams from. |
+| **Qwen3-1.7B** | 1.7B | ~1.0 GB | Apache-2.0 ✅ | `Qwen3-1.7B-q4f16_1-MLC` | The "safe" pick if the tiny tier fails the bar. |
+| **SmolLM2-1.7B-Instruct** | 1.7B | ~1.0 GB | Apache-2.0 ✅ | `SmolLM2-1.7B-Instruct-q4f16_1-MLC` | Fully open (weights+data); weaker tool-calling OOTB. |
+| Qwen3.5-2B | 2B | ~1.2 GB | Apache-2.0 ✅ | `Qwen3.5-2B-q4f16_1-MLC` | Upper bound; only if nothing smaller clears. |
+| Gemma 2 2B / Gemma 3 1B | 1–2B | — | ⚠️ Gemma Terms | present | **Avoid** — redistribution stricter than Apache/MIT. |
+| Phi-mini | ≥3.8B | — | MIT ✅ | — | **No ≤2B Phi exists.** Out of scope for mobile. |
 
-**Recommendation: start with `Qwen3-1.7B`** (Apache-2.0, prebuilt wasm likely
-reusable, strong for size), with `Qwen2.5-1.5B-Instruct` as the lower-risk /
-more-documented fallback and `Qwen3.5-2B` as the newer-but-verify option.
-**Verify the exact license text + chat template on the model card at download
-time** — license terms and 2026 releases change; this table is a starting
-point, not gospel.
+**Download ≈ params × 0.55 GB** (q4f16). For a phone, ~0.4–0.7 GB is the
+comfortable band; ~1 GB is the ceiling. The bake-off ranks bases by
+protocol-validity **per GB**, and we fine-tune the *smallest* one that clears
+the bar — that's the whole mobile thesis.
 
-**Full fine-tune vs LoRA.** At 1.5–2B, **full-parameter SFT is cheap** (a 16 GB
-GPU handles it) and tends to beat LoRA for *structured-output reliability* —
-which is the entire goal. Use LoRA/QLoRA only if you want to iterate on a
-lighter footprint or merge multiple adapters. Default plan: **full SFT, bf16,
-~2–3 epochs**, early-stop on the protocol-validity eval.
+**Full fine-tune vs LoRA.** At ≤2B, **full-parameter SFT is cheap** (a 16 GB
+GPU handles even 2B) and tends to beat LoRA for *structured-output reliability*
+— which is the entire goal. Use LoRA/QLoRA only to iterate cheaply or to keep a
+base + swappable adapters. Default plan: **full SFT, bf16, ~2–3 epochs**,
+early-stop on the protocol-validity eval.
 
 ---
 
@@ -185,14 +198,18 @@ lighter footprint or merge multiple adapters. Default plan: **full SFT, bf16,
                │ corpus.jsonl  (+ held-out eval split)
                ▼
 ┌─ OFF-REPO (your machine / a GPU box) ────────────────────────┐
-│ 1. SFT  Qwen3-1.7B on corpus.jsonl (HF TRL SFTTrainer /      │
-│    Axolotl / LLaMA-Factory), bf16, full-FT, early-stop       │
+│ 0. BAKE-OFF: run the eval gate on each STOCK tiny base       │
+│    (0.6B→2B); rank protocol-validity per GB; pick the        │
+│    SMALLEST that clears the bar (the mobile thesis)          │
+│ 1. SFT  <bake-off winner> on corpus.jsonl (HF TRL SFTTrainer │
+│    / Axolotl / LLaMA-Factory), bf16, full-FT, early-stop     │
 │ 2. Eval vs the frozen eval split → protocol-validity %       │
 │ 3. Export → HuggingFace (public)                             │
 │ 4. MLC compile:  mlc_llm gen_config + convert_weight          │
 │    (q4f16_1) → likely REUSE the prebuilt webgpu wasm for the │
 │    same arch; else mlc_llm compile --device webgpu           │
-│ 5. Verify it loads via a custom web-llm appConfig            │
+│ 5. Verify it loads via a custom web-llm appConfig — incl.    │
+│    on an actual phone browser (WebGPU, memory, thermals)     │
 └──────────────┬───────────────────────────────────────────────┘
                │ verified model_id + wasm + HF URL
                ▼
@@ -202,24 +219,29 @@ lighter footprint or merge multiple adapters. Default plan: **full SFT, bf16,
 ```
 
 **Sample training config (starting point, off-repo):** HF TRL `SFTTrainer`,
-`Qwen3-1.7B`, bf16, packing off, `learning_rate ~1e-5` (full-FT) / `~1e-4`
-(LoRA r=16), `num_train_epochs 2–3`, cosine schedule, `per_device_train_batch_size`
-sized to VRAM (16 GB → full-FT of 1.7B fits with gradient checkpointing). Mask
-the loss to **assistant tokens only** so the model learns to *produce* tool
-calls and explanations, not to parrot the user/system text.
+`<bake-off winner>` (e.g. `Qwen3-0.6B` … `Qwen3-1.7B`), bf16, packing off,
+`learning_rate ~1e-5` (full-FT) / `~1e-4` (LoRA r=16), `num_train_epochs 2–3`,
+cosine schedule, `per_device_train_batch_size` sized to VRAM (16 GB → full-FT of
+≤2B fits with gradient checkpointing). Mask the loss to **assistant tokens
+only** so the model learns to *produce* tool calls and explanations, not to
+parrot the user/system text. Smaller bases (≤1B) may want a touch more LR and
+an extra epoch — tune on the eval gate, not vibes.
 
 **MLC compile (the gating step to verify early):**
 ```bash
 pip install --pre -U -f https://mlc.ai/wheels mlc-llm-nightly mlc-ai-nightly
-mlc_llm gen_config     ./hf/Qwen3-1.7B-finetuned --quantization q4f16_1 -o dist/Qwen3-1.7B-ft-q4f16_1-MLC/
-mlc_llm convert_weight ./hf/Qwen3-1.7B-finetuned --quantization q4f16_1 -o dist/Qwen3-1.7B-ft-q4f16_1-MLC/
-# Prefer reusing the prebuilt Qwen3-1.7B-q4f16_1 webgpu wasm (same arch+quant).
+mlc_llm gen_config     ./hf/<winner>-finetuned --quantization q4f16_1 -o dist/<winner>-ft-q4f16_1-MLC/
+mlc_llm convert_weight ./hf/<winner>-finetuned --quantization q4f16_1 -o dist/<winner>-ft-q4f16_1-MLC/
+# Prefer reusing the prebuilt <winner>-q4f16_1 webgpu wasm (same arch+quant).
 # Only if that fails:  mlc_llm compile .../mlc-chat-config.json --device webgpu -o dist/libs/...wasm
 ```
 Then load in the app via a custom `appConfig` (not `prebuiltAppConfig`) pointing
 at the public HF weights + the wasm. **Spike this FIRST** with the *unmodified*
-Qwen3-1.7B to confirm the custom-`appConfig` + wasm-reuse path works end-to-end
-before spending any training compute.
+bake-off winner to confirm the custom-`appConfig` + wasm-reuse path works
+end-to-end before spending any training compute — **and verify it on a real
+phone browser**, since mobile WebGPU is the actual target and has tighter
+memory / no guaranteed fp16 / thermal throttling that desktop testing won't
+surface.
 
 ---
 
