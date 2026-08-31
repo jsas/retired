@@ -42,11 +42,12 @@ function normalize(periods: MarketPeriod[] | undefined): MarketPeriod[] {
 }
 
 /**
- * Linear interpolation over sorted anchors at integer `age`, with clamped ends:
- * `age` before the first anchor or after the last yields `fallback` (the plan's
- * constant), not the nearest anchor — a hypothesis is a LOCAL regime, not a
- * whole-horizon re-rating. At or between anchors it lerps on the age gap.
- * `pick` selects which field the curve reads (return, or volatility).
+ * Linear interpolation over sorted anchors at integer `age`. A hypothesis is a
+ * LOCAL regime, not a whole-horizon re-rating, so outside the outermost anchors
+ * the value returns to the plan's `fallback` constant — and it does so over a
+ * ONE-YEAR ramp from the edge anchor's value back to the constant, rather than
+ * a vertical cliff at the anchor's age. `pick` selects which field the curve
+ * reads (return, or volatility); a missing field falls back to the constant.
  */
 function valueAt(
   anchors: MarketPeriod[],
@@ -57,7 +58,21 @@ function valueAt(
   if (anchors.length === 0) return fallback;
   const first = anchors[0];
   const last = anchors[anchors.length - 1];
-  if (age < first.age || age > last.age) return fallback;
+
+  // Beyond the hypothesis window: the flat constant holds.
+  if (age < first.age - 1 || age > last.age + 1) return fallback;
+
+  // One-year ramp at the leading edge: first.age-1 lerps the constant to the
+  // first anchor's value, so the regime eases in instead of stepping.
+  if (age === first.age - 1) {
+    const v = pick(first) ?? fallback;
+    return (fallback + v) / 2;
+  }
+  // One-year ramp at the trailing edge: last.age+1 lerps back to the constant.
+  if (age === last.age + 1) {
+    const v = pick(last) ?? fallback;
+    return (fallback + v) / 2;
+  }
 
   // Exact hit, or a single anchor (first === last): no interpolation needed.
   const exact = anchors.find(p => p.age === age);

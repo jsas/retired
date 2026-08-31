@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { PencilLine } from 'lucide-react';
-import type { RetirementInputs, RetirementResults, CashEvent } from '@retired/engine-core/retirementEngine';
+import type { RetirementInputs, RetirementResults, CashEvent, MarketPeriod } from '@retired/engine-core/retirementEngine';
+import { buildReturnSequence, buildVolatilitySequence } from '@retired/engine-core/marketPeriods';
 
 interface TimelineChartProps {
   inputs: RetirementInputs;
@@ -13,8 +14,21 @@ const W = 900;
 const H = 300;
 const PAD = { top: 18, right: 16, bottom: 26, left: 60 };
 const SPEND_H = 84; // spending panel height below the main chart
+const MKT_H = 84;   // market-hypothesis panel height below the spending panel
 const GAP = 12;
-const TOTAL_H = H + GAP + SPEND_H + PAD.bottom;
+const TOTAL_H = H + GAP + SPEND_H + GAP + MKT_H + PAD.bottom;
+
+// The market panel's vertical ranges. Return can go deep negative (a crash);
+// volatility is a standard deviation, floored at 0.
+const RET_MIN = -0.30, RET_MAX = 0.20;
+const VOL_MIN = 0, VOL_MAX = 0.40;
+
+// Round drags to stable steps so points settle on clean values (0.1% return, 0.5% σ).
+const roundRet = (v: number) => Math.round(v * 1000) / 1000;
+const roundVol = (v: number) => Math.round(v * 200) / 200;
+
+let mpSeq = 0;
+const newMarketPeriodId = () => `mp-${Date.now().toString(36)}-${(mpSeq++).toString(36)}`;
 
 function formatMoney(v: number): string {
   if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
@@ -26,7 +40,8 @@ type DragTarget =
   | { kind: 'retirement' }
   | { kind: 'spending' }            // base desired-spending level
   | { kind: 'band'; index: number } // a spending-band level
-  | { kind: 'event'; id: string };  // a one-time event (age + amount)
+  | { kind: 'event'; id: string }   // a one-time event (age + amount)
+  | { kind: 'mkt'; id: string; field: 'return' | 'volatility' }; // a market-hypothesis anchor (age + value)
 
 /**
  * Interactive projection timeline. Drag handles write back into the inputs:
@@ -40,6 +55,8 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragTarget | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  // The selected market anchor (for the floating delete affordance).
+  const [selectedMkt, setSelectedMkt] = useState<string | null>(null);
 
   const rows = results.yearlyBreakdown;
   const minAge = inputs.currentAge;
@@ -69,6 +86,46 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
   const maxSpend = Math.max(1, ...rows.map(r => r.spendingTarget));
   const ys = (v: number) => spendTop + (1 - v / maxSpend) * (SPEND_H - 14);
   const spendAtY = (py: number) => (1 - (py - spendTop) / (SPEND_H - 14)) * maxSpend;
+
+  // Market-hypothesis panel geometry (issue #138), its own scales: return on
+  // the left, volatility on the right. Sits below the spending panel.
+  const mktTop = spendTop + SPEND_H + GAP;
+  const ymRet = (v: number) => mktTop + (1 - (v - RET_MIN) / (RET_MAX - RET_MIN)) * (MKT_H - 14);
+  const retAtY = (py: number) => RET_MIN + (1 - (py - mktTop) / (MKT_H - 14)) * (RET_MAX - RET_MIN);
+  const ymVol = (v: number) => mktTop + (1 - (v - VOL_MIN) / (VOL_MAX - VOL_MIN)) * (MKT_H - 14);
+  const volAtY = (py: number) => VOL_MIN + (1 - (py - mktTop) / (MKT_H - 14)) * (VOL_MAX - VOL_MIN);
+
+  // The plan's market-hypothesis anchors and the per-age curves the engine
+  // computes from them (linear interpolation, clamped to the flat constants
+  // outside the outermost anchors). Drawing the resolved curve keeps the chart
+  // honest with the engine. Empty = the flat constants every year.
+  const marketPeriods = useMemo(
+    () => (Array.isArray(inputs.marketPeriods) ? [...inputs.marketPeriods].sort((a, b) => a.age - b.age) : []),
+    [inputs.marketPeriods],
+  );
+  const retSeq = useMemo(
+    () => buildReturnSequence(marketPeriods, minAge, maxAge, inputs.investmentReturn),
+    [marketPeriods, minAge, maxAge, inputs.investmentReturn],
+  );
+  const volSeq = useMemo(
+    () => buildVolatilitySequence(marketPeriods, minAge, maxAge, inputs.returnVolatility ?? 0),
+    [marketPeriods, minAge, maxAge, inputs.returnVolatility],
+  );
+  // Fallback to the flat constants when there are no anchors (build* return
+  // undefined then), so the strip always draws the current assumption.
+  const effRetSeq = useMemo(() => {
+    if (retSeq) return retSeq;
+    const seq: Record<number, number> = {};
+    for (let a = minAge; a <= maxAge; a++) seq[a] = inputs.investmentReturn;
+    return seq;
+  }, [retSeq, minAge, maxAge, inputs.investmentReturn]);
+  const effVolSeq = useMemo(() => {
+    if (volSeq) return volSeq;
+    const seq: Record<number, number> = {};
+    const v = inputs.returnVolatility ?? 0;
+    for (let a = minAge; a <= maxAge; a++) seq[a] = v;
+    return seq;
+  }, [volSeq, minAge, maxAge, inputs.returnVolatility]);
 
   const inflation = Math.max(0, config.engine.inflationRate ?? 0);
   // Deflate a nominal amount at `age` back to today's dollars (inputs are
@@ -101,6 +158,21 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
     rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(r.age).toFixed(1)},${ys(r.spendingTarget).toFixed(1)}`).join(' '),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, maxSpend, minAge, span]);
+
+  // Market-hypothesis lines (per-age curves over every age in the window).
+  const mktAges = useMemo(() => {
+    const a: number[] = [];
+    for (let age = minAge; age <= maxAge; age++) a.push(age);
+    return a;
+  }, [minAge, maxAge]);
+  const mktRetPath = useMemo(() =>
+    mktAges.map((a, i) => `${i === 0 ? 'M' : 'L'}${x(a).toFixed(1)},${ymRet(effRetSeq[a]).toFixed(1)}`).join(' '),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mktAges, effRetSeq, minAge, span]);
+  const mktVolPath = useMemo(() =>
+    mktAges.map((a, i) => `${i === 0 ? 'M' : 'L'}${x(a).toFixed(1)},${ymVol(effVolSeq[a]).toFixed(1)}`).join(' '),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mktAges, effVolSeq, minAge, span]);
 
   const equityPath = useMemo(() =>
     hasRm
@@ -169,9 +241,26 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
           ? { ...ev, age, amount: rounded }
           : ev))
       });
+      return;
+    }
+
+    if (drag.kind === 'mkt') {
+      // Market-hypothesis anchor: drag horizontally for age, vertically for the
+      // value of the field this handle controls (return or volatility). The
+      // other field on the anchor is left untouched.
+      const age = Math.round(Math.min(inputs.maxAge, Math.max(inputs.currentAge, ageAtX(px))));
+      const next = marketPeriods.map(p => {
+        if (p.id !== drag.id) return p;
+        if (drag.field === 'return') {
+          return { ...p, age, return: roundRet(Math.min(RET_MAX, Math.max(RET_MIN, retAtY(py)))) };
+        }
+        return { ...p, age, volatility: roundVol(Math.min(VOL_MAX, Math.max(VOL_MIN, volAtY(py)))) };
+      });
+      onChange({ ...inputs, marketPeriods: next });
+      return;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag, inputs, bands, events, minAge, span, maxSpend]);
+  }, [drag, inputs, bands, events, marketPeriods, minAge, span, maxSpend]);
 
   // Window-level listeners so a drag continues outside the SVG.
   useEffect(() => {
@@ -185,6 +274,38 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
       window.removeEventListener('mouseup', up);
     };
   }, [drag, applyDrag]);
+
+  // Add a market anchor at `age`, seeded with the curve's CURRENT value there
+  // so the line is continuous through the new point (no kink). One anchor per
+  // age — a double-click on an existing anchor's age is a no-op.
+  const addMarketPeriod = (ageRaw: number) => {
+    const age = Math.round(Math.min(inputs.maxAge, Math.max(inputs.currentAge, ageRaw)));
+    if (marketPeriods.some(p => p.age === age)) return;
+    const pt: MarketPeriod = {
+      id: newMarketPeriodId(),
+      age,
+      return: roundRet(effRetSeq[age] ?? inputs.investmentReturn),
+      volatility: roundVol(effVolSeq[age] ?? (inputs.returnVolatility ?? 0)),
+    };
+    onChange({ ...inputs, marketPeriods: [...marketPeriods, pt] });
+    setSelectedMkt(pt.id);
+  };
+
+  const removeMarketPeriod = (id: string) => {
+    onChange({ ...inputs, marketPeriods: marketPeriods.filter(p => p.id !== id) });
+    if (selectedMkt === id) setSelectedMkt(null);
+  };
+
+  // Double-click adds a market anchor ONLY when it lands in the market strip —
+  // the main balance panel and spending panel keep their existing behaviours.
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    const { px, py } = svgPoint(e);
+    if (py >= mktTop && py <= mktTop + MKT_H && px >= PAD.left && px <= W - PAD.right) {
+      addMarketPeriod(ageAtX(px));
+    }
+  };
+
+  const selectedPeriod = marketPeriods.find(p => p.id === selectedMkt) ?? null;
 
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => f * maxBal);
   const xTicks: number[] = [];
@@ -224,7 +345,7 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
           <PencilLine size={13} className="text-blue-600" />
           Projection Timeline
           <span className="font-normal text-slate-500">
-            — drag the retirement line, spending handles, and event diamonds; edits re-simulate live
+            — drag the retirement line, spending handles, and event diamonds; double-click the market strip to add a trend anchor; edits re-simulate live
           </span>
         </div>
         <div className="flex items-center gap-3 text-[10px] text-slate-500">
@@ -244,6 +365,12 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
           <span className="inline-flex items-center gap-1">
             <span className="inline-block w-4 h-0.5 bg-emerald-600" /> spend
           </span>
+          <span className="inline-flex items-center gap-1" title="Market hypothesis: the per-age expected return the projection follows. Double-click the market strip to add an anchor; drag up/down for return, sideways for age.">
+            <span className="inline-block w-4 h-0.5 bg-violet-600" /> return
+          </span>
+          <span className="inline-flex items-center gap-1" title="Market hypothesis: the per-age volatility Monte Carlo samples around.">
+            <span className="inline-block w-4 h-0 border-t-2 border-dashed border-amber-500" /> volatility
+          </span>
         </div>
       </div>
       <div className="p-2">
@@ -252,6 +379,7 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
           viewBox={`0 0 ${W} ${TOTAL_H}`}
           className="w-full select-none"
           onMouseMove={e => { if (drag) applyDrag(e); }}
+          onDoubleClick={handleDoubleClick}
         >
           {/* Y gridlines */}
           {yTicks.map((t, i) => (
@@ -334,6 +462,66 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
               </g>
             );
           })}
+
+          {/* Market-hypothesis panel (issue #138): the per-age return curve the
+              projection follows (violet) and the volatility curve Monte Carlo
+              samples (amber dashed). Double-click the strip to add an anchor;
+              drag an anchor vertically for its value, horizontally for its age. */}
+          <text x={PAD.left - 6} y={mktTop + 8} textAnchor="end" fontSize="9" fill="#64748b">market</text>
+          {/* zero-return reference line */}
+          <line x1={PAD.left} x2={W - PAD.right} y1={ymRet(0)} y2={ymRet(0)} stroke="#e2e8f0" strokeWidth="1" />
+          <text x={PAD.left - 6} y={ymRet(0) + 3} textAnchor="end" fontSize="8" fill="#a78bfa">0%</text>
+          <path d={mktVolPath} fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="5 3" />
+          <path d={mktRetPath} fill="none" stroke="#7c3aed" strokeWidth="2" />
+
+          {/* Volatility anchors (squares, amber) — only for anchors carrying a σ */}
+          {marketPeriods.filter(p => p.volatility != null).map(p => (
+            <rect
+              key={`mvol-${p.id}`}
+              x={x(p.age) - 4.5} y={ymVol(p.volatility!) - 4.5} width="9" height="9" rx="1"
+              fill={selectedMkt === p.id ? '#b45309' : '#f59e0b'} stroke="#fff" strokeWidth="1.5"
+              className="cursor-move hover:opacity-100"
+              opacity={selectedMkt === p.id ? 1 : 0.85}
+              onMouseEnter={() => setHover(`mvol-${p.id}`)}
+              onMouseLeave={() => setHover(null)}
+              onMouseDown={e => { e.preventDefault(); setDrag({ kind: 'mkt', id: p.id, field: 'volatility' }); }}
+              onClick={e => { e.stopPropagation(); setSelectedMkt(p.id); }}
+            >
+              <title>Age {p.age}: σ {(p.volatility! * 100).toFixed(1)}% — drag to adjust; click to select</title>
+            </rect>
+          ))}
+
+          {/* Return anchors (circles, violet) */}
+          {marketPeriods.map(p => (
+            <circle
+              key={`mret-${p.id}`}
+              cx={x(p.age)} cy={ymRet(p.return)} r={selectedMkt === p.id ? 6 : 5}
+              fill={selectedMkt === p.id ? '#5b21b6' : '#7c3aed'} stroke="#fff" strokeWidth="1.5"
+              className="cursor-move hover:opacity-100"
+              opacity={selectedMkt === p.id ? 1 : 0.9}
+              onMouseEnter={() => setHover(`mret-${p.id}`)}
+              onMouseLeave={() => setHover(null)}
+              onMouseDown={e => { e.preventDefault(); setDrag({ kind: 'mkt', id: p.id, field: 'return' }); }}
+              onClick={e => { e.stopPropagation(); setSelectedMkt(p.id); }}
+            >
+              <title>Age {p.age}: {(p.return * 100).toFixed(1)}% — drag to adjust; click to select</title>
+            </circle>
+          ))}
+
+          {/* Delete affordance for the selected anchor */}
+          {selectedPeriod && (
+            <g
+              className="cursor-pointer"
+              onClick={e => { e.stopPropagation(); removeMarketPeriod(selectedPeriod.id); }}
+            >
+              <rect
+                x={x(selectedPeriod.age) + 8} y={ymRet(selectedPeriod.return) - 22}
+                width="16" height="16" rx="3" fill="#ef4444"
+              />
+              <text x={x(selectedPeriod.age) + 16} y={ymRet(selectedPeriod.return) - 10} textAnchor="middle" fontSize="11" fill="#fff" className="pointer-events-none">×</text>
+              <title>Delete this anchor</title>
+            </g>
+          )}
         </svg>
       </div>
     </div>

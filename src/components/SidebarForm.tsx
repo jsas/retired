@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Home, X, Briefcase, HeartHandshake, CreditCard } from 'lucide-react';
-import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, IncomeSource, ReverseMortgage, RdspInputs, FhsaInputs, Debt } from '@retired/engine-core/retirementEngine';
+import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, IncomeSource, ReverseMortgage, RdspInputs, FhsaInputs, Debt, MarketPeriod } from '@retired/engine-core/retirementEngine';
 import { cppAdjustmentMultiplier } from '@retired/engine-core/retirementEngine';
 import { baselineSpouse } from '@retired/engine-core/householdTypes';
 import type { AppConfig } from '@retired/engine-core/appConfig';
@@ -41,6 +41,7 @@ let eventSeq = 0;
 const newEventId = () => `ev-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
 const newIncomeId = () => `inc-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
 const newDebtId = () => `debt-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
+const newMarketPeriodId = () => `mp-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
 
 // Reusable income-register editor (primary plan and spouse plan both render
 // one). One card per IncomeSource: label, $/yr, start/end ages, indexed, plus a
@@ -803,6 +804,76 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
           className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
         >
           <Plus size={12} /> Add phase
+        </button>
+      </div>
+    );
+  };
+
+  // The market-hypothesis (issue #138) trend editor: one row per anchor with
+  // its age, expected return %, and volatility % (σ). Sorted by age. The return
+  // is required; σ is optional per anchor (blank = the flat Volatility above
+  // holds there), so a returns-only hypothesis leaves Monte Carlo's σ flat.
+  const renderMarketPeriods = (
+    periods: MarketPeriod[],
+    setPeriods: (next: MarketPeriod[]) => void,
+  ) => {
+    const sorted = [...periods].sort((a, b) => a.age - b.age);
+    const updateAt = (index: number, patch: Partial<MarketPeriod>) => {
+      setPeriods(sorted.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+    };
+    return (
+      <div className="space-y-1.5">
+        {sorted.map((p, i) => (
+          <div key={p.id} className="flex items-center gap-1.5 px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded">
+            <input
+              type="number"
+              value={p.age}
+              title="At age"
+              onChange={(e) => updateAt(i, { age: parseInt(e.target.value) || p.age })}
+              className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">ret</span>
+            <input
+              type="number"
+              step="0.1"
+              value={+(p.return * 100).toFixed(2)}
+              title="Expected annual return % (may be negative — a crash)"
+              onChange={(e) => updateAt(i, { return: (parseFloat(e.target.value) || 0) / 100 })}
+              className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">%</span>
+            <span className="text-[10px] text-neutral-500">σ</span>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={p.volatility != null ? +(p.volatility * 100).toFixed(2) : ''}
+              placeholder="—"
+              title="Volatility % at this age (Monte Carlo only); blank = the flat value"
+              onChange={(e) => {
+                const raw = e.target.value;
+                updateAt(i, { volatility: raw === '' ? undefined : Math.max(0, (parseFloat(raw) || 0) / 100) });
+              }}
+              className="w-14 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] text-neutral-500">%</span>
+            <button
+              onClick={() => setPeriods(sorted.filter((_, j) => j !== i))}
+              className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+              title="Remove anchor"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => {
+            const age = sorted.length > 0 ? sorted[sorted.length - 1].age + 5 : inputs.retirementAge;
+            setPeriods([...sorted, { id: newMarketPeriodId(), age, return: inputs.investmentReturn, volatility: inputs.returnVolatility }]);
+          }}
+          className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded w-full"
+        >
+          <Plus size={12} /> Add trend anchor
         </button>
       </div>
     );
@@ -2093,13 +2164,15 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 Standard deviation of annual returns. 0% = deterministic. Typical equity-heavy portfolio: 15–20%.
               </p>
             </div>
-            {Array.isArray(inputs.marketPeriods) && inputs.marketPeriods.length > 0 && (
-              <p className="text-[10px] text-blue-400 leading-snug border border-blue-900/40 bg-blue-950/30 rounded px-2 py-1.5">
-                A market hypothesis ({inputs.marketPeriods.length} anchor{inputs.marketPeriods.length === 1 ? '' : 's'})
-                is active — these flat values apply only outside the anchors' age range. Edit the curve in the
-                <em> Market Hypothesis</em> panel above the projection timeline.
+            <div>
+              <label className="block text-[11px] text-neutral-500 mb-1">Trend (return / volatility by age)</label>
+              {renderMarketPeriods(inputs.marketPeriods ?? [], (next) => updateField('marketPeriods', next))}
+              <p className="mt-1.5 text-[10px] text-neutral-500 leading-snug">
+                Add anchors to model a crash, boom, or choppy stretch instead of one flat return. The engine interpolates
+                linearly between anchors; before the first and after the last the flat values above hold. The projection
+                follows the return curve; volatility shapes Monte Carlo only. Drag points on the timeline's market strip.
               </p>
-            )}
+            </div>
           </div>
         </CollapsibleSection>
       </div>

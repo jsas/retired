@@ -27,12 +27,26 @@ describe('buildReturnSequence', () => {
       { id: 'b', age: 70, return: 0.10 },
     ];
     const seq = buildReturnSequence(periods, 60, 90, 0.05)!;
-    // Before the first anchor and after the last: the flat constant, NOT the
+    // Before the hypothesis window and after it: the flat constant, NOT the
     // nearest anchor — a hypothesis is a local regime, not a whole-horizon bet.
     expect(seq[60]).toBe(0.05);
-    expect(seq[67]).toBe(0.05);
-    expect(seq[71]).toBe(0.05);
+    expect(seq[66]).toBe(0.05); // one year before the first anchor's ramp-in
+    expect(seq[72]).toBe(0.05); // one year after the last anchor's ramp-out
     expect(seq[90]).toBe(0.05);
+  });
+
+  it('returns to the flat constant after the last anchor (with a one-year ramp)', () => {
+    // The headline behaviour (issue #138): after the final anchor the curve
+    // eases back to the plan's expected return over ONE year, not a cliff and
+    // never holding the anchor's value onward.
+    const seq = buildReturnSequence([{ id: 'a', age: 70, return: 0.20 }], 60, 90, 0.05)!;
+    expect(seq[70]).toBe(0.20);            // the anchor
+    expect(seq[71]).toBeCloseTo((0.20 + 0.05) / 2, 10); // ramp-out year
+    expect(seq[72]).toBe(0.05);            // back to the constant
+    expect(seq[90]).toBe(0.05);
+    // And the leading edge ramps in the year before.
+    expect(seq[69]).toBeCloseTo((0.05 + 0.20) / 2, 10);
+    expect(seq[68]).toBe(0.05);
   });
 
   it('hits anchor values exactly and lerps linearly between them', () => {
@@ -59,11 +73,13 @@ describe('buildReturnSequence', () => {
     expect(seq[69]).toBeCloseTo((-0.20 + 0.10) / 2, 10);
   });
 
-  it('a single anchor applies at its age and nowhere else', () => {
+  it('a single anchor applies at its age, ramping in and out over one year', () => {
     const seq = buildReturnSequence([{ id: 'a', age: 70, return: -0.25 }], 60, 90, 0.05)!;
-    expect(seq[70]).toBe(-0.25);
-    expect(seq[69]).toBe(0.05);
-    expect(seq[71]).toBe(0.05);
+    expect(seq[70]).toBe(-0.25);                            // the anchor
+    expect(seq[69]).toBeCloseTo((0.05 + -0.25) / 2, 10);    // ramp-in
+    expect(seq[71]).toBeCloseTo((-0.25 + 0.05) / 2, 10);    // ramp-out
+    expect(seq[68]).toBe(0.05);                             // flat beyond the ramps
+    expect(seq[72]).toBe(0.05);
   });
 });
 
@@ -122,15 +138,18 @@ describe('engine integration', () => {
     });
     const boom = calculateHousehold(inputs, config);
     const flat = calculateHousehold(baseInputs(), config);
-    // Before the anchor the two paths are identical (the curve hasn't started).
-    for (let age = 65; age <= 74; age++) {
+    // Before the ramp-in year the two paths are identical (the curve is flat).
+    // The ramp-in at age 74 is the first year the boom lifts the balance.
+    for (let age = 65; age <= 73; age++) {
       expect(closeTo(
         yearAt(boom.yearlyBreakdown, age).endingBalance,
         yearAt(flat.yearlyBreakdown, age).endingBalance,
         0.01,
       )).toBe(true);
     }
-    // At/after the anchor the boom path diverges upward.
+    // From the ramp-in year onward the boom path diverges upward.
+    expect(yearAt(boom.yearlyBreakdown, 74).endingBalance)
+      .toBeGreaterThan(yearAt(flat.yearlyBreakdown, 74).endingBalance);
     expect(yearAt(boom.yearlyBreakdown, 76).endingBalance)
       .toBeGreaterThan(yearAt(flat.yearlyBreakdown, 76).endingBalance);
   });

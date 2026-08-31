@@ -18,7 +18,6 @@ import { SettingsModal } from './components/SettingsModal';
 import { SavePromptModal } from './components/SavePromptModal';
 import { HelpModal } from './components/HelpModal';
 import { MonteCarloChart } from './components/MonteCarloChart';
-import { MarketHypothesisChart } from './components/MarketHypothesisChart';
 import { TimelineChart } from './components/TimelineChart';
 import { BacktestPanel } from './components/BacktestPanel';
 import { CollapsiblePanel } from './components/CollapsiblePanel';
@@ -976,14 +975,6 @@ function App() {
                 {/* KPI Cards */}
                 <CollapsiblePanel id="summary" title="Projection Summary">
                   <MetricCards results={results} household={household} />
-                </CollapsiblePanel>
-
-                {/* Market hypothesis editor (issue #138): shape the return/volatility
-                    regime the projection and Monte Carlo follow. Sits directly above
-                    the timeline so the consequence of a drag is visible on the same
-                    screen. */}
-                <CollapsiblePanel id="market-hypothesis" title="Market Hypothesis" defaultOpen={false}>
-                  <MarketHypothesisChart inputs={inputs} onChange={handleInputsChange} />
                 </CollapsiblePanel>
 
                 {/* Interactive projection timeline (household when a spouse is enabled) */}
