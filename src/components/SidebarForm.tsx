@@ -1042,6 +1042,24 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                     you have carried-forward room, then overflow to non-registered.
                   </div>
                 )}
+                {/* Over-contribution against TODAY'S room (issue #119 T5): the
+                    annual-limit warnings above compare to the per-year cap, but
+                    a deposit can also exceed the room you actually have right
+                    now (which is what the engine caps against). Warn directly. */}
+                {inputs.tfsaRoom != null && (inputs.tfsaContribution ?? 0) > inputs.tfsaRoom && (
+                  <div className="text-[10px] text-amber-400 leading-snug">
+                    Your {formatMoney(inputs.tfsaContribution ?? 0)}/yr TFSA contribution is more than your
+                    {' '}{formatMoney(inputs.tfsaRoom)} of room today — the excess overflows to the
+                    taxable account from year one.
+                  </div>
+                )}
+                {inputs.rrspRoom != null && (inputs.rrspContribution ?? 0) > inputs.rrspRoom && (
+                  <div className="text-[10px] text-amber-400 leading-snug">
+                    Your {formatMoney(inputs.rrspContribution ?? 0)}/yr RRSP contribution is more than your
+                    {' '}{formatMoney(inputs.rrspRoom)} of room today — the excess overflows to the
+                    taxable account from year one.
+                  </div>
+                )}
               </div>
             </div>
           </div>

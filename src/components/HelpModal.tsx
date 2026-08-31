@@ -97,6 +97,10 @@ const SECTIONS: HelpSection[] = [
         body: <P>Your available contribution room from your CRA notice of assessment. Blank means "no limit" — the engine won't enforce room (how older plans behaved). Enter a number and room is tracked: each year TFSA room grows by the annual limit ({new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(DEFAULT_APP_CONFIG.engine.tfsaAnnualLimit)}/yr, set in Settings → Engine) and RRSP room grows by 18% of your employment/self-employment income up to the RRSP maximum, minus any pension adjustment. A TFSA withdrawal re-adds to your room the <em>following</em> year (the CRA rule); an RRSP withdrawal never does. Deposits beyond your remaining room overflow into non-registered, so an RRSP→TFSA meltdown is now capped at your TFSA room rather than over-contributing.</P>
       },
       {
+        term: 'Room warnings & the schedule "Contribution room" panel',
+        body: <P>When room tracking is on, the sidebar warns you in amber if a planned annual contribution is bigger than the room you actually have today (the excess overflows to the taxable account from year one), or bigger than the per-year limit (fits only while carried-forward room lasts). Each year row in the schedule table also has an expandable <strong>Contribution room</strong> panel showing your TFSA/RRSP room left at year end and any over-contribution that overflowed to taxable that year — so you can see exactly when and why a deposit stopped fitting.</P>
+      },
+      {
         term: 'Desired Spending ($)',
         body: <P>The after-tax income you want each retirement year, in today's dollars — the base the phases scale. When Settings → Engine → "Grow spending with inflation" is on, the engine inflates it by CPI each year from your current age, so the table's Spending Target column shows the nominal dollars needed that year; when off, the target stays flat in today's dollars. The engine grosses up registered withdrawals so that benefits + portfolio income, after tax, equal that target.</P>
       },

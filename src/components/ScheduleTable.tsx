@@ -131,6 +131,26 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
         </Section>
       )}
 
+      {/* Contribution-room ledger (issue #24 / #119 T5): remaining room at year
+          end for each tracked account, plus any over-contribution that overflowed
+          to taxable this year. Shown only when room tracking is on. */}
+      {detail.roomRemaining && (
+        <Section title="Contribution room">
+          {detail.roomRemaining.tfsa !== undefined && (
+            <Line label="TFSA room left" value={detail.roomRemaining.tfsa} strong hint="Remaining TFSA contribution room at year end (after this year's accrual and deposits)." />
+          )}
+          {detail.roomRemaining.rrsp !== undefined && (
+            <Line label="RRSP room left" value={detail.roomRemaining.rrsp} strong hint="Remaining RRSP contribution room at year end (after this year's accrual and deposits)." />
+          )}
+          {(detail.overflow?.tfsa ?? 0) > 0.5 && (
+            <Line label="TFSA over-contribution" value={detail.overflow!.tfsa} hint="This much would have gone into the TFSA but ran out of room, so it was redirected to the taxable account." />
+          )}
+          {(detail.overflow?.rrsp ?? 0) > 0.5 && (
+            <Line label="RRSP over-contribution" value={detail.overflow!.rrsp} hint="This much would have gone into the RRSP but ran out of room, so it was redirected to the taxable account." />
+          )}
+        </Section>
+      )}
+
       {hasBenefits && (
         <Section title="Benefits (gross)">
           <Line label="CPP" value={row.cppIncome} />
