@@ -131,6 +131,28 @@ export class TabSession {
     return result.result?.value;
   }
 
+  /** Call a page function with arguments bound as VALUES, not interpolated into
+   *  the evaluated source (Runtime.callFunctionOn + arguments). Prefer this over
+   *  `eval(\`...fn(${JSON.stringify(x)})...\`)` when passing untrusted/large data:
+   *  the value crosses as a parameter, so it can never be re-parsed as code and
+   *  there's nothing to mis-escape (CodeQL: improper code sanitization).
+   *  `fnDecl` is a function *declaration* source, e.g. `(a, b) => a + b`; args are
+   *  JSON-serializable. Returns the awaited, by-value result. */
+  async callFn(fnDecl, args = [], { timeoutMs = 600000 } = {}) {
+    const result = await this._send('Runtime.callFunctionOn', {
+      functionDeclaration: fnDecl,
+      arguments: args.map((v) => ({ value: v })),
+      awaitPromise: true,
+      returnByValue: true,
+      timeout: timeoutMs,
+    });
+    if (result.exceptionDetails) {
+      const d = result.exceptionDetails;
+      throw new Error('page exception: ' + (d.exception?.description ?? d.text ?? 'unknown'));
+    }
+    return result.result?.value;
+  }
+
   /** Like eval, but tolerant of the navigation race: a freshly-opened tab can
    *  have its execution context destroyed as it commits the URL. Retry those
    *  transient failures until the page is stable (a real page error still

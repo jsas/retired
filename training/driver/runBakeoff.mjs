@@ -19,7 +19,7 @@
 
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { dirname, join, extname } from 'node:path';
+import { dirname, join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchChrome, openTab, TabSession } from './cdp.mjs';
 
@@ -39,11 +39,15 @@ const CDP_PORT = Number(arg('--cdp-port') ?? 9222);
 const MIME = { '.html': 'text/html', '.mjs': 'text/javascript', '.js': 'text/javascript' };
 
 /** Serve the driver dir over http so Chrome can load the harness as a module
- *  (file:// blocks ESM + WebGPU in some configs). */
+ *  (file:// blocks ESM + WebGPU in some configs). Loopback-only dev server, but
+ *  canonicalize + confine the resolved path to the serve root so a crafted URL
+ *  can't read outside it (CodeQL: uncontrolled data in path expression). */
 function serve() {
+  const root = resolve(here);
   const server = createServer((req, res) => {
-    const path = req.url === '/' ? '/harness.html' : req.url.split('?')[0];
-    const file = join(here, path);
+    const urlPath = (req.url === '/' ? '/harness.html' : req.url.split('?')[0]).replace(/\\/g, '/');
+    const file = resolve(root, `.${urlPath}`);
+    if (file !== root && !file.startsWith(root + sep)) { res.writeHead(403); res.end('forbidden'); return; }
     if (!existsSync(file)) { res.writeHead(404); res.end('nope'); return; }
     res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'text/plain' });
     res.end(readFileSync(file));
@@ -112,14 +116,16 @@ async function main() {
       if (!gpu) { await tab.close(); continue; }
 
       // Download + warm the model (slow on first run; cached in the browser profile after).
-      await tab.eval(`(async () => window.BAKEOFF.load(${JSON.stringify(base.modelId)}))()`, { timeoutMs: 900000 });
+      // modelId crosses as a bound argument, not interpolated into the eval source.
+      await tab.callFn(`(modelId) => window.BAKEOFF.load(modelId)`, [base.modelId], { timeoutMs: 900000 });
       console.error('model loaded; running eval…');
 
       const replies = [];
       for (let i = 0; i < evalRecords.length; i++) {
         const q = evalRecords[i].question;
-        const text = await tab.eval(
-          `(async () => window.BAKEOFF.reply(${JSON.stringify(systemPrompt)}, ${JSON.stringify(q)}))()`,
+        const text = await tab.callFn(
+          `(systemPrompt, question) => window.BAKEOFF.reply(systemPrompt, question)`,
+          [systemPrompt, q],
           { timeoutMs: 120000 },
         );
         replies.push(text);

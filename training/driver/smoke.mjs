@@ -4,16 +4,20 @@
 //   node training/driver/smoke.mjs
 import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join, extname } from 'node:path';
+import { dirname, join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchChrome, openTab, TabSession } from './cdp.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MIME = { '.html': 'text/html', '.mjs': 'text/javascript' };
 
+// Loopback-only dev server, but canonicalize + confine the resolved path to the
+// serve root so a crafted URL can't read outside it (CodeQL: uncontrolled data).
+const root = resolve(here);
 const server = createServer((req, res) => {
-  const path = req.url === '/' ? '/harness.html' : req.url.split('?')[0];
-  const file = join(here, path);
+  const urlPath = (req.url === '/' ? '/harness.html' : req.url.split('?')[0]).replace(/\\/g, '/');
+  const file = resolve(root, `.${urlPath}`);
+  if (file !== root && !file.startsWith(root + sep)) { res.writeHead(403); res.end(); return; }
   if (!existsSync(file)) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'text/plain' });
   res.end(readFileSync(file));
