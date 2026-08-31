@@ -50,7 +50,7 @@
 </head>
 <body>
 <h1>Bake-off — stock bases, smallest first</h1>
-<div id="sub">thinking OFF · temperature 0 · the fine-tune contract</div>
+<div id="sub">temperature 0 · thinking allowed (not suppressed) · max_tokens 2048</div>
 <div id="banner">starting…</div>
 <div id="grid"></div>
 
@@ -64,11 +64,12 @@
   let engine = null;
   let loadedId = null;
 
-  // The corpus teaches question → bare TOOL_CALL: with no reasoning block, so we
-  // benchmark stock bases on that same contract. Qwen3's /no_think skips the
-  // <think> block (inert for non-thinking bases), so the 400-token budget goes to
-  // the answer, not reasoning that would truncate the call.
-  const NO_THINK = ' /no_think';
+  // Thinking models think — we do NOT suppress it. A base's reasoning is part of
+  // why it routes well, and the parser ignores prose before/after the call, so the
+  // think text never reaches the score. The failure to avoid is TRUNCATION: a
+  // 400-token cap let a long <think> run out the budget so the TOOL_CALL: never got
+  // emitted. Give thinking room to finish, then the call.
+  const MAX_TOKENS = 2048;   // headroom for think + tool call; the gate scores the call only
 
   function makeCard(id, label, sizeGB) {
     const el = document.createElement('div');
@@ -124,10 +125,10 @@
     const out = await engine.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: question + NO_THINK },
+        { role: 'user', content: question },
       ],
       temperature: 0,
-      max_tokens: 400,
+      max_tokens: MAX_TOKENS,
     });
     return out.choices[0]?.message?.content ?? '';
   }

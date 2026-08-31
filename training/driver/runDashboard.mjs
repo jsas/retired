@@ -217,7 +217,7 @@ async function main() {
     const stamp = new Date().toISOString();
     const board = {
       generatedAt: stamp,
-      think: 'off (/no_think)',
+      think: 'allowed (not suppressed) · max_tokens 2048',
       evalRecords: evalRecords.length,
       bar: 0.95,
       bases: results.map((r) => ({ modelId: r.base.modelId, label: r.base.label, sizeGB: r.base.sizeGB, protocolValidity: r.pct })),
@@ -226,7 +226,7 @@ async function main() {
     const md = [
       `# Bake-off results — ${stamp}`,
       ``,
-      `thinking OFF (\`/no_think\`) · temperature 0 · ${evalRecords.length} eval records · bar 95%`,
+      `thinking allowed (not suppressed) · temperature 0 · max_tokens 2048 · ${evalRecords.length} eval records · bar 95%`,
       ``,
       `| base | size | protocol-validity | clears bar | tiers |`,
       `|---|---|---|---|---|`,
