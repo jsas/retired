@@ -46,6 +46,9 @@
   .score { margin-top: 8px; font-size: 12px; font-weight: 600; }
   .score.pass { color: #4ade80; } .score.fail { color: #f87171; }
   .tiers { font-size: 10px; color: #64748b; font-weight: 400; margin-top: 2px; }
+  .skip { margin-top: 4px; font-size: 10px; background: #334155; color: #cbd5e1;
+          border: none; border-radius: 4px; padding: 1px 6px; cursor: pointer; }
+  .card.active .skip { background: #7f1d1d; color: #fff; }
 </style>
 </head>
 <body>
@@ -80,7 +83,10 @@
       <div class="bar"><div></div></div>
       <div class="last"></div>
       <div class="score"></div>
-      <div class="tiers"></div>`;
+      <div class="tiers"></div>
+      <button class="skip">skip</button>`;
+    const btn = el.querySelector('.skip');
+    btn.addEventListener('click', () => { window.SKIP_FLAG = id; });
     grid.appendChild(el);
     cards.set(id, {
       el,
@@ -120,12 +126,17 @@
     return { ok: true };
   }
 
-  async function reply(systemPrompt, question) {
+  // THINK ON (natural) or OFF (`/no_think`), routed per question. The OFF
+  // suffix tells Qwen3*/3.5* to answer immediately instead of reasoning —
+  // matching how the app's assistant uses these models. The `noThink` flag is
+  // set by Node per question so both modes can be measured in one sweep.
+  async function reply(systemPrompt, question, noThink) {
     if (!engine) throw new Error('no model loaded');
+    const content = noThink ? question + ' /no_think' : question;
     const out = await engine.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: question },
+        { role: 'user', content: content },
       ],
       temperature: 0,
       max_tokens: MAX_TOKENS,
@@ -138,7 +149,7 @@
     return {
       text,
       finishReason: out.choices[0]?.finish_reason ?? null,
-      thought: /<think>/i.test(text),
+      thought: /<think>/i.test(text) && !noThink,
       hasCall: /tool_call\s*:/i.test(text),
     };
   }
