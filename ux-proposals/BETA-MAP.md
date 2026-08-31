@@ -60,21 +60,59 @@ English, few controls, distinct concepts over reskins.
 
 ## 2. TO-DO — the open work (from the user's review)
 
-### A. Page-by-page style review → convert to styleguide components ⬜
+### A. Page-by-page style review → convert to styleguide components 🚧
 **The problem:** pages fork raw elements (rounded corners, shadows, inline
 `style={{}}`, one-off class soup) instead of composing `src/design/` primitives.
 Per §8.10 that's a violation — a needed style gets *added to* the design system,
 never forked inside a page.
 
-**The task:** walk each page, list what forks the vocabulary, and convert it to a
-proper component (or a new primitive added to `src/design/` + the Style Guide page).
-- [ ] Dashboard (`BetaApp.tsx`)
-- [ ] Landing (`LandingPage.tsx`)
-- [ ] Details (`DetailsPage.tsx`)
-- [ ] Schedule (`ScheduleTable.tsx`)
-- [ ] Insights (`beta/pages.tsx` — Eq/Optimize/MC/Backtest wrappers)
-- [ ] Plans / Data / Settings / Print / Export / Donate / Connections (`beta/pages.tsx` wrappers)
-- [ ] For each: a written list of what to update, then the conversion.
+**Review (written list, by file):**
+
+- [ ] **`src/components/AgentPage.tsx`** (assistant — dock + full page). The worst offender:
+  `rounded-full` tag chips (l.431), `rounded-lg` message bubbles + panels (l.1206, 1273,
+  1294, 1902), a `rounded-full … shadow-sm` floating pill (l.1476), and inline
+  `style={{ width }}` progress bars (l.1339, 1795). Convert bubbles to flat squares,
+  use a named `<Progress>` primitive for the bars, kill the shadows.
+- [ ] **`src/components/EqPage.tsx`** (Insights → Eq). Range-thumb + dot use
+  `rounded-full … shadow` (l.166, 274) — F7 wants square thumbs. Inline `style={{ left }}`
+  percent positions are fine (geometry), but the thumbs' chrome is not.
+- [ ] **`src/components/ScheduleTable.tsx`** — the §8.9 column picker popover uses
+  `rounded + shadow-lg` (l.91). Make it a flat hairline panel; shadows banned.
+- [ ] **`src/components/MonteCarloChart.tsx`** — legend swatches + hist bars with
+  `rounded-sm` and hex `style={{ background: '#3b82f6' }}` — should use the design
+  token (`tokens.ts` BLUE) not raw hex; square swatches.
+- [ ] **`src/components/BacktestPanel.tsx`** — histogram bars `rounded-sm` +
+  `style={{ height }}` — square bars, heights via class-mapped widths where possible.
+- [ ] **`src/components/ConnectionsPage.tsx`** — status dot `rounded-full border-2`
+  and an inline-`style` progress bar (l.258, 303). Square the dot; use `<Progress>`.
+- [ ] **`src/components/SetupWizard.tsx`** — the first-run wizard still quotes the OLD
+  palette: `rounded-md/lg/full`, `shadow-sm`, `focus:ring-1 focus:ring-blue-500`,
+  hex-free but class-heavy (l.175, 298, 308, 310, 340, 415, 471). Needs a full pass
+  to the design tokens (square, hairline, no ring, flat).
+- [ ] **`src/components/CompareCard.tsx`** (Plans) — baseline dot `rounded-full`.
+- [ ] **`src/components/SavePromptModal.tsx`** — `rounded-lg shadow-xl` modal +
+  `rounded-md` buttons. There should be a shared `<Modal>` primitive instead.
+- [ ] **`src/components/HelpModal.tsx`** — `<mark>` `rounded-sm`. Trivial.
+- [ ] **`src/components/MathPage.tsx`** — numbered-badge `rounded-full`.
+- [ ] **`src/components/TimelineChart.tsx`** — legend swatch `rounded-sm`.
+- [ ] **`src/components/TopHeader.tsx`** — dirty-dot `rounded-full`, mobile menu
+  `rounded-md shadow-xl`. The TopHeader itself only renders in the wrapped-insights
+  views; should still square up.
+- [ ] **`src/components/WelcomeCard.tsx`** — hero CTA `rounded-md`.
+- [ ] **`src/components/PrintSummary.tsx`** — 40+ inline `style={{}}` blocks (padding,
+  colors as raw hex `#475569` / `#1d4ed8` / `#e2e8f0`, etc.) — this one page carries
+  its own palette. Convert to classes + tokens. Border-radius `'4px'` on the RE: mark.
+- [ ] **`src/components/beta/LandingPage.tsx`** — verdict + RE: mark use inline hex
+  (`style={{ borderColor: … }}`, `style={{ color: … }}`, `style={{ backgroundColor: INK }}`)
+  — should draw from `tokens.ts`, not per-component constants.
+
+**Shared primitives to ADD to `src/design/` (then consumed above):**
+- [ ] `<Progress>` — a thin hairline track + a fill of `width: pct%` (replaces the
+  inline-style bars in AgentPage / Connections / SetupWizard).
+- [ ] `<Modal>` — a flat hairline overlay shell (replaces SavePromptModal's shadow shell).
+- [ ] square `Dot`/`Swatch` (the system has square dots; several pages fork round ones).
+
+**Then:** do the conversions page-by-page, leaving each above checkbox ticked.
 
 ### B. Details page — no way to ADD things ✅
 The Details sections that hold lists now edit inline, in-styleguide (flat hairline
