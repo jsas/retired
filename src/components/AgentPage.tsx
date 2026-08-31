@@ -238,9 +238,10 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
   const ready = connection != null && connectionReady(connection);
   const isLocal = connection?.provider === 'webllm';
-  // A local model that's too weak for the tool protocol (e.g. Gemma 2 2B)
-  // drops to 'off': it answers from the plan summary instead of mangling
-  // fenced-JSON tool calls. Anything not in the catalog is assumed capable.
+  // A local model flagged too weak for the tool protocol drops to 'off': it
+  // answers from the plan summary instead of mangling fenced-JSON tool calls.
+  // Since #118 no curated model is weak, so this only bites if a future
+  // entry opts in; free-text models are assumed capable.
   const localMeta = isLocal ? WEBLLM_MODELS.find(m => m.id === connection?.model) : undefined;
   const toolCapable = !isLocal || (localMeta?.toolCapable ?? true);
   const toolMode: 'native' | 'prompt' | 'off' = !isLocal ? 'native' : toolCapable ? 'prompt' : 'off';

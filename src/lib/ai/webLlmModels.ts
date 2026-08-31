@@ -75,15 +75,6 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     blurb: 'Microsoft\'s small instruct model; reliable at following formats.',
   },
   {
-    id: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
-    label: 'DeepSeek R1 Distill 7B',
-    vramMB: 5107,
-    sizeGB: 4.5,
-    toolCapable: true,
-    maxWindow: 32768,
-    blurb: 'Thinks out loud (R1-style), then answers. Verbose but careful; needs ~6 GB VRAM.',
-  },
-  {
     id: 'Qwen3-8B-q4f16_1-MLC',
     label: 'Qwen3 8B (thinking)',
     vramMB: 5696,
@@ -100,15 +91,6 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     toolCapable: true,
     maxWindow: 32768,
     blurb: 'Strongest model in the list, for GPUs with 8 GB+. Largest download.',
-  },
-  {
-    id: 'gemma-2-2b-it-q4f16_1-MLC',
-    label: 'Gemma 2 2B',
-    vramMB: 1895,
-    sizeGB: 1.6,
-    toolCapable: false,
-    maxWindow: 8192,
-    blurb: 'Smallest download, but too weak to change your plan — answers questions only. Pick only if nothing else fits your GPU.',
   },
 ];
 
