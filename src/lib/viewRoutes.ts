@@ -19,7 +19,11 @@ export type View =
   | 'donate'
   | 'agent'
   | 'connections'
-  | 'welcome';
+  | 'welcome'
+  // Beta-skin only: the design-system style guide. Not part of the stable UI —
+  // App renders it from the beta branch, but it must be a recognized view so
+  // the URL-sync effect doesn't rewrite #/styleguide back to the default view.
+  | 'styleguide';
 
 export const VIEW_ROUTES: Record<View, string> = {
   projection: 'projection',
@@ -39,6 +43,7 @@ export const VIEW_ROUTES: Record<View, string> = {
   welcome: 'welcome',
   help: 'help',
   settings: 'settings',
+  styleguide: 'styleguide',
 };
 
 // Map a location hash ('#/steering', '#steering', '#/steering/') to its view.

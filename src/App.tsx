@@ -724,7 +724,9 @@ function App() {
   if (beta) {
     // The style guide is part of the beta skin — reach it without leaving the
     // new surface. It reads only src/design/, so it always matches the code.
-    if (window.location.hash.replace(/^#\/?/, '').replace(/\/+$/, '') === 'styleguide') {
+    // `view` already parsed #/styleguide via viewFromHash, so the URL-sync
+    // effect above recognizes the route and leaves the hash alone.
+    if (view === 'styleguide') {
       return <StyleGuide />;
     }
     return (
