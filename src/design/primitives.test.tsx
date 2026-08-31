@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import * as T from './tokens';
 import {
   VerdictHero, Panel, Fader, Chip, Stat, AccountBars, Legend, Dropdown, Footnote, AppHeader,
+  HelpHint,
 } from './primitives';
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -93,5 +94,17 @@ describe('primitives render', () => {
   it('Footnote and AppHeader render', () => {
     expect(render(<Footnote>not advice</Footnote>)).toContain('not advice');
     expect(render(<AppHeader><span>x</span></AppHeader>)).toContain('RE:');
+  });
+
+  it('HelpHint renders a ? button labelled by its topic', () => {
+    const html = render(<HelpHint topic="rrsp" />);
+    expect(html).toContain('?');
+    expect(html).toContain('aria-label="Help: RRSP"');
+    // popup is closed until tapped — the body text stays out of the DOM
+    expect(html).not.toContain('More in Help');
+  });
+
+  it('HelpHint returns null for an unknown topic id', () => {
+    expect(render(<HelpHint topic="nope-not-a-topic" />)).toBe('');
   });
 });

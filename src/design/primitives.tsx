@@ -4,8 +4,9 @@
  * these rather than restyle raw elements, so the vocabulary stays consistent.
  * The living reference is StyleGuide.tsx; the prose is STYLEGUIDE.md.
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from './tokens';
+import { helpTopic } from '../help/topics';
 
 /* ── VerdictHero ──────────────────────────────────────────────────────────
    The answer, first, in plain English. One uppercase eyebrow, one sentence,
@@ -207,6 +208,71 @@ export function Dropdown({ label, children, wide = false }: {
         </div>
       )}
     </div>
+  );
+}
+
+/* ── HelpHint ─────────────────────────────────────────────────────────────
+   The small ? at the end of a label. Click/tap opens a flat hairline box
+   (w-72) with the topic's title, the SAME body the Help page renders (never
+   re-typed here — one source of truth in src/help/topics.tsx), and a link
+   that deep-links into Help. Opens on click not hover (touch is first-class),
+   closes on outside-tap / Esc / re-tap. `place="top"` flips it above. */
+export function HelpHint({ topic: topicId, place = 'bottom', className = '' }: {
+  /** Unique topic id from src/help/topics.tsx — also the Help-page anchor. */
+  topic: string;
+  place?: 'bottom' | 'top';
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const topic = helpTopic(topicId);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (!topic) return null;
+
+  return (
+    <span ref={ref} className={`relative inline-flex align-middle ${className}`}>
+      <button
+        type="button"
+        aria-label={`Help: ${topic.title}`}
+        aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center border border-slate-300 text-[10px] font-semibold leading-none text-slate-400 hover:border-slate-400 hover:text-slate-600 focus:outline-none focus:border-slate-500"
+      >
+        ?
+      </button>
+      {open && (
+        <span
+          role="dialog"
+          aria-label={topic.title}
+          className={`absolute left-0 z-50 block w-72 border border-slate-200 bg-white p-3 text-left ${
+            place === 'top' ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
+          }`}
+        >
+          <span className="mb-1.5 block text-[12px] font-semibold text-slate-900">{topic.title}</span>
+          <span className="block">{topic.body}</span>
+          <a
+            href={`#/help?topic=${topic.id}`}
+            className="mt-2 inline-block text-[11px] font-medium text-blue-700 hover:underline"
+          >
+            More in Help →
+          </a>
+        </span>
+      )}
+    </span>
   );
 }
 

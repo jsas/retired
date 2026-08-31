@@ -8,6 +8,7 @@ import { useState } from 'react';
 import * as T from './tokens';
 import {
   Fader, Chip, VerdictHero, Panel, Stat, AccountBars, Legend, Dropdown, Footnote,
+  HelpHint,
 } from './primitives';
 
 function Swatch({ name, value, note }: { name: string; value: string; note?: string }) {
@@ -152,6 +153,9 @@ export function StyleGuide() {
             <Dropdown label="Details">
               <div className="px-2 py-1 text-[12px] text-slate-600">Spouse · pensions · cash events · withdrawal order…</div>
             </Dropdown>
+            <span className="text-[12px] text-slate-500">
+              The small <HelpHint topic="withdrawal-order" /> sits at the end of a label — tap it for the short answer, follow through to Help.
+            </span>
           </div>
 
           <Footnote>
