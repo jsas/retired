@@ -39,6 +39,15 @@ export interface CppConfig {
   maxDeferralAge: number;       // latest start (70)
   earlyPenaltyPerMonth: number; // reduction per month before standardAge (0.006)
   deferralBonusPerMonth: number; // increase per month after standardAge (0.007)
+  // Self-employed CPP payroll contribution (2026): a self-employed person pays
+  // BOTH the employee and employer shares — selfEmployedRate × pensionable
+  // earnings (net self-employment income between the basic exemption and the
+  // YMPE). That contribution is a DEDUCTION from taxable income (the employee
+  // half as a deduction, the employer half not taxed either — modelled as one
+  // pre-tax deduction). 0 disables the deduction.
+  selfEmployedRate: number;     // combined employee+employer rate (0.119 in 2026)
+  ympe: number;                 // Year's Maximum Pensionable Earnings ($71,300 in 2026)
+  basicExemption: number;       // earnings below this are exempt ($3,500)
 }
 
 export interface EngineConfig {
@@ -178,7 +187,11 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     earliestAge: 60,
     maxDeferralAge: 70,
     earlyPenaltyPerMonth: 0.006,
-    deferralBonusPerMonth: 0.007
+    deferralBonusPerMonth: 0.007,
+    // 2026 self-employed CPP: 11.9% combined, $71,300 YMPE, $3,500 exemption.
+    selfEmployedRate: 0.119,
+    ympe: 71300,
+    basicExemption: 3500
   },
   engine: {
     cashCushionRate: 0.005,
@@ -256,6 +269,12 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
     cpp.earlyPenaltyPerMonth, cpp.deferralBonusPerMonth
   ].some(v => typeof v !== 'number')) {
     (c as AppConfig).cpp = { ...DEFAULT_APP_CONFIG.cpp };
+  } else {
+    // Self-employed CPP fields were added later — back-fill defaults so configs
+    // saved before they existed keep the deduction available.
+    if (typeof cpp.selfEmployedRate !== 'number') cpp.selfEmployedRate = DEFAULT_APP_CONFIG.cpp.selfEmployedRate;
+    if (typeof cpp.ympe !== 'number') cpp.ympe = DEFAULT_APP_CONFIG.cpp.ympe;
+    if (typeof cpp.basicExemption !== 'number') cpp.basicExemption = DEFAULT_APP_CONFIG.cpp.basicExemption;
   }
   const e = c.engine as Partial<EngineConfig> | undefined;
   if (!e || typeof e.cashCushionRate !== 'number' || typeof e.rrifConversionAge !== 'number') return null;

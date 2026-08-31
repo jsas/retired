@@ -201,6 +201,9 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
     maxDeferralAge: z.number(),
     earlyPenaltyPerMonth: z.number(),
     deferralBonusPerMonth: z.number(),
+    selfEmployedRate: z.number(),
+    ympe: z.number(),
+    basicExemption: z.number(),
   }),
   engine: z.object({
     cashCushionRate: z.number(),

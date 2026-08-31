@@ -371,6 +371,15 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={v => update(c => { c.cpp.earlyPenaltyPerMonth = v; })} />
               <PercentField label="Deferral bonus (%/month after standard age)" value={draft.cpp.deferralBonusPerMonth}
                 onChange={v => update(c => { c.cpp.deferralBonusPerMonth = v; })} />
+              <div className="pt-2 border-t border-neutral-700">
+                <p className="text-[11px] text-neutral-500 mb-2">Self-employed CPP contribution (both sides) — a deduction from taxable self-employment income.</p>
+                <PercentField label="Combined employee+employer rate" value={draft.cpp.selfEmployedRate}
+                  onChange={v => update(c => { c.cpp.selfEmployedRate = v; })} />
+                <NumberField label="YMPE (max pensionable earnings)" value={draft.cpp.ympe}
+                  onChange={v => update(c => { c.cpp.ympe = v; })} />
+                <NumberField label="Basic exemption" value={draft.cpp.basicExemption}
+                  onChange={v => update(c => { c.cpp.basicExemption = v; })} />
+              </div>
             </div>
           )}
 

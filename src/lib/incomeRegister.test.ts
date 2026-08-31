@@ -4,7 +4,7 @@
 // investment income (net lands in taxable, no RRSP room, no pension-split).
 import { describe, it, expect } from 'vitest';
 import { calculateRetirement, type IncomeSource } from './retirementEngine';
-import { calculateTax } from './canadianTax';
+import { calculateTax, selfEmployedCppContribution } from './canadianTax';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
 const config = testConfig();
@@ -25,14 +25,17 @@ const mk = (income: IncomeSource[], over: Parameters<typeof baseInputs>[0] = {})
 const taxOn = (gross: number) => calculateTax(gross, ONT, config).totalTax;
 
 describe('self-employment income', () => {
-  it('is taxed and saved like employment (earned income)', () => {
+  it('is taxed and saved like employment (earned income), net of the CPP deduction', () => {
     const r = mk([src({ kind: 'selfEmployment', destAccount: 'taxable' })]);
     const row = yearAt(r.yearlyBreakdown, 55);
-    const net = 40000 - taxOn(40000);
-    // Reported under the employment umbrella (earned) and saved to taxable.
+    // Self-employment is taxed net of the both-sides CPP deduction, and the CPP
+    // contribution is withheld from take-home (Track 3). Reported gross under
+    // the employment umbrella; the saved net reflects both.
+    const cpp = selfEmployedCppContribution(40000, config);
+    const net = 40000 - taxOn(40000 - cpp) - cpp;
     expect(closeTo(row.employmentGross ?? 0, 40000)).toBe(true);
     expect(closeTo(row.detail?.deposit?.taxable ?? 0, net, 1)).toBe(true);
-    expect(closeTo(row.incomeTax, taxOn(40000), 1)).toBe(true);
+    expect(closeTo(row.incomeTax, taxOn(40000 - cpp), 1)).toBe(true);
   });
 
   it('builds RRSP room at 18% of earned income', () => {

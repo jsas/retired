@@ -7,7 +7,8 @@ import {
   oasAnnualGross,
   gisAnnual,
   gisAnnualCouple,
-  indexConfig
+  indexConfig,
+  selfEmployedCppContribution
 } from './canadianTax';
 import {
   legacyToPerson,
@@ -422,7 +423,7 @@ export interface YearlyBreakdown {
   netHomeEquity?: number;
   // Pension-splitting inputs, captured per-year so the household pass can
   // recompute tax with a split applied. Undefined for singles.
-  splitEligibleIncome?: number; // RRIF/RRSP draws (from conversion age) + DB pensions — NOT CPP/OAS
+  splitEligibleIncome?: number; // DB pensions + registered draws (registered only from age 65) — NOT CPP/OAS
   unsplitNetIncome?: number;    // this person's net income before any split
   // Set on the year the split changes this person's reported tax.
   splitTransferred?: number;    // eligible income moved OUT to the spouse (+) or received IN (−)
@@ -1144,6 +1145,7 @@ export function calculatePerson(
     // (issue #25).
     const yearCfg = configAt(age);
     let employmentGrossAccum = 0;
+    let selfEmploymentGrossAccum = 0; // subset of employmentGross — self-emp only
     let pensionGrossAccum = 0;
     let rentalGrossAccum = 0;
     const employmentActiveAccum: Array<{ e: IncomeSource; gross: number }> = [];
@@ -1152,6 +1154,7 @@ export function calculatePerson(
       if (e.endAge != null && age > e.endAge) continue;
       const g = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
       employmentGrossAccum += g;
+      if (e.kind === 'selfEmployment') selfEmploymentGrossAccum += g;
       employmentActiveAccum.push({ e, gross: g });
     }
     for (const p of pensionList) {
@@ -1164,13 +1167,16 @@ export function calculatePerson(
       if (r.endAge != null && age > r.endAge) continue;
       rentalGrossAccum += r.annualAmount * (r.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
+    // Self-employed CPP: the both-sides contribution is a DEDUCTION from taxable
+    // income, so the year's self-employment earnings are taxed net of it.
+    const selfEmpCppAccum = selfEmployedCppContribution(selfEmploymentGrossAccum, yearCfg);
     // Marginal tax on the year's earned + pension + rental income (no benefits
-    // yet pre-retirement). Apportioned pro-rata so each stream's net is its
-    // gross minus its share of the tax — the same convention the decumulation
-    // loop uses for employment.
+    // yet pre-retirement), less the self-employed CPP deduction. Apportioned
+    // pro-rata so each stream's net is its gross minus its share of the tax —
+    // the same convention the decumulation loop uses for employment.
     const earningsGrossAccum = employmentGrossAccum + pensionGrossAccum + rentalGrossAccum;
     const earningsTaxAccum = earningsGrossAccum > 0
-      ? calculateTax(earningsGrossAccum, provinceCode, yearCfg).totalTax
+      ? calculateTax(Math.max(0, earningsGrossAccum - selfEmpCppAccum), provinceCode, yearCfg).totalTax
       : 0;
     const netOf = (gross: number): number =>
       earningsGrossAccum > 0 ? gross * (1 - earningsTaxAccum / earningsGrossAccum) : 0;
@@ -1179,10 +1185,15 @@ export function calculatePerson(
     // Save each active earned source's net × savingsRate into its account
     // (unset savingsRate = save it all); the rest is consumed by working-year
     // living costs, which the model doesn't track. Registered destinations
-    // consume room; the overflow spills to taxable via capToRoom.
+    // consume room; the overflow spills to taxable via capToRoom. A self-
+    // employment source's take-home is its income-tax net MINUS its CPP
+    // contribution (real money paid, on top of income tax).
     for (const { e, gross } of employmentActiveAccum) {
       const rate = e.savingsRate ?? 1;
-      const amt = netOf(gross) * Math.min(1, Math.max(0, rate));
+      const cpp = e.kind === 'selfEmployment' && selfEmploymentGrossAccum > 0
+        ? selfEmpCppAccum * (gross / selfEmploymentGrossAccum)
+        : 0;
+      const amt = Math.max(0, netOf(gross) - cpp) * Math.min(1, Math.max(0, rate));
       if (amt <= 0) continue;
       const dest = e.destAccount ?? 'taxable';
       if (dest === 'rrsp') { const land = capToRoom('rrsp', amt); rrsp += land; accumDeposit.rrsp += land; }
@@ -1450,25 +1461,34 @@ export function calculatePerson(
     // Employment income: earned, so it stacks for tax like the benefits and is
     // taxed in the year it's earned (regardless of what the money is then used
     // for). Split by mode: top-up net covers spending first (RM-style), save
-    // net is deposited into its account below.
+    // net is deposited into its account below. Self-employment additionally
+    // owes the both-sides CPP contribution — a deduction from taxable income
+    // AND real money paid out of the year's take-home.
     let employmentTopUpGross = 0;
     let employmentSaveGross = 0;
+    let selfEmploymentGross = 0; // subset of the two above — self-emp only
     const employmentSaveActive: IncomeSource[] = [];
     for (const e of employmentList) {
       if (age < e.startAge) continue;
       if (e.endAge != null && age > e.endAge) continue;
       const amt = e.annualAmount * (e.indexedToCpi && indexTables ? factorAt(age) : 1);
+      if (e.kind === 'selfEmployment') selfEmploymentGross += amt;
       if (e.topUpSpending) employmentTopUpGross += amt;
       else { employmentSaveGross += amt; employmentSaveActive.push(e); }
     }
     const employmentGross = employmentTopUpGross + employmentSaveGross;
+    const selfEmpCpp = selfEmployedCppContribution(selfEmploymentGross, yearConfig);
     const otherGrossNoEmployment = cppGross + oasGross + pensionGross + rentalGross;
+    // Employment's marginal tax, computed on income NET of the self-emp CPP
+    // deduction (the deduction lowers the taxable stack on both sides).
     const employmentTax = employmentGross > 0
       ? Math.max(0,
-          calculateTax(otherGrossNoEmployment + employmentGross, provinceCode, yearConfig).totalTax
+          calculateTax(otherGrossNoEmployment + employmentGross - selfEmpCpp, provinceCode, yearConfig).totalTax
           - calculateTax(otherGrossNoEmployment, provinceCode, yearConfig).totalTax)
       : 0;
-    const employmentNet = employmentGross - employmentTax;
+    // Take-home = gross − income tax − CPP contribution (the contribution is
+    // paid out of the year's earnings, not just deducted for tax).
+    const employmentNet = employmentGross - employmentTax - selfEmpCpp;
     // Apportion the net between the two modes pro-rata to their gross.
     const employmentTopUpNet = employmentGross > 0 ? employmentNet * (employmentTopUpGross / employmentGross) : 0;
     const employmentSaveNet = employmentGross > 0 ? employmentNet * (employmentSaveGross / employmentGross) : 0;
@@ -1768,11 +1788,16 @@ export function calculatePerson(
     // threshold. Employment is taxed exactly once: it's inside totalNetIncome
     // (so brackets and clawback see it) and its marginal share — this figure
     // minus what a no-employment year would report — equals employmentTax.
+    // The self-emp CPP contribution is a deduction, so taxable income is net
+    // of it (the clawback base still uses the full gross — CRA's clawback is on
+    // net income BEFORE the CPP deduction, but the deduction is small and the
+    // simplification keeps the two figures consistent).
     const totalNetIncome = otherGross + employmentGross + registeredGross + capitalGains * inclusion + rdspTaxable;
+    const taxableNetIncome = Math.max(0, totalNetIncome - selfEmpCpp);
     const oasClawback = oasGross > 0
       ? Math.min(oasGross, Math.max(0, totalNetIncome - yearConfig.oas.clawbackThreshold) * yearConfig.oas.clawbackRate)
       : 0;
-    const incomeTax = calculateTax(totalNetIncome, provinceCode, yearConfig).totalTax
+    const incomeTax = calculateTax(taxableNetIncome, provinceCode, yearConfig).totalTax
       - calculateTax(otherGross, provinceCode, yearConfig).totalTax
       + oasClawback;
     cumulativeTax += incomeTax;
@@ -1811,11 +1836,12 @@ export function calculatePerson(
       depletionAge = age;
     }
 
-    // Pension-splitting inputs: eligible income is RRIF/RRSP registered draws
-    // (which only exist from the RRIF-conversion age onward, so age ≥ 65 in
-    // practice) plus DB pensions. CPP and OAS are NOT eligible. Captured
+    // Pension-splitting inputs. Eligible income is DB pensions PLUS registered
+    // draws — but CRA only lets you split REGISTERED (RRIF/RRSP annuity) income
+    // from age 65. Before 65, an RRSP/RRIF withdrawal is NOT split-eligible
+    // (a DB pension still is). CPP and OAS are never eligible. Captured
     // pre-split; the household pass applies the split to the reported tax.
-    const splitEligibleIncome = registeredGross + pensionGross;
+    const splitEligibleIncome = pensionGross + (age >= 65 ? registeredGross : 0);
     const unsplitNetIncome = totalNetIncome;
 
     // The GIS base this run actually used — captured per age so the household
