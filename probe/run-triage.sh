@@ -7,6 +7,11 @@
 #   bash probe/run-triage.sh --maxtokens=512 --profile=hot
 #   bash probe/run-triage.sh --persona=simple   # force the short persona on
 #                                               # every model (#108 full-vs-simple A/B)
+#   bash probe/run-triage.sh --all        # full coverage in one go: the
+#                                         # production pass + the simple A/B
+#                                         # pass + all 8 sampler profiles.
+#                                         # Already-measured cells are skipped
+#                                         # (localStorage), so re-running resumes.
 #   bash probe/run-triage.sh --wipe       # delete the scratch profile first
 #                                         # (frees ALL probe-downloaded weights)
 #

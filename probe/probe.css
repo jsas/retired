@@ -38,3 +38,27 @@ td.worst { background: #fef2f2; }
 pre { background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 11px; overflow: auto; max-height: 260px; white-space: pre-wrap; }
 #logBox { max-height: 160px; }
 .hint { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--mut); font-size: 11px; }
+
+/* --- coverage grid ------------------------------------------------------------
+   One table per model: 4 prompts × 2 personas (rows) × sampler profiles (cols).
+   Cell background = state, text = score. Click a filled cell to clear it. */
+table.grid { margin-bottom: 14px; }
+table.grid td { padding: 3px 6px; text-align: center; font-variant-numeric: tabular-nums; }
+table.grid th { text-align: center; }
+table.grid td.rowh { text-align: left; white-space: nowrap; }
+table.grid td.rowh .per { color: var(--mut); font-size: 10px; margin-left: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 0 5px; }
+table.grid h3 { display: inline; }
+table.grid td.pending { background: #f8fafc; }
+table.grid td.na { color: #cbd5e1; }
+table.grid td.running { background: #ede9fe; animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes pulse { from { opacity: .45; } to { opacity: 1; } }
+table.grid td[data-clear] { cursor: pointer; }
+table.grid td[data-clear]:hover { outline: 2px solid var(--bad); outline-offset: -2px; }
+td.sc-ok { background: #ecfdf5; }
+td.sc-mid { background: #fefce8; }
+td.sc-bad { background: #fef2f2; font-weight: 700; }
+td.sc-floor { background: #f1f5f9; color: var(--mut); }
+h3 .meta { color: var(--mut); font-weight: 400; font-size: 11px; margin-left: 8px; text-transform: none; letter-spacing: 0; }
+.legend { font-size: 11px; color: var(--mut); margin: 0 0 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.legend .sw { display: inline-block; width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 3px; vertical-align: -2px; }
+.legend .sw.running { animation: none; }

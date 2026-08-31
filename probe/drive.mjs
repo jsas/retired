@@ -42,6 +42,7 @@ const auto = ['1'];
 if (args.models) auto.push(`models=${args.models}`);
 if (args.maxtokens) auto.push(`maxtokens=${args.maxtokens}`);
 if (args.persona) auto.push(`persona=${args.persona}`); // full|simple A/B override
+if (args.all || args.plan) auto.push(`plan=all`);       // full coverage: triage + simple A/B + sampler grid
 const url = `${BASE}?auto=${auto.join(',')}${args.profile ? `&profile=${args.profile}` : ''}`;
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
