@@ -372,6 +372,39 @@ const MUTATION_SPECS: MutationSpec[] = [
     rejectedReply: () => 'Okay — card debt kept in the plan.',
   },
   {
+    tool: 'propose_market_periods',
+    questions: [
+      () => 'Model a crash — markets drop 30% the year I turn 68.',
+      () => 'What if there\'s a 30% market crash right when my drawdown starts?',
+    ],
+    args: () => ({ periods: [{ age: 68, return: -0.30 }] }),
+    approvedReply: () => 'Crash year added — the projection follows the hypothesis curve for that age, then eases back to your flat expected return. I can run it to show the hit.',
+    rejectedReply: () => 'Okay — hypothesis left out.',
+  },
+  {
+    tool: 'propose_market_periods',
+    questions: [
+      () => 'Let\'s stress-test the plan — early years volatile, then a strong recovery.',
+      () => 'Model a rough patch followed by a rebound in the markets.',
+    ],
+    args: () => ({ periods: [
+      { age: 68, return: -0.30, volatility: 0.30 },
+      { age: 70, return: 0.10 },
+    ] }),
+    approvedReply: () => 'Hypothesis set — the crash year shapes both the projection and the Monte Carlo spread, then the curve returns to your flat baseline. Want me to re-run it?',
+    rejectedReply: () => 'Okay — hypothesis not added.',
+  },
+  {
+    tool: 'propose_market_periods',
+    questions: [
+      () => 'Actually, forget that crash scenario — go back to the flat assumption.',
+      () => 'Clear that market hypothesis — use the constant return again.',
+    ],
+    args: () => ({ periods: [] }),
+    approvedReply: () => 'Cleared — back to your flat expected return for the whole horizon.',
+    rejectedReply: () => 'Okay — hypothesis kept.',
+  },
+  {
     tool: 'remember',
     questions: [
       () => 'Remember that I plan to downsize the house in a few years.',
