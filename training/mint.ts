@@ -18,8 +18,8 @@
 //   - 'clarify'          ambiguous ask → ask a question, don't guess a tool
 //   - 'domain-explain'   a concept question → plain-words explainer, no tool needed
 
-import { executeToolCall, type ToolContext } from '../src/lib/ai/tools';
-import { testConfig } from '../src/test/helpers';
+import { executeToolCall, type ToolContext } from '@retired/mcp-tools/tools';
+import { testConfig } from '@retired/engine-core/test/helpers';
 import type { ChatMessage, CorpusRecord } from './buildCorpus';
 import { emitToolCall, wrapToolResult, mutationFeedback } from './protocol';
 import { mintDomainKnowledgeRecords } from './domain';

@@ -18,7 +18,7 @@
 // (inCatalog ∧ argsValid ∧ exactly one call ∧ the expected tool).
 
 import { extractPromptToolCalls } from '../src/lib/ai/promptTools';
-import { TOOL_SCHEMAS } from '../src/lib/ai/tools';
+import { TOOL_SCHEMAS } from '@retired/mcp-tools/tools';
 import type { CorpusRecord } from './buildCorpus';
 import { scoreToolReply, TOOL_NAMES } from './protocol';
 

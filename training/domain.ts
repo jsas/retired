@@ -17,9 +17,9 @@
 // The register is the same as every other kind: consequence-explaining, never
 // advice ("here's how it works / here's what it does to YOUR numbers — your call").
 
-import { DEFAULT_APP_CONFIG } from '../src/lib/appConfig';
+import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
 import { HISTORICAL_REAL_RETURNS } from '../src/lib/historicalReturns';
-import type { RetirementInputs } from '../src/lib/retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { CorpusRecord } from './buildCorpus';
 import { SCENARIOS, type NamedScenario } from './scenarios';
 

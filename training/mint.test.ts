@@ -3,8 +3,8 @@ import { mintCorpus, mintGuardrailRecords, mintMutationRecords, mintOptionFramin
 import { mintDomainKnowledgeRecords } from './domain';
 import { scoreToolReply, TOOL_NAMES } from './protocol';
 import { SCENARIOS } from './scenarios';
-import { executeToolCall, type ToolContext } from '../src/lib/ai/tools';
-import { testConfig } from '../src/test/helpers';
+import { executeToolCall, type ToolContext } from '@retired/mcp-tools/tools';
+import { testConfig } from '@retired/engine-core/test/helpers';
 
 describe('corpus minter', () => {
   const records = mintReadRecords();

@@ -18,7 +18,7 @@ import {
   extractPromptToolCalls,
   formatPromptToolResults,
 } from '../src/lib/ai/promptTools';
-import { toolSpecs } from '../src/lib/ai/tools';
+import { toolSpecs } from '@retired/mcp-tools/tools';
 
 /** The 23-name tool catalog exactly as the model sees it (name/description/args). */
 export const SPECS = toolSpecs();

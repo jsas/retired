@@ -7,8 +7,8 @@
 // 'ON'); cppStartAge/oasStartAge are explicit null when unset; structural
 // blocks (income/events/spouse) are added whole, never as flat overrides.
 
-import type { RetirementInputs } from '../src/lib/retirementEngine';
-import { baseInputs } from '../src/test/helpers';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import { baseInputs } from '@retired/engine-core/test/helpers';
 
 export interface NamedScenario {
   id: string;
