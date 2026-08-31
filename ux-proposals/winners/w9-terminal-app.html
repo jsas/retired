@@ -397,7 +397,7 @@
     },
     retire: function (args) {
       var v = parseNum(args[0]);
-      if (v == null) return 'retire takes an age, like <strong>retire 65</strong>';
+      if (v == null) return 'retire takes an age, like <strong>retire 64</strong>';
       var age = Math.round(v);
       if (age < 50 || age > 75) return span('err', 'out of range.') + span('mut', ' try 50 to 75.');
       if (age <= state.currentAge) return span('err', 'you’re ' + state.currentAge + ' already.') + span('mut', ' the dashboard sliders go down to 55.');
