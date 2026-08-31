@@ -1,0 +1,2051 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP server registers 1`] = `
+[
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "section": {
+          "default": "full",
+          "description": "Which slice of the plan to return. Use summary/accounts/benefits/spending/spouse to save tokens; full returns everything.",
+          "enum": [
+            "full",
+            "summary",
+            "accounts",
+            "benefits",
+            "spending",
+            "spouse",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "section",
+      ],
+      "type": "object",
+    },
+    "name": "get_scenario",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "overrides": {
+          "additionalProperties": {},
+          "description": "Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the scenario schema; invalid entries are reported, not applied.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+      },
+      "type": "object",
+    },
+    "name": "run_projection",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "overrides": {
+          "additionalProperties": {},
+          "description": "Flat patch of top-level RetirementInputs fields defining ONE variant to compare against the current plan. Use variants for several.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "variants": {
+          "description": "Up to 4 variants compared in ONE call (e.g. three retirement ages). Current plan is always included as the baseline. Takes precedence over the singular overrides.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "description": "Short name shown for this variant (e.g. "Retire at 60").",
+                "type": "string",
+              },
+              "overrides": {
+                "additionalProperties": {},
+                "description": "Flat patch of top-level RetirementInputs fields defining this variant.",
+                "propertyNames": {
+                  "type": "string",
+                },
+                "type": "object",
+              },
+            },
+            "required": [
+              "overrides",
+            ],
+            "type": "object",
+          },
+          "maxItems": 4,
+          "type": "array",
+        },
+      },
+      "type": "object",
+    },
+    "name": "compare_scenarios",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Optional filters; call with {} for the full exploration.",
+      "properties": {
+        "categories": {
+          "description": "Scope the explorer to specific lever families (e.g. ["cpp","oas"] for benefit timing only, ["pension_timing"] for employer-pension start ages). Omit for all.",
+          "items": {
+            "enum": [
+              "cpp",
+              "oas",
+              "pension_timing",
+              "withdrawal_order",
+              "reverse_mortgage",
+              "work",
+            ],
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "maxVariants": {
+          "description": "Cap the number of variants returned (best first).",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer",
+        },
+      },
+      "type": "object",
+    },
+    "name": "run_strategies",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "overrides": {
+          "additionalProperties": {},
+          "description": "Optional flat patch of top-level scalar fields to apply to a COPY of the plan before solving (what-if: solve under different assumptions).",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "runs": {
+          "default": 500,
+          "description": "Market futures to simulate per candidate. More = smoother, slower.",
+          "maximum": 2000,
+          "minimum": 50,
+          "type": "integer",
+        },
+        "targetSuccessRate": {
+          "default": 0.9,
+          "description": "Target Monte Carlo success rate as a fraction, e.g. 0.9 = 90% chance the money lasts to max age.",
+          "maximum": 0.99,
+          "minimum": 0.5,
+          "type": "number",
+        },
+      },
+      "required": [
+        "targetSuccessRate",
+        "runs",
+      ],
+      "type": "object",
+    },
+    "name": "solve_spending",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "overrides": {
+          "additionalProperties": {},
+          "description": "Optional flat patch of top-level scalar fields to apply to a COPY of the plan before simulating (what-if: success rate under different assumptions).",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "runs": {
+          "default": 500,
+          "maximum": 2000,
+          "minimum": 50,
+          "type": "integer",
+        },
+        "volatility": {
+          "description": "Annual return standard deviation. Defaults to the plan's returnVolatility.",
+          "maximum": 0.5,
+          "minimum": 0,
+          "type": "number",
+        },
+      },
+      "required": [
+        "runs",
+      ],
+      "type": "object",
+    },
+    "name": "run_monte_carlo",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "fromAge": {
+          "description": "First age to include (default: currentAge).",
+          "type": "number",
+        },
+        "overrides": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "stride": {
+          "description": "Return every Nth year (e.g. 5 covers a whole horizon in one call). The LAST year in range is always included.",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "toAge": {
+          "description": "Last age to include (default: maxAge). Keep ranges small to save tokens.",
+          "type": "number",
+        },
+      },
+      "type": "object",
+    },
+    "name": "get_schedule",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "description": "Top-level RetirementInputs field name (e.g. desiredSpending, retirementAge, rrspBalance, cppStartAge).",
+          "minLength": 1,
+          "type": "string",
+        },
+        "rationale": {
+          "description": "One sentence on why this change helps — shown to the user on the confirm card.",
+          "type": "string",
+        },
+        "value": {
+          "description": "The proposed new value. Must satisfy the scenario schema (numbers as numbers; nullable ages may be null).",
+        },
+      },
+      "required": [
+        "field",
+        "value",
+      ],
+      "type": "object",
+    },
+    "name": "set_scenario_value",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": {},
+          "description": "A batch of top-level RetirementInputs fields to change at once (e.g. {"cppStartAge":70,"oasStartAge":70}). Each is validated; invalid entries are rejected, not proposed.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "description": "One sentence on why this batch helps — shown on the confirm card.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_patch",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": {},
+          "description": "Spouse fields to set. Use {"enabled":true,...} to add a spouse (fill the key fields), or {"enabled":false} to remove. Any SpouseInputs scalar field is allowed.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_spouse",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "An income source to add. kind "pension" = DB/bridge pension (split-eligible; endAge a number for a bridge, null for lifetime; optional pensionAdjustment reduces RRSP room). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room like a job). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible).",
+      "properties": {
+        "annualAmount": {
+          "type": "number",
+        },
+        "destAccount": {
+          "enum": [
+            "rrsp",
+            "tfsa",
+            "taxable",
+            "cash",
+          ],
+          "type": "string",
+        },
+        "endAge": {
+          "anyOf": [
+            {
+              "type": "number",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "indexedToCpi": {
+          "type": "boolean",
+        },
+        "kind": {
+          "enum": [
+            "employment",
+            "pension",
+            "selfEmployment",
+            "rental",
+          ],
+          "type": "string",
+        },
+        "label": {
+          "type": "string",
+        },
+        "pensionAdjustment": {
+          "type": "number",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "rrspEligible": {
+          "type": "boolean",
+        },
+        "savingsRate": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number",
+        },
+        "startAge": {
+          "type": "number",
+        },
+        "topUpSpending": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "label",
+        "kind",
+        "annualAmount",
+        "startAge",
+        "endAge",
+        "indexedToCpi",
+      ],
+      "type": "object",
+    },
+    "name": "propose_income",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "bands": {
+          "description": "Spending phases: pctOfBase (fraction of desiredSpending, e.g. 1, 0.85, 0.7) applying fromAge until the next band. Replaces the whole set.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "fromAge": {
+                "type": "number",
+              },
+              "pctOfBase": {
+                "type": "number",
+              },
+            },
+            "required": [
+              "fromAge",
+              "pctOfBase",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "bands",
+      ],
+      "type": "object",
+    },
+    "name": "propose_spending_bands",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A one-time or recurring cash event (inflow to an account, or outflow adding to spending). Set endAge to repeat yearly through that age.",
+      "properties": {
+        "account": {
+          "enum": [
+            "rrsp",
+            "tfsa",
+            "taxable",
+            "cash",
+          ],
+          "type": "string",
+        },
+        "age": {
+          "type": "number",
+        },
+        "amount": {
+          "type": "number",
+        },
+        "direction": {
+          "enum": [
+            "in",
+            "out",
+          ],
+          "type": "string",
+        },
+        "endAge": {
+          "anyOf": [
+            {
+              "type": "number",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "from": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "external",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "account": {
+                  "enum": [
+                    "rrsp",
+                    "tfsa",
+                    "taxable",
+                    "cash",
+                  ],
+                  "type": "string",
+                },
+                "kind": {
+                  "const": "account",
+                  "type": "string",
+                },
+                "person": {
+                  "enum": [
+                    "primary",
+                    "spouse",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "person",
+                "account",
+              ],
+              "type": "object",
+            },
+          ],
+        },
+        "label": {
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "to": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "external",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "account": {
+                  "enum": [
+                    "rrsp",
+                    "tfsa",
+                    "taxable",
+                    "cash",
+                  ],
+                  "type": "string",
+                },
+                "kind": {
+                  "const": "account",
+                  "type": "string",
+                },
+                "person": {
+                  "enum": [
+                    "primary",
+                    "spouse",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "person",
+                "account",
+              ],
+              "type": "object",
+            },
+          ],
+        },
+      },
+      "required": [
+        "age",
+        "label",
+        "amount",
+        "direction",
+      ],
+      "type": "object",
+    },
+    "name": "propose_cash_event",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "description": "Reverse-mortgage fields to set. Use {"enabled":true,...} to turn it on (homeValue, interestRate, draws/top-up), {"enabled":false} to turn it off.",
+          "properties": {
+            "appreciationRate": {
+              "type": "number",
+            },
+            "drawAmount": {
+              "type": "number",
+            },
+            "durationYears": {
+              "type": "number",
+            },
+            "enabled": {
+              "type": "boolean",
+            },
+            "homeValue": {
+              "type": "number",
+            },
+            "interestRate": {
+              "type": "number",
+            },
+            "maxLtv": {
+              "type": "number",
+            },
+            "mode": {
+              "enum": [
+                "reverse",
+                "heloc",
+              ],
+              "type": "string",
+            },
+            "startAge": {
+              "type": "number",
+            },
+            "topUp": {
+              "type": "boolean",
+            },
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_reverse_mortgage",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "description": "RDSP fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, familyIncome, dtcEligible), {"enabled":false} to turn it off.",
+          "properties": {
+            "balance": {
+              "type": "number",
+            },
+            "contribution": {
+              "type": "number",
+            },
+            "contributionBasis": {
+              "type": "number",
+            },
+            "dtcEligible": {
+              "type": "boolean",
+            },
+            "enabled": {
+              "type": "boolean",
+            },
+            "familyIncome": {
+              "type": "number",
+            },
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_rdsp",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "description": "FHSA fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, contributionBasis, openAge), {"enabled":false} to turn it off.",
+          "properties": {
+            "balance": {
+              "type": "number",
+            },
+            "contribution": {
+              "type": "number",
+            },
+            "contributionBasis": {
+              "type": "number",
+            },
+            "enabled": {
+              "type": "boolean",
+            },
+            "openAge": {
+              "type": "number",
+            },
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_fhsa",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint": {
+          "description": "Which checkpoint to revert to: its label, or omit for the most recent one. Labels come from the change cards the user approved ("Add pension").",
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "propose_revert",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "update",
+            "remove",
+          ],
+          "type": "string",
+        },
+        "changes": {
+          "additionalProperties": {},
+          "description": "For update: the cash-event fields to change (age, amount, direction, endAge, account, label). Missing fields keep their current values.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "target": {
+          "description": "Which cash event: its id, or its label if unique (e.g. "Downsize").",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "action",
+        "target",
+      ],
+      "type": "object",
+    },
+    "name": "manage_cash_event",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "update",
+            "remove",
+          ],
+          "type": "string",
+        },
+        "changes": {
+          "additionalProperties": {},
+          "description": "For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending, savingsRate, pensionAdjustment). endAge must be a number or explicit null. savingsRate (0–1) is the share of after-tax pay saved; pensionAdjustment is a DB pension's annual RRSP-room offset.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "target": {
+          "description": "Which income source: its id, or its label if unique (e.g. "Work DB").",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "action",
+        "target",
+      ],
+      "type": "object",
+    },
+    "name": "manage_income",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A debt to add. kind "mortgage" = a home loan; "creditCard", "loan", "lineOfCredit", or "other" for consumer debt. balance is what's owed today, interestRate is the annual rate (e.g. 0.051 = 5.1%), monthlyPayment is the required payment. Payments are funded from spending each year until the balance is paid off (then they stop). Omit startAge to start now; set endAge to stop early (rare).",
+      "properties": {
+        "balance": {
+          "type": "number",
+        },
+        "endAge": {
+          "anyOf": [
+            {
+              "type": "number",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "interestRate": {
+          "type": "number",
+        },
+        "kind": {
+          "enum": [
+            "mortgage",
+            "creditCard",
+            "loan",
+            "lineOfCredit",
+            "other",
+          ],
+          "type": "string",
+        },
+        "label": {
+          "type": "string",
+        },
+        "monthlyPayment": {
+          "type": "number",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "startAge": {
+          "type": "number",
+        },
+      },
+      "required": [
+        "label",
+        "kind",
+        "balance",
+        "interestRate",
+        "monthlyPayment",
+      ],
+      "type": "object",
+    },
+    "name": "propose_debt",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "update",
+            "remove",
+          ],
+          "type": "string",
+        },
+        "changes": {
+          "additionalProperties": {},
+          "description": "For update: the debt fields to change (label, kind, balance, interestRate, monthlyPayment, startAge, endAge). endAge must be a number or explicit null. Missing fields keep their current values.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "target": {
+          "description": "Which debt: its id, or its label if unique (e.g. "Mortgage").",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "action",
+        "target",
+      ],
+      "type": "object",
+    },
+    "name": "manage_debt",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "importance": {
+          "default": 0.5,
+          "description": "0..1: how important this fact is. Reserve 0.9+ for decisions and constraints ("user refuses to touch RRSP"), 0.3 for color.",
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number",
+        },
+        "keywords": {
+          "description": "Category words a future question might use that are NOT in the text itself — the hypernyms of what the fact is about (text "likes oranges" → ["fruit", "food", "preference"]; "wants to retire to Nova Scotia" → ["location", "province", "move"]). The fact's own words are indexed automatically; only add what a later query would say differently.",
+          "items": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 12,
+          "type": "array",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "scope": {
+          "default": "scenario",
+          "description": "scenario = about this plan (shown in chats on this scenario). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").",
+          "enum": [
+            "scenario",
+            "global",
+          ],
+          "type": "string",
+        },
+        "text": {
+          "description": "The fact to remember, one or two self-contained sentences (e.g. "Spouse's DB pension pays $1,200/mo from 65" — never "it pays that").",
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "text",
+        "scope",
+        "importance",
+      ],
+      "type": "object",
+    },
+    "name": "remember",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 6,
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "query": {
+          "description": "Search words — single keywords work best (they match by word, not phrase; "fruit" finds "likes oranges" if it was saved with that keyword). Omit for the top-ranked memories outright.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "limit",
+      ],
+      "type": "object",
+    },
+    "name": "recall",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Alternatively, the scenario NAME — matched case-insensitively; must be unambiguous.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "scenarioId": {
+          "description": "Id of the saved scenario to open (from the ids given in your context).",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "open_scenario",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Name for the new scenario (e.g. "Downsized at 65"). Duplicates are allowed.",
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "save_scenario_as",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "withDetails": {
+          "default": false,
+          "description": "true = include the key numbers of each plan (ages, balances, spending, benefits) so you can compare saved plans without opening them. Omit/false for a compact list.",
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "withDetails",
+      ],
+      "type": "object",
+    },
+    "name": "list_scenarios",
+  },
+]
+`;
+
+exports[`tool catalog surface > exposes every catalog tool to LLM providers (names, descriptions, JSON Schema) 1`] = `
+[
+  {
+    "description": "Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "section": {
+          "default": "full",
+          "description": "Which slice of the plan to return. Use summary/accounts/benefits/spending/spouse to save tokens; full returns everything.",
+          "enum": [
+            "full",
+            "summary",
+            "accounts",
+            "benefits",
+            "spending",
+            "spouse",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "section",
+      ],
+      "type": "object",
+    },
+    "name": "get_scenario",
+  },
+  {
+    "description": "Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "overrides": {
+          "additionalProperties": {},
+          "description": "Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the scenario schema; invalid entries are reported, not applied.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+      },
+      "type": "object",
+    },
+    "name": "run_projection",
+  },
+  {
+    "description": "Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "overrides": {
+          "additionalProperties": {},
+          "description": "Flat patch of top-level RetirementInputs fields defining ONE variant to compare against the current plan. Use variants for several.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "variants": {
+          "description": "Up to 4 variants compared in ONE call (e.g. three retirement ages). Current plan is always included as the baseline. Takes precedence over the singular overrides.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "description": "Short name shown for this variant (e.g. "Retire at 60").",
+                "type": "string",
+              },
+              "overrides": {
+                "additionalProperties": {},
+                "description": "Flat patch of top-level RetirementInputs fields defining this variant.",
+                "propertyNames": {
+                  "type": "string",
+                },
+                "type": "object",
+              },
+            },
+            "required": [
+              "overrides",
+            ],
+            "type": "object",
+          },
+          "maxItems": 4,
+          "type": "array",
+        },
+      },
+      "type": "object",
+    },
+    "name": "compare_scenarios",
+  },
+  {
+    "description": "Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Optional filters; call with {} for the full exploration.",
+      "properties": {
+        "categories": {
+          "description": "Scope the explorer to specific lever families (e.g. ["cpp","oas"] for benefit timing only, ["pension_timing"] for employer-pension start ages). Omit for all.",
+          "items": {
+            "enum": [
+              "cpp",
+              "oas",
+              "pension_timing",
+              "withdrawal_order",
+              "reverse_mortgage",
+              "work",
+            ],
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "maxVariants": {
+          "description": "Cap the number of variants returned (best first).",
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer",
+        },
+      },
+      "type": "object",
+    },
+    "name": "run_strategies",
+  },
+  {
+    "description": "Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "overrides": {
+          "additionalProperties": {},
+          "description": "Optional flat patch of top-level scalar fields to apply to a COPY of the plan before solving (what-if: solve under different assumptions).",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "runs": {
+          "default": 500,
+          "description": "Market futures to simulate per candidate. More = smoother, slower.",
+          "maximum": 2000,
+          "minimum": 50,
+          "type": "integer",
+        },
+        "targetSuccessRate": {
+          "default": 0.9,
+          "description": "Target Monte Carlo success rate as a fraction, e.g. 0.9 = 90% chance the money lasts to max age.",
+          "maximum": 0.99,
+          "minimum": 0.5,
+          "type": "number",
+        },
+      },
+      "required": [
+        "targetSuccessRate",
+        "runs",
+      ],
+      "type": "object",
+    },
+    "name": "solve_spending",
+  },
+  {
+    "description": "Run the Monte Carlo simulation on the current plan (optionally with overrides) and return the success rate, median final balance, and depletion spread across market futures.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "overrides": {
+          "additionalProperties": {},
+          "description": "Optional flat patch of top-level scalar fields to apply to a COPY of the plan before simulating (what-if: success rate under different assumptions).",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "runs": {
+          "default": 500,
+          "maximum": 2000,
+          "minimum": 50,
+          "type": "integer",
+        },
+        "volatility": {
+          "description": "Annual return standard deviation. Defaults to the plan's returnVolatility.",
+          "maximum": 0.5,
+          "minimum": 0,
+          "type": "number",
+        },
+      },
+      "required": [
+        "runs",
+      ],
+      "type": "object",
+    },
+    "name": "run_monte_carlo",
+  },
+  {
+    "description": "Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "fromAge": {
+          "description": "First age to include (default: currentAge).",
+          "type": "number",
+        },
+        "overrides": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "stride": {
+          "description": "Return every Nth year (e.g. 5 covers a whole horizon in one call). The LAST year in range is always included.",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "toAge": {
+          "description": "Last age to include (default: maxAge). Keep ranges small to save tokens.",
+          "type": "number",
+        },
+      },
+      "type": "object",
+    },
+    "name": "get_schedule",
+  },
+  {
+    "description": "PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "description": "Top-level RetirementInputs field name (e.g. desiredSpending, retirementAge, rrspBalance, cppStartAge).",
+          "minLength": 1,
+          "type": "string",
+        },
+        "rationale": {
+          "description": "One sentence on why this change helps — shown to the user on the confirm card.",
+          "type": "string",
+        },
+        "value": {
+          "description": "The proposed new value. Must satisfy the scenario schema (numbers as numbers; nullable ages may be null).",
+        },
+      },
+      "required": [
+        "field",
+        "value",
+      ],
+      "type": "object",
+    },
+    "name": "set_scenario_value",
+  },
+  {
+    "description": "PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": {},
+          "description": "A batch of top-level RetirementInputs fields to change at once (e.g. {"cppStartAge":70,"oasStartAge":70}). Each is validated; invalid entries are rejected, not proposed.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "description": "One sentence on why this batch helps — shown on the confirm card.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_patch",
+  },
+  {
+    "description": "PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": {},
+          "description": "Spouse fields to set. Use {"enabled":true,...} to add a spouse (fill the key fields), or {"enabled":false} to remove. Any SpouseInputs scalar field is allowed.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_spouse",
+  },
+  {
+    "description": "PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "An income source to add. kind "pension" = DB/bridge pension (split-eligible; endAge a number for a bridge, null for lifetime; optional pensionAdjustment reduces RRSP room). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room like a job). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible).",
+      "properties": {
+        "annualAmount": {
+          "type": "number",
+        },
+        "destAccount": {
+          "enum": [
+            "rrsp",
+            "tfsa",
+            "taxable",
+            "cash",
+          ],
+          "type": "string",
+        },
+        "endAge": {
+          "anyOf": [
+            {
+              "type": "number",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "indexedToCpi": {
+          "type": "boolean",
+        },
+        "kind": {
+          "enum": [
+            "employment",
+            "pension",
+            "selfEmployment",
+            "rental",
+          ],
+          "type": "string",
+        },
+        "label": {
+          "type": "string",
+        },
+        "pensionAdjustment": {
+          "type": "number",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "rrspEligible": {
+          "type": "boolean",
+        },
+        "savingsRate": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number",
+        },
+        "startAge": {
+          "type": "number",
+        },
+        "topUpSpending": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "label",
+        "kind",
+        "annualAmount",
+        "startAge",
+        "endAge",
+        "indexedToCpi",
+      ],
+      "type": "object",
+    },
+    "name": "propose_income",
+  },
+  {
+    "description": "PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "bands": {
+          "description": "Spending phases: pctOfBase (fraction of desiredSpending, e.g. 1, 0.85, 0.7) applying fromAge until the next band. Replaces the whole set.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "fromAge": {
+                "type": "number",
+              },
+              "pctOfBase": {
+                "type": "number",
+              },
+            },
+            "required": [
+              "fromAge",
+              "pctOfBase",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "bands",
+      ],
+      "type": "object",
+    },
+    "name": "propose_spending_bands",
+  },
+  {
+    "description": "PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A one-time or recurring cash event (inflow to an account, or outflow adding to spending). Set endAge to repeat yearly through that age.",
+      "properties": {
+        "account": {
+          "enum": [
+            "rrsp",
+            "tfsa",
+            "taxable",
+            "cash",
+          ],
+          "type": "string",
+        },
+        "age": {
+          "type": "number",
+        },
+        "amount": {
+          "type": "number",
+        },
+        "direction": {
+          "enum": [
+            "in",
+            "out",
+          ],
+          "type": "string",
+        },
+        "endAge": {
+          "anyOf": [
+            {
+              "type": "number",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "from": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "external",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "account": {
+                  "enum": [
+                    "rrsp",
+                    "tfsa",
+                    "taxable",
+                    "cash",
+                  ],
+                  "type": "string",
+                },
+                "kind": {
+                  "const": "account",
+                  "type": "string",
+                },
+                "person": {
+                  "enum": [
+                    "primary",
+                    "spouse",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "person",
+                "account",
+              ],
+              "type": "object",
+            },
+          ],
+        },
+        "label": {
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "to": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "external",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "account": {
+                  "enum": [
+                    "rrsp",
+                    "tfsa",
+                    "taxable",
+                    "cash",
+                  ],
+                  "type": "string",
+                },
+                "kind": {
+                  "const": "account",
+                  "type": "string",
+                },
+                "person": {
+                  "enum": [
+                    "primary",
+                    "spouse",
+                  ],
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "person",
+                "account",
+              ],
+              "type": "object",
+            },
+          ],
+        },
+      },
+      "required": [
+        "age",
+        "label",
+        "amount",
+        "direction",
+      ],
+      "type": "object",
+    },
+    "name": "propose_cash_event",
+  },
+  {
+    "description": "PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "description": "Reverse-mortgage fields to set. Use {"enabled":true,...} to turn it on (homeValue, interestRate, draws/top-up), {"enabled":false} to turn it off.",
+          "properties": {
+            "appreciationRate": {
+              "type": "number",
+            },
+            "drawAmount": {
+              "type": "number",
+            },
+            "durationYears": {
+              "type": "number",
+            },
+            "enabled": {
+              "type": "boolean",
+            },
+            "homeValue": {
+              "type": "number",
+            },
+            "interestRate": {
+              "type": "number",
+            },
+            "maxLtv": {
+              "type": "number",
+            },
+            "mode": {
+              "enum": [
+                "reverse",
+                "heloc",
+              ],
+              "type": "string",
+            },
+            "startAge": {
+              "type": "number",
+            },
+            "topUp": {
+              "type": "boolean",
+            },
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_reverse_mortgage",
+  },
+  {
+    "description": "PROPOSE enabling/configuring (or disabling) an RDSP (Registered Disability Savings Plan). Models CDSG grants, CDSB bonds, tax-sheltered growth, and taxable-fraction withdrawals. User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "description": "RDSP fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, familyIncome, dtcEligible), {"enabled":false} to turn it off.",
+          "properties": {
+            "balance": {
+              "type": "number",
+            },
+            "contribution": {
+              "type": "number",
+            },
+            "contributionBasis": {
+              "type": "number",
+            },
+            "dtcEligible": {
+              "type": "boolean",
+            },
+            "enabled": {
+              "type": "boolean",
+            },
+            "familyIncome": {
+              "type": "number",
+            },
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_rdsp",
+  },
+  {
+    "description": "PROPOSE enabling/configuring (or disabling) an FHSA (First Home Savings Account). Deductible contributions, tax-sheltered growth, accumulation-only; transfers to the RRSP at retirement. User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "description": "FHSA fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, contributionBasis, openAge), {"enabled":false} to turn it off.",
+          "properties": {
+            "balance": {
+              "type": "number",
+            },
+            "contribution": {
+              "type": "number",
+            },
+            "contributionBasis": {
+              "type": "number",
+            },
+            "enabled": {
+              "type": "boolean",
+            },
+            "openAge": {
+              "type": "number",
+            },
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "changes",
+      ],
+      "type": "object",
+    },
+    "name": "propose_fhsa",
+  },
+  {
+    "description": "PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint": {
+          "description": "Which checkpoint to revert to: its label, or omit for the most recent one. Labels come from the change cards the user approved ("Add pension").",
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "propose_revert",
+  },
+  {
+    "description": "PROPOSE updating or REMOVING an existing cash event (by id or unique label). User confirms. Use propose_cash_event to add a new one.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "update",
+            "remove",
+          ],
+          "type": "string",
+        },
+        "changes": {
+          "additionalProperties": {},
+          "description": "For update: the cash-event fields to change (age, amount, direction, endAge, account, label). Missing fields keep their current values.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "target": {
+          "description": "Which cash event: its id, or its label if unique (e.g. "Downsize").",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "action",
+        "target",
+      ],
+      "type": "object",
+    },
+    "name": "manage_cash_event",
+  },
+  {
+    "description": "PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "update",
+            "remove",
+          ],
+          "type": "string",
+        },
+        "changes": {
+          "additionalProperties": {},
+          "description": "For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending, savingsRate, pensionAdjustment). endAge must be a number or explicit null. savingsRate (0–1) is the share of after-tax pay saved; pensionAdjustment is a DB pension's annual RRSP-room offset.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "target": {
+          "description": "Which income source: its id, or its label if unique (e.g. "Work DB").",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "action",
+        "target",
+      ],
+      "type": "object",
+    },
+    "name": "manage_income",
+  },
+  {
+    "description": "PROPOSE adding a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending each year until paid off, then stops — so carrying debt into retirement raises withdrawals and can flip the verdict. User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "A debt to add. kind "mortgage" = a home loan; "creditCard", "loan", "lineOfCredit", or "other" for consumer debt. balance is what's owed today, interestRate is the annual rate (e.g. 0.051 = 5.1%), monthlyPayment is the required payment. Payments are funded from spending each year until the balance is paid off (then they stop). Omit startAge to start now; set endAge to stop early (rare).",
+      "properties": {
+        "balance": {
+          "type": "number",
+        },
+        "endAge": {
+          "anyOf": [
+            {
+              "type": "number",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "interestRate": {
+          "type": "number",
+        },
+        "kind": {
+          "enum": [
+            "mortgage",
+            "creditCard",
+            "loan",
+            "lineOfCredit",
+            "other",
+          ],
+          "type": "string",
+        },
+        "label": {
+          "type": "string",
+        },
+        "monthlyPayment": {
+          "type": "number",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "startAge": {
+          "type": "number",
+        },
+      },
+      "required": [
+        "label",
+        "kind",
+        "balance",
+        "interestRate",
+        "monthlyPayment",
+      ],
+      "type": "object",
+    },
+    "name": "propose_debt",
+  },
+  {
+    "description": "PROPOSE updating or REMOVING an existing debt (mortgage, credit card, loan, or line of credit, by id or unique label). User confirms. Use propose_debt to add a new one.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "update",
+            "remove",
+          ],
+          "type": "string",
+        },
+        "changes": {
+          "additionalProperties": {},
+          "description": "For update: the debt fields to change (label, kind, balance, interestRate, monthlyPayment, startAge, endAge). endAge must be a number or explicit null. Missing fields keep their current values.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "target": {
+          "description": "Which debt: its id, or its label if unique (e.g. "Mortgage").",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "action",
+        "target",
+      ],
+      "type": "object",
+    },
+    "name": "manage_debt",
+  },
+  {
+    "description": "Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "importance": {
+          "default": 0.5,
+          "description": "0..1: how important this fact is. Reserve 0.9+ for decisions and constraints ("user refuses to touch RRSP"), 0.3 for color.",
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number",
+        },
+        "keywords": {
+          "description": "Category words a future question might use that are NOT in the text itself — the hypernyms of what the fact is about (text "likes oranges" → ["fruit", "food", "preference"]; "wants to retire to Nova Scotia" → ["location", "province", "move"]). The fact's own words are indexed automatically; only add what a later query would say differently.",
+          "items": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 12,
+          "type": "array",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "scope": {
+          "default": "scenario",
+          "description": "scenario = about this plan (shown in chats on this scenario). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").",
+          "enum": [
+            "scenario",
+            "global",
+          ],
+          "type": "string",
+        },
+        "text": {
+          "description": "The fact to remember, one or two self-contained sentences (e.g. "Spouse's DB pension pays $1,200/mo from 65" — never "it pays that").",
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "text",
+        "scope",
+        "importance",
+      ],
+      "type": "object",
+    },
+    "name": "remember",
+  },
+  {
+    "description": "Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don't know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 6,
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "query": {
+          "description": "Search words — single keywords work best (they match by word, not phrase; "fruit" finds "likes oranges" if it was saved with that keyword). Omit for the top-ranked memories outright.",
+          "type": "string",
+        },
+      },
+      "required": [
+        "limit",
+      ],
+      "type": "object",
+    },
+    "name": "recall",
+  },
+  {
+    "description": "Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Alternatively, the scenario NAME — matched case-insensitively; must be unambiguous.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "scenarioId": {
+          "description": "Id of the saved scenario to open (from the ids given in your context).",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "open_scenario",
+  },
+  {
+    "description": "Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Name for the new scenario (e.g. "Downsized at 65"). Duplicates are allowed.",
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "save_scenario_as",
+  },
+  {
+    "description": "List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan's key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "withDetails": {
+          "default": false,
+          "description": "true = include the key numbers of each plan (ages, balances, spending, benefits) so you can compare saved plans without opening them. Omit/false for a compact list.",
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "withDetails",
+      ],
+      "type": "object",
+    },
+    "name": "list_scenarios",
+  },
+]
+`;
