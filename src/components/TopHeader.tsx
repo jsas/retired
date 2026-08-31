@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, Settings, Database, Save, FolderOpen, RotateCcw, Dices, BookOpen, History, Heart, Menu, MoreVertical } from 'lucide-react';
-import type { RetirementInputs } from '../lib/retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 interface TopHeaderProps {
   onToggleSidebar: () => void;

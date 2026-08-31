@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildProgramRules } from './programRules';
-import { testConfig } from '../../test/helpers';
+import { testConfig } from '@retired/engine-core/test/helpers';
 
 describe('buildProgramRules', () => {
   it('renders the core benefit rules from config', () => {

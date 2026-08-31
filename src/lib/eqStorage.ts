@@ -6,7 +6,7 @@
 // the UI: if an axis's range ever changes (or differs across scenarios), a crop
 // saved as "the middle 60%" still means the middle 60% — rehydrated by scaling
 // back onto whatever the axis's current range is.
-import { AXES, fullBand, normalizeBand, type Band, type EqAxis } from './eqConstraints';
+import { AXES, fullBand, normalizeBand, type Band, type EqAxis } from '@retired/engine-core/eqConstraints';
 import { prefKV } from './prefKv';
 
 // Issue #20: persisted through the prefKv facade (store kv row + localStorage

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Home, X, Briefcase, HeartHandshake, CreditCard } from 'lucide-react';
-import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, IncomeSource, ReverseMortgage, RdspInputs, FhsaInputs, Debt } from '../lib/retirementEngine';
-import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
-import { baselineSpouse } from '../lib/householdTypes';
-import type { AppConfig } from '../lib/appConfig';
+import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, IncomeSource, ReverseMortgage, RdspInputs, FhsaInputs, Debt } from '@retired/engine-core/retirementEngine';
+import { cppAdjustmentMultiplier } from '@retired/engine-core/retirementEngine';
+import { baselineSpouse } from '@retired/engine-core/householdTypes';
+import type { AppConfig } from '@retired/engine-core/appConfig';
 
 interface SidebarFormProps {
   inputs: RetirementInputs;

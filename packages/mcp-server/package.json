@@ -1,0 +1,17 @@
+{
+  "name": "@retired/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The RE:tired engine + assistant tools exposed as a Model Context Protocol server. Run it in-page (InMemoryTransport) inside the web app, or host it standalone over Streamable HTTP.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@retired/engine-core": "*",
+    "@retired/mcp-tools": "*",
+    "zod": "^4.4.3"
+  }
+}

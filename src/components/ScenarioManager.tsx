@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit3, Trash2, Save, X, Copy, Check, History, Undo2 } from 'lucide-react';
-import type { RetirementInputs } from '../lib/retirementEngine';
-import { baselineInputs } from '../data/exampleScenarios';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { diffRevisions, MAX_REVISIONS, type ScenarioRevision } from '../lib/scenarioRevisions';
 
 interface Scenario {

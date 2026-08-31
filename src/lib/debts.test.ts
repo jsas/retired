@@ -5,10 +5,10 @@
 // second-order effect the feature exists to show: a debt makes the plan
 // deplete earlier / leave less.
 import { describe, it, expect } from 'vitest';
-import { baseInputs, testConfig, yearAt, closeTo } from '../test/helpers';
-import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown } from './retirementEngine';
-import { legacyToPerson, legacySpouseToPerson, toHousehold } from './householdTypes';
-import type { Debt } from './retirementEngine';
+import { baseInputs, testConfig, yearAt, closeTo } from '@retired/engine-core/test/helpers';
+import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown } from '@retired/engine-core/retirementEngine';
+import { legacyToPerson, legacySpouseToPerson, toHousehold } from '@retired/engine-core/householdTypes';
+import type { Debt } from '@retired/engine-core/retirementEngine';
 
 const card: Debt = {
   id: 'cc', label: 'Credit card', kind: 'creditCard',

@@ -1,5 +1,5 @@
-import type { Scenario } from '../lib/types';
-import type { RetirementInputs } from '../lib/retirementEngine';
+import type { Scenario } from './types';
+import type { RetirementInputs } from './retirementEngine';
 
 /**
  * A clean baseline plan for a BRAND-NEW scenario. Deliberately modest, neutral

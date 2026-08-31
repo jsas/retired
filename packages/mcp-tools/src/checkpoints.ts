@@ -11,7 +11,7 @@
 // agent's change are visible on the card and only roll back when they conflict
 // with what the checkpoint restores.
 
-import type { RetirementInputs } from '../retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 export interface PlanCheckpoint {
   id: string;

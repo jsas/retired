@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Calculator } from 'lucide-react';
-import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '../lib/retirementEngine';
+import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 
 interface MathPageProps {
   inputs: RetirementInputs;

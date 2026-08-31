@@ -16,7 +16,7 @@
 // (scenarios, config, memories) — one more table in the one .sqlite file that
 // backs up with everything else.
 
-import type { RetirementInputs } from './retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { migrateInputs } from '../data/migrations';
 import type { AppDatabase } from '../data/db';
 

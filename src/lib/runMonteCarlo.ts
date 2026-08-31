@@ -4,7 +4,7 @@
 // detect the failure and fall back to running synchronously on the main
 // thread — 500 runs takes ~a second and only happens on demand.
 
-import { runMonteCarlo, type MonteCarloRequest, type MonteCarloResults } from './monteCarlo';
+import { runMonteCarlo, type MonteCarloRequest, type MonteCarloResults } from '@retired/engine-core/monteCarlo';
 
 export function runMonteCarloAuto(
   request: MonteCarloRequest,

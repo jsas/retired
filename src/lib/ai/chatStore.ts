@@ -5,7 +5,7 @@
 // rather than breaking the page (unlike scenarios, which are precious).
 
 import { z } from 'zod';
-import type { RetirementInputs } from '../retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 const STORAGE_KEY = 'retirement_ai_chats';
 /** Exported so the backup layer (db.ts / Data page) can carry chats in the

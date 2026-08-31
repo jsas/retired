@@ -8,10 +8,10 @@ import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
-import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from './lib/retirementEngine';
-import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson, toHousehold } from './lib/householdTypes';
-import type { Scenario } from './lib/types';
-import { DEFAULT_APP_CONFIG, type AppConfig } from './lib/appConfig';
+import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from '@retired/engine-core/retirementEngine';
+import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson, toHousehold } from '@retired/engine-core/householdTypes';
+import type { Scenario } from '@retired/engine-core/types';
+import { DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { AppStore } from './data/store';
 import { AppDatabase, readSeedScenariosFromMirror } from './data/db';
 import { SettingsModal } from './components/SettingsModal';
@@ -38,22 +38,22 @@ import {
   loadProjectionExportOptions, saveProjectionExportOptions,
   type ProjectionExportOptions,
 } from './lib/projectionExport';
-import type { MonteCarloResults } from './lib/monteCarlo';
+import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
 import { consumePlanFromHash } from './lib/shareLink';
-import { buildDefaultScenarios } from './data/exampleScenarios';
+import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
 import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { PREF_KEYS, prefKV } from './lib/prefKv';
 import { runEqSolverAuto } from './lib/runEqSolver';
-import { solveEqReadout } from './lib/eqSolver';
-import { renderRange, axisValue, consistentAges } from './lib/eqConstraints';
-import type { MonteCarloRequest } from './lib/monteCarlo';
+import { solveEqReadout } from '@retired/engine-core/eqSolver';
+import { renderRange, axisValue, consistentAges } from '@retired/engine-core/eqConstraints';
+import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
 
 // The SQL store loads asynchronously (the wasm binary has to be fetched/decoded
 // first — near-instant after the first visit). To keep first paint synchronous

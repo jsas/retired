@@ -1,6 +1,6 @@
 import { Printer, LineChart, Dices, Milestone, Table2, Loader2 } from 'lucide-react';
 import type { PrintOptions } from '../lib/printOptions';
-import type { MonteCarloResults } from '../lib/monteCarlo';
+import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 
 interface PrintOptionsCardProps {
   options: PrintOptions;

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Search, X, Sparkles } from 'lucide-react';
-import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
+import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
 
 // ---------------------------------------------------------------------------
 // Help content model: every entry is a small tree of {id, title, body} so the
@@ -458,6 +458,10 @@ const SECTIONS: HelpSection[] = [
       {
         term: 'Local vs online models',
         body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download it once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter answers, but your plan details travel to that provider — see the privacy note in the Glossary). Local models are smaller, so keep questions focused; online models handle long, nuanced conversations better. Pick and download on <strong>Connections</strong>, which opens from the assistant's header.</P>
+      },
+      {
+        term: 'The engine as an MCP server',
+        body: <P>Under the hood the assistant's tools — reading your plan, running projections, proposing changes — are served by a real <strong>Model Context Protocol (MCP) server</strong> that owns the engine. The page talks to it over an in-page connection (nothing is sent anywhere), so the chat and the engine go through one well-defined protocol boundary rather than touching your plan directly. That same server can be hosted elsewhere in the future; every proposed change still appears as a confirm card and is never applied without your say-so.</P>
       },
       {
         term: 'When answers go wrong',

@@ -2,8 +2,8 @@
 // RetirementInputs the caller overrides per-test; `testConfig()` is a deep copy
 // of DEFAULT_APP_CONFIG (config persistence lives in the SQL store, so tests
 // build their own from the shipped defaults rather than read storage).
-import type { RetirementInputs, YearlyBreakdown } from '../lib/retirementEngine';
-import { DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
+import type { RetirementInputs, YearlyBreakdown } from '../src/retirementEngine';
+import { DEFAULT_APP_CONFIG, type AppConfig } from '../src/appConfig';
 
 export function testConfig(): AppConfig {
   return JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));

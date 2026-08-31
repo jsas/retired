@@ -1,11 +1,11 @@
-import type { Scenario } from '../lib/types';
-import type { AppConfig } from '../lib/appConfig';
-import type { RetirementInputs } from '../lib/retirementEngine';
-import { validateAppConfig } from '../lib/appConfig';
+import type { Scenario } from '@retired/engine-core/types';
+import type { AppConfig } from '@retired/engine-core/appConfig';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import { validateAppConfig } from '@retired/engine-core/appConfig';
 import { AppDatabase, DB_STORAGE_KEY } from './db';
 import { attachPrefKv, reconcilePrefKv } from '../lib/prefKv';
 import type { AppDbDoc } from './schemas';
-import { MemoryStore } from '../lib/memory/store';
+import { MemoryStore } from '@retired/mcp-tools/memoryStore';
 import { SqliteMemoryAdapter } from '../lib/memory/sqliteAdapter';
 import {
   SqliteRevisionStore, inputsChanged, pushRevision,

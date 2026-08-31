@@ -14,9 +14,9 @@
 // back gracefully. Inputs pass through migrateInputs so plans saved by older
 // app versions import cleanly.
 
-import type { RetirementInputs } from './retirementEngine';
-import type { AppConfig } from './appConfig';
-import type { Scenario } from './types';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import type { AppConfig } from '@retired/engine-core/appConfig';
+import type { Scenario } from '@retired/engine-core/types';
 import { migrateInputs } from '../data/migrations';
 
 export const PLAN_TRANSFER_VERSION = 1;

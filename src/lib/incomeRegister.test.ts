@@ -3,9 +3,9 @@
 // (taxed like wages, builds RRSP room, saves its net) and rental is taxable
 // investment income (net lands in taxable, no RRSP room, no pension-split).
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, type IncomeSource } from './retirementEngine';
-import { calculateTax, selfEmployedCppContribution } from './canadianTax';
-import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
+import { calculateRetirement, type IncomeSource } from '@retired/engine-core/retirementEngine';
+import { calculateTax, selfEmployedCppContribution } from '@retired/engine-core/canadianTax';
+import { testConfig, baseInputs, yearAt, closeTo } from '@retired/engine-core/test/helpers';
 
 const config = testConfig();
 const ONT = 'ONT';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Users, Home, SlidersHorizontal, Sparkles, GitCompareArrows } from 'lucide-react';
-import type { RetirementInputs } from '../lib/retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 const formatMoney = (v: number) =>
   new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);

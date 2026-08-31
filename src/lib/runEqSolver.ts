@@ -12,7 +12,7 @@
 import {
   solveEq, solveEqReadout, shardRows,
   type EqSolveRequest, type EqSolveResult, type EqRowProgress, type EqShardResponse,
-} from './eqSolver';
+} from '@retired/engine-core/eqSolver';
 
 export function runEqSolverAuto(
   request: EqSolveRequest,

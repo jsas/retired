@@ -5,7 +5,7 @@ import {
   type TaxTable,
   validateAppConfig,
   defaultAppConfig
-} from '../lib/appConfig';
+} from '@retired/engine-core/appConfig';
 import { DB_STORAGE_KEY } from '../data/db';
 import { AsyncOpfsBackend } from '../data/opfs';
 import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';

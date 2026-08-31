@@ -23,8 +23,8 @@ import {
   Copy, ClipboardPaste, Download, RotateCcw, Settings2, Brain, ChevronDown,
   ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle,
 } from 'lucide-react';
-import type { RetirementInputs } from '../lib/retirementEngine';
-import type { AppConfig } from '../lib/appConfig';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
   connectionReady, loadAiSettings, saveAiSettings, type AiConnection, type AiSettings,
 } from '../lib/aiSettings';
@@ -32,21 +32,22 @@ import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
 import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { createMcpToolExecutor } from '../lib/ai/mcpClient';
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
 import { reasoningTail } from '../lib/ai/reasoningPreview';
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
-import { toolSpecs } from '../lib/ai/tools';
-import type { ToolContext } from '../lib/ai/tools';
-import type { MemoryStore } from '../lib/memory/store';
+import { toolSpecs } from '@retired/mcp-tools/tools';
+import type { ToolContext } from '@retired/mcp-tools/tools';
+import type { MemoryStore } from '@retired/mcp-tools/memoryStore';
 import {
   captureCheckpoint, appendCheckpoint, decodeRevertPatch,
   type PlanCheckpoint,
-} from '../lib/ai/checkpoints';
+} from '@retired/mcp-tools/checkpoints';
 import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
 import { buildPlanDigest } from '../lib/agentQA';
-import { calculateHousehold } from '../lib/retirementEngine';
+import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
   loadChats, saveChats, newThread, titleFromFirstMessage,
   type ChatThread,
@@ -666,6 +667,14 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     onOpenScenario, onSaveScenarioAs,
   }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
 
+  // The MCP-backed tool executor. The server re-resolves the LIVE context on
+  // every call, so the executor closes over the memoized context object (its
+  // getters already read through the refs above). Memoized on the same deps.
+  const mcpExecutor = useMemo(
+    () => createMcpToolExecutor(() => toolContext),
+    [toolContext],
+  );
+
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
   // Estimated context usage for the meter. Mirror what runTurn actually sends:
@@ -816,6 +825,9 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     try {
       for await (const evt of runAgentTurn({
         context: toolContext,
+        // Route every tool call through the in-page MCP server (the engine's
+        // real protocol boundary) instead of invoking the catalog in-process.
+        executeCall: mcpExecutor,
         history,
         userMessage: content,
         system,

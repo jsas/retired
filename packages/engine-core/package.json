@@ -1,0 +1,14 @@
+{
+  "name": "@retired/engine-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The RE:tired retirement engine, decoupled from the web app. Pure, environment-agnostic (no DOM/localStorage/fetch): safe to run in a browser, a Node MCP server, or a test worker.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

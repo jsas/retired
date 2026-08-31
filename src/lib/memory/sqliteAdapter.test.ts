@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AppDatabase } from '../../data/db';
 import { SqliteMemoryAdapter } from './sqliteAdapter';
-import { MemoryStore } from './store';
+import { MemoryStore } from '@retired/mcp-tools/memoryStore';
 
 // Tests run in Node — give the mirror a localStorage to write to.
 const storage = new Map<string, string>();

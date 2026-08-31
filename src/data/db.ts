@@ -1,8 +1,8 @@
 import initSqlJs, { type Database } from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
-import type { Scenario } from '../lib/types';
+import type { Scenario } from '@retired/engine-core/types';
 import { migrateInputs } from './migrations';
-import { validateAppConfig, DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
+import { validateAppConfig, DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { appDbDocSchema, type AppDbDoc } from './schemas';
 import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './opfs';
 

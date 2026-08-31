@@ -10,7 +10,7 @@
 // runs on — and buildSystemPrompt appends it. The model therefore always
 // describes what THIS app will actually compute.
 
-import type { AppConfig } from '../appConfig';
+import type { AppConfig } from '@retired/engine-core/appConfig';
 
 const money = (n: number): string => Math.round(n).toLocaleString('en-CA');
 const pct = (n: number, digits = 1): string => `${(n * 100).toFixed(digits)}%`;

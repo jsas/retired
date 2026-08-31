@@ -4,7 +4,7 @@
 // SAME payload in two wire shapes, decoded by the one defensive parser.
 // Any decode failure returns null and the app boots from localStorage as usual.
 
-import type { RetirementInputs } from './retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { buildPlanCode, parsePlanCode, type DecodedPlan } from './planTransfer';
 
 const HASH_KEY = '#plan=';

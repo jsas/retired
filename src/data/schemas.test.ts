@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   retirementInputsSchema, scenarioSchema, appConfigSchema, parseAppDbDoc,
 } from './schemas';
-import { baseInputs } from '../test/helpers';
-import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
-import { buildDefaultScenarios } from './exampleScenarios';
+import { baseInputs } from '@retired/engine-core/test/helpers';
+import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
+import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
 
 /** The Zod schemas are the gatekeeper for everything persisted or imported —
  *  a good payload must pass, a corrupted one must fail LOUDLY (return null /

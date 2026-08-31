@@ -8,10 +8,10 @@
 // into any AI, and reads the prose answer — the app stays serverless,
 // free and private. Nothing is ingested back.
 
-import type { RetirementInputs, RetirementResults, YearlyBreakdown } from './retirementEngine';
-import { householdOutcome } from './retirementEngine';
-import { toHousehold } from './householdTypes';
-import type { MonteCarloResults } from './monteCarlo';
+import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
+import { householdOutcome } from '@retired/engine-core/retirementEngine';
+import { toHousehold } from '@retired/engine-core/householdTypes';
+import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 
 export interface QAPreset {
   id: string;

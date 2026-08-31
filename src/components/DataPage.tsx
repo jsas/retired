@@ -7,9 +7,9 @@ import {
   COLUMN_GROUPS, METADATA_SECTIONS, buildExport,
   type ProjectionExportOptions, type ExportFormat, type Subject, type ColumnGroup, type MetaSection,
 } from '../lib/projectionExport';
-import type { RetirementInputs, RetirementResults } from '../lib/retirementEngine';
-import type { AppConfig } from '../lib/appConfig';
-import type { Scenario } from '../lib/types';
+import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
+import type { AppConfig } from '@retired/engine-core/appConfig';
+import type { Scenario } from '@retired/engine-core/types';
 import { migrateInputs } from '../data/migrations';
 import type { AppDb } from '../lib/planTransfer';
 import { AppDatabase } from '../data/db';

@@ -9,10 +9,10 @@
 // output to plan state bypasses it.
 
 import type { AgentToolCall, ChatMessage, StreamEvent, ToolSpec } from './providers';
-import { executeToolCall, toolSpecs, type ToolContext, type ToolOutcome } from './tools';
+import { executeToolCall, toolSpecs, type ToolContext, type ToolOutcome } from '@retired/mcp-tools/tools';
 import { extractPromptToolCalls, formatPromptToolResults } from './promptTools';
 import { buildProgramRules } from './programRules';
-import type { AppConfig } from '../appConfig';
+import type { AppConfig } from '@retired/engine-core/appConfig';
 
 export type AgentEvent =
   | { type: 'text'; text: string }
@@ -66,6 +66,11 @@ export interface AgentLoopOptions {
   toolMode?: 'native' | 'prompt' | 'off';
   /** Called when the model proposes a mutation; resolves with the user's decision. */
   onMutation: (proposal: MutationProposal) => Promise<MutationDecision>;
+  /** How tool calls are executed. Default: `executeToolCall(context, call)`
+   *  in-process. The app passes an MCP-backed executor (see mcpClient.ts) so
+   *  every call goes through the in-page MCP server — same catalog, same
+   *  outcomes, but over the protocol boundary the server owns. */
+  executeCall?: (call: AgentToolCall) => Promise<ToolOutcome>;
   signal?: AbortSignal;
   /** Safety net: max tool-call round trips per user message (default 8). */
   maxRounds?: number;
@@ -257,7 +262,9 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
           yield { type: 'tool_result', call, content, isError: true };
           continue;
         }
-        const outcome: ToolOutcome = executeToolCall(opts.context, call);
+        const outcome: ToolOutcome = opts.executeCall
+          ? await opts.executeCall(call)
+          : executeToolCall(opts.context, call);
         lastCallKey = callKey;
 
         if (outcome.kind === 'mutation') {
