@@ -28,6 +28,56 @@
   display: none;
 }
 
+/* ── Beta skin (src/design/) ─────────────────────────────────────────────── */
+
+/* Tabular figures for anything the user compares across states — money,
+   ages, percents — so digits don't jitter as values change. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one slider. A 24px hit strip for fingers whose visible track is a 4px
+   hairline; the thumb is a flat square, no fill to the left — position is
+   the signal. Matches the f7 finalist's faders. */
+input[type="range"].fader {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 24px;             /* the finger target */
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+input[type="range"].fader::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #e2e8f0;      /* slate-200 hairline */
+}
+input[type="range"].fader::-moz-range-track {
+  height: 4px;
+  background: #e2e8f0;
+}
+input[type="range"].fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;         /* center the square on the 4px track */
+  background: #fff;
+  border: 2px solid #0f172a; /* slate-900 */
+  border-radius: 0;         /* flat — no rounded corners */
+}
+input[type="range"].fader::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 2px solid #0f172a;
+  border-radius: 0;
+}
+input[type="range"].fader:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 3px;
+}
+
 /* Scroll targets for the various cards/panels that scrollIntoView on open.
    The main workspace has a sticky breadcrumb/links bar (~48px tall) pinned to
    its top, so scrolling a card to block:'start' would slide it underneath the

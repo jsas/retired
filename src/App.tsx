@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { BetaApp } from './components/BetaApp';
+import { StyleGuide } from './design/StyleGuide';
 import { applyBetaAtBoot } from './lib/betaSkin';
 import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot, AlertTriangle, X } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
@@ -721,6 +722,11 @@ function App() {
   // `inputs` here is the RAW plan (like SidebarForm) — the two levers touch
   // host-won household fields, so it matches the resolved numbers on screen.
   if (beta) {
+    // The style guide is part of the beta skin — reach it without leaving the
+    // new surface. It reads only src/design/, so it always matches the code.
+    if (window.location.hash.replace(/^#\/?/, '').replace(/\/+$/, '') === 'styleguide') {
+      return <StyleGuide />;
+    }
     return (
       <BetaApp
         scenarios={scenarios}
