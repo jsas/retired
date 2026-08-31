@@ -35,13 +35,13 @@ describe('buildMachineGuide', () => {
     expect(g.detail).toMatch(/WebGPU/);
   });
 
-  it('recommends the smallest TOOL-CAPABLE model, not the absolute smallest', () => {
-    // Gemma 2 2B is the smallest download but can't drive the tool protocol;
-    // defaulting to it would strand the user in a questions-only assistant.
+  it('recommends the smallest TOOL-CAPABLE model', () => {
+    // Since #118 pruned the weak models, every catalog entry is tool-capable —
+    // the recommendation is the lightest download that can still drive the
+    // plan (never a questions-only assistant).
     const g = buildMachineGuide(true);
     expect(g.recommended).toBe(smallestToolCapable);
     expect(g.recommended.toolCapable).toBe(true);
-    expect(g.recommended.id).not.toBe('gemma-2-2b-it-q4f16_1-MLC');
     expect(g.headline).toContain(g.recommended.label);
   });
 

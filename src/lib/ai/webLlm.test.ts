@@ -86,18 +86,17 @@ describe('curated web-llm model list', () => {
     expect(fmtVram(512)).toBe('512 MB VRAM');
   });
 
-  it('marks exactly one model as too weak for tools, and it is the smallest download', () => {
-    // The tool-capability contract: every model except the tiniest can drive
-    // the tool protocol; the one that can't is offered only as a small-download
-    // fallback. If a future model is also weak, this forces a conscious choice.
+  it('curates only tool-capable models — every listed model can drive the plan', () => {
+    // The tool-capability contract after #118: the probe sweep showed the two
+    // weak/low-value models (Gemma 2 2B, DeepSeek R1 7B) weren't earning their
+    // download, so the catalog is now all-tool-capable. A user who still wants
+    // a tiny Q&A-only model reaches it via the free-text field (assumed
+    // capable); the tools-off tier in AgentPage stays for that path.
     const weak = WEBLLM_MODELS.filter(m => !m.toolCapable);
-    expect(weak.map(m => m.id)).toEqual(['gemma-2-2b-it-q4f16_1-MLC']);
+    expect(weak).toEqual([]);
+    // And the smallest download is still modest, so "start small" is real.
     const minSize = Math.min(...WEBLLM_MODELS.map(m => m.sizeGB));
-    expect(weak[0].sizeGB).toBe(minSize);
-    // ...and a tool-capable model exists at a comparable size, so "small" never
-    // has to mean "can't edit the plan".
-    const smallestCapable = [...WEBLLM_MODELS].filter(m => m.toolCapable).sort((a, b) => a.sizeGB - b.sizeGB)[0];
-    expect(smallestCapable.sizeGB).toBeLessThanOrEqual(2.5);
+    expect(minSize).toBeLessThanOrEqual(2.5);
   });
 
   it('webGpuAvailable reports a boolean without throwing', () => {
