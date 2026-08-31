@@ -30,13 +30,21 @@
     return { ok: true, modelId };
   }
 
+  // The corpus teaches question → bare TOOL_CALL: line with NO reasoning block,
+  // so we benchmark stock bases on the SAME contract the fine-tuned model is held
+  // to: thinking OFF. Qwen3's `/no_think` soft-switch skips the <think> block for
+  // the turn; it's inert for bases that don't think (Qwen2.5, SmolLM2). Without
+  // it, a thinking base burns the 400-token budget on <think> and the call gets
+  // truncated or never emitted — that measures "fits in budget", not the protocol.
+  const NO_THINK = ' /no_think';
+
   async function reply(systemPrompt, question) {
     if (!engine) throw new Error('no model loaded');
     log('Q: ' + question);
     const out = await engine.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: question },
+        { role: 'user', content: question + NO_THINK },
       ],
       temperature: 0,          // deterministic: the eval wants the model's best answer
       max_tokens: 400,
