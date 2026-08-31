@@ -143,6 +143,11 @@ export interface RetirementInputs {
   // First Home Savings Account — the primary person's FHSA. Optional; absent =
   // no FHSA. Accumulation-only (never enters the withdrawal order).
   fhsa?: FhsaInputs;
+  // The person's debts: mortgage, credit cards, car/student/personal loans,
+  // lines of credit. Each compounds at its own rate and is serviced out of
+  // cash flow (added to the year's spending need), so it drags on the plan
+  // until paid off. Absent/empty = debt-free.
+  debts?: Debt[];
 }
 
 /** Where the spouse's plan comes from (see RetirementInputs.spouseSource). */
@@ -184,6 +189,8 @@ export interface SpouseInputs {
   rdsp?: RdspInputs;
   // The spouse's own FHSA. Optional; absent = none.
   fhsa?: FhsaInputs;
+  // The spouse's own debts. Optional; absent = none.
+  debts?: Debt[];
 }
 
 export interface CashEvent {
@@ -295,6 +302,31 @@ export interface FhsaInputs {
   openAge?: number;         // age the account was opened; the 15-year clock runs from here
 }
 
+/**
+ * One liability a person carries — the unified debt register. A mortgage is
+ * just a debt with `kind: 'mortgage'` (its payment ends at payoff, freeing the
+ * biggest cash flow). The engine compounds the balance at `interestRate` each
+ * year and services the debt out of cash flow: the year's payments are added
+ * to that year's spending need (funded from accounts like any other expense),
+ * so a debt drags on the plan until it's paid off. Payments are after-tax
+ * money, so they never touch taxable income, GIS, or the OAS clawback.
+ *
+ * A debt is active from `startAge` (default the current age) until the balance
+ * reaches $0 — or until `endAge` if one is set (an explicit amortization end,
+ * e.g. a mortgage "paid off at 68"). The payment is capped at the remaining
+ * balance each year, so the final year pays less and the debt then stops.
+ */
+export interface Debt {
+  id: string;
+  label: string;              // "Mortgage", "Credit card", "Car loan"
+  kind: 'mortgage' | 'creditCard' | 'loan' | 'lineOfCredit' | 'other';
+  balance: number;            // principal outstanding today (today's dollars)
+  interestRate: number;       // annual rate charged on the balance (e.g. 0.051)
+  monthlyPayment: number;     // fixed payment, today's dollars
+  startAge?: number;          // when payments start (default: current age)
+  endAge?: number | null;     // explicit stop-age override; absent/null = until paid off
+}
+
 export interface AccountBreakdown {
   age: number;
   rrspBalance: number;
@@ -402,6 +434,10 @@ export interface YearDetail {
   // interest; in HELOC mode that interest is PAID (interestExpense, added to
   // spending) rather than compounded into the loan.
   rm?: { interestAccrued: number; scheduledDraw: number; topUpDraw: number; homeValue: number; loanBalance: number; interestExpense?: number };
+  // Per-debt flow this year, when the person has debts. interestAccrued is the
+  // year's interest charge; payment is what was actually serviced (capped at
+  // the balance); balanceEnd is the principal outstanding at year end.
+  debts?: Array<{ label: string; kind: Debt['kind']; interestAccrued: number; payment: number; balanceEnd: number }>;
   // Cash events that fired this year (labelled in/out). `from`/`to` are the
   // human-readable endpoints when the event is a transfer (else undefined and
   // the row is a plain inflow/outflow).
@@ -462,6 +498,11 @@ export interface YearlyBreakdown {
   homeValue?: number;
   loanBalance?: number;
   netHomeEquity?: number;
+  // Debts (undefined when the person has none). debtPayments is the total
+  // serviced out of cash flow this year (added to the spending need);
+  // debtBalance is the total principal outstanding at year end.
+  debtPayments?: number;
+  debtBalance?: number;
   // Pension-splitting inputs, captured per-year so the household pass can
   // recompute tax with a split applied. Undefined for singles.
   splitEligibleIncome?: number; // DB pensions + registered draws (registered only from age 65) — NOT CPP/OAS
@@ -930,6 +971,45 @@ export function calculatePerson(
   // growth does not. The embedded-gain fraction of any withdrawal is taxed
   // at the capital-gains inclusion rate.
   let taxableAcb = taxableBalance * Math.min(1, Math.max(0, config.engine.taxableAcbRatio));
+
+  // Debts: each liability compounds at its own rate and is serviced out of cash
+  // flow. Track the live principal per debt id; absent/empty = debt-free. The
+  // payment is capped at the remaining balance so the final year pays less.
+  const debtList: Debt[] = Array.isArray(person.debts) ? person.debts : [];
+  const debtBal = new Map<string, number>();
+  for (const d of debtList) debtBal.set(d.id, Math.max(0, d.balance));
+  const debtOn = debtList.length > 0;
+  // Total principal outstanding right now (year-end figure is read after the
+  // year's payments, so callers take this AFTER applying the year's ledger).
+  const debtBalanceNow = () => {
+    let t = 0;
+    for (const v of debtBal.values()) t += v;
+    return t;
+  };
+  // Run one year's interest + payment for every active debt. Returns the year's
+  // total payment (added to the spending need) and per-debt detail rows. A debt
+  // is active from startAge (default currentAge) until paid off, or until
+  // endAge when one is set. Interest accrues on the balance first, then the
+  // payment (capped at the post-interest balance) comes off.
+  const runDebtYear = (age: number): { total: number; rows: NonNullable<YearDetail['debts']> } => {
+    const rows: NonNullable<YearDetail['debts']> = [];
+    let total = 0;
+    for (const d of debtList) {
+      const bal0 = debtBal.get(d.id) ?? 0;
+      const startAge = d.startAge ?? currentAge;
+      const active = age >= startAge && (d.endAge == null || age <= d.endAge) && bal0 > 0;
+      if (!active) { rows.push({ label: d.label, kind: d.kind, interestAccrued: 0, payment: 0, balanceEnd: bal0 }); continue; }
+      const interest = bal0 * Math.max(0, d.interestRate);
+      let bal = bal0 + interest;
+      const want = Math.max(0, d.monthlyPayment) * 12;
+      const payment = Math.min(want, bal);
+      bal -= payment;
+      debtBal.set(d.id, bal);
+      total += payment;
+      rows.push({ label: d.label, kind: d.kind, interestAccrued: interest, payment, balanceEnd: bal });
+    }
+    return { total, rows };
+  };
   const gainsFraction = () => (taxable > 0 ? Math.max(0, Math.min(1, 1 - taxableAcb / taxable)) : 0);
   const inclusion = Math.min(1, Math.max(0, config.engine.capitalGainsInclusion));
 
@@ -1348,6 +1428,14 @@ export function calculatePerson(
       accumEventOut += accRmInterestExpense;
       drawDown(accRmInterestExpense);
     }
+    // Debts: the year's payments are serviced out of cash flow too, drawn from
+    // the accounts like any other pre-retirement outflow. The payment is capped
+    // at the remaining balance, so a paid-off debt frees its payment.
+    const accumDebt = debtOn ? runDebtYear(age) : { total: 0, rows: [] };
+    if (accumDebt.total > 0) {
+      accumEventOut += accumDebt.total;
+      drawDown(accumDebt.total);
+    }
 
     // The year's tax = the earnings tax (on wages + pension) plus the meltdown
     // transfer tax. Together they equal tax(earnings + transfers) − tax(0): the
@@ -1382,6 +1470,7 @@ export function calculatePerson(
       employmentGross: employmentGrossAccum,
       employmentTax: employmentTaxAccum,
       employmentNet: employmentNetAccum,
+      ...(debtOn ? { debtPayments: accumDebt.total, debtBalance: debtBalanceNow() } : {}),
       detail: {
         withdraw: { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 },
         growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains, ...(fhsaOn ? { fhsa: fhsaGains } : {}) },
@@ -1393,6 +1482,7 @@ export function calculatePerson(
         ...(rdspOn ? { rdsp: { contribution: rdspContribution, grant: rdspGrant, bond: rdspBond, growth: rdspGains, balance: rdspBal, contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction() } } : {}),
         ...(fhsaOn ? { fhsa: { contribution: fhsaContribution, growth: fhsaGains, balance: fhsaBal, contributionBasis: fhsaContribBasis } } : {}),
         ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: accRmInterestExpense } : {}) } } : {}),
+        ...(debtOn ? { debts: accumDebt.rows } : {}),
         events: yearEvents,
         // Pre-retirement transfers: surface on the math page too. There is no
         // full YearCalc pipeline pre-retirement, so attach a minimal calc.
@@ -1509,8 +1599,12 @@ export function calculatePerson(
     // This year's spending target: today's dollars, inflated to this year when
     // indexSpending is on (otherwise held flat in today's dollars). A HELOC's
     // annual interest is serviced out of cash flow, so it raises the year's
-    // spending need like any other expense.
-    const yearSpending = desiredSpending * spendingFactorAt(age) * spendingPctAt(age) + eventOutAt(age) + rmInterestExpense;
+    // spending need like any other expense. Debt payments are too: each
+    // liability's payment is added to the year's need, so the ordered draws
+    // gross up to cover it — the debt visibly pushes withdrawals up until it's
+    // paid off (after-tax money, so it never touches GIS or the clawback).
+    const decumDebt = debtOn ? runDebtYear(age) : { total: 0, rows: [] };
+    const yearSpending = desiredSpending * spendingFactorAt(age) * spendingPctAt(age) + eventOutAt(age) + rmInterestExpense + decumDebt.total;
 
     // Gross benefit income (taxable). OAS amounts come from the (possibly
     // indexed) config; CPP is inflated manually when indexation is on.
@@ -1969,6 +2063,7 @@ export function calculatePerson(
       employmentGross,
       employmentTax,
       employmentNet,
+      ...(debtOn ? { debtPayments: decumDebt.total, debtBalance: debtBalanceNow() } : {}),
       splitEligibleIncome,
       unsplitNetIncome,
       detail: {
@@ -1980,6 +2075,7 @@ export function calculatePerson(
         tax: { oasClawback, capitalGains, registeredGross },
         ...(rdspOn ? { rdsp: { contribution: 0, grant: 0, bond: 0, growth: rdspGains, balance: Math.max(0, rdspBal), contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction(), withdrawal: rdspWithdrawn, taxablePortion: rdspTaxable } } : {}),
         ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: rmInterestExpense } : {}) } } : {}),
+        ...(debtOn ? { debts: decumDebt.rows } : {}),
         events: yearEvents,
         calc,
       },
@@ -2327,6 +2423,12 @@ export function combineHouseholdBreakdown(
       employmentGross: (py.employmentGross ?? 0) + (sy.employmentGross ?? 0),
       employmentTax: (py.employmentTax ?? 0) + (sy.employmentTax ?? 0),
       employmentNet: (py.employmentNet ?? 0) + (sy.employmentNet ?? 0),
+      ...((py.debtPayments !== undefined || sy.debtPayments !== undefined)
+        ? { debtPayments: (py.debtPayments ?? 0) + (sy.debtPayments ?? 0) }
+        : {}),
+      ...((py.debtBalance !== undefined || sy.debtBalance !== undefined)
+        ? { debtBalance: (py.debtBalance ?? 0) + (sy.debtBalance ?? 0) }
+        : {}),
       ...rm,
       splitTransferred: undefined,
       detail: undefined,
