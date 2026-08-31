@@ -55,14 +55,33 @@ drawer sections. Same levers as the dashboard, just present on this page too.
 
 The old steering page's triple-slider `RangeFader` (a value knob plus two
 crop-edge thumbs that set an allowed min–max band) **goes away**. In its place,
-each lever is a single fader over a **sensible fixed min–max range** — no user
-"limiters":
+each lever is a single fader over the **real ranges the live site already uses**
+(`packages/engine-core/eqConstraints.ts` AXES) — no user "limiter" thumbs:
 
-| Lever | Fader range | Where it appears |
-|---|---|---|
-| Stop working at | 55 – 80 | door lever · map x-axis · details page |
-| Spend a year | $20k – $200k | door lever · map y-axis · details page |
-| Markets (avg return) | 1.2% – 4.5% | verdict-hero dial · details page |
+| Lever | Real min–max | Step | Range source |
+|---|---|---|---|
+| Annual spending | $0 – $1,000,000 | $1k | tunable in Settings |
+| Retirement age | 40 – 75 (min→current age) | 1 | fixed (natural bound) |
+| Expected return (Markets) | 0% – 20% | 0.25% | tunable in Settings |
+| Plan to age | 70 – 105 | 1 | fixed (lifespan) |
+| Annual savings | $0 – $500,000 | $1k | tunable in Settings |
+| Return volatility | 0% – 30% | 0.5% | tunable in Settings |
+| CPP start age | 60 – 70 | 1 | fixed (statutory) |
+| OAS start age | 65 – 70 | 1 | fixed (statutory) |
+
+**Range prefs in Settings** — only the axes that could *conceivably run away*
+get a user-settable min/max (stored via prefKV, a new `PREF_KEYS` entry per
+issue #20, not a parallel localStorage key):
+
+- **Annual spending max** — no natural ceiling; high spenders blow past $1M
+- **Annual savings max** — same; big earners
+- **Expected return min & max** — 0–20% is a modeling opinion (bearish <0, bullish >20%)
+- **Return volatility max** — modeling assumption, could exceed 30%
+
+The rest stay fixed because they're bounded by law or lifespan (retire 40–75,
+plan-to 70–105, CPP 60–70, OAS 65–70) — a pref there would be noise. The faders
+on the door / map / details all read the same range object, so a Settings change
+propagates everywhere at once.
 
 **Groups = plain names** (no metaphors). Sections are grouped the way a person
 actually looks for them, each under a one-word header, top-to-bottom:
@@ -167,7 +186,8 @@ Every page composes `src/design/` primitives — no one-off styles (§8.10).
 ## 6. The bolt-on checklist (walk this before calling any slice done)
 
 - [ ] Every sidebar section in table §2 has a named home on `#/details` (deep-linked) — none dropped silently
-- [ ] The 3 levers (retire age, spending, market) are editable on the door AND the details page; single faders over fixed ranges, no min/max limiter slider
+- [ ] The 3 levers (retire age, spending, market) are editable on the door AND the details page; single faders over the real site ranges, no min/max limiter slider
+- [ ] Runaway-able ranges (spending max, savings max, return min/max, volatility max) are user-settable in Settings, persisted via prefKV, and propagate to every fader
 - [ ] Every old view in table §3 routes somewhere real
 - [ ] Every assistant tool in table §4 still executes through the dock
 - [ ] Conditional sections (RDSP, Home Equity, FHSA) auto-appear in Schedule when enabled (§8.9)
