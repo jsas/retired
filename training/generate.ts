@@ -3,6 +3,9 @@
 //
 // Run from the repo root:
 //   npx tsx training/generate.ts            # writes training/data/*.jsonl
+//   npx tsx training/generate.ts --subset 3 # additionally writes corpus.train.subset3.jsonl
+//                                           # (every 3rd train record — deterministic reduced slice
+//                                           #  for the full-SFT-vs-QLoRA tiebreak; eval is untouched)
 //
 // (tsx runs TypeScript directly; the engine is deterministic, so re-running
 // reproduces the same corpus byte-for-byte unless the engine or catalog changes
@@ -26,6 +29,20 @@ const trainJsonl = toJsonl(train);
 const evalJsonl = toJsonl(evals);
 writeFileSync(join(outDir, 'corpus.train.jsonl'), trainJsonl);
 writeFileSync(join(outDir, 'corpus.eval.jsonl'), evalJsonl);
+
+// Optional deterministic reduced-train slice for the full-SFT-vs-QLoRA tiebreak
+// (SPIKE.md §5): same corpus, same eval, less train data — any protocol-validity
+// gap between the two methods on this slice is a (conservative) proxy for the gap
+// at full scale. Every-Nth by mint order keeps the kind/tool mix proportional.
+const subsetArg = process.argv.find((a) => a.startsWith('--subset'));
+if (subsetArg) {
+  const n = Number(subsetArg.split('=')[1] ?? process.argv[process.argv.indexOf(subsetArg) + 1]);
+  if (!Number.isInteger(n) || n < 2) throw new Error('--subset N: N must be an integer >= 2');
+  const subset = train.filter((_, i) => i % n === 0);
+  const subsetJsonl = toJsonl(subset);
+  writeFileSync(join(outDir, `corpus.train.subset${n}.jsonl`), subsetJsonl);
+  console.error(`subset: every ${n}th train record -> ${subset.length} records (corpus.train.subset${n}.jsonl)`);
+}
 
 // The eval hash (printed below) is the spike's analogue of the golden-master
 // rule: a shipped model is always scored against the same frozen eval set.

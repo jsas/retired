@@ -51,12 +51,34 @@ function serve() {
   return new Promise((resolve) => server.listen(SERVE_PORT, () => resolve(server)));
 }
 
+/** Locate the tsx CLI entry (cli.mjs) so we can run it under `node` directly.
+ *  On Windows, spawning `npx`/`npx.cmd` from Node fails (ENOENT / EINVAL), so we
+ *  bypass the shim: check local node_modules first, then the npm `_npx` cache
+ *  (where `npx tsx` installed it on first use). */
+async function findTsxCli() {
+  const { existsSync } = await import('node:fs');
+  const { readdirSync } = await import('node:fs');
+  const local = join(dirname(trainingDir), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  if (existsSync(local)) return local;
+  const cacheRoot = process.platform === 'win32'
+    ? join(process.env.LOCALAPPDATA ?? '', 'npm-cache', '_npx')
+    : join(process.env.HOME ?? '', '.npm', '_npx');
+  if (existsSync(cacheRoot)) {
+    for (const dir of readdirSync(cacheRoot)) {
+      const candidate = join(cacheRoot, dir, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  throw new Error('tsx not found — run `npx tsx --version` once to prime the npx cache');
+}
+
 /** Load the eval-split tool-call records + production system prompt, extracted
  *  by a tiny tsx side-process so this .mjs stays dependency-free (no TS import). */
 async function loadEvalSet() {
   const { execFileSync } = await import('node:child_process');
   const extractor = join(trainingDir, 'driver', 'extractEvalSet.ts');
-  const json = execFileSync('npx', ['tsx', extractor], { cwd: dirname(trainingDir), maxBuffer: 64 * 1024 * 1024 }).toString();
+  const tsx = await findTsxCli();
+  const json = execFileSync(process.execPath, [tsx, extractor], { cwd: dirname(trainingDir), maxBuffer: 64 * 1024 * 1024 }).toString();
   return JSON.parse(json); // { systemPrompt, records: [{id, question}] }
 }
 

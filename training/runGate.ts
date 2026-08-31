@@ -33,11 +33,12 @@ function evalCallRecords(): CorpusRecord[] {
 }
 
 async function main(): Promise<number> {
-  const records = evalCallRecords();
+  const allRecords = evalCallRecords();
   const threshold = THRESHOLDS.postSftShipBar;
 
   const repliesPath = arg('--replies');
   const modelId = arg('--model') ?? 'corpus-self-check';
+  const limit = arg('--limit') ? Number(arg('--limit')) : undefined;
 
   let replies: string[];
   if (repliesPath) {
@@ -49,11 +50,18 @@ async function main(): Promise<number> {
     replies = JSON.parse(readFileSync(full, 'utf8')) as string[];
   } else {
     // Self-check: the assistant target of each record IS the "reply".
-    replies = records.map((r) => {
+    replies = allRecords.map((r) => {
       const assistant = r.messages.find((m) => m.role === 'assistant');
       if (!assistant) throw new Error(`${r.id} has no assistant target`);
       return assistant.content;
     });
+  }
+
+  // A partial bake-off (--limit N) scores only the first N eval records.
+  const records = limit ? allRecords.slice(0, limit) : allRecords;
+  if (records.length !== replies.length) {
+    console.error(`records (${records.length}) and replies (${replies.length}) must align — pass --limit ${replies.length} to match a partial bake-off`);
+    return 2;
   }
 
   const report = gateReport(modelId, records, replies, threshold);
