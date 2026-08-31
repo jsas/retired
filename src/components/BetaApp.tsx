@@ -4,8 +4,8 @@
 // so the vocabulary stays consistent as the skin grows toward f7. It renders
 // the REAL engine's verdict on the REAL active scenario and lets the two
 // biggest levers — annual spending and retirement age — steer it.
-import type { RetirementInputs, RetirementResults } from '../lib/retirementEngine';
-import type { Scenario } from '../lib/types';
+import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
+import type { Scenario } from '@retired/engine-core/types';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
 import { AppHeader, VerdictHero, Panel, Fader, Footnote } from '../design/primitives';
 import { cls } from '../design/tokens';
