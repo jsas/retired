@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Home, X, Briefcase, HeartHandshake } from 'lucide-react';
-import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, IncomeSource, ReverseMortgage, RdspInputs, FhsaInputs } from '../lib/retirementEngine';
+import { User, PiggyBank, TrendingUp, Shield, MapPin, ArrowDownWideNarrow, ChevronUp, ChevronDown, ChevronRight, CalendarClock, Plus, Trash2, Activity, Users, Home, X, Briefcase, HeartHandshake, CreditCard } from 'lucide-react';
+import type { RetirementInputs, WithdrawalAccount, CashEvent, SpendingBand, IncomeSource, ReverseMortgage, RdspInputs, FhsaInputs, Debt } from '../lib/retirementEngine';
 import { cppAdjustmentMultiplier } from '../lib/retirementEngine';
 import { baselineSpouse } from '../lib/householdTypes';
 import type { AppConfig } from '../lib/appConfig';
@@ -40,6 +40,7 @@ const formatMoney = (v: number) =>
 let eventSeq = 0;
 const newEventId = () => `ev-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
 const newIncomeId = () => `inc-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
+const newDebtId = () => `debt-${Date.now().toString(36)}-${(eventSeq++).toString(36)}`;
 
 // Reusable income-register editor (primary plan and spouse plan both render
 // one). One card per IncomeSource: label, $/yr, start/end ages, indexed, plus a
@@ -282,6 +283,185 @@ function IncomeList({ income, onChange, tfsaAnnualLimit }: {
           className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
         >
           <Plus size={12} /> Add rental
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Reusable debt-register editor (primary plan and spouse plan both render one).
+// One card per Debt: label, kind, balance, rate, monthly payment, and an
+// optional start/end age. A live readout shows the computed payoff age so the
+// amortization is visible (a mortgage "paid off at 68" reads directly). The
+// balance compounds at the rate each year and the payment (capped at the
+// balance) comes off — so the payoff age is when the balance reaches $0.
+const DEBT_KIND_LABELS: Record<Debt['kind'], string> = {
+  mortgage: 'Mortgage',
+  creditCard: 'Credit card',
+  loan: 'Loan',
+  lineOfCredit: 'Line of credit',
+  other: 'Other',
+};
+
+// Estimate the payoff age from the ledger math (annual compounding, payment
+// capped at the balance). Returns null when the payment never retires the
+// balance (payment ≤ annual interest). Used only for the live readout — the
+// engine computes the real payoff itself.
+function debtPayoffAge(d: Debt, fromAge: number): number | null {
+  let bal = Math.max(0, d.balance);
+  if (bal <= 0) return null;
+  const pay = Math.max(0, d.monthlyPayment) * 12;
+  const start = d.startAge ?? fromAge;
+  for (let age = start; age < start + 100; age++) {
+    if (d.endAge != null && age > d.endAge) return null;
+    bal += bal * Math.max(0, d.interestRate);
+    bal -= Math.min(pay, bal);
+    if (bal <= 0.005) return age;
+  }
+  return null; // never paid off within a century
+}
+
+function DebtList({ debts, onChange, currentAge }: {
+  debts: Debt[];
+  onChange: (next: Debt[]) => void;
+  currentAge: number;
+}) {
+  const update = (i: number, patch: Partial<Debt>) =>
+    onChange(debts.map((d, j) => (j === i ? { ...d, ...patch } : d)));
+
+  const add = (kind: Debt['kind']) => {
+    const seed: Record<Debt['kind'], Omit<Debt, 'id' | 'kind'>> = {
+      mortgage: { label: 'Mortgage', balance: 320000, interestRate: 0.051, monthlyPayment: 2100 },
+      creditCard: { label: 'Credit card', balance: 8000, interestRate: 0.1999, monthlyPayment: 400 },
+      loan: { label: 'Car loan', balance: 25000, interestRate: 0.065, monthlyPayment: 480 },
+      lineOfCredit: { label: 'Line of credit', balance: 15000, interestRate: 0.072, monthlyPayment: 300 },
+      other: { label: 'Other debt', balance: 10000, interestRate: 0.08, monthlyPayment: 300 },
+    };
+    onChange([...debts, { id: newDebtId(), kind, ...seed[kind] }]);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      {debts.map((d, i) => {
+        const payoffAge = debtPayoffAge(d, currentAge);
+        return (
+          <div key={d.id} className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <select
+                value={d.kind}
+                title="Debt kind (a label only — the engine treats all kinds the same: balance compounds at the rate, payment services it)"
+                onChange={(e) => update(i, { kind: e.target.value as Debt['kind'] })}
+                className="shrink-0 px-1 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              >
+                {Object.entries(DEBT_KIND_LABELS).map(([k, label]) => (
+                  <option key={k} value={k}>{label}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={d.label}
+                placeholder="Label"
+                onChange={(e) => update(i, { label: e.target.value })}
+                className="flex-1 min-w-0 px-1.5 py-1 bg-neutral-900 border border-neutral-700 rounded text-[11px] text-white focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={() => onChange(debts.filter((_, j) => j !== i))}
+                className="p-1 hover:bg-neutral-700 rounded text-neutral-400 hover:text-red-400"
+                title={`Remove ${d.label || DEBT_KIND_LABELS[d.kind]}`}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <div>
+                <label className={LABEL_CLS}>Balance ($)</label>
+                <input
+                  type="number"
+                  step="1000"
+                  value={d.balance}
+                  title="Principal outstanding today"
+                  onChange={(e) => update(i, { balance: Math.max(0, parseInt(e.target.value) || 0) })}
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Interest (%/yr)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={+(d.interestRate * 100).toFixed(2)}
+                  title="Annual rate charged on the balance"
+                  onChange={(e) => update(i, { interestRate: (parseFloat(e.target.value) || 0) / 100 })}
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Payment ($/mo)</label>
+                <input
+                  type="number"
+                  step="50"
+                  value={d.monthlyPayment}
+                  title="Fixed monthly payment (capped at the remaining balance)"
+                  onChange={(e) => update(i, { monthlyPayment: Math.max(0, parseInt(e.target.value) || 0) })}
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <label className={LABEL_CLS}>From age</label>
+                  <input
+                    type="number"
+                    value={d.startAge ?? currentAge}
+                    title="Age payments start (default: your current age)"
+                    onChange={(e) => update(i, { startAge: parseInt(e.target.value) || undefined })}
+                    className={INPUT_CLS}
+                  />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>To age</label>
+                  <input
+                    type="number"
+                    value={d.endAge ?? ''}
+                    placeholder="paid off"
+                    title="Stop age override (blank = until the balance is paid off)"
+                    onChange={(e) => update(i, { endAge: e.target.value ? parseInt(e.target.value) : null })}
+                    className={INPUT_CLS}
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-[10px] text-neutral-500 leading-snug">
+              {payoffAge != null
+                ? <>Paid off at age <strong className="text-neutral-300">{payoffAge}</strong> — then the {formatMoney(d.monthlyPayment)}/mo frees up.</>
+                : <>The {formatMoney(d.monthlyPayment)}/mo payment never retires this balance (payment ≤ interest).</>}
+            </p>
+          </div>
+        );
+      })}
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          onClick={() => add('mortgage')}
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+        >
+          <Plus size={12} /> Add mortgage
+        </button>
+        <button
+          onClick={() => add('creditCard')}
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+        >
+          <Plus size={12} /> Add card
+        </button>
+        <button
+          onClick={() => add('loan')}
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+        >
+          <Plus size={12} /> Add loan
+        </button>
+        <button
+          onClick={() => add('lineOfCredit')}
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] text-neutral-400 hover:text-white hover:bg-neutral-800 rounded"
+        >
+          <Plus size={12} /> Add credit line
         </button>
       </div>
     </div>
@@ -1563,6 +1743,10 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 <IncomeList income={inputs.spouse.income ?? []} onChange={(next) => updateSpouse({ income: next })} tfsaAnnualLimit={config.engine.tfsaAnnualLimit} />
               </div>
               <div>
+                <label className={LABEL_CLS}>Spouse debts</label>
+                <DebtList debts={inputs.spouse.debts ?? []} onChange={(next) => updateSpouse({ debts: next })} currentAge={inputs.spouse.currentAge} />
+              </div>
+              <div>
                 <label className={LABEL_CLS}>Spouse cash events</label>
                 {renderEventList(
                   inputs.spouse.events ?? [],
@@ -1869,6 +2053,17 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
               </p>
             </div>
           )}
+        </CollapsibleSection>
+
+        {/* Debts */}
+        <CollapsibleSection id="debts" icon={<CreditCard size={14} />} title="Debts" open={isOpen('debts')} onToggle={toggleSection}>
+          <DebtList debts={inputs.debts ?? []} onChange={(next) => updateField('debts', next)} currentAge={inputs.currentAge} />
+          <p className="mt-2 text-[10px] text-neutral-500 leading-snug">
+            Each balance compounds at its rate every year and the payment is funded out of cash
+            flow — it raises the year's spending need, so the portfolio draws more until the debt
+            is paid off. That's exactly how a mortgage or card balance delays retirement. Payments
+            are after-tax money (no effect on GIS or the OAS clawback).
+          </p>
         </CollapsibleSection>
 
         {/* Market Hypotheses */}
