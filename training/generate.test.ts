@@ -29,5 +29,5 @@ describe('corpus determinism', () => {
     for (const r of mc) {
       expect(r.messages[1].content).toContain('"runs":500');
     }
-  });
+  }, 120000);
 });

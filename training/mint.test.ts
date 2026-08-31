@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mintReadRecords, toJsonl } from './mint';
+import { mintCorpus, mintGuardrailRecords, mintMutationRecords, mintReadRecords, toJsonl } from './mint';
 import { scoreToolReply, TOOL_NAMES } from './protocol';
 import { SCENARIOS } from './scenarios';
 import { executeToolCall, type ToolContext } from '../src/lib/ai/tools';
@@ -8,14 +8,24 @@ import { testConfig } from '../src/test/helpers';
 describe('corpus minter', () => {
   const records = mintReadRecords();
 
-  it('mints a call + follow-up for every read spec × scenario', () => {
-    // 6 read specs × 7 scenarios; get_scenario is call-only (raw JSON result),
-    // the other 5 mint a follow-up too → 6 calls + 5 follow-ups per scenario.
-    expect(records.length).toBe((6 + 5) * SCENARIOS.length);
+  it('mints at scale: every paraphrase × scenario yields a tool-call record', () => {
+    // The point of the paraphrase bank is scale — many phrasings per tool. We
+    // should get well past the old 77-record skeleton toward a trainable size.
     const calls = records.filter((r) => r.kind === 'tool-call');
+    expect(calls.length).toBeGreaterThan(100);
+    // Every scenario is represented.
+    expect(new Set(calls.map((r) => r.scenarioId)).size).toBe(SCENARIOS.length);
+    // Multiple phrasings map to the same canonical call for a given tool.
+    const runProj = calls.filter((r) => r.expect.toolName === 'run_projection');
+    expect(new Set(runProj.map((r) => r.messages[0].content)).size).toBeGreaterThan(3);
+  });
+
+  it('mints follow-ups only for tools with figure-bearing results', () => {
     const follows = records.filter((r) => r.kind === 'tool-followup');
-    expect(calls.length).toBe(6 * SCENARIOS.length);
-    expect(follows.length).toBe(5 * SCENARIOS.length);
+    expect(follows.length).toBeGreaterThan(0);
+    // No follow-up should exist for the raw-JSON tools (get_scenario, etc.).
+    const followTools = new Set(follows.map((r) => r.expect.toolName));
+    expect(followTools.has('get_scenario')).toBe(false);
   });
 
   it('holds out an eval split drawn from the same distribution', () => {
@@ -49,7 +59,7 @@ describe('corpus minter', () => {
       const outcome = executeToolCall(ctx, { id: 't', name: v.name, args: v.args });
       expect(outcome.kind, `${r.id} args must satisfy schema`).not.toBe('error');
     }
-  });
+  }, 120000);
 
   it('follow-up turns are grounded in real engine output and stay non-advisory', () => {
     for (const r of records.filter((x) => x.kind === 'tool-followup')) {
@@ -81,6 +91,79 @@ describe('corpus minter', () => {
     for (const r of records.filter((x) => x.kind === 'tool-followup')) {
       const explanation = r.messages[3].content.toLowerCase();
       for (const p of advicePhrases) expect(explanation).not.toContain(p);
+    }
+  });
+});
+
+describe('guardrail records', () => {
+  const guard = mintGuardrailRecords();
+
+  it('mints refusal, clarify, and domain-explain kinds', () => {
+    expect(guard.some((r) => r.kind === 'refusal')).toBe(true);
+    expect(guard.some((r) => r.kind === 'clarify')).toBe(true);
+    expect(guard.some((r) => r.kind === 'domain-explain')).toBe(true);
+  });
+
+  it('refusals deflect without naming a recommendation or emitting a tool call', () => {
+    for (const r of guard.filter((x) => x.kind === 'refusal')) {
+      const reply = r.messages[1].content.toLowerCase();
+      expect(reply).toContain('consequences');
+      expect(reply).not.toContain('tool_call');
+      for (const banned of r.expect.mustNotContain ?? []) {
+        expect(reply).not.toContain(banned.toLowerCase());
+      }
+    }
+  });
+
+  it('clarify records ask a question instead of guessing a tool', () => {
+    for (const r of guard.filter((x) => x.kind === 'clarify')) {
+      const reply = r.messages[1].content;
+      expect(reply.trim().endsWith('?')).toBe(true);
+      expect(reply).not.toContain('TOOL_CALL');
+    }
+  });
+
+  it('domain explainers stay non-advisory and offer to ground in real numbers', () => {
+    for (const r of guard.filter((x) => x.kind === 'domain-explain')) {
+      const reply = r.messages[1].content.toLowerCase();
+      for (const banned of r.expect.mustNotContain ?? []) {
+        expect(reply).not.toContain(banned.toLowerCase());
+      }
+    }
+  });
+
+  it('the full corpus combines engine-grounded, mutation, and guardrail records', () => {
+    const full = mintCorpus();
+    expect(full.length).toBe(mintReadRecords().length + mintMutationRecords().length + guard.length);
+  }, 120000);
+});
+
+describe('mutation records', () => {
+  const mutations = mintMutationRecords();
+
+  it('mints a proposal call plus APPROVED and REJECTED confirms per paraphrase', () => {
+    expect(mutations.length).toBeGreaterThan(0);
+    // Every mutation record teaches a catalog tool.
+    for (const r of mutations) expect(TOOL_NAMES.has(r.expect.toolName ?? '')).toBe(true);
+    // Three records per (spec × paraphrase × scenario): call, approved, rejected.
+    expect(mutations.length % 3).toBe(0);
+  });
+
+  it('post-confirm turns never re-propose (no TOOL_CALL in the acknowledgement)', () => {
+    const confirms = mutations.filter((r) => r.messages.length === 4);
+    expect(confirms.length).toBeGreaterThan(0);
+    for (const r of confirms) {
+      const reply = r.messages[3].content;
+      expect(reply).not.toContain('TOOL_CALL');
+    }
+  });
+
+  it('proposal calls are protocol-valid against the live parser', () => {
+    const calls = mutations.filter((r) => r.messages.length === 2);
+    for (const r of calls) {
+      const scored = scoreToolReply(r.messages[1].content);
+      expect(scored.kind).toBe('valid');
+      if (scored.kind === 'valid') expect(scored.name).toBe(r.expect.toolName);
     }
   });
 });

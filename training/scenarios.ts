@@ -68,6 +68,84 @@ export const SCENARIOS: NamedScenario[] = [
     cppStartAge: 65, cppMonthlyAmount: 1300, oasStartAge: 65, oasYearsInCanada: 40,
     desiredSpending: 90000, provinceCode: 'AB',
   }),
+  // --- extended sweep: more provinces, ages, account mixes, benefit timings ---
+  s('ns-modest', 'Nova Scotia modest', {
+    currentAge: 63, retirementAge: 65, maxAge: 92,
+    rrspBalance: 180000, tfsaBalance: 70000, taxableBalance: 10000,
+    cppStartAge: 65, cppMonthlyAmount: 900, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 42000, provinceCode: 'NS',
+  }),
+  s('sk-late-cpp', 'Saskatchewan late CPP', {
+    currentAge: 66, retirementAge: 66, maxAge: 95,
+    rrspBalance: 420000, tfsaBalance: 110000, taxableBalance: 0,
+    cppStartAge: 70, cppMonthlyAmount: 1200, oasStartAge: 70, oasYearsInCanada: 40,
+    desiredSpending: 60000, provinceCode: 'SK',
+  }),
+  s('nb-early-cpp', 'New Brunswick early CPP', {
+    currentAge: 60, retirementAge: 62, maxAge: 90,
+    rrspBalance: 220000, tfsaBalance: 40000, taxableBalance: 30000,
+    cppStartAge: 60, cppMonthlyAmount: 750, oasStartAge: 65, oasYearsInCanada: 35,
+    desiredSpending: 44000, provinceCode: 'NB',
+  }),
+  s('pei-lean', 'PEI lean plan', {
+    currentAge: 65, retirementAge: 65, maxAge: 92,
+    rrspBalance: 90000, tfsaBalance: 55000, taxableBalance: 0,
+    cppStartAge: 65, cppMonthlyAmount: 650, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 32000, provinceCode: 'PEI',
+  }),
+  s('nl-taxable-heavy', 'Newfoundland taxable-heavy', {
+    currentAge: 58, retirementAge: 63, maxAge: 95,
+    rrspBalance: 150000, tfsaBalance: 60000, taxableBalance: 300000,
+    cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 66000, provinceCode: 'NL',
+  }),
+  s('yt-north', 'Yukon northern', {
+    currentAge: 60, retirementAge: 65, maxAge: 95,
+    rrspBalance: 280000, tfsaBalance: 85000, taxableBalance: 20000,
+    cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 54000, provinceCode: 'YT',
+  }),
+  s('nt-north', 'NWT northern', {
+    currentAge: 61, retirementAge: 65, maxAge: 95,
+    rrspBalance: 260000, tfsaBalance: 75000, taxableBalance: 15000,
+    cppStartAge: 65, cppMonthlyAmount: 980, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 52000, provinceCode: 'NT',
+  }),
+  s('nu-north', 'Nunavut northern', {
+    currentAge: 62, retirementAge: 65, maxAge: 95,
+    rrspBalance: 240000, tfsaBalance: 70000, taxableBalance: 10000,
+    cppStartAge: 65, cppMonthlyAmount: 950, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 50000, provinceCode: 'NU',
+  }),
+  s('mb-cash-cushion', 'Manitoba cash cushion', {
+    currentAge: 64, retirementAge: 65, maxAge: 95,
+    rrspBalance: 320000, tfsaBalance: 90000, taxableBalance: 40000, cashCushionBalance: 60000,
+    cppStartAge: 65, cppMonthlyAmount: 1050, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 56000, provinceCode: 'MB',
+  }),
+  s('bc-delay-oas', 'BC delayed OAS', {
+    currentAge: 65, retirementAge: 66, maxAge: 95,
+    rrspBalance: 380000, tfsaBalance: 120000, taxableBalance: 50000,
+    cppStartAge: 66, cppMonthlyAmount: 1100, oasStartAge: 68, oasYearsInCanada: 40,
+    desiredSpending: 62000, provinceCode: 'BC',
+  }),
+  s('on-employment', 'Ontario part-time work', {
+    currentAge: 60, retirementAge: 65, maxAge: 95,
+    rrspBalance: 300000, tfsaBalance: 100000, taxableBalance: 30000,
+    cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 55000, provinceCode: 'ONT',
+    income: [{
+      id: 'pt1', label: 'Part-time consulting', kind: 'employment',
+      annualAmount: 15000, startAge: 65, endAge: 70, indexedToCpi: false,
+    }],
+  }),
+  s('qc-high-spend', 'Quebec high spender', {
+    currentAge: 55, retirementAge: 60, maxAge: 95,
+    rrspBalance: 600000, tfsaBalance: 150000, taxableBalance: 200000,
+    rrspContribution: 25000, tfsaContribution: 7000,
+    cppStartAge: 65, cppMonthlyAmount: 1250, oasStartAge: 65, oasYearsInCanada: 40,
+    desiredSpending: 100000, provinceCode: 'QC',
+  }),
 ];
 
 /** Scenario used for exemplars that need a guaranteed shortfall to explain. */

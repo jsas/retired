@@ -12,12 +12,12 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mintReadRecords, toJsonl } from './mint';
+import { mintCorpus, toJsonl } from './mint';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = join(here, 'data');
 
-const records = mintReadRecords();
+const records = mintCorpus();
 const train = records.filter((r) => r.split === 'train');
 const evals = records.filter((r) => r.split === 'eval');
 
@@ -35,14 +35,15 @@ writeFileSync(join(outDir, 'corpus.eval.jsonl'), evalJsonl);
 const hash = createHash('sha256').update(evalJsonl).digest('hex').slice(0, 16);
 writeFileSync(join(outDir, 'corpus.eval.sha256'), `${hash}  corpus.eval.jsonl\n`);
 
+const byKind = new Map<string, number>();
 const byTool = new Map<string, number>();
 for (const r of records) {
-  const t = r.expect.toolName ?? '(none)';
-  byTool.set(t, (byTool.get(t) ?? 0) + 1);
+  byKind.set(r.kind, (byKind.get(r.kind) ?? 0) + 1);
+  if (r.expect.toolName) byTool.set(r.expect.toolName, (byTool.get(r.expect.toolName) ?? 0) + 1);
 }
 console.error(`minted ${records.length} records (${train.length} train / ${evals.length} eval)`);
 console.error(`eval sha256: ${hash}`);
-console.error('records per tool:');
-for (const [tool, n] of [...byTool.entries()].sort()) {
-  console.error(`  ${tool}: ${n}`);
-}
+console.error('records per kind:');
+for (const [kind, n] of [...byKind.entries()].sort()) console.error(`  ${kind}: ${n}`);
+console.error('records per tool (engine-grounded):');
+for (const [tool, n] of [...byTool.entries()].sort()) console.error(`  ${tool}: ${n}`);
