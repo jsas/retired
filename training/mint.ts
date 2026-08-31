@@ -493,10 +493,20 @@ const OPTION_ASKS: Array<(sc: NamedScenario) => string> = [
   () => 'How could I spend more without running out?',
 ];
 
+/** The hand-the-choice-back closers, rotated so the model doesn't parrot one
+ *  sentence. All frame the trade-off and return the decision to the user —
+ *  the option-framing register, varied. */
+const OPTION_CLOSERS = [
+  'Which of those is worth trading off depends on what you value — I can run any of them side by side on your numbers so you can see the consequences, but the choice is yours.',
+  'Which lever to pull is your call — I can run any of them on your numbers so you see exactly what each one does before you decide.',
+  'Each of those trades something off — I can put them side by side on your plan so the consequences are concrete, and then it\'s up to you.',
+  'There\'s no single right answer here — it depends on what you value most. I can model whichever of these you want to see on your actual numbers.',
+];
+
 /** Turn a real run_strategies result into the option-framing reply: name the
  *  top levers + their numbers, framed as "here's what moves the needle and by
  *  how much", with an explicit "your call" close — never "you should". */
-function frameOptions(resultText: string): string {
+function frameOptions(resultText: string, closerIndex = 0): string {
   const lines = resultText.split('\n').map((l) => l.trim()).filter(Boolean);
   const baseline = lines.find((l) => l.startsWith('CURRENT plan')) ?? '';
   // Pull up to two strategy rows (the "$x/yr (+$y vs current)" lines) as the
@@ -508,7 +518,7 @@ function frameOptions(resultText: string): string {
   return [
     `Every plan has a few levers that move the needle — benefit timing, withdrawal order, how much you draw, and (if it applies) a pension or your home. ${baseline}`,
     options,
-    'Which of those is worth trading off depends on what you value — I can run any of them side by side on your numbers so you can see the consequences, but the choice is yours.',
+    OPTION_CLOSERS[closerIndex % OPTION_CLOSERS.length],
   ].filter(Boolean).join('\n');
 }
 
@@ -539,7 +549,7 @@ export function mintOptionFramingRecords(evalEvery = 5): CorpusRecord[] {
           { role: 'user', content: question },
           { role: 'assistant', content: emitToolCall('run_strategies', args) },
           { role: 'user', content: wrapToolResult(resultText) },
-          { role: 'assistant', content: frameOptions(resultText) },
+          { role: 'assistant', content: frameOptions(resultText, seq) },
         ],
         expect: {
           toolName: 'run_strategies',

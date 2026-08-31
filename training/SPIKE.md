@@ -118,7 +118,7 @@ emitter/scorer wired to the live app. Record kinds:
 | `clarify` | ambiguous ask → ask a question, don't guess a tool | ~6% |
 | `domain-explain` | projection digest → plain-words explanation (no tool needed) | ~6% |
 | `option-framing` | "what can I optimize?" → `run_strategies` + survey the levers with real deltas, frame the trade-off, hand the choice back | ~9% |
-| `domain-knowledge` | Canadian tax/benefit/market-history fact, answered from the app's OWN shipped tables + offer to ground in the user's numbers | ~1% |
+| `domain-knowledge` | Canadian tax/benefit/market-history fact in three shapes — canonical recall, paraphrase, and per-scenario applied (real household numbers) — answered from the app's OWN shipped tables + offer to ground | ~2% |
 
 \* target mix, tuned after the first eval. **Every tool gets ≥1 tool-call and
 ≥1 follow-up exemplar; every mutation tool gets both an APPROVED and a REJECTED

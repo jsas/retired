@@ -192,8 +192,8 @@ describe('option-framing records', () => {
       for (const banned of ['you should', 'i recommend', 'the best option', 'you ought to']) {
         expect(reply).not.toContain(banned);
       }
-      // And it hands the choice back to the user.
-      expect(reply).toMatch(/choice is yours|your call|depends on what you value/);
+      // And it hands the choice back to the user (any of the rotated closers).
+      expect(reply).toMatch(/choice is yours|your call|depends on what you value|up to you|no single right answer/);
     }
   }, 120000);
 });

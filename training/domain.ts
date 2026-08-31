@@ -19,8 +19,9 @@
 
 import { DEFAULT_APP_CONFIG } from '../src/lib/appConfig';
 import { HISTORICAL_REAL_RETURNS } from '../src/lib/historicalReturns';
+import type { RetirementInputs } from '../src/lib/retirementEngine';
 import type { CorpusRecord } from './buildCorpus';
-import { SCENARIOS } from './scenarios';
+import { SCENARIOS, type NamedScenario } from './scenarios';
 
 const cfg = DEFAULT_APP_CONFIG;
 
@@ -32,9 +33,18 @@ const cfg = DEFAULT_APP_CONFIG;
 
 interface FactSpec {
   id: string;
+  /** The canonical phrasing (kept for backward-compat with the eval). */
   ask: string;
-  /** Build the answer from live config — never a hardcoded number. */
+  /** Extra natural phrasings of the same question — teaches recall, not echo. */
+  phrasings?: string[];
+  /** Scenario ids this fact has an "applied" variant for (real household numbers). */
+  appliedTo?: string[];
+  /** Build the general answer from live config — never a hardcoded number. */
   answer: () => string;
+  /** Build the applied answer against a specific scenario's real numbers. */
+  appliedAnswer?: (inputs: RetirementInputs, s: NamedScenario) => string;
+  /** Optional applied-variant question (defaults to the canonical ask). */
+  appliedAsk?: (s: NamedScenario) => string;
   /** Phrases the answer must contain (graded by the eval gate). */
   mustContain: string[];
 }
@@ -44,11 +54,27 @@ const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 const OFFER = 'I can run this on your own plan so you see what it does to your numbers.';
 
+// Register rotation: the SAME closing sentence every time teaches parroting, so
+// the offer-to-ground is drawn from a varied set. All still route back to the
+// tools ("your plan/numbers") and none advises — the register, varied.
+const CLOSERS = [
+  OFFER,
+  'If you want, I can run this on your plan and show you the actual numbers.',
+  'Want me to apply this to your situation? I can run the numbers.',
+  'I can model this on your plan so you see the dollar effect.',
+  'Happy to run this against your own figures so it\'s concrete.',
+];
+
 const FACTS: FactSpec[] = [
   // ---- CPP timing -------------------------------------------------------
   {
     id: 'cpp-timing',
     ask: 'How does CPP timing work? What changes if I take it early or late?',
+    phrasings: [
+      'When should I start my CPP?',
+      'What\'s the penalty for taking CPP early?',
+      'Explain how the age I take CPP affects the amount.',
+    ],
     answer: () => {
       const c = cfg.cpp;
       const earlyTotal = (c.standardAge - c.earliestAge) * 12 * c.earlyPenaltyPerMonth;
@@ -60,6 +86,10 @@ const FACTS: FactSpec[] = [
   {
     id: 'cpp-early',
     ask: 'Is it ever worth taking CPP at 60?',
+    phrasings: [
+      'Should I take CPP as soon as I can at 60?',
+      'What do I lose by taking CPP at 60?',
+    ],
     answer: () => {
       const c = cfg.cpp;
       const cut = (c.standardAge - c.earliestAge) * 12 * c.earlyPenaltyPerMonth;
@@ -70,6 +100,10 @@ const FACTS: FactSpec[] = [
   {
     id: 'cpp-defer-70',
     ask: 'What do I gain by delaying CPP to 70?',
+    phrasings: [
+      'How much bigger is CPP if I wait until 70?',
+      'Why do people say to delay CPP to 70?',
+    ],
     answer: () => {
       const c = cfg.cpp;
       const bonus = (c.maxDeferralAge - c.standardAge) * 12 * c.deferralBonusPerMonth;
@@ -81,6 +115,10 @@ const FACTS: FactSpec[] = [
   {
     id: 'oas-basics',
     ask: 'How much is OAS, and what does delaying it do?',
+    phrasings: [
+      'When can I start OAS and how much is it?',
+      'Is it worth delaying OAS past 65?',
+    ],
     answer: () => {
       const o = cfg.oas;
       const maxBonus = (o.maxDeferralAge - o.eligibleAge) * 12 * o.deferralBonusPerMonth;
@@ -92,9 +130,19 @@ const FACTS: FactSpec[] = [
   {
     id: 'oas-clawback',
     ask: 'What is the OAS clawback?',
+    phrasings: [
+      'Will my OAS be clawed back?',
+      'At what income does OAS start getting reduced?',
+    ],
+    appliedTo: ['ab-high-earner'],
+    appliedAsk: () => 'I earn a lot — is my OAS at risk of clawback?',
     answer: () => {
       const o = cfg.oas;
       return `If your net income goes over ${money0(o.clawbackThreshold)} (2026), OAS is recovered at ${pct(o.clawbackRate)} of the excess — the "clawback." Big RRSP/RRIF withdrawals or a large taxable gain in one year can push you over it, which is why the timing and order of withdrawals matters. ${OFFER}`;
+    },
+    appliedAnswer: (inputs) => {
+      const o = cfg.oas;
+      return `With ${money0(inputs.rrspBalance ?? 0)} in RRSP and a target spend of ${money0(inputs.desiredSpending ?? 0)}/yr, your taxable income in retirement could approach or exceed the ${money0(o.clawbackThreshold)} OAS clawback threshold (2026) — especially once RRIF minimums start. Above that line OAS is recovered at ${pct(o.clawbackRate)} of the excess, so a large RRSP withdrawal doesn't just get taxed, it also erodes your OAS. Spreading withdrawals or leaning on your TFSA (${money0(inputs.tfsaBalance ?? 0)}) can keep you under the threshold in more years. ${OFFER}`;
     },
     mustContain: ['clawback', 'income', 'OAS'],
   },
@@ -102,9 +150,20 @@ const FACTS: FactSpec[] = [
   {
     id: 'gis',
     ask: 'What is GIS and how is it reduced?',
+    phrasings: [
+      'Do I qualify for the Guaranteed Income Supplement?',
+      'How does extra income affect my GIS?',
+    ],
+    appliedTo: ['gis-sensitive'],
+    appliedAsk: () => 'My income is low — will I get GIS, and what reduces it?',
     answer: () => {
       const o = cfg.oas;
       return `The Guaranteed Income Supplement (GIS) tops up low-income OAS pensioners — up to about ${money0(o.gisMaxAnnualSingle)}/yr for a single person (2026). It's reduced by roughly ${pct(o.gisReductionRate)} per dollar of income *excluding* OAS itself, so extra RRSP/RRIF withdrawals can wipe it out dollar-for-dollar. ${OFFER}`;
+    },
+    appliedAnswer: (inputs) => {
+      const o = cfg.oas;
+      const cpp = (inputs.cppMonthlyAmount ?? 0) * 12;
+      return `With your savings (${money0(inputs.rrspBalance ?? 0)} RRSP, ${money0(inputs.tfsaBalance ?? 0)} TFSA) and CPP of about ${money0(cpp)}/yr, GIS is very relevant to you: it can add up to about ${money0(o.gisMaxAnnualSingle)}/yr for a single OAS pensioner (2026). The catch is it's reduced by about ${pct(o.gisReductionRate)} per dollar of income *excluding* OAS — so your CPP and any RRSP withdrawal cut it, while a TFSA withdrawal does not. For someone in your position the drawdown order directly changes how much GIS you keep. ${OFFER}`;
     },
     mustContain: ['GIS', 'OAS', 'reduced'],
   },
@@ -112,6 +171,10 @@ const FACTS: FactSpec[] = [
   {
     id: 'rrif',
     ask: 'When do I have to convert my RRSP to a RRIF, and what are the minimum withdrawals?',
+    phrasings: [
+      'What are RRIF minimum withdrawals?',
+      'Do I have to take money out of my RRIF every year?',
+    ],
     answer: () => {
       const age = cfg.engine.rrifConversionAge;
       const r71 = cfg.rrifRates['71'] ?? 0;
@@ -124,6 +187,10 @@ const FACTS: FactSpec[] = [
   {
     id: 'accounts',
     ask: 'What\'s the difference between an RRSP, a TFSA, and a taxable account?',
+    phrasings: [
+      'Should I save in an RRSP or a TFSA?',
+      'How is a taxable account different from registered accounts?',
+    ],
     answer: () =>
       `An RRSP defers tax: contributions are deductible, growth is sheltered, and withdrawals are fully taxed as income (that's why the drawdown order matters). A TFSA is the reverse: after-tax in, but growth and withdrawals are tax-free. A taxable (non-registered) account has no shelter — interest, dividends, and realized gains are taxed each year, with only ${pct(cfg.engine.capitalGainsInclusion)} of a capital gain counted as income. ${OFFER}`,
     mustContain: ['RRSP', 'TFSA', 'tax'],
@@ -176,17 +243,40 @@ const FACTS: FactSpec[] = [
   {
     id: 'pension-splitting',
     ask: 'Can pension income be split between spouses?',
+    phrasings: [
+      'How does income splitting work for retirees?',
+      'Can my spouse and I share pension income to save tax?',
+    ],
+    appliedTo: ['couple-ont'],
+    appliedAsk: () => 'We\'re a couple — can we split our pension income?',
     answer: () =>
       `Yes — up to ${pct(cfg.engine.pensionSplitMaxRate)} of eligible pension income can be split with a spouse, which can lower the household's total tax by moving income into the lower-earner's brackets. For couples the engine models both people's CPP/OAS and pensions together, so it can show the household effect. ${OFFER}`,
+    appliedAnswer: (inputs) => {
+      const sp = inputs.spouse;
+      const yourCpp = (inputs.cppMonthlyAmount ?? 0) * 12;
+      const spCpp = (sp?.cppMonthlyAmount ?? 0) * 12;
+      return `Yes. Since you're planning as a couple, up to ${pct(cfg.engine.pensionSplitMaxRate)} of eligible pension income can be shifted to the lower-income spouse. Between your CPP (about ${money0(yourCpp)}/yr) and your spouse's (${money0(spCpp)}/yr), plus your larger RRSP (${money0(inputs.rrspBalance ?? 0)} vs ${money0(sp?.rrspBalance ?? 0)}), the higher earner's RRIF withdrawals are the natural thing to split — moving income into the lower bracket can cut the household's combined tax. The engine models both of you together, so it can show that effect directly. ${OFFER}`;
+    },
     mustContain: ['split', 'spouse', 'tax'],
   },
   // ---- RDSP --------------------------------------------------------------
   {
     id: 'rdsp',
     ask: 'How does an RDSP work?',
+    phrasings: [
+      'What grants and bonds come with an RDSP?',
+      'Is an RDSP worth it for my family member with a disability?',
+    ],
+    appliedTo: ['rdsp-family'],
+    appliedAsk: () => 'We have an RDSP for a family member — how do the grants work for us?',
     answer: () => {
       const r = cfg.rdsp;
       return `A Registered Disability Savings Plan (RDSP) is tax-sheltered and boosted by federal grants and bonds. The Canada Disability Savings Grant can add up to ${money0(r.grantAnnualMax)}/yr (lifetime ${money0(r.grantLifetimeMax)}) depending on family income, and lower-income beneficiaries can get a bond of up to ${money0(r.bondAnnualMax)}/yr with no contribution needed. Grants and bonds stop at age ${r.grantEndAge}, contributions at ${r.contributionEndAge}. Only the contribution principal comes back tax-free — grant, bond, and growth are taxable on withdrawal. ${OFFER}`;
+    },
+    appliedAnswer: (inputs) => {
+      const r = cfg.rdsp;
+      const d = inputs.rdsp;
+      return `With your RDSP (balance ${money0(d?.balance ?? 0)}, contributing ${money0(d?.contribution ?? 0)}/yr, family income ${money0(d?.familyIncome ?? 0)}), the federal top-ups are the key lever: the grant can add up to ${money0(r.grantAnnualMax)}/yr depending on income, and at your income level a bond of up to ${money0(r.bondAnnualMax)}/yr may apply even without contributions. Grants and bonds stop at age ${r.grantEndAge}, so the contributing years matter. On withdrawal, only your contribution principal is tax-free — grant, bond, and growth are taxable. ${OFFER}`;
     },
     mustContain: ['RDSP', 'grant', 'bond'],
   },
@@ -194,8 +284,19 @@ const FACTS: FactSpec[] = [
   {
     id: 'withdrawal-order',
     ask: 'Does it matter which account I draw from first?',
+    phrasings: [
+      'What\'s the best order to withdraw from my accounts?',
+      'RRSP or TFSA first in retirement — does it matter?',
+    ],
+    appliedTo: ['rrsp-heavy'],
+    appliedAsk: () => 'Most of my money is in my RRSP — what order should I draw down?',
     answer: () =>
       `A lot. RRSP/RRIF withdrawals are fully taxed as income (100% counts), TFSA withdrawals are tax-free (0% counts), and taxable-account capital gains are only ${pct(cfg.engine.capitalGainsInclusion)} taxed. So drawing RRSP first can spike your marginal rate and trigger OAS/GIS clawback, while drawing TFSA or taxable first can keep taxable income low early. There's no single right order — it depends on your balances and benefits — but the order alone can change lifetime tax by thousands. I can run your plan under different withdrawal orders to show the difference.`,
+    appliedAnswer: (inputs) => {
+      const total = (inputs.rrspBalance ?? 0) + (inputs.tfsaBalance ?? 0) + (inputs.taxableBalance ?? 0);
+      const rrspShare = total > 0 ? (inputs.rrspBalance ?? 0) / total : 0;
+      return `With ${money0(inputs.rrspBalance ?? 0)} in RRSP against only ${money0((inputs.tfsaBalance ?? 0) + (inputs.taxableBalance ?? 0))} outside it (${pct(rrspShare)} of your savings in the fully-taxed bucket), the drawdown order is a real lever for you. RRSP/RRIF withdrawals are 100% taxable, TFSA is 0%, and taxable gains are only ${pct(cfg.engine.capitalGainsInclusion)} counted — so a big RRSP draw can spike your marginal rate and trigger OAS/GIS clawback, while drawing the other accounts first can keep taxable income low early. There's no single right order, but I can run your plan under different orders to show the lifetime-tax difference.`;
+    },
     mustContain: ['RRSP', 'TFSA', 'tax'],
   },
   // ---- GIS for couples ----------------------------------------------------
@@ -210,6 +311,10 @@ const FACTS: FactSpec[] = [
   {
     id: 'sequence-risk',
     ask: 'Why does the order of good and bad market years matter?',
+    phrasings: [
+      'What is sequence-of-returns risk?',
+      'Why is a market crash early in retirement so damaging?',
+    ],
     answer: () => {
       const { returns, startYear } = HISTORICAL_REAL_RETURNS;
       const min = Math.min(...returns);
@@ -257,32 +362,73 @@ const FACTS: FactSpec[] = [
   {
     id: 'reverse-mortgage',
     ask: 'How does a reverse mortgage fit into a retirement plan?',
+    phrasings: [
+      'Can I use my home equity to fund retirement without selling?',
+      'What are the downsides of a reverse mortgage?',
+    ],
+    appliedTo: ['reverse-mortgage'],
+    appliedAsk: () => 'I\'m house-rich but cash-poor — would a reverse mortgage help me?',
     answer: () =>
       `A reverse mortgage lets a homeowner (55+) borrow against home equity without selling — no required payments, with interest compounding into the loan, and the balance capped (typically at 55% loan-to-value) so you can't owe more than the home is worth (the no-negative-equity guarantee). It can fund spending for someone house-rich but cash-poor, at the cost of reducing the estate. It's a real lever but a significant one — I can model what it would do to your plan before you consider it.`,
+    appliedAnswer: (inputs) => {
+      const rm = inputs.reverseMortgage;
+      return `In your situation — a home worth ${money0(rm?.homeValue ?? 0)} but modest savings (${money0((inputs.rrspBalance ?? 0) + (inputs.tfsaBalance ?? 0) + (inputs.taxableBalance ?? 0))}) — a reverse mortgage is exactly the lever designed for this: drawing ${money0(rm?.drawAmount ?? 0)}/yr from age ${rm?.startAge ?? 0} against the equity, with no required payments while interest compounds at ${pct(rm?.interestRate ?? 0)}. The balance is capped so you can't owe more than the home is worth, but it does reduce what's left in the estate. I can model the actual draw and the remaining equity on your plan. ${OFFER}`;
+    },
     mustContain: ['reverse mortgage', 'home', 'equity'],
   },
 ];
 
-/** Mint domain-knowledge fact-recall records. These have no scenario and no
- *  tool call — they teach the model the *concepts*, always closing with an
- *  offer to ground the rule in the user's own numbers (so fluency routes back
- *  to the tools instead of free-standing advice). */
+/** Mint domain-knowledge records in THREE shapes so the model learns the
+ *  *concept*, not one phrasing:
+ *    - fact recall:    the canonical question → grounded general answer
+ *    - paraphrase:     the same fact asked differently (teaches recall, not echo)
+ *    - applied:        the fact stated against a scenario's REAL numbers (teaches
+ *                      the model to read a person, not just recite a rule)
+ *  All close by offering to ground the rule in the user's own numbers — the
+ *  offer is rotated across CLOSERS so the model doesn't parrot one sentence. */
 export function mintDomainKnowledgeRecords(): CorpusRecord[] {
-  return FACTS.map((f, i) => {
-    const answer = f.answer();
-    return {
-      id: `domain-knowledge:${f.id}:${i}`,
+  const records: CorpusRecord[] = [];
+  let i = 0;
+
+  const push = (fact: FactSpec, variant: string, ask: string, answer: string, scenarioId: string) => {
+    records.push({
+      id: `domain-knowledge:${fact.id}:${variant}:${i}`,
       split: (i % 5 === 4 ? 'eval' : 'train') as 'eval' | 'train',
       kind: 'domain-knowledge' as const,
-      scenarioId: 'any',
+      scenarioId,
       messages: [
-        { role: 'user' as const, content: f.ask },
+        { role: 'user' as const, content: ask },
         { role: 'assistant' as const, content: answer },
       ],
       expect: {
-        mustContain: f.mustContain,
+        mustContain: fact.mustContain,
         mustNotContain: ['you should', 'i recommend', 'the best choice is', 'you ought to', 'TOOL_CALL'],
       },
-    };
-  });
+    });
+    i++;
+  };
+
+  const scenarioById = new Map(SCENARIOS.map((s) => [s.id, s]));
+
+  for (const fact of FACTS) {
+    const closer = CLOSERS[i % CLOSERS.length];
+    // 1. Canonical fact recall.
+    push(fact, 'recall', fact.ask, `${fact.answer()}`, 'any');
+    // 2. Paraphrases — same answer, different ask (the closer rotates so even a
+    //    repeated answer ends differently).
+    for (const phrasing of fact.phrasings ?? []) {
+      const rotated = CLOSERS[i % CLOSERS.length];
+      const base = fact.answer().replace(OFFER, rotated);
+      push(fact, 'paraphrase', phrasing, base.includes(rotated) ? base : `${base} ${rotated}`, 'any');
+    }
+    // 3. Applied — the fact against a scenario's real numbers.
+    for (const scenarioId of fact.appliedTo ?? []) {
+      const scenario = scenarioById.get(scenarioId);
+      if (!scenario || !fact.appliedAnswer) continue;
+      const appliedCloser = CLOSERS[i % CLOSERS.length];
+      push(fact, 'applied', fact.appliedAsk?.(scenario) ?? fact.ask, fact.appliedAnswer(scenario.inputs, scenario), scenario.id);
+      void appliedCloser;
+    }
+  }
+  return records;
 }
