@@ -3,9 +3,10 @@
 > **Companion docs:** [USAGE.md](./USAGE.md) — operator's guide (generate, test,
 > bake off, score). [METHODOLOGY.md](./METHODOLOGY.md) — how the input data +
 > training method make the model understand a person, lay out their options,
-> and stay in the calculator-not-planner lane. [UPDATING.md](./UPDATING.md) —
-> the repeatable loop for re-grounding the corpus + retraining when `main`
-> lands a feature.
+> and stay in the calculator-not-planner lane (incl. §4, the determinism-reward
+> contract: the engine's output is ground truth + reward, never answer text).
+> [UPDATING.md](./UPDATING.md) — the repeatable loop for re-grounding the corpus
+> + retraining when `main` lands a feature.
 
 Status: **scoping / pre-training.** This doc answers the two questions the spike
 opened with — *what can we train?* and *how do we do it?* — and lands the
@@ -422,7 +423,60 @@ phone browser.
 
 ---
 
-## 7. Four surfaces (only if it ships)
+## 7. Phase 2 — spending the determinism dividend harder
+
+The corpus + gate already exploit the deterministic engine for *supervision* and
+*grading*. Two upgrades spend that same determinism harder once the first SFT
+rung lands. Neither is required for the ship decision; both are documented here
+so they aren't tribal knowledge. The design rationale for both is METHODOLOGY §4.
+
+### 7a. Rejection sampling / best-of-n distillation (RLVR-lite)
+
+Pure SFT imitates vetted targets. Because the engine + protocol are
+deterministic, we can add a **selection** signal on top for free:
+
+1. Sample the bake-off winner `k` times per eval/train question (a few
+   temperature/settings per question).
+2. Keep only completions that pass the **protocol-validity check** (parseable ∧
+   in-catalog ∧ args-valid ∧ right tool) **and** — for follow-ups — convey the
+   **correct engine number** (the figure that actually appears in the `[OK]`
+   result).
+3. Mix those verified successes into the SFT set and retrain.
+
+The model then learns from **its own correct outputs**, not just hand-minted
+templates — a stronger, better-calibrated signal, and the exact on-ramp to a
+full RLVR pass where "protocol-valid + numerically faithful" *is* the reward
+function (no reward model, no human labels — the deterministic engine **is** the
+reward). The `runGate.ts` self-check tiers are already the per-completion
+predicate; this stage is a sampling + filtering loop around them.
+
+### 7b. Interaction-grading mode (the hard-half gate)
+
+The gate today grades the **call** (protocol-validity) and **single-result
+grounding** (did the follow-up quote the returned figure). The hard half of
+questions — timeline + interaction (METHODOLOGY §4) — need a third grading mode
+for the *interpretation of a comparison*:
+
+- For `compare_scenarios` / `run_strategies` records, the engine computes both
+  branches deterministically. Extend the follow-up grader to check that the
+  model's explanation matches the **sign and rough magnitude of the real computed
+  delta** (e.g. "delaying CPP raises sustainable spending" must agree with the
+  actual A/B numbers), not merely that it quoted *some* figure.
+- For timeline questions, grade whether the model pulled the **right slice**
+  (the year GIS cuts out, the year a debt pays off) via `get_schedule` and
+  reasoned over *those* years.
+- Crucially, grade **fidelity + neutrality, not optimality**: the fish is for
+  faithfully reporting the trade-off the engine computed with no advice verbs,
+  **never** for picking a winner. Grading interactions as right/wrong would
+  train advice-giving and cross the calculator-not-planner line.
+
+This is the natural next eval-gate extension after the first tuned checkpoint:
+it turns "did it call the tool" into "did it correctly interpret the interaction
+the engine revealed."
+
+---
+
+## 8. Four surfaces (only if it ships)
 
 - **Engine** — one new `WEBLLM_MODELS` entry. The app ships a single system
   prompt now (#108's reduced-persona tier never landed, and #127 removed the
@@ -438,7 +492,7 @@ phone browser.
 
 ---
 
-## 8. What this spike is NOT doing
+## 9. What this spike is NOT doing
 
 - Not training a model in-repo, not shipping weights, not hosting/proxying
   inference (ROADMAP non-goals — unchanged).

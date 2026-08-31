@@ -201,7 +201,113 @@ iterate until the *smallest* base clears the bar — that's the mobile thesis.
 
 ---
 
-## 4. The honesty contract (what keeps this from backfiring)
+## 4. The determinism-reward contract (the "gets it right → gets a fish" principle)
+
+The engine is deterministic and fully client-side, so every training question
+can be answered by running the real engine — the supervision is free *and*
+verifiable. That single fact shapes the whole method, and it cuts two ways that
+are easy to conflate. Keep them separate:
+
+### What the emergent data is FOR — ground truth and reward, not answer text
+
+Running the engine produces a full schedule of intermediate data (per-year
+balances, tax, GIS/clawback, debt drag, depletion age). That data is
+**load-bearing, but never as content the model is taught to generate.**
+
+- **Don't bake emergent numbers into the answers.** Training the model to emit a
+  depletion age or a final-tax figure is teaching it to *look up* memorized
+  outputs. The space of Canadian retirement inputs is astronomically larger than
+  any corpus, so on unseen inputs the model would interpolate and produce
+  **plausible-looking wrong numbers** — the exact failure the whole architecture
+  exists to prevent. This is why the corpus is built to make the emergent data
+  **opaque to the model at answer time**: it learns `question → TOOL_CALL → read
+  the wrapped result → explain`, never `question → number`.
+- **Do use the emergent numbers as the verifier.** The same deterministic run
+  that *must not* be the answer is exactly what lets us *grade* the answer
+  cheaply and exactly. This is the "gets it right → gets a fish" loop: because
+  the engine is deterministic, there is a single ground-truth number to check
+  against, so reward needs no reward model and no human labeling.
+
+So the emergent middle data flows into **grading and filtering**, never into
+model weights:
+
+| Use of the deterministic output | Role |
+|---|---|
+| The real `[OK]` result fed back in a follow-up record | ground truth the model must quote (§2b) |
+| The self-check gate (`runGate.ts` self-check) validating every minted call against the live Zod schemas | a minted call that's invalid fails loudly, not silently into training data |
+| The protocol-validity gate (parseable / in-catalog / args-valid / right tool) | a deterministic pass/fail — right = fish |
+| **Rejection sampling / best-of-n distillation** (phase-2, see SPIKE §9) | sample the base model k times per question, keep only completions that pass the protocol check *and* convey the correct engine number, mix those into SFT — the model learns from its **own verified successes**, not just templates |
+
+That last row is the natural upgrade this contract unlocks. Pure SFT imitates
+vetted targets; rejection sampling adds a *selection* signal on top, and the
+deterministic engine is what makes the selection cheap and exact. It's also the
+on-ramp to a true RLVR pass later, where "protocol-valid + numerically-faithful"
+*is* the reward function.
+
+### The easy half vs. the hard half
+
+"Right" decomposes into two regimes with very different risk profiles:
+
+- **Easy half — direct retrieval.** "What's my depletion age?" "How much tax at
+  70?" The model's job is pure *routing*: pick the right tool, fill valid args,
+  read back what the engine computed. It never *derives* — it *retrieves*. As
+  long as the engine is correct, the answer is correct by construction, and
+  grading is trivially checkable against one ground-truth number. The current
+  corpus + gate handles this regime well.
+- **Hard half — indirect / timeline / interaction questions.** "Take CPP at 60
+  but OAS at 70, spouse three years younger — when does money get tight?" "Does
+  drawing down the RRSP faster early cut the OAS clawback enough to offset the
+  extra tax?" These are **still deterministic**, but the right answer isn't one
+  tool call — it's a **trajectory**: run the baseline → run a variant → compare
+  → interpret the delta. The correctness unit shifts from "did you emit one
+  valid call" to "did you orchestrate the right sequence and interpret the
+  interaction faithfully."
+
+What that demands of the training:
+
+1. **The signal for interactions is a comparison, not a point.** Grading can
+   still be deterministic — the model proposes `compare_scenarios` /
+   `run_strategies` across two benefit timings, the engine computes both
+   branches, and "right" = it chose the comparison tool *and* its explanation
+   matches the **sign and rough magnitude of the real computed delta** (not just
+   protocol validity). The current gate grades the call and single-result
+   grounding; extending it to grade the *interpretation of an A/B delta* is the
+   concrete phase-2 addition.
+2. **Timeline reasoning leans on pulling the right slice.** A small model can't
+   hold a 30-year interacting schedule in its head. It must learn to pull the
+   specific years that matter — the year GIS cuts out, the year the RRIF minimum
+   spikes, the year a debt pays off — via `get_schedule` and reason over those.
+   So the reward targets *asking for the right slice*, not reciting a timeline.
+
+### The reward for the hard half grades fidelity + neutrality, not optimality
+
+A subtle trap in "as long as the model is right": for interaction questions
+there often **is no single right answer** — there's a trade-off to *surface*.
+"CPP early vs. late" has no correct answer; it has a correct *characterization*
+("early costs X% per month but bridges the gap until OAS; here's what that does
+to *your* depletion age"). Grading those as right/wrong would push the model
+toward picking a winner — which is advice, and crosses the
+calculator-not-planner line. So the fish for the hard half is for **faithfully
+and neutrally reporting the trade-off the engine computed**, never for
+recommending one. The reward is fidelity-to-simulation plus the no-advice-verbs
+constraint, together.
+
+### Everything hinges on the engine being correct
+
+Both halves inherit their correctness from the engine, because the engine is the
+source of every "fish." If the engine is wrong, the model learns the wrong thing
+**confidently**, and the reward signal rewards the wrong behavior. That is the
+load-bearing assumption, and it's why engine correctness is enforced *upstream*
+and independently of any model work: the engine's own suite plus
+`goldenMaster.test.ts` locks its numeric output so a change can't silently shift
+what every correct answer is (CLAUDE.md rule 2). The model layer is always
+graded against that golden-locked engine — never against numbers the model
+generated itself. **Protect the engine's determinism and its golden master above
+all; the whole training edifice stands on it.**
+
+---
+
+## 5. The honesty contract (what keeps this from backfiring)
 
 1. **Grounded, never generic.** Every quantitative claim in a target reply is a
    figure the real engine returned. The model learns "cite the number you were
@@ -217,7 +323,7 @@ iterate until the *smallest* base clears the bar — that's the mobile thesis.
 
 ---
 
-## 5. Known limits (be honest about what SFT won't fix)
+## 6. Known limits (be honest about what SFT won't fix)
 
 - **Domain fluency is the lower-certainty target.** Protocol format teaches
   reliably; nuanced Canadian-retirement prose does not, and risks "confidently
