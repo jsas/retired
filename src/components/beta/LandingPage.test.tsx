@@ -33,4 +33,12 @@ describe('LandingPage', () => {
     // the fast escape door
     expect(html).toContain('Skip to the dashboard');
   });
+
+  it('carries the §8.8 landing footer — legal, open-source, privacy', () => {
+    const html = renderLanding();
+    expect(html).toContain('not financial, tax, or investment advice');
+    expect(html).toContain('github.com/jsas/retired');
+    expect(html).toContain('#/help');
+    expect(html).toContain('never leaves this browser');
+  });
 });

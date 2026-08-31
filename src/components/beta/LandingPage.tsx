@@ -219,6 +219,22 @@ export function LandingPage({ config, onBuild, chip, assistant }: {
           </div>
         </div>
       )}
+
+      {/* the front door's footer (§8.8): legal + open-source + help, always visible */}
+      <footer className="mt-12 border-t border-slate-200 pt-4 text-[11px] leading-relaxed text-slate-400">
+        <p>
+          Educational modeling — not financial, tax, or investment advice. Rules are Canadian
+          tax &amp; benefit approximations.{' '}
+          <Link view="help" className="text-blue-700 hover:underline">Read the legal &amp; help docs →</Link>
+        </p>
+        <p className="mt-1.5">
+          Open source on{' '}
+          <a href="https://github.com/jsas/retired" target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">GitHub</a>
+          {' · '}
+          <Link view="donate" className="text-blue-700 hover:underline">Support this app</Link>
+          {' · '}No servers, no accounts — your data never leaves this browser.
+        </p>
+      </footer>
     </div>
     </BetaPage>
   );

@@ -72,13 +72,29 @@ tracking 0.16em) · caption 11. Small and tight — the number, not the chrome.
 
 ## The components
 
+Every component lives in `src/design/primitives.tsx` and renders live on the
+style-guide page (`#/styleguide`). To place a `?` hint, pass a topic id — never
+build the popup by hand: `Panel hint=`, `Fader help=`, `BetaPage hint=`, or a
+bare `<HelpHint topic="…" />` beside any label.
+
 - **`VerdictHero`** — the answer. Uppercase eyebrow, one sentence, one
   supporting line. Nothing else on the page competes with it.
+- **`Panel`** — the only container: hairline rule + uppercase label. `hint`
+  adds a `?` to the label.
 - **`Fader`** — the one slider. 24px hit strip, 4px hairline track, flat
-  square thumb. No fill to the left; position is the signal.
+  square thumb. No fill to the left; position is the signal. `help` adds a `?`.
 - **`Chip`** — a stateless status pill: square dot + plain words. Colour
   carries the verdict.
-- **`Panel`** — the only container: hairline rule + uppercase label.
+- **`Stat`** — one number with a label and a quiet note; verdict-toned value.
+- **`AccountBars`** — per-account proportional bars, the mix at a glance.
+- **`Legend`** — swatch + label rows explaining a chart's marks.
+- **`Dropdown`** — a flat hairline panel under a text button (Details ▾, Plans ▾).
+- **`HelpHint`** — the small square `?` at the end of a label. Tap (not hover)
+  opens a flat w-72 box with the topic's body — rendered from the single source
+  in `src/help/topics.tsx`, never re-typed — plus a "More in Help →" deep-link.
+  Esc / outside-tap / re-tap closes; `place="top"` flips it above.
+- **`Footnote`** — the quiet legal/privacy line at the very bottom, always visible.
+- **`AppHeader`** — the beta chrome: brand square, the named homes, the save control.
 
 ## What we never do
 
