@@ -76,6 +76,25 @@ export function takeHome(grossIncome: number, provinceCode: string, config: AppC
 }
 
 /**
+ * The CPP contribution a SELF-EMPLOYED person owes on their net self-employment
+ * earnings for the year. Unlike an employee (whose employer pays half and whose
+ * share comes off pay before tax), a self-employed person pays BOTH the employee
+ * and employer shares — selfEmployedRate × pensionable earnings (net earnings
+ * between the basic exemption and the YMPE). That whole contribution is a
+ * DEDUCTION from taxable income (CRA treats the employee half as a deduction and
+ * doesn't tax the employer half), so the engine subtracts it before taxing.
+ * Returns 0 when the rate is 0 or earnings are at/below the exemption.
+ */
+export function selfEmployedCppContribution(netSelfEmployment: number, config: AppConfig): number {
+  const rate = config.cpp.selfEmployedRate ?? 0;
+  if (rate <= 0 || netSelfEmployment <= 0) return 0;
+  const ympe = config.cpp.ympe ?? 0;
+  const exemption = config.cpp.basicExemption ?? 0;
+  const pensionable = Math.max(0, Math.min(netSelfEmployment, ympe) - exemption);
+  return pensionable * rate;
+}
+
+/**
  * Reverse: gross income required to produce a desired after-tax amount.
  * Binary search, same approach as the Ruby/JS engine.
  */

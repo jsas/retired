@@ -49,6 +49,28 @@ describe('TFSA room', () => {
     expect(closeTo(row.taxableBalance, 8000, 1)).toBe(true);
   });
 
+  it('reports remaining room at year end (roomRemaining), read by the schedule detail panel', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 60, retirementAge: 63, maxAge: 65,
+      tfsaBalance: 0, tfsaContribution: 0, taxableBalance: 0,
+      tfsaRoom: 5000, // 5000 start + 7000 accrued = 12000 available at 60
+      events: [{ id: 'a', age: 60, label: 'in', amount: 20000, direction: 'in', account: 'tfsa' }],
+    }), config);
+    // 12000 landed at 60 → all room consumed; year-end room is 0.
+    expect(yearAt(r.yearlyBreakdown, 60).detail?.roomRemaining?.tfsa).toBeCloseTo(0, 0);
+    // Age 61 refills by the 7000 limit (no deposit) → 7000 left.
+    expect(yearAt(r.yearlyBreakdown, 61).detail?.roomRemaining?.tfsa).toBeCloseTo(7000, 0);
+  });
+
+  it('omits roomRemaining for an untracked (unlimited) account', () => {
+    const r = calculateRetirement(baseInputs({
+      currentAge: 60, retirementAge: 62, maxAge: 64,
+      tfsaBalance: 0, tfsaContribution: 0, taxableBalance: 0,
+      tfsaRoom: null, rrspRoom: null,
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 60).detail?.roomRemaining).toBeUndefined();
+  });
+
   it('re-adds a TFSA withdrawal to room the FOLLOWING year (CRA rule)', () => {
     // Retired, drawing spending from the TFSA. Room starts at 0, so the year's
     // accrual is just the annual limit; the withdrawal re-adds next year.

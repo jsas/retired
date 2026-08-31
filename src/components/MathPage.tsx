@@ -236,6 +236,7 @@ function YearWorksheet({ row, inputs, isCouple }: {
         <Line label="Taxable growth" value={d.growth.taxable} />
         <Line label="Cash growth (cushion rate)" value={d.growth.cash} />
         {(d.growth.rdsp ?? 0) > 0.5 && <Line label="RDSP growth (tax-sheltered)" value={d.growth.rdsp ?? 0} />}
+        {(d.growth.fhsa ?? 0) > 0.5 && <Line label="FHSA growth (tax-sheltered)" value={d.growth.fhsa ?? 0} />}
         <Eq parts="market gains" result={row.marketGains} strong />
         <Eq parts="ending balance" result={row.endingBalance} strong />
       </Step>

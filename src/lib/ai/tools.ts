@@ -22,7 +22,7 @@ import { solveSustainableSpending } from '../spendingSolver';
 import { runMonteCarlo } from '../monteCarlo';
 import {
   retirementInputsSchema, spouseSchema, incomeSourceSchema,
-  cashEventSchema, reverseMortgageSchema, rdspSchema,
+  cashEventSchema, reverseMortgageSchema, rdspSchema, fhsaSchema,
 } from '../../data/schemas';
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
 import { MemoryStore } from '../memory/store';
@@ -80,14 +80,14 @@ const proposeSpouseArgs = z.object({
 const proposeIncomeArgs = incomeSourceSchema
   .omit({ id: true })
   .extend({ rationale: z.string().optional() })
-  .describe('An income source to add: kind "pension" for a DB/bridge pension (set endAge to a number for a bridge, null for lifetime), kind "employment" for semi-/post-retirement work.');
+  .describe('An income source to add. kind "pension" = DB/bridge pension (split-eligible; endAge a number for a bridge, null for lifetime; optional pensionAdjustment reduces RRSP room). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room like a job). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible).');
 
 const manageIncomeArgs = z.object({
   action: z.enum(['update', 'remove']),
   target: z.string().min(1)
     .describe('Which income source: its id, or its label if unique (e.g. "Work DB").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending). endAge must be a number or explicit null.'),
+    .describe('For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending, savingsRate, pensionAdjustment). endAge must be a number or explicit null. savingsRate (0–1) is the share of after-tax pay saved; pensionAdjustment is a DB pension\'s annual RRSP-room offset.'),
   rationale: z.string().optional(),
 });
 
@@ -111,6 +111,12 @@ const proposeReverseMortgageArgs = z.object({
 const proposeRdspArgs = z.object({
   changes: rdspSchema.partial()
     .describe('RDSP fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, familyIncome, dtcEligible), {"enabled":false} to turn it off.'),
+  rationale: z.string().optional(),
+});
+
+const proposeFhsaArgs = z.object({
+  changes: fhsaSchema.partial()
+    .describe('FHSA fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, contributionBasis, openAge), {"enabled":false} to turn it off.'),
   rationale: z.string().optional(),
 });
 
@@ -214,6 +220,7 @@ const TOOL_SCHEMAS = {
   propose_cash_event: proposeCashEventArgs,
   propose_reverse_mortgage: proposeReverseMortgageArgs,
   propose_rdsp: proposeRdspArgs,
+  propose_fhsa: proposeFhsaArgs,
   propose_revert: proposeRevertArgs,
   manage_cash_event: manageCashEventArgs,
   manage_income: manageIncomeArgs,
@@ -249,7 +256,7 @@ export const EDITABLE_FIELDS = new Set([
 /** Structural top-level keys that are refused in flat override patches — they
  *  have dedicated propose_* tools with element-level validation. */
 const STRUCTURAL_FIELDS = new Set([
-  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp',
+  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -294,7 +301,7 @@ export function toolSpecs(): ToolSpec[] {
       'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.',
       proposeSpouseArgs),
     spec('propose_income',
-      'PROPOSE adding an income source: kind "pension" for a DB/bridge pension (taxable income stacked with CPP/OAS), kind "employment" for semi-/post-retirement work. User confirms.',
+      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.',
       proposeIncomeArgs),
     spec('propose_spending_bands',
       'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.',
@@ -308,6 +315,9 @@ export function toolSpecs(): ToolSpec[] {
     spec('propose_rdsp',
       'PROPOSE enabling/configuring (or disabling) an RDSP (Registered Disability Savings Plan). Models CDSG grants, CDSB bonds, tax-sheltered growth, and taxable-fraction withdrawals. User confirms.',
       proposeRdspArgs),
+    spec('propose_fhsa',
+      'PROPOSE enabling/configuring (or disabling) an FHSA (First Home Savings Account). Deductible contributions, tax-sheltered growth, accumulation-only; transfers to the RRSP at retirement. User confirms.',
+      proposeFhsaArgs),
     spec('propose_revert',
       'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.',
       proposeRevertArgs),
@@ -315,7 +325,7 @@ export function toolSpecs(): ToolSpec[] {
       'PROPOSE updating or REMOVING an existing cash event (by id or unique label). User confirms. Use propose_cash_event to add a new one.',
       manageCashEventArgs),
     spec('manage_income',
-      'PROPOSE updating or REMOVING an existing income source (pension or employment, by id or unique label). User confirms. Use propose_income to add a new one.',
+      'PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.',
       manageIncomeArgs),
     spec('remember',
       'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.',
@@ -472,6 +482,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return proposeReverseMortgage(ctx, parsed.data as z.infer<typeof proposeReverseMortgageArgs>);
     case 'propose_rdsp':
       return proposeRdsp(ctx, parsed.data as z.infer<typeof proposeRdspArgs>);
+    case 'propose_fhsa':
+      return proposeFhsa(ctx, parsed.data as z.infer<typeof proposeFhsaArgs>);
     case 'propose_revert':
       return proposeRevert(ctx, parsed.data as z.infer<typeof proposeRevertArgs>);
     case 'manage_cash_event':
@@ -523,6 +535,12 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
       rdsp: {
         balance: i.rdsp.balance, contribution: i.rdsp.contribution,
         familyIncome: i.rdsp.familyIncome, dtcEligible: i.rdsp.dtcEligible,
+      },
+    } : {}),
+    ...(i.fhsa?.enabled ? {
+      fhsa: {
+        balance: i.fhsa.balance, contribution: i.fhsa.contribution,
+        contributionBasis: i.fhsa.contributionBasis, openAge: i.fhsa.openAge,
       },
     } : {}),
     withdrawalOrder: i.withdrawalOrder,
@@ -912,6 +930,36 @@ function proposeRdsp(
     label: disabling ? 'Disable RDSP' : enabling ? 'Enable RDSP' : 'Update RDSP',
     rationale: args.rationale,
     preview: { rdsp: res.data },
+  };
+}
+
+/** Enable/configure/disable the FHSA. Same merge-then-validate pattern as the
+ *  RDSP: partial changes over the existing block, full schema re-validation,
+ *  one confirm card. */
+function proposeFhsa(
+  ctx: ToolContext,
+  args: { changes: Record<string, unknown>; rationale?: string },
+): ToolOutcome {
+  const existing = ctx.inputs.fhsa;
+  const merged = { ...(existing ?? {}), ...args.changes };
+  const res = fhsaSchema.safeParse(merged);
+  if (!res.success) {
+    return {
+      kind: 'error',
+      content: `Invalid FHSA: ${zodIssues(res.error)}.` +
+        (!existing && args.changes.enabled !== false
+          ? ' To ENABLE it you must supply balance and contribution.'
+          : ''),
+    };
+  }
+  const enabling = args.changes.enabled === true && !existing?.enabled;
+  const disabling = args.changes.enabled === false;
+  return {
+    kind: 'mutation',
+    patch: { fhsa: res.data },
+    label: disabling ? 'Disable FHSA' : enabling ? 'Enable FHSA' : 'Update FHSA',
+    rationale: args.rationale,
+    preview: { fhsa: res.data },
   };
 }
 
