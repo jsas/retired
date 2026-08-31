@@ -6,7 +6,9 @@
  */
 import { useState } from 'react';
 import * as T from './tokens';
-import { Fader, Chip, VerdictHero, Panel } from './primitives';
+import {
+  Fader, Chip, VerdictHero, Panel, Stat, AccountBars, Legend, Dropdown, Footnote,
+} from './primitives';
 
 function Swatch({ name, value, note }: { name: string; value: string; note?: string }) {
   return (
@@ -119,11 +121,42 @@ export function StyleGuide() {
             <Chip tone="short" title="Down-market warning">At 1.2% the money runs out at 80.</Chip>
             <Chip tone="borderline" title="Borderline">Runs out at 91 — four years short of 95.</Chip>
           </div>
-          <div className="mt-6 flex flex-wrap gap-3">
+
+          <div className="mt-8 grid grid-cols-2 gap-5 border-t border-slate-100 pt-6 md:grid-cols-4">
+            <Stat label="Money lasts to" value="95" note="past the plan" tone="holds" />
+            <Stat label="Left at 95" value="$0" note="the pot is empty" />
+            <Stat label="In the pot at work's end" value="$1.1M" note="after the saving years" />
+            <Stat label="Runs out at" value="89" note="six years short" tone="short" />
+          </div>
+
+          <div className="mt-8 border-t border-slate-100 pt-6">
+            <AccountBars total={850000} rows={[
+              { label: 'RRSP', value: 442000 },
+              { label: 'TFSA', value: 263000, active: true },
+              { label: 'Taxable', value: 145000 },
+            ]} />
+          </div>
+
+          <div className="mt-8 border-t border-slate-100 pt-6">
+            <Legend items={[
+              { swatch: 'line-blue', label: 'the boundary — where the plan stops holding' },
+              { swatch: 'box-blue', label: 'below it, the money lasts past 95' },
+              { swatch: 'box-rose', label: 'above it, it runs out early' },
+            ]} />
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-6">
             <button className={T.cls.primaryBtn}>Save plan</button>
             <button className={T.cls.hairlineBtn}>Compare scenarios</button>
             <input className={T.cls.input} placeholder="Type an amount…" />
+            <Dropdown label="Details">
+              <div className="px-2 py-1 text-[12px] text-slate-600">Spouse · pensions · cash events · withdrawal order…</div>
+            </Dropdown>
           </div>
+
+          <Footnote>
+            Educational modeling — not financial, tax, or investment advice. Data stays in this browser.
+          </Footnote>
         </Panel>
 
         <Panel label="Type scale">
