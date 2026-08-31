@@ -2,7 +2,7 @@
 // falling back to a synchronous inline run for the single-file build — same
 // pattern as runMonteCarlo.ts.
 
-import { solveSustainableSpending, type SolverRequest, type SolverResult } from './spendingSolver';
+import { solveSustainableSpending, type SolverRequest, type SolverResult } from '@retired/engine-core/spendingSolver';
 
 export function runSpendingSolverAuto(
   request: SolverRequest,

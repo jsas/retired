@@ -3,8 +3,8 @@ import { prebuiltAppConfig } from '@mlc-ai/web-llm';
 import { WEBLLM_MODELS, fmtVram, webGpuAvailable } from './webLlmModels';
 import { connectionReady, defaultModelFor, type AiConnection } from '../aiSettings';
 import { buildPlanDigest } from '../agentQA';
-import { calculateHousehold } from '../retirementEngine';
-import { baseInputs, testConfig } from '../../test/helpers';
+import { calculateHousehold } from '@retired/engine-core/retirementEngine';
+import { baseInputs, testConfig } from '@retired/engine-core/test/helpers';
 import type { StreamEvent } from './providers';
 
 // Fake the @mlc-ai/web-llm module: the real engine needs WebGPU and downloads

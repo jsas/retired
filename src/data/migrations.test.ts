@@ -3,7 +3,7 @@
 // the old keys are dropped, and no legacy shape survives into the engine.
 import { describe, it, expect } from 'vitest';
 import { migrateInputs } from './migrations';
-import type { IncomeSource } from '../lib/retirementEngine';
+import type { IncomeSource } from '@retired/engine-core/retirementEngine';
 
 const base = () => ({
   currentAge: 60, retirementAge: 65, maxAge: 95,

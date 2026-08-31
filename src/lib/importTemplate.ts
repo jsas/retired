@@ -1,4 +1,4 @@
-import type { RetirementInputs } from './retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 // Import template: a flat key,value CSV that someone can fill in from Excel /
 // Google Sheets and import as a new scenario — the only realistic "import

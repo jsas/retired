@@ -9,9 +9,9 @@
 import { describe, expect, it } from 'vitest';
 import { runAgentTurn, type AgentEvent, type MutationProposal } from './agentLoop';
 import type { ChatMessage, StreamEvent } from './providers';
-import type { ToolContext } from './tools';
+import type { ToolContext } from '@retired/mcp-tools/tools';
 import { createMcpToolExecutor, closeSharedMcpSession } from './mcpClient';
-import { baseInputs, testConfig } from '../../test/helpers';
+import { baseInputs, testConfig } from '@retired/engine-core/test/helpers';
 
 function ctx(): ToolContext {
   return {

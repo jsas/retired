@@ -1,4 +1,4 @@
-import { solveSustainableSpending, type SolverRequest, type SolverResult } from '../lib/spendingSolver';
+import { solveSustainableSpending, type SolverRequest, type SolverResult } from '@retired/engine-core/spendingSolver';
 
 // Runs the spending solver off the main thread (it performs several full
 // Monte Carlo evaluations). Vite bundles via `new Worker(new URL(...))`.

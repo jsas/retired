@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AsyncOpfsBackend } from './opfs';
 import { AppDatabase } from './db';
-import { baseInputs } from '../test/helpers';
-import type { Scenario } from '../lib/types';
+import { baseInputs } from '@retired/engine-core/test/helpers';
+import type { Scenario } from '@retired/engine-core/types';
 
 /**
  * OPFS integration for the store. The browser API is faked with an in-memory

@@ -1,8 +1,8 @@
 // Tests for the paste-based "Ask an AI" question prompts.
 import { describe, it, expect } from 'vitest';
 import { QA_PRESETS, buildQAPrompt, buildPlanDigest } from './agentQA';
-import { calculateRetirement, calculateHousehold } from './retirementEngine';
-import { testConfig, baseInputs } from '../test/helpers';
+import { calculateRetirement, calculateHousehold } from '@retired/engine-core/retirementEngine';
+import { testConfig, baseInputs } from '@retired/engine-core/test/helpers';
 
 const config = testConfig();
 

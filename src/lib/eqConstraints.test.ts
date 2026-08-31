@@ -3,8 +3,8 @@ import {
   AXES, axisValue, withAxis, deterministicOutcome,
   fullBand, normalizeBand, effectiveRange, clampToBand, isLimited, renderRange, bandWithValue, consistentAges, reconcileControl,
   type Band,
-} from './eqConstraints';
-import { testConfig, baseInputs } from '../test/helpers';
+} from '@retired/engine-core/eqConstraints';
+import { testConfig, baseInputs } from '@retired/engine-core/test/helpers';
 
 const config = testConfig();
 

@@ -3,8 +3,8 @@
 // spilling the excess to taxable (ACB-tracked) and reporting it as `overflow`.
 // Blank (null) room = unlimited = enforcement off, preserving pre-#24 behavior.
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, type IncomeSource } from './retirementEngine';
-import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
+import { calculateRetirement, type IncomeSource } from '@retired/engine-core/retirementEngine';
+import { testConfig, baseInputs, yearAt, closeTo } from '@retired/engine-core/test/helpers';
 
 const config = testConfig();
 // testConfig ships indexTaxTables off, so factorAt() = 1 and the annual limits

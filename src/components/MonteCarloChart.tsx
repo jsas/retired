@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dices, Loader2, RefreshCw } from 'lucide-react';
-import type { MonteCarloRequest, MonteCarloResults } from '../lib/monteCarlo';
+import type { MonteCarloRequest, MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import { runMonteCarloAuto } from '../lib/runMonteCarlo';
 
 interface MonteCarloChartProps {

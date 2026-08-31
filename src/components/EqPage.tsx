@@ -8,14 +8,14 @@
 // against one seeded batch of futures so they stay stable while dragging.
 import { useEffect, useRef } from 'react';
 import { Sliders, Loader2 } from 'lucide-react';
-import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '../lib/retirementEngine';
+import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { TimelineChart } from './TimelineChart';
-import type { AppConfig } from '../lib/appConfig';
+import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
   AXES, axisValue, withAxis, clampToBand, normalizeBand, effectiveRange, deterministicOutcome, isLimited,
   renderRange, reconcileControl, INT_AXES,
   type EqAxis, type Band,
-} from '../lib/eqConstraints';
+} from '@retired/engine-core/eqConstraints';
 
 const fmtMoney = (v: number) =>
   new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);

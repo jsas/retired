@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildDefaultScenarios } from './exampleScenarios';
-import { calculateHousehold } from '../lib/retirementEngine';
-import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
+import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
+import { calculateHousehold } from '@retired/engine-core/retirementEngine';
+import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
 import { migrateInputs } from './migrations';
 
 /**

@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import type { YearlyBreakdown, YearDetail } from '../lib/retirementEngine';
+import type { YearlyBreakdown, YearDetail } from '@retired/engine-core/retirementEngine';
 
 interface ScheduleTableProps {
   breakdown: YearlyBreakdown[];

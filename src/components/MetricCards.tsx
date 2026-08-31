@@ -1,5 +1,5 @@
-import { householdOutcome, type RetirementResults } from '../lib/retirementEngine';
-import type { Household } from '../lib/householdTypes';
+import { householdOutcome, type RetirementResults } from '@retired/engine-core/retirementEngine';
+import type { Household } from '@retired/engine-core/householdTypes';
 
 interface MetricCardsProps {
   results: RetirementResults;

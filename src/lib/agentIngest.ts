@@ -7,7 +7,7 @@
 // turns it into a safe RetirementInputs patch — unknown fields are reported
 // and ignored, out-of-range numbers are clamped or rejected with reasons.
 
-import type { RetirementInputs, WithdrawalAccount } from './retirementEngine';
+import type { RetirementInputs, WithdrawalAccount } from '@retired/engine-core/retirementEngine';
 
 export interface IngestResult {
   ok: boolean;

@@ -4,9 +4,9 @@ import {
   SqliteRevisionStore,
 } from './scenarioRevisions';
 import { AppDatabase } from '../data/db';
-import { baseInputs } from '../test/helpers';
+import { baseInputs } from '@retired/engine-core/test/helpers';
 import type { ScenarioRevision } from './scenarioRevisions';
-import type { RetirementInputs } from './retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 // Tests run in Node — give the OPFS-less mirror a localStorage to write to.
 const storage = new Map<string, string>();

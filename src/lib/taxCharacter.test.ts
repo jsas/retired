@@ -5,9 +5,9 @@
 // a DB pension is eligible at any age. Deferred: $2k pension-amount credit, EI,
 // dividend gross-up, CCA.
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, calculateHousehold, type IncomeSource } from './retirementEngine';
-import { calculateTax, selfEmployedCppContribution } from './canadianTax';
-import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
+import { calculateRetirement, calculateHousehold, type IncomeSource } from '@retired/engine-core/retirementEngine';
+import { calculateTax, selfEmployedCppContribution } from '@retired/engine-core/canadianTax';
+import { testConfig, baseInputs, yearAt, closeTo } from '@retired/engine-core/test/helpers';
 
 const config = testConfig();
 const ONT = 'ONT';

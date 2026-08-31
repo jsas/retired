@@ -20,7 +20,7 @@ import {
   type MutationStructuredContent,
 } from '@retired/mcp-server';
 import type { AgentToolCall } from './providers';
-import type { ToolContext, ToolOutcome } from './tools';
+import type { ToolContext, ToolOutcome } from '@retired/mcp-tools/tools';
 
 export interface McpToolExecutor {
   /** Execute one tool call through the MCP server. Async: it awaits the

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AppStore } from './store';
 import { AppDatabase } from './db';
-import { baseInputs } from '../test/helpers';
-import { DEFAULT_APP_CONFIG, type AppConfig } from '../lib/appConfig';
-import { buildDefaultScenarios } from './exampleScenarios';
-import type { Scenario } from '../lib/types';
+import { baseInputs } from '@retired/engine-core/test/helpers';
+import { DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
+import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
+import type { Scenario } from '@retired/engine-core/types';
 
 // Tests run in Node — give the mirror a localStorage to write to.
 const storage = new Map<string, string>();

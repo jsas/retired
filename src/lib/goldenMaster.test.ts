@@ -14,8 +14,8 @@
 //
 // The fixture is deterministic (no Monte Carlo): constant return, no volatility.
 import { describe, it, expect } from 'vitest';
-import { calculateHousehold, type YearlyBreakdown } from './retirementEngine';
-import { testConfig, baseInputs, closeTo } from '../test/helpers';
+import { calculateHousehold, type YearlyBreakdown } from '@retired/engine-core/retirementEngine';
+import { testConfig, baseInputs, closeTo } from '@retired/engine-core/test/helpers';
 
 const config = testConfig();
 

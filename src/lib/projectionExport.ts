@@ -4,8 +4,8 @@
 // reconstructed outside the app. CSV flattens the detail into extra columns
 // (one row per person per year for households); JSON/YAML keep the nested
 // structure and can carry a metadata envelope.
-import type { AppConfig } from './appConfig';
-import type { RetirementInputs, RetirementResults, YearlyBreakdown } from './retirementEngine';
+import type { AppConfig } from '@retired/engine-core/appConfig';
+import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 
 export type ExportFormat = 'csv' | 'json' | 'yaml';
 export type Subject = 'household' | 'you' | 'spouse';

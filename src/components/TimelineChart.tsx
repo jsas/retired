@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { PencilLine } from 'lucide-react';
-import type { RetirementInputs, RetirementResults, CashEvent } from '../lib/retirementEngine';
+import type { RetirementInputs, RetirementResults, CashEvent } from '@retired/engine-core/retirementEngine';
 
 interface TimelineChartProps {
   inputs: RetirementInputs;

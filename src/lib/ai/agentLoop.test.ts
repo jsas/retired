@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { runAgentTurn, buildSystemPrompt, type AgentEvent, type MutationProposal } from './agentLoop';
 import type { ChatMessage, StreamEvent } from './providers';
-import type { ToolContext } from './tools';
-import { baseInputs, testConfig } from '../../test/helpers';
+import type { ToolContext } from '@retired/mcp-tools/tools';
+import { baseInputs, testConfig } from '@retired/engine-core/test/helpers';
 
 function ctx(): ToolContext {
   return {

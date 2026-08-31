@@ -3,7 +3,7 @@ import {
   bandToFrac, bandFromFrac, defaultEqBands, loadEqBands, saveEqBands,
   type BandFrac,
 } from './eqStorage';
-import { AXES, fullBand, normalizeBand, type EqAxis } from './eqConstraints';
+import { AXES, fullBand, normalizeBand, type EqAxis } from '@retired/engine-core/eqConstraints';
 
 // Tests run in Node (no DOM), so give the storage module a minimal in-memory
 // localStorage to persist against.

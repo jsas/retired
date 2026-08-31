@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildCsv, buildProjectionObject, toYaml, buildExport, DEFAULT_PROJECTION_EXPORT } from './projectionExport';
-import { calculateRetirement, calculateHousehold, type RetirementResults } from './retirementEngine';
-import { testConfig, baseInputs } from '../test/helpers';
+import { calculateRetirement, calculateHousehold, type RetirementResults } from '@retired/engine-core/retirementEngine';
+import { testConfig, baseInputs } from '@retired/engine-core/test/helpers';
 
 const config = testConfig();
 const opts = DEFAULT_PROJECTION_EXPORT;

@@ -14,7 +14,7 @@
 // upgrade in place with no SCHEMA_VERSION bump.
 
 import type { AppDatabase } from '../../data/db';
-import type { MemoryAdapter, MemoryRecord } from './store';
+import type { MemoryAdapter, MemoryRecord } from '@retired/mcp-tools/memoryStore';
 
 const TABLE = 'memories';
 

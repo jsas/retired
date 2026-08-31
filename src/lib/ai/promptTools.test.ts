@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildPromptToolInstructions, extractPromptToolCalls, formatPromptToolResults,
 } from './promptTools';
-import { toolSpecs } from './tools';
+import { toolSpecs } from '@retired/mcp-tools/tools';
 
 const names = new Set(toolSpecs().map(s => s.name));
 

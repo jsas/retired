@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, ClipboardCopy, Link2, Share2, Upload } from 'lucide-react';
 import { buildShareUrl } from '../lib/shareLink';
 import { buildPlanCode, parsePlanCode } from '../lib/planTransfer';
-import type { RetirementInputs } from '../lib/retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 export interface SharingImportRequest {
   inputs: RetirementInputs;

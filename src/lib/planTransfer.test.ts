@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildPlanCode, parsePlanCode } from './planTransfer';
-import type { RetirementInputs } from './retirementEngine';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 // A minimal but realistic inputs object — parse only checks `currentAge` is a
 // number, so the rest just needs to survive the round trip intact.

@@ -23,8 +23,8 @@ import {
   Copy, ClipboardPaste, Download, RotateCcw, Settings2, Brain, ChevronDown,
   ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle,
 } from 'lucide-react';
-import type { RetirementInputs } from '../lib/retirementEngine';
-import type { AppConfig } from '../lib/appConfig';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
   connectionReady, loadAiSettings, saveAiSettings, type AiConnection, type AiSettings,
 } from '../lib/aiSettings';
@@ -38,16 +38,16 @@ import {
 } from '../lib/ai/context';
 import { reasoningTail } from '../lib/ai/reasoningPreview';
 import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
-import { toolSpecs } from '../lib/ai/tools';
-import type { ToolContext } from '../lib/ai/tools';
-import type { MemoryStore } from '../lib/memory/store';
+import { toolSpecs } from '@retired/mcp-tools/tools';
+import type { ToolContext } from '@retired/mcp-tools/tools';
+import type { MemoryStore } from '@retired/mcp-tools/memoryStore';
 import {
   captureCheckpoint, appendCheckpoint, decodeRevertPatch,
   type PlanCheckpoint,
-} from '../lib/ai/checkpoints';
+} from '@retired/mcp-tools/checkpoints';
 import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
 import { buildPlanDigest } from '../lib/agentQA';
-import { calculateHousehold } from '../lib/retirementEngine';
+import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
   loadChats, saveChats, newThread, titleFromFirstMessage,
   type ChatThread,

@@ -4,9 +4,9 @@
 // them. Now each working year is taxed at the marginal rate and savingsRate ×
 // net is saved into the source's account; pension net lands in taxable.
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, type IncomeSource } from './retirementEngine';
-import { calculateTax } from './canadianTax';
-import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
+import { calculateRetirement, type IncomeSource } from '@retired/engine-core/retirementEngine';
+import { calculateTax } from '@retired/engine-core/canadianTax';
+import { testConfig, baseInputs, yearAt, closeTo } from '@retired/engine-core/test/helpers';
 
 const config = testConfig();
 const ONT = 'ONT';

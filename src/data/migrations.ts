@@ -3,7 +3,7 @@
 // the SQL store became the single source of truth; lives under data/ because
 // it's part of the persistence boundary, not the engine.
 
-import type { RetirementInputs, IncomeSource } from '../lib/retirementEngine';
+import type { RetirementInputs, IncomeSource } from '@retired/engine-core/retirementEngine';
 
 // The legacy array element shapes, defined structurally here because the engine
 // no longer exports them (no-legacy cutover). They describe what OLD payloads

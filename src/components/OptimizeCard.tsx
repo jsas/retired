@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles, Check, Lightbulb, ArrowUpRight, ArrowDownRight, Crosshair, Loader2 } from 'lucide-react';
-import type { RetirementInputs } from '../lib/retirementEngine';
-import type { AppConfig } from '../lib/appConfig';
-import { runStrategies, type StrategyReport } from '../lib/strategies';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import type { AppConfig } from '@retired/engine-core/appConfig';
+import { runStrategies, type StrategyReport } from '@retired/engine-core/strategies';
 import { runSpendingSolverAuto } from '../lib/runSpendingSolver';
-import type { SolverResult } from '../lib/spendingSolver';
+import type { SolverResult } from '@retired/engine-core/spendingSolver';
 
 function fmt(v: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);

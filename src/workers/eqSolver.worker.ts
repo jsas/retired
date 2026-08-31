@@ -1,4 +1,4 @@
-import { solveEqRows, type EqShardRequest, type EqShardResponse, type EqRowProgress } from '../lib/eqSolver';
+import { solveEqRows, type EqShardRequest, type EqShardResponse, type EqRowProgress } from '@retired/engine-core/eqSolver';
 
 // One worker in the EQ pool: computes a SHARD of grid rows (solveEqRows) off the
 // main thread, streaming each finished row back as a { type: 'row' } message so

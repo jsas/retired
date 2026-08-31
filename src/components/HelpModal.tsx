@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Search, X, Sparkles } from 'lucide-react';
-import { DEFAULT_APP_CONFIG } from '../lib/appConfig';
+import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
 
 // ---------------------------------------------------------------------------
 // Help content model: every entry is a small tree of {id, title, body} so the

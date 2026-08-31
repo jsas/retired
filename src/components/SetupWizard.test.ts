@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { wizardDataFrom, applyWizardData, spouseWizardDataFrom, applySpouseWizardData, stepsFor } from './SetupWizard';
-import { baseInputs } from '../test/helpers';
+import { baseInputs } from '@retired/engine-core/test/helpers';
 
 describe('SetupWizard data helpers', () => {
   it('wizardDataFrom extracts exactly the wizard-collected fields', () => {

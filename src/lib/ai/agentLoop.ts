@@ -9,10 +9,10 @@
 // output to plan state bypasses it.
 
 import type { AgentToolCall, ChatMessage, StreamEvent, ToolSpec } from './providers';
-import { executeToolCall, toolSpecs, type ToolContext, type ToolOutcome } from './tools';
+import { executeToolCall, toolSpecs, type ToolContext, type ToolOutcome } from '@retired/mcp-tools/tools';
 import { extractPromptToolCalls, formatPromptToolResults } from './promptTools';
 import { buildProgramRules } from './programRules';
-import type { AppConfig } from '../appConfig';
+import type { AppConfig } from '@retired/engine-core/appConfig';
 
 export type AgentEvent =
   | { type: 'text'; text: string }

@@ -1,5 +1,5 @@
-import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '../lib/retirementEngine';
-import type { MonteCarloResults } from '../lib/monteCarlo';
+import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
+import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import type { PrintOptions } from '../lib/printOptions';
 
 function fmt(value: number): string {
