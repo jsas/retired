@@ -41,6 +41,7 @@ const BASE = args.url || process.env.PROBE_URL || 'http://localhost:5174/probe/'
 const auto = ['1'];
 if (args.models) auto.push(`models=${args.models}`);
 if (args.maxtokens) auto.push(`maxtokens=${args.maxtokens}`);
+if (args.persona) auto.push(`persona=${args.persona}`); // full|simple A/B override
 const url = `${BASE}?auto=${auto.join(',')}${args.profile ? `&profile=${args.profile}` : ''}`;
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');

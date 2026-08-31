@@ -338,16 +338,21 @@ render();
 interface AutoConfig {
   models: 'all' | string;
   maxTokens: number;
+  persona: 'auto' | 'full' | 'simple';
 }
 
 function parseAutoParam(): AutoConfig | null {
   const raw = new URLSearchParams(location.search).get('auto');
   if (raw === null) return null;
-  const cfg: AutoConfig = { models: 'all', maxTokens: SWEEP_MAX_TOKENS };
+  const cfg: AutoConfig = { models: 'all', maxTokens: SWEEP_MAX_TOKENS, persona: 'auto' };
   for (const part of raw.split(',')) {
     const [k, v] = part.split('=');
     if (k === 'models' && v) cfg.models = v;
     if (k === 'maxtokens' && v) cfg.maxTokens = Math.max(64, Number(v) || cfg.maxTokens);
+    // Force one persona for the whole sweep (the #108 full-vs-simple A/B —
+    // e.g. auto=1,persona=simple re-runs the triage with the short persona
+    // on every model, not just the ones the app would pick it for).
+    if (k === 'persona' && (v === 'full' || v === 'simple' || v === 'auto')) cfg.persona = v;
   }
   return cfg;
 }
@@ -419,7 +424,7 @@ async function runAutoTriage(cfg: AutoConfig) {
         }
       }) as unknown as Engine;
       const toolMode = autoToolMode(modelId);
-      const persona = autoPersona(modelId);
+      const persona = cfg.persona === 'auto' ? autoPersona(modelId) : cfg.persona;
       const sys = buildSystemPrompt('Probe plan', {
         toolMode,
         basePrompt: persona === 'simple' ? PROBE_SIMPLE_PERSONA : undefined,
