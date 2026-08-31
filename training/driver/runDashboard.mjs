@@ -50,7 +50,8 @@ function serve() {
   const root = resolve(here);
   return new Promise((resolve) => {
     const server = createServer((req, res) => {
-      const urlPath = req.url === '/' ? '/dashboard.html' : req.url.split('?')[0];
+      const url = typeof req.url === 'string' ? req.url.split('?')[0] : '';
+      const urlPath = url === '/' ? '/dashboard.html' : url;
       if (!/^\/[A-Za-z0-9._\-/]*$/.test(urlPath) || urlPath.includes('..')) {
         res.writeHead(403); res.end('forbidden'); return;
       }
@@ -114,8 +115,13 @@ async function main() {
     : CANDIDATES_SMALLEST_FIRST;
   if (bases.length === 0) { console.error(`no base matched --only ${ONLY}`); process.exit(2); }
 
-  const server = await serve();
-  const chrome = await launchChrome({ port: CDP_PORT, gpu: true, headless: false });
+  // Kick off server + Chrome together — they're both I/O-bound and neither
+  // depends on the other, so this shaves the ~2-3s serial startup gap off every
+  // run.
+  const [server, chrome] = await Promise.all([
+    serve(),
+    launchChrome({ port: CDP_PORT, gpu: true, headless: false }),
+  ]);
 
   const target = await openTab(`http://127.0.0.1:${SERVE_PORT}/dashboard.html`, CDP_PORT);
   const tab = new TabSession(target.webSocketDebuggerUrl);
