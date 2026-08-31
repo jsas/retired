@@ -39,15 +39,21 @@ const CDP_PORT = Number(arg('--cdp-port') ?? 9222);
 const MIME = { '.html': 'text/html', '.mjs': 'text/javascript', '.js': 'text/javascript' };
 
 /** Serve the driver dir over http so Chrome can load the harness as a module
- *  (file:// blocks ESM + WebGPU in some configs). Loopback-only dev server, but
- *  canonicalize + confine the resolved path to the serve root so a crafted URL
- *  can't read outside it (CodeQL: uncontrolled data in path expression). */
+ *  (file:// blocks ESM + WebGPU in some configs). Loopback-only dev server. The
+ *  URL path is validated against a strict allowlist (letters/digits/`._-/`, no
+ *  `..`) before it touches the filesystem — CodeQL recognizes the character
+ *  allowlist as a sanitizer, and confining to the serve root is defense-in-depth
+ *  on top (CodeQL: uncontrolled data in path expression). */
 function serve() {
   const root = resolve(here);
   const server = createServer((req, res) => {
-    const urlPath = (req.url === '/' ? '/harness.html' : req.url.split('?')[0]).replace(/\\/g, '/');
+    const urlPath = req.url === '/' ? '/harness.html' : req.url.split('?')[0];
+    // Reject anything that isn't a plain in-root relative path.
+    if (!/^\/[A-Za-z0-9._\-/]*$/.test(urlPath) || urlPath.includes('..')) {
+      res.writeHead(403); res.end('forbidden'); return;
+    }
     const file = resolve(root, `.${urlPath}`);
-    if (file !== root && !file.startsWith(root + sep)) { res.writeHead(403); res.end('forbidden'); return; }
+    if (!file.startsWith(root + sep)) { res.writeHead(403); res.end('forbidden'); return; }
     if (!existsSync(file)) { res.writeHead(404); res.end('nope'); return; }
     res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'text/plain' });
     res.end(readFileSync(file));

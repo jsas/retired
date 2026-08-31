@@ -11,13 +11,18 @@ import { launchChrome, openTab, TabSession } from './cdp.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const MIME = { '.html': 'text/html', '.mjs': 'text/javascript' };
 
-// Loopback-only dev server, but canonicalize + confine the resolved path to the
-// serve root so a crafted URL can't read outside it (CodeQL: uncontrolled data).
+// Loopback-only dev server. The URL path is validated against a strict allowlist
+// (letters/digits/`._-/`, no `..`) before it touches the filesystem — CodeQL
+// recognizes the character allowlist as a sanitizer; confining to the serve root
+// is defense-in-depth on top (CodeQL: uncontrolled data in path expression).
 const root = resolve(here);
 const server = createServer((req, res) => {
-  const urlPath = (req.url === '/' ? '/harness.html' : req.url.split('?')[0]).replace(/\\/g, '/');
+  const urlPath = req.url === '/' ? '/harness.html' : req.url.split('?')[0];
+  if (!/^\/[A-Za-z0-9._\-/]*$/.test(urlPath) || urlPath.includes('..')) {
+    res.writeHead(403); res.end(); return;
+  }
   const file = resolve(root, `.${urlPath}`);
-  if (file !== root && !file.startsWith(root + sep)) { res.writeHead(403); res.end(); return; }
+  if (!file.startsWith(root + sep)) { res.writeHead(403); res.end(); return; }
   if (!existsSync(file)) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'text/plain' });
   res.end(readFileSync(file));
