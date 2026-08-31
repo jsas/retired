@@ -195,9 +195,11 @@ the bar — that's the whole mobile thesis.
 
 **Full fine-tune vs LoRA.** At ≤2B, **full-parameter SFT is cheap** (a 16 GB
 GPU handles even 2B) and tends to beat LoRA for *structured-output reliability*
-— which is the entire goal. Use LoRA/QLoRA only to iterate cheaply or to keep a
-base + swappable adapters. Default plan: **full SFT, bf16, ~2–3 epochs**,
-early-stop on the protocol-validity eval.
+— which is the entire goal. **QLoRA is the documented cheaper option** (~4–6 GB
+VRAM, faster steps) for iterating or when VRAM is tight; see the method
+comparison table in §5. Default plan: **full SFT, bf16, ~2–3 epochs**,
+early-stop on the protocol-validity eval, falling back to QLoRA only if the
+gate shows it doesn't cost protocol reliability.
 
 ---
 
@@ -240,6 +242,26 @@ cosine schedule, `per_device_train_batch_size` sized to VRAM (16 GB → full-FT 
 only** so the model learns to *produce* tool calls and explanations, not to
 parrot the user/system text. Smaller bases (≤1B) may want a touch more LR and
 an extra epoch — tune on the eval gate, not vibes.
+
+**Two training methods — full-SFT (default) or QLoRA (the cheaper option):**
+
+| | **Full-parameter SFT** (default) | **QLoRA** (the cheaper path) |
+|---|---|---|
+| **VRAM** | ~16 GB for ≤2B (w/ grad ckpt) | ~4–6 GB — fits a laptop card |
+| **Cost** | a few $ of electricity, hours | ~3–4× less memory + faster steps |
+| **Structured-output reliability** | best — updates every weight | slightly worse (only adapters train) |
+| **Output** | a standalone model | a base + a small adapter (merged at export) |
+| **When to use** | the goal is *protocol reliability*, so start here | iterate cheaply, or VRAM is tight |
+
+**Default to full-SFT** because the entire goal is a clean `TOOL_CALL:` line —
+structured-output reliability is exactly what full-FT buys over adapters. Reach
+for **QLoRA** (4-bit, `r=16`, `lora_alpha=32`, `lora_dropout=0.05`,
+`learning_rate ~1e-4`) when you want to iterate fast/cheap or the GPU can't fit
+full-FT. Either way: **mask loss to assistant tokens**, early-stop on the eval
+gate, and merge the adapter into the base before the MLC compile (web-llm loads
+a single merged model, not a base + LoRA). If QLoRA's protocol-validity comes
+back materially worse on the gate, that's the signal to spend the extra VRAM on
+full-SFT — decide on the number, not vibes.
 
 **MLC compile (the gating step to verify early):**
 ```bash
