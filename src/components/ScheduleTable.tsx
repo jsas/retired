@@ -100,6 +100,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
           <Line label="TFSA" value={detail.contrib!.tfsa} />
           <Line label="Taxable" value={detail.contrib!.taxable} />
           {(detail.contrib!.rdsp ?? 0) > 0.5 && <Line label="RDSP" value={detail.contrib!.rdsp ?? 0} hint="Not deductible (like a TFSA); attracts grants/bonds at lower incomes." />}
+          {(detail.contrib!.fhsa ?? 0) > 0.5 && <Line label="FHSA" value={detail.contrib!.fhsa ?? 0} hint="Deductible (like an RRSP); capped by the annual and lifetime limits." />}
         </Section>
       )}
 
@@ -110,6 +111,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
         <Line label="Taxable" value={detail.growth.taxable} />
         <Line label="Cash cushion" value={detail.growth.cash} hint="Cash earns the lower cushion rate." />
         {(detail.growth.rdsp ?? 0) > 0.5 && <Line label="RDSP" value={detail.growth.rdsp ?? 0} hint="Tax-sheltered growth; taxable only when withdrawn." />}
+        {(detail.growth.fhsa ?? 0) > 0.5 && <Line label="FHSA" value={detail.growth.fhsa ?? 0} hint="Tax-sheltered growth; transfers to the RRSP at retirement (tax-free there too)." />}
       </Section>
 
       {detail.rdsp && (detail.rdsp.contribution > 0.5 || detail.rdsp.grant > 0.5 || detail.rdsp.bond > 0.5) && (
@@ -118,6 +120,14 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
           {detail.rdsp.grant > 0.5 && <Line label="CDSG (grant)" value={detail.rdsp.grant} hint="Canada Disability Savings Grant — matches contributions up to 300%/200% at lower incomes." />}
           {detail.rdsp.bond > 0.5 && <Line label="CDSB (bond)" value={detail.rdsp.bond} hint="Canada Disability Savings Bond — income-tested; no contribution needed." />}
           <Line label="Balance" value={detail.rdsp.balance} strong />
+        </Section>
+      )}
+
+      {detail.fhsa && detail.fhsa.contribution > 0.5 && (
+        <Section title="FHSA">
+          <Line label="Contribution (deductible)" value={detail.fhsa.contribution} hint="Reduces this year's taxable income like an RRSP contribution." />
+          <Line label="Contributed to date" value={detail.fhsa.contributionBasis} hint={`Toward the lifetime limit.`} />
+          <Line label="Balance" value={detail.fhsa.balance} strong />
         </Section>
       )}
 
@@ -192,12 +202,14 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
   const hasRm = breakdown.some(r => r.netHomeEquity !== undefined);
   // RDSP balance column appears only when a person has an RDSP.
   const hasRdsp = breakdown.some(r => r.rdspBalance !== undefined);
+  // FHSA balance column appears only when a person has an FHSA.
+  const hasFhsa = breakdown.some(r => r.fhsaBalance !== undefined);
   const anyDetail = household || breakdown.some(r => r.detail);
   // Number of columns the detail row must span: base 19 + the expand chevron
-  // (when any row is expandable) + optional RM/RDSP columns. The chevron column
+  // (when any row is expandable) + optional RM/RDSP/FHSA columns. The chevron column
   // was previously left out, so an expandable table's detail row spanned one
   // column too few and the panel didn't reach the table's right edge.
-  const colCount = 19 + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0);
+  const colCount = 19 + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0);
 
   return (
     <div className="bg-white border border-slate-200 rounded overflow-hidden">
@@ -227,6 +239,9 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
               <th className="text-right px-3 py-2 font-semibold text-slate-700">Cash Cushion</th>
               {hasRdsp && (
                 <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>
+              )}
+              {hasFhsa && (
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="First Home Savings Account. Contributions are deductible; growth is tax-sheltered. Transfers to the RRSP at retirement (never drawn directly).">FHSA</th>
               )}
               {hasRm && (
                 <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Home value minus reverse-mortgage loan balance. The loan compounds with interest and draws, eroding equity over time.">Home Equity</th>
@@ -317,6 +332,12 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
                       <td className="px-3 py-1.5 text-right font-mono text-slate-600"
                         title={row.detail?.rdsp ? `Contribution basis ${formatCurrency(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
                         {row.rdspBalance !== undefined ? formatCurrency(row.rdspBalance) : '—'}
+                      </td>
+                    )}
+                    {hasFhsa && (
+                      <td className="px-3 py-1.5 text-right font-mono text-slate-600"
+                        title={row.detail?.fhsa ? `Contributed to date ${formatCurrency(row.detail.fhsa.contributionBasis)}; transfers to the RRSP at retirement` : undefined}>
+                        {row.fhsaBalance !== undefined ? formatCurrency(row.fhsaBalance) : '—'}
                       </td>
                     )}
                     {hasRm && (

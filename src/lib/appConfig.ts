@@ -108,6 +108,27 @@ export interface RdspConfig {
   contributionEndAge: number;      // (59)
 }
 
+/**
+ * First Home Savings Account parameters (2026). A savings plan for a first
+ * home: contributions are DEDUCTIBLE (like an RRSP, reducing taxable income in
+ * the year), growth is tax-sheltered, and a withdrawal to buy a qualifying
+ * first home is TAX-FREE. If the money isn't used for a qualifying home it can
+ * be transferred to an RRSP/RRIF with no contribution room required (taxed on
+ * later withdrawal), or withdrawn as taxable income. The account must be used
+ * within 15 years of opening. Accumulation-only in this engine: it never
+ * enters the retirement withdrawal order.
+ *
+ * NOT modelled (by design): the qualifying-home withdrawal event itself and
+ * the 15-year forced closure — the balance is assumed transferred to the RRSP
+ * at the retirement boundary (the common "didn't buy" path). Sources: canada.ca
+ * "First Home Savings Account" ($8,000/yr, $40,000 lifetime).
+ */
+export interface FhsaConfig {
+  annualLimit: number;    // max contribution per year (8,000)
+  lifetimeLimit: number;  // max total contributions (40,000)
+  maxYears: number;       // account must be used within this many years of opening (15)
+}
+
 export interface AppConfig {
   federal: TaxTable;
   provinces: Record<string, TaxTable>;
@@ -116,6 +137,7 @@ export interface AppConfig {
   cpp: CppConfig;
   engine: EngineConfig;
   rdsp: RdspConfig;
+  fhsa: FhsaConfig;
   qcFederalAbatement: number;  // Quebec abatement: fraction of federal tax refunded (0.165)
   ontarioSurtax: {             // Ontario surtax on provincial tax above two thresholds
     threshold1: number; rate1: number;
@@ -219,6 +241,12 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     contributionLifetimeMax: 200000,
     contributionEndAge: 59,
   },
+  // 2026 FHSA parameters (canada.ca "First Home Savings Account").
+  fhsa: {
+    annualLimit: 8000,
+    lifetimeLimit: 40000,
+    maxYears: 15,
+  },
   qcFederalAbatement: 0.165,
   // 2026 Ontario surtax thresholds (2025 values × 1.02 CRA indexation).
   ontarioSurtax: { threshold1: 5925, rate1: 0.20, threshold2: 7577, rate2: 0.56 },
@@ -302,6 +330,13 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
     ];
     if (!r || nums.some(k => typeof r[k] !== 'number')) {
       (c as AppConfig).rdsp = { ...DEFAULT_APP_CONFIG.rdsp };
+    }
+  }
+  // FHSA config was added later — back-fill the whole block (all-or-nothing).
+  {
+    const f = c.fhsa as Partial<FhsaConfig> | undefined;
+    if (!f || [f.annualLimit, f.lifetimeLimit, f.maxYears].some(v => typeof v !== 'number')) {
+      (c as AppConfig).fhsa = { ...DEFAULT_APP_CONFIG.fhsa };
     }
   }
   // QC abatement / ON surtax were added later — back-fill defaults.

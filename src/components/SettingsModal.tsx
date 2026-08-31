@@ -44,7 +44,7 @@ const ERASABLE_KEYS = [
   AI_SETTINGS_STORAGE_KEY,
 ];
 
-type Section = 'general' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp';
+type Section = 'general' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'general', label: 'General' },
@@ -55,7 +55,8 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'cpp', label: 'CPP' },
   { id: 'engine', label: 'Engine' },
   { id: 'gains', label: 'Capital Gains' },
-  { id: 'rdsp', label: 'RDSP' }
+  { id: 'rdsp', label: 'RDSP' },
+  { id: 'fhsa', label: 'FHSA' }
 ];
 
 const PROVINCE_NAMES: Record<string, string> = {
@@ -431,6 +432,23 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 $1,000 contributed; above it, 100% on the first $1,000. The bond pays in full at/below the
                 lower threshold, phases out linearly to $0 at the upper. The 10-year AHA clawback and the
                 grant/bond carry-forward are not modelled.
+              </p>
+            </div>
+          )}
+
+          {section === 'fhsa' && (
+            <div className="space-y-3 max-w-sm">
+              <NumberField label="Annual contribution limit ($/yr)" value={draft.fhsa.annualLimit}
+                onChange={v => update(c => { c.fhsa.annualLimit = v; })} step="1000" />
+              <NumberField label="Lifetime contribution limit ($)" value={draft.fhsa.lifetimeLimit}
+                onChange={v => update(c => { c.fhsa.lifetimeLimit = v; })} step="5000" />
+              <NumberField label="Plan life (years)" value={draft.fhsa.maxYears}
+                onChange={v => update(c => { c.fhsa.maxYears = v; })} />
+              <p className="text-[11px] text-slate-500 leading-snug border-t border-slate-200 pt-2">
+                FHSA contributions are deductible (like an RRSP), grow tax-sheltered, and are capped by
+                the annual and lifetime limits. The plan can stay open for a limited number of years
+                from when it was opened. On retirement the balance transfers to the RRSP (no RRSP room
+                needed). A qualifying first-home withdrawal (tax-free) is not modelled.
               </p>
             </div>
           )}

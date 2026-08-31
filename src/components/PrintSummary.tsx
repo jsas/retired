@@ -299,7 +299,9 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
   const hasRm = people.some(p => p.rows.some(r => r.netHomeEquity !== undefined));
   // RDSP column appears only when a person has an RDSP (matches ScheduleTable).
   const hasRdsp = people.some(p => p.rows.some(r => r.rdspBalance !== undefined));
-  const colSpan = 17 + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0);
+  // FHSA column appears only when a person has an FHSA (matches ScheduleTable).
+  const hasFhsa = people.some(p => p.rows.some(r => r.fhsaBalance !== undefined));
+  const colSpan = 17 + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0);
   return (
     <div style={{ marginTop: '14px' }}>
       <div style={sectionTitle}>Detailed year-by-year</div>
@@ -329,6 +331,7 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
                 <th style={HEAD_CELL}>Taxable</th>
                 <th style={HEAD_CELL}>Cash</th>
                 {hasRdsp && <th style={HEAD_CELL} title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>}
+                {hasFhsa && <th style={HEAD_CELL} title="First Home Savings Account. Contributions are deductible; growth is tax-sheltered. Transfers to the RRSP at retirement.">FHSA</th>}
                 {hasRm && <th style={HEAD_CELL}>Home eq.</th>}
               </tr>
             </thead>
@@ -358,6 +361,12 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
                       <td style={CELL}
                         title={row.detail?.rdsp ? `Contribution basis ${fmtShort(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
                         {row.rdspBalance !== undefined ? money(row.rdspBalance) : '—'}
+                      </td>
+                    )}
+                    {hasFhsa && (
+                      <td style={CELL}
+                        title={row.detail?.fhsa ? `Contributed to date ${fmtShort(row.detail.fhsa.contributionBasis)}; transfers to the RRSP at retirement` : undefined}>
+                        {row.fhsaBalance !== undefined ? money(row.fhsaBalance) : '—'}
                       </td>
                     )}
                     {hasRm && (

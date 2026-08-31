@@ -138,6 +138,9 @@ export interface RetirementInputs {
   // Registered Disability Savings Plan — the primary person is the beneficiary.
   // Optional; absent = no RDSP.
   rdsp?: RdspInputs;
+  // First Home Savings Account — the primary person's FHSA. Optional; absent =
+  // no FHSA. Accumulation-only (never enters the withdrawal order).
+  fhsa?: FhsaInputs;
 }
 
 /** Where the spouse's plan comes from (see RetirementInputs.spouseSource). */
@@ -177,6 +180,8 @@ export interface SpouseInputs {
   reverseMortgage?: ReverseMortgage;
   // The spouse's own RDSP (they are the beneficiary). Optional; absent = none.
   rdsp?: RdspInputs;
+  // The spouse's own FHSA. Optional; absent = none.
+  fhsa?: FhsaInputs;
 }
 
 export interface CashEvent {
@@ -266,6 +271,28 @@ export interface RdspInputs {
   dtcEligible: boolean;     // Disability Tax Credit eligible — required to hold/receive grants & bonds
 }
 
+/**
+ * A First Home Savings Account. Per-person. Contributions are DEDUCTIBLE (like
+ * an RRSP — they reduce taxable income in the contribution year), growth is
+ * tax-sheltered, and a qualifying first-home withdrawal is tax-free. This
+ * engine models the ACCUMULATION side only: the FHSA never enters the
+ * retirement withdrawal order, and at the retirement boundary any remaining
+ * balance is assumed transferred to the RRSP (the no-qualifying-home path —
+ * CRA allows a direct FHSA→RRSP/RRIF transfer with no contribution room
+ * required). Parameters (annual/lifetime limits, lifespan) live in config.fhsa.
+ * Absent = the person has no FHSA.
+ */
+export interface FhsaInputs {
+  enabled: boolean;
+  balance: number;          // current FHSA market value, today's dollars
+  contribution: number;     // planned contribution $/yr (capped at config.fhsa.annualLimit)
+  // Contributions already made toward the LIFETIME limit (so a plan opened a
+  // few years ago carries its prior contributions). Defaults to `balance` when
+  // omitted — a pre-existing balance is assumed to be all contributed principal.
+  contributionBasis?: number;
+  openAge?: number;         // age the account was opened; the 15-year clock runs from here
+}
+
 export interface AccountBreakdown {
   age: number;
   rrspBalance: number;
@@ -274,6 +301,7 @@ export interface AccountBreakdown {
   taxableBalance: number;
   cashCushionBalance: number;
   rdspBalance?: number; // undefined when the person has no RDSP
+  fhsaBalance?: number;  // undefined when the person has no FHSA
 }
 
 /**
@@ -329,9 +357,9 @@ export interface YearDetail {
   // borrowing (tax-free). Registered and taxable draws are grossed up for tax.
   withdraw: { rrifMin: number; rrif: number; rrsp: number; tfsa: number; taxable: number; cash: number; rmDraw: number; rdsp?: number };
   // Market growth / interest earned per account this year (before it's added).
-  growth: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number; rdsp?: number };
+  growth: { rrsp: number; rrif: number; tfsa: number; taxable: number; cash: number; rdsp?: number; fhsa?: number };
   // Contributions per account (accumulation years only).
-  contrib?: { rrsp: number; tfsa: number; taxable: number; rdsp?: number };
+  contrib?: { rrsp: number; tfsa: number; taxable: number; rdsp?: number; fhsa?: number };
   // RDSP flow this year, when the account exists. contribution/grant/bond are
   // deposits; growth is the year's sheltered growth; balance/contributionBasis
   // are year-end. taxableFraction is the share of any withdrawal that is
@@ -342,6 +370,13 @@ export interface YearDetail {
     contribution: number; grant: number; bond: number; growth: number;
     balance: number; contributionBasis: number; taxableFraction: number;
     withdrawal?: number; taxablePortion?: number;
+  };
+  // FHSA flow this year, when the account exists. contribution is the year's
+  // (deductible) deposit; growth is the year's sheltered growth; balance and
+  // contributionBasis are year-end. Accumulation-only — never withdrawn in the
+  // plan, so no taxable-fraction split is needed.
+  fhsa?: {
+    contribution: number; growth: number; balance: number; contributionBasis: number;
   };
   // Deposit provenance — gross dollars that LANDED in each account this year
   // from cash events and transfers (inflows + the redeposit side of a
@@ -402,6 +437,10 @@ export interface YearlyBreakdown {
   // RDSP balance (undefined when the person has no RDSP). Included in the
   // ending/total balance; the grant/bond/growth portion is taxable on withdrawal.
   rdspBalance?: number;
+  // FHSA balance (undefined when the person has no FHSA). Included in the
+  // ending/total balance; accumulation-only — transferred to the RRSP at the
+  // retirement boundary, never drawn in the plan.
+  fhsaBalance?: number;
   cppIncome: number;
   oasIncome: number;
   gisIncome: number;
@@ -912,7 +951,20 @@ export function calculatePerson(
   // The fraction of any withdrawal that is TAXABLE (grant + bond + growth).
   const rdspTaxableFraction = () => (rdspBal > 0 ? Math.max(0, Math.min(1, 1 - rdspContribBasis / rdspBal)) : 0);
 
-  const totalBalance = () => rrsp + rrif + tfsa + taxable + cashCushion + rdspBal;
+  // FHSA: deductible-in, tax-sheltered growth, accumulation-only. Tracked by
+  // contribution basis toward the LIFETIME limit (config.fhsa.lifetimeLimit).
+  // At the retirement boundary the balance transfers to the RRSP (the
+  // no-qualifying-home path — CRA allows the transfer with no RRSP room).
+  const fhsaIn = person.fhsa;
+  const fhsaCfg = config.fhsa;
+  const fhsaOn = fhsaIn?.enabled === true;
+  let fhsaBal = fhsaOn ? Math.max(0, fhsaIn.balance) : 0;
+  // Contributions already made toward the lifetime cap. Defaults to the opening
+  // balance (a pre-existing balance is assumed all contributed principal).
+  let fhsaContribBasis = fhsaOn ? Math.min(Math.max(0, fhsaIn.contributionBasis ?? fhsaIn.balance), fhsaCfg.lifetimeLimit) : 0;
+  const fhsaOpenAge = fhsaIn?.openAge ?? currentAge;
+
+  const totalBalance = () => rrsp + rrif + tfsa + taxable + cashCushion + rdspBal + fhsaBal;
 
   // ---- transfer events (account→account / inter-spousal) ----
   // Which household member this run is; transfer endpoints naming this person
@@ -1108,6 +1160,23 @@ export function calculatePerson(
       rdspBondBasis += rdspBond;
     }
 
+    // FHSA: deductible contribution (capped at the annual + lifetime limits),
+    // then tax-sheltered growth on the whole account. The contribution reduces
+    // the year's taxable income (like an RRSP) — subtracted from the earnings
+    // base below. Contributions stop once the 15-year clock runs out.
+    let fhsaContribution = 0, fhsaGains = 0;
+    if (fhsaOn) {
+      if (age < fhsaOpenAge + fhsaCfg.maxYears) {
+        const annualLimit = fhsaCfg.annualLimit * (indexTables ? factorAt(age) : 1);
+        const want = Math.min(Math.max(0, fhsaIn.contribution) * (indexTables ? factorAt(age) : 1), annualLimit);
+        const lifetimeLeft = Math.max(0, fhsaCfg.lifetimeLimit - fhsaContribBasis);
+        fhsaContribution = Math.min(want, lifetimeLeft);
+      }
+      fhsaGains = fhsaBal * r;
+      fhsaBal += fhsaContribution + fhsaGains;
+      fhsaContribBasis += fhsaContribution;
+    }
+
     // Reverse mortgage / HELOC: appreciate the home, accrue interest (reverse)
     // or charge it as an expense (HELOC), take any scheduled draw into the cash
     // cushion (rare pre-retirement, but allowed). Draws are capped at headroom.
@@ -1168,15 +1237,17 @@ export function calculatePerson(
       rentalGrossAccum += r.annualAmount * (r.indexedToCpi && indexTables ? factorAt(age) : 1);
     }
     // Self-employed CPP: the both-sides contribution is a DEDUCTION from taxable
-    // income, so the year's self-employment earnings are taxed net of it.
+    // income, so the year's self-employment earnings are taxed net of it. The
+    // FHSA contribution is deductible too (like an RRSP) — both come off the
+    // taxable base.
     const selfEmpCppAccum = selfEmployedCppContribution(selfEmploymentGrossAccum, yearCfg);
     // Marginal tax on the year's earned + pension + rental income (no benefits
-    // yet pre-retirement), less the self-employed CPP deduction. Apportioned
-    // pro-rata so each stream's net is its gross minus its share of the tax —
-    // the same convention the decumulation loop uses for employment.
+    // yet pre-retirement), less the self-employed CPP and FHSA deductions.
+    // Apportioned pro-rata so each stream's net is its gross minus its share of
+    // the tax — the same convention the decumulation loop uses for employment.
     const earningsGrossAccum = employmentGrossAccum + pensionGrossAccum + rentalGrossAccum;
     const earningsTaxAccum = earningsGrossAccum > 0
-      ? calculateTax(Math.max(0, earningsGrossAccum - selfEmpCppAccum), provinceCode, yearCfg).totalTax
+      ? calculateTax(Math.max(0, earningsGrossAccum - selfEmpCppAccum - fhsaContribution), provinceCode, yearCfg).totalTax
       : 0;
     const netOf = (gross: number): number =>
       earningsGrossAccum > 0 ? gross * (1 - earningsTaxAccum / earningsGrossAccum) : 0;
@@ -1287,8 +1358,8 @@ export function calculatePerson(
     yearlyBreakdown.push({
       age,
       startingBalance: startingTotal,
-      contributions: rrspContribution + tfsaContribution + taxableContribution + rdspContribution,
-      marketGains: rrspGains + tfsaGains + taxableGains + cashGains + rdspGains,
+      contributions: rrspContribution + tfsaContribution + taxableContribution + rdspContribution + fhsaContribution,
+      marketGains: rrspGains + tfsaGains + taxableGains + cashGains + rdspGains + fhsaGains,
       withdrawals: accumEventOut + accumTransfers.reduce((s, t) => s + t.gross, 0),
       incomeTax: accumIncomeTax,
       cumulativeTax,
@@ -1300,6 +1371,7 @@ export function calculatePerson(
       taxableBalance: taxable,
       cashCushionBalance: cashCushion,
       ...(rdspOn ? { rdspBalance: rdspBal } : {}),
+      ...(fhsaOn ? { fhsaBalance: fhsaBal } : {}),
       cppIncome: 0,
       oasIncome: 0,
       gisIncome: 0,
@@ -1310,13 +1382,14 @@ export function calculatePerson(
       employmentNet: employmentNetAccum,
       detail: {
         withdraw: { rrifMin: 0, rrif: 0, rrsp: 0, tfsa: 0, taxable: 0, cash: 0, rmDraw: 0 },
-        growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains },
-        contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution, ...(rdspOn ? { rdsp: rdspContribution } : {}) },
+        growth: { rrsp: rrspGains, rrif: 0, tfsa: tfsaGains, taxable: taxableGains, cash: cashGains, ...(fhsaOn ? { fhsa: fhsaGains } : {}) },
+        contrib: { rrsp: rrspContribution, tfsa: tfsaContribution, taxable: taxableContribution, ...(rdspOn ? { rdsp: rdspContribution } : {}), ...(fhsaOn ? { fhsa: fhsaContribution } : {}) },
         deposit: accumDeposit,
         ...(yearOverflow.tfsa > 0 || yearOverflow.rrsp > 0 ? { overflow: { tfsa: yearOverflow.tfsa, rrsp: yearOverflow.rrsp } } : {}),
         ...((tfsaRoom !== null || rrspRoom !== null) ? { roomRemaining: { ...(tfsaRoom !== null ? { tfsa: Math.max(0, tfsaRoom) } : {}), ...(rrspRoom !== null ? { rrsp: Math.max(0, rrspRoom) } : {}) } } : {}),
         tax: { oasClawback: 0, capitalGains: 0, registeredGross: accumTransferBaseGross },
         ...(rdspOn ? { rdsp: { contribution: rdspContribution, grant: rdspGrant, bond: rdspBond, growth: rdspGains, balance: rdspBal, contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction() } } : {}),
+        ...(fhsaOn ? { fhsa: { contribution: fhsaContribution, growth: fhsaGains, balance: fhsaBal, contributionBasis: fhsaContribBasis } } : {}),
         ...(rmOn ? { rm: { interestAccrued: accRmInterest, scheduledDraw: accRmScheduled, topUpDraw: 0, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: accRmInterestExpense } : {}) } } : {}),
         events: yearEvents,
         // Pre-retirement transfers: surface on the math page too. There is no
@@ -1341,8 +1414,19 @@ export function calculatePerson(
       tfsaBalance: tfsa,
       taxableBalance: taxable,
       cashCushionBalance: cashCushion,
-      ...(rdspOn ? { rdspBalance: rdspBal } : {})
+      ...(rdspOn ? { rdspBalance: rdspBal } : {}),
+      ...(fhsaOn ? { fhsaBalance: fhsaBal } : {})
     });
+  }
+
+  // FHSA → RRSP transfer at the retirement boundary: any remaining FHSA balance
+  // moves into the RRSP (the no-qualifying-home path; CRA allows the direct
+  // transfer with no RRSP contribution room required, so capToRoom is bypassed).
+  // The FHSA never enters the decumulation withdrawal order — it has served its
+  // purpose (or its 15-year window) by the time drawdown begins.
+  if (fhsaOn && fhsaBal > 0) {
+    rrsp += fhsaBal;
+    fhsaBal = 0;
   }
 
   // ---------------- decumulation phase ----------------
@@ -1874,6 +1958,7 @@ export function calculatePerson(
       taxableBalance: Math.max(0, taxable),
       cashCushionBalance: Math.max(0, cashCushion),
       ...(rdspOn ? { rdspBalance: Math.max(0, rdspBal) } : {}),
+      ...(fhsaOn ? { fhsaBalance: Math.max(0, fhsaBal) } : {}),
       cppIncome: cppGross,
       oasIncome: oasGross,
       gisIncome: gisGross,
@@ -1906,7 +1991,8 @@ export function calculatePerson(
       tfsaBalance: Math.max(0, tfsa),
       taxableBalance: Math.max(0, taxable),
       cashCushionBalance: Math.max(0, cashCushion),
-      ...(rdspOn ? { rdspBalance: Math.max(0, rdspBal) } : {})
+      ...(rdspOn ? { rdspBalance: Math.max(0, rdspBal) } : {}),
+      ...(fhsaOn ? { fhsaBalance: Math.max(0, fhsaBal) } : {})
     });
   }
 
@@ -2199,6 +2285,9 @@ export function combineHouseholdBreakdown(
       cashCushionBalance: py.cashCushionBalance + sy.cashCushionBalance,
       ...((py.rdspBalance !== undefined || sy.rdspBalance !== undefined)
         ? { rdspBalance: (py.rdspBalance ?? 0) + (sy.rdspBalance ?? 0) }
+        : {}),
+      ...((py.fhsaBalance !== undefined || sy.fhsaBalance !== undefined)
+        ? { fhsaBalance: (py.fhsaBalance ?? 0) + (sy.fhsaBalance ?? 0) }
         : {}),
       cppIncome: py.cppIncome + sy.cppIncome,
       oasIncome: py.oasIncome + sy.oasIncome,
