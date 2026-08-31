@@ -11,6 +11,7 @@ export * from './householdTypes';
 export * from './strategies';
 export * from './spendingSolver';
 export * from './monteCarlo';
+export * from './marketPeriods';
 export * from './types';
 export * from './compareMetrics';
 export * from './eqConstraints';

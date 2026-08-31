@@ -97,6 +97,20 @@ const proposeSpendingBandsArgs = z.object({
   rationale: z.string().optional(),
 });
 
+// Market hypothesis (issue #138). Each anchor sets the expected return at an
+// age; volatility is optional (absent = the plan's flat returnVolatility holds).
+const marketPeriodSchema = z.object({
+  age: z.number().describe('The age this anchor applies at.'),
+  return: z.number().describe('Expected annual return (decimal, e.g. -0.30 for a 30% crash, 0.07 for 7% growth). May be negative.'),
+  volatility: z.number().min(0).optional().describe('Annual return standard deviation at this age (decimal, e.g. 0.25). Omit to keep the plan\'s flat volatility.'),
+});
+
+const proposeMarketPeriodsArgs = z.object({
+  periods: z.array(marketPeriodSchema)
+    .describe('Market-hypothesis anchors, any order. The engine sorts by age and interpolates linearly between them; outside the outermost anchors the flat investmentReturn/returnVolatility hold. The projection follows the return curve; volatility shapes Monte Carlo only. Empty array clears the hypothesis (back to flat constants). Replaces the whole set.'),
+  rationale: z.string().optional(),
+});
+
 const proposeCashEventArgs = cashEventSchema
   .omit({ id: true })
   .extend({ rationale: z.string().optional() })
@@ -234,6 +248,7 @@ export const TOOL_SCHEMAS = {
   propose_spouse: proposeSpouseArgs,
   propose_income: proposeIncomeArgs,
   propose_spending_bands: proposeSpendingBandsArgs,
+  propose_market_periods: proposeMarketPeriodsArgs,
   propose_cash_event: proposeCashEventArgs,
   propose_reverse_mortgage: proposeReverseMortgageArgs,
   propose_rdsp: proposeRdspArgs,
@@ -275,7 +290,7 @@ export const EDITABLE_FIELDS = new Set([
 /** Structural top-level keys that are refused in flat override patches — they
  *  have dedicated propose_* tools with element-level validation. */
 const STRUCTURAL_FIELDS = new Set([
-  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa', 'debts',
+  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa', 'debts', 'marketPeriods',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -306,6 +321,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
     propose_spouse: { description:      'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.', schema: proposeSpouseArgs },
     propose_income: { description:      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.', schema: proposeIncomeArgs },
     propose_spending_bands: { description:      'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.', schema: proposeSpendingBandsArgs },
+    propose_market_periods: { description:      'PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.', schema: proposeMarketPeriodsArgs },
     propose_cash_event: { description:      'PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.', schema: proposeCashEventArgs },
     propose_reverse_mortgage: { description:      'PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.', schema: proposeReverseMortgageArgs },
     propose_rdsp: { description:      'PROPOSE enabling/configuring (or disabling) an RDSP (Registered Disability Savings Plan). Models CDSG grants, CDSB bonds, tax-sheltered growth, and taxable-fraction withdrawals. User confirms.', schema: proposeRdspArgs },
@@ -462,6 +478,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return proposeElement(ctx, 'income', incomeSourceSchema, parsed.data, 'income source');
     case 'propose_spending_bands':
       return proposeSpendingBands(ctx, parsed.data as z.infer<typeof proposeSpendingBandsArgs>);
+    case 'propose_market_periods':
+      return proposeMarketPeriods(ctx, parsed.data as z.infer<typeof proposeMarketPeriodsArgs>);
     case 'propose_cash_event':
       return proposeElement(ctx, 'events', cashEventSchema, parsed.data, 'cash event');
     case 'propose_reverse_mortgage':
@@ -507,6 +525,12 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
     hasSpouse: i.spouse?.enabled === true,
     desiredSpending: i.desiredSpending,
     investmentReturn: i.investmentReturn, returnVolatility: i.returnVolatility,
+    // Market hypothesis (issue #138): shown only when anchors exist, so the
+    // agent knows the projection/MC follow a curve, not the flat constants.
+    ...((i.marketPeriods?.length ?? 0) > 0 ? {
+      marketHypothesis: (i.marketPeriods ?? []).map(p =>
+        `age ${p.age}: ${(p.return * 100).toFixed(1)}%${p.volatility != null ? ` (σ ${(p.volatility * 100).toFixed(1)}%)` : ''}`),
+    } : {}),
   };
   const accounts = {
     rrsp: i.rrspBalance, tfsa: i.tfsaBalance, taxable: i.taxableBalance,
@@ -868,6 +892,31 @@ function proposeSpendingBands(
     label: 'Set spending phases',
     rationale: args.rationale,
     preview: { bands: sorted.map(b => `${(b.pctOfBase * 100).toFixed(0)}% from age ${b.fromAge}`) },
+  };
+}
+
+/** Replace the whole market-hypothesis set (issue #138). The engine needs a
+ *  stable id per anchor (the UI keys drag targets by it); the caller supplies
+ *  only age/return/volatility, so we mint ids here. Empty array = clear. */
+function proposeMarketPeriods(
+  _ctx: ToolContext,
+  args: { periods: Array<{ age: number; return: number; volatility?: number }>; rationale?: string },
+): ToolOutcome {
+  const res = z.array(marketPeriodSchema).safeParse(args.periods);
+  if (!res.success) {
+    return { kind: 'error', content: `Invalid market periods: ${zodIssues(res.error)}` };
+  }
+  const sorted = [...res.data].sort((a, b) => a.age - b.age);
+  const withIds = sorted.map((p, i) => ({ id: `mp-${i}-${p.age}`, ...p }));
+  return {
+    kind: 'mutation',
+    patch: { marketPeriods: withIds },
+    label: withIds.length > 0 ? `Set market hypothesis (${withIds.length} anchors)` : 'Clear market hypothesis',
+    rationale: args.rationale,
+    preview: {
+      periods: withIds.map(p =>
+        `age ${p.age}: ${(p.return * 100).toFixed(1)}%${p.volatility != null ? ` (σ ${(p.volatility * 100).toFixed(1)}%)` : ''}`),
+    },
   };
 }
 
