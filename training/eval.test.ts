@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { gateReport, scoreReply } from './eval';
+import { gateReport, scoreFollowup, scoreMutationConfirm, scoreReply } from './eval';
 import { emitToolCall } from './protocol';
+import { mintReadRecords } from './mint';
 import type { CorpusRecord } from './buildCorpus';
 
 const rec = (toolName: string): CorpusRecord => ({
@@ -117,5 +118,79 @@ describe('eval gate — gateReport aggregation', () => {
 
   it('throws when records and replies misalign', () => {
     expect(() => gateReport('m', [RUN_PROJ], [], 0.9)).toThrow(/align/);
+  });
+});
+
+describe('eval gate — multi-turn followup grading', () => {
+  // A real follow-up record from the corpus carries the genuine engine result
+  // in messages[2] and the grounding expectations in expect.
+  const followRec = mintReadRecords().find((r) => r.kind === 'tool-followup')!;
+  const callTarget = followRec.messages[1].content;       // canonical TOOL_CALL
+  const resultText = followRec.messages[2].content;        // fed-back [OK] result
+  const aFigure = (resultText.match(/\$[\d,]+/) ?? [''])[0]; // a real figure from the result
+
+  it('passes a correct call + grounded non-advisory continuation', () => {
+    const cont = `Net worth at retirement is ${aFigure}. Those are the consequences from your plan.`;
+    const s = scoreFollowup(followRec, callTarget, cont);
+    expect(s.call.valid).toBe(true);
+    expect(s.grounded).toBe(true);
+    expect(s.nonAdvisory).toBe(true);
+    expect(s.pass).toBe(true);
+  });
+
+  it('fails when the continuation ignores the tool result', () => {
+    const s = scoreFollowup(followRec, callTarget, 'Everything looks fine, no numbers needed.');
+    expect(s.grounded).toBe(false);
+    expect(s.pass).toBe(false);
+    expect(s.reason).toMatch(/does not reference/);
+  });
+
+  it('fails when the continuation crosses into advice', () => {
+    const s = scoreFollowup(followRec, callTarget, `At ${aFigure} you should retire at 60.`);
+    expect(s.nonAdvisory).toBe(false);
+    expect(s.pass).toBe(false);
+  });
+
+  it('fails when the tool call itself is invalid', () => {
+    const s = scoreFollowup(followRec, emitToolCall('wrong_tool', {}), `At ${aFigure}.`);
+    expect(s.call.valid).toBe(false);
+    expect(s.pass).toBe(false);
+  });
+});
+
+describe('eval gate — mutation-confirm grading', () => {
+  const proposeCall = emitToolCall('set_scenario_value', { field: 'cppStartAge', value: 70 });
+
+  it('approved: pass when the model confirms without re-proposing', () => {
+    const s = scoreMutationConfirm(proposeCall, 'set_scenario_value', true,
+      'Done — CPP now starts at 70 and it is live in your plan.');
+    expect(s.callValid && s.noRepropose && s.acknowledges).toBe(true);
+    expect(s.pass).toBe(true);
+  });
+
+  it('approved: fail when the model re-proposes the same change', () => {
+    const s = scoreMutationConfirm(proposeCall, 'set_scenario_value', true,
+      `Confirmed.\n${proposeCall}`);
+    expect(s.noRepropose).toBe(false);
+    expect(s.pass).toBe(false);
+    expect(s.reason).toMatch(/re-proposed/);
+  });
+
+  it('rejected: pass when the model accepts and does not repeat', () => {
+    const s = scoreMutationConfirm(proposeCall, 'set_scenario_value', false,
+      'Understood — I have left the plan unchanged.');
+    expect(s.pass).toBe(true);
+  });
+
+  it('rejected: fail when the model pushes the change again', () => {
+    const s = scoreMutationConfirm(proposeCall, 'set_scenario_value', false,
+      `You really should do this.\n${proposeCall}`);
+    expect(s.pass).toBe(false);
+  });
+
+  it('fails when the mutation call itself is malformed', () => {
+    const s = scoreMutationConfirm('TOOL_CALL: {bad json', 'set_scenario_value', true, 'done');
+    expect(s.callValid).toBe(false);
+    expect(s.pass).toBe(false);
   });
 });

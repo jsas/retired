@@ -162,6 +162,9 @@ export function mintReadRecords(evalEvery = 4): CorpusRecord[] {
         id: `${base}:follow`, split, kind: 'tool-followup', scenarioId: sc.id,
         messages: followMessages,
         expect: {
+          // The follow-up's call turn must invoke the same tool — the gate's
+          // multi-turn grader checks it against this expected tool.
+          toolName: spec.tool,
           mustContain: ['consequences'],
           mustNotContain: ['you should', 'I recommend', 'you ought to'],
         },
