@@ -187,6 +187,21 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
         </Section>
       )}
 
+      {detail.debts && detail.debts.some(d => d.interestAccrued > 0.5 || d.payment > 0.5 || d.balanceEnd > 0.5) && (
+        <Section title="Debts">
+          {detail.debts.map((d, i) => (
+            <div key={i}>
+              <div className="text-[11px] font-medium text-slate-600 mt-1 first:mt-0">{d.label}</div>
+              <div className="pl-2">
+                <Line label="Interest accrued" value={d.interestAccrued} hint="This year's interest charge, compounded onto the balance before the payment." />
+                {d.payment > 0.5 && <Line label="Payment" value={d.payment} hint="Serviced out of cash flow (funded from your accounts like any other expense)." />}
+                <Line label="Balance" value={d.balanceEnd} strong />
+              </div>
+            </div>
+          ))}
+        </Section>
+      )}
+
       {detail.events.length > 0 && (
         <Section title="Cash events">
           {detail.events.map((ev, i) => (
@@ -224,12 +239,14 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
   const hasRdsp = breakdown.some(r => r.rdspBalance !== undefined);
   // FHSA balance column appears only when a person has an FHSA.
   const hasFhsa = breakdown.some(r => r.fhsaBalance !== undefined);
+  // Debt balance column appears only when a person carries a debt.
+  const hasDebts = breakdown.some(r => r.debtBalance !== undefined);
   const anyDetail = household || breakdown.some(r => r.detail);
   // Number of columns the detail row must span: base 19 + the expand chevron
-  // (when any row is expandable) + optional RM/RDSP/FHSA columns. The chevron column
+  // (when any row is expandable) + optional RM/RDSP/FHSA/Debt columns. The chevron column
   // was previously left out, so an expandable table's detail row spanned one
   // column too few and the panel didn't reach the table's right edge.
-  const colCount = 19 + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0);
+  const colCount = 19 + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0) + (hasDebts ? 1 : 0);
 
   return (
     <div className="bg-white border border-slate-200 rounded overflow-hidden">
@@ -265,6 +282,9 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
               )}
               {hasRm && (
                 <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Home value minus reverse-mortgage loan balance. The loan compounds with interest and draws, eroding equity over time.">Home Equity</th>
+              )}
+              {hasDebts && (
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Total outstanding debt balance (mortgage, credit cards, loans, lines of credit). Interest accrues each year; payments are funded from spending.">Debts</th>
               )}
             </tr>
           </thead>
@@ -364,6 +384,12 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
                       <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
                         title={row.homeValue !== undefined ? `Home ${formatCurrency(row.homeValue)} − loan ${formatCurrency(row.loanBalance ?? 0)}` : undefined}>
                         {row.netHomeEquity !== undefined ? formatCurrency(row.netHomeEquity) : '—'}
+                      </td>
+                    )}
+                    {hasDebts && (
+                      <td className={`px-3 py-1.5 text-right font-mono ${(row.debtBalance ?? 0) > 0.5 ? 'text-red-600' : 'text-slate-600'}`}
+                        title={(row.debtPayments ?? 0) > 0.5 ? `Paid ${formatCurrency(row.debtPayments ?? 0)} this year` : undefined}>
+                        {row.debtBalance !== undefined ? formatCurrency(row.debtBalance) : '—'}
                       </td>
                     )}
                   </tr>

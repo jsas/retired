@@ -13,7 +13,7 @@
 // Carlo, the solvers) can migrate to the unified model independently while the
 // wire/storage formats stay stable.
 
-import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, IncomeSource, SpendingBand, ReverseMortgage, RdspInputs, FhsaInputs } from './retirementEngine';
+import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, IncomeSource, SpendingBand, ReverseMortgage, RdspInputs, FhsaInputs, Debt } from './retirementEngine';
 
 // ---------------------------------------------------------------------------
 // Accounts & transfers
@@ -78,6 +78,8 @@ export interface PersonInputs {
   rdsp?: RdspInputs;
   // First Home Savings Account. Optional; absent = none. Accumulation-only.
   fhsa?: FhsaInputs;
+  // The person's debts (mortgage, cards, loans). Optional; absent = debt-free.
+  debts?: Debt[];
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +183,8 @@ export function fromHousehold(h: Household, base?: RetirementInputs): Retirement
     income: primary.income,
     reverseMortgage: primary.reverseMortgage,
     rdsp: primary.rdsp,
+    fhsa: primary.fhsa,
+    debts: primary.debts,
     // Preserve spouse linkage + legacy/optional fields from the base inputs
     // when round-tripping; they aren't part of the unified model.
     spouseSource: base?.spouseSource,
@@ -211,6 +215,8 @@ export function fromHousehold(h: Household, base?: RetirementInputs): Retirement
       spendingBands: spousePerson.spendingBands,
       reverseMortgage: spousePerson.reverseMortgage,
       rdsp: spousePerson.rdsp,
+      fhsa: spousePerson.fhsa,
+      debts: spousePerson.debts,
     };
   }
   return inputs;
@@ -266,6 +272,7 @@ export function legacyToPerson(inputs: RetirementInputs): PersonInputs {
     reverseMortgage: inputs.reverseMortgage,
     rdsp: inputs.rdsp,
     fhsa: inputs.fhsa,
+    debts: inputs.debts,
   };
 }
 
@@ -338,6 +345,7 @@ export function legacySpouseToPerson(sp: SpouseInputs): PersonInputs {
     reverseMortgage: sp.reverseMortgage,
     rdsp: sp.rdsp,
     fhsa: sp.fhsa,
+    debts: sp.debts,
   };
 }
 
@@ -472,6 +480,7 @@ export function resolveSpouseSource(
     reverseMortgage: their.reverseMortgage,
     rdsp: their.rdsp,
     fhsa: their.fhsa,
+    debts: their.debts,
   };
   return { spouse, warnings };
 }

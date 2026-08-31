@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type {
   RetirementInputs, SpouseInputs, CashEvent, IncomeSource, SpendingBand,
-  ReverseMortgage, WithdrawalAccount, RdspInputs, FhsaInputs,
+  ReverseMortgage, WithdrawalAccount, RdspInputs, FhsaInputs, Debt,
 } from '../lib/retirementEngine';
 import type { AppConfig, TaxTable } from '../lib/appConfig';
 import type { Scenario } from '../lib/types';
@@ -100,6 +100,17 @@ export const fhsaSchema = z.object({
   openAge: z.number().optional(),
 }) satisfies z.ZodType<FhsaInputs>;
 
+export const debtSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  kind: z.enum(['mortgage', 'creditCard', 'loan', 'lineOfCredit', 'other']),
+  balance: z.number(),
+  interestRate: z.number(),
+  monthlyPayment: z.number(),
+  startAge: z.number().optional(),
+  endAge: z.number().nullish(),
+}) satisfies z.ZodType<Debt>;
+
 const spouseSourceSchema = z.union([
   z.object({ kind: z.literal('builtin') }),
   z.object({ kind: z.literal('scenario'), scenarioId: z.string() }),
@@ -130,6 +141,7 @@ export const spouseSchema = z.object({
   reverseMortgage: reverseMortgageSchema.optional(),
   rdsp: rdspSchema.optional(),
   fhsa: fhsaSchema.optional(),
+  debts: z.array(debtSchema).optional(),
 }) satisfies z.ZodType<SpouseInputs>;
 
 export const retirementInputsSchema = z.object({
@@ -165,6 +177,7 @@ export const retirementInputsSchema = z.object({
   reverseMortgage: reverseMortgageSchema.optional(),
   rdsp: rdspSchema.optional(),
   fhsa: fhsaSchema.optional(),
+  debts: z.array(debtSchema).optional(),
 }) satisfies z.ZodType<RetirementInputs>;
 
 export const scenarioSchema = z.object({

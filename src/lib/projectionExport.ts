@@ -9,7 +9,7 @@ import type { RetirementInputs, RetirementResults, YearlyBreakdown } from './ret
 
 export type ExportFormat = 'csv' | 'json' | 'yaml';
 export type Subject = 'household' | 'you' | 'spouse';
-export type ColumnGroup = 'balances' | 'flows' | 'benefits' | 'withdrawalSources' | 'growth' | 'tax' | 'reverseMortgage' | 'rdsp' | 'fhsa' | 'events';
+export type ColumnGroup = 'balances' | 'flows' | 'benefits' | 'withdrawalSources' | 'growth' | 'tax' | 'reverseMortgage' | 'rdsp' | 'fhsa' | 'debts' | 'events';
 export type MetaSection = 'profile' | 'options' | 'settings';
 
 export interface ProjectionExportOptions {
@@ -31,6 +31,7 @@ export const COLUMN_GROUPS: Array<{ key: ColumnGroup; label: string; hint: strin
   { key: 'reverseMortgage', label: 'Reverse mortgage', hint: 'Home value, loan, equity, interest accrued, scheduled vs top-up draws' },
   { key: 'rdsp', label: 'RDSP', hint: 'Balance, contribution, grant (CDSG), bond (CDSB), growth, withdrawal + taxable portion' },
   { key: 'fhsa', label: 'FHSA', hint: 'Balance, deductible contribution, growth, contributed-to-date (accumulation-only)' },
+  { key: 'debts', label: 'Debts', hint: 'Year totals (payment, ending balance) plus one column per debt (interest, payment, balance)' },
   { key: 'events', label: 'Cash events', hint: 'One column per labelled event' },
 ];
 
@@ -94,7 +95,7 @@ export function saveProjectionExportOptions(opts: ProjectionExportOptions): void
 // Row → record mapping (shared by CSV columns and JSON/YAML output)
 // ---------------------------------------------------------------------------
 
-function rowToRecord(row: YearlyBreakdown, groups: ColumnGroup[], eventKeys: string[]): Record<string, number | string> {
+function rowToRecord(row: YearlyBreakdown, groups: ColumnGroup[], eventKeys: string[], debtKeys: string[]): Record<string, number | string> {
   const d = row.detail;
   const rec: Record<string, number | string> = { age: row.age };
   if (groups.includes('balances')) {
@@ -165,6 +166,17 @@ function rowToRecord(row: YearlyBreakdown, groups: ColumnGroup[], eventKeys: str
     rec.fhsaGrowth = d?.fhsa?.growth ?? 0;
     rec.fhsaContributionBasis = d?.fhsa?.contributionBasis ?? 0;
   }
+  if (groups.includes('debts') && row.debtBalance !== undefined) {
+    // Year totals (combined across debts), then one triplet per named debt.
+    rec.debtPayments = row.debtPayments ?? 0;
+    rec.debtBalance = row.debtBalance;
+    for (const key of debtKeys) {
+      const deb = d?.debts?.find(x => x.label === key);
+      rec[`debt:${key}:interest`] = deb ? deb.interestAccrued : '';
+      rec[`debt:${key}:payment`] = deb ? deb.payment : '';
+      rec[`debt:${key}:balance`] = deb ? deb.balanceEnd : '';
+    }
+  }
   if (groups.includes('events')) {
     for (const key of eventKeys) {
       const ev = d?.events.find(e => e.label === key);
@@ -180,6 +192,17 @@ function collectEventKeys(rows: YearlyBreakdown[]): string[] {
   for (const r of rows) {
     for (const ev of r.detail?.events ?? []) {
       if (!keys.includes(ev.label)) keys.push(ev.label);
+    }
+  }
+  return keys;
+}
+
+// All debt labels across the rows, in first-seen order (stable columns).
+function collectDebtKeys(rows: YearlyBreakdown[]): string[] {
+  const keys: string[] = [];
+  for (const r of rows) {
+    for (const deb of r.detail?.debts ?? []) {
+      if (!keys.includes(deb.label)) keys.push(deb.label);
     }
   }
   return keys;
@@ -212,10 +235,13 @@ export function buildCsv(
   const eventKeys = groups.includes('events')
     ? [...new Set(people.flatMap(p => collectEventKeys(p.rows)))]
     : [];
+  const debtKeys = groups.includes('debts')
+    ? [...new Set(people.flatMap(p => collectDebtKeys(p.rows)))]
+    : [];
 
   // Header order = record insertion order; build from a sample record per
   // group combination so unchecked groups leave no dangling columns.
-  const sample = rowToRecord(people[0].rows[0], groups, eventKeys);
+  const sample = rowToRecord(people[0].rows[0], groups, eventKeys, debtKeys);
   const dataHeaders = Object.keys(sample).filter(k => k !== 'age');
   const headers = ['person', 'age', 'calendarYear', ...dataHeaders];
 
@@ -223,7 +249,7 @@ export function buildCsv(
   for (const p of people) {
     const baseYear = new Date().getFullYear();
     for (const row of p.rows) {
-      const rec = rowToRecord(row, groups, eventKeys);
+      const rec = rowToRecord(row, groups, eventKeys, debtKeys);
       const calendarYear = baseYear + (row.age - p.currentAge);
       lines.push([p.person, row.age, calendarYear, ...dataHeaders.map(h => csvEscape(rec[h] ?? ''))].join(','));
     }
@@ -330,6 +356,7 @@ export function buildProjectionObject(
         income: inputs.income,
         events: inputs.events,
         reverseMortgage: inputs.reverseMortgage,
+        debts: inputs.debts,
         verdict: {
           status: results.status,
           depletionAge: results.depletionAge,
