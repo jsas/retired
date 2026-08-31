@@ -36,7 +36,9 @@ English, few controls, distinct concepts over reskins.
   bottom (§8.8), always visible.
 - ✅ **Details** (`DetailsPage.tsx`) — 3 levers + 13 sections, one scroll, plain-name
   groups (People/Accounts/Income/Spending/Property), Details ▾ deep-links
-  (`#/details?section=…`), two-col desktop / one-col mobile.
+  (`#/details?section=…`), two-col desktop / one-col mobile. Income / Events / Debts /
+  Spouse edit inline (add + remove) via shared `Num`/`Txt`/`Sel` flat-hairline helpers
+  — nothing defers to the old app.
 - ✅ **Schedule** (`ScheduleTable.tsx` + `scheduleColumns.ts`) — year-by-year + §8.9
   column picker, prefKV-persisted (`wealthconsole_schedule_cols`); RDSP/FHSA/Home
   Equity/Debts columns auto-gated.
@@ -52,7 +54,7 @@ English, few controls, distinct concepts over reskins.
   `#/help?topic=<id>` deep-links + flash); `HelpHint` shows the same body in a flat
   popup — single source, no drift. Hints placed on every surface via
   `Panel hint=` / `Fader help=` / `BetaPage hint=`.
-- ✅ **Suite:** 996/996 tests green · `tsc -b` clean · build ok.
+- ✅ **Suite:** 1002/1002 tests green · `tsc -b` clean · build ok.
 
 ---
 
@@ -74,13 +76,15 @@ proper component (or a new primitive added to `src/design/` + the Style Guide pa
 - [ ] Plans / Data / Settings / Print / Export / Donate / Connections (`beta/pages.tsx` wrappers)
 - [ ] For each: a written list of what to update, then the conversion.
 
-### B. Details page — no way to ADD things ⬜
-The Details sections that hold lists are read-only summaries pointing at the old app:
-- [ ] **Cash Events** — add an event (in/out, one-time or recurring)
-- [ ] **Income** — add a source (work / pension / self / rental)
-- [ ] **Debts** — add a debt
-- [ ] **Spouse** — enable/edit partner
-(Each currently says "edit in the stable app" — bring the add/edit inline, in-styleguide.)
+### B. Details page — no way to ADD things ✅
+The Details sections that hold lists now edit inline, in-styleguide (flat hairline
+cards, `×` remove, `+ add` buttons, shared `Num`/`Txt`/`Sel` helpers):
+- [x] **Cash Events** — add an event (in/out, one-time or recurring to an end age)
+- [x] **Income** — add a source (work / pension / self / rental), name, $/yr, from/to age
+- [x] **Debts** — add a debt (kind, balance, rate, monthly payment)
+- [x] **Spouse** — enable toggle + partner age / balances / CPP / OAS fields inline
+(All four write to `inputs.events` / `inputs.income` / `inputs.debts` / `inputs.spouse`
+via the existing `set` helper; tests in `DetailsPage.test.tsx` cover add/remove rows.)
 
 ### C. Assistant — fix the chrome ✅
 - [x] **Never appear on the first page** — the landing renders no assistant; the dock
@@ -126,8 +130,8 @@ OAS 65–70. All faders read the same range object.
 
 - [ ] Every page composes `src/design/` primitives — no forked styles (§8.10).
 - [ ] Every sidebar section has a named home; nothing dropped silently (§8.7).
-- [ ] Details page can add events / income / debts / spouse inline.
-- [ ] Assistant: absent on landing, remembers open state, has a full-page view, slim chat picker.
+- [x] Details page can add events / income / debts / spouse inline.
+- [x] Assistant: absent on landing, remembers open state, has a full-page view, slim chat picker.
 - [ ] Flat/square/hairline rules hold everywhere (no cards, no shadows, one blue accent).
 - [ ] Mobile: assistant sheet, finger-draggable map/faders, readable pages.
 - [ ] Tests with every feature; `npx vitest run` green before merge.

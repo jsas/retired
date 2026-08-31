@@ -4,7 +4,7 @@
 // tapped section (?section=…). Two-col on desktop, one-col on mobile. Every
 // field edits the real plan; the verdict, map and dock recompute together.
 import { useEffect, useRef } from 'react';
-import type { RetirementInputs, WithdrawalAccount, SpendingBand } from '@retired/engine-core/retirementEngine';
+import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt } from '@retired/engine-core/retirementEngine';
 import { Panel, Fader, HelpHint } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
@@ -34,6 +34,50 @@ function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
   );
 }
 
+/* A small labelled text input, same flat hairline. */
+function Txt({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[12px] text-slate-500">{label}</span>
+      <input
+        type="text"
+        className="mt-0.5 w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+/* A small labelled select, same flat hairline. */
+function Sel<T extends string>({ label, value, onChange, options }: {
+  label: string; value: T; onChange: (v: T) => void; options: { value: T; label: string }[];
+}) {
+  return (
+    <label className="block">
+      <span className="text-[12px] text-slate-500">{label}</span>
+      <select
+        className="mt-0.5 w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+      >
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+const INCOME_KIND_LABEL: Record<IncomeKind, string> = {
+  employment: 'Employment', pension: 'Pension (DB/bridge)', selfEmployment: 'Self-employment', rental: 'Rental',
+};
+const DEBT_KIND_LABEL: Record<Debt['kind'], string> = {
+  mortgage: 'Mortgage', creditCard: 'Credit card', loan: 'Loan', lineOfCredit: 'Line of credit', other: 'Other',
+};
+
 function Section({ id, title, hint, children }: { id: string; title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section id={`details-${id}`} className="border-b border-slate-200 py-6">
@@ -44,6 +88,19 @@ function Section({ id, title, hint, children }: { id: string; title: string; hin
 }
 
 const ACCOUNT_LABEL: Record<WithdrawalAccount, string> = { rrsp: 'RRSP', tfsa: 'TFSA', taxable: 'Taxable', rdsp: 'RDSP' };
+
+function defaultSpouse(primaryAge: number) {
+  return {
+    enabled: true,
+    currentAge: primaryAge,
+    retirementAge: primaryAge + 5,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+    cppStartAge: 65 as number | null, cppMonthlyAmount: 0,
+    oasStartAge: 65 as number | null, oasYearsInCanada: 40,
+    desiredSpending: 0,
+  };
+}
 
 export function DetailsPage({ inputs, onChange, section }: {
   inputs: RetirementInputs;
@@ -139,16 +196,48 @@ function renderSection(id: string, ctx: {
           </label>
         </Section>
       );
-    case 'spouse':
+    case 'spouse': {
+      const sp = inp.spouse;
+      const enabled = sp?.enabled === true;
+      const setSpouse = (patch: Partial<NonNullable<typeof sp>>) =>
+        set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: true, ...patch } });
       return (
         <Section id="spouse" title="Spouse" hint="include-spouse">
-          <p className="text-[12.5px] leading-relaxed text-slate-500">
-            {inp.spouse?.enabled
-              ? 'A partner plan is combined for household totals. Edit the partner\'s balances and benefits in the stable app\'s Spouse section for now — the combined verdict already shows here.'
-              : 'No partner on this plan. Adding one combines a second plan for household totals.'}
-          </p>
+          <label className="flex items-center gap-2 text-[13px] text-slate-800">
+            <input type="checkbox" checked={enabled}
+              onChange={(e) => {
+                if (e.target.checked) set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: true } });
+                else set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: false } });
+              }} />
+            Include a partner
+            <HelpHint topic="include-spouse" />
+          </label>
+          {enabled && sp && (
+            <div className="mt-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Num label="Partner age" value={sp.currentAge} step={1} onChange={(v) => setSpouse({ currentAge: v })} />
+                <Num label="Retires at" value={sp.retirementAge} step={1} onChange={(v) => setSpouse({ retirementAge: v })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Num label="RRSP" value={sp.rrspBalance} onChange={(v) => setSpouse({ rrspBalance: v })} />
+                <Num label="TFSA" value={sp.tfsaBalance} onChange={(v) => setSpouse({ tfsaBalance: v })} />
+                <Num label="Taxable" value={sp.taxableBalance} onChange={(v) => setSpouse({ taxableBalance: v })} />
+                <Num label="Cash cushion" value={sp.cashCushionBalance} onChange={(v) => setSpouse({ cashCushionBalance: v })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Num label="CPP start age" value={sp.cppStartAge ?? 65} step={1} min={60} onChange={(v) => setSpouse({ cppStartAge: v })} />
+                <Num label="CPP monthly (at 65)" value={sp.cppMonthlyAmount} step={50} onChange={(v) => setSpouse({ cppMonthlyAmount: v })} />
+                <Num label="OAS start age" value={sp.oasStartAge ?? 65} step={1} min={65} onChange={(v) => setSpouse({ oasStartAge: v })} />
+                <Num label="OAS years in Canada" value={sp.oasYearsInCanada} step={1} onChange={(v) => setSpouse({ oasYearsInCanada: v })} />
+              </div>
+              <p className="text-[11px] leading-relaxed text-slate-400">
+                Contributions, income, events and phases for the partner are full-parity fields — the combined verdict already counts them.
+              </p>
+            </div>
+          )}
         </Section>
       );
+    }
     case 'accounts':
       return (
         <Section id="accounts" title="Account Balances" hint="rrsp">
@@ -170,16 +259,39 @@ function renderSection(id: string, ctx: {
           </div>
         </Section>
       );
-    case 'income':
+    case 'income': {
+      const list = inp.income ?? [];
+      const add = () => set({ income: [...list, { id: uid(), label: '', kind: 'employment' as IncomeKind, annualAmount: 0, startAge: inp.currentAge, endAge: inp.retirementAge, indexedToCpi: true }] });
+      const upd = (i: number, patch: Partial<IncomeSource>) => {
+        const next = [...list]; next[i] = { ...list[i], ...patch }; set({ income: next });
+      };
       return (
         <Section id="income" title="Income" hint="income">
-          <p className="text-[12.5px] leading-relaxed text-slate-500">
-            {(inp.income ?? []).length} source{(inp.income ?? []).length === 1 ? '' : 's'} on the plan
-            {(inp.income ?? []).length > 0 ? ` — ${(inp.income ?? []).map(s => s.label || s.kind).join(', ')}` : ''}.
-            Add and edit work, pensions and rentals in the stable app\'s Income section; the verdict here already counts them.
-          </p>
+          {list.length === 0 && <p className="text-[12.5px] text-slate-400">No income on the plan yet.</p>}
+          <div className="space-y-2">
+            {list.map((s, i) => (
+              <div key={s.id} className="space-y-2 border border-slate-200 p-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><Txt label="Name" value={s.label} placeholder="e.g. Day job, DB pension, rental" onChange={(v) => upd(i, { label: v })} /></div>
+                  <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${s.label || 'income'}`}
+                    onClick={() => set({ income: list.filter((_, j) => j !== i) })}>×</button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Sel label="Kind" value={s.kind} onChange={(v) => upd(i, { kind: v })}
+                    options={(Object.keys(INCOME_KIND_LABEL) as IncomeKind[]).map(k => ({ value: k, label: INCOME_KIND_LABEL[k] }))} />
+                  <Num label="$ a year" value={s.annualAmount} step={1000} onChange={(v) => upd(i, { annualAmount: v })} />
+                  <Num label="From age" value={s.startAge} step={1} onChange={(v) => upd(i, { startAge: v })} />
+                  <Num label="To age (blank = forever)" value={s.endAge ?? 0} step={1} onChange={(v) => upd(i, { endAge: v <= 0 ? null : v })} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="mt-2 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={add}>
+            + add income
+          </button>
         </Section>
       );
+    }
     case 'benefits':
       return (
         <Section id="benefits" title="Government Benefits" hint="cpp-start-age">
@@ -191,16 +303,40 @@ function renderSection(id: string, ctx: {
           </div>
         </Section>
       );
-    case 'events':
+    case 'events': {
+      const list = inp.events ?? [];
+      const add = (direction: 'in' | 'out') => set({ events: [...list, { id: uid(), age: inp.retirementAge, label: '', amount: 0, direction }] });
+      const upd = (i: number, patch: Partial<CashEvent>) => {
+        const next = [...list]; next[i] = { ...list[i], ...patch }; set({ events: next });
+      };
       return (
         <Section id="events" title="Cash Events" hint="cash-events">
-          <p className="text-[12.5px] leading-relaxed text-slate-500">
-            {(inp.events ?? []).length} event{(inp.events ?? []).length === 1 ? '' : 's'} on the plan
-            {(inp.events ?? []).length > 0 ? ` — ${(inp.events ?? []).map(e => e.label || 'event').join(', ')}` : ''}.
-            One-time and recurring in- and out-flows are edited in the stable app\'s Cash Events section.
-          </p>
+          {list.length === 0 && <p className="text-[12.5px] text-slate-400">No one-time or recurring flows on the plan.</p>}
+          <div className="space-y-2">
+            {list.map((e, i) => (
+              <div key={e.id} className="space-y-2 border border-slate-200 p-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><Txt label="Name" value={e.label} placeholder="e.g. Inheritance, renovation, gift" onChange={(v) => upd(i, { label: v })} /></div>
+                  <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${e.label || 'event'}`}
+                    onClick={() => set({ events: list.filter((_, j) => j !== i) })}>×</button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Sel label="Direction" value={e.direction} onChange={(v) => upd(i, { direction: v })}
+                    options={[{ value: 'in' as const, label: 'Money in' }, { value: 'out' as const, label: 'Money out' }]} />
+                  <Num label="$ amount" value={e.amount} step={1000} onChange={(v) => upd(i, { amount: v })} />
+                  <Num label="At age" value={e.age} step={1} onChange={(v) => upd(i, { age: v })} />
+                  <Num label="Repeat to age (blank = once)" value={e.endAge ?? 0} step={1} onChange={(v) => upd(i, { endAge: v <= 0 ? null : v })} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('in')}>+ add money in</button>
+            <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('out')}>+ add money out</button>
+          </div>
         </Section>
       );
+    }
     case 'spending':
       return (
         <Section id="spending" title="Spending Phases" hint="spending-phases">
@@ -244,14 +380,42 @@ function renderSection(id: string, ctx: {
           </ol>
         </Section>
       );
-    case 'debts':
+    case 'debts': {
+      const list = inp.debts ?? [];
+      const add = () => set({ debts: [...list, { id: uid(), label: '', kind: 'mortgage' as Debt['kind'], balance: 0, interestRate: 0.05, monthlyPayment: 0 }] });
+      const upd = (i: number, patch: Partial<Debt>) => {
+        const next = [...list]; next[i] = { ...list[i], ...patch }; set({ debts: next });
+      };
       return (
         <Section id="debts" title="Debts" hint="debts">
-          <p className="text-[12.5px] leading-relaxed text-slate-500">
-            Mortgages and consumer debts raise yearly withdrawals until paid off. Manage them in the stable app\'s Debts section; the verdict here already counts the payments.
+          {list.length === 0 && <p className="text-[12.5px] text-slate-400">No debts on the plan.</p>}
+          <div className="space-y-2">
+            {list.map((d, i) => (
+              <div key={d.id} className="space-y-2 border border-slate-200 p-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><Txt label="Name" value={d.label} placeholder="e.g. Mortgage, car loan" onChange={(v) => upd(i, { label: v })} /></div>
+                  <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${d.label || 'debt'}`}
+                    onClick={() => set({ debts: list.filter((_, j) => j !== i) })}>×</button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Sel label="Kind" value={d.kind} onChange={(v) => upd(i, { kind: v })}
+                    options={(Object.keys(DEBT_KIND_LABEL) as Debt['kind'][]).map(k => ({ value: k, label: DEBT_KIND_LABEL[k] }))} />
+                  <Num label="Balance" value={d.balance} step={1000} onChange={(v) => upd(i, { balance: v })} />
+                  <Num label="Rate %" value={Math.round(d.interestRate * 1000) / 10} step={0.1} onChange={(v) => upd(i, { interestRate: v / 100 })} />
+                  <Num label="Monthly payment" value={d.monthlyPayment} step={50} onChange={(v) => upd(i, { monthlyPayment: v })} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="mt-2 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={add}>
+            + add a debt
+          </button>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+            Payments are added to yearly withdrawals until each debt is paid off.
           </p>
         </Section>
       );
+    }
     case 'home':
       return (
         <Section id="home" title="Home Equity" hint="home-equity">
