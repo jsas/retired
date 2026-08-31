@@ -236,4 +236,43 @@ For each item in 8.2–8.6, the winning design must name its home: (a) visible b
 - Privacy: no servers/accounts, data stays in the browser (from DonateCard copy — keep that voice)
 - **Legal page:** not financial/tax/investment advice; educational modeling only; rules are Canadian tax & benefit approximations (expand WelcomeCard:112 into a real page)
 - Open-source link, donate link, help/docs link
+
+### 8.9 Schedule page: user-selectable columns
+
+The schedule table (`ScheduleTable.tsx`) currently renders ~19–22 columns
+hard-coded — every engine output always on. The beta keeps the table (§8.2:
+"the receipts") but puts the user in charge of its width.
+
+- **A simple control in the table header** (a "Columns" button opening a
+  checklist) selects which columns are visible. One click to toggle, no modal
+  ceremony, applied immediately.
+- **A good starter set is the default**, not everything: Age · Starting
+  Balance · Contributions · Market Gains · Withdrawals · Ending Balance ·
+  CPP · OAS. The rest (tax columns, GIS, pension, per-account balances, RDSP,
+  home equity) are available in the picker but off by default. The full set is
+  one "show all" away.
+- **The chevron/expand column and conditional columns** (RDSP, home equity)
+  still appear only when the feature produced them — the picker governs the
+  always-on set, feature-gating stays automatic.
+- **Persistence via the prefs mechanism** (`prefKV`, issue #20): the visible-
+  column set is plan-adjacent UI state, so it rides the same kv-table +
+  localStorage-mirror path as `wealthconsole_panel_state` — captured by every
+  full backup, restored on import, readable synchronously at first paint. Add
+  the key to `PREF_KEYS`; do not invent a parallel localStorage key.
+
+### 8.10 Design source of truth
+
+The beta skin's visual language is **not** rediscovered per page — it lives
+in one place and every surface builds from it:
+
+- **`STYLEGUIDE.md`** (repo root) — the principles in prose: flat, hairline,
+  one accent; verdict-first; touch first-class.
+- **`src/design/`** — the same rules as live code: `tokens.ts` (every colour,
+  size, shared class named once), `primitives.tsx` (`Fader`, `Chip`,
+  `VerdictHero`, `Panel`, …), `StyleGuide.tsx` (a page rendering all of it
+  live at `#/styleguide`).
+- **Rule:** a new surface composes `src/design/` primitives. If a needed
+  style isn't there, it gets *added* there (and appears on the style-guide
+  page) — never forked one-off inside a page. This is the §7 "thin skin"
+  made concrete: the vocabulary is a dependency, not a copy.
 - The door: "Open the app" → Site 2
