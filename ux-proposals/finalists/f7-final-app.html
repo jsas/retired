@@ -81,7 +81,6 @@
   .tdot:nth-child(2) { animation-delay:.15s; }
   .tdot:nth-child(3) { animation-delay:.3s; }
 
-  .skybtn { transition: background .12s, color .12s, border-color .12s; }
   .vdot { transition: background-color .3s; }
 
   ::selection { background: #e2e8f0; }
@@ -193,12 +192,14 @@
           <p id="verdictSub" class="mt-1.5 text-[13.5px] leading-relaxed text-slate-500"></p>
         </div>
 
-        <!-- storm / ordinary / kind — the layperson's Monte Carlo -->
-        <div class="flex items-center gap-1.5 text-[12px] text-slate-500">
-          <span class="mr-1">If the markets are</span>
-          <button data-sky="storm"  class="skybtn border border-slate-200 px-2.5 py-1 text-slate-500 hover:text-slate-900" aria-pressed="false">stormy</button>
-          <button data-sky="normal" class="skybtn border border-slate-200 px-2.5 py-1 text-slate-500 hover:text-slate-900" aria-pressed="true">ordinary</button>
-          <button data-sky="sun"    class="skybtn border border-slate-200 px-2.5 py-1 text-slate-500 hover:text-slate-900" aria-pressed="false">kind</button>
+        <!-- the market assumption — a plain dial from down to up -->
+        <div class="flex items-center gap-3 text-[12px] text-slate-500">
+          <span>Markets</span>
+          <span class="text-[11px] text-slate-400">down</span>
+          <input id="fMarket" type="range" class="fader" style="width:9rem" min="1.2" max="4.5" step="0.1" value="3.0"
+                 aria-label="Average annual market return, from down markets to up markets" />
+          <span class="text-[11px] text-slate-400">up</span>
+          <span class="num w-12 text-right font-semibold text-slate-700" id="vMarket">3.0%</span>
         </div>
       </div>
     </section>
@@ -255,11 +256,11 @@
           <p class="mt-2 text-[11.5px] leading-relaxed text-slate-500" id="fxSpend"></p>
         </div>
 
-        <!-- storm-test indicator — always on, plain words, square dot -->
+        <!-- down-market check — always on, plain words, square dot -->
         <div class="border-l-2 border-slate-200 pl-4">
           <div class="flex items-center gap-2">
             <span id="stormDot" class="vdot h-2 w-2 inline-block"></span>
-            <span class="text-[13px] font-medium text-slate-700" id="stormTitle">Storm test</span>
+            <span class="text-[13px] font-medium text-slate-700" id="stormTitle">Down-market check</span>
           </div>
           <p class="mt-1.5 text-[11.5px] leading-relaxed text-slate-500" id="stormLine"></p>
         </div>
@@ -340,7 +341,7 @@
 
     <p class="text-[11px] leading-relaxed text-slate-400">
       Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line,
-      the accounts and the storm test recompute together. Year-by-year receipts, withdrawal-order
+      the accounts and the down-market check recompute together. Year-by-year receipts, withdrawal-order
       optimization and backtests live one level down, behind the numbers they explain.
     </p>
 
@@ -385,7 +386,7 @@
     spending:   DEMO_DEFAULTS.spending,
     benefits:   DEMO_DEFAULTS.benefits,
     benefitAge: DEMO_DEFAULTS.benefitAge,
-    sky:        DEMO_DEFAULTS.sky
+    market:     DEMO_DEFAULTS.market   // the down↔up dial, as a plain return %
   };
 
   function el(id) { return document.getElementById(id); }
@@ -406,7 +407,7 @@
 
      The terrain depends on everything EXCEPT the two axes (retire age and
      spending move the dot, not the ground). Cache it; recompute only when a
-     ground-changing input — the sky, here — changes. */
+     ground-changing input — the market dial, here — changes. */
   var VW = 720, VH = 480;
   var PL = 56, PR = 700, PT = 20, PB = 432;
   var A0 = 55, A1 = 75;
@@ -426,7 +427,7 @@
     return simulate({
       currentAge: state.currentAge, retireAge: retireAge, maxAge: state.maxAge,
       savings: state.savings, contrib: state.contrib, spending: spending,
-      benefits: state.benefits, benefitAge: state.benefitAge, sky: state.sky
+      benefits: state.benefits, benefitAge: state.benefitAge, market: state.market
     });
   }
 
@@ -484,7 +485,7 @@
   var terrain = null;   // { green: pathD, amber: pathD, deep: pathD }
 
   function ensureTerrain() {
-    var key = JSON.stringify([state.sky, state.savings, state.contrib,
+    var key = JSON.stringify([state.market, state.savings, state.contrib,
                               state.benefits, state.benefitAge, state.maxAge, state.currentAge]);
     if (key === terrainKey && terrain) return;
     terrainKey = key;
@@ -757,25 +758,18 @@
     el('fxSpend').innerHTML = fmtMoney(5000) + ' less a year and it lasts to <strong class="text-slate-700 num">' +
       lastsLabel(cheaper) + '</strong>' + (cheaper.ok && !ok ? ' — that alone would close the gap.' : '.');
 
-    /* ── storm test ── */
-    var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+    /* ── down-market check — the plan against a fixed low return ── */
+    var low = simulate(Object.assign({}, state, { market: MARKET_DOWN }));
     var sdot = el('stormDot'), st2 = el('stormTitle'), sl = el('stormLine');
-    if (storm.ok) {
+    if (low.ok) {
       sdot.style.backgroundColor = BLUE;
-      st2.textContent = 'Storm-tested.';
-      sl.innerHTML = 'Even in stormy markets this plan holds to <strong class="text-slate-700 num">' + lastsLabel(storm) + '</strong>.';
+      st2.textContent = 'Down-market check';
+      sl.innerHTML = 'Even at a <strong class="text-slate-700 num">' + (MARKET_DOWN * 100).toFixed(1) + '%</strong> return this plan holds to <strong class="text-slate-700 num">' + lastsLabel(low) + '</strong>.';
     } else {
       sdot.style.backgroundColor = '#f43f5e';
-      st2.textContent = 'Storm warning.';
-      sl.innerHTML = 'In stormy markets the money runs out at <strong class="text-slate-900 num">' + storm.depletionAge + '</strong>. The map above is for <em>' +
-        (state.sky === 'storm' ? 'stormy' : (state.sky === 'sun' ? 'kind' : 'ordinary')) + '</em> skies — switch it and the bands move.';
+      st2.textContent = 'Down-market warning';
+      sl.innerHTML = 'At a <strong class="text-slate-900 num">' + (MARKET_DOWN * 100).toFixed(1) + '%</strong> return the money runs out at <strong class="text-slate-900 num">' + low.depletionAge + '</strong>. The map above uses your <strong class="num">' + (state.market * 100).toFixed(1) + '%</strong> dial — move it and the bands change.';
     }
-    document.querySelectorAll('[data-sky]').forEach(function (b) {
-      var on = b.getAttribute('data-sky') === state.sky;
-      b.setAttribute('aria-pressed', String(on));
-      b.className = 'skybtn border px-2.5 py-1 ' +
-        (on ? 'border-slate-900 bg-slate-900 text-white font-semibold' : 'border-slate-200 text-slate-500 hover:text-slate-900');
-    });
 
     /* ── numbers ── */
     el('rLasts').textContent = lastsLabel(res);
@@ -795,9 +789,11 @@
   el('fRetire').addEventListener('input', function () { state.retireAge = +this.value; render(); });
   el('fSpend').addEventListener('input', function () { state.spending = +this.value; render(); });
 
-  /* ── wiring: the sky ── */
-  document.querySelectorAll('[data-sky]').forEach(function (b) {
-    b.addEventListener('click', function () { state.sky = b.getAttribute('data-sky'); render(); });
+  /* ── wiring: the market dial ── */
+  el('fMarket').addEventListener('input', function () {
+    state.market = +this.value / 100;
+    el('vMarket').textContent = (+this.value).toFixed(1) + '%';
+    render();
   });
 
   /* ── dropdown chrome ── */
@@ -874,10 +870,10 @@
         : 'Honestly, even at very low spending this plan doesn\'t reach ' + state.maxAge + ' — something bigger has to give.', 850);
     } else if (kind === 'storm') {
       dBlock('“Does it survive a bad market?”', 'me');
-      var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
-      dSay(storm.ok
-        ? 'Yes — even in stormy markets the plan holds to <strong class="num text-blue-700">' + lastsLabel(storm) + '</strong>. The storm chip on the left says the same.'
-        : 'Honestly, no — in stormy markets the money runs out at <strong class="num text-rose-700">' + storm.depletionAge + '</strong>. Try the “stormy” weather switch up top and watch the bands move.', 850);
+      var low = simulate(Object.assign({}, state, { market: MARKET_DOWN }));
+      dSay(low.ok
+        ? 'Yes — even at a <strong class="num text-blue-700">' + (MARKET_DOWN * 100).toFixed(1) + '%</strong> return the plan holds to <strong class="num text-blue-700">' + lastsLabel(low) + '</strong>. The down-market check on the left says the same.'
+        : 'Honestly, no — at a <strong class="num">' + (MARKET_DOWN * 100).toFixed(1) + '%</strong> return the money runs out at <strong class="num text-rose-700">' + low.depletionAge + '</strong>. Slide the “Markets” dial toward down and watch the bands move.', 850);
     }
   }
 
@@ -912,12 +908,12 @@
     el('dockInput').value = '';
     if (/work|year|longer|retire/i.test(text)) answerLive('work');
     else if (/spend|spending|afford|less/i.test(text)) answerLive('spend');
-    else if (/storm|market|crash|bad|weather/i.test(text)) answerLive('storm');
+    else if (/storm|market|crash|bad|weather|down|low/i.test(text)) answerLive('storm');
     else {
       dBlock('“' + text.replace(/</g, '&lt;') + '”', 'me');
       var res = simulate(state);
       dSay('I can read the plan as it stands — it currently lasts to <strong class="num">' + lastsLabel(res) + '</strong>. '
-        + 'Try asking about working longer, spending less, or stormy markets — those I can answer with real numbers.', 700);
+        + 'Try asking about working longer, spending less, or a bad market — those I can answer with real numbers.', 700);
     }
   });
 

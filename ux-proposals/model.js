@@ -1,8 +1,10 @@
 /* Shared demo model for the three UX proposals.
    Deliberately simple and honest: one pot of money, steady growth,
    contributions while working, spending after retirement, and a
-   government-benefit top-up from benefitAge. The "sky" is the market's
-   mood: storm / ordinary / kind — the layperson's Monte Carlo. */
+   government-benefit top-up from benefitAge. The market dial is a plain
+   annual-return assumption sliding from down (MARKET_DOWN) to up
+   (MARKET_UP) — no weather metaphors. Older pages still pass
+   sky: 'storm' | 'normal' | 'sun'; both are accepted. */
 const DEMO_DEFAULTS = {
   currentAge: 55,
   retireAge: 62,
@@ -12,14 +14,25 @@ const DEMO_DEFAULTS = {
   spending: 85000,     // per year after retirement
   benefits: 22000,     // CPP + OAS per year, from benefitAge
   benefitAge: 65,
-  sky: 'normal',       // 'storm' | 'normal' | 'sun'
+  market: 0.03,        // average annual market return (down..up)
 };
 
-const SKY_RETURN = { storm: 0.012, normal: 0.03, sun: 0.045 };
+const MARKET_DOWN = 0.012, MARKET_UP = 0.045;   // the dial's ends
+const SKY_RETURN = { storm: MARKET_DOWN, normal: 0.03, sun: MARKET_UP };
 const HARD_CAP = 110;  // sim never runs past this age
 
+/* Resolve the return assumption. A legacy `sky` mood wins when present —
+   the older proposals never set market and override sky directly, so their
+   storm/sun switches keep working untouched. Pages that dropped sky
+   entirely (f7) drive the numeric `market` dial. */
+function marketReturn(o) {
+  if (o.sky != null && SKY_RETURN[o.sky] != null) return SKY_RETURN[o.sky];
+  if (typeof o.market === 'number') return o.market;
+  return SKY_RETURN.normal;
+}
+
 function simulate(o) {
-  const r = SKY_RETURN[o.sky] ?? SKY_RETURN.normal;
+  const r = marketReturn(o);
   let bal = o.savings;
   let depletionAge = null;
   const rows = [];

@@ -79,9 +79,10 @@
   </div>
 </div>
 
-<!-- landing footer: privacy + legal, per the two-site split -->
+<!-- landing footer: the four doors, then the legal text as permanent footnotes
+     at the very bottom — always visible, never hidden or collapsed away. -->
 <footer class="border-t border-slate-200">
-  <div class="max-w-2xl mx-auto px-5 py-6">
+  <div class="max-w-2xl mx-auto px-5 pt-6 pb-28">
     <!-- the four doors: legal, help, about, and the app itself -->
     <nav class="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] font-medium">
       <a href="#legal" class="text-slate-700 hover:text-slate-900 hover:underline underline-offset-4">Legal</a>
@@ -92,14 +93,18 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </a>
     </nav>
-    <!-- the legal content itself, anchored under the link -->
-    <div id="legal" class="mt-5 space-y-2 text-[12px] leading-relaxed text-slate-500">
-      <p><strong class="text-slate-700">Private by design.</strong> No servers, no accounts, no tracking.
-        Everything you type stays in this browser tab and is gone when you close it (unless you later save a plan).</p>
-      <p><strong class="text-slate-700">Not advice.</strong> RE:tired is an educational model, not financial,
-        tax, or investment advice. Tax and benefit rules are Canadian approximations — talk to a professional before acting.</p>
+    <!-- the footnotes: small, quiet, at the very bottom — always here -->
+    <div id="help" class="mt-6 border-t border-slate-100 pt-4 text-[11.5px] leading-relaxed text-slate-400">
+      <p><strong class="font-semibold text-slate-500">Help.</strong> Answer the five questions and the plan computes itself. In the dashboard, every number is live — drag the dot or move a fader and the answer changes with it. Stuck? The assistant in the dock answers plain-language questions about your plan.</p>
     </div>
-    <p class="mt-4 text-[11px] text-slate-400">Open source · f7 · the final, take two — landing</p>
+    <div id="about" class="mt-3 text-[11.5px] leading-relaxed text-slate-400">
+      <p><strong class="font-semibold text-slate-500">About.</strong> RE:tired is an open-source Canadian retirement model — one household projection engine, the same numbers behind every screen here, running entirely in your browser.</p>
+    </div>
+    <div id="legal" class="mt-3 space-y-1.5 text-[11.5px] leading-relaxed text-slate-400">
+      <p><strong class="font-semibold text-slate-500">Private by design.</strong> No servers, no accounts, no tracking. Everything you type stays in this browser tab and is gone when you close it (unless you later save a plan).</p>
+      <p><strong class="font-semibold text-slate-500">Not advice.</strong> RE:tired is an educational model, not financial, tax, or investment advice. Tax and benefit rules are Canadian approximations — talk to a professional before acting.</p>
+      <p class="text-[11px]">Open source · f7 · the final, take two — landing</p>
+    </div>
   </div>
 </footer>
 
@@ -345,7 +350,7 @@ async function verdict() {
     +     '<div class="text-[14.5px] font-semibold">Open the dashboard →</div>'
     +     '<div class="text-[12px] text-slate-300 mt-1 leading-relaxed">'
     +       (ok
-    ?         'The whole plan laid out — the map, the faders, the storm test. Move things and watch the answer change.'
+    ?         'The whole plan laid out — the map, the faders, the down-market check. Move things and watch the answer change.'
     :         'The plan on a map. Drag the two levers that decide the answer, and watch the age move.')
     +     '</div>'
     +   '</a>'
@@ -469,10 +474,10 @@ async function answerCanned(which) {
       : 'Honestly, even at very low spending this plan doesn\'t reach ' + plan.maxAge + ' — something bigger has to change.', 900);
   } else if (which === 'storm') {
     block('“Does it survive a bad market?”', 'me');
-    const storm = simulate({ ...plan, sky: 'storm' });
-    await say(storm.ok
-      ? 'Yes — even with stormy markets the plan holds to <strong class="num text-emerald-700">' + lastsLabel(storm) + '</strong>.'
-      : 'Honestly, no — in stormy markets the money runs out at <strong class="num text-rose-700">' + storm.depletionAge + '</strong>, earlier than the ' + lastsLabel(simulate(plan)) + ' we saw with ordinary weather.', 900);
+    const low = simulate({ ...plan, market: MARKET_DOWN });
+    await say(low.ok
+      ? 'Yes — even at a <strong class="num text-emerald-700">' + (MARKET_DOWN * 100).toFixed(1) + '%</strong> return the plan holds to <strong class="num text-emerald-700">' + lastsLabel(low) + '</strong>.'
+      : 'Honestly, no — at a ' + (MARKET_DOWN * 100).toFixed(1) + '% return the money runs out at <strong class="num text-rose-700">' + low.depletionAge + '</strong>, earlier than the ' + lastsLabel(simulate(plan)) + ' we saw at the default ' + (plan.market * 100).toFixed(1) + '%.', 900);
   }
 
   /* then the door into the app with the assistant alive there too */
