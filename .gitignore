@@ -28,6 +28,9 @@ src/test/tmp/
 # Claude Code worktree scratch (nested git repos — never commit)
 .claude/worktrees/
 
-# Elective probe: headless Chrome profile scratch + sweep output (never commit)
+# Elective probe: headless Chrome profile scratch + sweep output (never commit),
+# except the curated fine-tune baselines (issue #127 — pre-training reference
+# grids that checkpoints get diffed against).
 .probe-chrome/
-probe/results/
+probe/results/*
+!probe/results/baseline-*.json

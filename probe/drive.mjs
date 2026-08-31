@@ -41,8 +41,7 @@ const BASE = args.url || process.env.PROBE_URL || 'http://localhost:5174/probe/'
 const auto = ['1'];
 if (args.models) auto.push(`models=${args.models}`);
 if (args.maxtokens) auto.push(`maxtokens=${args.maxtokens}`);
-if (args.persona) auto.push(`persona=${args.persona}`); // full|simple A/B override
-if (args.all || args.plan) auto.push(`plan=all`);       // full coverage: triage + simple A/B + sampler grid
+if (args.all || args.plan) auto.push(`plan=all`);       // full coverage: the whole 8-profile sampler grid
 const url = `${BASE}?auto=${auto.join(',')}${args.profile ? `&profile=${args.profile}` : ''}`;
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -178,7 +177,7 @@ function printEvent(e) {
     case 'start': console.log(`▶ sweep start: ${e.models.length} model(s), maxTokens ${e.maxTokens}, profile ${e.override}`); break;
     case 'load-start': console.log(`⬇ ${e.modelId} ${e.cached ? '(cached)' : '(DOWNLOAD — may take a long while)'}`); break;
     case 'load-progress': if ((e.progress ?? 0) < 0.99) console.log(`   … ${Math.round((e.progress ?? 0) * 100)}% ${e.text}`); break;
-    case 'load-done': console.log(`✓ ${e.modelId} loaded (window ${e.window.toLocaleString()}, tools ${e.toolMode}, ${e.persona} persona)`); break;
+    case 'load-done': console.log(`✓ ${e.modelId} loaded (window ${e.window.toLocaleString()}, tools ${e.toolMode})`); break;
     case 'cell-start': break;
     case 'cell':
       console.log(`  · ${e.promptId.padEnd(17)} score ${e.score.toFixed(2)}  ttr ${e.ttr.toFixed(2)}  onset ${(e.onset * 100).toFixed(0)}%  ` +

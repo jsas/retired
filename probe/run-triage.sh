@@ -5,11 +5,9 @@
 #   bash probe/run-triage.sh              # sweep all curated models
 #   bash probe/run-triage.sh --models=Phi-4-mini-instruct-q4f16_1-MLC
 #   bash probe/run-triage.sh --maxtokens=512 --profile=hot
-#   bash probe/run-triage.sh --persona=simple   # force the short persona on
-#                                               # every model (#108 full-vs-simple A/B)
-#   bash probe/run-triage.sh --all        # full coverage in one go: the
-#                                         # production pass + the simple A/B
-#                                         # pass + all 8 sampler profiles.
+#   bash probe/run-triage.sh --all        # full coverage in one go: the whole
+#                                         # 8-profile sampler grid × 4 prompts
+#                                         # at the shipped system prompt.
 #                                         # Already-measured cells are skipped
 #                                         # (localStorage), so re-running resumes.
 #   bash probe/run-triage.sh --wipe       # delete the scratch profile first
@@ -58,14 +56,12 @@ done
 
 # --- translate driver-style flags into the page's ?auto= param syntax ---------
 #   --models=a|b --maxtokens=512   ->   auto=1,models=a|b,maxtokens=512
-#   --persona=simple               ->   auto=1,persona=simple
 #   --profile=hot                  ->   profile=hot   (separate param)
 AUTO="1"; EXTRA=""
 for a in "$@"; do
   case "$a" in
     --models=*)    AUTO="$AUTO,${a#--models=}" ;;
     --maxtokens=*) AUTO="$AUTO,maxtokens=${a#--maxtokens=}" ;;
-    --persona=*)   AUTO="$AUTO,persona=${a#--persona=}" ;;
     --profile=*)   EXTRA="&profile=${a#--profile=}" ;;
   esac
 done
