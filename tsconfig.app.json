@@ -15,6 +15,17 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+    "paths": {
+      "@retired/engine-core": ["./packages/engine-core/src/index.ts"],
+      // Test fixtures live under packages/engine-core/test, not src — the
+      // specific mapping must come before the wildcard.
+      "@retired/engine-core/test/*": ["./packages/engine-core/test/*"],
+      "@retired/engine-core/*": ["./packages/engine-core/src/*"],
+      "@retired/mcp-tools": ["./packages/mcp-tools/src/index.ts"],
+      "@retired/mcp-tools/*": ["./packages/mcp-tools/src/*"],
+      "@retired/mcp-server": ["./packages/mcp-server/src/index.ts"],
+      "@retired/mcp-server/*": ["./packages/mcp-server/src/*"]
+    },
 
     /* Linting */
     "noUnusedLocals": true,
@@ -22,5 +33,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src", "packages"]
 }

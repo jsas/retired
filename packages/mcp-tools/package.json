@@ -1,0 +1,15 @@
+{
+  "name": "@retired/mcp-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The assistant tool catalog for RE:tired: zod argument schemas + handlers, host-agnostic. Consumed by the MCP server (which exposes them over the Model Context Protocol) and by the web app's toolSpecs (LLM-facing JSON-Schema).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@retired/engine-core": "*",
+    "zod": "^4.4.3"
+  }
+}

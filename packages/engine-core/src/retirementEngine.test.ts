@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent, type IncomeSource, type RetirementInputs } from './retirementEngine';
 import { legacyToPerson, legacyToShared, legacySpouseToPerson, toHousehold } from './householdTypes';
 import { calculateTax } from './canadianTax';
-import { baselineInputs } from '../data/exampleScenarios';
+import { baselineInputs } from './exampleScenarios';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
 const config = testConfig();

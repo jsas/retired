@@ -2,8 +2,11 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { rmSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+
+const here = dirname(fileURLToPath(import.meta.url))
 
 // App revision stamped into the build: the short commit hash, with '-dirty'
 // when the working tree has uncommitted changes. Falls back to a UTC timestamp
@@ -45,6 +48,18 @@ export default defineConfig(({ mode }) => {
   const single = mode === 'singlefile'
   return {
     base: single ? './' : '/retired/',
+    resolve: {
+      alias: [
+        // Most-specific first: the shared engine test fixtures live under
+        // packages/engine-core/test, not src. Workspace packages resolve
+        // @retired/* straight to their TypeScript source so the app and tests
+        // build from the same code the MCP packages ship.
+        { find: '@retired/engine-core/test/helpers', replacement: join(here, 'packages/engine-core/test/helpers.ts') },
+        { find: '@retired/engine-core', replacement: join(here, 'packages/engine-core/src') },
+        { find: '@retired/mcp-tools', replacement: join(here, 'packages/mcp-tools/src') },
+        { find: '@retired/mcp-server', replacement: join(here, 'packages/mcp-server/src') },
+      ],
+    },
     define: {
       __APP_REVISION__: JSON.stringify(appRevision()),
     },
