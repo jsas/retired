@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:tired — one number, and what it points to</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="../model.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+  #ring-fg { transition: stroke-dashoffset 1.2s cubic-bezier(.22,.8,.3,1); }
+</style>
+</head>
+<body class="min-h-screen bg-[#fafafa] text-slate-900 antialiased flex flex-col">
+
+<!-- ═══ SITE 1 · LANDING — pure marketing. Radically spare: one number, one sentence, one door. ═══ -->
+
+<main class="flex-1 flex items-center justify-center px-6">
+  <div class="flex flex-col items-center text-center">
+
+    <div class="text-[11px] font-semibold uppercase tracking-[.28em] text-slate-400">RE:tired</div>
+
+    <!-- the score: one element -->
+    <div class="relative mt-10">
+      <svg width="240" height="240" viewBox="0 0 240 240" class="block" aria-hidden="true">
+        <circle cx="120" cy="120" r="100" fill="none" stroke="#e7e7e4" stroke-width="10" />
+        <circle id="ring-fg" cx="120" cy="120" r="100" fill="none" stroke="#d97706" stroke-width="10"
+                stroke-dasharray="628.32" stroke-dashoffset="628.32"
+                transform="rotate(-90 120 120)" />
+      </svg>
+      <div class="absolute inset-0 flex flex-col items-center justify-center">
+        <div class="num text-[72px] font-bold leading-none tracking-tight" id="score-num" role="status">0</div>
+        <div class="mt-2 text-[10px] font-semibold uppercase tracking-[.24em] text-slate-400">plan score</div>
+      </div>
+    </div>
+
+    <!-- one sentence -->
+    <p class="num mt-10 max-w-md text-[16px] leading-relaxed text-slate-600" id="verdict">
+      Computing an honest score…
+    </p>
+
+    <!-- one door -->
+    <a href="f7-final-app.html"
+       class="mt-10 inline-flex items-center gap-2 bg-slate-900 px-7 py-3.5 text-[15px] font-semibold text-white transition hover:bg-slate-700">
+      Find your one change
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </a>
+
+  </div>
+</main>
+
+<!-- quiet footer: privacy + legal -->
+<footer class="px-6 py-6">
+  <div class="mx-auto max-w-md text-center text-[11px] leading-relaxed text-slate-400">
+    No servers · no accounts · your numbers never leave your browser.
+    Not financial, tax, or investment advice — educational modeling with approximate Canadian rules.
+    <span class="whitespace-nowrap">Open source · <span class="underline decoration-slate-300 underline-offset-2">help</span> · <span class="underline decoration-slate-300 underline-offset-2">donate</span></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* The hero score is computed live from ../model.js defaults — the demo
+     plan runs out at 89 on purpose, so the number is mediocre honestly. */
+
+  var state = Object.assign({}, DEMO_DEFAULTS);
+
+  function scoreOutlast(o, res) {
+    if (res.ok) return 100;
+    var span = Math.max(1, o.maxAge - o.currentAge);
+    return Math.max(0, Math.round(100 * ((res.depletionAge - o.currentAge) / span)));
+  }
+  function scoreCushion(o, res) {
+    return Math.min(100, Math.round(100 * res.leftAtMax / (3 * o.spending)));
+  }
+  function bandColor(v) {
+    if (v < 45) return '#e11d48';
+    if (v < 70) return '#d97706';
+    return '#059669';
+  }
+
+  var res = simulate(state);
+  var storm = simulate(Object.assign({}, state, { sky: 'storm' }));
+
+  var total = Math.max(0, Math.min(100, Math.round(
+    0.40 * scoreOutlast(state, res) +
+    0.35 * scoreCushion(state, res) +
+    0.25 * scoreOutlast(state, storm)
+  )));
+
+  /* one sentence under the number — honest, but pointed at the fix, not the
+     gap. The demo plan runs short; the sentence says so AND says it closes. */
+  var verdict = document.getElementById('verdict');
+  if (res.ok) {
+    verdict.innerHTML = 'That plan lasts past ' + state.maxAge + '. Most people&rsquo;s don&rsquo;t &mdash; check yours anyway.';
+  } else {
+    var fix = suggest(state);
+    verdict.innerHTML = 'That&rsquo;s a plan that reaches ' + lastsLabel(res) + ' of the ' + state.maxAge + ' you&rsquo;re planning for.'
+      + (fix ? ' ' + fix.replace(/\.$/, '') + '.' : ' One change usually closes the gap.');
+  }
+
+  /* the ring: fill once, no dashboard */
+  var C = 2 * Math.PI * 100;
+  var ring = document.getElementById('ring-fg');
+  ring.setAttribute('stroke', bandColor(total));
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      ring.setAttribute('stroke-dashoffset', String(C * (1 - total / 100)));
+    });
+  });
+
+  /* count up */
+  var numEl = document.getElementById('score-num');
+  var t0 = null;
+  function step(t) {
+    if (t0 === null) t0 = t;
+    var p = Math.min(1, (t - t0) / 1000);
+    var eased = 1 - Math.pow(1 - p, 3);
+    numEl.textContent = String(Math.round(total * eased));
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
