@@ -29,10 +29,11 @@ English, few controls, distinct concepts over reskins.
   (bisection boundary, Catmull-Rom smoothing, hold-wash) on `calculateHousehold`, pure + tests.
 - ✅ **Dashboard** (`BetaApp.tsx`) — verdict hero, Markets dial, contour map, two
   levers, down-market check, life timeline, evidence row; one engine run feeds all.
-- ✅ **Landing** (`LandingPage.tsx`) — 5-question chat → verdict → doors. Wrapped in
-  the shared BetaPage chrome (header nav + chip + assistant dock) so the whole site
-  is one click away. "Skip to the dashboard →" escape + §8.8 footer (legal /
-  open-source / privacy).
+- ✅ **Landing** (`LandingPage.tsx`) — the f7 front door: minimal wordmark header
+  (NO app nav / verdict chip / assistant — it's the front door, not the app),
+  5-question chat with the chips + composer inline under each question, then the
+  verdict and the doors. About / Help / Legal / privacy footnotes at the very
+  bottom (§8.8), always visible.
 - ✅ **Details** (`DetailsPage.tsx`) — 3 levers + 13 sections, one scroll, plain-name
   groups (People/Accounts/Income/Spending/Property), Details ▾ deep-links
   (`#/details?section=…`), two-col desktop / one-col mobile.

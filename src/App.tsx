@@ -880,12 +880,11 @@ function App() {
         );
       case 'welcome':
         // The front door: five questions build a starter plan, then the doors.
-        // NO assistant here — there's no plan to converse about yet, and the
-        // dock never opens on the first page.
+        // NO app chrome — no nav header, no verdict chip, no assistant. Just the
+        // wordmark and the conversation (the f7 landing shape).
         return (
           <LandingPage
             config={config}
-            chip={chip}
             onBuild={(plan) => {
               setInputs(JSON.parse(JSON.stringify(plan)));
               setHasUnsavedChanges(true);
