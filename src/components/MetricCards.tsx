@@ -1,9 +1,9 @@
-import { householdOutcome, type RetirementResults, type RetirementInputs } from '../lib/retirementEngine';
-import { toHousehold } from '../lib/householdTypes';
+import { householdOutcome, type RetirementResults } from '../lib/retirementEngine';
+import type { Household } from '../lib/householdTypes';
 
 interface MetricCardsProps {
   results: RetirementResults;
-  inputs: RetirementInputs;
+  household: Household;
 }
 
 function formatCurrency(value: number): string {
@@ -19,9 +19,9 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-export function MetricCards({ results, inputs }: MetricCardsProps) {
+export function MetricCards({ results, household }: MetricCardsProps) {
   // Household-first verdict: when the COMBINED money runs out, not either silo.
-  const ho = householdOutcome(results, toHousehold(inputs));
+  const ho = householdOutcome(results, household);
   const statusColor = ho.status === 'ON_TRACK' ? 'text-emerald-600' : 'text-amber-600';
   const statusBg = ho.status === 'ON_TRACK' ? 'bg-emerald-50' : 'bg-amber-50';
   const statusBorder = ho.status === 'ON_TRACK' ? 'border-emerald-200' : 'border-amber-200';
