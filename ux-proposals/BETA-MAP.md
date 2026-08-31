@@ -26,7 +26,7 @@ below and find nothing homeless.
 | **Down-market check** | the stress test, demoted from header | one line + dot: holds/warns at the down-market return |
 | **Life timeline** | the plan on one line | working/retired/run-out ticks, funded baseline |
 | **Evidence row** | the receipts | per-account balances over time + key numbers |
-| **Details ▾** | the rest of the plan, one click away | every input section → its own page |
+| **Details ▾** | the rest of the plan, one click away | every input section, on one page → scrolls to the tapped section |
 | **Plans ▾** | scenario management | list / new / compare / revision history |
 | **Docked assistant** | the front door, right side (sheet on mobile) | chat that reads the plan, shows its work, proposes changes |
 
@@ -35,33 +35,55 @@ below and find nothing homeless.
 ## 2. Sidebar sections → homes (the 16 CollapsibleSections in `SidebarForm.tsx`)
 
 The old app puts all 16 in one long drawer. f7's answer: the two that decide the
-verdict live on the door (as levers/map axes); the other 14 each get a **dedicated
-page** reachable from Details ▾, so each has room to breathe instead of being a
-collapsed drawer row. Pages share one scaffold (`Panel` + back-to-dashboard).
+verdict live on the door (as levers/map axes); Market Hypotheses becomes the
+door's market dial; the other 13 all live on **one page — "The details"
+(`#/details`)** — every section open in a single scroll. No 13 separate pages.
 
-| # | Section (`SidebarForm.tsx`) | Home | Surface |
+The **Details ▾** header menu doesn't open 13 routes — it opens `#/details` and
+**scrolls to the tapped section** (deep-link: `#/details?section=profile`). So each
+section still has a named, linkable home (§8.7) while staying one simple page.
+
+**Layout:** desktop = two-column grid of sections; mobile = one column. Each
+section is a `Panel` (hairline + uppercase label — an existing `src/design/`
+primitive), not a card. Everything is editable in place; the verdict, map and
+dock recompute off the same engine call.
+
+**Grouped in plain terms** (the order they appear top-to-bottom):
+
+| Group | Sections | Why together |
+|---|---|---|
+| **You** | Personal Profile · Spouse | who the plan is for — ages, province, partner |
+| **What you have** | Account Balances · Home Equity · Debts | the balances and property today |
+| **What goes in** | Contribution Rates · Income · Government Benefits · Cash Events | money arriving: savings, work/pension, CPP/OAS, one-offs |
+| **How you take it out** | Spending Phases · Withdrawal Strategy | the spend shape + the order you draw down |
+| **Special accounts** | RDSP · FHSA | conditional — appear when enabled |
+
+Per-section homes (all on `#/details`, scrolled to):
+
+| # | Section | Deep-link | Feeds |
 |---|---|---|---|
-| 1 | Personal Profile | **Details ▾ → Profile page** | current/max age, province — also the map's x-origin |
-| 2 | Account Balances | **Details ▾ → Accounts page** | RRSP/TFSA/taxable/etc.; also feeds Evidence row + map savings |
-| 3 | Contribution Rates | **Details ▾ → Contributions page** | per-account savings rates; feeds map "saved so far" |
-| 4 | RDSP (Disability Savings) | **Details ▾ → RDSP page** | conditional — auto-appears in Schedule when enabled |
-| 5 | FHSA (First Home Savings) | **Details ▾ → FHSA page** | accumulation-only → RRSP at retirement |
-| 6 | Government Benefits | **Details ▾ → Benefits page** | CPP/OAS/GIS timing & amounts; feeds map benefits |
-| 7 | Income (pension/employ/self/rental) | **Details ▾ → Income page** | the multi-source editor (was the longest drawer block) |
-| 8 | Cash Events | **Details ▾ → Cash Events page** | one-time/recurring in- & out-flows |
-| 9 | Spending Phases | **Details ▾ → Spending page** | go-go/slow-go/no-go bands; base spend is Lever 2 |
-| 10 | Spouse | **Details ▾ → Spouse page** | partner plan / linked scenario — household totals |
-| 11 | Withdrawal Strategy | **Details ▾ → Withdrawal page** | drawdown order; also an assistant `run_strategies` lever |
-| 12 | Home Equity (reverse mortgage) | **Details ▾ → Home page** | conditional — auto-appears in Schedule when enabled |
-| 13 | Debts | **Details ▾ → Debts page** | mortgage/consumer; payment raises withdrawals |
+| 1 | Personal Profile | `#/details?section=profile` | current/max age, province — the map's x-origin |
+| 2 | Spouse | `#/details?section=spouse` | partner plan / linked scenario — household totals |
+| 3 | Account Balances | `#/details?section=accounts` | Evidence row + map "saved so far" |
+| 4 | Home Equity | `#/details?section=home` | reverse mortgage; conditional in Schedule |
+| 5 | Debts | `#/details?section=debts` | payments raise withdrawals |
+| 6 | Contribution Rates | `#/details?section=contributions` | per-account savings rates |
+| 7 | Income | `#/details?section=income` | pension/employment/self/rental sources |
+| 8 | Government Benefits | `#/details?section=benefits` | CPP/OAS/GIS — feeds map benefits |
+| 9 | Cash Events | `#/details?section=events` | one-time/recurring in- & out-flows |
+| 10 | Spending Phases | `#/details?section=spending` | go-go/slow-go/no-go; base spend is Lever 2 |
+| 11 | Withdrawal Strategy | `#/details?section=withdrawal` | drawdown order; also an assistant lever |
+| 12 | RDSP | `#/details?section=rdsp` | conditional in Schedule |
+| 13 | FHSA | `#/details?section=fhsa` | accumulation-only → RRSP at retirement |
 | 14 | Market Hypotheses | **Verdict hero — the Markets dial** | the only section *promoted* to the door (down↔up 1.2–4.5%) |
-| 15 | — (was implicit) **Retirement age** | **Lever 1 on the door** | "Stop working at" — also the map's x-axis |
-| 16 | — (was implicit) **Desired spending** | **Lever 2 on the door** | "Spend a year" — also the map's y-axis |
+| 15 | **Retirement age** | **Lever 1 on the door** | "Stop working at" — also the map's x-axis |
+| 16 | **Desired spending** | **Lever 2 on the door** | "Spend a year" — also the map's y-axis |
 
 **The mapping answer to "where do the old sidebar sections go":** two become the
 door's levers + map axes, one becomes the door's market dial, and the other
-thirteen each become a **named page under Details ▾** — not a drawer, a page.
-Every one is reachable in one click from anywhere via the header.
+thirteen all live on **one Details page, open in a single scroll** — grouped in
+plain terms, reachable in one click via the Details ▾ menu (which scrolls to the
+tapped section).
 
 ---
 
@@ -116,7 +138,7 @@ Every page composes `src/design/` primitives — no one-off styles (§8.10).
 - [ ] **Contour lib** — `src/lib/contour.ts`: port the f7 terrain math (bisection boundary, Catmull-Rom smoothing, hold-wash) onto `calculateHousehold` — **pure + Vitest-tested** before any SVG
 - [ ] **Schedule** — year-by-year table + **§8.9 column picker** (prefKV-persisted)
 - [ ] **Insights** — levers ranked (eq/optimize) + Monte Carlo + backtest, one level down
-- [ ] **Details pages** — Profile · Accounts · Contributions · Benefits · Income · Cash Events · Spending · Spouse · Withdrawal · Home · Debts · RDSP · FHSA
+- [ ] **The details page** (`#/details`) — all 13 sections, one scroll, grouped in plain terms; Details ▾ scrolls to the tapped section; two-col on desktop, one-col on mobile
 - [ ] **Plans** — list / new / compare / revision history
 - [ ] **Data** — backup / restore / import / share
 - [ ] **Settings** — app config + AI provider/connection
@@ -126,7 +148,7 @@ Every page composes `src/design/` primitives — no one-off styles (§8.10).
 
 ## 6. The bolt-on checklist (walk this before calling any slice done)
 
-- [ ] Every sidebar section in table §2 has a named home — none dropped silently
+- [ ] Every sidebar section in table §2 has a named home on `#/details` (deep-linked) — none dropped silently
 - [ ] Every old view in table §3 routes somewhere real
 - [ ] Every assistant tool in table §4 still executes through the dock
 - [ ] Conditional sections (RDSP, Home Equity, FHSA) auto-appear in Schedule when enabled (§8.9)
