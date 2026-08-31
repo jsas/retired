@@ -1,6 +1,13 @@
-import { Fragment, useState } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { ChevronRight, ChevronDown, Columns3 } from 'lucide-react';
 import type { YearlyBreakdown, YearDetail } from '@retired/engine-core/retirementEngine';
+import { prefKV } from '../lib/prefKv';
+import {
+  SCHEDULE_COLUMNS,
+  SCHEDULE_COLS_PREF_KEY,
+  resolveVisibleColumns,
+  type ScheduleColumn,
+} from './scheduleColumns';
 
 interface ScheduleTableProps {
   breakdown: YearlyBreakdown[];
@@ -20,6 +27,95 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+const TONE_CLASS: Record<ScheduleColumn['tone'], string> = {
+  plain: 'text-slate-700',
+  green: 'text-emerald-700',
+  red: 'text-red-700',
+  amber: 'text-amber-700',
+  amberDark: 'text-amber-800',
+  amberDeep: 'text-amber-900',
+  muted: 'text-slate-600',
+  strong: 'font-semibold text-slate-900',
+};
+
+function readVisibleCols(): Set<string> {
+  try {
+    const raw = prefKV().getItem(SCHEDULE_COLS_PREF_KEY);
+    return resolveVisibleColumns(raw ? (JSON.parse(raw) as string[]) : null);
+  } catch {
+    return resolveVisibleColumns(null);
+  }
+}
+
+// The column picker: a small checklist popover pinned to the table header.
+// Age and Ending Balance are the row's identity and its bottom line, so they
+// stay on; everything else is a toggle, persisted via prefKV.
+function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (next: Set<string>) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const toggleable = SCHEDULE_COLUMNS.filter((c) => !c.alwaysVisible);
+  const allOn = toggleable.every((c) => visible.has(c.id));
+
+  const setAll = (on: boolean) => {
+    const next = new Set(visible);
+    for (const c of toggleable) {
+      if (on) next.add(c.id); else next.delete(c.id);
+    }
+    onChange(next);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded hover:bg-slate-50"
+        title="Choose which columns the table shows"
+      >
+        <Columns3 size={13} />
+        Columns
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 rounded shadow-lg p-2">
+          <button
+            type="button"
+            onClick={() => setAll(!allOn)}
+            className="w-full text-left px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 rounded"
+          >
+            {allOn ? 'Show fewer' : 'Show all'}
+          </button>
+          <div className="my-1 border-t border-slate-100" />
+          {toggleable.map((c) => (
+            <label key={c.id} className="flex items-center gap-2 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 rounded cursor-pointer">
+              <input
+                type="checkbox"
+                checked={visible.has(c.id)}
+                onChange={() => {
+                  const next = new Set(visible);
+                  if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                  onChange(next);
+                }}
+                className="accent-blue-700"
+              />
+              {c.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // A single labelled money line inside the drill-down panel.
@@ -242,38 +338,62 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
   // Debt balance column appears only when a person carries a debt.
   const hasDebts = breakdown.some(r => r.debtBalance !== undefined);
   const anyDetail = household || breakdown.some(r => r.detail);
-  // Number of columns the detail row must span: base 19 + the expand chevron
-  // (when any row is expandable) + optional RM/RDSP/FHSA/Debt columns. The chevron column
-  // was previously left out, so an expandable table's detail row spanned one
-  // column too few and the panel didn't reach the table's right edge.
-  const colCount = 19 + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0) + (hasDebts ? 1 : 0);
+
+  // User-visible base columns (picker + prefKV; feature columns stay automatic).
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(readVisibleCols);
+  const updateVisibleCols = (next: Set<string>) => {
+    setVisibleCols(next);
+    prefKV().setItem(SCHEDULE_COLS_PREF_KEY, JSON.stringify([...next]));
+  };
+  const shownColumns = SCHEDULE_COLUMNS.filter((c) => visibleCols.has(c.id));
+
+  // Number of columns the detail row must span: visible base columns + the
+  // expand chevron (when any row is expandable) + optional RM/RDSP/FHSA/Debt
+  // columns. The chevron column was previously left out, so an expandable
+  // table's detail row spanned one column too few and the panel didn't reach
+  // the table's right edge.
+  const colCount = shownColumns.length + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0) + (hasDebts ? 1 : 0);
+
+  const renderCell = (col: ScheduleColumn, row: YearlyBreakdown, isRetirement: boolean) => {
+    if (col.id === 'age') {
+      return (
+        <td key={col.id} className={`px-3 py-1.5 ${isRetirement ? 'font-bold text-blue-700' : 'text-slate-900'}`}>
+          {row.age}
+          {isRetirement && ' 🎯'}
+        </td>
+      );
+    }
+    const v = col.value(row);
+    const cls =
+      col.tone === 'strong' && isRetirement
+        ? 'font-semibold text-blue-700'
+        : TONE_CLASS[col.tone];
+    return (
+      <td key={col.id} className={`px-3 py-1.5 text-right font-mono ${cls}`}>
+        {v === undefined ? '—' : formatCurrency(v)}
+      </td>
+    );
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded overflow-hidden">
+      <div className="flex justify-end px-2 py-1.5 border-b border-slate-100 bg-slate-50/60">
+        <ColumnPicker visible={visibleCols} onChange={updateVisibleCols} />
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               {anyDetail && <th className="w-6 px-1 py-2" title="Expand a year to see where the money came from" />}
-              <th className="text-left px-3 py-2 font-semibold text-slate-700">Age</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Starting Balance</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Contributions</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Market Gains</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="After-tax income goal for the year (desired spending inflated to that year)">Spending Target</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Withdrawals</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Incremental tax on this year's withdrawals (registered draws + realized gains) beyond the tax on benefits alone, plus OAS clawback. Reads $0 late in life once the portfolio is drained — that does NOT mean tax stopped; see Total Tax.">Income Tax</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Total tax on ALL of the year's income (CPP, OAS, pension, employment, withdrawals) plus OAS clawback. Charged every year taxable income is received, right to the final year.">Total Tax</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Running total of income tax paid since retirement">Tax Burden</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">CPP</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">OAS</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Guaranteed Income Supplement (tax-free; couples assessed on combined income)">GIS</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Defined-benefit / bridge pension income (taxable)">Pension</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Ending Balance</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">RRSP</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">RRIF</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">TFSA</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Taxable</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Cash Cushion</th>
+              {shownColumns.map((c) => (
+                <th
+                  key={c.id}
+                  className={`${c.align === 'left' ? 'text-left' : 'text-right'} px-3 py-2 font-semibold text-slate-700`}
+                  title={c.title}
+                >
+                  {c.label}
+                </th>
+              ))}
               {hasRdsp && (
                 <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>
               )}
@@ -310,64 +430,7 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
                         {canExpand && (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
                       </td>
                     )}
-                    <td className={`px-3 py-1.5 ${isRetirement ? 'font-bold text-blue-700' : 'text-slate-900'}`}>
-                      {row.age}
-                      {isRetirement && ' 🎯'}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                      {formatCurrency(row.startingBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.contributions)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                      {formatCurrency(row.marketGains)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                      {formatCurrency(row.spendingTarget)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-red-700">
-                      {formatCurrency(row.withdrawals)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-amber-700">
-                      {formatCurrency(row.incomeTax)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-amber-800">
-                      {formatCurrency(row.totalTaxPaid ?? 0)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-amber-900">
-                      {formatCurrency(row.cumulativeTax)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.cppIncome)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.oasIncome)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.gisIncome)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.pensionIncome)}
-                    </td>
-                    <td className={`px-3 py-1.5 text-right font-mono font-semibold ${isRetirement ? 'text-blue-700' : 'text-slate-900'}`}>
-                      {formatCurrency(row.endingBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.rrspBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.rrifBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.tfsaBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.taxableBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.cashCushionBalance)}
-                    </td>
+                    {shownColumns.map((c) => renderCell(c, row, isRetirement))}
                     {hasRdsp && (
                       <td className="px-3 py-1.5 text-right font-mono text-slate-600"
                         title={row.detail?.rdsp ? `Contribution basis ${formatCurrency(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
