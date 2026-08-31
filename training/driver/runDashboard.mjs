@@ -51,8 +51,11 @@ function serve() {
   return new Promise((resolve) => {
     const server = createServer((req, res) => {
       try {
-        const rawUrl = req.url ?? '';
-        const url = String(rawUrl).split('?')[0];
+        // Chrome sends the absolute URL; Node sees it as req.url. Normalize to
+        // a PATH (/dashboard.html) so the allowlist can validate it cleanly.
+        const rawHostMatch = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/]+(.*)$/.exec(String(req.url ?? ''));
+        const hostStripped = rawHostMatch ? rawHostMatch[1] : String(req.url ?? '');
+        const url = String(hostStripped).split('?')[0];
         const urlPath = url === '/' ? '/dashboard.html' : url;
         if (!urlPath || typeof urlPath !== 'string') { res.writeHead(403); res.end('forbidden'); return; }
         if (!/^\/[A-Za-z0-9._\-/]*$/.test(urlPath) || urlPath.includes('..')) {
