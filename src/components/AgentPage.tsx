@@ -32,6 +32,7 @@ import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
 import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { createMcpToolExecutor } from '../lib/ai/mcpClient';
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
@@ -666,6 +667,14 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     onOpenScenario, onSaveScenarioAs,
   }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
 
+  // The MCP-backed tool executor. The server re-resolves the LIVE context on
+  // every call, so the executor closes over the memoized context object (its
+  // getters already read through the refs above). Memoized on the same deps.
+  const mcpExecutor = useMemo(
+    () => createMcpToolExecutor(() => toolContext),
+    [toolContext],
+  );
+
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
   // Estimated context usage for the meter. Mirror what runTurn actually sends:
@@ -816,6 +825,9 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     try {
       for await (const evt of runAgentTurn({
         context: toolContext,
+        // Route every tool call through the in-page MCP server (the engine's
+        // real protocol boundary) instead of invoking the catalog in-process.
+        executeCall: mcpExecutor,
         history,
         userMessage: content,
         system,
