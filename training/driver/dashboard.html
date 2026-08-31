@@ -130,7 +130,17 @@
       temperature: 0,
       max_tokens: MAX_TOKENS,
     });
-    return out.choices[0]?.message?.content ?? '';
+    const text = out.choices[0]?.message?.content ?? '';
+    // Diagnostics so the run is self-auditing: did the model think, and did the
+    // completion finish naturally ('stop') or get cut off at max_tokens ('length')?
+    // A 'length' on a thinking base means 2048 still wasn't enough headroom — we
+    // want to see that in the artifact, not infer it from a missing TOOL_CALL.
+    return {
+      text,
+      finishReason: out.choices[0]?.finish_reason ?? null,
+      thought: /<think>/i.test(text),
+      hasCall: /tool_call\s*:/i.test(text),
+    };
   }
 
   async function hasWebGPU() {

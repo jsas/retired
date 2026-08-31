@@ -167,14 +167,21 @@ async function main() {
           } catch {}
         }
       }, 5000);
+      const diag = { thought: 0, lengthCut: 0, noCall: 0 };
       for (let i = 0; i < evalRecords.length; i++) {
         const q = evalRecords[i].question;
-        const text = await tab.callFn(
+        const r = await tab.callFn(
           `(systemPrompt, question) => window.BAKEOFF.reply(systemPrompt, question)`,
           [systemPrompt, q],
           { timeoutMs: 180000 },
         );
+        const text = typeof r === 'string' ? r : (r?.text ?? '');
         replies.push(text);
+        if (r && typeof r === 'object') {
+          if (r.thought) diag.thought++;
+          if (r.finishReason === 'length') diag.lengthCut++;
+          if (!r.hasCall) diag.noCall++;
+        }
         lastAdvance = Date.now();
         stalled = false;
         const done = i + 1, pct = done / evalRecords.length;
@@ -186,12 +193,20 @@ async function main() {
           [`[${b + 1}/${bases.length}] ${base.label} — ${done}/${evalRecords.length}  (overall ${Math.floor((((b * evalRecords.length) + done) / (bases.length * evalRecords.length)) * 100)}%)`]);
       }
       clearInterval(watchdog);
+      // Self-audit line: for a thinking base we expect thought>0 and lengthCut==0;
+      // a nonzero lengthCut means 2048 wasn't enough headroom and the score is
+      // truncated, not a fair read of the base.
+      console.error(`  [diag] ${base.label}: thought ${diag.thought}/${evalRecords.length} · length-cut ${diag.lengthCut} · no-call ${diag.noCall}`);
 
       // Write replies, score in-process, push the verdict onto the card.
       const outFile = join(outDir, `${id}.replies.json`);
       writeFileSync(outFile, JSON.stringify(replies, null, 2));
       const scored = await scoreReplies(id, outFile, LIMIT);
       const pass = scored && scored.pct >= 0.95;
+      // Prefix the tiers line with the think/length audit so the card shows at a
+      // glance whether this base thought and whether any reply was cut off.
+      const diagNote = `think ${diag.thought}/${evalRecords.length} · len-cut ${diag.lengthCut}`;
+      const tiersLine = (scored?.tiers ?? '') + (scored ? ' — ' : '') + diagNote;
       await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [id, {
         active: false,
         cardClass: pass ? 'done' : 'failed',
@@ -199,9 +214,9 @@ async function main() {
         pct: 1,
         score: scored ? `protocol-validity ${(scored.pct * 100).toFixed(1)}%` : 'score unavailable',
         scoreClass: pass ? 'pass' : 'fail',
-        tiers: scored?.tiers ?? '',
+        tiers: tiersLine,
       }]);
-      results.push({ base, pct: scored?.pct ?? null, tiers: scored?.tiers ?? '' });
+      results.push({ base, pct: scored?.pct ?? null, tiers: tiersLine });
     }
 
     const cleared = results.filter((r) => r.pct != null && r.pct >= 0.95);
