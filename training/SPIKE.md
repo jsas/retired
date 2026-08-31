@@ -192,7 +192,10 @@ Confirmed present in web-llm's `prebuiltAppConfig` (`q4f16_1-MLC` unless noted):
 **Download ≈ params × 0.55 GB** (q4f16). For a phone, ~0.4–0.7 GB is the
 comfortable band; ~1 GB is the ceiling. The bake-off ranks bases by
 protocol-validity **per GB**, and we fine-tune the *smallest* one that clears
-the bar — that's the whole mobile thesis.
+the bar — that's the whole mobile thesis. §5 adds a parallel **large-bracket
+reference run** (a 7B–14B-class base fine-tuned on the same corpus) to measure
+whether the small tier leaves real accuracy on the table — if it doesn't, the
+mobile thesis holds and the bottleneck is data, not params.
 
 **Full fine-tune vs LoRA.** At ≤2B, **full-parameter SFT is cheap** (a 16 GB
 GPU handles even 2B) and tends to beat LoRA for *structured-output reliability*
@@ -263,6 +266,36 @@ gate, and merge the adapter into the base before the MLC compile (web-llm loads
 a single merged model, not a base + LoRA). If QLoRA's protocol-validity comes
 back materially worse on the gate, that's the signal to spend the extra VRAM on
 full-SFT — decide on the number, not vibes.
+
+**Two size brackets — small vs very-large (decided with the user).** The mobile
+thesis says "smallest that clears the bar," but that begs a question we can
+answer with data instead of assuming it: **does a much larger base fine-tune to
+materially higher accuracy on our gate?** So the experiment runs the SAME
+corpus + eval across two brackets:
+
+| bracket | what it is | why run it |
+|---|---|---|
+| **Small** (the shipping candidates) | the ≤2B redistributable set in §4, smallest-first | the actual phone targets — this is what could ship |
+| **Large** (a capability ceiling) | one strong open-weight large base (e.g. a 7B–14B-class instruct, picked at run time for license + availability) | an *upper bound* on what fine-tuning this corpus can reach — the "best of the best" reference point |
+
+How to read the result:
+
+- **If the large base's fine-tuned protocol-validity ≈ the best small base's**
+  (within a couple of points), the small tier isn't the bottleneck — the corpus
+  is. That's a strong signal the mobile thesis holds: ship the smallest that
+  clears the bar, and spend effort on data, not params.
+- **If the large base clearly beats every small base**, there's headroom the
+  tiny tier can't reach. Then we decide on the number: is the gap worth
+  abandoning the phone-size ceiling (a bigger model needs more download +
+  WebGPU memory), or do we close it with more/better data at small size?
+
+The large base is a **reference, not a ship candidate** — it never goes in
+`WEBLLM_MODELS` (too heavy for a phone), it exists to tell us how much accuracy
+we're leaving on the table by staying small. One large rung is enough; we're
+measuring the *ceiling*, not benchmarking the whole size curve. Cost note: a
+7B-class full-SFT needs ~40+ GB VRAM (or QLoRA at ~12–16 GB); if that's out of
+reach, run the large bracket under QLoRA and note the method difference when
+comparing — the *ceiling* reading stays valid either way.
 
 **MLC compile (the gating step to verify early):**
 ```bash
