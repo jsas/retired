@@ -218,7 +218,10 @@ const listScenariosArgs = z.object({
     .describe('true = include the key numbers of each plan (ages, balances, spending, benefits) so you can compare saved plans without opening them. Omit/false for a compact list.'),
 });
 
-const TOOL_SCHEMAS = {
+// Exported so the fine-tuning spike's eval gate (training/) can validate args
+// against the same Zod schemas the executor enforces — the executor itself is
+// the only runtime consumer.
+export const TOOL_SCHEMAS = {
   get_scenario: getScenarioArgs,
   run_projection: runProjectionArgs,
   compare_scenarios: compareScenariosArgs,
