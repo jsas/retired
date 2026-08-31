@@ -530,6 +530,59 @@ describe('propose_spending_bands', () => {
   });
 });
 
+describe('propose_market_periods', () => {
+  it('proposes a sorted anchor set with minted ids, any-order input', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_market_periods',
+      args: { periods: [{ age: 70, return: 0.10 }, { age: 68, return: -0.30, volatility: 0.30 }] },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    const periods = out.patch.marketPeriods as Array<{ id: string; age: number; return: number; volatility?: number }>;
+    // Handler sorts by age and mints an id per anchor (mp-<idx>-<age>).
+    expect(periods.map(p => p.age)).toEqual([68, 70]);
+    expect(periods[0].id).toBe('mp-0-68');
+    expect(periods[0].return).toBe(-0.30);
+    expect(periods[0].volatility).toBe(0.30);
+    expect(periods[1].id).toBe('mp-1-70');
+  });
+
+  it('labels the mutation and previews each anchor', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_market_periods',
+      args: { periods: [{ age: 68, return: -0.30, volatility: 0.30 }, { age: 70, return: 0.10 }] },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Set market hypothesis (2 anchors)');
+    const periods = (out.preview as { periods: string[] }).periods;
+    expect(periods[0]).toContain('age 68');
+    expect(periods[0]).toContain('(σ 30.0%)');
+  });
+
+  it('an empty array clears the hypothesis back to flat constants', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_market_periods', args: { periods: [] },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Clear market hypothesis');
+    expect(out.patch.marketPeriods).toEqual([]);
+  });
+
+  it('rejects a negative volatility', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_market_periods', args: { periods: [{ age: 68, return: 0.05, volatility: -0.1 }] },
+    });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('volatility');
+  });
+
+  it('rejects a non-numeric return', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_market_periods', args: { periods: [{ age: 68, return: 'low' }] },
+    });
+    expect(out.kind).toBe('error');
+  });
+});
+
 describe('propose_reverse_mortgage', () => {
   it('proposes enabling a reverse mortgage from a full block', () => {
     const out = executeToolCall(ctx(), {
