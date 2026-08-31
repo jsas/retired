@@ -8,7 +8,7 @@
 // never traps you.
 import { useState, type ReactNode } from 'react';
 import { Link } from './nav';
-import { Dropdown } from '../../design/primitives';
+import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { DETAILS_SECTIONS } from './detailsSections';
 
@@ -22,8 +22,10 @@ function chipDot(tone: VerdictChip['tone']) {
   return tone === 'holds' ? BLUE : tone === 'short' ? RED_DOT : tone === 'borderline' ? AMBER_DOT : '#94a3b8';
 }
 
-export function BetaPage({ title, chip, actions, assistant, children }: {
+export function BetaPage({ title, hint, chip, actions, assistant, children }: {
   title?: string;
+  /** A help-topic id — renders a ? beside the page title. */
+  hint?: string;
   chip: VerdictChip;
   actions?: ReactNode;
   /** The assistant conversation (AgentPage docked). Providing it turns the
@@ -96,7 +98,7 @@ export function BetaPage({ title, chip, actions, assistant, children }: {
         <main className="w-full min-w-0 flex-1 px-4 pb-16">
           {title && (
             <div className="border-b border-slate-200 pb-4 pt-8">
-              <p className={cls.sectionLabel}>{title}</p>
+              <p className={cls.sectionLabel}>{title}{hint && <HelpHint topic={hint} />}</p>
             </div>
           )}
           {children}
@@ -116,7 +118,7 @@ export function BetaPage({ title, chip, actions, assistant, children }: {
           >
             <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
               <div className="flex h-5 w-5 items-center justify-center bg-slate-900 text-[8px] font-bold text-white">RE</div>
-              <div className="text-[13px] font-semibold">Assistant</div>
+              <div className="text-[13px] font-semibold">Assistant<HelpHint topic="assistant" /></div>
               <div className="flex-1" />
               <button
                 type="button"

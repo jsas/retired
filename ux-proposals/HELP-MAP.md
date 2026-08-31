@@ -185,12 +185,17 @@ Status key: ✅ done & shipped to PR #137 · 🚧 in progress · ⬜ not started
   events→`cash-events`, spending→`spending-phases`, withdrawal→`withdrawal-order`,
   debts→`debts`, home→`home-equity`, rdsp→`rdsp`, fhsa→`fhsa`); levers Spend→
   `desired-spending`, Markets→`expected-return`.
-- [ ] 🚧 Hints still to place: Schedule column picker (`schedule-columns`), Insights
-  (`monte-carlo` / `backtest` / `levers-ranked` / `optimize-spending`), Plans
-  (`scenarios` / `compare`), Data/Print (`data-backup-restore` / `share-link` /
-  `print-export`), Settings Lever Ranges (`lever-ranges`), assistant dock header
-  (`assistant` / `assistant-local-vs-online` / `assistant-privacy`).
+- [x] ✅ Hints placed on the remaining surfaces via the `BetaPage hint` prop (page
+  titles) + inline: Schedule (`schedule-columns`), Insights (`levers-ranked`,
+  `optimize-spending`, `monte-carlo`, `backtest`), Plans (`scenarios`, `compare`),
+  Data (`data-backup-restore`, `share-link`), Print (`print-export`), Connections
+  (`assistant-local-vs-online`), Settings → Lever Ranges (`lever-ranges`), and the
+  assistant dock header (`assistant`).
 - [x] ✅ `npx vitest run` green (995) · `tsc -b` clean · build ok.
+
+**Every placement in the §5 table now has a live `?`.** The `assistant-privacy`
+topic is reachable from Help and cross-linked from the assistant topics rather
+than its own chrome icon (the dock header carries the one `assistant` hint).
 
 ## 7. Acceptance (the no-drift test)
 

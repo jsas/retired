@@ -11,6 +11,7 @@ import { AsyncOpfsBackend } from '../data/opfs';
 import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';
 import { AI_SETTINGS_STORAGE_KEY } from '../lib/aiSettings';
 import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } from '../lib/rangePrefs';
+import { HelpHint } from '../design/primitives';
 
 interface SettingsModalProps {
   config: AppConfig;
@@ -223,7 +224,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
           {section === 'levers' && (
             <div className="space-y-4 max-w-lg">
               <div>
-                <h3 className="text-xs font-semibold text-slate-700 mb-1">Lever ranges</h3>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">Lever ranges<HelpHint topic="lever-ranges" /></h3>
                 <p className="text-xs text-slate-600 leading-snug">
                   The sliders for spending, savings, expected return and volatility only span the
                   range below. Widen one if your plan lives past the default edge — these are

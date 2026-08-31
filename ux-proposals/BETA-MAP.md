@@ -1,7 +1,34 @@
 # Real Beta — element inventory & the map to f7
 
-**Status:** plan of record · **Branch:** `issue/real-beta` · **Closes:** #136
+**Status:** plan of record · **Branch:** `issue/real-beta` · **Draft PR:** #137 · **Closes:** #136
 **Source of truth:** `STYLEGUIDE.md` + `src/design/` + the winning mock `ux-proposals/finalists/f7-final*.html`.
+
+---
+
+## 0. What's built — the live status board
+
+Updated as work lands. ✅ shipped to PR #137 · 🚧 in progress · ⬜ not started.
+
+| Surface | Status | Where |
+|---|---|---|
+| Design system (tokens + primitives + Style Guide) | ✅ | `src/design/` — VerdictHero, Panel, Fader, Chip, Stat, AccountBars, Legend, Dropdown, Footnote, AppHeader, **HelpHint** |
+| Landing (front door, 5-question chat → verdict → doors) | ✅ | `LandingPage.tsx` — sits in the shared chrome; whole site reachable from the header |
+| Dashboard (verdict hero, Markets dial, contour map, two levers, down-market check, life timeline, evidence row) | ✅ | `BetaApp.tsx` + `beta/ContourMap·MarketDial·DownMarketCheck·LifeTimeline·EvidenceRow` |
+| Details page (3 levers + 13 sections, one scroll, deep-linked) | ✅ | `DetailsPage.tsx` + `detailsSections.ts` |
+| Schedule (year-by-year + §8.9 column picker, prefKV) | ✅ | `ScheduleTable.tsx` + `scheduleColumns.ts` |
+| Insights (levers ranked + Monte Carlo + backtest + spending solve) | ✅ | `BetaInsightsPage` |
+| Plans (list / new / compare / revision history) | ✅ | `BetaPlansPage` |
+| Data (backup / restore / import / share) | ✅ | `BetaDataPage` |
+| Settings (config + Lever Ranges pref + AI connection) | ✅ | `BetaSettingsPage` + `lib/rangePrefs.ts` |
+| Print / Export / Donate routed into the shell | ✅ | `BetaPrintPage` · `BetaExportPage` · `BetaDonatePage` |
+| Assistant dock (340px rail / mobile sheet, one conversation) | ✅ | `BetaPage` assistant slot + `AgentPage docked` |
+| **Help system** — searchable/linkable from one data source | ✅ | `src/help/topics.tsx` + rewritten `HelpModal.tsx`; see `HELP-MAP.md` |
+| **`?` hints (HelpHint)** — placed | ✅ | Dashboard, all Details sections/levers, Schedule, Insights, Plans, Data, Print, Connections, Settings Lever Ranges, dock header — every §5 placement live |
+| Lever-range prefs (spending/savings/return/volatility min–max) | ✅ | `lib/rangePrefs.ts` + Settings → Lever Ranges, `wealthconsole_ranges` prefKV key |
+
+**Suite:** `npx vitest run` 995 green · `tsc -b` clean · `npm run build` ok.
+
+---
 
 This file is the contract for the rebuild. Per REQUIREMENTS §8.7 (the bolt-on
 test), **every element of the current app gets a named home** — (a) visible by
