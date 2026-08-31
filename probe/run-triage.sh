@@ -80,6 +80,15 @@ for i in $(seq 1 30); do
   sleep 1
 done
 curl -s "http://localhost:$PORT/probe/" -o /dev/null || { echo "!! probe server didn't come up"; tail -20 /tmp/probe-vite.log; exit 1; }
+# Warm vite's dep optimizer: requesting the entry module triggers the
+# esbuild pre-bundle of web-llm/zod/etc. — otherwise the browser's first
+# load sits in "waiting" for minutes while vite optimizes on demand.
+echo "# warming vite (dep pre-bundle)…"
+curl -s "http://localhost:$PORT/probe/main.ts" -o /dev/null
+for i in $(seq 1 90); do
+  curl -s "http://localhost:$PORT/probe/main.ts" | grep -q "deps/" && break
+  sleep 2
+done
 echo "# probe server up"
 
 CHROME="$(find_chrome)"

@@ -136,16 +136,33 @@ function finish(code) {
 // leave Node with nothing to do — it must run until 'done' or a real error).
 const keepAlive = setInterval(() => {}, 30_000);
 
-// Startup watchdog: if the sweep's first event never arrives, the page didn't
-// load (probe server down, URL typo, WebGPU disabled). Fail fast, visibly.
+// Startup watchdog: a cold vite cache can take minutes to pre-bundle web-llm
+// before the page emits its first event, so don't fail on a fixed timer —
+// PROBE the page itself. Only give up when the page is genuinely dead (not on
+// the probe URL, or the debug socket rejects). Live-but-slow keeps waiting.
 let sawStart = false;
-setTimeout(() => {
-  if (!sawStart && !finished) {
-    console.log('!! no sweep events after 60s — the probe page never started. ' +
-      'Check the Chrome window (server down? error banner?) and /tmp/probe-vite.log.');
+const startPoll = setInterval(async () => {
+  if (finished) { clearInterval(startPoll); return; }
+  if (sawStart) { clearInterval(startPoll); return; }
+  try {
+    const r = await send(ws, 'Runtime.evaluate', {
+      expression: '({u: location.href, b: (document.getElementById("barText")||{}).textContent || "", l: (document.getElementById("logBox")||{}).textContent?.length || 0})',
+      returnByValue: true,
+    });
+    const v = r?.result?.value;
+    if (v && /\/probe\//.test(v.u)) {
+      if (v.b || v.l) { console.log('# page is alive and working (slow first load — cold vite cache?). Waiting for events…'); }
+      return; // on the probe page: alive, just not streaming events yet
+    }
+    console.log(`!! probe page never started (window is at ${v?.u ?? 'unknown URL'}). ` +
+      'Check the Chrome window and /tmp/probe-vite.log.');
+    finish(4);
+  } catch {
+    console.log('!! probe page is gone (window closed?).');
     finish(4);
   }
-}, 60_000).unref?.();
+}, 20_000);
+startPoll.unref?.();
 
 // Safety net: a cold sweep (7 models ≈ 22 GB of downloads) can take hours.
 // Cap the DRIVER, not the page — Ctrl-C or timeout ends collection; the sweep
