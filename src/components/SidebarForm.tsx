@@ -2093,6 +2093,13 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 Standard deviation of annual returns. 0% = deterministic. Typical equity-heavy portfolio: 15–20%.
               </p>
             </div>
+            {Array.isArray(inputs.marketPeriods) && inputs.marketPeriods.length > 0 && (
+              <p className="text-[10px] text-blue-400 leading-snug border border-blue-900/40 bg-blue-950/30 rounded px-2 py-1.5">
+                A market hypothesis ({inputs.marketPeriods.length} anchor{inputs.marketPeriods.length === 1 ? '' : 's'})
+                is active — these flat values apply only outside the anchors' age range. Edit the curve in the
+                <em> Market Hypothesis</em> panel above the projection timeline.
+              </p>
+            )}
           </div>
         </CollapsibleSection>
       </div>

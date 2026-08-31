@@ -197,6 +197,16 @@ const SECTIONS: HelpSection[] = [
       {
         term: 'Volatility (%/yr)',
         body: <P>Standard deviation of annual returns, used only by Monte Carlo. 0% means "every year equals the expected return" — the Monte Carlo button will ask you to set a value above zero. Equity-heavy portfolios are typically 15–20%.</P>
+      },
+      {
+        term: 'Market Hypothesis (periods)',
+        body: (
+          <>
+            <P>The flat Expected Return and Volatility above assume the market is the same every year. To model a <strong>crash, a boom, or a choppy stretch</strong>, open the <strong>Market Hypothesis</strong> panel just above the projection timeline and shape a curve instead.</P>
+            <P><strong>Double-click</strong> the chart to drop an anchor at that age, then <strong>drag</strong> it up/down for the expected return (blue, left axis) and sideways for the age. A second line (amber, right axis) holds volatility anchors. The engine <strong>interpolates linearly</strong> between anchors; before the first and after the last it falls back to the flat sidebar values, so a hypothesis that covers only part of your horizon (say, a crash at 68–70) leaves the rest untouched.</P>
+            <P>The <strong>projection follows the return curve</strong> — you'll see the balance line dip through a crash and recover — while the <strong>volatility curve shapes only Monte Carlo</strong>, widening or narrowing the random fan age by age. Remove every anchor (Clear) to return to the flat constants.</P>
+          </>
+        )
       }
     ]
   },
