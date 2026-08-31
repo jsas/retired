@@ -87,6 +87,8 @@ export class TabSession {
     this.ws = null;
     this.seq = 0;
     this.pending = new Map();
+    this.contextId = null;           // page's default execution context (for callFn)
+    this._contextWaiters = [];
   }
 
   async connect() {
@@ -98,6 +100,16 @@ export class TabSession {
     });
     this.ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
+      // Runtime.enable emits executionContextCreated for each existing/new context.
+      if (msg.method === 'Runtime.executionContextCreated') {
+        const ctx = msg.params?.context;
+        // Keep the page's default (main-world) context — it has an empty origin/auxData.isDefault.
+        if (ctx && (ctx.auxData?.isDefault ?? true)) {
+          this.contextId = ctx.id;
+          for (const w of this._contextWaiters.splice(0)) w(ctx.id);
+        }
+        return;
+      }
       if (msg.id != null && this.pending.has(msg.id)) {
         const { resolve, reject } = this.pending.get(msg.id);
         this.pending.delete(msg.id);
@@ -105,6 +117,9 @@ export class TabSession {
         else resolve(msg.result);
       }
     };
+    // Turn on the Runtime domain so Chrome tells us the execution context id;
+    // callFunctionOn needs it (no objectId → must name a context).
+    await this._send('Runtime.enable', {});
   }
 
   _send(method, params) {
@@ -139,9 +154,19 @@ export class TabSession {
    *  `fnDecl` is a function *declaration* source, e.g. `(a, b) => a + b`; args are
    *  JSON-serializable. Returns the awaited, by-value result. */
   async callFn(fnDecl, args = [], { timeoutMs = 600000 } = {}) {
+    // callFunctionOn with no objectId must name an execution context, or Chrome
+    // replies "Either objectId or executionContextId or uniqueContextId must be
+    // specified". Wait (briefly) for Runtime.enable to deliver the default one.
+    if (this.contextId == null) {
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('execution context never reported')), 10000);
+        this._contextWaiters.push((id) => { clearTimeout(t); resolve(id); });
+      });
+    }
     const result = await this._send('Runtime.callFunctionOn', {
       functionDeclaration: fnDecl,
       arguments: args.map((v) => ({ value: v })),
+      executionContextId: this.contextId,
       awaitPromise: true,
       returnByValue: true,
       timeout: timeoutMs,
