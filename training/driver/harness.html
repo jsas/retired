@@ -32,6 +32,7 @@
 
   async function reply(systemPrompt, question) {
     if (!engine) throw new Error('no model loaded');
+    log('Q: ' + question);
     const out = await engine.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
@@ -40,7 +41,9 @@
       temperature: 0,          // deterministic: the eval wants the model's best answer
       max_tokens: 400,
     });
-    return out.choices[0]?.message?.content ?? '';
+    const text = out.choices[0]?.message?.content ?? '';
+    log('A: ' + text);
+    return text;
   }
 
   async function hasWebGPU() {

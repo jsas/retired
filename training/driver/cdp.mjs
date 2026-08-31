@@ -43,17 +43,19 @@ function httpJson(path, port, method = 'GET') {
   });
 }
 
-/** Launch headless Chrome with remote debugging + WebGPU enabled, and wait for
- *  the devtools endpoint to answer. Returns the child process. */
-export async function launchChrome({ port = 9222, gpu = true } = {}) {
+/** Launch Chrome with remote debugging + WebGPU enabled, and wait for the
+ *  devtools endpoint to answer. Pass `headless: false` to watch the harness
+ *  page (model load progress + replies) in a real window. Returns the child. */
+export async function launchChrome({ port = 9222, gpu = true, headless = true } = {}) {
   const bin = findChrome();
   const args = [
     `--remote-debugging-port=${port}`,
     '--no-first-run',
     '--no-default-browser-check',
     '--user-data-dir=' + `${process.env.TEMP}/retired-bakeoff-profile`,
-    // WebGPU on headless: don't force-disable GPU; enable the unsafe fallback so
-    // SwiftShader/ANGLE still exposes an adapter where hardware is present.
+    ...(headless ? ['--headless=new'] : ['--start-maximized', '--auto-open-devtools-for-tabs']),
+    // WebGPU: enable the unsafe fallback so SwiftShader/ANGLE still exposes an
+    // adapter where hardware is present (works in both headless and headed).
     ...(gpu ? ['--enable-unsafe-webgpu', '--enable-features=Vulkan'] : []),
     'about:blank',
   ];
@@ -153,29 +155,44 @@ export class TabSession {
    *  there's nothing to mis-escape (CodeQL: improper code sanitization).
    *  `fnDecl` is a function *declaration* source, e.g. `(a, b) => a + b`; args are
    *  JSON-serializable. Returns the awaited, by-value result. */
-  async callFn(fnDecl, args = [], { timeoutMs = 600000 } = {}) {
-    // callFunctionOn with no objectId must name an execution context, or Chrome
-    // replies "Either objectId or executionContextId or uniqueContextId must be
-    // specified". Wait (briefly) for Runtime.enable to deliver the default one.
-    if (this.contextId == null) {
-      await new Promise((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('execution context never reported')), 10000);
-        this._contextWaiters.push((id) => { clearTimeout(t); resolve(id); });
-      });
+  async callFn(fnDecl, args = [], { timeoutMs = 600000, retries = 40, retryDelayMs = 250 } = {}) {
+    let lastErr;
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        // callFunctionOn with no objectId must name an execution context, or Chrome
+        // replies "Either objectId or executionContextId or uniqueContextId must be
+        // specified". Wait (briefly) for Runtime.enable to deliver the default one.
+        if (this.contextId == null) {
+          await new Promise((resolve, reject) => {
+            const t = setTimeout(() => reject(new Error('execution context never reported')), 10000);
+            this._contextWaiters.push((id) => { clearTimeout(t); resolve(id); });
+          });
+        }
+        const result = await this._send('Runtime.callFunctionOn', {
+          functionDeclaration: fnDecl,
+          arguments: args.map((v) => ({ value: v })),
+          executionContextId: this.contextId,
+          awaitPromise: true,
+          returnByValue: true,
+          timeout: timeoutMs,
+        });
+        if (result.exceptionDetails) {
+          const d = result.exceptionDetails;
+          throw new Error('page exception: ' + (d.exception?.description ?? d.text ?? 'unknown'));
+        }
+        return result.result?.value;
+      } catch (e) {
+        lastErr = e;
+        // A model load can navigate/reload the tab and destroy the context we
+        // captured; the next Runtime.executionContextCreated re-arms it. Retry
+        // those transients; a genuine page error still throws immediately.
+        const transient = /Execution context was destroyed|Cannot find context|Inspected target navigated|Session closed|Target closed|execution context/i.test(e.message);
+        if (!transient) throw e;
+        this.contextId = null;   // force re-resolve against the fresh context
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+      }
     }
-    const result = await this._send('Runtime.callFunctionOn', {
-      functionDeclaration: fnDecl,
-      arguments: args.map((v) => ({ value: v })),
-      executionContextId: this.contextId,
-      awaitPromise: true,
-      returnByValue: true,
-      timeout: timeoutMs,
-    });
-    if (result.exceptionDetails) {
-      const d = result.exceptionDetails;
-      throw new Error('page exception: ' + (d.exception?.description ?? d.text ?? 'unknown'));
-    }
-    return result.result?.value;
+    throw lastErr;
   }
 
   /** Like eval, but tolerant of the navigation race: a freshly-opened tab can
