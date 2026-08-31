@@ -35,6 +35,7 @@ export const PREF_KEYS = [
   'wealthconsole_panel_state', // collapsed panels + print options + export options + welcome dismissal
   'wealthconsole_eq',          // EQ steering crops (axis-fraction scalars)
   'wealthconsole_schedule_cols', // year-by-year table: user-visible column ids
+  'wealthconsole_ranges',      // lever slider min/max prefs (spending/savings/return/volatility)
 ] as const;
 
 export type PrefKey = (typeof PREF_KEYS)[number];

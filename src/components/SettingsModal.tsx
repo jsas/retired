@@ -10,6 +10,7 @@ import { DB_STORAGE_KEY } from '../data/db';
 import { AsyncOpfsBackend } from '../data/opfs';
 import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';
 import { AI_SETTINGS_STORAGE_KEY } from '../lib/aiSettings';
+import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } from '../lib/rangePrefs';
 
 interface SettingsModalProps {
   config: AppConfig;
@@ -34,20 +35,25 @@ interface SettingsModalProps {
 //                                     (the localStorage mirror of the kv row)
 //   retirement_ai_chats             — assistant chat threads
 //   retirement_ai_settings          — model connections + AI preferences
+//   wealthconsole_schedule_cols     — year-by-year table column picker
+//   wealthconsole_ranges            — lever slider min/max prefs
 const ERASABLE_KEYS = [
   DB_STORAGE_KEY,
   'wealthconsole_scenarios',
   'wealthconsole_config',
   'wealthconsole_eq',
   'wealthconsole_panel_state',
+  'wealthconsole_schedule_cols',
+  'wealthconsole_ranges',
   AI_CHATS_STORAGE_KEY,
   AI_SETTINGS_STORAGE_KEY,
 ];
 
-type Section = 'general' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
+type Section = 'general' | 'levers' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'general', label: 'General' },
+  { id: 'levers', label: 'Lever Ranges' },
   { id: 'federal', label: 'Federal Tax' },
   { id: 'provinces', label: 'Provincial Tax' },
   { id: 'rrif', label: 'RRIF Rates' },
@@ -71,6 +77,11 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   const [section, setSection] = useState<Section>('federal');
   const [selectedProvince, setSelectedProvince] = useState<string>('ONT');
   const [error, setError] = useState<string | null>(null);
+  // Lever ranges live in prefKV (UI prefs), not the engine config — they shape
+  // the sliders, not the math. Edits save immediately and the faders pick them
+  // up on their next render.
+  const [ranges, setRanges] = useState<RangePrefs>(getRangePrefs);
+  const updateRanges = (patch: Partial<RangePrefs>) => setRanges(setRangePrefs(patch));
 
   const update = (mutate: (c: AppConfig) => void) => {
     setDraft(prev => {
@@ -206,6 +217,42 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   <Trash2 size={13} /> Erase everything and reset
                 </button>
               </div>
+            </div>
+          )}
+
+          {section === 'levers' && (
+            <div className="space-y-4 max-w-lg">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">Lever ranges</h3>
+                <p className="text-xs text-slate-600 leading-snug">
+                  The sliders for spending, savings, expected return and volatility only span the
+                  range below. Widen one if your plan lives past the default edge — these are
+                  preferences, not engine settings, so they save the moment you change them.
+                  Retirement age, plan-to age, CPP and OAS start ages keep fixed spans; a fixed
+                  span is part of their meaning.
+                </p>
+              </div>
+              <RangeNum label="Spending slider max" value={ranges.spendingMax} step={10000}
+                hint={`Default ${DEFAULT_RANGE_PREFS.spendingMax.toLocaleString('en-CA')}`}
+                onChange={(v) => updateRanges({ spendingMax: v })} money />
+              <RangeNum label="Annual savings slider max" value={ranges.savingsMax} step={10000}
+                hint={`Default ${DEFAULT_RANGE_PREFS.savingsMax.toLocaleString('en-CA')}`}
+                onChange={(v) => updateRanges({ savingsMax: v })} money />
+              <RangeNum label="Expected return slider min" value={+(ranges.returnMin * 100).toFixed(2)} step={0.25}
+                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.returnMin * 100).toFixed(1)}%`}
+                onChange={(v) => updateRanges({ returnMin: Math.max(0, v) / 100 })} />
+              <RangeNum label="Expected return slider max" value={+(ranges.returnMax * 100).toFixed(2)} step={0.25}
+                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.returnMax * 100).toFixed(1)}%`}
+                onChange={(v) => updateRanges({ returnMax: Math.max(0.01, v) / 100 })} />
+              <RangeNum label="Volatility slider max" value={+(ranges.volatilityMax * 100).toFixed(1)} step={1}
+                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.volatilityMax * 100).toFixed(0)}%`}
+                onChange={(v) => updateRanges({ volatilityMax: Math.max(0.01, v) / 100 })} />
+              <button
+                onClick={() => setRanges(setRangePrefs({ ...DEFAULT_RANGE_PREFS }))}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 border border-neutral-300 rounded hover:bg-neutral-50"
+              >
+                <RotateCcw size={13} /> Back to the default ranges
+              </button>
             </div>
           )}
 
@@ -540,6 +587,34 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
           </div>
         </div>
     </div>
+  );
+}
+
+/** Lever-range editor row: label + number + a one-line default hint. */
+function RangeNum({ label, value, onChange, step, hint, money }: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+  hint?: string;
+  money?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-slate-700">{label}</span>
+      <span className="mt-0.5 flex items-baseline gap-1.5">
+        {money && <span className="text-[11px] text-slate-400">$</span>}
+        <input
+          type="number"
+          step={step ?? 1}
+          min={0}
+          value={Number.isFinite(value) ? value : 0}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="w-36 px-2 py-1 text-xs border border-neutral-300 rounded text-right"
+        />
+      </span>
+      {hint && <span className="mt-0.5 block text-[11px] text-slate-500">{hint}</span>}
+    </label>
   );
 }
 

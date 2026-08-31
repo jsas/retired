@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import type { RetirementInputs, WithdrawalAccount, SpendingBand } from '@retired/engine-core/retirementEngine';
 import { Panel, Fader } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
+import { getRangePrefs } from '../../lib/rangePrefs';
 
 const fmtMoney = (v: number) => '$' + Math.round(v).toLocaleString('en-CA');
 
@@ -69,6 +70,8 @@ export function DetailsPage({ inputs, onChange, section }: {
   };
 
   const bands = inputs.spendingBands ?? [];
+  // Lever ranges are a user preference (Settings); the faders read them here.
+  const ranges = getRangePrefs();
 
   const visibleSections = DETAILS_SECTIONS.filter(s => {
     if (s.conditional === 'rdsp') return inputs.rdsp != null;
@@ -84,9 +87,9 @@ export function DetailsPage({ inputs, onChange, section }: {
         <div className="grid gap-6 md:grid-cols-3">
           <Fader label="Stop working at" value={inputs.retirementAge} min={inputs.currentAge} max={75} step={1}
             format={(v) => `${v}`} onChange={(v) => set({ retirementAge: v })} />
-          <Fader label="Spend a year" value={inputs.desiredSpending} min={0} max={1000000} step={1000}
+          <Fader label="Spend a year" value={inputs.desiredSpending} min={0} max={ranges.spendingMax} step={1000}
             format={fmtMoney} onChange={(v) => set({ desiredSpending: v })} />
-          <Fader label="Markets" value={Math.round(inputs.investmentReturn * 1000) / 10} min={0} max={20} step={0.1}
+          <Fader label="Markets" value={Math.round(inputs.investmentReturn * 1000) / 10} min={ranges.returnMin * 100} max={ranges.returnMax * 100} step={0.1}
             format={(v) => `${v.toFixed(1)}%`} onChange={(v) => set({ investmentReturn: v / 100 })} />
         </div>
       </Panel>
