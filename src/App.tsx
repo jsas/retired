@@ -4,6 +4,7 @@ import { StyleGuide } from './design/StyleGuide';
 import { applyBetaAtBoot } from './lib/betaSkin';
 import { BetaPage } from './components/beta/BetaPage';
 import { DetailsPage } from './components/beta/DetailsPage';
+import { LandingPage } from './components/beta/LandingPage';
 import {
   BetaSchedulePage, BetaInsightsPage, BetaPlansPage, BetaDataPage,
   BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
@@ -816,7 +817,20 @@ function App() {
         return <BetaConnectionsPage chip={chip} onClose={() => setView('projection')} />;
       case 'help':
         return <BetaHelpPage chip={chip} />;
-      case 'agent':
+      case 'welcome':
+        // The assistant as the front door: five questions build a starter plan,
+        // then two doors (dashboard / details). Building loads the plan and
+        // lands on the dashboard.
+        return (
+          <LandingPage
+            config={config}
+            onBuild={(plan) => {
+              setInputs(JSON.parse(JSON.stringify(plan)));
+              setHasUnsavedChanges(true);
+              setView('projection');
+            }}
+          />
+        );
         return (
           <BetaPage title="Assistant" chip={chip}>
             <AgentPage
