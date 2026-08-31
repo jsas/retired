@@ -32,8 +32,8 @@ describe('toolSpecs', () => {
     expect(specs.map(s => s.name).sort()).toEqual([
       'compare_scenarios', 'get_schedule', 'get_scenario',
       'list_scenarios',
-      'manage_cash_event', 'manage_income',
-      'propose_cash_event', 'propose_fhsa', 'propose_income', 'propose_patch',
+      'manage_cash_event', 'manage_debt', 'manage_income',
+      'propose_cash_event', 'propose_debt', 'propose_fhsa', 'propose_income', 'propose_patch',
       'propose_rdsp', 'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
       'open_scenario', 'save_scenario_as',
@@ -424,6 +424,91 @@ describe('propose_income / cash_event', () => {
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
     expect((out.patch.events as Array<{ label: string }>)[0].label).toBe('Downsize');
+  });
+});
+
+describe('propose_debt / manage_debt', () => {
+  const mortgage = { id: 'd1', label: 'Mortgage', kind: 'mortgage' as const, balance: 320000, interestRate: 0.051, monthlyPayment: 2100 };
+
+  it('adds a debt with a generated id appended to the debts list', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_debt',
+      args: { label: 'Credit card', kind: 'creditCard', balance: 8000, interestRate: 0.1999, monthlyPayment: 400 },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    const debts = out.patch.debts as Array<{ id: string; label: string; kind: string }>;
+    expect(debts).toHaveLength(1);
+    expect(debts[0].label).toBe('Credit card');
+    expect(debts[0].kind).toBe('creditCard');
+    expect(debts[0].id).toBeTruthy();
+  });
+
+  it('rejects an unknown kind', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_debt',
+      args: { label: 'X', kind: 'payday', balance: 1000, interestRate: 0.2, monthlyPayment: 100 },
+    });
+    expect(out.kind).toBe('error');
+  });
+
+  it('updates a debt by unique label, re-validated, keeping id and other fields', () => {
+    const c = ctx({ inputs: baseInputs({ debts: [mortgage] }) });
+    const out = executeToolCall(c, {
+      id: '1', name: 'manage_debt',
+      args: { action: 'update', target: 'mortgage', changes: { monthlyPayment: 2500 } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    const debts = out.patch.debts as Array<{ id: string; monthlyPayment: number; balance: number }>;
+    expect(debts[0].monthlyPayment).toBe(2500);
+    expect(debts[0].id).toBe('d1'); // id immutable
+    expect(debts[0].balance).toBe(320000); // untouched field survives
+  });
+
+  it('rejects an update that fails the debt schema', () => {
+    const c = ctx({ inputs: baseInputs({ debts: [mortgage] }) });
+    const out = executeToolCall(c, {
+      id: '1', name: 'manage_debt',
+      args: { action: 'update', target: 'd1', changes: { interestRate: 'high' } },
+    });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('Invalid debt update');
+  });
+
+  it('removes a debt by id', () => {
+    const c = ctx({ inputs: baseInputs({ debts: [mortgage, { id: 'd2', label: 'Card', kind: 'creditCard' as const, balance: 5000, interestRate: 0.2, monthlyPayment: 200 }] }) });
+    const out = executeToolCall(c, { id: '1', name: 'manage_debt', args: { action: 'remove', target: 'd1' } });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect((out.patch.debts as unknown[]).map(e => (e as { id: string }).id)).toEqual(['d2']);
+  });
+
+  it('errors on an unknown target and on an empty plan', () => {
+    const empty = executeToolCall(ctx(), { id: '1', name: 'manage_debt', args: { action: 'remove', target: 'd1' } });
+    expect(empty.kind).toBe('error');
+    if (empty.kind === 'error') expect(empty.content).toContain('no debts');
+
+    const one = ctx({ inputs: baseInputs({ debts: [mortgage] }) });
+    const missing = executeToolCall(one, { id: '1', name: 'manage_debt', args: { action: 'remove', target: 'zzz' } });
+    expect(missing.kind).toBe('error');
+    if (missing.kind === 'error') expect(missing.content).toContain('Mortgage');
+  });
+
+  it('refuses a flat override that targets the structural debts field', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'run_projection',
+      args: { overrides: { debts: [mortgage] } },
+    });
+    // Structural fields are rejected in overrides (use propose_debt instead).
+    expect(out.kind === 'error' || (out.kind === 'result' && /rejected|debts/i.test(out.content))).toBe(true);
+  });
+
+  it('surfaces debts in the get_scenario spending section', () => {
+    const c = ctx({ inputs: baseInputs({ debts: [mortgage] }) });
+    const out = executeToolCall(c, { id: '1', name: 'get_scenario', args: { section: 'spending' } });
+    expect(out.kind).toBe('result');
+    if (out.kind === 'result') {
+      expect(out.content).toContain('Mortgage');
+      expect(out.content).toContain('funded from spending');
+    }
   });
 });
 

@@ -22,7 +22,7 @@ import { solveSustainableSpending } from '../spendingSolver';
 import { runMonteCarlo } from '../monteCarlo';
 import {
   retirementInputsSchema, spouseSchema, incomeSourceSchema,
-  cashEventSchema, reverseMortgageSchema, rdspSchema, fhsaSchema,
+  cashEventSchema, reverseMortgageSchema, rdspSchema, fhsaSchema, debtSchema,
 } from '../../data/schemas';
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
 import { MemoryStore } from '../memory/store';
@@ -135,6 +135,20 @@ const manageCashEventArgs = z.object({
   rationale: z.string().optional(),
 });
 
+const proposeDebtArgs = debtSchema
+  .omit({ id: true })
+  .extend({ rationale: z.string().optional() })
+  .describe('A debt to add. kind "mortgage" = a home loan; "creditCard", "loan", "lineOfCredit", or "other" for consumer debt. balance is what\'s owed today, interestRate is the annual rate (e.g. 0.051 = 5.1%), monthlyPayment is the required payment. Payments are funded from spending each year until the balance is paid off (then they stop). Omit startAge to start now; set endAge to stop early (rare).');
+
+const manageDebtArgs = z.object({
+  action: z.enum(['update', 'remove']),
+  target: z.string().min(1)
+    .describe('Which debt: its id, or its label if unique (e.g. "Mortgage").'),
+  changes: z.record(z.string(), z.unknown()).optional()
+    .describe('For update: the debt fields to change (label, kind, balance, interestRate, monthlyPayment, startAge, endAge). endAge must be a number or explicit null. Missing fields keep their current values.'),
+  rationale: z.string().optional(),
+});
+
 
 const runStrategiesArgs = z.object({
   categories: z.array(z.enum(['cpp', 'oas', 'pension_timing', 'withdrawal_order', 'reverse_mortgage', 'work'])).optional()
@@ -224,6 +238,8 @@ const TOOL_SCHEMAS = {
   propose_revert: proposeRevertArgs,
   manage_cash_event: manageCashEventArgs,
   manage_income: manageIncomeArgs,
+  propose_debt: proposeDebtArgs,
+  manage_debt: manageDebtArgs,
   remember: rememberArgs,
   recall: recallArgs,
   open_scenario: openScenarioArgs,
@@ -239,7 +255,7 @@ export function isAgentToolName(name: string): name is AgentToolName {
 
 /** Top-level scalar fields the agent may propose changing (via set_scenario_value
  *  or propose_patch). Structural blocks (spouse, events, income, spendingBands,
- *  reverseMortgage) go through their own propose_* tools. */
+ *  reverseMortgage, rdsp, fhsa, debts) go through their own propose_* tools. */
 export const EDITABLE_FIELDS = new Set([
   'currentAge', 'retirementAge', 'maxAge',
   'rrspBalance', 'tfsaBalance', 'taxableBalance', 'cashCushionBalance',
@@ -256,7 +272,7 @@ export const EDITABLE_FIELDS = new Set([
 /** Structural top-level keys that are refused in flat override patches — they
  *  have dedicated propose_* tools with element-level validation. */
 const STRUCTURAL_FIELDS = new Set([
-  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa',
+  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa', 'debts',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -327,6 +343,12 @@ export function toolSpecs(): ToolSpec[] {
     spec('manage_income',
       'PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.',
       manageIncomeArgs),
+    spec('propose_debt',
+      'PROPOSE adding a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending each year until paid off, then stops — so carrying debt into retirement raises withdrawals and can flip the verdict. User confirms.',
+      proposeDebtArgs),
+    spec('manage_debt',
+      'PROPOSE updating or REMOVING an existing debt (mortgage, credit card, loan, or line of credit, by id or unique label). User confirms. Use propose_debt to add a new one.',
+      manageDebtArgs),
     spec('remember',
       'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.',
       rememberArgs),
@@ -490,6 +512,10 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return manageElement(ctx, 'events', cashEventSchema, parsed.data as z.infer<typeof manageCashEventArgs>, 'cash event');
     case 'manage_income':
       return manageElement(ctx, 'income', incomeSourceSchema, parsed.data as z.infer<typeof manageIncomeArgs>, 'income source');
+    case 'propose_debt':
+      return proposeElement(ctx, 'debts', debtSchema, parsed.data, 'debt');
+    case 'manage_debt':
+      return manageElement(ctx, 'debts', debtSchema, parsed.data as z.infer<typeof manageDebtArgs>, 'debt');
     case 'remember':
       return rememberTool(ctx, parsed.data as z.infer<typeof rememberArgs>);
     case 'recall':
@@ -548,6 +574,10 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
   const describeIncome = (list: RetirementInputs['income']) =>
     (list ?? []).map(s =>
       `${s.label} [${s.kind}]: ${money(s.annualAmount)}/yr from ${s.startAge}${s.endAge != null ? ` to ${s.endAge}` : ''}${s.indexedToCpi ? ' (indexed)' : ''}`);
+  const describeDebts = (list: RetirementInputs['debts']) =>
+    (list ?? []).map(d =>
+      `${d.label} [${d.kind}]: ${money(d.balance)} at ${(d.interestRate * 100).toFixed(2)}%, ${money(d.monthlyPayment)}/mo` +
+      `${d.startAge != null ? ` from ${d.startAge}` : ''}${d.endAge != null ? ` to ${d.endAge}` : ''} (funded from spending)`);
   const benefits = {
     cpp: i.cppStartAge == null ? 'not taken'
       : `${money(i.cppMonthlyAmount)}/mo from age ${i.cppStartAge}${i.cppAdjustedAmount ? ' (already adjusted)' : ''}`,
@@ -559,6 +589,7 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
     desiredSpending: i.desiredSpending,
     bands: (i.spendingBands ?? []).map(b => `${(b.pctOfBase * 100).toFixed(0)}% from age ${b.fromAge}`),
     events: (i.events ?? []).map(e => `${e.label}: ${money(e.amount)} ${e.direction} at age ${e.age}${e.endAge != null ? `–${e.endAge}` : ''}`),
+    debts: describeDebts(i.debts),
   };
   const spouse = i.spouse?.enabled ? {
     currentAge: i.spouse.currentAge, retirementAge: i.spouse.retirementAge,
@@ -566,6 +597,7 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
     cpp: i.spouse.cppStartAge == null ? 'not taken' : `${money(i.spouse.cppMonthlyAmount)}/mo from ${i.spouse.cppStartAge}`,
     oasStartAge: i.spouse.oasStartAge, desiredSpending: i.spouse.desiredSpending,
     income: describeIncome(i.spouse.income),
+    debts: describeDebts(i.spouse.debts),
   } : 'none (single plan)';
 
   const emit = (title: string, value: unknown) => {
@@ -832,7 +864,7 @@ function proposeSpouse(
  *  proposes the array with the new element appended. */
 function proposeElement(
   ctx: ToolContext,
-  key: 'income' | 'events',
+  key: 'income' | 'events' | 'debts',
   schema: z.ZodType,
   rawArgs: unknown,
   noun: string,
@@ -1010,12 +1042,12 @@ function proposeRevert(ctx: ToolContext, args: z.infer<typeof proposeRevertArgs>
   };
 }
 
-/** Shared helper for manage_cash_event / manage_income: update (merge fields
- *  over the matched element, re-validated) or remove. Target matches by exact
- *  id first, then by unique case-insensitive label. */
+/** Shared helper for manage_cash_event / manage_income / manage_debt: update
+ *  (merge fields over the matched element, re-validated) or remove. Target
+ *  matches by exact id first, then by unique case-insensitive label. */
 function manageElement(
   ctx: ToolContext,
-  key: 'events' | 'income',
+  key: 'events' | 'income' | 'debts',
   schema: z.ZodType,
   args: { action: 'update' | 'remove'; target: string; changes?: Record<string, unknown>; rationale?: string },
   noun: string,

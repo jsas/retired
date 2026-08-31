@@ -414,6 +414,11 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
   const spouseAgeOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
   const spouse = results.spouse;
   const rmOn = inputs.reverseMortgage?.enabled === true;
+  // Debts shown only when at least one carries a balance (matches the input UI).
+  const debts = (inputs.debts ?? []).filter(d => d.balance > 0.5);
+  const debtsOn = debts.length > 0;
+  const totalDebtBalance = debts.reduce((s, d) => s + d.balance, 0);
+  const totalDebtMonthly = debts.reduce((s, d) => s + Math.max(0, d.monthlyPayment), 0);
   const today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
   const milestones = options.includeMilestones ? buildMilestones(inputs, rrifConversionAge) : [];
 
@@ -453,6 +458,12 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
               <Row label="Total" value={fmt(inputs.rrspBalance + inputs.tfsaBalance + inputs.taxableBalance + inputs.cashCushionBalance)} />
               {rmOn && (
                 <Row label="Home (reverse mtg.)" value={fmt(inputs.reverseMortgage!.homeValue)} />
+              )}
+              {debtsOn && (
+                <Row
+                  label={`Debts (${debts.length})`}
+                  value={`${fmt(totalDebtBalance)} · ${fmt(totalDebtMonthly)}/mo`}
+                />
               )}
             </tbody>
           </table>
