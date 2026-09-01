@@ -8,7 +8,7 @@ import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { baseInputs, testConfig } from '../../../packages/engine-core/test/helpers';
 import { MarketDial } from './MarketDial';
 import { DownMarketCheck, DOWN_MARKET_RETURN } from './DownMarketCheck';
-import { LifeTimeline } from './LifeTimeline';
+import { ProjectionTimeline } from '../../design/ProjectionTimeline';
 import { EvidenceRow } from './EvidenceRow';
 
 const config = testConfig();
@@ -43,17 +43,32 @@ describe('DownMarketCheck', () => {
   });
 });
 
-describe('LifeTimeline', () => {
-  it('renders the axis, year ticks, and the you / work-ends pins', () => {
-    const html = renderToStaticMarkup(<LifeTimeline inputs={plan} breakdown={breakdown} />);
+describe('dashboard life timeline (ProjectionTimeline)', () => {
+  const toSeries = (rows: typeof breakdown) => [{ id: 'plan', label: 'portfolio', area: true, points: rows.map(r => ({ age: r.age, value: r.endingBalance })) }];
+  it('renders the axis and the you / work-ends pins', () => {
+    const html = renderToStaticMarkup(
+      <ProjectionTimeline
+        series={toSeries(breakdown)}
+        pins={[
+          { age: plan.currentAge, label: `you · ${plan.currentAge}`, place: 'below', anchor: 'start' },
+          { age: plan.retirementAge, label: `work ends · ${plan.retirementAge}` },
+        ]}
+      />,
+    );
     expect(html).toContain('<svg');
     expect(html).toContain('you · 55');
     expect(html).toContain('work ends · 62');
   });
-  it('shows the run-out pin when the plan depletes, else the outlasts note', () => {
+  it('marks where the money runs out when the plan depletes', () => {
     const broke = { ...plan, tfsaBalance: 5000, rrspBalance: 0, desiredSpending: 120000 };
     const brokeRows = calculateHousehold(broke, config).yearlyBreakdown;
-    const html = renderToStaticMarkup(<LifeTimeline inputs={broke} breakdown={brokeRows} />);
+    const depAge = brokeRows.find(r => r.endingBalance <= 0)?.age ?? null;
+    const html = renderToStaticMarkup(
+      <ProjectionTimeline
+        series={toSeries(brokeRows)}
+        pins={depAge != null ? [{ age: depAge, label: `money runs out · ${depAge}` }] : []}
+      />,
+    );
     expect(html).toMatch(/money runs out · \d+/);
   });
 });

@@ -96,11 +96,10 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             </button>
           )}
 
-          {/* the persistent verdict chip */}
-          <Link view="projection" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label="Back to the verdict">
-            <span className="inline-block h-2.5 w-2.5" style={{ backgroundColor: chipDot(chip.tone) }} />
+          {/* the persistent verdict chip — number and colour carry it; the words live in the tooltip */}
+          <Link view="projection" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label={`Back to the verdict — ${chip.label}`}>
+            <span title={chip.label} className="inline-block h-2.5 w-2.5" style={{ backgroundColor: chipDot(chip.tone) }} />
             <span className="num text-[14px] font-bold text-slate-900">{chip.age}</span>
-            <span className="hidden text-[9px] uppercase tracking-wider text-slate-400 sm:block">{chip.label}</span>
           </Link>
         </div>
       </header>

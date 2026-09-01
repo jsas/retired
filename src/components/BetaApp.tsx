@@ -12,12 +12,12 @@ import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
 import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
-import { cls } from '../design/tokens';
+import { cls, INK, RED_DOT } from '../design/tokens';
+import { ProjectionTimeline } from '../design/ProjectionTimeline';
 import { BetaPage, type VerdictChip } from './beta/BetaPage';
 import { ContourMap } from './beta/ContourMap';
 import { MarketDial } from './beta/MarketDial';
 import { DownMarketCheck } from './beta/DownMarketCheck';
-import { LifeTimeline } from './beta/LifeTimeline';
 import { EvidenceRow } from './beta/EvidenceRow';
 
 // The map's axis window — retire age × spending. The faders use the same
@@ -54,6 +54,8 @@ export function BetaApp({
 }: BetaAppProps) {
   const v = verdict(inputs, results);
   const breakdown = results.yearlyBreakdown ?? [];
+  // Where the money runs out (null = outlasts the plan) — drives the timeline pin.
+  const lifeDepletion = breakdown.find(r => r.endingBalance <= 0)?.age ?? null;
   const chip: VerdictChip = {
     tone: v.holds ? 'holds' : (results.depletionAge != null && inputs.maxAge - results.depletionAge <= 6) ? 'borderline' : 'short',
     age: v.holds ? `${inputs.maxAge}+` : `${results.depletionAge ?? '—'}`,
@@ -131,7 +133,16 @@ export function BetaApp({
         </Panel>
 
         <Panel label="Your life on one line — this exact plan" hint="life-timeline">
-          <LifeTimeline inputs={inputs} breakdown={breakdown} />
+          <ProjectionTimeline
+            series={[{ id: 'plan', label: 'portfolio', color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
+            pins={[
+              { age: inputs.currentAge, label: `you · ${inputs.currentAge}`, place: 'below', anchor: 'start', color: INK },
+              { age: inputs.retirementAge, label: `work ends · ${inputs.retirementAge}`, color: '#475569' },
+              ...(lifeDepletion != null
+                ? [{ age: lifeDepletion, label: `money runs out · ${lifeDepletion}`, color: RED_DOT }]
+                : []),
+            ]}
+          />
         </Panel>
 
         <Panel label="The receipts" hint="evidence-row">

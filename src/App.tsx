@@ -26,7 +26,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { SavePromptModal } from './components/SavePromptModal';
 import { HelpModal } from './components/HelpModal';
 import { MonteCarloChart } from './components/MonteCarloChart';
-import { TimelineChart } from './components/TimelineChart';
+import { ProjectionTimeline } from './design/ProjectionTimeline';
 import { BacktestPanel } from './components/BacktestPanel';
 import { CollapsiblePanel } from './components/CollapsiblePanel';
 import { SharingPage, type SharingImportRequest } from './components/SharingPage';
@@ -1144,9 +1144,13 @@ function App() {
                   <MetricCards results={results} household={household} />
                 </CollapsiblePanel>
 
-                {/* Interactive projection timeline (household when a spouse is enabled) */}
+                {/* Projection timeline (household when a spouse is enabled) — the
+                    shared component; drag-to-edit lives on the steering page. */}
                 <CollapsiblePanel id="timeline" title="Projection Timeline">
-                  <TimelineChart inputs={inputs} results={{ ...results, yearlyBreakdown: householdBreakdown }} config={config} onChange={handleInputsChange} />
+                  <ProjectionTimeline
+                    series={[{ id: 'plan', label: 'portfolio', area: true, points: householdBreakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
+                    pins={[{ age: inputs.retirementAge, label: `work ends · ${inputs.retirementAge}` }]}
+                  />
                 </CollapsiblePanel>
 
                 {/* Schedule Table (household when a spouse is enabled); the drill-down

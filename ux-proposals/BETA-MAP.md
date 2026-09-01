@@ -26,7 +26,9 @@ English, few controls, distinct concepts over reskins.
   Primitives: VerdictHero, Panel (hint prop), Fader (help prop), Chip, Stat,
   AccountBars, Legend, Dropdown, **HelpHint**, Footnote, AppHeader,
   **Dot** (square status/legend dot), **Progress** (flat hairline fill),
-  **Modal** (flat hairline dialog shell).
+  **Modal** (flat hairline dialog shell), **ProjectionTimeline** (the one
+  money-over-age chart: series + overlays + pins + retirement marker, used by
+  dashboard, steering, projection view, and Compare).
 - ✅ **Contour lib** — `packages/engine-core/src/contour.ts`: f7 terrain math
   (bisection boundary, Catmull-Rom smoothing, hold-wash) on `calculateHousehold`, pure + tests.
 - ✅ **Dashboard** (`BetaApp.tsx`) — verdict hero, Markets dial, contour map, two
@@ -125,17 +127,26 @@ via the existing `set` helper; tests in `DetailsPage.test.tsx` cover add/remove 
   with a clickable chat icon drops down to select / start / delete a chat
   (`DockChatPicker`), so the rail keeps its width for the conversation.
 
-### D. Compare page — rebuild as a real comparison tool ⬜
-The card view is "neat but the UX is shit": pick-up-to-3 + a baseline dot ritual
-is super silly. Rebuild as the obvious thing:
-- [ ] **One projection timeline**: a single line per selected scenario (all of them
-  can be on; no 3-cap), with a legend that toggles lines on/off.
-- [ ] **A simple table of numbers underneath**: one row per scenario, columns =
+### D. Compare page — rebuild as a real comparison tool ✅
+Rebuilt on a new shared **`src/design/ProjectionTimeline.tsx`** (see below):
+- [x] **One projection timeline**: a line per scenario — ALL scenarios on by default,
+  no 3-cap — with a legend that toggles lines on/off.
+- [x] **A simple table of numbers underneath**: one row per visible scenario —
   wealth at retirement, depletion age, withdrawal rate, lifetime tax, ending
-  balance. No baseline/diff chips — just the numbers, sortable by column.
-- [ ] Kill `MAX_COMPARE`, the baseline dot, and the diff-chip callouts.
-(Engine `compareScenarios` already computes per-scenario metrics; the timeline
-needs each scenario's `yearlyBreakdown.endingBalance` series.)
+  balance. No baseline dot, no diff chips.
+- [x] Killed `MAX_COMPARE`, the baseline dot, and the diff-chip callouts.
+
+**ProjectionTimeline (the shared line-chart primitive)** — money-over-age in the f7
+style (soft balance area-fill, clean axis + hairline year ticks, token colours,
+labelled pins). Props: `series[]` (one line each), `overlays[]` (spend / market /
+home-equity lines, legend-toggleable), `pins[]` (you / work ends / money runs out),
+`marker` (retirement as a `line` or `dot`). Now used by:
+- [x] **Dashboard** (BetaApp) — "Your life on one line" (replaced `LifeTimeline`, deleted).
+- [x] **Steering** (EqPage) — the live projection under the controls (read-only now).
+- [x] **Dashboard projection view** (App `view==='projection'`) — replaces `TimelineChart`'s
+  balance line. ⚠️ the drag-to-edit handles were dropped there; steering (EqPage) is
+  the edit surface. `TimelineChart` is now unused.
+- [x] **Compare** (CompareCard) — the multi-scenario timeline above.
 
 ---
 

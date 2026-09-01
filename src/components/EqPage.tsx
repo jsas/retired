@@ -9,7 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { Sliders, Loader2 } from 'lucide-react';
 import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
-import { TimelineChart } from './TimelineChart';
+import { ProjectionTimeline } from '../design/ProjectionTimeline';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
   AXES, axisValue, withAxis, clampToBand, normalizeBand, effectiveRange, deterministicOutcome, isLimited,
@@ -459,15 +459,15 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
         </div>
       </div>
 
-      {/* Live projection under the controls — the visual aid while steering. */}
+      {/* Live projection under the controls — the visual aid while steering. The
+          shared ProjectionTimeline draws the balance; a retirement pin marks where
+          work ends. (The full drag-to-edit timeline stays on the Dashboard.) */}
       {projection && (
-        <div className="mt-3 bg-white border border-slate-200 rounded p-3">
+        <div className="mt-3 bg-white border border-slate-200 p-3">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Projection timeline</div>
-          <TimelineChart
-            inputs={inputs}
-            results={{ ...projection.results, yearlyBreakdown: projection.breakdown }}
-            config={config}
-            onChange={onChange}
+          <ProjectionTimeline
+            series={[{ id: 'plan', label: 'portfolio', area: true, points: projection.breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
+            pins={[{ age: inputs.retirementAge, label: `work ends · ${inputs.retirementAge}` }]}
           />
         </div>
       )}
