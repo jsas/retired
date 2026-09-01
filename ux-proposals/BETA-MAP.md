@@ -46,7 +46,7 @@ English, few controls, distinct concepts over reskins.
 - ✅ **Schedule** (`ScheduleTable.tsx` + `scheduleColumns.ts`) — year-by-year + §8.9
   column picker, prefKV-persisted (`wealthconsole_schedule_cols`); RDSP/FHSA/Home
   Equity/Debts columns auto-gated.
-- ✅ **Insights / Plans / Data / Settings / Connections / Print / Donate /
+- ✅ **Insights / Profiles / Data / Settings / Connections / Print / Donate /
   Help** — full-featured panels wrapped in the beta chrome (`beta/pages.tsx`).
   Data is ONE page: share (link/code) + the full backup/restore/projection-export
   surface stacked (`BetaDataPage`); the old `#/export` route aliases to it.
@@ -55,6 +55,14 @@ English, few controls, distinct concepts over reskins.
   prefKV key; retirement/plan-to/CPP/OAS stay fixed.
 - ✅ **Assistant dock** — `BetaPage` assistant slot + `AgentPage docked`: 340px right
   rail desktop, full-screen sheet mobile, one conversation across pages.
+  2026-08-30 update: the Assistant header button is ALWAYS present (every page,
+  filled-ink when open) and toggles the dock; the dock header is just the RE mark
+  + help ? + one fullscreen control (Maximize2 ⇄ Minimize2, replaces the ⤢ link
+  and ×); the model picker rides the chat-picker strip so models stay switchable
+  after connecting; and the docked AgentPage is ONE instance at a stable tree
+  position — closing the dock or navigating never unmounts it, so a streaming
+  reply keeps running and the chat survives. `#/assistant` opens the same docked
+  chat (no second AgentPage fork).
 - ✅ **Help system** (`src/help/topics.tsx` + `HELP-MAP.md`) — one data source owns
   every topic (id/title/body/keywords/section); Help page renders from it (searchable,
   `#/help?topic=<id>` deep-links + flash); `HelpHint` shows the same body in a flat
@@ -103,7 +111,7 @@ never forked inside a page.
 - [x] **`src/components/TimelineChart.tsx`** — legend swatch squared.
 - [x] **`src/components/TopHeader.tsx`** — dirty-dot squared, mobile menu flattened.
 - [x] **`src/components/WelcomeCard.tsx`** — hero CTA square, slate-900.
-- [x] **`src/components/CompareCard.tsx`** (Plans) — rebuilt as a timeline + numbers
+- [x] **`src/components/CompareCard.tsx`** (Profiles) — rebuilt as a timeline + numbers
   table (task D ✅, ProjectionTimeline); the f7 sweep flattened its table/legend
   (commit `0f23de5`). No one-off dot fix needed.
 - [x] **`src/components/PrintSummary.tsx`** — all 44 inline `style={{}}` blocks →
@@ -145,17 +153,18 @@ cards, `×` remove, `+ add` buttons, shared `Num`/`Txt`/`Sel` helpers):
 (All four write to `inputs.events` / `inputs.income` / `inputs.debts` / `inputs.spouse`
 via the existing `set` helper; tests in `DetailsPage.test.tsx` cover add/remove rows.)
 
-### C. Assistant — fix the chrome ✅
+### C. Assistant — fix the chrome ✅ (superseded 2026-08-30 — see §1 dock entry)
 - [x] **Never appear on the first page** — the landing renders no assistant; the dock
   only mounts once there's a plan to talk about.
 - [x] **Remember its open state** — dock open/closed persists via prefKV
   (`wealthconsole_dock_open`, new PREF_KEYS entry), not `useState(true)` fresh each load.
-- [x] **Open fully on its own page** — `#/assistant` is back as a full beta page
-  (undocked AgentPage: chat list + thread + model picker); the dock header has a ⤢
-  link to it.
+- [x] **Open fully on its own page** — SUPERSEDED: `#/assistant` now opens the same
+  docked conversation; fullscreen is the dock's own Maximize2/Minimize2 toggle, so
+  there is exactly one AgentPage and the chat never forks.
 - [x] **Slim the chat picker** — the rail's permanent mini list is gone; a slim strip
   with a clickable chat icon drops down to select / start / delete a chat
-  (`DockChatPicker`), so the rail keeps its width for the conversation.
+  (`DockChatPicker`), so the rail keeps its width for the conversation. The model
+  picker rides the same strip (2026-08-30) so a connected model stays switchable.
 
 ### D. Compare page — rebuild as a real comparison tool ✅
 Rebuilt on a new shared **`src/design/ProjectionTimeline.tsx`** (see below):
@@ -191,7 +200,7 @@ Phases · Withdrawal Strategy · Debts) · Property (Home Equity).
 
 ### 3b. Old views → homes (18 in `viewRoutes.ts`)
 projection→dashboard · math→Schedule · eq+optimize+montecarlo+backtest→Insights ·
-compare+scenarios→Plans · sharing+export→Data (one page) · print→Print ·
+compare+scenarios→Profiles · sharing+export→Data (one page) · print→Print ·
 donate→footer · agent→assistant dock (+ own page, see §2C) · connections→Settings ·
 welcome→Landing · help→Help · settings→Settings · styleguide→dev surface.
 
@@ -214,7 +223,8 @@ OAS 65–70. All faders read the same range object.
 - [x] Every sidebar section has a named home; nothing dropped silently (§8.7).
   (§3a/§3b mapping + BetaPage nav test proves the homes render.)
 - [x] Details page can add events / income / debts / spouse inline.
-- [x] Assistant: absent on landing, remembers open state, has a full-page view, slim chat picker.
+- [x] Assistant: absent on landing, remembers open state, always-available header
+  toggle + fullscreen (one never-unmounted conversation), slim chat picker + model picker.
 - [x] Flat/square/hairline rules hold everywhere (no cards, no shadows, one blue accent).
 - [x] Mobile (2026-08-30 pass, commit `7a22e32`): phone **Menu ▾** carries all nine
   named homes under `md` (row = logo · Menu · Assistant · verdict chip fits 375px);

@@ -74,4 +74,15 @@ describe('BetaPage assistant dock', () => {
     expect(html).toContain('title="Fullscreen"');
     expect(html).toContain('aria-label="Expand the assistant to fullscreen"');
   });
+
+  it('the open dock shows as a full-screen sheet on phones (not hidden below lg)', () => {
+    // The open (non-fullscreen) state must be `flex` on phones with the sticky
+    // rail only from lg up — a `hidden` in the base classes would blank the
+    // assistant for every phone user.
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+    );
+    expect(html).toMatch(/class="[^"]*fixed inset-0 top-12 z-50 flex flex-col lg:sticky/);
+    expect(html).not.toMatch(/flex flex-col hidden/);
+  });
 });

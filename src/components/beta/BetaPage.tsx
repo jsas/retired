@@ -163,7 +163,10 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
               dockOpen
                 ? fullscreen
                   ? 'fixed inset-0 z-50 top-12 flex flex-col'
-                  : 'fixed inset-0 z-50 hidden flex-col lg:sticky lg:top-12 lg:z-0 lg:flex lg:h-[calc(100vh-3rem)] lg:w-[340px] lg:shrink-0'
+                  // phone: full-screen sheet starting BELOW the sticky header
+                  // (top-12) so the Assistant button stays reachable to close
+                  // it · desktop: the sticky 340px rail beside the content
+                  : 'fixed inset-0 top-12 z-50 flex flex-col lg:sticky lg:top-12 lg:z-0 lg:h-[calc(100vh-3rem)] lg:w-[340px] lg:shrink-0'
                 : 'hidden'
             } border-l border-slate-200 bg-white`}
             aria-label="Assistant"

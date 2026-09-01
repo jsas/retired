@@ -7,7 +7,7 @@
 // auto-scroll, and the composer. Connecting/switching models lives on the
 // separate Connections page.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AssistantRuntimeProvider,
   ThreadPrimitive,
@@ -239,12 +239,16 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 /* The docked chat picker: a clickable icon in a slim strip that drops down to
    select, start, or delete a chat. The rail's width stays for the conversation —
    no permanent chat list. Flat, hairline, f7. */
-function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete }: {
+function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, modelPicker }: {
   threads: ChatThread[];
   activeThreadId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  /** The model picker rides this strip in docked mode — the dock has no full
+   *  header, and without it there'd be no way to switch models once one is
+   *  connected (the offline CTA that links to Connections only shows before). */
+  modelPicker?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -287,6 +291,7 @@ function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete }: 
       >
         <Plus size={14} />
       </button>
+      {modelPicker && <div className="shrink-0">{modelPicker}</div>}
       {open && (
         <div className="absolute left-0 top-full z-50 w-full border border-slate-200 bg-white">
           {threads.length === 0 && (
@@ -480,6 +485,14 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
             onSelect={setActiveThread}
             onNew={newChat}
             onDelete={deleteChat}
+            modelPicker={
+              <ModelPicker
+                settings={settings}
+                activeId={settings.activeConnectionId}
+                onChoose={chooseConnection}
+                onLoadModel={onOpenConnections}
+              />
+            }
           />
         )}
         {/* ---- Chat list (full page only): pinned open, or a slim strip. ---- */}
