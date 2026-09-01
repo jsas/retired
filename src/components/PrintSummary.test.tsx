@@ -36,14 +36,26 @@ const render = (overrides: Partial<Parameters<typeof PrintSummary>[0]> = {}) =>
   }));
 
 describe('PrintSummary (f7 tokens)', () => {
-  it('renders the sheet: wordmark, three summary tables, milestones', () => {
+  it('renders the sheet: wordmark, verdict-first tables, milestones', () => {
     const html = render();
     expect(html).toContain('RE: tired — Retirement Plan Summary');
-    for (const section of ['Profile', 'Savings', 'Verdict']) {
+    for (const section of ['Verdict', 'Profile', 'Savings']) {
       expect(html, section).toContain(section);
     }
+    // Verdict first (guide principle 1) — its table precedes Profile's.
+    expect(html.indexOf('Status')).toBeLessThan(html.indexOf('Current age'));
     expect(html).toContain('Major spending milestones');
     expect(html).toContain('Age 65'); // a milestone row rendered
+  });
+
+  it('keeps blue for data/verdict only — structure is ink and slate', () => {
+    const html = render();
+    // The header rule is INK, not the verdict accent…
+    expect(html).toContain('border-slate-900');
+    expect(html).not.toContain('border-blue-700');
+    // …and section labels are the guide's slate, not blue.
+    expect(html).not.toContain('text-blue-700 mb-1');
+    expect(html).toContain('uppercase'); // the section-label style survives
   });
 
   it('carries no raw hex and no inline styles — tokens/classes only', () => {

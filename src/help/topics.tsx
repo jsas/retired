@@ -221,12 +221,12 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'cash-events',
-    title: 'Cash events (money in / money out)',
+    title: 'Cash events (inflow / outflow)',
     section: 'Income',
-    keywords: ['inheritance', 'house sale', 'gift', 'big purchase', 'lump sum', 'one-time', 'inflow', 'outflow'],
+    keywords: ['inheritance', 'house sale', 'gift', 'big purchase', 'lump sum', 'one-time', 'money in', 'money out'],
     body: (
       <>
-        <P><strong>Money in</strong> — a lump sum landing in the chosen account at the chosen age; it appears in that year's balances and grows thereafter. <strong>Money out</strong> — an extra expense at the chosen age, on top of that year's spending target; the portfolio must fund both.</P>
+        <P><strong>Inflow</strong> — a lump sum landing in the chosen account at the chosen age; it appears in that year's balances and grows thereafter. <strong>Outflow</strong> — an extra expense at the chosen age, on top of that year's spending target; the portfolio must fund both.</P>
         <P>Switch an event to <em>Yearly</em> with a start–end age range to repeat the same amount every year (rental income for a few years, or a recurring cost).</P>
       </>
     ),

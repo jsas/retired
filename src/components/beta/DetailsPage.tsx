@@ -322,7 +322,7 @@ function renderSection(id: string, ctx: {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Sel label="Direction" value={e.direction} onChange={(v) => upd(i, { direction: v })}
-                    options={[{ value: 'in' as const, label: 'Money in' }, { value: 'out' as const, label: 'Money out' }]} />
+                    options={[{ value: 'in' as const, label: 'Inflow' }, { value: 'out' as const, label: 'Outflow' }]} />
                   <Num label="$ amount" value={e.amount} step={1000} onChange={(v) => upd(i, { amount: v })} />
                   <Num label="At age" value={e.age} step={1} onChange={(v) => upd(i, { age: v })} />
                   <Num label="Repeat to age (blank = once)" value={e.endAge ?? 0} step={1} onChange={(v) => upd(i, { endAge: v <= 0 ? null : v })} />
@@ -331,8 +331,8 @@ function renderSection(id: string, ctx: {
             ))}
           </div>
           <div className="mt-2 flex gap-2">
-            <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('in')}>+ add money in</button>
-            <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('out')}>+ add money out</button>
+            <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('in')}>+ add inflow</button>
+            <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('out')}>+ add outflow</button>
           </div>
         </Section>
       );

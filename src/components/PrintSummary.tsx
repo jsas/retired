@@ -1,7 +1,7 @@
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import type { PrintOptions } from '../lib/printOptions';
-import { BLUE, AMBER_TEXT, MUTED, FAINT, HAIRLINE } from '../design/tokens';
+import { BLUE, AMBER_TEXT, MUTED, FAINT, HAIRLINE, cls } from '../design/tokens';
 
 // The print sheet (hidden on screen — see the `print-only` rule in index.css).
 // Composes the same visual language as the app (tokens.ts / the slate+blue
@@ -22,10 +22,10 @@ function fmtShort(v: number): string {
   return `$${Math.round(v)}`;
 }
 
-// Uppercase blue section label — the print twin of cls.sectionLabel (blue
-// carries it here because print is monochrome-adjacent and the label must
-// still read as structure).
-const SECTION_TITLE = 'text-[11px] font-bold uppercase tracking-[0.05em] text-blue-700 mb-1';
+// Section labels: the guide's uppercase slate label (cls.sectionLabel) with a
+// bottom hairline — the Panel pattern, print's container. Blue is verdict-
+// only, never structure.
+const SECTION_TITLE = `border-b ${cls.sectionLabel} pb-1 mb-1.5`;
 // Money/figures align and compare — tabular figures, not monospace.
 const NUM = 'num';
 
@@ -333,7 +333,7 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
       {people.map(person => (
         <div key={person.label || 'single'} className="mb-2.5">
           {person.label && (
-            <div className="mb-0.5 mt-1.5 text-[11px] font-bold text-blue-700">{person.label}</div>
+            <div className="mb-0.5 mt-1.5 text-[11px] font-bold text-slate-900">{person.label}</div>
           )}
           <table className="w-full border-collapse">
             <thead>
@@ -450,9 +450,9 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
 
   return (
     <div className="print-only p-2 text-slate-900">
-      {/* The wordmark: square ink block, same as the on-screen header — no
-          radius, and blue-700 (not the old blue-600) for the rule under it. */}
-      <div className="mb-2.5 flex items-center gap-2 border-b-2 border-blue-700 pb-1.5">
+      {/* The wordmark: square ink block, same as the on-screen header. The
+          rule under it is INK — structure, not the verdict accent. */}
+      <div className="mb-3 flex items-center gap-2 border-b-2 border-slate-900 pb-1.5">
         <div className="flex h-[22px] w-[22px] items-center justify-center bg-slate-900 text-[9px] font-bold text-white">RE:</div>
         <div>
           <div className="text-[15px] font-bold">RE: tired — Retirement Plan Summary</div>
@@ -460,7 +460,21 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
         </div>
       </div>
 
+      {/* Verdict first (guide principle 1): the answer leads the sheet. */}
       <div className="flex gap-6">
+        <div className="flex-1">
+          <div className={SECTION_TITLE}>Verdict</div>
+          <table className="border-collapse text-[12px]">
+            <tbody>
+              <Row label="Status" value={results.status.replace('_', ' ')} />
+              <Row label="Wealth at retirement" value={fmt(results.totalNetWorthAtRetirement + (spouse?.totalNetWorthAtRetirement ?? 0))} />
+              <Row label="Money lasts until" value={results.depletionAge ? `age ${results.depletionAge}` : `age ${inputs.maxAge}+`} />
+              <Row label="Withdrawal rate" value={`${(results.withdrawalRate * 100).toFixed(1)}%`} />
+              <Row label="Expected return" value={`${(inputs.investmentReturn * 100).toFixed(1)}%`} />
+            </tbody>
+          </table>
+        </div>
+
         <div className="flex-1">
           <div className={SECTION_TITLE}>Profile</div>
           <table className="border-collapse text-[12px]">
@@ -493,19 +507,6 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
                   value={`${fmt(totalDebtBalance)} · ${fmt(totalDebtMonthly)}/mo`}
                 />
               )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex-1">
-          <div className={SECTION_TITLE}>Verdict</div>
-          <table className="border-collapse text-[12px]">
-            <tbody>
-              <Row label="Status" value={results.status.replace('_', ' ')} />
-              <Row label="Wealth at retirement" value={fmt(results.totalNetWorthAtRetirement + (spouse?.totalNetWorthAtRetirement ?? 0))} />
-              <Row label="Money lasts until" value={results.depletionAge ? `age ${results.depletionAge}` : `age ${inputs.maxAge}+`} />
-              <Row label="Withdrawal rate" value={`${(results.withdrawalRate * 100).toFixed(1)}%`} />
-              <Row label="Expected return" value={`${(inputs.investmentReturn * 100).toFixed(1)}%`} />
             </tbody>
           </table>
         </div>

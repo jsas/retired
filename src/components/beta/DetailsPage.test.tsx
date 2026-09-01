@@ -38,11 +38,11 @@ describe('DetailsPage inline editors', () => {
     expect(html).toContain('aria-label="Remove Day job"');
   });
 
-  it('lists existing events with in/out add controls', () => {
+  it('lists existing events with inflow/outflow add controls', () => {
     const html = render({ events: [{ id: 'a', age: 62, label: 'Inheritance', amount: 100000, direction: 'in' }] });
     expect(html).toContain('Inheritance');
-    expect(html).toContain('+ add money in');
-    expect(html).toContain('+ add money out');
+    expect(html).toContain('+ add inflow');
+    expect(html).toContain('+ add outflow');
     expect(html).toContain('aria-label="Remove Inheritance"');
   });
 
