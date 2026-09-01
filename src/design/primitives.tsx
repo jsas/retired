@@ -291,6 +291,70 @@ export function Footnote({ children }: { children: ReactNode }) {
   );
 }
 
+/* ── Dot ──────────────────────────────────────────────────────────────────
+   The small square status/legend dot — the system's dots are SQUARE, not
+   round. Used by legends, status indicators and the verdict chip. */
+export function Dot({ color, size = 10, title }: { color: string; size?: number; title?: string }) {
+  return (
+    <span
+      title={title}
+      className="inline-block shrink-0"
+      style={{ width: size, height: size, backgroundColor: color }}
+    />
+  );
+}
+
+/* ── Progress ─────────────────────────────────────────────────────────────
+   A thin hairline track with a flat fill of `pct` percent. No rounded pill,
+   no shadow, no inline-style div soup in the page — the fill's width is the
+   only inline value (a computed percent, not a forked color). */
+export function Progress({ pct, className = '' }: { pct: number; className?: string }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div className={`h-1 w-full border border-slate-200 bg-white ${className}`} role="progressbar"
+      aria-valuenow={Math.round(clamped)} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-full bg-blue-600" style={{ width: `${clamped}%` }} />
+    </div>
+  );
+}
+
+/* ── Modal ────────────────────────────────────────────────────────────────
+   The flat overlay shell — hairline border, no shadow, no rounded card. Pages
+   needing a dialog compose this instead of rolling their own shadow box.
+   Closes on the backdrop tap and on Esc. */
+export function Modal({ open, onClose, title, children, wide = false }: {
+  open: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Close" onClick={onClose}
+        className="absolute inset-0 cursor-default bg-slate-900/30" />
+      <div className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-sm'} border border-slate-200 bg-white`}>
+        {title != null && (
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <h2 className="text-[13px] font-semibold text-slate-900">{title}</h2>
+            <button type="button" onClick={onClose} aria-label="Close dialog"
+              className="px-1 text-slate-400 hover:text-slate-900">×</button>
+          </div>
+        )}
+        <div className="px-4 py-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 /* ── AppHeader ────────────────────────────────────────────────────────────
    The beta chrome: brand square, the named homes (menus/actions), and the
    save control. Flat, hairline bottom border, sticky. */

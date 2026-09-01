@@ -8,7 +8,7 @@ import { useState } from 'react';
 import * as T from './tokens';
 import {
   Fader, Chip, VerdictHero, Panel, Stat, AccountBars, Legend, Dropdown, Footnote,
-  HelpHint,
+  HelpHint, Dot, Progress, Modal,
 } from './primitives';
 
 function Swatch({ name, value, note }: { name: string; value: string; note?: string }) {
@@ -38,6 +38,7 @@ function Rule({ n, title, children }: { n: number; title: string; children: Reac
 export function StyleGuide() {
   const [spend, setSpend] = useState(85000);
   const [age, setAge] = useState(62);
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -156,6 +157,24 @@ export function StyleGuide() {
             <span className="text-[12px] text-slate-500">
               The small <HelpHint topic="withdrawal-order" /> sits at the end of a label — tap it for the short answer, follow through to Help.
             </span>
+          </div>
+
+          <div className="mt-8 space-y-4 border-t border-slate-100 pt-6">
+            <div>
+              <p className={T.cls.sectionLabel}>Square dot, progress, modal — no round corners, no shadows</p>
+              <div className="mt-2 flex items-center gap-4">
+                <span className="flex items-center gap-1.5 text-[12px] text-slate-600"><Dot color={T.BLUE} title="holds" /> a status dot</span>
+                <span className="flex items-center gap-1.5 text-[12px] text-slate-600"><Dot color={T.RED_DOT} title="short" /> short</span>
+                <span className="flex items-center gap-1.5 text-[12px] text-slate-600"><Dot color={T.AMBER_DOT} title="borderline" /> borderline</span>
+              </div>
+            </div>
+            <Progress pct={62} />
+            <div>
+              <button className={T.cls.hairlineBtn} onClick={() => setOpen(true)}>open the flat modal</button>
+              <Modal open={open} onClose={() => setOpen(false)} title="A flat dialog">
+                <p className="text-[12.5px] text-slate-600">A hairline border, no rounded corners, no shadow — the shell every dialog composes.</p>
+              </Modal>
+            </div>
           </div>
 
           <Footnote>
