@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { GitCompareArrows } from 'lucide-react';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import type { Scenario } from '@retired/engine-core/types';
 import { computeScenarioMetrics, type ScenarioMetrics } from '@retired/engine-core/compareMetrics';
@@ -70,14 +69,12 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3">
-        <GitCompareArrows size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Compare scenarios</h2>
+      <div className="mb-3">
         <span className="text-[11px] text-slate-400">toggle lines in the legend · numbers below</span>
       </div>
 
       {activeSeries.length === 0 ? (
-        <p className="text-xs text-slate-500 py-2">All lines are off — toggle one back on in the legend above.</p>
+        <p className="py-2 text-xs text-slate-500">All lines are off — toggle one back on in the legend above.</p>
       ) : (
         <ProjectionTimeline series={activeSeries} onToggleSeries={toggleLine} />
       )}
@@ -86,7 +83,7 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wider text-slate-500">
+            <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-[0.16em] text-slate-400">
               <th className="py-1.5 pr-3 font-semibold">Scenario</th>
               <th className="py-1.5 pr-3 font-semibold text-right">Wealth at retirement</th>
               <th className="py-1.5 pr-3 font-semibold text-right">Depletion age</th>
@@ -97,18 +94,18 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
           </thead>
           <tbody>
             {activeRows.map(r => (
-              <tr key={r.id} className={`border-b border-slate-100 ${r.id === activeScenarioId ? 'bg-blue-50/40' : ''}`}>
+              <tr key={r.id} className={`border-b border-slate-100 ${r.id === activeScenarioId ? 'bg-slate-50' : ''}`}>
                 <td className="py-1.5 pr-3">
-                  <span className="font-medium text-slate-800">{r.name}</span>
+                  <span className="font-medium text-slate-900">{r.name}</span>
                   <span className="ml-1.5 text-[10px] text-slate-400">{r.isCouple ? 'couple' : 'single'}</span>
                 </td>
-                <td className="py-1.5 pr-3 text-right num text-slate-800">{fmtMoney(r.householdWorth)}</td>
-                <td className={`py-1.5 pr-3 text-right num ${r.depletionAge ? 'text-red-600 font-medium' : 'text-slate-800'}`}>
+                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtMoney(r.householdWorth)}</td>
+                <td className={`num py-1.5 pr-3 text-right ${r.depletionAge ? 'font-medium text-rose-700' : 'text-slate-800'}`}>
                   {r.depletionAge ?? 'Never'}
                 </td>
-                <td className="py-1.5 pr-3 text-right num text-slate-800">{fmtPct(r.withdrawalRate)}</td>
-                <td className="py-1.5 pr-3 text-right num text-slate-800">{fmtMoney(r.lifetimeTax)}</td>
-                <td className="py-1.5 text-right num text-slate-800">{fmtMoney(r.endingBalance)}</td>
+                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtPct(r.withdrawalRate)}</td>
+                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtMoney(r.lifetimeTax)}</td>
+                <td className="num py-1.5 text-right text-slate-800">{fmtMoney(r.endingBalance)}</td>
               </tr>
             ))}
           </tbody>
