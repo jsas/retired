@@ -21,6 +21,7 @@
 // Final results live in results.md / results.json.
 
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -154,6 +155,22 @@ async function main() {
     );
   }
 
+  // Live per-question scorer kept hot via tsx so each reply can be judged as it
+  // arrives (no tsx spawn per question). See './driver/scoreLive.ts' for shape.
+  console.log('[startup] warming live scorer…');
+  const scorerProc = spawn(process.execPath, [await findTsxCli(), join(trainingDir, 'driver', 'scoreLive.ts')], { stdio: ['pipe', 'pipe', 'inherit'] });
+  const pending = [];
+  scorerProc.stdout.on('data', (buf) => {
+    for (const line of String(buf).split('\n').filter(Boolean)) {
+      const got = JSON.parse(line);
+      const idx = pending.findIndex((p) => p.id === got.id);
+      if (idx >= 0) {
+        const [pendingOut] = pending.splice(idx, 1);
+        pendingOut.resolve(got);
+      }
+    }
+  });
+
   const results = [];
   try {
     for (let j = 0; j < jobs.length; j++) {
@@ -181,9 +198,11 @@ async function main() {
         }
       }, 5000);
 
+      const live = { count: 0, valid: 0 };
       const diag = { thought: 0, lengthCut: 0, noCall: 0 };
       for (let i = 0; i < evalRecords.length; i++) {
-        const q = evalRecords[i].question;
+        const record = evalRecords[i];
+        const q = record.question;
         const r = await tab.callFn(
           `(systemPrompt, question, noThink) => window.BAKEOFF.reply(systemPrompt, question, noThink)`,
           [systemPrompt, q, mode === 'off'],
@@ -191,6 +210,14 @@ async function main() {
         );
         const text = typeof r === 'string' ? r : (r?.text ?? '');
         replies.push(text);
+
+        // Feed record id + reply to the live scorer — resolve when it returns.
+        live.count++;
+        const scorePromise = new Promise((resolve) => pending.push({ id: record.id, resolve }));
+        scorerProc.stdin.write(JSON.stringify({ id: record.id, reply: text }) + '\n');
+        const scored = await scorePromise;
+        if (scored && scored.valid) live.valid++;
+
         if (r && typeof r === 'object') {
           if (r.thought) diag.thought++;
           if (r.finishReason === 'length') diag.lengthCut++;
@@ -200,6 +227,7 @@ async function main() {
         stalled = false;
         const done = i + 1;
         const pct = done / evalRecords.length;
+        const livePct = live.count > 0 ? live.valid / live.count : 0;
 
         // User-driven skip: if the user pressed the card's "skip" button, stop.
         if (!skipped) {
@@ -217,12 +245,9 @@ async function main() {
           }
         }
 
-        // Live partial scoring after SKIP_AFTER: if no valid call yet, skip.
+        // Trivial rejection after SKIP_AFTER: zero valid call so far → skip.
         if (!skipped && done === SKIP_AFTER) {
-          writeFileSync(partialFile, JSON.stringify(replies, null, 2));
-          const early = await scoreReplies(jobId, partialFile, LIMIT);
-          const passRate = early?.pct ?? 0;
-          if (passRate === 0) {
+          if (live.valid === 0) {
             console.error(`  [skip] ${base.label} (${mode}): 0/${SKIP_AFTER} valid → skip`);
             await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
               active: false, cardClass: 'failed',
@@ -236,8 +261,18 @@ async function main() {
           }
           await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
             phase: `running ${done}/${evalRecords.length}`, pct,
-            last: `partial ${(passRate * 100).toFixed(0)}% at ${done}`,
+            last: `live ${(livePct * 100).toFixed(0)}%`,
           }]);
+        }
+
+        if (!skipped) {
+          const partialStr = `live ${live.valid}/${live.count}`;
+          await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
+            phase: `running ${done}/${evalRecords.length}`, pct,
+            last: partialStr + ' → ' + oneLine(text).slice(0, 60),
+          }]);
+          await tab.callFn(`(t) => window.DASH.setBanner(t, 'run')`,
+            [`[${j + 1}/${jobs.length}] ${base.label} (${mode}) — ${done}/${evalRecords.length} · live ${(livePct * 100).toFixed(0)}%`]);
         }
 
         if (!skipped) {
