@@ -95,6 +95,14 @@ bare `<HelpHint topic="…" />` beside any label.
   Esc / outside-tap / re-tap closes; `place="top"` flips it above.
 - **`Footnote`** — the quiet legal/privacy line at the very bottom, always visible.
 - **`AppHeader`** — the beta chrome: brand square, the named homes, the save control.
+- **`ProjectionTimeline`** (`src/design/ProjectionTimeline.tsx`) — the one
+  money-over-age chart. Soft balance area-fill, clean INK axis, hairline year
+  ticks, token colours, labelled pins, and a legend whose entries toggle their
+  line. Any surface composes it (dashboard, steering, projection view, Compare)
+  instead of forking its own SVG. `series` draw the lines (one may `area`-fill),
+  `overlays` add auxiliary lines (spend, market components, home equity), `pins`
+  label the axis (you / work ends / money runs out), `marker` draws retirement
+  as a dashed rule or a square dot.
 
 ## What we never do
 

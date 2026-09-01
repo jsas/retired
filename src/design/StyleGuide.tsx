@@ -10,6 +10,17 @@ import {
   Fader, Chip, VerdictHero, Panel, Stat, AccountBars, Legend, Dropdown, Footnote,
   HelpHint, Dot, Progress, Modal,
 } from './primitives';
+import { ProjectionTimeline } from './ProjectionTimeline';
+
+// A plausible-looking demo plan for the ProjectionTimeline example: a saver
+// who retires at 65 and depletes at 94. Straight-line shapes — enough to show
+// the area, axis, pins, and overlays; the engine draws the real ones.
+const demoSeries = Array.from({ length: 50 }, (_, i) => {
+  const a = 45 + i;
+  const v = a < 65 ? 300_000 + ((a - 45) / 20) * 800_000 : 1_100_000 * ((94 - a) / 29);
+  return { age: a, value: Math.max(0, v) };
+});
+const demoSpend = demoSeries.map(p => ({ age: p.age, value: 72_000 }));
 
 function Swatch({ name, value, note }: { name: string; value: string; note?: string }) {
   return (
@@ -174,6 +185,29 @@ export function StyleGuide() {
               <Modal open={open} onClose={() => setOpen(false)} title="A flat dialog">
                 <p className="text-[12.5px] text-slate-600">A hairline border, no rounded corners, no shadow — the shell every dialog composes.</p>
               </Modal>
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-slate-100 pt-6">
+            <p className={T.cls.sectionLabel}>ProjectionTimeline — every money-over-age chart</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
+              One chart for the portfolio line: soft area-fill, clean axis, hairline year
+              ticks, token colours, labelled pins. Dashboard, steering, projection view,
+              and Compare all compose it. Legend entries toggle their line.
+            </p>
+            <div className="mt-3">
+              <ProjectionTimeline
+                series={[{ id: 'plan', label: 'portfolio', color: T.INK, area: true, points: demoSeries }]}
+                overlays={[
+                  { id: 'spend', label: 'spend', color: T.AMBER_DOT, points: demoSpend, dash: true },
+                ]}
+                pins={[
+                  { age: 45, label: 'you · 45', place: 'below', anchor: 'start', color: T.INK },
+                  { age: 65, label: 'work ends · 65', color: '#475569' },
+                  { age: 94, label: 'runs out · 94', color: T.RED_DOT },
+                ]}
+                marker={{ age: 65, style: 'dot' }}
+              />
             </div>
           </div>
 
