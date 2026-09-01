@@ -13,7 +13,7 @@ const renderLanding = () => renderToStaticMarkup(<LandingPage config={config} on
 describe('LandingPage', () => {
   it('opens with the greeting and the first question', () => {
     const html = renderLanding();
-    expect(html).toContain('money will outlast you');
+    expect(html).toContain('money last as long as you');
     expect(html).toContain('how old are you right now');
     expect(html).toContain('Nothing is sent anywhere');
   });

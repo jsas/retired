@@ -1,5 +1,5 @@
 // The landing — the assistant as the front door. Five plain questions build a
-// starter plan, the engine answers "does your money outlast you?", and two
+// starter plan, the engine shows how to make the money last as long as you, and two
 // doors open: the dashboard, or keep editing the details. Nothing leaves the
 // browser. This is the f7 landing (f7-final.html) rebuilt on the real engine:
 // minimal wordmark header (no app nav — this is the front door, not the app),
@@ -130,14 +130,14 @@ export function LandingPage({ config, onBuild }: {
       <header className="mx-auto flex w-full max-w-2xl items-center gap-2.5 px-5 pt-7">
         <span className="flex h-6 w-6 items-center justify-center bg-slate-900 text-[9px] font-bold text-white">RE:</span>
         <span className="text-[15px] font-semibold tracking-tight text-slate-900">tired</span>
-        <span className="ml-1 text-[12px] text-slate-400">— knows if your money outlasts you</span>
+        <span className="ml-1 text-[12px] text-slate-400">— helps your money last as long as you</span>
       </header>
 
       {/* the conversation */}
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 pt-10">
         <div className="space-y-5">
         <Bubble who="re">
-          Hi. I'm RE — I can tell you whether your money will outlast you. It takes about five
+          Hi. I'm RE — I'll show you how to make your money last as long as you. It takes about five
           questions, and nothing you say leaves this browser.
         </Bubble>
 
