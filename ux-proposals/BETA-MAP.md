@@ -64,7 +64,7 @@ English, few controls, distinct concepts over reskins.
 
 ## 2. TO-DO — the open work (from the user's review)
 
-### A. Page-by-page style review → convert to styleguide components 🚧 (mostly done)
+### A. Page-by-page style review → convert to styleguide components ✅
 **The problem:** pages fork raw elements (rounded corners, shadows, inline
 `style={{}}`, one-off class soup) instead of composing `src/design/` primitives.
 Per §8.10 that's a violation — a needed style gets *added to* the design system,
@@ -101,8 +101,9 @@ never forked inside a page.
 - [x] **`src/components/TimelineChart.tsx`** — legend swatch squared.
 - [x] **`src/components/TopHeader.tsx`** — dirty-dot squared, mobile menu flattened.
 - [x] **`src/components/WelcomeCard.tsx`** — hero CTA square, slate-900.
-- [ ] **`src/components/CompareCard.tsx`** (Plans) — skip a one-off dot fix; the whole
-  page is being rebuilt as a timeline + numbers table (see task D).
+- [x] **`src/components/CompareCard.tsx`** (Plans) — rebuilt as a timeline + numbers
+  table (task D ✅, ProjectionTimeline); the f7 sweep flattened its table/legend
+  (commit `0f23de5`). No one-off dot fix needed.
 - [x] **`src/components/PrintSummary.tsx`** — all 44 inline `style={{}}` blocks →
   Tailwind classes; raw hex → design tokens (blue-600 → token BLUE, red-600 →
   rose-700, monospace cells → `.num` tabular, rounded RE: block → square ink).
