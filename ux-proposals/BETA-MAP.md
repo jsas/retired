@@ -203,10 +203,20 @@ OAS 65–70. All faders read the same range object.
 
 ## 4. Acceptance (the no-regression gates)
 
-- [ ] Every page composes `src/design/` primitives — no forked styles (§8.10).
-- [ ] Every sidebar section has a named home; nothing dropped silently (§8.7).
+- [x] Every page composes `src/design/` primitives — no forked styles (§8.10).
+  (2026-08-30 final sweep, commit `e2c4bc0`: grep for old-skin markers across
+  beta-mounted components returns only intentional hits.)
+- [x] Every sidebar section has a named home; nothing dropped silently (§8.7).
+  (§3a/§3b mapping + BetaPage nav test proves the homes render.)
 - [x] Details page can add events / income / debts / spouse inline.
 - [x] Assistant: absent on landing, remembers open state, has a full-page view, slim chat picker.
-- [ ] Flat/square/hairline rules hold everywhere (no cards, no shadows, one blue accent).
-- [ ] Mobile: assistant sheet, finger-draggable map/faders, readable pages.
+- [x] Flat/square/hairline rules hold everywhere (no cards, no shadows, one blue accent).
+- [x] Mobile (2026-08-30 pass, commit `7a22e32`): phone **Menu ▾** carries all nine
+  named homes under `md` (row = logo · Menu · Assistant · verdict chip fits 375px);
+  Details dropdown goes one-column under `sm` and Dropdown panels cap at viewport
+  width; assistant = full-screen sheet; contour map is `touch-none` pointer-drag +
+  `w-full` viewBox; faders are native range inputs (touch-native); Schedule table
+  scrolls (`overflow-x-auto`); dashboard/levers collapse below `lg`/`md`; viewport
+  meta present; Landing doors stack under `sm`. Guard: BetaPage mobile-menu test.
 - [ ] Tests with every feature; `npx vitest run` green before merge.
+  (Held on every commit — 1021/1021 as of this pass; stays open until merge.)
