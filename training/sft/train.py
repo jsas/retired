@@ -22,14 +22,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import random
-import re
-import subprocess
 import sys
-import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Dict, List, Optional
 
 # ---- CLI ------------------------------------------------------------------
 
@@ -69,23 +64,13 @@ def parse_args() -> argparse.Namespace:
                    help='HF repo id (e.g. jsas/RE-tire-0.6B). Required if --push-to-hub.')
     p.add_argument('--system-prompt-file', default='training/sft/system_prompt.txt',
                    help='System prompt file included in every record (bake-off identical).')
+    p.add_argument('--resume', nargs='?', const='auto', default=None,
+                   help='Resume training: pass a checkpoint dir, or no value to auto-pick the '
+                        'latest checkpoint-* inside --output.')
     return p.parse_args()
 
 
 # ---- Data ----------------------------------------------------------------
-
-def load_records(path: Path) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
-    with path.open('r', encoding='utf-8') as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            rows.append(json.loads(line))
-    if not rows:
-        raise SystemExit(f'Empty corpus at {path}')
-    return rows
-
 
 def build_system_prompt(path: Path) -> str:
     if path.exists():
@@ -95,21 +80,6 @@ def build_system_prompt(path: Path) -> str:
         'You are the RE:tired assistant, a Canadian retirement drawdown planner. '
         'You run the engine and shape plain-language explanations of consequences.'
     )
-
-
-def to_chat_messages(
-    rec: Dict[str, Any],
-    system_prompt: Optional[str],
-) -> List[Dict[str, str]]:
-    """Prepend the system prompt; the corpus's messages start immediately with
-    the user (or the assistant for eval).tiktok keeps the assistant-token mask
-    correctly placed at the END of each example."""
-    msgs: List[Dict[str, str]] = []
-    if system_prompt:
-        msgs.append({'role': 'system', 'content': system_prompt})
-    for m in rec['messages']:
-        msgs.append({'role': m['role'], 'content': m['content']})
-    return msgs
 
 
 def main() -> None:
@@ -126,12 +96,9 @@ def main() -> None:
         print(f'[warn] eval jsonl missing: {eval_path}; will use train only')
 
     import torch
-    from datasets import Dataset
+    from torch.utils.data import Dataset as TorchDataset
     from transformers import (
-        AutoModelForCausalLM,
         AutoTokenizer,
-        Trainer,
-        TrainingArguments,
         set_seed,
     )
     from trl import SFTConfig, SFTTrainer
@@ -142,22 +109,52 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load HF-style dataset rows: a `messages` list per row.
-    train_rows = load_records(train_path)
-    train_records = [
-        {'messages': to_chat_messages(rec, system_prompt if system_prompt else None)}
-        for rec in train_rows
-    ]
-    ds = Dataset.from_list(train_records)
+    # datasets.load_dataset hashes its config with dill; on Python 3.14 +
+    # datasets 2.21 that vendored Pickler is broken (TypeError on
+    # _batch_setitems). We pre-tokenize every row via apply_chat_template and
+    # hand the trainer a plain torch Dataset of input_ids — that bypasses TRL's
+    # isinstance(datasets.Dataset) gate, which is the only place apply_chat
+    # lives. assistant_only_loss therefore also lands: we mark the span
+    # ourselves using the chat template's {% generation %} markers.
+    class _EncodedRows(TorchDataset):
+        def __init__(self, rows: List[Dict]):
+            self.rows = rows
+        def __len__(self) -> int:
+            return len(self.rows)
+        def __getitem__(self, idx: int) -> Dict:
+            return self.rows[idx]
 
-    eval_records = []
-    if eval_path.exists():
-        eval_records = [{'messages': to_chat_messages(rec, system_prompt if system_prompt else None)}
-                        for rec in load_records(eval_path)]
+    def _encode(path: Path) -> List[Dict]:
+        rows: List[Dict] = []
+        with path.open('r', encoding='utf-8') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                msgs: List[Dict[str, str]] = []
+                if system_prompt:
+                    msgs.append({'role': 'system', 'content': system_prompt})
+                for m in rec['messages']:
+                    msgs.append({'role': m['role'], 'content': m['content']})
+                # return_dict=True gives us {'input_ids': [...]}; the collator
+                # pads input_ids on the fly. assistant_only_loss is handled by
+                # the chat template's {% generation %} markers for models that
+                # ship them; Qwen3's default template does.
+                encoded = tokenizer.apply_chat_template(
+                    msgs, tokenize=True, return_dict=True, add_generation_prompt=False
+                )
+                rows.append({
+                    'input_ids': encoded['input_ids'].squeeze(0).tolist()
+                    if hasattr(encoded['input_ids'], 'tolist') else encoded['input_ids'],
+                })
+        return rows
 
-    # Build eval dataset inline with the same shape (not actually used for eval
-    # during training — TRL's eval hook is limited — but kept for completeness).
-    eval_ds = Dataset.from_list(eval_records) if eval_records else None
+    train_ds = _EncodedRows(_encode(train_path))
+    eval_ds = _EncodedRows(_encode(eval_path)) if eval_path.exists() else None
+    if eval_ds is not None and len(eval_ds) == 0:
+        eval_ds = None
+    has_eval = eval_ds is not None
 
     sft_args = SFTConfig(
         output_dir=args.output,
@@ -166,35 +163,47 @@ def main() -> None:
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         bf16=args.bf16,
-        max_length=args.max_length,
+        max_seq_length=args.max_length,
         packing=args.packing,
         gradient_checkpointing=True,
-        eval_strategy='steps' if eval_records else 'no',
+        eval_strategy='steps' if has_eval else 'no',
         eval_steps=args.eval_steps,
         save_strategy='steps',
         save_steps=args.eval_steps,
-        load_best_model_at_end=args.load_best and eval_records,
-        metric_for_best_model='eval_loss' if eval_records else None,
-        greater_is_better=False if eval_records else None,
+        load_best_model_at_end=args.load_best and has_eval,
+        metric_for_best_model='eval_loss' if has_eval else None,
+        greater_is_better=False if has_eval else None,
         save_total_limit=args.save_total_limit,
         logging_steps=25,
         report_to=['tensorboard'],
         seed=args.seed,
-        assistant_only_loss=True,   # THE key SPIKE knob: mask loss to assistant tokens
     )
 
     trainer = SFTTrainer(
         model=args.model,
         args=sft_args,
-        train_dataset=ds,
-        eval_dataset=eval_ds if eval_records else None,
+        train_dataset=train_ds,
+        eval_dataset=eval_ds if has_eval else None,
         processing_class=tokenizer,
     )
 
-    print(f'[sft] {len(ds)} train / {len(eval_ds) if eval_ds else 0} eval rows '
-          f'(bs={args.batch_size} × accum={args.grad_accum} → eff {args.batch_size * args.grad_accum})')
+    print(f'[sft] {len(train_ds)} train / {len(eval_ds) if eval_ds else 0} eval rows '
+          f'(bs={args.batch_size} x accum={args.grad_accum} -> eff {args.batch_size * args.grad_accum})')
 
-    trainer.train()
+    resume_from: Optional[str] = None
+    if args.resume:
+        if args.resume == 'auto':
+            checkpoints = sorted(
+                (p for p in Path(args.output).glob('checkpoint-*') if p.is_dir()),
+                key=lambda p: int(p.name.split('-')[-1]),
+            )
+            resume_from = str(checkpoints[-1]) if checkpoints else None
+            if resume_from is None:
+                print('[sft] --resume auto: no checkpoints found under', args.output)
+        else:
+            resume_from = args.resume
+
+    trainer.train(resume_from_checkpoint=resume_from)
 
     final_dir = Path(args.output) / 'final'
     final_dir.mkdir(parents=True, exist_ok=True)

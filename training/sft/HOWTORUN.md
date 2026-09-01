@@ -58,7 +58,64 @@ $OUTPUT/
    node training/driver/runGate.ts \
        --replies /path/to/your/replies.json \
        --model "$BASE_MODEL@$OUTPUT/final"
-   ```
+
+## Troubleshooting (TRL 0.14 + Python 3.14)
+
+The runner has been bitten by all of these; the work-arounds below are
+baked into `sft/train.py`, and this note exists so the *reasons* don't get
+munged on the next library upgrade.
+
+1. **`datasets` + Python 3.14 breaks in-process hashing.** `load_dataset('json',
+   split=...)` (and `Dataset.from_list`) route through
+   `datasets.utils._dill`, which on 3.14 ships a
+   `save_dict(pickler, obj)` call whose signature is `(pickler, items)` —
+   every row crashes with `TypeError: Pickler._batch_setitems() ...`. The
+   trainer sidesteps the library: read the JSONL, hand
+   `tokenizer.apply_chat_template` each row, then wrap the `input_ids` in a
+   plain `torch.utils.data.Dataset`. TRL's dataset-normalization pass has an
+   `isinstance(datasets.Dataset)` gate that's only checked for the
+   `apply_chat_template` path, so already-encoded rows sail through.
+
+2. **TRL 0.14 renamed `max_length` → `max_seq_length` on `SFTConfig`.** The
+   `--max-length` CLI flag stays human-speak; the config kw passes as
+   `max_seq_length=args.max_length`. If you copy the flag name onto the config
+   call, `TypeError: SFTConfig.__init__() got an unexpected keyword argument
+   'max_length'` — rename it at the plumbing layer.
+
+3. **TRL 0.14 dropped `assistant_only_loss` from `SFTConfig` entirely**; the
+   mask now comes from the base model's chat template (`{% generation %}`).
+   Qwen3's template ships those markers, so supervision stays focused on
+   assistant turns in this repo's corpus. Don't try to pass the kwarg back —
+   it just fails at init.
+
+4. **Windows consoles are cp1252.** Any `→`, `×`, `…` in `print()` crashes
+   with `UnicodeEncodeError: 'charmap' codec ...` once the program writes to
+   stdout. Use ASCII (`->`, `x`, `...`) or pre-set `PYTHONIOENCODING=utf-8`.
+
+5. **torch's pip wheel resolves to `+cpu` on a blank install** unless you
+   pass an explicit CUDA index. The `requirements.txt` line `torch>=2.9,<3`
+   alone got `2.13.0+cpu`; install with
+   `pip install --index-url https://download.pytorch.org/whl/cu128 torch`
+   (cu12x for modern cards; `nvidia-smi` reports the driver's CUDA version).
+
+6. **`use_cache=True` warning is expected** when `gradient_checkpointing=True`;
+   TRL sets `model.config.use_cache=False` on your behalf. Not a bug — it
+   means activation-checkpointing is on and the KV cache is allocated only
+   during generation (which we don't do in SFT).
+
+7. **llama.cpp's GGUF converter only writes f32/f16/bf16/q8_0** (`--outtype`);
+   Q4_K_M and friends need the compiled `llama-quantize` binary. The pure-
+   Python ladder that works with zero C build: safetensors -> bf16
+   (`to_bf16.py`) -> `convert_hf_to_gguf.py --outtype bf16` -> `--outtype
+   q8_0`. Vendoring the converter needs `gguf-py/gguf/*` AND the `conversion/`
+   package (`__init__.py`, `base.py`, arch file e.g. `qwen.py`) — see
+   `fetch_llama_cpp.py`.
+
+8. **Score an Ollama-served GGUF against the gate** with
+   `ollama_eval.py` (replays `extractEvalSet.ts` output through
+   `localhost:11434/api/chat`, writes replies.json) then
+   `runGate.ts --replies ... --limit N`. Keep `num_predict` >= 256: several
+   long-args tools truncate into malformed JSON below that.
 
    The protocol-validity should now be ≥ the bake-off stock number
    (70.9% → 95%+).

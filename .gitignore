@@ -38,3 +38,11 @@ probe/results/*
 # #112 spike: generated corpus artifacts. The engine is deterministic, so
 # `npx tsx training/generate.ts` reproduces these; don't commit the JSONL.
 training/data/
+
+# #135 fine-tune: trainer output, vendored llama.cpp converter, GGUF quants.
+# All reproducible: train.py regenerates out/, fetch_llama_cpp.py re-vendors,
+# convert_hf_to_gguf.py re-quantizes. Checkpoints/quants are far too big for git.
+training/sft/out/
+training/sft/llama.cpp/
+training/sft/quantized/
+training/sft/__pycache__/
