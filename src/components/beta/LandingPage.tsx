@@ -137,8 +137,8 @@ export function LandingPage({ config, onBuild }: {
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 pt-10">
         <div className="space-y-5">
         <Bubble who="re">
-          Hi. I'm RE — I'll show you how to make your money last as long as you. It takes about five
-          questions, and nothing you say leaves this browser.
+          Hi. I'm RE — I want to help you make your money last as long as you in just a few questions.
+          Nothing you say leaves this browser.
         </Bubble>
 
         {QUESTIONS.slice(0, step).map((qq, i) => (
