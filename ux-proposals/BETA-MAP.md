@@ -46,8 +46,10 @@ English, few controls, distinct concepts over reskins.
 - ✅ **Schedule** (`ScheduleTable.tsx` + `scheduleColumns.ts`) — year-by-year + §8.9
   column picker, prefKV-persisted (`wealthconsole_schedule_cols`); RDSP/FHSA/Home
   Equity/Debts columns auto-gated.
-- ✅ **Insights / Plans / Data / Settings / Connections / Print / Export / Donate /
+- ✅ **Insights / Plans / Data / Settings / Connections / Print / Donate /
   Help** — full-featured panels wrapped in the beta chrome (`beta/pages.tsx`).
+  Data is ONE page: share (link/code) + the full backup/restore/projection-export
+  surface stacked (`BetaDataPage`); the old `#/export` route aliases to it.
 - ✅ **Lever-range prefs** — `lib/rangePrefs.ts`; spending max, savings max, return
   min/max, volatility max user-settable (Settings → Lever Ranges), `wealthconsole_ranges`
   prefKV key; retirement/plan-to/CPP/OAS stay fixed.
@@ -189,7 +191,7 @@ Phases · Withdrawal Strategy · Debts) · Property (Home Equity).
 
 ### 3b. Old views → homes (18 in `viewRoutes.ts`)
 projection→dashboard · math→Schedule · eq+optimize+montecarlo+backtest→Insights ·
-compare+scenarios→Plans · sharing→Data · print+export→Print/Data pages ·
+compare+scenarios→Plans · sharing+export→Data (one page) · print→Print ·
 donate→footer · agent→assistant dock (+ own page, see §2C) · connections→Settings ·
 welcome→Landing · help→Help · settings→Settings · styleguide→dev surface.
 
