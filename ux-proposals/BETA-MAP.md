@@ -109,6 +109,19 @@ never forked inside a page.
   inline `style={{ color }}` reads the `tokens.ts` constants (BLUE / RED_TEXT / INK),
   not forked hex. No raw hex literals in the file — nothing to convert.
 
+**2026-08-30 final sweep — the beta-visible surface is done.** Every component
+mounted inside BetaPage chrome now follows the flat spec (commits `951f5b4`,
+`0f23de5`, `1617b12`, `a047924`, `28c2970`): **DataPage, EqPage, OptimizeCard,
+MonteCarloChart, BacktestPanel, CompareCard, MathPage, ScheduleTable,
+MetricCards, Markdown** (assistant replies: violet links → blue-700, square code
+blocks), plus AgentPage's double header fixed (`hideTitle` on the beta mount —
+BetaPage's "Assistant" is the only title; controls/badge stay). Remaining old-skin
+files — **SetupWizard, SidebarForm** — mount only in the legacy app path below the
+beta switch, not beta-visible; **PrintSummary** stays deferred (print-only sheet,
+task D-adjacent). Sweep verified by grep for `rounded|violet|emerald|bg-blue-6|
+ring-1|neutral-` across beta-mounted components: only intentional hits remain
+(EqPage's square value-knob/pad-dot use the one blue accent for meaning).
+
 **Shared primitives ADDED to `src/design/` (now consumed by the conversions below):**
 - [x] `<Progress>` — a thin hairline track + a fill of `width: pct%` (replaces the
   inline-style bars in AgentPage / Connections / SetupWizard).
