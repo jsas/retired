@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { BetaPage, type VerdictChip } from './BetaPage';
+import { BetaPage, MOBILE_MENU_ITEMS, type VerdictChip } from './BetaPage';
 
 // Node has no localStorage — stub it so the dock-open pref read/write works.
 const store = new Map<string, string>();
@@ -46,6 +46,20 @@ describe('BetaPage assistant dock', () => {
     expect(html).toContain('90+');
     for (const label of ['Details', 'Schedule', 'Insights', 'Plans']) {
       expect(html, label).toContain(label);
+    }
+  });
+
+  it('offers a phone Menu carrying the same named homes', () => {
+    // Under md the inline links hide and a Menu ▾ takes over — the menu's
+    // item list must cover every home (nothing dropped on phones), and the
+    // trigger must render.
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, children: createElement('div') }),
+    );
+    expect(html).toContain('Menu');
+    const labels = MOBILE_MENU_ITEMS.map(i => i.label);
+    for (const label of ['Dashboard', 'Schedule', 'Insights', 'Plans', 'Details', 'Data', 'Print', 'Settings', 'Help']) {
+      expect(labels, label).toContain(label);
     }
   });
 

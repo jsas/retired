@@ -26,6 +26,21 @@ export interface VerdictChip {
   label: string;
 }
 
+/** The phone menu's contents — the same named homes the desktop row shows
+ *  (plus Dashboard/Details/Help, which desktop reaches other ways). Exported
+ *  so tests can prove nothing was dropped on phones. */
+export const MOBILE_MENU_ITEMS: Array<{ view: 'projection' | 'math' | 'eq' | 'scenarios' | 'details' | 'data' | 'print' | 'settings' | 'help'; label: string }> = [
+  { view: 'projection', label: 'Dashboard' },
+  { view: 'math', label: 'Schedule' },
+  { view: 'eq', label: 'Insights' },
+  { view: 'scenarios', label: 'Plans' },
+  { view: 'details', label: 'Details' },
+  { view: 'data', label: 'Data' },
+  { view: 'print', label: 'Print' },
+  { view: 'settings', label: 'Settings' },
+  { view: 'help', label: 'Help' },
+];
+
 function chipDot(tone: VerdictChip['tone']) {
   return tone === 'holds' ? BLUE : tone === 'short' ? RED_DOT : tone === 'borderline' ? AMBER_DOT : '#94a3b8';
 }
@@ -62,7 +77,7 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               The full plan — every section one click away
             </p>
-            <div className="grid grid-cols-2 gap-px">
+            <div className="grid grid-cols-1 gap-px sm:grid-cols-2">
               {DETAILS_SECTIONS.map(s => (
                 <Link key={s.id} view="details" section={s.id} className="px-2 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
                   {s.label}
@@ -74,12 +89,26 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             </p>
           </Dropdown>
 
-          <Link view="math" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">Schedule</Link>
-          <Link view="eq" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">Insights</Link>
-          <Link view="scenarios" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">Plans</Link>
+          <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Schedule</Link>
+          <Link view="eq" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Insights</Link>
+          <Link view="scenarios" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Plans</Link>
           <Link view="data" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Data</Link>
           <Link view="print" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Print</Link>
           <Link view="settings" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Settings</Link>
+
+          {/* Phones: the same named homes collapse into one Menu — the row
+              (logo, Menu, Assistant, verdict chip) fits a 375px viewport. */}
+          <div className="md:hidden">
+            <Dropdown label="Menu">
+              <div className="flex flex-col">
+                {MOBILE_MENU_ITEMS.map(item => (
+                  <Link key={item.view} view={item.view} className="px-2 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </Dropdown>
+          </div>
 
           <div className="flex-1" />
           {actions}

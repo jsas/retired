@@ -281,7 +281,7 @@ export function Dropdown({ label, children, wide = false }: {
       </button>
       {open && (
         <div
-          className={`absolute left-0 top-[calc(100%+4px)] z-50 border border-slate-200 bg-white p-2 ${wide ? 'min-w-[300px]' : 'min-w-[230px]'}`}
+          className={`absolute left-0 top-[calc(100%+4px)] z-50 max-w-[calc(100vw-2rem)] border border-slate-200 bg-white p-2 ${wide ? 'min-w-[300px]' : 'min-w-[230px]'}`}
           onClick={() => setOpen(false)}
         >
           {children}
