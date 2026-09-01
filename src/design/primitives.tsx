@@ -163,6 +163,57 @@ export function Fader({ label, help, value, min, max, step, format, onChange, hi
   );
 }
 
+/* ── Check ────────────────────────────────────────────────────────────────
+   The one checkbox. A square (never round, never blue): hairline border when
+   off, solid INK with a white ✓ when on. Pages compose this instead of a raw
+   <input type="checkbox"> so no surface can drift back to the browser's blue
+   default. Renders a real input underneath — labels, focus, and keyboard all
+   behave natively. `size` scales the box for denser (12px) or roomier rows. */
+export function Check({ checked, onChange, size = 16, label, children, className = '' }: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  /** Box edge in px — 16 default, 12 for tight list rows, 20 for big tap targets. */
+  size?: 12 | 16 | 20;
+  /** Optional text rendered beside the box; wrapping in your own <label> also works. */
+  label?: ReactNode;
+  /** Rich content beside the box (title + note blocks) — wins over `label`. */
+  children?: ReactNode;
+  className?: string;
+}) {
+  const box = (
+    <span
+      aria-hidden
+      className={`inline-flex shrink-0 items-center justify-center border transition-colors ${
+        checked ? 'border-slate-900 bg-slate-900' : 'border-slate-300 bg-white'
+      }`}
+      style={{ width: size, height: size }}
+    >
+      {checked && (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 10 10" fill="none">
+          <path d="M1.5 5.2 4 7.7 8.5 2.3" stroke="#fff" strokeWidth="1.8" />
+        </svg>
+      )}
+    </span>
+  );
+  const input = (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="sr-only"
+    />
+  );
+  // The input is visually hidden but present, so the <label> click / focus /
+  // space-key semantics all come from the browser — no custom key handling.
+  return (
+    <label className={`inline-flex cursor-pointer items-center gap-2 ${className}`}>
+      {input}
+      {box}
+      {children ?? (label != null && <span className="text-[13px] text-slate-800">{label}</span>)}
+    </label>
+  );
+}
+
 /* ── Chip ─────────────────────────────────────────────────────────────────
    A small stateless status pill: a square dot + plain words. Colour carries
    the verdict — blue holds, red runs out, amber borderline. */

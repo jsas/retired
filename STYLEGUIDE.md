@@ -85,6 +85,10 @@ bare `<HelpHint topic="…" />` beside any label.
   square thumb. No fill to the left; position is the signal. `help` adds a `?`.
 - **`Chip`** — a stateless status pill: square dot + plain words. Colour
   carries the verdict.
+- **`Check`** — the one checkbox: square box, hairline border, solid ink fill
+  with a white ✓ when on. Never the browser's blue default; `size` scales it
+  (12 tight rows / 16 default / 20 big tap targets). A raw
+  `<input type="checkbox">` in the beta skin is a bug — compose this.
 - **`Stat`** — one number with a label and a quiet note; verdict-toned value.
 - **`AccountBars`** — per-account proportional bars, the mix at a glance.
 - **`Legend`** — swatch + label rows explaining a chart's marks.

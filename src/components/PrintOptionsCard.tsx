@@ -1,6 +1,6 @@
 import type { PrintOptions } from '../lib/printOptions';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
-import { Panel } from '../design/primitives';
+import { Panel, Check } from '../design/primitives';
 import { cls } from '../design/tokens';
 
 interface PrintOptionsCardProps {
@@ -79,8 +79,9 @@ export function PrintOptionsCard({
   );
 }
 
-/** One flat checkbox row: a square check, a plain-word title, a quiet note.
- *  The check is ink (accent-slate-900) — never blue; colour carries verdicts. */
+/** One flat checkbox row composed on the design primitive: the square ink
+ *  Check (never blue — colour carries verdicts), a plain-word title, a quiet
+ *  note. */
 function OptionRow({ checked, onChange, title, note }: {
   checked: boolean;
   onChange: (v: boolean) => void;
@@ -88,17 +89,12 @@ function OptionRow({ checked, onChange, title, note }: {
   note: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={e => onChange(e.target.checked)}
-        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-slate-900"
-      />
+    <div className="flex items-start gap-3">
+      <Check checked={checked} onChange={onChange} className="mt-0.5" />
       <span className="min-w-0">
         <span className="block text-[13px] font-medium text-slate-900">{title}</span>
         <span className="mt-0.5 block text-[11.5px] leading-relaxed text-slate-500">{note}</span>
       </span>
-    </label>
+    </div>
   );
 }

@@ -5,7 +5,7 @@
 // field edits the real plan; the verdict, map and dock recompute together.
 import { useEffect, useRef } from 'react';
 import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt } from '@retired/engine-core/retirementEngine';
-import { Panel, Fader, HelpHint } from '../../design/primitives';
+import { Panel, Fader, HelpHint, Check } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
 
@@ -218,15 +218,15 @@ function renderSection(id: string, ctx: {
         set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: true, ...patch } });
       return (
         <Section id="spouse" title="Spouse" hint="include-spouse">
-          <label className="flex items-center gap-2 text-[13px] text-slate-800">
-            <input type="checkbox" checked={enabled}
-              onChange={(e) => {
-                if (e.target.checked) set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: true } });
+          <div className="flex items-center gap-1">
+            <Check checked={enabled}
+              onChange={(on) => {
+                if (on) set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: true } });
                 else set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: false } });
-              }} />
-            Include a partner
+              }}
+              label="Include a partner" />
             <HelpHint topic="include-spouse" />
-          </label>
+          </div>
           {enabled && sp && (
             <div className="mt-3 space-y-3">
               <div className="grid grid-cols-2 gap-3">

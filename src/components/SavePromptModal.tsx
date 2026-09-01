@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Save, AlertTriangle } from 'lucide-react';
-import { Modal } from '../design/primitives';
+import { Modal, Check } from '../design/primitives';
 import { cls } from '../design/tokens';
 
 interface SavePromptModalProps {
@@ -30,10 +30,10 @@ export function SavePromptModal({ scenarioName, onSave, onDiscard, onCancel }: S
         </p>
       </div>
 
-      <label className="flex items-center gap-2 text-[12px] text-slate-600 cursor-pointer mb-4 ml-1">
-        <input type="checkbox" checked={dontAskAgain} onChange={e => setDontAskAgain(e.target.checked)} />
-        Don't ask again (turn this off in Settings → General)
-      </label>
+      <div className="mb-4 ml-1">
+        <Check size={12} checked={dontAskAgain} onChange={setDontAskAgain}
+          label={<span className="text-[12px] text-slate-600">Don't ask again (turn this off in Settings → General)</span>} />
+      </div>
 
       <div className="flex flex-col gap-2">
         <button

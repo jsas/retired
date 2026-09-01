@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Check, ClipboardCopy, Download, Upload, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check as CheckBox } from '../design/primitives';
 import {
   COLUMN_GROUPS, METADATA_SECTIONS, buildExport,
   type ProjectionExportOptions, type ExportFormat, type Subject, type ColumnGroup, type MetaSection,
@@ -198,13 +199,13 @@ function ProjectionExportSection({
             <div className={SECTION}>Columns to include</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 max-w-3xl">
               {COLUMN_GROUPS.map(g => (
-                <label key={g.key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer" title={g.hint}>
-                  <input type="checkbox" checked={options.columnGroups.includes(g.key)} onChange={() => toggleGroup(g.key)} className="mt-0.5" />
-                  <span>
+                <CheckBox key={g.key} size={12} className="items-start" checked={options.columnGroups.includes(g.key)}
+                  onChange={() => toggleGroup(g.key)}>
+                  <span className="text-xs text-slate-700" title={g.hint}>
                     <span className="font-medium">{g.label}</span>
                     <span className="block text-[10px] text-slate-400">{g.hint}</span>
                   </span>
-                </label>
+                </CheckBox>
               ))}
             </div>
           </div>
@@ -213,30 +214,28 @@ function ProjectionExportSection({
         {/* JSON/YAML options */}
         {!isCsv && (
           <div className="space-y-2.5">
-            <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
-              <input type="checkbox" checked={options.includeDetail} onChange={e => set({ includeDetail: e.target.checked })} className="mt-0.5" />
-              <span>
+            <CheckBox className="items-start" checked={options.includeDetail} onChange={v => set({ includeDetail: v })}>
+              <span className="text-xs text-slate-700">
                 <span className="font-medium">Include per-year drill-down detail</span>
                 <span className="block text-[11px] text-slate-500 mt-0.5">Withdrawal sources, per-account growth, tax decomposition, reverse mortgage and events on every year.</span>
               </span>
-            </label>
-            <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
-              <input type="checkbox" checked={options.includeMetadata} onChange={e => set({ includeMetadata: e.target.checked })} className="mt-0.5" />
-              <span>
+            </CheckBox>
+            <CheckBox className="items-start" checked={options.includeMetadata} onChange={v => set({ includeMetadata: v })}>
+              <span className="text-xs text-slate-700">
                 <span className="font-medium">Include metadata envelope</span>
                 <span className="block text-[11px] text-slate-500 mt-0.5">Scenario name, generation date and the sections below, next to the projection.</span>
               </span>
-            </label>
+            </CheckBox>
             {options.includeMetadata && (
               <div className="ml-6 grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1.5">
                 {METADATA_SECTIONS.map(m => (
-                  <label key={m.key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer" title={m.hint}>
-                    <input type="checkbox" checked={options.metadataSections.includes(m.key)} onChange={() => toggleMeta(m.key)} className="mt-0.5" />
-                    <span>
+                  <CheckBox key={m.key} size={12} className="items-start" checked={options.metadataSections.includes(m.key)}
+                    onChange={() => toggleMeta(m.key)}>
+                    <span className="text-xs text-slate-700" title={m.hint}>
                       <span className="font-medium">{m.label}</span>
                       <span className="block text-[10px] text-slate-400">{m.hint}</span>
                     </span>
-                  </label>
+                  </CheckBox>
                 ))}
               </div>
             )}
@@ -330,27 +329,26 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 max-w-3xl mb-3">
         {scenarios.map(s => (
-          <label key={s.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={checked.has(s.id)} onChange={() => toggle(s.id)} />
-            <span className="font-medium truncate">{s.name}</span>
-            {s.id === activeScenarioId && <span className="text-[10px] font-semibold text-slate-900">active</span>}
-          </label>
+          <CheckBox key={s.id} size={12} checked={checked.has(s.id)} onChange={() => toggle(s.id)}>
+            <span className="text-xs text-slate-700">
+              <span className="font-medium">{s.name}</span>
+              {s.id === activeScenarioId && <span className="ml-1.5 text-[10px] font-semibold text-slate-900">active</span>}
+            </span>
+          </CheckBox>
         ))}
-        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2 mt-1 pt-2 border-t border-slate-100">
-          <input type="checkbox" checked={includeConfig} onChange={e => setIncludeConfig(e.target.checked)} />
-          <span><span className="font-medium">Include engine settings</span>
+        <CheckBox size={12} className="sm:col-span-2 mt-1 pt-2 border-t border-slate-100"
+          checked={includeConfig} onChange={setIncludeConfig}>
+          <span className="text-xs text-slate-700"><span className="font-medium">Include engine settings</span>
           <span className="block text-[10px] text-slate-400">Inflation, RRIF conversion age, tax tables and other engine config</span></span>
-        </label>
-        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-          <input type="checkbox" checked={includeChats} onChange={e => setIncludeChats(e.target.checked)} />
-          <span><span className="font-medium">Include AI chats</span>
+        </CheckBox>
+        <CheckBox size={12} className="sm:col-span-2" checked={includeChats} onChange={setIncludeChats}>
+          <span className="text-xs text-slate-700"><span className="font-medium">Include AI chats</span>
           <span className="block text-[10px] text-slate-400">The assistant conversation transcripts saved on this device</span></span>
-        </label>
-        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-          <input type="checkbox" checked={includeAiSettings} onChange={e => setIncludeAiSettings(e.target.checked)} />
-          <span><span className="font-medium">Include AI connections &amp; model settings</span>
+        </CheckBox>
+        <CheckBox size={12} className="sm:col-span-2" checked={includeAiSettings} onChange={setIncludeAiSettings}>
+          <span className="text-xs text-slate-700"><span className="font-medium">Include AI connections &amp; model settings</span>
           <span className="block text-[10px] text-amber-700">Includes any API keys stored for cloud providers — pack this only into a backup you keep private</span></span>
-        </label>
+        </CheckBox>
       </div>
       <button
         onClick={() => onExportFull([...checked], includeConfig, { chats: includeChats, settings: includeAiSettings })}
@@ -680,39 +678,37 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 mb-3">
             {parsed.db.scenarios.map(s => (
-              <label key={s.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={checked.has(s.id)} onChange={() => toggle(s.id)} />
-                <span className="truncate">{s.name}</span>
-                {s.id === parsed.db.activeScenarioId && <span className="text-[10px] font-semibold text-slate-900">active</span>}
-              </label>
+              <CheckBox key={s.id} size={12} checked={checked.has(s.id)} onChange={() => toggle(s.id)}>
+                <span className="text-xs text-slate-700">
+                  <span>{s.name}</span>
+                  {s.id === parsed.db.activeScenarioId && <span className="ml-1.5 text-[10px] font-semibold text-slate-900">active</span>}
+                </span>
+              </CheckBox>
             ))}
-            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2 mt-1 pt-2 border-t border-slate-100">
-              <input type="checkbox" checked={includeConfig} onChange={e => setIncludeConfig(e.target.checked)} />
-              <span className="font-medium">Also apply engine settings from the file</span>
-            </label>
+            <CheckBox size={12} className="sm:col-span-2 mt-1 pt-2 border-t border-slate-100"
+              checked={includeConfig} onChange={setIncludeConfig}>
+              <span className="text-xs font-medium text-slate-700">Also apply engine settings from the file</span>
+            </CheckBox>
             {parsed.aiChats !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-                <input type="checkbox" checked={applyChats} onChange={e => setApplyChats(e.target.checked)} />
-                <span className="font-medium">Replace AI chats with the ones in the file</span>
-              </label>
+              <CheckBox size={12} className="sm:col-span-2" checked={applyChats} onChange={setApplyChats}>
+                <span className="text-xs font-medium text-slate-700">Replace AI chats with the ones in the file</span>
+              </CheckBox>
             )}
             {parsed.aiSettings !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-                <input type="checkbox" checked={applyAiSettings} onChange={e => setApplyAiSettings(e.target.checked)} />
-                <span>
+              <CheckBox size={12} className="sm:col-span-2" checked={applyAiSettings} onChange={setApplyAiSettings}>
+                <span className="text-xs text-slate-700">
                   <span className="font-medium">Replace AI connections &amp; model settings with the file's</span>
                   <span className="block text-[10px] text-amber-700">This brings in the API keys saved in that backup</span>
                 </span>
-              </label>
+              </CheckBox>
             )}
             {parsed.prefs !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-                <input type="checkbox" checked={applyPrefs} onChange={e => setApplyPrefs(e.target.checked)} />
-                <span>
+              <CheckBox size={12} className="sm:col-span-2" checked={applyPrefs} onChange={setApplyPrefs}>
+                <span className="text-xs text-slate-700">
                   <span className="font-medium">Also apply UI preferences from the file</span>
                   <span className="block text-[10px] text-slate-400">Panel layout, print &amp; export options, welcome setting, steering crops</span>
                 </span>
-              </label>
+              </CheckBox>
             )}
           </div>
           <p className="mb-3 border-l-2 border-amber-500 px-2.5 py-1 text-[11.5px] leading-relaxed text-amber-800">
@@ -742,25 +738,22 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           </p>
           <div className="grid grid-cols-1 gap-y-1.5 mb-3">
             {parsed.config !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={includeConfig} onChange={e => setIncludeConfig(e.target.checked)} />
-                <span className="font-medium">Apply engine settings from the file</span>
-              </label>
+              <CheckBox size={12} checked={includeConfig} onChange={setIncludeConfig}>
+                <span className="text-xs font-medium text-slate-700">Apply engine settings from the file</span>
+              </CheckBox>
             )}
             {parsed.aiChats !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={applyChats} onChange={e => setApplyChats(e.target.checked)} />
-                <span className="font-medium">Replace AI chats with the ones in the file</span>
-              </label>
+              <CheckBox size={12} checked={applyChats} onChange={setApplyChats}>
+                <span className="text-xs font-medium text-slate-700">Replace AI chats with the ones in the file</span>
+              </CheckBox>
             )}
             {parsed.aiSettings !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={applyAiSettings} onChange={e => setApplyAiSettings(e.target.checked)} />
-                <span>
+              <CheckBox size={12} checked={applyAiSettings} onChange={setApplyAiSettings}>
+                <span className="text-xs text-slate-700">
                   <span className="font-medium">Replace AI connections &amp; model settings with the file's</span>
                   <span className="block text-[10px] text-amber-700">This brings in the API keys saved in that backup</span>
                 </span>
-              </label>
+              </CheckBox>
             )}
           </div>
           <p className="mb-3 border-l-2 border-slate-300 px-2.5 py-1 text-[11.5px] leading-relaxed text-slate-600">

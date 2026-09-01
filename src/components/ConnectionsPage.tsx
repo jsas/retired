@@ -33,6 +33,7 @@ import { WEBLLM_MODELS, fmtSize, webGpuAvailable } from '../lib/ai/webLlmModels'
 import { buildMachineGuide, type MachineGuide } from '../lib/ai/machineGuide';
 import { estimateContextFit, fmtMB } from '../lib/ai/vramEstimate';
 import { defaultContextSize } from '../lib/ai/context';
+import { Check as CheckBox } from '../design/primitives';
 import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 import { Progress } from '../design/primitives';
@@ -342,19 +343,14 @@ function ModelsSection({ onChange, webllmConn }: {
                 placeholder={isAuto ? 'Auto' : String(defaultContextSize('webllm'))}
                 className="num w-24 border border-slate-300 bg-white px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
               />
-              <label className="flex items-center gap-1 text-[12px] text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={isAuto}
-                  onChange={e => onChange(s => {
-                    const c = s.connections.find(x => x.id === webllmConn.id);
-                    if (!c) return;
-                    // Auto = unset; unchecking seeds the current target as a manual value.
-                    c.contextSize = e.target.checked ? undefined : tokens;
-                  })}
-                />
-                Auto (as big as your GPU allows)
-              </label>
+              <CheckBox size={12} checked={isAuto}
+                onChange={(on) => onChange(s => {
+                  const c = s.connections.find(x => x.id === webllmConn.id);
+                  if (!c) return;
+                  // Auto = unset; unchecking seeds the current target as a manual value.
+                  c.contextSize = on ? undefined : tokens;
+                })}
+                label={<span className="text-[12px] text-slate-700">Auto (as big as your GPU allows)</span>} />
             </div>
             <div className="mt-1 text-[10.5px] leading-relaxed text-slate-400">
               {isAuto ? (

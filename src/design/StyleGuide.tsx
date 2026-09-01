@@ -8,7 +8,7 @@ import { useState } from 'react';
 import * as T from './tokens';
 import {
   Fader, Chip, VerdictHero, Panel, Stat, AccountBars, Legend, Dropdown, Footnote,
-  HelpHint, Dot, Progress, Modal,
+  HelpHint, Dot, Progress, Modal, Check,
 } from './primitives';
 import { ProjectionTimeline } from './ProjectionTimeline';
 
@@ -50,6 +50,8 @@ export function StyleGuide() {
   const [spend, setSpend] = useState(85000);
   const [age, setAge] = useState(62);
   const [open, setOpen] = useState(false);
+  const [checkOn, setCheckOn] = useState(true);
+  const [checkOff, setCheckOff] = useState(false);
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -148,6 +150,21 @@ export function StyleGuide() {
               { label: 'TFSA', value: 263000, active: true },
               { label: 'Taxable', value: 145000 },
             ]} />
+          </div>
+
+          <div className="mt-8 border-t border-slate-100 pt-6">
+            <p className={T.cls.sectionLabel}>Check — the one checkbox</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
+              Square, ink fill, white ✓. Never round, never blue — a control is not a
+              verdict. Pages compose <code>&lt;Check&gt;</code>; raw
+              <code> &lt;input type="checkbox"&gt;</code> in the beta skin is a bug.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
+              <Check checked={checkOn} onChange={setCheckOn} label="Include a partner" />
+              <Check checked={checkOff} onChange={setCheckOff} label="Include GST/HST credit" />
+              <Check checked={checkOn} onChange={setCheckOn} size={12} label="tight row (12)" />
+              <Check checked={checkOn} onChange={setCheckOn} size={20} label="big tap target (20)" />
+            </div>
           </div>
 
           <div className="mt-8 border-t border-slate-100 pt-6">

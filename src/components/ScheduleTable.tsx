@@ -10,6 +10,7 @@ import {
   ALWAYS_VISIBLE_IDS,
   type ScheduleColumn,
 } from './scheduleColumns';
+import { Check } from '../design/primitives';
 
 interface ScheduleTableProps {
   breakdown: YearlyBreakdown[];
@@ -111,19 +112,18 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
           </button>
           <div className="my-1 border-t border-slate-100" />
           {toggleable.map((c) => (
-            <label key={c.id} className="flex items-center gap-2 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 cursor-pointer">
-              <input
-                type="checkbox"
+            <div key={c.id} className="px-2 py-1 hover:bg-slate-50">
+              <Check
+                size={12}
                 checked={visible.has(c.id)}
-                onChange={() => {
+                onChange={(on) => {
                   const next = new Set(visible);
-                  if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                  if (on) next.add(c.id); else next.delete(c.id);
                   onChange(next);
                 }}
-                className="accent-slate-900"
+                label={<span className="text-[11px] text-slate-700">{c.label}</span>}
               />
-              {c.label}
-            </label>
+            </div>
           ))}
         </div>
       )}

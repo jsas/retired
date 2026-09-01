@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import * as T from './tokens';
 import {
   VerdictHero, Panel, Fader, Chip, Stat, AccountBars, Legend, Dropdown, Footnote, AppHeader,
-  HelpHint, HelpHintPopup,
+  HelpHint, HelpHintPopup, Check,
 } from './primitives';
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -128,5 +128,36 @@ describe('primitives render', () => {
 
   it('HelpHint returns null for an unknown topic id', () => {
     expect(render(<HelpHint topic="nope-not-a-topic" />)).toBe('');
+  });
+
+  it('Check is ink when on, hairline when off — never blue', () => {
+    const on = render(<Check checked onChange={() => {}} label="include" />);
+    expect(on).toContain('bg-slate-900');
+    expect(on).toContain('border-slate-900');
+    expect(on).toContain('include');
+    expect(on).toContain('type="checkbox"');
+    // no blue anywhere — a control is not a verdict
+    expect(on).not.toContain('blue');
+
+    const off = render(<Check checked={false} onChange={() => {}} />);
+    expect(off).toContain('border-slate-300');
+    expect(off).toContain('bg-white');
+    expect(off).not.toContain('bg-slate-900');
+    expect(off).not.toContain('blue');
+  });
+
+  it('Check scales the box by size', () => {
+    expect(render(<Check checked={false} onChange={() => {}} size={12} />)).toContain('width:12px');
+    expect(render(<Check checked={false} onChange={() => {}} size={20} />)).toContain('width:20px');
+  });
+
+  it('Check prefers children over label for rich rows', () => {
+    const html = render(
+      <Check checked onChange={() => {}} label="plain">
+        <span>rich title</span>
+      </Check>,
+    );
+    expect(html).toContain('rich title');
+    expect(html).not.toContain('plain');
   });
 });
