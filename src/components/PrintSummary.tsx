@@ -40,7 +40,7 @@ const TL_PAD = { top: 10, right: 10, bottom: 20, left: 52 };
 // on-screen chart: with a reverse mortgage the headline is TOTAL cash
 // (portfolio + net home equity) and the portfolio/equity components show as
 // secondary lines; without RM it's just the portfolio balance. Uses the
-// household-combined breakdown (same rows as the on-screen TimelineChart).
+// household-combined breakdown (same rows as the on-screen ProjectionTimeline).
 function TimelinePrintChart({ inputs, rows }: {
   inputs: RetirementInputs;
   rows: YearlyBreakdown[];
