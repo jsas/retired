@@ -104,7 +104,7 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
           <button
             type="button"
             onClick={reset}
-            className="w-full text-left px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+            className="w-full text-left px-2 py-1 text-[11px] font-semibold text-slate-900 hover:bg-slate-50"
             title="Cycle the topical column sets — money flow, accounts, tax, income"
           >
             Reset
@@ -120,7 +120,7 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
                   if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
                   onChange(next);
                 }}
-                className="accent-blue-700"
+                className="accent-slate-900"
               />
               {c.label}
             </label>
