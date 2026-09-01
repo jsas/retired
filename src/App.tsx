@@ -784,6 +784,8 @@ function App() {
         memoryScenarioId={activeScenarioId}
         onOpenScenario={agentOpenScenario}
         onSaveScenarioAs={agentSaveScenarioAs}
+        currentView={view}
+        onNavigate={(target) => setView(target)}
       />
     );
 
@@ -1212,6 +1214,13 @@ function App() {
                 memoryScenarioId={activeScenarioId}
                 onOpenScenario={agentOpenScenario}
                 onSaveScenarioAs={agentSaveScenarioAs}
+                // The page the user is on when the chat mounts — powers the
+                // ambient "current page" prompt line + find_page's "already here".
+                // On approval of a propose_navigate card the app switches views;
+                // the chat unmounting with it is why the route is queued to the
+                // turn's finally block (see pendingNavigation in AgentPage).
+                currentView={view}
+                onNavigate={(target) => setView(target)}
               />
             )}
 

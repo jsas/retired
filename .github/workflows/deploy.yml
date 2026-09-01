@@ -27,6 +27,16 @@ jobs:
       - run: npm ci
       - run: npm test             # engine/library tests gate the deploy
       - run: npm run build        # multi-file site -> dist/ (base /retired/)
+      # Sitemap drift gate (issue #141): dist/sitemap.json is emitted from the
+      # page catalog by the Vite plugin; the copy at the repo root is the
+      # committed artifact. A mismatch means the catalog changed without
+      # regenerating it — rebuild (`npm run build`) and commit dist/sitemap.json
+      # to the root, same discipline as the engine's golden master.
+      - name: Check committed sitemap.json matches the build
+        run: |
+          cp dist/sitemap.json sitemap.json
+          git --no-pager diff sitemap.json
+          git diff --exit-code sitemap.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

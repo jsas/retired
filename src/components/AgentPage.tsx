@@ -34,6 +34,7 @@ import { streamChat, type ChatMessage } from '../lib/ai/providers';
 import { Progress } from '../design/primitives';
 import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
+import type { View } from '../lib/viewRoutes';
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
@@ -82,6 +83,13 @@ interface AgentPageProps {
    *  Assistant — an inner h2 would be a second header). Controls and the
    *  connection badge stay. */
   hideTitle?: boolean;
+  /** The view the host page is on when AgentPage mounts — for the ambient
+   *  prompt line and find_page's "already here" tag. */
+  currentView?: View;
+  /** Route the host to a view (the action behind an approved propose_navigate
+   *  card). Its presence also advertises `canNavigate` to the tools: no prop,
+   *  and the card degrades to a shareable #/hash result. */
+  onNavigate?: (view: View) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +331,7 @@ function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, mo
   );
 }
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle }: AgentPageProps) {
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle, currentView, onNavigate }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -607,6 +615,8 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               patchThread={patchThread}
               recordCheckpoint={recordCheckpoint}
               checkpoints={activeThread.checkpoints ?? []}
+              currentView={currentView}
+              onNavigate={onNavigate}
               memory={memory}
               memoryScenarioId={memoryScenarioId}
               onOpenScenario={onOpenScenario}
@@ -670,15 +680,16 @@ function buildSystemBody(
   scenarioName: string,
   basePrompt: string | undefined,
   config: AppConfig,
+  currentView?: View,
 ): string {
   if (toolMode === 'prompt') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
+    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config, currentView }) + '\n\n' +
       buildPromptToolInstructions(toolSpecs());
   }
   if (toolMode === 'off') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config });
+    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config, currentView });
   }
-  return buildSystemPrompt(scenarioName, { basePrompt, config });
+  return buildSystemPrompt(scenarioName, { basePrompt, config, currentView });
 }
 
 /** The live plan digest for chat-only local models ('prompt' and 'off'
@@ -704,7 +715,7 @@ function planContextMessage(
   };
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -726,6 +737,8 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   memoryScenarioId?: string;
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
+  currentView?: View;
+  onNavigate?: (view: View) => void;
 }) {
   const turns = thread.turns as Turn[];
   const [running, setRunning] = useState(false);
@@ -738,6 +751,12 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const abortRef = useRef<AbortController | null>(null);
   const downloadDoneRef = useRef(false);
   const pendingDecisions = useRef(new Map<string, (d: { approved: boolean; note?: string }) => void>());
+  // Approved propose_navigate cards queue their destination here instead of
+  // routing on the spot: AgentPage unmounts as soon as the view leaves
+  // 'agent', and its unmount cleanup aborts the in-flight turn — routing
+  // immediately would kill the assistant's own acknowledgment mid-stream.
+  // runTurn's finally flushes the queue once the turn is fully done.
+  const pendingNavigation = useRef<View[]>([]);
   // Filled in by SnapToBottomOnSend (inside the viewport) with the store's
   // scrollToBottom. send() calls it so a new user message snaps the reply into
   // view — the ONE auto-jump we keep now that the library's own triggers are
@@ -784,7 +803,13 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     get memoryScenarioId() { return memoryScenarioIdRef.current; },
     activeScenarioId, scenarioInputsById,
     onOpenScenario, onSaveScenarioAs,
-  }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
+    // Current page is ambient context (find_page tags it, the prompt names it)
+    // — not bound through a prop-less closure, so the memo tracks the prop.
+    currentView,
+    // Advertise the card path only if the host can actually route (see
+    // ToolContext.canNavigate); the routing itself happens on approval.
+    canNavigate: onNavigate != null,
+  }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs, currentView, onNavigate]);
 
   // The MCP-backed tool executor. The server re-resolves the LIVE context on
   // every call, so the executor closes over the memoized context object (its
@@ -805,7 +830,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
     const basePrompt = settings.systemPromptOverride;
-    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config);
+    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config, currentView);
     const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
     const planContext = planContextMessage(toolMode, inputs, config);
     const history = toHistory(turns);
@@ -863,7 +888,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     };
 
     const basePrompt = settings.systemPromptOverride;
-    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config);
+    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config, currentView);
     // The chat's standing instructions go last so they read as the user's own
     // voice; they can steer tone/focus but the base prompt's rules come first.
     const system = thread.systemNote?.trim()
@@ -1031,6 +1056,15 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       setRunning(false);
       setLoadProgress(null);
       abortRef.current = null;
+      // Turn fully over (reply persisted, abort cleared) — NOW it's safe to
+      // honor any approved propose_navigate. Last queued destination wins:
+      // mid-turn re-proposals mean the user's real destination was the later
+      // one, and routing through both would double-jump.
+      if (pendingNavigation.current.length > 0) {
+        const target = pendingNavigation.current[pendingNavigation.current.length - 1];
+        pendingNavigation.current = [];
+        onNavigate?.(target);
+      }
     }
 
     // Write (or extend) the running digest after a compacted turn, so the next
@@ -1050,15 +1084,24 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       changes: t.changes.map(c => c.callId === change.callId ? { ...c, resolved: approved ? 'approved' : 'rejected' } : c),
     })));
     if (approved) {
-      // Snapshot the plan BEFORE the patch lands — the automatic checkpoint
-      // propose_revert rolls back to. The label is the card's, so the model
-      // (and the user) can name the checkpoint later.
-      recordCheckpoint(change.label ?? 'Plan change', inputs);
-      // Revert patches carry encoded undefined-removals; decode them here so
-      // the spread in App's onApply actually deletes the keys.
-      const raw = changePatch(change);
-      const decoded = change.revert ? decodeRevertPatch(raw) : raw;
-      onApply(decoded as Partial<RetirementInputs>);
+      if (change.navigate != null) {
+        // Page-navigation card: no plan change to checkpoint and nothing to
+        // merge into inputs (the patch is empty by design). Queue the route —
+        // the host unmounts this chat when the view leaves 'agent', so moving
+        // now would abort the assistant's reply mid-stream (see
+        // pendingNavigation). runTurn's finally navigates once the turn is over.
+        pendingNavigation.current.push(change.navigate);
+      } else {
+        // Snapshot the plan BEFORE the patch lands — the automatic checkpoint
+        // propose_revert rolls back to. The label is the card's, so the model
+        // (and the user) can name the checkpoint later.
+        recordCheckpoint(change.label ?? 'Plan change', inputs);
+        // Revert patches carry encoded undefined-removals; decode them here so
+        // the spread in App's onApply actually deletes the keys.
+        const raw = changePatch(change);
+        const decoded = change.revert ? decodeRevertPatch(raw) : raw;
+        onApply(decoded as Partial<RetirementInputs>);
+      }
     }
     const live = pendingDecisions.current.get(change.callId);
     if (live) {
