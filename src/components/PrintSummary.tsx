@@ -1,6 +1,12 @@
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import type { PrintOptions } from '../lib/printOptions';
+import { BLUE, AMBER_TEXT, MUTED, FAINT, HAIRLINE } from '../design/tokens';
+
+// The print sheet (hidden on screen — see the `print-only` rule in index.css).
+// Composes the same visual language as the app (tokens.ts / the slate+blue
+// scale) via Tailwind classes; the only raw values left are SVG paint
+// attributes, which read the token constants directly. No inline styles.
 
 function fmt(value: number): string {
   return new Intl.NumberFormat('en-CA', {
@@ -16,19 +22,21 @@ function fmtShort(v: number): string {
   return `$${Math.round(v)}`;
 }
 
+// Uppercase blue section label — the print twin of cls.sectionLabel (blue
+// carries it here because print is monochrome-adjacent and the label must
+// still read as structure).
+const SECTION_TITLE = 'text-[11px] font-bold uppercase tracking-[0.05em] text-blue-700 mb-1';
+// Money/figures align and compare — tabular figures, not monospace.
+const NUM = 'num';
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <tr>
-      <td style={{ padding: '2px 12px 2px 0', color: '#475569' }}>{label}</td>
-      <td style={{ fontWeight: 600, textAlign: 'right' }}>{value}</td>
+      <td className="py-0.5 pr-3 text-slate-600">{label}</td>
+      <td className="py-0.5 text-right font-semibold">{value}</td>
     </tr>
   );
 }
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
-  letterSpacing: '0.05em', color: '#2563eb', marginBottom: '4px'
-};
 
 // ---------------------------------------------------------------- timeline --
 
@@ -71,37 +79,37 @@ function TimelinePrintChart({ inputs, rows }: {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${TL_W} ${TL_H}`} style={{ width: '100%', height: 'auto' }}>
+      <svg viewBox={`0 0 ${TL_W} ${TL_H}`} className="h-auto w-full">
         {yTicks.map((t, i) => (
           <g key={i}>
-            <line x1={TL_PAD.left} x2={TL_W - TL_PAD.right} y1={y(t)} y2={y(t)} stroke="#e2e8f0" strokeWidth="1" />
-            <text x={TL_PAD.left - 5} y={y(t) + 3} textAnchor="end" fontSize="9" fill="#64748b">{fmtShort(t)}</text>
+            <line x1={TL_PAD.left} x2={TL_W - TL_PAD.right} y1={y(t)} y2={y(t)} stroke={HAIRLINE} strokeWidth="1" />
+            <text x={TL_PAD.left - 5} y={y(t) + 3} textAnchor="end" fontSize="9" fill={MUTED}>{fmtShort(t)}</text>
           </g>
         ))}
         {xTicks.map(a => (
-          <text key={a} x={x(a)} y={TL_H - 6} textAnchor="middle" fontSize="9" fill="#64748b">{a}</text>
+          <text key={a} x={x(a)} y={TL_H - 6} textAnchor="middle" fontSize="9" fill={MUTED}>{a}</text>
         ))}
-        <path d={area} fill="#3b82f6" opacity="0.12" />
-        <path d={headlinePath} fill="none" stroke="#1d4ed8" strokeWidth="2.2" />
+        <path d={area} fill={BLUE} opacity="0.12" />
+        <path d={headlinePath} fill="none" stroke={BLUE} strokeWidth="2.2" />
         {hasRm && (
           <>
-            <path d={pathOf(portfolio)} fill="none" stroke="#60a5fa" strokeWidth="1.2" />
-            <path d={pathOf(equity)} fill="none" stroke="#d97706" strokeWidth="1.2" strokeDasharray="5 3" />
+            <path d={pathOf(portfolio)} fill="none" stroke={BLUE} strokeOpacity="0.45" strokeWidth="1.2" />
+            <path d={pathOf(equity)} fill="none" stroke={AMBER_TEXT} strokeWidth="1.2" strokeDasharray="5 3" />
           </>
         )}
         <line
           x1={x(inputs.retirementAge)} x2={x(inputs.retirementAge)}
           y1={TL_PAD.top} y2={TL_H - TL_PAD.bottom}
-          stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3"
+          stroke={FAINT} strokeWidth="1" strokeDasharray="4 3"
         />
-        <text x={x(inputs.retirementAge) + 4} y={TL_PAD.top + 9} fontSize="9" fill="#64748b">
+        <text x={x(inputs.retirementAge) + 4} y={TL_PAD.top + 9} fontSize="9" fill={MUTED}>
           retire {inputs.retirementAge}
         </text>
       </svg>
-      <div style={{ display: 'flex', gap: '14px', fontSize: '9px', color: '#475569', marginTop: '2px' }}>
-        <span style={{ color: '#1d4ed8' }}>— {hasRm ? 'total cash (portfolio + home equity)' : 'portfolio'}</span>
-        {hasRm && <span style={{ color: '#60a5fa' }}>— portfolio</span>}
-        {hasRm && <span style={{ color: '#d97706' }}>–– net home equity</span>}
+      <div className="mt-0.5 flex gap-3.5 text-[9px] text-slate-600">
+        <span className="text-blue-700">— {hasRm ? 'total cash (portfolio + home equity)' : 'portfolio'}</span>
+        {hasRm && <span className="text-blue-700/45">— portfolio</span>}
+        {hasRm && <span className="text-amber-700">–– net home equity</span>}
       </div>
     </div>
   );
@@ -142,34 +150,34 @@ function MonteCarloPrintChart({ results, retirementAge, maxAge }: {
 
   return (
     <div>
-      <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+      <div className="mb-1 text-[12px]">
         <strong>{(results.successRate * 100).toFixed(1)}%</strong> of {results.runs} runs funded to age {maxAge}
         {' '}· median final balance <strong>{fmt(results.medianFinalBalance)}</strong>
         {' '}· {(results.volatility * 100).toFixed(1)}% volatility, fat-tailed (Student-t)
       </div>
-      <svg viewBox={`0 0 ${MC_W} ${MC_H}`} style={{ width: '100%', height: 'auto' }}>
+      <svg viewBox={`0 0 ${MC_W} ${MC_H}`} className="h-auto w-full">
         {yTicks.map((t, i) => (
           <g key={i}>
-            <line x1={MC_PAD.left} x2={MC_W - MC_PAD.right} y1={y(t)} y2={y(t)} stroke="#e2e8f0" strokeWidth="1" />
-            <text x={MC_PAD.left - 5} y={y(t) + 3} textAnchor="end" fontSize="9" fill="#64748b">{fmtShort(t)}</text>
+            <line x1={MC_PAD.left} x2={MC_W - MC_PAD.right} y1={y(t)} y2={y(t)} stroke={HAIRLINE} strokeWidth="1" />
+            <text x={MC_PAD.left - 5} y={y(t) + 3} textAnchor="end" fontSize="9" fill={MUTED}>{fmtShort(t)}</text>
           </g>
         ))}
         {xTicks.map(a => (
-          <text key={a} x={x(a)} y={MC_H - 6} textAnchor="middle" fontSize="9" fill="#64748b">{a}</text>
+          <text key={a} x={x(a)} y={MC_H - 6} textAnchor="middle" fontSize="9" fill={MUTED}>{a}</text>
         ))}
-        <path d={bandPath('p90', 'p10')} fill="#3b82f6" opacity="0.12" />
-        <path d={bandPath('p75', 'p25')} fill="#3b82f6" opacity="0.22" />
-        <path d={median} fill="none" stroke="#1d4ed8" strokeWidth="1.8" />
+        <path d={bandPath('p90', 'p10')} fill={BLUE} opacity="0.12" />
+        <path d={bandPath('p75', 'p25')} fill={BLUE} opacity="0.22" />
+        <path d={median} fill="none" stroke={BLUE} strokeWidth="1.8" />
         <line
           x1={x(retirementAge)} x2={x(retirementAge)}
           y1={MC_PAD.top} y2={MC_H - MC_PAD.bottom}
-          stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3"
+          stroke={FAINT} strokeWidth="1" strokeDasharray="4 3"
         />
-        <text x={x(retirementAge) + 4} y={MC_PAD.top + 9} fontSize="9" fill="#64748b">retire</text>
+        <text x={x(retirementAge) + 4} y={MC_PAD.top + 9} fontSize="9" fill={MUTED}>retire</text>
       </svg>
-      <div style={{ display: 'flex', gap: '14px', fontSize: '9px', color: '#475569', marginTop: '2px' }}>
+      <div className="mt-0.5 flex gap-3.5 text-[9px] text-slate-600">
         <span>■ 10th–90th percentile</span>
-        <span style={{ opacity: 0.8 }}>■ 25th–75th percentile</span>
+        <span className="opacity-80">■ 25th–75th percentile</span>
         <span>— median</span>
       </div>
     </div>
@@ -236,14 +244,10 @@ function buildMilestones(inputs: RetirementInputs, rrifConversionAge: number): M
 
 // ---------------------------------------------------------- detailed table --
 
-const CELL: React.CSSProperties = {
-  padding: '2px 6px', textAlign: 'right', fontFamily: 'monospace',
-  fontSize: '9.5px', whiteSpace: 'nowrap', color: '#334155'
-};
-const HEAD_CELL: React.CSSProperties = {
-  ...CELL, fontFamily: 'inherit', fontWeight: 700, color: '#475569',
-  borderBottom: '1px solid #cbd5e1', padding: '3px 6px'
-};
+// Right-aligned tabular figures on a hairline grid; heads carry the strong
+// hairline. Zebra rows come from the conditional odd/even classes below.
+const CELL = 'px-1.5 py-0.5 text-right whitespace-nowrap text-[9.5px] text-slate-700';
+const HEAD_CELL = 'border-b border-slate-300 px-1.5 py-[3px] text-right whitespace-nowrap font-bold text-slate-600';
 
 // One-line drill-down summary for a year's detail (print can't expand rows, so
 // the same sections render as a compact inline list under the year's row).
@@ -303,81 +307,82 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
   const hasFhsa = people.some(p => p.rows.some(r => r.fhsaBalance !== undefined));
   const colSpan = 17 + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0);
   return (
-    <div style={{ marginTop: '14px' }}>
-      <div style={sectionTitle}>Detailed year-by-year</div>
+    <div className="mt-3.5">
+      <div className={SECTION_TITLE}>Detailed year-by-year</div>
       {people.map(person => (
-        <div key={person.label || 'single'} style={{ marginBottom: '10px' }}>
+        <div key={person.label || 'single'} className="mb-2.5">
           {person.label && (
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#1d4ed8', margin: '6px 0 2px' }}>{person.label}</div>
+            <div className="mb-0.5 mt-1.5 text-[11px] font-bold text-blue-700">{person.label}</div>
           )}
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th style={{ ...HEAD_CELL, textAlign: 'left' }}>Age</th>
-                <th style={HEAD_CELL}>Start</th>
-                <th style={HEAD_CELL}>Contrib.</th>
-                <th style={HEAD_CELL}>Gains</th>
-                <th style={HEAD_CELL}>Target</th>
-                <th style={HEAD_CELL}>Withdrawn</th>
-                <th style={HEAD_CELL}>Tax</th>
-                <th style={HEAD_CELL}>CPP</th>
-                <th style={HEAD_CELL}>OAS</th>
-                <th style={HEAD_CELL}>GIS</th>
-                <th style={HEAD_CELL}>Pension</th>
-                <th style={HEAD_CELL}>End</th>
-                <th style={HEAD_CELL}>RRSP</th>
-                <th style={HEAD_CELL}>RRIF</th>
-                <th style={HEAD_CELL}>TFSA</th>
-                <th style={HEAD_CELL}>Taxable</th>
-                <th style={HEAD_CELL}>Cash</th>
-                {hasRdsp && <th style={HEAD_CELL} title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>}
-                {hasFhsa && <th style={HEAD_CELL} title="First Home Savings Account. Contributions are deductible; growth is tax-sheltered. Transfers to the RRSP at retirement.">FHSA</th>}
-                {hasRm && <th style={HEAD_CELL}>Home eq.</th>}
+                <th className={`${HEAD_CELL} text-left`}>Age</th>
+                <th className={HEAD_CELL}>Start</th>
+                <th className={HEAD_CELL}>Contrib.</th>
+                <th className={HEAD_CELL}>Gains</th>
+                <th className={HEAD_CELL}>Target</th>
+                <th className={HEAD_CELL}>Withdrawn</th>
+                <th className={HEAD_CELL}>Tax</th>
+                <th className={HEAD_CELL}>CPP</th>
+                <th className={HEAD_CELL}>OAS</th>
+                <th className={HEAD_CELL}>GIS</th>
+                <th className={HEAD_CELL}>Pension</th>
+                <th className={HEAD_CELL}>End</th>
+                <th className={HEAD_CELL}>RRSP</th>
+                <th className={HEAD_CELL}>RRIF</th>
+                <th className={HEAD_CELL}>TFSA</th>
+                <th className={HEAD_CELL}>Taxable</th>
+                <th className={HEAD_CELL}>Cash</th>
+                {hasRdsp && <th className={HEAD_CELL} title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>}
+                {hasFhsa && <th className={HEAD_CELL} title="First Home Savings Account. Contributions are deductible; growth is tax-sheltered. Transfers to the RRSP at retirement.">FHSA</th>}
+                {hasRm && <th className={HEAD_CELL}>Home eq.</th>}
               </tr>
             </thead>
             <tbody>
               {person.rows.map((row, i) => {
                 const detail = detailLine(row);
+                const zebra = i % 2 === 0 ? 'bg-white' : 'bg-slate-50';
                 return [
-                  <tr key={`r${i}`} style={{ borderTop: '1px solid #e2e8f0', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <td style={{ ...CELL, textAlign: 'left', fontWeight: 600 }}>{row.age}</td>
-                    <td style={CELL}>{money(row.startingBalance)}</td>
-                    <td style={CELL}>{money(row.contributions)}</td>
-                    <td style={CELL}>{money(row.marketGains)}</td>
-                    <td style={CELL}>{money(row.spendingTarget)}</td>
-                    <td style={CELL}>{money(row.withdrawals)}</td>
-                    <td style={CELL}>{money(row.incomeTax)}</td>
-                    <td style={CELL}>{money(row.cppIncome)}</td>
-                    <td style={CELL}>{money(row.oasIncome)}</td>
-                    <td style={CELL}>{money(row.gisIncome)}</td>
-                    <td style={CELL}>{money(row.pensionIncome)}</td>
-                    <td style={{ ...CELL, fontWeight: 700 }}>{money(row.endingBalance)}</td>
-                    <td style={CELL}>{money(row.rrspBalance)}</td>
-                    <td style={CELL}>{money(row.rrifBalance)}</td>
-                    <td style={CELL}>{money(row.tfsaBalance)}</td>
-                    <td style={CELL}>{money(row.taxableBalance)}</td>
-                    <td style={CELL}>{money(row.cashCushionBalance)}</td>
+                  <tr key={`r${i}`} className={`border-t border-slate-200 ${zebra}`}>
+                    <td className={`${CELL} ${NUM} text-left font-semibold`}>{row.age}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.startingBalance)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.contributions)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.marketGains)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.spendingTarget)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.withdrawals)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.incomeTax)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.cppIncome)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.oasIncome)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.gisIncome)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.pensionIncome)}</td>
+                    <td className={`${CELL} ${NUM} font-bold`}>{money(row.endingBalance)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.rrspBalance)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.rrifBalance)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.tfsaBalance)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.taxableBalance)}</td>
+                    <td className={`${CELL} ${NUM}`}>{money(row.cashCushionBalance)}</td>
                     {hasRdsp && (
-                      <td style={CELL}
+                      <td className={`${CELL} ${NUM}`}
                         title={row.detail?.rdsp ? `Contribution basis ${fmtShort(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
                         {row.rdspBalance !== undefined ? money(row.rdspBalance) : '—'}
                       </td>
                     )}
                     {hasFhsa && (
-                      <td style={CELL}
+                      <td className={`${CELL} ${NUM}`}
                         title={row.detail?.fhsa ? `Contributed to date ${fmtShort(row.detail.fhsa.contributionBasis)}; transfers to the RRSP at retirement` : undefined}>
                         {row.fhsaBalance !== undefined ? money(row.fhsaBalance) : '—'}
                       </td>
                     )}
                     {hasRm && (
-                      <td style={{ ...CELL, color: (row.netHomeEquity ?? 0) < 0 ? '#dc2626' : CELL.color }}>
+                      <td className={`${CELL} ${NUM} ${(row.netHomeEquity ?? 0) < 0 ? 'font-semibold text-rose-700' : ''}`}>
                         {row.netHomeEquity !== undefined ? money(row.netHomeEquity) : '—'}
                       </td>
                     )}
                   </tr>,
                   detail ? (
-                    <tr key={`d${i}`} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                      <td colSpan={colSpan} style={{ padding: '0 6px 2px 18px', fontSize: '8.5px', color: '#64748b' }}>
+                    <tr key={`d${i}`} className={zebra}>
+                      <td colSpan={colSpan} className="px-1.5 pb-0.5 pl-4 text-[8.5px] text-slate-500">
                         {detail}
                       </td>
                     </tr>
@@ -388,7 +393,7 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
           </table>
         </div>
       ))}
-      <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px' }}>
+      <div className="mt-0.5 text-[9px] text-slate-400">
         Nominal (future) dollars of each year. Spouse years are their own ages
         {spouseAgeOffset !== 0 ? ` (spouse is ${Math.abs(spouseAgeOffset)} year${Math.abs(spouseAgeOffset) === 1 ? '' : 's'} ${spouseAgeOffset > 0 ? 'younger' : 'older'})` : ''}.
       </div>
@@ -423,19 +428,21 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
   const milestones = options.includeMilestones ? buildMilestones(inputs, rrifConversionAge) : [];
 
   return (
-    <div className="print-only" style={{ fontFamily: 'system-ui, sans-serif', color: '#0f172a', padding: '8px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '2px solid #2563eb', paddingBottom: '6px', marginBottom: '10px' }}>
-        <div style={{ width: '22px', height: '22px', background: '#2563eb', borderRadius: '4px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '9px' }}>RE:</div>
+    <div className="print-only p-2 text-slate-900">
+      {/* The wordmark: square ink block, same as the on-screen header — no
+          radius, and blue-700 (not the old blue-600) for the rule under it. */}
+      <div className="mb-2.5 flex items-center gap-2 border-b-2 border-blue-700 pb-1.5">
+        <div className="flex h-[22px] w-[22px] items-center justify-center bg-slate-900 text-[9px] font-bold text-white">RE:</div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: '15px' }}>RE: tired — Retirement Plan Summary</div>
-          <div style={{ fontSize: '11px', color: '#64748b' }}>{scenarioName} · generated {today}</div>
+          <div className="text-[15px] font-bold">RE: tired — Retirement Plan Summary</div>
+          <div className="text-[11px] text-slate-500">{scenarioName} · generated {today}</div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '24px' }}>
-        <div style={{ flex: 1 }}>
-          <div style={sectionTitle}>Profile</div>
-          <table style={{ fontSize: '12px', borderCollapse: 'collapse' }}>
+      <div className="flex gap-6">
+        <div className="flex-1">
+          <div className={SECTION_TITLE}>Profile</div>
+          <table className="border-collapse text-[12px]">
             <tbody>
               <Row label="Current age" value={String(inputs.currentAge)} />
               <Row label="Retirement age" value={String(inputs.retirementAge)} />
@@ -447,9 +454,9 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
           </table>
         </div>
 
-        <div style={{ flex: 1 }}>
-          <div style={sectionTitle}>Savings</div>
-          <table style={{ fontSize: '12px', borderCollapse: 'collapse' }}>
+        <div className="flex-1">
+          <div className={SECTION_TITLE}>Savings</div>
+          <table className="border-collapse text-[12px]">
             <tbody>
               <Row label="RRSP" value={fmt(inputs.rrspBalance)} />
               <Row label="TFSA" value={fmt(inputs.tfsaBalance)} />
@@ -469,9 +476,9 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
           </table>
         </div>
 
-        <div style={{ flex: 1 }}>
-          <div style={sectionTitle}>Verdict</div>
-          <table style={{ fontSize: '12px', borderCollapse: 'collapse' }}>
+        <div className="flex-1">
+          <div className={SECTION_TITLE}>Verdict</div>
+          <table className="border-collapse text-[12px]">
             <tbody>
               <Row label="Status" value={results.status.replace('_', ' ')} />
               <Row label="Wealth at retirement" value={fmt(results.totalNetWorthAtRetirement + (spouse?.totalNetWorthAtRetirement ?? 0))} />
@@ -484,8 +491,8 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
       </div>
 
       {options.includeTimeline && (
-        <div style={{ marginTop: '14px', breakInside: 'avoid' }}>
-          <div style={sectionTitle}>
+        <div className="mt-3.5 break-inside-avoid">
+          <div className={SECTION_TITLE}>
             {rmOn
               ? 'Projection timeline — household portfolio & home equity by age'
               : 'Projection timeline — household portfolio by age'}
@@ -495,22 +502,22 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
       )}
 
       {options.includeMonteCarlo && mcResults && (
-        <div style={{ marginTop: '14px', breakInside: 'avoid' }}>
-          <div style={sectionTitle}>Monte Carlo simulation</div>
+        <div className="mt-3.5 break-inside-avoid">
+          <div className={SECTION_TITLE}>Monte Carlo simulation</div>
           <MonteCarloPrintChart results={mcResults} retirementAge={inputs.retirementAge} maxAge={inputs.maxAge} />
         </div>
       )}
 
       {options.includeMilestones && milestones.length > 0 && (
-        <div style={{ marginTop: '14px', breakInside: 'avoid' }}>
-          <div style={sectionTitle}>Major spending milestones &amp; changes</div>
-          <table style={{ fontSize: '11px', borderCollapse: 'collapse', width: '100%' }}>
+        <div className="mt-3.5 break-inside-avoid">
+          <div className={SECTION_TITLE}>Major spending milestones &amp; changes</div>
+          <table className="w-full border-collapse text-[11px]">
             <tbody>
               {milestones.map((m, i) => (
-                <tr key={i} style={{ borderTop: i === 0 ? 'none' : '1px solid #e2e8f0' }}>
-                  <td style={{ padding: '3px 12px 3px 0', fontWeight: 700, whiteSpace: 'nowrap', width: '60px' }}>Age {m.age}</td>
-                  <td style={{ padding: '3px 12px 3px 0', fontWeight: 600, whiteSpace: 'nowrap' }}>{m.label}</td>
-                  <td style={{ padding: '3px 0', color: '#475569' }}>{m.detail}</td>
+                <tr key={i} className={i === 0 ? '' : 'border-t border-slate-200'}>
+                  <td className="w-[60px] whitespace-nowrap py-0.5 pr-3 font-bold">Age {m.age}</td>
+                  <td className="whitespace-nowrap py-0.5 pr-3 font-semibold">{m.label}</td>
+                  <td className="py-0.5 text-slate-600">{m.detail}</td>
                 </tr>
               ))}
             </tbody>
@@ -522,7 +529,7 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
         <DetailedTablePrint results={results} spouseAgeOffset={spouseAgeOffset} />
       )}
 
-      <div style={{ marginTop: '12px', fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>
+      <div className="mt-3 text-[11px] leading-snug text-slate-500">
         CPP from age {inputs.cppStartAge ?? '—'} · OAS from {inputs.oasStartAge ?? '—'} ·
         inflation-adjusted spending · Canadian federal + {inputs.provinceCode} provincial tax.
         {' '}Estimates only — not financial advice.
