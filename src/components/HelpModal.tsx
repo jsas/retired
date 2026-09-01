@@ -26,7 +26,7 @@ function highlight(node: ReactNode, query: string): ReactNode {
       if (hit === -1) { parts.push(node.slice(i)); break; }
       if (hit > i) parts.push(node.slice(i, hit));
       parts.push(
-        <mark key={k++} className="bg-yellow-200 text-inherit rounded-sm px-px">
+        <mark key={k++} className="bg-yellow-200 text-inherit px-px">
           {node.slice(hit, hit + q.length)}
         </mark>
       );

@@ -163,7 +163,7 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
             if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); setValue(value - spec.step); }
             if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); setValue(value + spec.step); }
           }}
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow cursor-grab active:cursor-grabbing touch-none"
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-blue-600 border-2 border-white cursor-grab active:cursor-grabbing touch-none"
           style={{ left: `${valF * 100}%` }}
         />
       </div>
@@ -271,7 +271,7 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, solved, onChange }
         <span className="absolute left-1 bottom-4 text-[9px] text-slate-400">{ySpec.format(yView.min)}</span>
 
         <div
-          className="absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 border-white bg-blue-600 shadow pointer-events-none"
+          className="absolute w-4 h-4 -ml-2 -mt-2 border-2 border-white bg-blue-600 pointer-events-none"
           style={{ left: `${toFracX(point.x) * 100}%`, top: `${toFracY(point.y) * 100}%` }}
         />
 

@@ -87,7 +87,7 @@ export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
                 <div
                   key={w.startYear}
                   title={`${w.startYear}–${w.startYear + result.windowYears - 1}: ${w.depleted ? `depleted at ${w.depletionAge}` : formatCurrency(w.finalBalance)}`}
-                  className={`flex-1 rounded-sm ${w.depleted ? 'bg-red-400' : 'bg-blue-400 hover:bg-blue-500'}`}
+                  className={`flex-1 ${w.depleted ? 'bg-red-400' : 'bg-blue-400 hover:bg-blue-500'}`}
                   style={{ height: `${h}%` }}
                 />
               );

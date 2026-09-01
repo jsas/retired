@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Dices, Loader2, RefreshCw } from 'lucide-react';
 import type { MonteCarloRequest, MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import { runMonteCarloAuto } from '../lib/runMonteCarlo';
+import { BLUE } from '../design/tokens';
 
 interface MonteCarloChartProps {
   request: MonteCarloRequest;
@@ -206,13 +207,13 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
               )}
             </div>
 
-            {/* Legend */}
+            {/* Legend — square swatches, the design-token blue (no raw hex). */}
             <div className="flex items-center gap-4 mt-2 text-[11px] text-slate-600">
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm" style={{ background: '#3b82f6', opacity: 0.12 }} /> 10th–90th percentile
+                <span className="w-3 h-3 inline-block" style={{ background: BLUE, opacity: 0.12 }} /> 10th–90th percentile
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm" style={{ background: '#3b82f6', opacity: 0.3 }} /> 25th–75th percentile
+                <span className="w-3 h-3 inline-block" style={{ background: BLUE, opacity: 0.3 }} /> 25th–75th percentile
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-4 h-0.5 bg-blue-700 inline-block" /> median
@@ -231,7 +232,7 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
                     return (
                       <div
                         key={age}
-                        className="flex-1 bg-red-400/80 hover:bg-red-500 rounded-t-sm"
+                        className="flex-1 bg-red-400/80 hover:bg-red-500"
                         style={{ height: `${Math.max(4, (count / maxCount) * 100)}%` }}
                         title={`Age ${age}: ${count} run${count === 1 ? '' : 's'} depleted`}
                       />

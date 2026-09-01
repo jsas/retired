@@ -31,6 +31,7 @@ import {
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { streamChat, type ChatMessage } from '../lib/ai/providers';
+import { Progress } from '../design/primitives';
 import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
 import {
@@ -428,7 +429,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
           <Bot size={16} className="text-violet-600" />
           <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
           <span
-            className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
+            className="border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
             title="Experimental: the assistant is new and still being tuned. It proposes changes for you to approve — it never edits your plan on its own."
           >
             Experimental
@@ -1203,7 +1204,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                           message part — the bubble must never depend on the
                           runtime's content conversion, so it can't vanish
                           while the assistant reply streams below it. */}
-                      <div className="max-w-[85%] min-w-0 px-3 py-2 rounded-lg bg-violet-600 text-white text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
+                      <div className="max-w-[85%] min-w-0 px-3 py-2 bg-violet-600 text-white text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
                         {turn?.text ?? <MessagePrimitive.Content />}
                       </div>
                     </div>
@@ -1270,7 +1271,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                         />
                       )}
                       {showBubble && (
-                        <div className="relative px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
+                        <div className="relative px-3 py-2 bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
                           {/* Activity spinner in the bubble's top-right corner
                               while it's a placeholder (thinking / working) —
                               same treatment as the reasoning block. */}
@@ -1291,7 +1292,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                         </div>
                       )}
                       {stuckPaused && (
-                        <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-snug">
+                        <div className="px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-snug">
                           This reply stopped while it was waiting for you. Use the
                           regenerate button to run it again.
                         </div>
@@ -1335,9 +1336,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
                     <span className="ml-auto shrink-0">{Math.round(loadProgress.progress * 100)}%</span>
                   )}
                 </div>
-                <div className="h-1.5 bg-slate-200 rounded overflow-hidden">
-                  <div className="h-full bg-violet-500 transition-all" style={{ width: `${Math.round(loadProgress.progress * 100)}%` }} />
-                </div>
+                <Progress pct={loadProgress.progress * 100} className="h-1.5 [&>div]:bg-violet-500" />
               </div>
             )}
           </ThreadPrimitive.Viewport>
@@ -1473,7 +1472,7 @@ function ScrollControls({ register }: { register: React.MutableRefObject<(() => 
   return (
     <button
       onClick={() => store.getState().scrollToBottom({ behavior: 'smooth' })}
-      className="self-center mb-1 flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 border border-slate-200 text-slate-400 text-[10px] shadow-sm hover:text-slate-600 hover:border-slate-300"
+      className="self-center mb-1 flex items-center gap-1 px-2 py-0.5 bg-white/90 border border-slate-200 text-slate-400 text-[10px] hover:text-slate-600 hover:border-slate-300"
       title="Jump to the latest message"
     >
       <ChevronDown size={10} /> Latest
@@ -1789,12 +1788,7 @@ function ContextMeter({ used, limit, compacted }: { used: number; limit: number;
       <span className={`text-[10px] font-semibold ${hard ? 'text-red-600' : over ? 'text-amber-600' : 'text-slate-400'}`}>
         ~{fmt(used)}/{fmt(limit)}
       </span>
-      <span className="w-16 h-1.5 bg-slate-200 rounded overflow-hidden">
-        <span
-          className={`block h-full transition-all ${hard ? 'bg-red-500' : over ? 'bg-amber-500' : 'bg-violet-400'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </span>
+      <Progress pct={pct} className={`w-16 h-1.5 ${hard ? '[&>div]:bg-red-500' : over ? '[&>div]:bg-amber-500' : '[&>div]:bg-violet-400'}`} />
     </span>
   );
 }
@@ -1899,7 +1893,7 @@ function ChangeCard({ change, onDecide }: {
   onDecide: (change: PendingChange, approved: boolean) => void;
 }) {
   return (
-    <div className="border border-violet-200 bg-violet-50 rounded-lg p-2.5 text-xs min-w-0">
+    <div className="border border-violet-200 bg-violet-50 p-2.5 text-xs min-w-0">
       <div className="font-semibold text-violet-900 mb-1">{change.label ?? (change.field ? `Set ${change.field}` : 'Proposed change')}</div>
       {change.rationale && <div className="text-violet-800/80 mb-1 [overflow-wrap:anywhere]">{change.rationale}</div>}
       <div className="text-slate-600 mb-2 space-y-0.5 [overflow-wrap:anywhere]">

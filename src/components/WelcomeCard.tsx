@@ -99,7 +99,7 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
       <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
         <button
           onClick={onContinue}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+          className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-semibold hover:bg-slate-700"
         >
           Get started <ArrowRight size={16} />
         </button>

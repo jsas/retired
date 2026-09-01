@@ -62,51 +62,38 @@ English, few controls, distinct concepts over reskins.
 
 ## 2. TO-DO — the open work (from the user's review)
 
-### A. Page-by-page style review → convert to styleguide components 🚧
+### A. Page-by-page style review → convert to styleguide components 🚧 (mostly done)
 **The problem:** pages fork raw elements (rounded corners, shadows, inline
 `style={{}}`, one-off class soup) instead of composing `src/design/` primitives.
 Per §8.10 that's a violation — a needed style gets *added to* the design system,
 never forked inside a page.
 
-**Review (written list, by file):**
+**Review (written list, by file) — ✅ done, 🚧 partial, ⬜ pending:**
 
-- [ ] **`src/components/AgentPage.tsx`** (assistant — dock + full page). The worst offender:
-  `rounded-full` tag chips (l.431), `rounded-lg` message bubbles + panels (l.1206, 1273,
-  1294, 1902), a `rounded-full … shadow-sm` floating pill (l.1476), and inline
-  `style={{ width }}` progress bars (l.1339, 1795). Convert bubbles to flat squares,
-  use a named `<Progress>` primitive for the bars, kill the shadows.
-- [ ] **`src/components/EqPage.tsx`** (Insights → Eq). Range-thumb + dot use
-  `rounded-full … shadow` (l.166, 274) — F7 wants square thumbs. Inline `style={{ left }}`
-  percent positions are fine (geometry), but the thumbs' chrome is not.
-- [ ] **`src/components/ScheduleTable.tsx`** — the §8.9 column picker popover uses
-  `rounded + shadow-lg` (l.91). Make it a flat hairline panel; shadows banned.
-- [ ] **`src/components/MonteCarloChart.tsx`** — legend swatches + hist bars with
-  `rounded-sm` and hex `style={{ background: '#3b82f6' }}` — should use the design
-  token (`tokens.ts` BLUE) not raw hex; square swatches.
-- [ ] **`src/components/BacktestPanel.tsx`** — histogram bars `rounded-sm` +
-  `style={{ height }}` — square bars, heights via class-mapped widths where possible.
-- [ ] **`src/components/ConnectionsPage.tsx`** — status dot `rounded-full border-2`
-  and an inline-`style` progress bar (l.258, 303). Square the dot; use `<Progress>`.
-- [ ] **`src/components/SetupWizard.tsx`** — the first-run wizard still quotes the OLD
-  palette: `rounded-md/lg/full`, `shadow-sm`, `focus:ring-1 focus:ring-blue-500`,
-  hex-free but class-heavy (l.175, 298, 308, 310, 340, 415, 471). Needs a full pass
-  to the design tokens (square, hairline, no ring, flat).
-- [ ] **`src/components/CompareCard.tsx`** (Plans) — baseline dot `rounded-full`.
-- [ ] **`src/components/SavePromptModal.tsx`** — `rounded-lg shadow-xl` modal +
-  `rounded-md` buttons. There should be a shared `<Modal>` primitive instead.
-- [ ] **`src/components/HelpModal.tsx`** — `<mark>` `rounded-sm`. Trivial.
-- [ ] **`src/components/MathPage.tsx`** — numbered-badge `rounded-full`.
-- [ ] **`src/components/TimelineChart.tsx`** — legend swatch `rounded-sm`.
-- [ ] **`src/components/TopHeader.tsx`** — dirty-dot `rounded-full`, mobile menu
-  `rounded-md shadow-xl`. The TopHeader itself only renders in the wrapped-insights
-  views; should still square up.
-- [ ] **`src/components/WelcomeCard.tsx`** — hero CTA `rounded-md`.
-- [ ] **`src/components/PrintSummary.tsx`** — 40+ inline `style={{}}` blocks (padding,
-  colors as raw hex `#475569` / `#1d4ed8` / `#e2e8f0`, etc.) — this one page carries
-  its own palette. Convert to classes + tokens. Border-radius `'4px'` on the RE: mark.
-- [ ] **`src/components/beta/LandingPage.tsx`** — verdict + RE: mark use inline hex
-  (`style={{ borderColor: … }}`, `style={{ color: … }}`, `style={{ backgroundColor: INK }}`)
-  — should draw from `tokens.ts`, not per-component constants.
+- [x] **`src/components/AgentPage.tsx`** (assistant) — bubbles/pills/panels flattened
+  (rounded-lg/full gone); both progress bars → `<Progress>`; shadows killed.
+- [x] **`src/components/EqPage.tsx`** — range-thumb + map dot squared, shadows off.
+- [x] **`src/components/ScheduleTable.tsx`** — column-picker popover + container
+  flattened (no rounded/shadow); draggable retirement marker on the grip cell.
+- [x] **`src/components/MonteCarloChart.tsx`** — legend swatches square + token BLUE
+  (no raw hex); histogram bars squared.
+- [x] **`src/components/BacktestPanel.tsx`** — histogram bars squared.
+- [x] **`src/components/ConnectionsPage.tsx`** — status dot squared; download bar → `<Progress>`.
+- [x] **`src/components/SetupWizard.tsx`** — flat tokens throughout (Progress bar,
+  square hairline boxes, primary button from `cls.primaryBtn`, no focus ring).
+- [x] **`src/components/SavePromptModal.tsx`** — rebuilt on the flat `<Modal>` primitive.
+- [x] **`src/components/HelpModal.tsx`** — `<mark>` squared.
+- [x] **`src/components/MathPage.tsx`** — numbered-badge squared.
+- [x] **`src/components/TimelineChart.tsx`** — legend swatch squared.
+- [x] **`src/components/TopHeader.tsx`** — dirty-dot squared, mobile menu flattened.
+- [x] **`src/components/WelcomeCard.tsx`** — hero CTA square, slate-900.
+- [ ] **`src/components/CompareCard.tsx`** (Plans) — skip a one-off dot fix; the whole
+  page is being rebuilt as a timeline + numbers table (see task D).
+- [ ] **`src/components/PrintSummary.tsx`** — 40+ inline `style={{}}` blocks (raw hex
+  palette). Convert to classes + tokens. (Deferred — print CSS is fiddly; do last.)
+- [x] **`src/components/beta/LandingPage.tsx`** — verified: the verdict / RE: mark
+  inline `style={{ color }}` reads the `tokens.ts` constants (BLUE / RED_TEXT / INK),
+  not forked hex. No raw hex literals in the file — nothing to convert.
 
 **Shared primitives ADDED to `src/design/` (now consumed by the conversions below):**
 - [x] `<Progress>` — a thin hairline track + a fill of `width: pct%` (replaces the

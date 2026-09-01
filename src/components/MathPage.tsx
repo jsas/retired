@@ -26,7 +26,7 @@ function Step({ n, title, note, children }: {
 }) {
   return (
     <div className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
-      <div className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center mt-0.5">
+      <div className="shrink-0 w-6 h-6 bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center mt-0.5">
         {n}
       </div>
       <div className="min-w-0 flex-1">

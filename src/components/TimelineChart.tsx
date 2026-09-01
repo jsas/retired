@@ -229,7 +229,7 @@ export function TimelineChart({ inputs, results, config, onChange }: TimelineCha
         </div>
         <div className="flex items-center gap-3 text-[10px] text-slate-500">
           <span className="inline-flex items-center gap-1" title={hasRm ? 'Total cash: investable portfolio + net home equity. The plan draws on both.' : 'Investable portfolio balance.'}>
-            <span className="inline-block w-4 h-1 bg-blue-700 rounded-sm" /> {hasRm ? 'total cash' : 'portfolio'}
+            <span className="inline-block w-4 h-1 bg-blue-700" /> {hasRm ? 'total cash' : 'portfolio'}
           </span>
           {hasRm && (
             <>
