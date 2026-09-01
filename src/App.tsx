@@ -796,6 +796,9 @@ function App() {
           <BetaSchedulePage chip={chip} assistant={assistantDock}
             breakdown={householdBreakdown}
             retirementAge={results.retirementAge}
+            currentAge={inputs.currentAge}
+            maxAge={inputs.maxAge}
+            onRetirementAgeChange={(age) => handleInputsChange({ ...inputs, retirementAge: age })}
             primaryBreakdown={results.spouse ? results.yearlyBreakdown : undefined}
             spouseBreakdown={results.spouse?.yearlyBreakdown}
             spouseAgeOffset={spouseAgeOffset}

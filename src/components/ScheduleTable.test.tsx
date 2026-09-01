@@ -78,4 +78,29 @@ describe('ScheduleTable column picker', () => {
     );
     expect(html).toContain('>RDSP<');
   });
+
+  it('makes the retirement marker draggable when onRetirementAgeChange is given', () => {
+    const html = renderToStaticMarkup(
+      createElement(ScheduleTable, {
+        breakdown,
+        retirementAge: 65,
+        currentAge: 50,
+        maxAge: 95,
+        onRetirementAgeChange: () => {},
+      }),
+    );
+    // The marker row gets the grab cursor, a drag hint title and the grip icon.
+    expect(html).toContain('cursor-grab');
+    expect(html).toContain('Drag to change the retirement age');
+    expect(html).toContain('Drag the blue &quot;stop working&quot; row');
+  });
+
+  it('keeps the marker a plain 🎯 when no onChange is wired', () => {
+    const html = renderToStaticMarkup(
+      createElement(ScheduleTable, { breakdown, retirementAge: 65 }),
+    );
+    expect(html).toContain('🎯');
+    expect(html).not.toContain('cursor-grab');
+    expect(html).not.toContain('Drag to change the retirement age');
+  });
 });

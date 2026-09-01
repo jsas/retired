@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { ChevronRight, ChevronDown, Columns3 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Columns3, GripVertical } from 'lucide-react';
 import type { YearlyBreakdown, YearDetail } from '@retired/engine-core/retirementEngine';
 import { prefKV } from '../lib/prefKv';
 import {
@@ -12,6 +12,12 @@ import {
 interface ScheduleTableProps {
   breakdown: YearlyBreakdown[];
   retirementAge: number;
+  /** Drag bounds for the retirement marker (the blue hairline row). */
+  currentAge?: number;
+  maxAge?: number;
+  /** When set, the retirement marker row is draggable: pull it up or down the
+      table to change the retirement age. Absent = read-only marker. */
+  onRetirementAgeChange?: (age: number) => void;
   // Household mode: the primary person's own rows + the spouse's rows keyed by
   // the primary's age axis (calendar year), so an expanded year can show both
   // people's detail. The combined `breakdown` rows themselves carry no detail.
@@ -314,7 +320,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
   );
 }
 
-export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spouseBreakdown, spouseAgeOffset = 0 }: ScheduleTableProps) {
+export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, onRetirementAgeChange, primaryBreakdown, spouseBreakdown, spouseAgeOffset = 0 }: ScheduleTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const toggle = (age: number) =>
     setExpanded(prev => {
@@ -322,6 +328,53 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
       if (next.has(age)) next.delete(age); else next.add(age);
       return next;
     });
+
+  // The blue hairline row marks "stop working at". When the page hands us an
+  // onChange, the marker row is draggable: press-and-pull the row (or its
+  // handle) and it follows the pointer; release and the retirement age moves
+  // to the row under the pointer, clamped to the same bounds the lever uses.
+  const canDragRetire = onRetirementAgeChange != null && currentAge != null;
+  const dragLo = currentAge ?? 40, dragHi = Math.min(75, maxAge ?? 75);
+  const [dragAge, setDragAge] = useState<number | null>(null);
+  const dragRef = useRef<{ pointerId: number } | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  const ageAtClientY = (clientY: number): number | null => {
+    const tbody = tableRef.current?.querySelector('tbody');
+    if (!tbody) return null;
+    const rows = Array.from(tbody.querySelectorAll('tr[data-age]'));
+    for (const el of rows) {
+      const r = el.getBoundingClientRect();
+      if (clientY >= r.top && clientY <= r.bottom) {
+        return Number((el as HTMLElement).dataset.age);
+      }
+    }
+    return null;
+  };
+
+  const beginRetireDrag = (e: React.PointerEvent) => {
+    if (!canDragRetire) return;
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    dragRef.current = { pointerId: e.pointerId };
+    setDragAge(retirementAge);
+  };
+  const moveRetireDrag = (e: React.PointerEvent) => {
+    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
+    const a = ageAtClientY(e.clientY);
+    if (a != null) setDragAge(Math.max(dragLo, Math.min(dragHi, a)));
+  };
+  const endRetireDrag = (e: React.PointerEvent) => {
+    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
+    const a = ageAtClientY(e.clientY);
+    dragRef.current = null;
+    setDragAge(null);
+    if (a != null && a !== retirementAge) {
+      onRetirementAgeChange?.(Math.max(dragLo, Math.min(dragHi, a)));
+    }
+  };
+
+  const effectiveRetirement = dragAge ?? retirementAge;
 
   // Household mode: look each row's per-person detail up by age (the combined
   // rows carry no detail — per-source numbers don't sum meaningfully).
@@ -354,12 +407,19 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
   // the table's right edge.
   const colCount = shownColumns.length + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0) + (hasDebts ? 1 : 0);
 
-  const renderCell = (col: ScheduleColumn, row: YearlyBreakdown, isRetirement: boolean) => {
+  const renderCell = (col: ScheduleColumn, row: YearlyBreakdown, isRetirement: boolean, dragAge: number | null = null) => {
     if (col.id === 'age') {
       return (
         <td key={col.id} className={`px-3 py-1.5 ${isRetirement ? 'font-bold text-blue-700' : 'text-slate-900'}`}>
           {row.age}
-          {isRetirement && ' 🎯'}
+          {isRetirement && (
+            canDragRetire
+              ? <span className="ml-1.5 inline-flex items-center gap-1 align-middle text-blue-500" aria-hidden="true">
+                  <GripVertical size={12} />
+                  {dragAge != null && <span className="text-[10px] font-semibold">→ {dragAge}</span>}
+                </span>
+              : ' 🎯'
+          )}
         </td>
       );
     }
@@ -381,7 +441,7 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
         <ColumnPicker visible={visibleCols} onChange={updateVisibleCols} />
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs" ref={tableRef}>
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               {anyDetail && <th className="w-6 px-1 py-2" title="Expand a year to see where the money came from" />}
@@ -410,7 +470,7 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
           </thead>
           <tbody>
             {breakdown.map((row, index) => {
-              const isRetirement = row.age === retirementAge;
+              const isRetirement = row.age === effectiveRetirement;
               const isOpen = expanded.has(row.age);
               const personRows = household
                 ? ([['You', primaryByAge.get(row.age)], ['Spouse', spouseByAge.get(row.age)]] as Array<[string, YearlyBreakdown | undefined]>)
@@ -421,16 +481,23 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
               return (
                 <Fragment key={index}>
                   <tr
-                    className={`${rowBg} ${isRetirement ? 'border-t-2 border-blue-500' : ''} ${canExpand ? 'cursor-pointer hover:bg-blue-50/40' : ''}`}
-                    onClick={canExpand ? () => toggle(row.age) : undefined}
-                    title={canExpand ? (isOpen ? 'Collapse year detail' : 'Expand year detail') : undefined}
+                    data-age={row.age}
+                    className={`${rowBg} ${isRetirement ? 'border-t-2 border-blue-500' : ''} ${canDragRetire && isRetirement ? 'cursor-grab touch-none select-none' : canExpand ? 'cursor-pointer hover:bg-blue-50/40' : ''}`}
+                    onClick={canExpand && !(canDragRetire && isRetirement) ? () => toggle(row.age) : undefined}
+                    onPointerDown={canDragRetire && isRetirement ? beginRetireDrag : undefined}
+                    onPointerMove={canDragRetire && isRetirement ? moveRetireDrag : undefined}
+                    onPointerUp={canDragRetire && isRetirement ? endRetireDrag : undefined}
+                    onPointerCancel={canDragRetire && isRetirement ? endRetireDrag : undefined}
+                    title={canDragRetire && isRetirement
+                      ? `Drag to change the retirement age (now ${effectiveRetirement})`
+                      : canExpand ? (isOpen ? 'Collapse year detail' : 'Expand year detail') : undefined}
                   >
                     {anyDetail && (
                       <td className="px-1 py-1.5 text-slate-400">
-                        {canExpand && (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
+                        {canExpand && !(canDragRetire && isRetirement) && (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
                       </td>
                     )}
-                    {shownColumns.map((c) => renderCell(c, row, isRetirement))}
+                    {shownColumns.map((c) => renderCell(c, row, isRetirement, dragAge))}
                     {hasRdsp && (
                       <td className="px-3 py-1.5 text-right font-mono text-slate-600"
                         title={row.detail?.rdsp ? `Contribution basis ${formatCurrency(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
@@ -484,7 +551,8 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
       </div>
       <p className="px-3 py-2 text-[10px] text-slate-400 border-t border-slate-100">
         Click a year to expand its inner workings — withdrawal sources, growth, tax, benefits and reverse
-        mortgage. Amounts are in nominal (future) dollars of each year: the spending target and contributions
+        mortgage.{canDragRetire && ' Drag the blue "stop working" row up or down to move the retirement age.'} Amounts
+        are in nominal (future) dollars of each year: the spending target and contributions
         grow with inflation, while balances, gains and benefits are the actual dollars that year. CPP/OAS are
         shown at 2026 values unless "Index tax tables, OAS and CPP" is on in Settings → Engine.
       </p>
