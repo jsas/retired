@@ -54,10 +54,12 @@ export const VIEW_ROUTES: Record<View, string> = {
 };
 
 // Map a location hash ('#/steering', '#steering', '#/steering/') to its view.
-// Returns null for empty/unknown hashes (including #plan= share links) so the
-// caller can keep its current view.
+// Query-string deep-links (#/help?topic=rrsp, #/details?section=spending) route
+// to their page — the destination reads its own ?param off the hash. Returns
+// null for empty/unknown hashes (including #plan= share links) so the caller
+// can keep its current view.
 export function viewFromHash(hash: string): View | null {
-  const route = hash.replace(/^#\/?/, '').replace(/\/+$/, '');
+  const route = hash.replace(/^#\/?/, '').replace(/\?.*$/, '').replace(/\/+$/, '');
   for (const [view, r] of Object.entries(VIEW_ROUTES) as Array<[View, string]>) {
     if (r === route) return view;
   }

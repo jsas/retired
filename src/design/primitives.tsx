@@ -33,6 +33,34 @@ export function VerdictHero({ eyebrow = 'The verdict', verdict, sub }: {
    re-typed here — one source of truth in src/help/topics.tsx), and a link
    that deep-links into Help. Opens on click not hover (touch is first-class),
    closes on outside-tap / Esc / re-tap. `place="top"` flips it above. */
+/* The popup half of HelpHint, exported so tests (and the style guide) can
+   render it directly. The typography resets here matter: the hint usually
+   mounts inside an uppercase section label, and without normal-case /
+   tracking-normal the label's transform leaks into the topic body. */
+export function HelpHintPopup({ topic, place = 'bottom' }: {
+  topic: { id: string; title: string; body: ReactNode };
+  place?: 'bottom' | 'top';
+}) {
+  return (
+    <span
+      role="dialog"
+      aria-label={topic.title}
+      className={`absolute left-0 z-50 block w-72 border border-slate-200 bg-white p-3 text-left text-[12px] font-normal normal-case leading-relaxed tracking-normal text-slate-600 ${
+        place === 'top' ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
+      }`}
+    >
+      <span className="mb-1.5 block text-[12px] font-semibold text-slate-900">{topic.title}</span>
+      <span className="block">{topic.body}</span>
+      <a
+        href={`#/help?topic=${topic.id}`}
+        className="mt-2 inline-block text-[11px] font-medium text-blue-700 hover:underline"
+      >
+        More in Help →
+      </a>
+    </span>
+  );
+}
+
 export function HelpHint({ topic: topicId, place = 'bottom', className = '' }: {
   /** Unique topic id from src/help/topics.tsx — also the Help-page anchor. */
   topic: string;
@@ -70,24 +98,7 @@ export function HelpHint({ topic: topicId, place = 'bottom', className = '' }: {
       >
         ?
       </button>
-      {open && (
-        <span
-          role="dialog"
-          aria-label={topic.title}
-          className={`absolute left-0 z-50 block w-72 border border-slate-200 bg-white p-3 text-left ${
-            place === 'top' ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
-          }`}
-        >
-          <span className="mb-1.5 block text-[12px] font-semibold text-slate-900">{topic.title}</span>
-          <span className="block">{topic.body}</span>
-          <a
-            href={`#/help?topic=${topic.id}`}
-            className="mt-2 inline-block text-[11px] font-medium text-blue-700 hover:underline"
-          >
-            More in Help →
-          </a>
-        </span>
-      )}
+      {open && <HelpHintPopup topic={topic} place={place} />}
     </span>
   );
 }

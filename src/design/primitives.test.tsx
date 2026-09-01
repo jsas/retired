@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import * as T from './tokens';
 import {
   VerdictHero, Panel, Fader, Chip, Stat, AccountBars, Legend, Dropdown, Footnote, AppHeader,
-  HelpHint,
+  HelpHint, HelpHintPopup,
 } from './primitives';
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -102,6 +102,28 @@ describe('primitives render', () => {
     expect(html).toContain('aria-label="Help: RRSP"');
     // popup is closed until tapped — the body text stays out of the DOM
     expect(html).not.toContain('More in Help');
+  });
+
+  it('HelpHintPopup body does not inherit an uppercase section label', () => {
+    // The hint usually mounts inside `cls.sectionLabel` (uppercase +
+    // wide tracking); the popup must reset both or the topic body
+    // renders ALL-CAPS.
+    const html = render(
+      <p className={T.cls.sectionLabel}>
+        Assistant<HelpHintPopup topic={{ id: 'assistant', title: 'The assistant', body: 'plain body text' }} />
+      </p>
+    );
+    expect(html).toContain('normal-case');
+    expect(html).toContain('tracking-normal');
+    expect(html).toContain('plain body text');
+  });
+
+  it('HelpHintPopup deep-links into Help', () => {
+    const html = render(
+      <HelpHintPopup topic={{ id: 'assistant', title: 't', body: 'b' }} />
+    );
+    expect(html).toContain('href="#/help?topic=assistant"');
+    expect(html).toContain('More in Help');
   });
 
   it('HelpHint returns null for an unknown topic id', () => {

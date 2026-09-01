@@ -106,15 +106,18 @@ function App() {
   // Keep the URL hash in sync with the current view (push a history entry per
   // navigation), and follow hash changes so back/forward and pasted links work.
   // The details page carries a ?section=… deep-link (Details ▾ scrolls to the
-  // tapped section); preserve it across the sync so it isn't stripped.
+  // tapped section) and Help a ?topic=… one (the ? hints deep-link into Help);
+  // preserve the current page's param across the sync so it isn't stripped.
   useEffect(() => {
     const route = hashForView(view);
     const current = window.location.hash;
-    const section = view === 'details' && current.includes('?section=')
-      ? current.slice(current.indexOf('?section='))
-      : '';
-    if (current !== route + section) {
-      window.history.pushState(null, '', window.location.pathname + window.location.search + route + section);
+    const paramMatch = current.match(/\?([a-z]+=[a-z0-9-]+)$/);
+    const param = paramMatch && (
+      (view === 'details' && paramMatch[1].startsWith('section='))
+      || (view === 'help' && paramMatch[1].startsWith('topic='))
+    ) ? `?${paramMatch[1]}` : '';
+    if (current !== route + param) {
+      window.history.pushState(null, '', window.location.pathname + window.location.search + route + param);
     }
   }, [view]);
 

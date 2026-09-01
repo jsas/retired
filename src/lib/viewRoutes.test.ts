@@ -27,6 +27,14 @@ describe('viewFromHash', () => {
     expect(viewFromHash('#steering')).toBe('eq');
   });
 
+  it('routes hashes carrying a query-string deep-link to their page', () => {
+    // The ? hints deep-link into Help (#/help?topic=…), Details carries
+    // ?section=… — the query must not break route matching.
+    expect(viewFromHash('#/help?topic=assistant')).toBe('help');
+    expect(viewFromHash('#/details?section=spending')).toBe('details');
+    expect(viewFromHash('#steering?x=1')).toBe('eq');
+  });
+
   it('ignores a trailing slash', () => {
     expect(viewFromHash('#/steering/')).toBe('eq');
   });
