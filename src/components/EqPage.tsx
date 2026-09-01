@@ -7,7 +7,7 @@
 // the pad's feasibility shading come from the EQ worker (runEqSolver), scored
 // against one seeded batch of futures so they stay stable while dragging.
 import { useEffect, useRef } from 'react';
-import { Sliders, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { ProjectionTimeline } from '../design/ProjectionTimeline';
 import type { AppConfig } from '@retired/engine-core/appConfig';
@@ -119,7 +119,7 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
   const valF = Math.min(1, Math.max(0, (value - range.min) / span));
 
   return (
-    <div className={`bg-white border rounded p-2.5 ${limited ? 'border-blue-300' : 'border-slate-200'}`}>
+    <div className={`border bg-white p-2.5 ${limited ? 'border-slate-900' : 'border-slate-200'}`}>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[11px] font-semibold text-slate-700">{spec.label}</span>
         <span className="text-sm font-semibold text-slate-900">{spec.format(value)}</span>
@@ -128,10 +128,10 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
       {/* One track: two native edge thumbs + a custom value knob on top. */}
       <div ref={trackRef} className="relative h-6">
         {/* base track */}
-        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 rounded bg-slate-200" />
+        <div className="absolute top-1/2 left-0 right-0 h-1.5 -translate-y-1/2 bg-slate-200" />
         {/* selected crop region */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded bg-blue-200"
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 bg-blue-200"
           style={{ left: `${loF * 100}%`, width: `${(hiF - loF) * 100}%` }}
         />
         {/* min crop edge (native thumb, small). Rendered over `range` (the same
@@ -163,7 +163,7 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
             if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); setValue(value - spec.step); }
             if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); setValue(value + spec.step); }
           }}
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-blue-600 border-2 border-white cursor-grab active:cursor-grabbing touch-none"
+          className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 border-2 border-white bg-blue-600 cursor-grab touch-none active:cursor-grabbing"
           style={{ left: `${valF * 100}%` }}
         />
       </div>
@@ -236,16 +236,16 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, solved, onChange }
   const anyLimit = xLimited || yLimited;
 
   return (
-    <div className="bg-white border border-slate-200 rounded p-3">
+    <div className="border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] font-semibold text-slate-700">{xLabel} × {yLabel}</span>
-        <span className="text-xs font-semibold text-slate-900">
+        <span className="num text-xs font-semibold text-slate-900">
           {xSpec.format(point.x)} · {ySpec.format(point.y)}
         </span>
       </div>
 
       <div
-        className="relative w-full h-48 rounded bg-slate-50 border border-slate-200 overflow-hidden cursor-crosshair touch-none select-none"
+        className="relative h-48 w-full overflow-hidden border border-slate-200 bg-slate-50 select-none cursor-crosshair touch-none"
         onPointerDown={onDrag}
         onPointerMove={onDrag}
       >
@@ -277,7 +277,7 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, solved, onChange }
 
         {/* corner spinner while the grid re-solves */}
         {solved.solving && (
-          <Loader2 size={14} className="absolute right-1.5 top-1.5 animate-spin text-blue-500" aria-label="recalculating" />
+          <Loader2 size={14} className="absolute right-1.5 top-1.5 animate-spin text-slate-400" aria-label="recalculating" />
         )}
       </div>
     </div>
@@ -361,7 +361,8 @@ function GradientCanvas({ grid, size }: { grid: number[]; size: number }) {
 
 // ---------------------------------------------------------------------------
 // ReadoutCard — a pure readout of a live plan outcome (not a knob, no goals).
-// `tone` tints it: good=emerald, warn=amber, bad=red, neutral=plain.
+// `tone` marks the verdict: good=blue (the system's ok), warn=amber, bad=rose,
+// neutral=ink. Left-rule instead of a tinted box.
 // ---------------------------------------------------------------------------
 function ReadoutCard({ label, value, tone, solving }: {
   label: string;
@@ -369,20 +370,20 @@ function ReadoutCard({ label, value, tone, solving }: {
   tone: 'good' | 'warn' | 'bad' | 'neutral';
   solving?: boolean;
 }) {
-  const tint = tone === 'good' ? 'border-emerald-300 bg-emerald-50/40'
-    : tone === 'warn' ? 'border-amber-300 bg-amber-50/40'
-    : tone === 'bad' ? 'border-red-300 bg-red-50/40'
-    : 'border-slate-200 bg-white';
-  const valueColor = tone === 'good' ? 'text-emerald-700'
+  const edge = tone === 'good' ? 'border-l-blue-700'
+    : tone === 'warn' ? 'border-l-amber-500'
+    : tone === 'bad' ? 'border-l-rose-500'
+    : 'border-l-slate-300';
+  const valueColor = tone === 'good' ? 'text-blue-700'
     : tone === 'warn' ? 'text-amber-700'
-    : tone === 'bad' ? 'text-red-700'
+    : tone === 'bad' ? 'text-rose-700'
     : 'text-slate-900';
 
   return (
-    <div className={`border rounded px-2.5 py-1.5 ${tint}`}>
-      <div className="text-[9px] uppercase tracking-wider text-slate-500">{label}</div>
-      <div className={`flex items-center gap-1 text-[13px] font-semibold ${valueColor}`}>
-        {solving && <Loader2 size={12} className="animate-spin text-blue-500" aria-label="calculating" />}
+    <div className={`border border-slate-200 border-l-2 px-2.5 py-1.5 ${edge}`}>
+      <div className="text-[9px] uppercase tracking-[0.16em] text-slate-400">{label}</div>
+      <div className={`num flex items-center gap-1 text-[13px] font-semibold ${valueColor}`}>
+        {solving && <Loader2 size={12} className="animate-spin text-slate-400" aria-label="calculating" />}
         {value}
       </div>
     </div>
@@ -416,10 +417,6 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-1">
-        <Sliders size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Steer the plan</h2>
-      </div>
       <p className="text-xs text-slate-500 mb-3 leading-snug max-w-2xl">
         Push the sliders or drag the pad to explore your plan — the readouts update live.
         Drag a slider's edges to crop its range (at least / at most) while you adjust the rest.
