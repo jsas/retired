@@ -103,8 +103,10 @@ never forked inside a page.
 - [x] **`src/components/WelcomeCard.tsx`** — hero CTA square, slate-900.
 - [ ] **`src/components/CompareCard.tsx`** (Plans) — skip a one-off dot fix; the whole
   page is being rebuilt as a timeline + numbers table (see task D).
-- [ ] **`src/components/PrintSummary.tsx`** — 40+ inline `style={{}}` blocks (raw hex
-  palette). Convert to classes + tokens. (Deferred — print CSS is fiddly; do last.)
+- [x] **`src/components/PrintSummary.tsx`** — all 44 inline `style={{}}` blocks →
+  Tailwind classes; raw hex → design tokens (blue-600 → token BLUE, red-600 →
+  rose-700, monospace cells → `.num` tabular, rounded RE: block → square ink).
+  First tests for the sheet (commit `c5ebbd0`).
 - [x] **`src/components/beta/LandingPage.tsx`** — verified: the verdict / RE: mark
   inline `style={{ color }}` reads the `tokens.ts` constants (BLUE / RED_TEXT / INK),
   not forked hex. No raw hex literals in the file — nothing to convert.
