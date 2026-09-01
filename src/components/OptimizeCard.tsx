@@ -2,12 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles, Check, Lightbulb, ArrowUpRight, ArrowDownRight, Crosshair, Loader2 } from 'lucide-react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
-import { runStrategies, type StrategyReport } from '@retired/engine-core/strategies';
+import { runStrategies, SUSTAINABLE_SPENDING_CEILING, type StrategyReport } from '@retired/engine-core/strategies';
 import { runSpendingSolverAuto } from '../lib/runSpendingSolver';
 import type { SolverResult } from '@retired/engine-core/spendingSolver';
 
 function fmt(v: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
+}
+
+/* The sustainable-spending search caps at an absolute ceiling so a plan with
+   more money than it can ever spend doesn't run forever. When a row reports
+   exactly that sentinel the honest answer is "no cap reached", not the number. */
+function fmtSustainable(v: number): string {
+  return v >= SUSTAINABLE_SPENDING_CEILING ? 'No cap reached' : fmt(v);
 }
 
 interface OptimizeCardProps {
@@ -214,7 +221,7 @@ function StrategyRow({ r, isBaseline = false, onApply }: {
         <div className="font-medium text-slate-800">{r.name}</div>
         <div className="text-[10px] text-slate-500">{r.description}</div>
       </td>
-      <td className="py-1.5 pr-3 text-right text-slate-800">{fmt(r.sustainableSpending)}</td>
+      <td className="py-1.5 pr-3 text-right text-slate-800">{fmtSustainable(r.sustainableSpending)}</td>
       <td className={`py-1.5 pr-3 text-right font-medium ${up ? 'text-emerald-600' : down ? 'text-red-600' : 'text-slate-400'}`}>
         {isBaseline ? '—' : (
           <span className="inline-flex items-center gap-0.5 justify-end">
