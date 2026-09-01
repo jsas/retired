@@ -787,7 +787,10 @@ function App() {
       />
     );
 
-    switch (view) {
+    // The beta page for this view. The print machinery (the .print-only
+    // summary sheet + marking the app .no-print) wraps it below — same as the
+    // stable path's return, so Ctrl+P prints the summary, not the chrome.
+    const betaPage = (() => { switch (view) {
       case 'details':
         return (
           <BetaPage title="The details" chip={chip} assistant={assistantDock}>
@@ -916,7 +919,28 @@ function App() {
           />
         );
     }
-  }
+    })();
+
+  // Print: the on-screen beta UI hides (.no-print) and the summary sheet
+  // shows (.print-only) — the same contract as the stable app's return.
+  return (
+    <>
+      {/* Print-only one-page summary (hidden on screen; see index.css) */}
+      <PrintSummary
+        scenarioName={activeScenario.name}
+        inputs={resolvedInputs}
+        results={results}
+        householdBreakdown={householdBreakdown}
+        options={printOptions}
+        mcResults={printMc}
+        rrifConversionAge={config.engine.rrifConversionAge}
+      />
+      <div className="no-print">
+        {betaPage}
+      </div>
+    </>
+  );
+}
 
   return (
     <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
