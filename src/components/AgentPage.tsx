@@ -78,6 +78,10 @@ interface AgentPageProps {
    *  right rail — no page header, no chat-list sidebar (a slim strip handles
    *  chat switching so the rail stays 340px). */
   docked?: boolean;
+  /** Hide the inner "AI Assistant" title (the beta page chrome already says
+   *  Assistant — an inner h2 would be a second header). Controls and the
+   *  connection badge stay. */
+  hideTitle?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +318,7 @@ function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete }: 
   );
 }
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked }: AgentPageProps) {
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -426,7 +430,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
           assistant's on/off. */}
       {!docked && (
         <div className="flex flex-wrap items-center gap-2 mb-2">
-          <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
+          {!hideTitle && <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>}
           <span
             className="border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
             title="Experimental: the assistant is new and still being tuned. It proposes changes for you to approve — it never edits your plan on its own."

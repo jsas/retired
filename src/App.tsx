@@ -867,6 +867,7 @@ function App() {
           <BetaPage title="Assistant" hint="assistant" chip={chip}>
             <div className="pt-6">
               <AgentPage
+                hideTitle
                 inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
                 scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
                 activeScenarioId={activeScenarioId}
