@@ -146,12 +146,17 @@ async function main() {
       jobs.push({ base, mode: 'on' });
     }
   }
-  // One card per (base, mode) up front.
+  // Single source of truth: ` (think)` for thinkers' ON, ` (no-think)` for their
+  // OFF, ` (non-think)` for bases that can't think at all. Every mode-string
+  // below (banner, diag, results table, card title) goes through this.
+  const modeLabel = (base, mode) =>
+    (base.think ? (mode === 'on' ? '(think)' : '(no-think)') : '(non-think)');
+
   for (const { base, mode } of jobs) {
     const cardId = `${base.modelId}:${mode}`;
     await tab.callFn(
       `(id, label, sizeGB) => window.DASH.makeCard(id, label, sizeGB)`,
-      [cardId, `${base.label} (${mode === 'on' ? 'think' : 'no-think'})`, base.sizeGB],
+      [cardId, `${base.label} ${modeLabel(base, mode)}`, base.sizeGB],
     );
   }
 
@@ -173,11 +178,27 @@ async function main() {
 
   const results = [];
   try {
+    // evalWhenReady takes a bare expression (no args array), so embed the id.
+    const isSkipArmed = (id) => tab.evalWhenReady(`!!window.SKIP_FLAGS[${JSON.stringify(id)}]`);
+    const clearSkipArmed = (id) => tab.evalWhenReady(`(window.SKIP_FLAGS[${JSON.stringify(id)}] = false, true)`);
+
     for (let j = 0; j < jobs.length; j++) {
       const { base, mode } = jobs[j];
+      const modeStr = modeLabel(base, mode);
       const jobId = `${base.modelId}:${mode}`;
-      await tab.callFn(`(id) => window.DASH.update(id, { active: true, phase: 'loading…', phaseClass: 'active', pct: 0 })`, [jobId]);
-      await tab.callFn(`(t) => window.DASH.setBanner(t, 'run')`, [`[${j + 1}/${jobs.length}] ${base.label} ${mode === 'on' ? '(think)' : '(no-think)'} — downloading / warming`]);
+
+      // PRE-LOAD skip check: if the user armed skip for this job before it even
+      // reached the front of the queue, we skip its (expensive) download too.
+      if (await isSkipArmed(jobId)) {
+        await clearSkipArmed(jobId);
+        console.error(`  [user-skip] ${base.label} ${modeStr} — armed before load`);
+        await tab.callFn(`(id) => window.DASH.update(id, { cardClass: 'failed', phase: 'skipped (user)', phaseClass: 'failed', pct: 0 })`, [jobId]);
+        results.push({ base, mode, pct: null, tiers: 'skipped by user before load' });
+        continue; // never loads the model
+      }
+
+      await tab.callFn(`(id) => window.DASH.update(id, { active: true, phase: 'loading 0%', phaseClass: 'active', pct: 0 })`, [jobId]);
+      await tab.callFn(`(t) => window.DASH.setBanner(t, 'run')`, [`[${j + 1}/${jobs.length}] ${base.label} ${modeStr} — downloading / warming`]);
 
       // Load (already cached after the first mode of this base).
       await tab.callFn(`(modelId, cardId) => window.BAKEOFF.load(modelId, cardId)`, [base.modelId, jobId], { timeoutMs: 900000 });
@@ -193,7 +214,7 @@ async function main() {
           stalled = true;
           try {
             await tab.callFn(`(id) => window.DASH.update(id, { phaseClass: 'failed' })`, [jobId]);
-            await tab.callFn(`(t) => window.DASH.setBanner(t, 'stuck')`, [`STUCK: ${base.label} (${mode}) — no reply for ${Math.round(STALL_MS / 1000)}s`]);
+            await tab.callFn(`(t) => window.DASH.setBanner(t, 'stuck')`, [`STUCK: ${base.label} ${modeStr} — no reply for ${Math.round(STALL_MS / 1000)}s`]);
           } catch {}
         }
       }, 5000);
@@ -202,6 +223,24 @@ async function main() {
       const diag = { thought: 0, lengthCut: 0, noCall: 0 };
       for (let i = 0; i < evalRecords.length; i++) {
         const record = evalRecords[i];
+        const done = i + 1;
+
+        // BEFORE the (long) reply: poll the toggle the user pressed on the card.
+        // Checking here — not only after a reply — means a skip click while a
+        // Qwen is mid-think doesn't force us to wait out the completion.
+        if (await isSkipArmed(jobId)) {
+          await clearSkipArmed(jobId);
+          console.error(`  [user-skip] ${base.label} ${modeStr} — before q${done}`);
+          await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
+            active: false, cardClass: 'failed',
+            phase: `skipped (user) ${i}/${evalRecords.length}`, phaseClass: 'failed',
+            pct: i / evalRecords.length,
+            score: 'skipped by user', scoreClass: 'fail',
+          }]);
+          skipped = true;
+          break;
+        }
+
         const q = record.question;
         const r = await tab.callFn(
           `(systemPrompt, question, noThink) => window.BAKEOFF.reply(systemPrompt, question, noThink)`,
@@ -225,72 +264,41 @@ async function main() {
         }
         lastAdvance = Date.now();
         stalled = false;
-        const done = i + 1;
         const pct = done / evalRecords.length;
         const livePct = live.count > 0 ? live.valid / live.count : 0;
+        const livePctStr = (livePct * 100).toFixed(0);
 
-        // User-driven skip: if the user pressed the card's "skip" button, stop.
-        if (!skipped) {
-          const userFlag = await tab.evalWhenReady(`() => window.SKIP_FLAG ?? null`);
-          if (userFlag === jobId) {
-            console.error(`  [user-skip] ${base.label} (${mode})`);
-            await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
-              active: false, cardClass: 'failed',
-              phase: 'skipped (user)', phaseClass: 'failed',
-              pct: done / evalRecords.length,
-              score: 'skipped by user', scoreClass: 'fail',
-            }]);
-            skipped = true;
-            break;
-          }
-        }
-
-        // Trivial rejection after SKIP_AFTER: zero valid call so far → skip.
-        if (!skipped && done === SKIP_AFTER) {
-          if (live.valid === 0) {
-            console.error(`  [skip] ${base.label} (${mode}): 0/${SKIP_AFTER} valid → skip`);
-            await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
-              active: false, cardClass: 'failed',
-              phase: 'skipped', phaseClass: 'failed',
-              pct: done / evalRecords.length,
-              score: `skipped (0/${SKIP_AFTER} valid)`,
-              scoreClass: 'fail',
-            }]);
-            skipped = true;
-            break;
-          }
+        // Trivial rejection after SKIP_AFTER with zero valid: drop the whole mode.
+        if (done === SKIP_AFTER && live.valid === 0) {
+          console.error(`  [skip] ${base.label} ${modeStr}: 0/${SKIP_AFTER} valid → skip`);
           await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
-            phase: `running ${done}/${evalRecords.length}`, pct,
-            last: `live ${(livePct * 100).toFixed(0)}%`,
+            active: false, cardClass: 'failed',
+            phase: `skipped (0/${SKIP_AFTER} valid)`, phaseClass: 'failed',
+            pct,
+            score: `skipped — 0/${SKIP_AFTER} valid`,
+            scoreClass: 'fail',
           }]);
+          skipped = true;
+          break;
         }
 
-        if (!skipped) {
-          const partialStr = `live ${live.valid}/${live.count}`;
-          await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
-            phase: `running ${done}/${evalRecords.length}`, pct,
-            last: partialStr + ' → ' + oneLine(text).slice(0, 60),
-          }]);
-          await tab.callFn(`(t) => window.DASH.setBanner(t, 'run')`,
-            [`[${j + 1}/${jobs.length}] ${base.label} (${mode}) — ${done}/${evalRecords.length} · live ${(livePct * 100).toFixed(0)}%`]);
-        }
-
-        if (!skipped) {
-          await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
-            phase: `running ${done}/${evalRecords.length}`, pct,
-            last: '→ ' + oneLine(text).slice(0, 70),
-          }]);
-          await tab.callFn(`(t) => window.DASH.setBanner(t, 'run')`,
-            [`[${j + 1}/${jobs.length}] ${base.label} (${mode}) — ${done}/${evalRecords.length}`]);
-        }
+        // PER-QUESTION update: show the running protocol-validity % on the card,
+        // not just in the banner — "as we go" is what the user is asking for.
+        await tab.callFn(`(id, patch) => window.DASH.update(id, patch)`, [jobId, {
+          phase: `running ${done}/${evalRecords.length}`, pct,
+          last: `live ${live.valid}/${live.count} (${livePctStr}%) · ${oneLine(text).slice(0, 60)}`,
+          score: `live ${livePctStr}%`, scoreClass: livePct >= 0.95 ? 'pass' : livePct < 0.5 ? 'fail' : '',
+        }]);
+        await tab.callFn(`(t) => window.DASH.setBanner(t, 'run')`,
+          [`[${j + 1}/${jobs.length}] ${base.label} ${modeStr} — ${done}/${evalRecords.length} · live ${livePctStr}%`]);
       }
       clearInterval(watchdog);
 
       if (skipped) {
-        results.push({ base, mode, pct: null, tiers: `skipped after ${SKIP_AFTER} questions (0 valid)` });
+        results.push({ base, mode, pct: null, tiers: `skipped (user or 0-valid) after ${live.count} questions` });
         continue;
       }
-      console.error(`  [diag] ${base.label} (${mode}): thought ${diag.thought}/${evalRecords.length} · length-cut ${diag.lengthCut} · no-call ${diag.noCall}`);
+      console.error(`  [diag] ${base.label} ${modeStr}: thought ${diag.thought}/${evalRecords.length} · length-cut ${diag.lengthCut} · no-call ${diag.noCall}`);
 
       // Final score + push verdict onto the card.
       writeFileSync(partialFile, JSON.stringify(replies, null, 2));
@@ -317,7 +325,7 @@ async function main() {
       : 'Done — no base cleared the 95% bar';
     await tab.callFn(`(t) => window.DASH.setBanner(t, '')`, [summary]);
     console.error('\n' + summary);
-    for (const r of results) console.error(`  ${(r.base.label + ' ' + (r.mode === 'on' ? '(think)' : '(no-think)')).padEnd(28)} ${r.pct == null ? 'skip' : (r.pct * 100).toFixed(1) + '%'}`);
+    for (const r of results) console.error(`  ${(r.base.label + ' ' + modeLabel(r.base, r.mode)).padEnd(28)} ${r.pct == null ? 'skip' : (r.pct * 100).toFixed(1) + '%'}`);
 
     const stamp = new Date().toISOString();
     const board = {
@@ -336,7 +344,7 @@ async function main() {
       `| base | mode | size | protocol-validity | clears bar | tiers |`,
       `|---|---|---|---|---|---|`,
       ...results.map((r) =>
-        `| ${r.base.label} | ${r.mode === 'on' ? 'think' : 'no-think'} | ~${r.base.sizeGB}GB | ${r.pct == null ? 'skip' : (r.pct * 100).toFixed(1) + '%'} | ${r.pct != null && r.pct >= 0.95 ? '✅' : r.pct == null ? '⏭' : '—'} | ${r.tiers} |`),
+        `| ${r.base.label} | ${r.base.think ? (r.mode === 'on' ? 'think' : 'no-think') : 'non-think'} | ~${r.base.sizeGB}GB | ${r.pct == null ? 'skip' : (r.pct * 100).toFixed(1) + '%'} | ${r.pct != null && r.pct >= 0.95 ? '✅' : r.pct == null ? '⏭' : '—'} | ${r.tiers} |`),
       ``,
       `**${summary}**`,
     ].join('\n');
