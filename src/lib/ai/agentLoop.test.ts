@@ -271,6 +271,22 @@ describe('buildSystemPrompt', () => {
     expect(s).toContain('planning assistant');
   });
 
+  it('adds the ambient current-page line when the host supplies a view', () => {
+    // The page titles come from the catalog — this is what find_page's
+    // "already here" tag and the ambient line share (issue #141).
+    const s = buildSystemPrompt('My Plan', { currentView: 'details' });
+    expect(s).toContain('The user is currently on the Details page.');
+  });
+
+  it('names the destination page for a folded legacy view, and drops the line when absent', () => {
+    // The beta folds Monte Carlo into Insights — the user is on the Insights
+    // page even at a legacy #/monte-carlo route.
+    const folded = buildSystemPrompt('My Plan', { currentView: 'montecarlo' });
+    expect(folded).toContain('The user is currently on the Insights page.');
+    // No currentView (tests / MCP hosts): the line simply falls out.
+    expect(buildSystemPrompt('My Plan')).not.toContain('currently on the');
+  });
+
   it('drops tool instructions for chat-only providers', () => {
     const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
     expect(s).not.toContain('set_scenario_value');

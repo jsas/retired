@@ -471,6 +471,22 @@ export const HELP_TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: 'assistant-navigation',
+    title: 'Finding pages with the assistant',
+    section: 'Assistant',
+    keywords: ['where', 'find page', 'navigate', 'take me to', 'site map', 'sitemap', 'which page', 'go to'],
+    body: (
+      <>
+        <P>The assistant knows every page in the app and what each one is for — so you can ask it <em>where</em> something lives instead of hunting the menu. Ask things like "where do I enter my TFSA room?", "what can this app do?", or "take me to the print summary".</P>
+        {ul([
+          <><strong>Find</strong> — it searches the page map in plain words and names the page (and the link to it) where your question lives.</>,
+          <><strong>Already here</strong> — it knows which page you're on, so if the answer is "that's the page in front of you", it says so instead of moving you.</>,
+          <><strong>Open a page for you</strong> — ask it to take you somewhere and it shows a confirm card with the destination; the app only moves when you approve it.</>,
+        ])}
+      </>
+    ),
+  },
+  {
     id: 'assistant-local-vs-online',
     title: 'Local vs online models',
     section: 'Assistant',

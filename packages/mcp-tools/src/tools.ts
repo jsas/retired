@@ -27,6 +27,10 @@ import {
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
 import { MemoryStore } from './memoryStore';
 import type { AgentToolCall, ToolSpec } from './toolTypes';
+import {
+  NAV_CATALOG, rankPages, hashForEntry, canonicalView, pageForView, searchablePages,
+  type NavEntry, type View,
+} from './navigation';
 
 // ---------------------------------------------------------------------------
 // Tool argument schemas
@@ -218,6 +222,26 @@ const listScenariosArgs = z.object({
     .describe('true = include the key numbers of each plan (ages, balances, spending, benefits) so you can compare saved plans without opening them. Omit/false for a compact list.'),
 });
 
+// Navigation: plain-words page lookup (find_page, get_sitemap) and the
+// page-switch proposal (propose_navigate). The lookups are pure reads; the
+// proposal is a confirm card, not a plan mutation (empty patch, no
+// checkpoint). The model counting on a find_page for "where" is trained by
+// the same catalog the sitemap artifacts emit.
+const findPageArgs = z.object({
+  query: z.string().min(1)
+    .describe('Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Match is deterministic; the catalog has the right keywords in it — re-case freely.'),
+});
+
+const getSitemapArgs = z.object({});
+
+const proposeNavigateArgs = z.object({
+  view: z.string().min(1)
+    .describe('View id, from find_page or get_sitemap (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.'),
+  label: z.string().min(1)
+    .describe('Confirm-card label, e.g. "Open the Monte Carlo page".'),
+  rationale: z.string().optional(),
+});
+
 // Exported so the fine-tuning spike's eval gate (training/) can validate args
 // against the same Zod schemas the executor enforces — the executor itself is
 // the only runtime consumer.
@@ -248,6 +272,9 @@ export const TOOL_SCHEMAS = {
   open_scenario: openScenarioArgs,
   save_scenario_as: saveScenarioAsArgs,
   list_scenarios: listScenariosArgs,
+  find_page: findPageArgs,
+  get_sitemap: getSitemapArgs,
+  propose_navigate: proposeNavigateArgs,
 } as const;
 
 export type AgentToolName = keyof typeof TOOL_SCHEMAS;
@@ -320,6 +347,9 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
     open_scenario: { description:      'Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.', schema: openScenarioArgs },
     save_scenario_as: { description:      'Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.', schema: saveScenarioAsArgs },
     list_scenarios: { description:      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
+    find_page: { description:      'Search the site\'s page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Use whenever the user asks WHERE something lives.', schema: findPageArgs },
+    get_sitemap: { description:      'The full site map: every page (view), its route (#/hash), and one-line purpose. Use for "what can this app do?", "what pages exist?", or before guessing where something lives.', schema: getSitemapArgs },
+    propose_navigate: { description:      'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → the Insights page that now hosts it — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
 };
 
 /** Tool specs advertised to providers: the catalog rendered as JSON Schema. */
@@ -365,6 +395,17 @@ export interface ToolContext {
   /** Snapshot the current live inputs as a new named scenario; returns its id.
    *  Optional for the same reason — save_scenario_as then errors. */
   onSaveScenarioAs?: (name: string) => string;
+  /** The view the chat-session of a user is visiting now (for the ambient
+   *  system prompt "current page" line and find_page's "already here" tag).
+   *  Optional: tests / MCP-server-host callers omit it, and the prompt line
+   *  simply goes absent (as it does in 'off'-mode). */
+  currentView?: View;
+  /** True when the host renders a UI the user can move (confirm cards route
+   *  via propose_navigate). When absent (MCP hosts without a page, plain
+   *  tests), propose_navigate returns the #/hash for the model to share —
+   *  there's no view to switch. The flag only GATES the card; switching
+   *  itself happens in the host after the user approves (see MutationProposal). */
+  canNavigate?: boolean;
 }
 
 export type ToolOutcome =
@@ -373,8 +414,13 @@ export type ToolOutcome =
       kind: 'mutation';
       /** The proposed change as a partial inputs patch (merged over the plan
        *  on approval). Always present — structural proposals put their block
-       *  here; single-field ones put { [field]: value }. */
+       *  here; single-field ones put { [field]: value }. UI-only mutations
+       *  (propose_navigate) carry an empty patch and use `navigate` instead. */
       patch: Partial<RetirementInputs>;
+      /** Set on page-navigation proposals: the view to open on approval. The
+       *  UI routes it (host setView) instead of merging a plan patch, and no
+       *  checkpoint is recorded — the plan never changed. */
+      navigate?: View;
       /** Short label for the card ("Set CPP start age", "Add spouse"). */
       label: string;
       /** Human-readable preview lines shown on the confirm card. */
@@ -490,6 +536,12 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return saveScenarioAsTool(ctx, parsed.data as z.infer<typeof saveScenarioAsArgs>);
     case 'list_scenarios':
       return listScenariosTool(ctx, parsed.data as z.infer<typeof listScenariosArgs>);
+    case 'find_page':
+      return findPageTool(ctx, parsed.data as z.infer<typeof findPageArgs>);
+    case 'get_sitemap':
+      return getSitemapTool();
+    case 'propose_navigate':
+      return proposeNavigateTool(ctx, parsed.data as z.infer<typeof proposeNavigateArgs>);
   }
 }
 
@@ -1168,6 +1220,84 @@ function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioA
 /** list_scenarios: enumerate the saved plans. Compact by default (one line per
  *  scenario, active marked); withDetails adds each plan's key numbers so the
  *  model can compare saved plans without opening them. A pure read. */
+// ---------------------------------------------------------------------------
+// Navigation: find_page / get_sitemap / propose_navigate
+// ---------------------------------------------------------------------------
+
+/** Resolve a name to its catalog entry (view id, route, title, or keyword).
+ *  Returns null instead of guessing-then-erroring. The whole catalog is
+ *  searched — a folded legacy name ("montecarlo") resolves so the tool can
+ *  redirect it to its destination rather than reject a request the UI can
+ *  satisfy. */
+function resolveNavView(name: string | View): NavEntry | null {
+  const q = name.toLowerCase().trim();
+  const found = NAV_CATALOG.find((e) =>
+    e.viewId.toLowerCase() === q ||
+    e.route.toLowerCase() === q ||
+    e.title.toLowerCase() === q ||
+    e.keywords.some((k) => k.toLowerCase() === q));
+  return found ?? null;
+}
+
+/** Follow `foldedInto` to the page the UI actually shows. */
+function destinationEntry(entry: NavEntry): NavEntry {
+  return entry.foldedInto ? pageForView(entry.foldedInto) ?? entry : entry;
+}
+
+/** find_page: ranked search over the reachable page map. Pure read;
+ *  idempotent-friendly (it's one catalog the user will reach the same way). */
+function findPageTool(ctx: ToolContext, args: z.infer<typeof findPageArgs>): ToolOutcome {
+  const ranked = rankPages(args.query, ctx.currentView);
+  if (ranked.length === 0) {
+    return { kind: 'result', content: `No page matches "${args.query}". Try get_sitemap for the whole map first.` };
+  }
+  const here = ctx.currentView != null ? canonicalView(ctx.currentView) : null;
+  const lines = ranked.slice(0, 5).map((e, i) => {
+    const isHere = here != null && e.viewId === here;
+    return `${i + 1}. ${e.title} ${isHere ? '(you are already here) ' : ''}— ${hashForEntry(e)} — ${e.description}`;
+  });
+  return { kind: 'result', content: `Matches for "${args.query}":\n${lines.join('\n')}` };
+}
+
+/** get_sitemap: the page map a user can reach, machine-readable. Folded
+ *  legacy pages are left out — the map should read as the site, not as the
+ *  view union. Pure read; idempotent — it's the same list regardless of state. */
+function getSitemapTool(): ToolOutcome {
+  const lines = searchablePages().map((e, i) =>
+    `${i + 1}. ${e.title} (view ${e.viewId}) — ${hashForEntry(e)} — ${e.description}${e.betaOnly ? ' (beta-only)' : ''}`);
+  return { kind: 'result', content: `The site map:\n${lines.join('\n')}` };
+}
+
+/** propose_navigate: PROPOSE a UI page switch as a confirm card (unlike a
+ *  direct navigate, which would yank the user out of this chat mid-answer).
+ *  Unbound hosts return the #/hash (not an error) — the model can share the
+ *  destination as a link instead of actioning it. A folded legacy view is
+ *  redirected to the page the UI shows (montecarlo → Insights), so the card
+ *  always opens a real destination. */
+function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavigateArgs>): ToolOutcome {
+  const found = resolveNavView(args.view);
+  if (!found) {
+    const routes = searchablePages().map((e) => e.viewId).join(', ');
+    return { kind: 'error', content: `Unknown view "${args.view}". Give a view id from find_page/get_sitemap (${routes}).` };
+  }
+  const entry = destinationEntry(found);
+  if (!ctx.canNavigate) {
+    return { kind: 'result', content: `To open "${entry.title}", share: ${hashForEntry(entry)} (view ${entry.viewId}).` };
+  }
+  // UI-only proposal: an empty plan patch + a `navigate` destination. The UI
+  // routes on approval (and skips the checkpoint, since the plan never
+  // changed) — the confirm card is the whole point: the user sees WHERE
+  // before the app moves them there.
+  return {
+    kind: 'mutation',
+    patch: {},
+    navigate: entry.viewId,
+    label: args.label,
+    preview: { Page: entry.title, Route: hashForEntry(entry) },
+    rationale: args.rationale,
+  };
+}
+
 function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
   const list = ctx.scenarioList;
   if (list.length === 0) {

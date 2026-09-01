@@ -1,10 +1,15 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { viteSingleFile } from 'vite-plugin-singlefile'
-import { rmSync, readdirSync } from 'node:fs'
+import { rmSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+// The sitemap builders live in the tools package, but the config is loaded
+// from its own checkout — import relative to THIS file, not through the
+// @retired/* alias (config-level aliases don't reach the config loader) or
+// the node_modules symlink (which can point at another worktree).
+import { buildSitemapJson, buildSitemapXml } from './packages/mcp-tools/src/navigation.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -19,6 +24,27 @@ function appRevision(): string {
     return dirty ? `${hash}-dirty` : hash
   } catch {
     return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12)
+  }
+}
+
+// The site map as a build artifact (issue #141): sitemap.{json,xml} generated
+// from the same NAV_CATALOG the find_page/get_sitemap tools read — so a
+// fetched artifact and a tool answer can never disagree. Multi-file (Pages)
+// builds only; the single-file artifact stays exactly one file, and a file://
+// copy has no origin to resolve #/ links against anyway. The serialization
+// lives in navigation.ts (buildSitemapJson/Xml) so the committed copy at the
+// repo root — and the drift test that pins it — build the same bytes.
+const PAGES_ORIGIN = 'https://jsas.github.io/retired'
+
+function emitSitemap(outDir: string): Plugin {
+  return {
+    name: 'emit-sitemap',
+    apply: 'build',
+    enforce: 'post',
+    closeBundle() {
+      writeFileSync(join(outDir, 'sitemap.json'), buildSitemapJson(PAGES_ORIGIN))
+      writeFileSync(join(outDir, 'sitemap.xml'), buildSitemapXml(PAGES_ORIGIN))
+    },
   }
 }
 
@@ -70,7 +96,9 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
-      ...(single ? [viteSingleFile(), pruneToSingleHtml('dist-single')] : []),
+      ...(single
+        ? [viteSingleFile(), pruneToSingleHtml('dist-single')]
+        : [emitSitemap(join(here, 'dist'))]),
     ],
     // public/ holds the standalone favicon.svg (used by the multi-file Pages
     // build). The single-file build inlines the favicon as a data-URI, so

@@ -19,9 +19,10 @@
 //   - 'domain-explain'   a concept question → plain-words explainer, no tool needed
 
 import { executeToolCall, type ToolContext } from '@retired/mcp-tools/tools';
+import { canonicalView, pageForView, pageTitleLine, type View } from '@retired/mcp-tools/navigation';
 import { testConfig } from '@retired/engine-core/test/helpers';
 import type { ChatMessage, CorpusRecord } from './buildCorpus';
-import { emitToolCall, wrapToolResult, mutationFeedback } from './protocol';
+import { emitToolCall, wrapToolResult, mutationFeedback, navigationFeedback, ambientPageLine } from './protocol';
 import { mintDomainKnowledgeRecords } from './domain';
 import { SCENARIOS, type NamedScenario } from './scenarios';
 
@@ -612,8 +613,319 @@ export function mintOptionFramingRecords(evalEvery = 5): CorpusRecord[] {
   return records;
 }
 
+// ---------------------------------------------------------------------------
+// Navigation records (issue #141): the site-awareness layer. Where the reads
+// answer "what does my plan say", these answer "where do I go to see/change it".
+// The whole minter is driven off the LIVE catalog (searchablePages()), so when
+// the UI is re-targeted — beta becomes the skin, a page is renamed or folded —
+// the exemplars follow the same single source of truth the tools and the
+// sitemap artifact use; no nav copy can rot against the routes.
+//
+// Two shapes the fine-tune must learn, both keyed to the ambient "you are
+// currently on the X page" line (the app's buildSystemPrompt adds it; here it
+// rides as a per-record SYSTEM message so a chat-template trainer conditions on
+// it, while the spike's single-systemPrompt bake-off stays untouched):
+//   - a "where is it" ask → find_page (and, once, that the answer is "you are
+//     already here" when the user is ON the page — never propose a no-op jump)
+//   - a "take me there" ask → propose_navigate confirm card, then acknowledge
+//     the page OPENED (UI moved, no plan numbers to report).
+// Split rotation matches the rest of the corpus. NOTE the bake-off gate
+// (runGate/extractEvalSet) scores only `mintReadRecords()` eval records, so
+// adding these does NOT change #112's frozen eval hash — the nav records mint
+// into corpus.train.jsonl alongside everything else. The ambient current-page
+// line rides as a per-record SYSTEM message (a chat-template trainer conditions
+// on it), which the single-systemPrompt bake-off simply never reads.
+// ---------------------------------------------------------------------------
+
+/** One canonical destination page's worth of nav exemplars. `query` is a
+ *  phrase that must rank THIS page first via find_page (mint.test asserts it,
+ *  so the mapping can't silently drift from the keywords). */
+interface NavSpec {
+  view: View;
+  query: string;
+  /** Phrasings of "where does this live?" → find_page(query). */
+  findAsks: Array<(sc: NamedScenario) => string>;
+  /** Phrasings of "take me there" → propose_navigate. */
+  goAsks: Array<(sc: NamedScenario) => string>;
+}
+
+/** Pick a human-sounding label for a go-card from the destination's title. A
+ *  folded legacy view resolves to its destination, so the card names the page
+ *  the user actually sees. */
+function navLabel(view: View): string {
+  const entry = pageForView(canonicalView(view));
+  const title = (entry?.title ?? view).replace(/\s*\(.*\)$/, '');
+  return `Open the ${title} page`;
+}
+
+/** Exported for the mint tests' query↔page drift guard: every `query` must
+ *  rank its spec's (canonicalized) page first via the live catalog. */
+export const NAV_SPECS: NavSpec[] = [
+  {
+    view: 'details', query: 'tfsa room',
+    findAsks: [
+      () => 'Where do I enter my TFSA and RRSP contribution room?',
+      () => 'Which page has my account balances?',
+      () => 'Where are my government benefit settings?',
+    ],
+    goAsks: [
+      () => 'Take me to the page where I edit my accounts and balances.',
+      () => 'Open my plan inputs.',
+    ],
+  },
+  {
+    view: 'eq', query: 'monte carlo',
+    findAsks: [
+      () => 'Where can I see the odds my money lasts?',
+      () => 'Which page runs the simulation?',
+    ],
+    goAsks: [
+      () => 'Take me to the Monte Carlo page.',
+      () => 'Show me my options and what helps most.',
+    ],
+  },
+  {
+    view: 'scenarios', query: 'compare',
+    findAsks: [
+      () => 'Where can I compare my saved plans side by side?',
+      () => 'Which page lists my saved scenarios?',
+    ],
+    goAsks: [
+      () => 'Take me to my saved plans.',
+      () => 'Open the scenario manager.',
+    ],
+  },
+  {
+    view: 'data', query: 'backup',
+    findAsks: [
+      () => 'Where do I back up or restore my plan?',
+      () => 'How do I export everything to a file?',
+    ],
+    goAsks: [
+      () => 'Take me to the data backup page.',
+      () => 'I want to share my plan — where is that?',
+    ],
+  },
+  {
+    view: 'settings', query: 'tax tables',
+    findAsks: [
+      () => 'Where can I edit the tax tables?',
+      () => 'Which page has the app settings?',
+    ],
+    goAsks: [
+      () => 'Open settings.',
+    ],
+  },
+  {
+    view: 'print', query: 'print',
+    findAsks: [
+      () => 'Where do I get a printable summary?',
+    ],
+    goAsks: [
+      () => 'Take me to the print page.',
+    ],
+  },
+];
+
+/** Run a nav tool for real (against the executor + current ctx) to capture the
+ *  exact result text the model would see, including the "already here" tag. */
+function runNav(sc: NamedScenario, tool: string, args: Record<string, unknown>, currentView?: View): string {
+  const c: ToolContext = { ...contextFor(sc), currentView, canNavigate: true };
+  const outcome = executeToolCall(c, { id: 'mint-nav', name: tool, args });
+  if (outcome.kind === 'mutation' || outcome.kind === 'error') {
+    throw new Error(`mint ${tool} failed for ${sc.id}: ${outcome.content}`);
+  }
+  return outcome.content;
+}
+
+/** Ground the find_page follow-up in the real result: name the destination page
+ *  (first match's title, stripped of the "already here" tag) and its hash — the
+ *  model learns to point the user somewhere concrete, not to say "somewhere". */
+function explainFind(resultText: string): string {
+  const firstMatch = resultText.split('\n').find((l) => /^\s*1\.\s/.test(l)) ?? '';
+  // e.g. "1. Insights (you are already here) — #/steering — desc" → title + hash.
+  const title = firstMatch.replace(/^\s*1\.\s+/, '').replace(/\s*\(you are already here\).*/, '').split(' — ')[0].trim();
+  const hash = firstMatch.match(/#\S+/)?.[0] ?? '';
+  const alreadyHere = /\(you are already here\)/.test(firstMatch);
+  if (alreadyHere) {
+    return `You're already on the ${title} page${hash ? ` (${hash})` : ''} — it's what's in front of you right now.`;
+  }
+  return `The ${title} page is where that lives${hash ? ` (open ${hash})` : ''}. It's one of the app's pages — I can take you there if you'd like.`;
+}
+
+function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: number): CorpusRecord[] {
+  const records: CorpusRecord[] = [];
+  for (const spec of NAV_SPECS) {
+    const here = canonicalView(spec.view);
+    const findArgs = { query: spec.query };
+    const goArgs = { view: spec.view, label: navLabel(spec.view) };
+
+    // (a) "where is it" — find_page, with the user somewhere ELSE (the common
+    // case): the follow-up points at the destination.
+    for (const ask of spec.findAsks) {
+      const question = ask(sc);
+      const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
+      const base = `find_page:${sc.id}:q${seqRef.n}`;
+      // Ambient line: put the user on a DIFFERENT reachable page so the answer
+      // is a real redirect. projection (Dashboard) is always reachable.
+      const ambient = here === 'projection' ? 'settings' : 'projection';
+      records.push({
+        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine(ambient) },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('find_page', findArgs) },
+        ],
+        expect: { toolName: 'find_page' },
+      });
+      const resultText = runNav(sc, 'find_page', findArgs, ambient);
+      records.push({
+        id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine(ambient) },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('find_page', findArgs) },
+          { role: 'user', content: wrapToolResult(resultText) },
+          { role: 'assistant', content: explainFind(resultText) },
+        ],
+        expect: {
+          toolName: 'find_page',
+          mustNotContain: ['you should', 'i recommend', 'you ought to'],
+        },
+      });
+    }
+
+    // (b) "where is it" WHEN THE USER IS ALREADY ON THE PAGE — the
+    // page-context-awareness case: find_page must return the already-here tag
+    // and the reply must say so, never propose a jump that goes nowhere.
+    {
+      const question = `Where do I set my ${spec.query}?`;
+      const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
+      const base = `find_page-here:${sc.id}:q${seqRef.n}`;
+      records.push({
+        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine(here) },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('find_page', findArgs) },
+        ],
+        expect: { toolName: 'find_page' },
+      });
+      const resultText = runNav(sc, 'find_page', findArgs, here);
+      records.push({
+        id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine(here) },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('find_page', findArgs) },
+          { role: 'user', content: wrapToolResult(resultText) },
+          { role: 'assistant', content: explainFind(resultText) },
+        ],
+        expect: {
+          toolName: 'find_page',
+          mustContain: ['already on'],
+          mustNotContain: ['TOOL_CALL', 'you should', 'i recommend'],
+        },
+      });
+    }
+
+    // (c) "take me there" — propose_navigate card, then approve/reject.
+    for (const ask of spec.goAsks) {
+      const question = ask(sc);
+      const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
+      const base = `propose_navigate:${sc.id}:q${seqRef.n}`;
+      records.push({
+        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine('projection') },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('propose_navigate', goArgs) },
+        ],
+        expect: { toolName: 'propose_navigate' },
+      });
+      records.push({
+        id: `${base}:approved`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine('projection') },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('propose_navigate', goArgs) },
+          { role: 'user', content: navigationFeedback(true, goArgs.label) },
+          { role: 'assistant', content: `Opened it — the ${pageTitleLine(here)} page is now on screen. What would you like to look at?` },
+        ],
+        expect: { toolName: 'propose_navigate', mustNotContain: ['TOOL_CALL'] },
+      });
+      records.push({
+        id: `${base}:rejected`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine('projection') },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('propose_navigate', goArgs) },
+          { role: 'user', content: navigationFeedback(false, goArgs.label) },
+          { role: 'assistant', content: `No problem — staying where you are. I can still answer questions from here.` },
+        ],
+        expect: { toolName: 'propose_navigate', mustNotContain: ['TOOL_CALL'] },
+      });
+    }
+  }
+
+  // (d) the "show me everything" ask → get_sitemap.
+  const sitemapArgs = {};
+  for (const question of [
+    'What can this app do?',
+    'What pages are in here?',
+    'Give me a tour of the app.',
+  ]) {
+    const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
+    const base = `get_sitemap:${sc.id}:q${seqRef.n}`;
+    records.push({
+      id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+      messages: [
+        { role: 'user', content: question },
+        { role: 'assistant', content: emitToolCall('get_sitemap', sitemapArgs) },
+      ],
+      expect: { toolName: 'get_sitemap' },
+    });
+    const resultText = runNav(sc, 'get_sitemap', sitemapArgs);
+    records.push({
+      id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+      messages: [
+        { role: 'user', content: question },
+        { role: 'assistant', content: emitToolCall('get_sitemap', sitemapArgs) },
+        { role: 'user', content: wrapToolResult(resultText) },
+        { role: 'assistant', content: explainSitemap(resultText) },
+      ],
+      expect: {
+        toolName: 'get_sitemap',
+        mustNotContain: ['you should', 'i recommend'],
+      },
+    });
+  }
+  return records;
+}
+
+/** Ground the get_sitemap follow-up: name a couple of the pages the result
+ *  lists, so the reply proves it READ the map rather than reciting a canned
+ *  tour. Deterministic: the first two listed pages by catalog order. */
+function explainSitemap(resultText: string): string {
+  const pages = resultText
+    .split('\n')
+    .map((l) => l.replace(/^\s*\d+\.\s+/, '').split(/\s+\(view\s/)[0])
+    .filter((l) => l && !l.startsWith('The site map'));
+  const named = pages.slice(0, 3).join(', ');
+  return `This app is a Canadian retirement drawdown planner. The pages cover the plan itself (the dashboard and your inputs), the year-by-year schedule, insights (levers, Monte Carlo odds, backtest), saved profiles, data (share/backup/export), plus print, settings, help, and the assistant. Say the word and I can open any of them — for example ${named}.`;
+}
+
+export function mintNavRecords(evalEvery = 5): CorpusRecord[] {
+  const records: CorpusRecord[] = [];
+  const seqRef = { n: 0 };
+  for (const sc of SCENARIOS) {
+    records.push(...mintNavRecordsFor(sc, seqRef, evalEvery));
+  }
+  return records;
+}
+
 /** The full corpus: engine-grounded reads + mutations + guardrail + options +
- *  domain knowledge. */
+ *  domain knowledge + navigation. */
 export function mintCorpus(): CorpusRecord[] {
   return [
     ...mintReadRecords(),
@@ -621,6 +933,7 @@ export function mintCorpus(): CorpusRecord[] {
     ...mintGuardrailRecords(),
     ...mintOptionFramingRecords(),
     ...mintDomainKnowledgeRecords(),
+    ...mintNavRecords(),
   ];
 }
 
