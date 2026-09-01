@@ -439,17 +439,17 @@ export const HELP_TOPICS: HelpTopic[] = [
   // ── Profiles ──────────────────────────────────────────────────────────────
   {
     id: 'scenarios',
-    title: 'Scenarios',
+    title: 'Profiles',
     section: 'Profiles',
-    keywords: ['what-if', 'save', 'switch', 'new plan', 'duplicate'],
-    body: <P>A scenario is one complete set of inputs. The top bar switches between them; Save writes your edits into the active scenario; the Profiles page creates, renames, duplicates and deletes. Switching away with unsaved edits asks whether to save first. Make several — "retire at 60" vs "65" — and flip or compare them.</P>,
+    keywords: ['what-if', 'save', 'switch', 'new plan', 'duplicate', 'scenario'],
+    body: <P>A profile is one complete set of inputs (internally a "scenario" — same idea). The top bar switches between them; Save writes your edits into the active profile; the Profiles page creates, renames, duplicates and deletes. Switching away with unsaved edits asks whether to save first. Make several — "retire at 60" vs "65" — and flip or compare them.</P>,
   },
   {
     id: 'compare',
-    title: 'Comparing plans',
+    title: 'Comparing profiles',
     section: 'Profiles',
     keywords: ['side by side', 'compare scenarios', 'which is better'],
-    body: <P>The Compare card puts 2–3 saved scenarios side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version of a plan holds up best. Each is scored with its own resolved spouse: a plan whose spouse is a linked scenario is compared as the full household.</P>,
+    body: <P>The Compare card puts your saved profiles side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version of a plan holds up best. Each is scored with its own resolved spouse: a profile whose spouse is a linked profile is compared as the full household.</P>,
   },
 
   // ── Assistant ──────────────────────────────────────────────────────────

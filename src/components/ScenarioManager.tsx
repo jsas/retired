@@ -87,11 +87,11 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
     <div>
       <div className="flex items-start justify-between gap-4">
         <p className="max-w-lg text-[12.5px] leading-relaxed text-slate-500">
-          Click a scenario to load it. Duplicate branches a what-if; each save keeps a
+          Click a profile to load it. Duplicate branches a what-if; each save keeps a
           revision (last {MAX_REVISIONS} per plan) you can roll back to.
         </p>
         <button onClick={handleCreateNew} className={`${cls.primaryBtn} shrink-0`}>
-          New scenario
+          New profile
         </button>
       </div>
 

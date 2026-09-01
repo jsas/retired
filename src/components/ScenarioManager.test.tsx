@@ -32,7 +32,7 @@ describe('ScenarioManager (beta design)', () => {
     // the list and its quiet explainer remain
     expect(html).toContain('Base plan');
     expect(html).toContain('Retire later');
-    expect(html).toContain('Click a scenario to load it');
+    expect(html).toContain('Click a profile to load it');
   });
 
   it('marks the active plan with the square blue dot and weight — no card, no ring', () => {
