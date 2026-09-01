@@ -80,6 +80,20 @@ export async function openTab(url, port = 9222) {
   return httpJson(`/json/new?${encodeURIComponent(url)}`, port, 'PUT');
 }
 
+/** Close every tab matching the URL (or containing the URL substring), then
+ *  open a fresh one. This stops stale bake-off tabs from accumulating across
+ *  sequenced runs. Returns the new target. */
+export async function openFreshTab(url, port = 9222) {
+  const targets = await httpJson('/json', port);
+  for (const t of targets ?? []) {
+    const u = t.url ?? '';
+    if (u.includes(url) && t.id) {
+      try { await httpJson(`/json/close/${t.id}`, port); } catch {}
+    }
+  }
+  return openTab(url, port);
+}
+
 /** A thin async-eval channel to one tab, over its webSocketDebuggerUrl. Each
  *  call is a Runtime.evaluate with awaitPromise, so the page can run async
  *  model work and hand back a JSON value. */

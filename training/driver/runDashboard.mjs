@@ -25,7 +25,7 @@ import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { launchChrome, openTab, TabSession } from './cdp.mjs';
+import { launchChrome, openFreshTab, TabSession } from './cdp.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));            // training/driver
 const trainingDir = dirname(here);                               // training/
@@ -124,7 +124,7 @@ async function main() {
   console.log('[startup] ready: server@' + SERVE_PORT + ' chrome@' + CDP_PORT);
 
   console.log('[startup] opening dashboard tab…');
-  const target = await openTab(`http://127.0.0.1:${SERVE_PORT}/dashboard.html`, CDP_PORT);
+  const target = await openFreshTab(`http://127.0.0.1:${SERVE_PORT}/dashboard.html`, CDP_PORT);
   const tab = new TabSession(target.webSocketDebuggerUrl);
   await tab.connect();
   await tab.evalWhenReady(`(async () => { for (let i=0;i<150 && !window.BAKEOFF_READY;i++) await new Promise(r=>setTimeout(r,100)); if (!window.BAKEOFF_READY) throw new Error('dashboard never became ready'); return true; })()`);
