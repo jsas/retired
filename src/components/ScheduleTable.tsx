@@ -87,24 +87,24 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded hover:bg-slate-50"
+        className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-600 border border-slate-300 hover:border-slate-900 hover:text-slate-900"
         title="Choose which columns the table shows"
       >
         <Columns3 size={13} />
         Columns
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 rounded shadow-lg p-2">
+        <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 p-2">
           <button
             type="button"
             onClick={() => setAll(!allOn)}
-            className="w-full text-left px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 rounded"
+            className="w-full text-left px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
           >
             {allOn ? 'Show fewer' : 'Show all'}
           </button>
           <div className="my-1 border-t border-slate-100" />
           {toggleable.map((c) => (
-            <label key={c.id} className="flex items-center gap-2 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 rounded cursor-pointer">
+            <label key={c.id} className="flex items-center gap-2 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 cursor-pointer">
               <input
                 type="checkbox"
                 checked={visible.has(c.id)}
@@ -330,13 +330,16 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
     });
 
   // The blue hairline row marks "stop working at". When the page hands us an
-  // onChange, the marker row is draggable: press-and-pull the row (or its
-  // handle) and it follows the pointer; release and the retirement age moves
-  // to the row under the pointer, clamped to the same bounds the lever uses.
+  // onChange, that row is draggable: press on the grip and pull up or down;
+  // release and the retirement age moves to the row under the pointer, clamped
+  // to the same bounds the lever uses. The listeners live on the DOCUMENT, not
+  // the row — as the marker crosses to a new age React re-renders the row and
+  // would otherwise drop its handlers mid-drag. A small movement threshold
+  // separates a real drag from a plain click (so the row still expands).
   const canDragRetire = onRetirementAgeChange != null && currentAge != null;
   const dragLo = currentAge ?? 40, dragHi = Math.min(75, maxAge ?? 75);
   const [dragAge, setDragAge] = useState<number | null>(null);
-  const dragRef = useRef<{ pointerId: number } | null>(null);
+  const dragState = useRef<{ pointerId: number; startY: number; moved: boolean; latest: number } | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
 
   const ageAtClientY = (clientY: number): number | null => {
@@ -352,27 +355,52 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
     return null;
   };
 
-  const beginRetireDrag = (e: React.PointerEvent) => {
-    if (!canDragRetire) return;
-    e.preventDefault();
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    dragRef.current = { pointerId: e.pointerId };
-    setDragAge(retirementAge);
-  };
-  const moveRetireDrag = (e: React.PointerEvent) => {
-    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
-    const a = ageAtClientY(e.clientY);
-    if (a != null) setDragAge(Math.max(dragLo, Math.min(dragHi, a)));
-  };
-  const endRetireDrag = (e: React.PointerEvent) => {
-    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
-    const a = ageAtClientY(e.clientY);
-    dragRef.current = null;
+  const endDrag = () => {
+    const s = dragState.current;
+    if (!s) return;
+    dragState.current = null;
+    const finalAge = s.latest;
     setDragAge(null);
-    if (a != null && a !== retirementAge) {
-      onRetirementAgeChange?.(Math.max(dragLo, Math.min(dragHi, a)));
+    if (s.moved && finalAge !== retirementAge) {
+      onRetirementAgeChange?.(Math.max(dragLo, Math.min(dragHi, finalAge)));
     }
   };
+
+  const beginRetireDrag = (e: React.PointerEvent) => {
+    if (!canDragRetire) return;
+    e.preventDefault(); // don't let the press select text or trigger the row's click
+    dragState.current = { pointerId: e.pointerId, startY: e.clientY, moved: false, latest: retirementAge };
+    setDragAge(retirementAge);
+
+    const onMove = (ev: PointerEvent) => {
+      const s = dragState.current;
+      if (!s || ev.pointerId !== s.pointerId) return;
+      if (Math.abs(ev.clientY - s.startY) > 5) s.moved = true; // past the click threshold
+      const a = ageAtClientY(ev.clientY);
+      if (a != null) {
+        s.latest = Math.max(dragLo, Math.min(dragHi, a));
+        setDragAge(s.latest);
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (dragState.current && ev.pointerId === dragState.current.pointerId) endDrag();
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+    // Auto-detach on unmount.
+    const cleanup = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+    };
+    // Stash cleanup so a pointercancel / re-render can't leak listeners.
+    (dragState.current as any).cleanup = cleanup;
+  };
+
+  useEffect(() => () => {
+    (dragState.current as any)?.cleanup?.();
+  }, []);
 
   const effectiveRetirement = dragAge ?? retirementAge;
 
@@ -414,9 +442,16 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
           {row.age}
           {isRetirement && (
             canDragRetire
-              ? <span className="ml-1.5 inline-flex items-center gap-1 align-middle text-blue-500" aria-hidden="true">
-                  <GripVertical size={12} />
-                  {dragAge != null && <span className="text-[10px] font-semibold">→ {dragAge}</span>}
+              ? <span
+                  role="slider"
+                  aria-label={`Stop working at — drag to change (now ${effectiveRetirement})`}
+                  aria-valuemin={dragLo} aria-valuemax={dragHi} aria-valuenow={effectiveRetirement}
+                  onPointerDown={beginRetireDrag}
+                  title={`Drag to change the retirement age (now ${effectiveRetirement})`}
+                  className="ml-1.5 inline-flex cursor-grab touch-none select-none items-center gap-1 align-middle text-blue-500 active:cursor-grabbing"
+                >
+                  <GripVertical size={12} aria-hidden="true" />
+                  <span className="text-[10px] font-semibold">{dragAge != null ? `→ ${dragAge}` : 'drag'}</span>
                 </span>
               : ' 🎯'
           )}
@@ -436,7 +471,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded overflow-hidden">
+    <div className="bg-white border border-slate-200 overflow-hidden">
       <div className="flex justify-end px-2 py-1.5 border-b border-slate-100 bg-slate-50/60">
         <ColumnPicker visible={visibleCols} onChange={updateVisibleCols} />
       </div>
@@ -482,15 +517,9 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
                 <Fragment key={index}>
                   <tr
                     data-age={row.age}
-                    className={`${rowBg} ${isRetirement ? 'border-t-2 border-blue-500' : ''} ${canDragRetire && isRetirement ? 'cursor-grab touch-none select-none' : canExpand ? 'cursor-pointer hover:bg-blue-50/40' : ''}`}
-                    onClick={canExpand && !(canDragRetire && isRetirement) ? () => toggle(row.age) : undefined}
-                    onPointerDown={canDragRetire && isRetirement ? beginRetireDrag : undefined}
-                    onPointerMove={canDragRetire && isRetirement ? moveRetireDrag : undefined}
-                    onPointerUp={canDragRetire && isRetirement ? endRetireDrag : undefined}
-                    onPointerCancel={canDragRetire && isRetirement ? endRetireDrag : undefined}
-                    title={canDragRetire && isRetirement
-                      ? `Drag to change the retirement age (now ${effectiveRetirement})`
-                      : canExpand ? (isOpen ? 'Collapse year detail' : 'Expand year detail') : undefined}
+                    className={`${rowBg} ${isRetirement ? 'border-t-2 border-blue-500' : ''} ${canExpand ? 'cursor-pointer hover:bg-blue-50/40' : ''}`}
+                    onClick={canExpand ? () => toggle(row.age) : undefined}
+                    title={canExpand ? (isOpen ? 'Collapse year detail' : 'Expand year detail') : undefined}
                   >
                     {anyDetail && (
                       <td className="px-1 py-1.5 text-slate-400">

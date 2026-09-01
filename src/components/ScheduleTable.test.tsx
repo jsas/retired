@@ -89,7 +89,9 @@ describe('ScheduleTable column picker', () => {
         onRetirementAgeChange: () => {},
       }),
     );
-    // The marker row gets the grab cursor, a drag hint title and the grip icon.
+    // The grip cell carries the drag affordance (slider role + grab cursor +
+    // hint), while the row itself stays click-to-expand.
+    expect(html).toContain('role="slider"');
     expect(html).toContain('cursor-grab');
     expect(html).toContain('Drag to change the retirement age');
     expect(html).toContain('Drag the blue &quot;stop working&quot; row');
@@ -100,6 +102,7 @@ describe('ScheduleTable column picker', () => {
       createElement(ScheduleTable, { breakdown, retirementAge: 65 }),
     );
     expect(html).toContain('🎯');
+    expect(html).not.toContain('role="slider"');
     expect(html).not.toContain('cursor-grab');
     expect(html).not.toContain('Drag to change the retirement age');
   });

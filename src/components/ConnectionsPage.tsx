@@ -36,6 +36,7 @@ import { estimateContextFit, fmtMB } from '../lib/ai/vramEstimate';
 import { defaultContextSize } from '../lib/ai/context';
 import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
+import { Progress } from '../design/primitives';
 
 /** Upper bound for the local context window — above this even big GPUs run
  *  out of room for the KV cache, and the small models lose coherence long
@@ -255,7 +256,7 @@ function ModelsSection({ onChange, webllmConn }: {
                 onClick={() => pick(m.id)}
                 disabled={!webllmConn}
                 title={webllmConn ? 'Use this model' : 'Add the on-computer connection (below) to pick a model'}
-                className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
+                className={`w-3.5 h-3.5 border-2 shrink-0 ${
                   isChosen ? 'border-emerald-600 bg-emerald-500' : 'border-slate-300'
                 } ${webllmConn ? '' : 'opacity-40 cursor-not-allowed'}`}
               />
@@ -299,9 +300,7 @@ function ModelsSection({ onChange, webllmConn }: {
       {/* Active download progress */}
       {downloading && progress && (
         <div className="mt-2 max-w-md">
-          <div className="h-2 bg-slate-200 rounded overflow-hidden">
-            <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.round(progress.progress * 100)}%` }} />
-          </div>
+          <Progress pct={progress.progress * 100} className="h-2 [&>div]:bg-emerald-600" />
           <div className="flex items-center justify-between mt-1">
             <span className="text-[10px] text-slate-500">{progress.text}</span>
             <button

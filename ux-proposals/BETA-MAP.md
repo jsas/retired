@@ -24,7 +24,9 @@ English, few controls, distinct concepts over reskins.
 - ✅ **Design system** — `src/design/`: tokens.ts (every colour/size named once),
   primitives.tsx, StyleGuide.tsx (live page at `#/styleguide`), STYLEGUIDE.md prose.
   Primitives: VerdictHero, Panel (hint prop), Fader (help prop), Chip, Stat,
-  AccountBars, Legend, Dropdown, **HelpHint**, Footnote, AppHeader.
+  AccountBars, Legend, Dropdown, **HelpHint**, Footnote, AppHeader,
+  **Dot** (square status/legend dot), **Progress** (flat hairline fill),
+  **Modal** (flat hairline dialog shell).
 - ✅ **Contour lib** — `packages/engine-core/src/contour.ts`: f7 terrain math
   (bisection boundary, Catmull-Rom smoothing, hold-wash) on `calculateHousehold`, pure + tests.
 - ✅ **Dashboard** (`BetaApp.tsx`) — verdict hero, Markets dial, contour map, two
@@ -106,11 +108,11 @@ never forked inside a page.
   (`style={{ borderColor: … }}`, `style={{ color: … }}`, `style={{ backgroundColor: INK }}`)
   — should draw from `tokens.ts`, not per-component constants.
 
-**Shared primitives to ADD to `src/design/` (then consumed above):**
-- [ ] `<Progress>` — a thin hairline track + a fill of `width: pct%` (replaces the
+**Shared primitives ADDED to `src/design/` (now consumed by the conversions below):**
+- [x] `<Progress>` — a thin hairline track + a fill of `width: pct%` (replaces the
   inline-style bars in AgentPage / Connections / SetupWizard).
-- [ ] `<Modal>` — a flat hairline overlay shell (replaces SavePromptModal's shadow shell).
-- [ ] square `Dot`/`Swatch` (the system has square dots; several pages fork round ones).
+- [x] `<Modal>` — a flat hairline overlay shell (replaces SavePromptModal's shadow shell).
+- [x] square `Dot` (the system has square dots; several pages fork round ones).
 
 **Then:** do the conversions page-by-page, leaving each above checkbox ticked.
 
@@ -135,6 +137,18 @@ via the existing `set` helper; tests in `DetailsPage.test.tsx` cover add/remove 
 - [x] **Slim the chat picker** — the rail's permanent mini list is gone; a slim strip
   with a clickable chat icon drops down to select / start / delete a chat
   (`DockChatPicker`), so the rail keeps its width for the conversation.
+
+### D. Compare page — rebuild as a real comparison tool ⬜
+The card view is "neat but the UX is shit": pick-up-to-3 + a baseline dot ritual
+is super silly. Rebuild as the obvious thing:
+- [ ] **One projection timeline**: a single line per selected scenario (all of them
+  can be on; no 3-cap), with a legend that toggles lines on/off.
+- [ ] **A simple table of numbers underneath**: one row per scenario, columns =
+  wealth at retirement, depletion age, withdrawal rate, lifetime tax, ending
+  balance. No baseline/diff chips — just the numbers, sortable by column.
+- [ ] Kill `MAX_COMPARE`, the baseline dot, and the diff-chip callouts.
+(Engine `compareScenarios` already computes per-scenario metrics; the timeline
+needs each scenario's `yearlyBreakdown.endingBalance` series.)
 
 ---
 
