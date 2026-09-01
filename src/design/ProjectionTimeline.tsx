@@ -115,6 +115,10 @@ export function ProjectionTimeline({ series, overlays = [], pins = [], marker, o
   const areaPath = (pts: { age: number; value: number }[]) =>
     `M ${x(pts[0].age).toFixed(1)},${AXIS} ${pts.map(p => `L ${x(p.age).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ')} L ${x(pts[pts.length - 1].age).toFixed(1)},${AXIS} Z`;
 
+  // A plan with no savings degenerates: every value is 0, the top axis label
+  // reads $0 and the line sits flat — it looks broken. Say why instead.
+  const hasAnything = maxVal >= 2;
+
   return (
     <div>
       {/* Legend — one swatch per line; click to toggle. */}
@@ -134,8 +138,15 @@ export function ProjectionTimeline({ series, overlays = [], pins = [], marker, o
 
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full select-none" role="img"
         aria-label={`Projection from age ${minAge} to ${maxAge}`}>
-        {/* balance areas (soft fill) */}
-        {visibleSeries.map((s, i) => {
+        {!hasAnything && (
+          <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="13" fill={FAINT} fontFamily="inherit">
+            Nothing to draw — the plan has no savings yet. Add balances on the Details page.
+          </text>
+        )}
+        {hasAnything && (
+          <>
+          {/* balance areas (soft fill) */}
+          {visibleSeries.map((s, i) => {
           const fill = s.area ?? visibleSeries.length === 1;
           if (!fill) return null;
           const color = s.color ?? PALETTE[i % PALETTE.length];
@@ -193,6 +204,8 @@ export function ProjectionTimeline({ series, overlays = [], pins = [], marker, o
             </g>
           );
         })}
+          </>
+        )}
       </svg>
     </div>
   );

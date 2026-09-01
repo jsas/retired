@@ -53,4 +53,13 @@ describe('ProjectionTimeline', () => {
     expect(html).toContain('you · 50');
     expect(html).toContain('work ends · 60');
   });
+
+  it('says why when there is nothing to draw (a zero-savings plan)', () => {
+    // Every value 0 degenerates the axis ($0 top label, flat line) — the
+    // chart must show the plain-English empty state instead of the lines.
+    const empty = [{ id: 'a', label: 'Plan', points: [{ age: 65, value: 0 }, { age: 90, value: 0 }] }];
+    const html = renderToStaticMarkup(createElement(ProjectionTimeline, { series: empty }));
+    expect(html).toContain('Nothing to draw');
+    expect(html).not.toContain('d="M'); // no balance lines drawn
+  });
 });

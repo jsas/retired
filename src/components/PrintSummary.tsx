@@ -65,6 +65,17 @@ function TimelinePrintChart({ inputs, rows }: {
   const headline = hasRm ? totalCash : portfolio;
   const maxBal = Math.max(1, ...headline, ...portfolio, ...(hasRm ? equity : []));
 
+  // A plan with no savings degenerates: every balance is 0, the axis reads
+  // $0–$1 and the line sits flat — looks broken. Say why instead.
+  if (maxBal < 2) {
+    return (
+      <p className="border-l-2 border-slate-300 py-1 pl-3 text-[11px] text-slate-500">
+        Nothing to draw — the plan has no savings yet. Add balances on the
+        Details page and the timeline will render.
+      </p>
+    );
+  }
+
   const x = (age: number) => TL_PAD.left + ((age - minAge) / span) * (TL_W - TL_PAD.left - TL_PAD.right);
   const y = (v: number) => TL_PAD.top + (1 - v / maxBal) * (TL_H - TL_PAD.top - TL_PAD.bottom);
   const pathOf = (vals: number[]) =>
@@ -133,6 +144,16 @@ function MonteCarloPrintChart({ results, retirementAge, maxAge }: {
   const bandMaxAge = bands[bands.length - 1].age;
   const span = Math.max(1, bandMaxAge - minAge);
   const maxBal = Math.max(1, ...bands.map(b => b.p90));
+
+  // Same degenerate case as the timeline: no savings → a flat $0 fan.
+  if (maxBal < 2) {
+    return (
+      <p className="border-l-2 border-slate-300 py-1 pl-3 text-[11px] text-slate-500">
+        Nothing to draw — the plan has no savings yet. Add balances on the
+        Details page and the simulation will render.
+      </p>
+    );
+  }
 
   const x = (age: number) => MC_PAD.left + ((age - minAge) / span) * (MC_W - MC_PAD.left - MC_PAD.right);
   const y = (v: number) => MC_PAD.top + (1 - v / maxBal) * (MC_H - MC_PAD.top - MC_PAD.bottom);
