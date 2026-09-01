@@ -58,6 +58,14 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
 
   return (
     <div className="max-w-3xl py-4 md:py-10">
+      {/* This whole UI is the reference build — the old site, kept alive behind
+          ?beta while we compare against it. Say so, and offer the way back. */}
+      <div className="mb-8 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200 pb-3 text-[12px] text-slate-500">
+        <span className="font-semibold text-slate-700">Reference build</span>
+        <span>— the old site, kept for comparison.</span>
+        <a href="?beta=off" className="font-medium text-slate-900 underline">Back to the current app →</a>
+      </div>
+
       {/* Hero */}
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600 mb-3">
         Canadian retirement drawdown planner

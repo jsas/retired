@@ -82,11 +82,12 @@ const getSyncSeed = () => {
 
 function App() {
   const [initialState] = useState(getSyncSeed);
-  // Beta reskin channel (?beta → beta-version cookie; see lib/betaSkin). The
-  // flag is resolved once, synchronously, on the very first render — writing
-  // the cookie is a side effect React must not replay, so it lives in the
-  // useState initializer, not an effect. The whole hook set below stays
-  // unconditional; only the render output branches.
+  // Skin gate (see lib/betaSkin): the f7 design is the app; `?beta` opts back
+  // into the old UI, kept alive as a reference. The flag is resolved once,
+  // synchronously, on the very first render — writing the cookie is a side
+  // effect React must not replay, so it lives in the useState initializer,
+  // not an effect. The whole hook set below stays unconditional; only the
+  // render output branches.
   const [beta] = useState(applyBetaAtBoot);
 
   const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
@@ -738,8 +739,8 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resolvedInputs, config]);
 
-  // The beta skin replaces the whole view; every hook above has already run
-  // unconditionally, so toggling ?beta off just re-renders the stable UI.
+  // The app skin (f7) replaces the whole view; every hook above has already
+  // run unconditionally, so ?beta (the reference UI) just re-renders the old one.
   // `inputs` here is the RAW plan (like SidebarForm) — the two levers touch
   // host-won household fields, so it matches the resolved numbers on screen.
   if (beta) {

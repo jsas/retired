@@ -1,4 +1,5 @@
-// The in-development reskin, served behind the `?beta` flag (see
+// The app's UI (built on the f7 design — the former beta, now the default).
+// The old site lives behind the `?beta` flag as a reference (see
 // src/lib/betaSkin.ts). Built from the design system in src/design/ — every
 // surface composes those primitives (per STYLEGUIDE.md / REQUIREMENTS §8.10)
 // so the vocabulary stays consistent as the skin grows toward f7. It renders
@@ -150,7 +151,7 @@ export function BetaApp({
         </Panel>
 
         <Footnote>
-          Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, levers ranked and backtests live one level down. · Beta reskin · {BETA_COOKIE_NAME} cookie · <a className="underline" href="?beta=off">leave beta</a>
+          Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, levers ranked and backtests live one level down. · The old site stays up as a reference for a while — <a className="underline" href="?beta">open it</a> ({BETA_COOKIE_NAME} cookie remembers; <a className="underline" href="?beta=off">back to the app</a>)
         </Footnote>
     </BetaPage>
   );
