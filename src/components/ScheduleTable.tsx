@@ -540,13 +540,13 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
                       </td>
                     )}
                     {hasRm && (
-                      <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
+                      <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'font-semibold text-rose-700' : 'text-slate-600'}`}
                         title={row.homeValue !== undefined ? `Home ${formatCurrency(row.homeValue)} − loan ${formatCurrency(row.loanBalance ?? 0)}` : undefined}>
                         {row.netHomeEquity !== undefined ? formatCurrency(row.netHomeEquity) : '—'}
                       </td>
                     )}
                     {hasDebts && (
-                      <td className={`px-3 py-1.5 text-right font-mono ${(row.debtBalance ?? 0) > 0.5 ? 'text-red-600' : 'text-slate-600'}`}
+                      <td className={`px-3 py-1.5 text-right font-mono ${(row.debtBalance ?? 0) > 0.5 ? 'text-rose-700' : 'text-slate-600'}`}
                         title={(row.debtPayments ?? 0) > 0.5 ? `Paid ${formatCurrency(row.debtPayments ?? 0)} this year` : undefined}>
                         {row.debtBalance !== undefined ? formatCurrency(row.debtBalance) : '—'}
                       </td>

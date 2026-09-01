@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Calculator } from 'lucide-react';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 
 interface MathPageProps {
@@ -73,7 +72,7 @@ function YearWorksheet({ row, inputs, isCouple }: {
   let n = 0;
 
   return (
-    <div className="bg-white border border-slate-200 rounded px-4 divide-y divide-slate-100">
+    <div className="divide-y divide-slate-100 border border-slate-200 bg-white px-4">
       {/* 1 — spending target */}
       <Step n={++n} title="Spending target" note="Desired spending inflated to this year, scaled by any spending-phase band, plus one-time outflow events.">
         <Eq parts={`${fmt(inputs.desiredSpending)} base, grown to this year`} result={row.spendingTarget} strong />
@@ -290,24 +289,20 @@ export function MathPage({ inputs, results, spouseAgeOffset }: MathPageProps) {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-1">
-        <Calculator size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Year math — how a year is worked out</h2>
-      </div>
-      <p className="text-xs text-slate-500 mb-4 leading-snug">
+      <p className="mb-4 text-xs leading-snug text-slate-500">
         Every number below is the actual value the engine used for that year — pick a year to see
         it worked through step by step, from the spending target down to the ending balance.
       </p>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         {spouse && (
-          <div className="flex rounded border border-slate-200 overflow-hidden">
+          <div className="flex border border-slate-200">
             {(['you', 'spouse', 'both'] as const).map(p => (
               <button
                 key={p}
                 onClick={() => setView(p)}
-                className={`px-3 py-1.5 text-xs font-medium ${view === p ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                className={`px-3 py-1.5 text-xs font-medium ${view === p ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
               >
                 {p === 'you' ? 'You' : p === 'spouse' ? 'Spouse' : 'Side by side'}
               </button>
@@ -319,7 +314,7 @@ export function MathPage({ inputs, results, spouseAgeOffset }: MathPageProps) {
           <select
             value={selAxisAge}
             onChange={e => setAxisAge(Number(e.target.value))}
-            className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white cursor-pointer"
+            className="cursor-pointer border border-slate-300 bg-white px-2 py-1.5 text-xs"
           >
             {axisAges.map(a => (
               <option key={a} value={a}>
