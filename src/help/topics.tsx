@@ -466,6 +466,7 @@ export const HELP_TOPICS: HelpTopic[] = [
           <><strong>What-if</strong> — it re-runs the engine with changed inputs and quotes the result.</>,
           <><strong>Propose changes</strong> — shown as a review card; nothing is applied until you confirm.</>,
         ])}
+        <P>Open or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The arrows in the dock's header expand it to fullscreen and back to the side rail.</P>
       </>
     ),
   },
@@ -474,7 +475,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'Local vs online models',
     section: 'Assistant',
     keywords: ['model', 'local', 'online', 'download', 'api key', 'provider'],
-    body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter, but your plan details travel to that provider). Local models are smaller, so keep questions focused. Pick and download on Connections, from the assistant's header.</P>,
+    body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter, but your plan details travel to that provider). Local models are smaller, so keep questions focused. Pick a model in the dock's model dropdown (or Connections, which the dropdown's "Load a model…" opens).</P>,
   },
   {
     id: 'assistant-privacy',
