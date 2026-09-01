@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The Plans page's scenario list, rebuilt in the f7 design: no inner page
+// The Profiles page's scenario list, rebuilt in the f7 design: no inner page
 // heading (BetaPage owns it), no rounded blue button/cards — one hairline
 // list where the active plan reads by weight and its blue dot.
 import { renderToStaticMarkup } from 'react-dom/server';

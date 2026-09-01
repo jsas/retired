@@ -794,7 +794,7 @@ function App() {
       case 'details':
         return (
           <BetaPage title="The details" chip={chip} assistant={assistantDock}>
-            <DetailsPage inputs={inputs} onChange={handleInputsChange} section={detailsSection} />
+            <DetailsPage inputs={inputs} onChange={handleInputsChange} section={detailsSection} provinceCodes={Object.keys(config.provinces).sort()} />
           </BetaPage>
         );
       case 'math':
@@ -866,25 +866,15 @@ function App() {
       case 'help':
         return <BetaHelpPage chip={chip} assistant={assistantDock} />;
       case 'agent':
-        // The full-page assistant: the whole conversation surface, undocked —
-        // room for the chat list beside the thread, the header with the model
-        // picker, and long answers. The same conversation as the dock.
+        // The assistant's own route: the SAME docked conversation as every
+        // other page (one AgentPage in the tree — mounting a second one here
+        // would fork the chat state). The route just opens the dock and lets
+        // BetaPage lay it out; deep links and back/forward keep working.
         return (
-          <BetaPage title="Assistant" hint="assistant" chip={chip}>
-            <div className="pt-6">
-              <AgentPage
-                hideTitle
-                inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
-                scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
-                activeScenarioId={activeScenarioId}
-                scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
-                onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
-                onOpenConnections={() => setView('connections')}
-                memory={store?.memory}
-                memoryScenarioId={activeScenarioId}
-                onOpenScenario={agentOpenScenario}
-                onSaveScenarioAs={agentSaveScenarioAs}
-              />
+          <BetaPage title="Assistant" hint="assistant" chip={chip} assistant={assistantDock}>
+            <div className="pt-6 max-w-xl space-y-3 text-[13px] text-slate-500">
+              <p className="text-[15px] font-semibold text-slate-900">The conversation is open beside you.</p>
+              <p>Ask about your plan, or ask it to change something — every edit is a card you approve. This page holds the same chat as the dock on every other page; the expand button in the dock's header gives it the full screen.</p>
             </div>
           </BetaPage>
         );

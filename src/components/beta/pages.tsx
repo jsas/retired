@@ -71,11 +71,11 @@ export function BetaPlansPage({ chip, assistant, managerProps, compareProps }: {
   compareProps: ComponentProps<typeof CompareCard>;
 }) {
   return (
-    <BetaPage title="Plans" hint="scenarios" chip={chip} assistant={assistant}>
+    <BetaPage title="Profiles" hint="scenarios" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ScenarioManager {...managerProps} />
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Compare plans<HelpHint topic="compare" /></h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Compare profiles<HelpHint topic="compare" /></h3>
           <CompareCard {...compareProps} />
         </section>
       </div>

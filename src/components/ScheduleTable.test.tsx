@@ -79,6 +79,22 @@ describe('ScheduleTable column picker', () => {
     expect(html).toContain('>RDSP<');
   });
 
+  it('always shows accounts and benefits the profile actually uses — even if the pref hid them', () => {
+    // The stored pref keeps only the always-visible pair; the profile holds
+    // RRSP/TFSA/taxable balances and receives CPP/OAS, so those columns must
+    // still appear (the fixture's gis/pension/cushion are zero → stay hidden).
+    localStorage.setItem(SCHEDULE_COLS_PREF_KEY, JSON.stringify(['age', 'endingBalance']));
+    const html = renderToStaticMarkup(
+      createElement(ScheduleTable, { breakdown, retirementAge: 65 }),
+    );
+    for (const label of ['RRSP', 'TFSA', 'Taxable', 'CPP', 'OAS']) {
+      expect(html, label).toContain(`>${label}<`);
+    }
+    expect(html).not.toContain('>GIS<');
+    expect(html).not.toContain('>Pension<');
+    expect(html).not.toContain('>Cash Cushion<');
+  });
+
   it('makes the retirement marker draggable when onRetirementAgeChange is given', () => {
     const html = renderToStaticMarkup(
       createElement(ScheduleTable, {

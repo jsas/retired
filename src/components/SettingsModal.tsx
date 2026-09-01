@@ -461,12 +461,10 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={v => update(c => { c.rdsp.grantLifetimeMax = v; })} step="1000" />
               <NumberField label="Grant/bond end age" value={draft.rdsp.grantEndAge}
                 onChange={v => update(c => { c.rdsp.grantEndAge = v; })} />
-              <div className="grid grid-cols-2 gap-2">
-                <NumberField label="Bond lower threshold ($)" value={draft.rdsp.bondThresholdLower}
-                  onChange={v => update(c => { c.rdsp.bondThresholdLower = v; })} step="500" />
-                <NumberField label="Bond upper threshold ($)" value={draft.rdsp.bondThresholdUpper}
-                  onChange={v => update(c => { c.rdsp.bondThresholdUpper = v; })} step="500" />
-              </div>
+              <NumberField label="Bond lower threshold ($)" value={draft.rdsp.bondThresholdLower}
+                onChange={v => update(c => { c.rdsp.bondThresholdLower = v; })} step="500" />
+              <NumberField label="Bond upper threshold ($)" value={draft.rdsp.bondThresholdUpper}
+                onChange={v => update(c => { c.rdsp.bondThresholdUpper = v; })} step="500" />
               <NumberField label="Bond annual max ($)" value={draft.rdsp.bondAnnualMax}
                 onChange={v => update(c => { c.rdsp.bondAnnualMax = v; })} step="100" />
               <NumberField label="Bond lifetime max ($)" value={draft.rdsp.bondLifetimeMax}

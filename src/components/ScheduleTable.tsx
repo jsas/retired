@@ -6,7 +6,8 @@ import {
   SCHEDULE_COLUMNS,
   SCHEDULE_COLS_PREF_KEY,
   resolveVisibleColumns,
-  DEFAULT_VISIBLE_IDS,
+  TOPICAL_COLUMN_SETS,
+  ALWAYS_VISIBLE_IDS,
   type ScheduleColumn,
 } from './scheduleColumns';
 
@@ -73,9 +74,19 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
   }, [open]);
 
   const toggleable = SCHEDULE_COLUMNS.filter((c) => !c.alwaysVisible);
-  // Reset = the shipped default set (not "all on" / "all off") — one click
-  // back to the columns a new user sees, persisted like any manual change.
-  const reset = () => onChange(new Set(DEFAULT_VISIBLE_IDS));
+  // Reset cycles the topical sets (money flow → accounts → tax → income → …)
+  // rather than toggling everything on/off: each click lands on a coherent
+  // story, and the choice persists like any manual change. The current state
+  // matches a set iff the toggleable picks equal it exactly; a hand-picked
+  // mix matches none and the next click starts at the top of the list.
+  const toggleableVisible = [...visible].filter((id) => !ALWAYS_VISIBLE_IDS.includes(id));
+  const currentSet = TOPICAL_COLUMN_SETS.findIndex((s) =>
+    s.ids.length === toggleableVisible.length && s.ids.every((id) => visible.has(id)),
+  );
+  const reset = () => {
+    const next = currentSet >= 0 ? (currentSet + 1) % TOPICAL_COLUMN_SETS.length : 0;
+    onChange(new Set([...TOPICAL_COLUMN_SETS[next].ids]));
+  };
 
   return (
     <div className="relative" ref={ref}>
@@ -94,6 +105,7 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
             type="button"
             onClick={reset}
             className="w-full text-left px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+            title="Cycle the topical column sets — money flow, accounts, tax, income"
           >
             Reset
           </button>
@@ -415,13 +427,23 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
   const hasDebts = breakdown.some(r => r.debtBalance !== undefined);
   const anyDetail = household || breakdown.some(r => r.detail);
 
-  // User-visible base columns (picker + prefKV; feature columns stay automatic).
+  // User-visible base columns (picker + prefKV), unioned with the columns the
+  // profile actually uses: an account the plan holds money in, or a benefit it
+  // receives, stays on screen even if the stored pref hid it — the picker only
+  // governs the columns this profile could take or leave. (The feature columns
+  // — RDSP/FHSA/Home Equity/Debts — already work this way: active means shown.)
+  const PROFILE_CONDITIONAL_IDS = ['rrsp', 'rrif', 'tfsa', 'taxable', 'cashCushion', 'cpp', 'oas', 'gis', 'pension'];
+  const activeFromProfile = new Set(
+    SCHEDULE_COLUMNS
+      .filter((c) => PROFILE_CONDITIONAL_IDS.includes(c.id) && breakdown.some((r) => (c.value(r) ?? 0) > 0.5))
+      .map((c) => c.id),
+  );
   const [visibleCols, setVisibleCols] = useState<Set<string>>(readVisibleCols);
   const updateVisibleCols = (next: Set<string>) => {
     setVisibleCols(next);
     prefKV().setItem(SCHEDULE_COLS_PREF_KEY, JSON.stringify([...next]));
   };
-  const shownColumns = SCHEDULE_COLUMNS.filter((c) => visibleCols.has(c.id));
+  const shownColumns = SCHEDULE_COLUMNS.filter((c) => visibleCols.has(c.id) || activeFromProfile.has(c.id));
 
   // Number of columns the detail row must span: visible base columns + the
   // expand chevron (when any row is expandable) + optional RM/RDSP/FHSA/Debt

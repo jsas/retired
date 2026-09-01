@@ -27,16 +27,20 @@ describe('BetaPage assistant dock', () => {
     expect(html).toContain('Assistant');
     expect(html).toContain('chat-body');
     expect(html).toContain('page-body');
-    expect(html).toContain('aria-label="Close the assistant"');
+    // the fullscreen toggle (arrows out to expand); closing lives on the
+    // header toggle now — no × in the dock header
+    expect(html).toContain('aria-label="Expand the assistant to fullscreen"');
+    expect(html).not.toContain('aria-label="Close the assistant"');
   });
 
-  it('omits the dock entirely when no assistant is given', () => {
+  it('the Assistant toggle is ALWAYS in the header — even with no assistant wired', () => {
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, children: createElement('div', null, 'page-body') }),
     );
-    expect(html).not.toContain('chat-body');
-    expect(html).not.toContain('aria-label="Close the assistant"');
+    expect(html).toContain('>Assistant</button>');
     expect(html).toContain('page-body');
+    // but the dock rail itself stays out — nothing to show
+    expect(html).not.toContain('chat-body');
   });
 
   it('keeps the persistent verdict chip and the named homes', () => {
@@ -44,7 +48,7 @@ describe('BetaPage assistant dock', () => {
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('90+');
-    for (const label of ['Details', 'Schedule', 'Insights', 'Plans']) {
+    for (const label of ['Details', 'Schedule', 'Insights', 'Profiles']) {
       expect(html, label).toContain(label);
     }
   });
@@ -58,17 +62,16 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toContain('Menu');
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    for (const label of ['Dashboard', 'Schedule', 'Insights', 'Plans', 'Details', 'Data', 'Print', 'Settings', 'Help']) {
+    for (const label of ['Dashboard', 'Schedule', 'Insights', 'Profiles', 'Details', 'Data', 'Print', 'Settings', 'Help']) {
       expect(labels, label).toContain(label);
     }
   });
 
-  it('the dock header links to the full-page assistant and has a close control', () => {
+  it('the dock header carries the fullscreen expand control', () => {
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
-    expect(html).toContain('#/assistant'); // the ⤢ expand link
-    expect(html).toContain('aria-label="Open the assistant full page"');
-    expect(html).toContain('aria-label="Close the assistant"');
+    expect(html).toContain('title="Fullscreen"');
+    expect(html).toContain('aria-label="Expand the assistant to fullscreen"');
   });
 });

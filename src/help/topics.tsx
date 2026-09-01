@@ -63,7 +63,7 @@ SOFTWARE.`;
 /** Section order on the page. */
 export const HELP_SECTIONS = [
   'People', 'Accounts', 'Income', 'Spending', 'Property', 'Levers',
-  'Reading the answer', 'Analysis', 'Schedule', 'Plans', 'Assistant', 'Data',
+  'Reading the answer', 'Analysis', 'Schedule', 'Profiles', 'Assistant', 'Data',
   'Assumptions', 'Glossary', 'Legal',
 ] as const;
 
@@ -436,18 +436,18 @@ export const HELP_TOPICS: HelpTopic[] = [
     body: <P>The year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The <strong>Columns</strong> button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one "show all" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail.</P>,
   },
 
-  // ── Plans ──────────────────────────────────────────────────────────────
+  // ── Profiles ──────────────────────────────────────────────────────────────
   {
     id: 'scenarios',
     title: 'Scenarios',
-    section: 'Plans',
+    section: 'Profiles',
     keywords: ['what-if', 'save', 'switch', 'new plan', 'duplicate'],
-    body: <P>A scenario is one complete set of inputs. The top bar switches between them; Save writes your edits into the active scenario; the Plans page creates, renames, duplicates and deletes. Switching away with unsaved edits asks whether to save first. Make several — "retire at 60" vs "65" — and flip or compare them.</P>,
+    body: <P>A scenario is one complete set of inputs. The top bar switches between them; Save writes your edits into the active scenario; the Profiles page creates, renames, duplicates and deletes. Switching away with unsaved edits asks whether to save first. Make several — "retire at 60" vs "65" — and flip or compare them.</P>,
   },
   {
     id: 'compare',
     title: 'Comparing plans',
-    section: 'Plans',
+    section: 'Profiles',
     keywords: ['side by side', 'compare scenarios', 'which is better'],
     body: <P>The Compare card puts 2–3 saved scenarios side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version of a plan holds up best. Each is scored with its own resolved spouse: a plan whose spouse is a linked scenario is compared as the full household.</P>,
   },

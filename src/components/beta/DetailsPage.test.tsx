@@ -18,8 +18,8 @@ vi.stubGlobal('localStorage', {
 
 const inputs = baseInputs({ currentAge: 55, retirementAge: 62, maxAge: 90 });
 const noop = () => {};
-const render = (over = {}) => renderToStaticMarkup(
-  createElement(DetailsPage, { inputs: { ...inputs, ...over }, onChange: noop, section: null }),
+const render = (over = {}, props = {}) => renderToStaticMarkup(
+  createElement(DetailsPage, { inputs: { ...inputs, ...over }, onChange: noop, section: null, ...props }),
 );
 
 describe('DetailsPage inline editors', () => {
@@ -29,6 +29,17 @@ describe('DetailsPage inline editors', () => {
       'details-income', 'details-benefits', 'details-events', 'details-spending', 'details-withdrawal', 'details-debts']) {
       expect(html, id).toContain(id);
     }
+  });
+
+  it('renders Province as a select of the config\'s codes, keeping unknown codes', () => {
+    const html = render({}, { provinceCodes: ['AB', 'BC', 'ONT'] });
+    expect(html).toContain('Province');
+    expect(html).toContain('<select');
+    expect(html).toContain('value="BC"');
+    expect(html).toContain('value="ONT"');
+    // a plan carrying a code outside the config stays selectable
+    const htmlUnknown = render({ provinceCode: 'YT' }, { provinceCodes: ['AB', 'BC', 'ONT'] });
+    expect(htmlUnknown).toContain('value="YT"');
   });
 
   it('lists existing income sources with add and remove controls', () => {

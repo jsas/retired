@@ -1,5 +1,5 @@
 // The shared beta page chrome — brand header, the named homes (Details ▾,
-// Plans ▾, Schedule, Insights, Data, style guide), the persistent verdict
+// Profiles, Schedule, Insights, Data, style guide), the persistent verdict
 // chip, and the assistant dock. Every beta page sits inside this so navigation
 // and the answer are always one glance away. Flat, hairline, sticky.
 //
@@ -11,6 +11,7 @@ import { Link } from './nav';
 import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { DETAILS_SECTIONS } from './detailsSections';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { prefKV } from '../../lib/prefKv';
 
 const DOCK_PREF_KEY = 'wealthconsole_dock_open';
@@ -33,7 +34,7 @@ export const MOBILE_MENU_ITEMS: Array<{ view: 'projection' | 'math' | 'eq' | 'sc
   { view: 'projection', label: 'Dashboard' },
   { view: 'math', label: 'Schedule' },
   { view: 'eq', label: 'Insights' },
-  { view: 'scenarios', label: 'Plans' },
+  { view: 'scenarios', label: 'Profiles' },
   { view: 'details', label: 'Details' },
   { view: 'data', label: 'Data' },
   { view: 'print', label: 'Print' },
@@ -52,13 +53,17 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
   chip: VerdictChip;
   actions?: ReactNode;
   /** The assistant conversation (AgentPage docked). Providing it turns the
-   *  Assistant button + right rail on. */
+   *  Assistant button + right rail on. THE SAME element must be passed on
+   *  every page — it always sits at the same tree position, so navigating
+   *  never unmounts the conversation and a stream keeps running. */
   assistant?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   // The dock's open state is remembered (prefKV) — closing it once keeps it
-  // closed across loads and pages until reopened. Default open.
+  // closed across loads and pages until reopened. Default open. Fullscreen is
+  // session-only: it's a viewing mode, not a preference.
   const [dockOpen, setDockOpenState] = useState<boolean>(readDockOpen);
+  const [fullscreen, setAssistantFullscreen] = useState(false);
   const setDockOpen = (open: boolean) => {
     setDockOpenState(open);
     try { prefKV().setItem(DOCK_PREF_KEY, open ? '1' : '0'); } catch { /* storage blocked */ }
@@ -91,7 +96,7 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
 
           <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Schedule</Link>
           <Link view="eq" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Insights</Link>
-          <Link view="scenarios" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Plans</Link>
+          <Link view="scenarios" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Profiles</Link>
           <Link view="data" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Data</Link>
           <Link view="print" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Print</Link>
           <Link view="settings" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Settings</Link>
@@ -113,17 +118,20 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
           <div className="flex-1" />
           {actions}
 
-          {/* the assistant toggle — the pair's star */}
-          {assistant && (
-            <button
-              type="button"
-              onClick={() => setDockOpen(!dockOpen)}
-              className="border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-slate-900"
-              title="The assistant — reads your plan, answers questions, shows its work"
-            >
-              Assistant
-            </button>
-          )}
+          {/* the assistant toggle — ALWAYS present, not gated on the dock
+              being wired: one click opens or closes it, on every page */}
+          <button
+            type="button"
+            onClick={() => setDockOpen(!dockOpen)}
+            className={`border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              dockOpen
+                ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-700'
+                : 'border-slate-300 text-slate-800 hover:border-slate-900'
+            }`}
+            title="The assistant — reads your plan, answers questions, shows its work"
+          >
+            Assistant
+          </button>
 
           {/* the persistent verdict chip — number and colour carry it; the words live in the tooltip */}
           <Link view="projection" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label={`Back to the verdict — ${chip.label}`}>
@@ -143,37 +151,49 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
           {children}
         </main>
 
-        {/* The assistant dock. Desktop: sticky 340px rail beside the content,
-            hidden when closed. Phones: a full-screen sheet when open, gone
-            when closed — the app works without it, it never traps you. */}
+        {/* The assistant dock. Closing it (header button) hides the rail but
+            NEVER unmounts the conversation — the same element sits at the
+            same tree position every page, so a stream keeps running and the
+            chat is exactly as you left it when you reopen. Desktop: sticky
+            340px rail, or fullscreen from its own expand button. Phones: a
+            full-screen sheet when open, gone when closed. */}
         {assistant && (
           <aside
             className={`${
               dockOpen
-                ? 'fixed inset-0 z-50 flex flex-col lg:sticky lg:top-12 lg:z-0 lg:flex lg:h-[calc(100vh-3rem)] lg:w-[340px] lg:shrink-0'
+                ? fullscreen
+                  ? 'fixed inset-0 z-50 top-12 flex flex-col'
+                  : 'fixed inset-0 z-50 hidden flex-col lg:sticky lg:top-12 lg:z-0 lg:flex lg:h-[calc(100vh-3rem)] lg:w-[340px] lg:shrink-0'
                 : 'hidden'
             } border-l border-slate-200 bg-white`}
             aria-label="Assistant"
           >
             <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
               <div className="flex h-5 w-5 items-center justify-center bg-slate-900 text-[8px] font-bold text-white">RE</div>
-              <div className="text-[13px] font-semibold">Assistant<HelpHint topic="assistant" /></div>
+              <HelpHint topic="assistant" />
               <div className="flex-1" />
-              <Link
-                view="agent"
-                className="px-1 text-[11px] font-medium text-slate-400 hover:text-slate-700"
-                aria-label="Open the assistant full page"
-              >
-                ⤢
-              </Link>
-              <button
-                type="button"
-                onClick={() => setDockOpen(false)}
-                className="px-1 text-lg leading-none text-slate-400 hover:text-slate-600"
-                aria-label="Close the assistant"
-              >
-                ×
-              </button>
+              {/* fullscreen toggle: arrows out to expand, in to return to the rail */}
+              {fullscreen ? (
+                <button
+                  type="button"
+                  onClick={() => setAssistantFullscreen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-700"
+                  aria-label="Return the assistant to the side rail"
+                  title="Back to the side rail"
+                >
+                  <Minimize2 size={14} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAssistantFullscreen(true)}
+                  className="p-1 text-slate-400 hover:text-slate-700"
+                  aria-label="Expand the assistant to fullscreen"
+                  title="Fullscreen"
+                >
+                  <Maximize2 size={14} />
+                </button>
+              )}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">{assistant}</div>
           </aside>

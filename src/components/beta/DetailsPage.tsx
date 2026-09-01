@@ -102,12 +102,17 @@ function defaultSpouse(primaryAge: number) {
   };
 }
 
-export function DetailsPage({ inputs, onChange, section }: {
+export function DetailsPage({ inputs, onChange, section, provinceCodes }: {
   inputs: RetirementInputs;
   onChange: (next: RetirementInputs) => void;
   section?: string | null;
+  /** The engine config's configured province codes — Province is a choice
+   *  among these, not free text (mirrors the stable app's SidebarForm). */
+  provinceCodes?: string[];
 }) {
   const set = (patch: Partial<RetirementInputs>) => onChange({ ...inputs, ...patch });
+  const provinces = provinceCodes && provinceCodes.length ? provinceCodes : null;
+  const provinceKnown = !provinces || provinces.includes(inputs.provinceCode);
   const scrolled = useRef(false);
 
   // Scroll to the deep-linked section once (Details ▾ → ?section=…).
@@ -159,7 +164,7 @@ export function DetailsPage({ inputs, onChange, section }: {
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{group}</h2>
             <div className="grid gap-x-10 md:grid-cols-2">
               {sections.map(s => (
-                <div key={s.id}>{renderSection(s.id, { inputs, set, order, move, bands })}</div>
+                <div key={s.id}>{renderSection(s.id, { inputs, set, order, move, bands, provinces, provinceKnown })}</div>
               ))}
             </div>
           </div>
@@ -179,8 +184,10 @@ function renderSection(id: string, ctx: {
   order: WithdrawalAccount[];
   move: (i: number, dir: -1 | 1) => void;
   bands: SpendingBand[];
+  provinces: readonly string[] | null;
+  provinceKnown: boolean;
 }) {
-  const { inputs: inp, set, order, move, bands } = ctx;
+  const { inputs: inp, set, order, move, bands, provinces, provinceKnown } = ctx;
   switch (id) {
     case 'profile':
       return (
@@ -191,8 +198,16 @@ function renderSection(id: string, ctx: {
           </div>
           <label className="block">
             <span className="text-[12px] text-slate-500">Province</span>
-            <input className="mt-0.5 w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] uppercase focus:border-slate-900 focus:outline-none"
-              value={inp.provinceCode} onChange={(e) => set({ provinceCode: e.target.value.toUpperCase() })} />
+            <select className="mt-0.5 w-full cursor-pointer border border-slate-300 bg-white px-2 py-1.5 text-[13px] focus:border-slate-900 focus:outline-none"
+              value={inp.provinceCode} onChange={(e) => set({ provinceCode: e.target.value.toUpperCase() })}>
+              {provinces && provinces.map(code => (
+                <option key={code} value={code}>{code}</option>
+              ))}
+              {/* a plan from a share link / backup may carry a code the current
+                  config doesn't list — keep it selectable rather than silently
+                  rewriting the plan */}
+              {!provinceKnown && <option value={inp.provinceCode}>{inp.provinceCode}</option>}
+            </select>
           </label>
         </Section>
       );

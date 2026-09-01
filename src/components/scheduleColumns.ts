@@ -201,6 +201,35 @@ export const ALWAYS_VISIBLE_IDS: readonly string[] = SCHEDULE_COLUMNS.filter((c)
 export const DEFAULT_VISIBLE_IDS: readonly string[] = SCHEDULE_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id);
 
 /**
+ * The topical reset sets — pickers of one story each, chosen to read as a
+ * coherent table rather than the union of everyone's defaults. The picker's
+ * Reset cycles through these (then back to the first), so a fresh angle is
+ * one click away and the shipped set is always reachable again.
+ */
+export const TOPICAL_COLUMN_SETS: ReadonlyArray<{ id: string; label: string; ids: readonly string[] }> = [
+  {
+    id: 'money-flow',
+    label: 'Money flow',
+    ids: ['startingBalance', 'contributions', 'marketGains', 'withdrawals', 'cpp', 'oas'],
+  },
+  {
+    id: 'accounts',
+    label: 'Accounts',
+    ids: ['startingBalance', 'rrsp', 'rrif', 'tfsa', 'taxable', 'cashCushion'],
+  },
+  {
+    id: 'tax',
+    label: 'Tax',
+    ids: ['withdrawals', 'incomeTax', 'totalTax', 'cumulativeTax'],
+  },
+  {
+    id: 'income',
+    label: 'Income',
+    ids: ['cpp', 'oas', 'gis', 'pension', 'spendingTarget'],
+  },
+];
+
+/**
  * Resolve which base columns are visible from a stored pref value.
  * `null` (no pref) → the default set. A stored array is intersected with the
  * known ids and always unioned with the always-visible pair, so stale ids
