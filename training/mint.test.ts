@@ -38,6 +38,26 @@ describe('corpus minter', () => {
     expect(new Set(evals.map((r) => r.expect.toolName)).size).toBeGreaterThan(1);
   });
 
+  it('train and eval are disjoint (no id leaks across the split)', () => {
+    // Guard against any future mint path that accidentally assigns the same
+    // record to BOTH splits — without this check, eval-validity scores would
+    // report inflated percentages on models that memorized the eval items.
+    const scan = (rs: typeof records) => {
+      const ids = new Set(rs.map((r) => r.id));
+      const trainIds = new Set(rs.filter((r) => r.split === 'train').map((r) => r.id));
+      const evalIds = new Set(rs.filter((r) => r.split === 'eval').map((r) => r.id));
+      const overlap = [...trainIds].filter((i) => evalIds.has(i));
+      expect(overlap, `split overlap: ${overlap.slice(0, 5).join(',')}`).toEqual([]);
+      expect(trainIds.size + evalIds.size).toBe(ids.size);
+    };
+    scan(records);
+    scan(mintMutationRecords());
+    scan(mintGuardrailRecords());
+    scan(mintOptionFramingRecords());
+    scan(mintDomainKnowledgeRecords());
+    scan(mintCorpus());
+  }, 600000);
+
   it('every tool-call record emits a protocol-valid in-catalog call', () => {
     for (const r of records.filter((x) => x.kind === 'tool-call')) {
       const assistantLine = r.messages[1].content;
@@ -60,7 +80,7 @@ describe('corpus minter', () => {
       const outcome = executeToolCall(ctx, { id: 't', name: v.name, args: v.args });
       expect(outcome.kind, `${r.id} args must satisfy schema`).not.toBe('error');
     }
-  }, 120000);
+  }, 600000);
 
   it('follow-up turns are grounded in real engine output and stay non-advisory', () => {
     for (const r of records.filter((x) => x.kind === 'tool-followup')) {
@@ -139,7 +159,7 @@ describe('guardrail records', () => {
       mintReadRecords().length + mintMutationRecords().length + guard.length
       + mintOptionFramingRecords().length + mintDomainKnowledgeRecords().length,
     );
-  }, 120000);
+  }, 600000);
 });
 
 describe('mutation records', () => {

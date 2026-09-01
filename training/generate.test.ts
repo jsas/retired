@@ -11,13 +11,13 @@ describe('corpus determinism', () => {
     const a = toJsonl(mintReadRecords());
     const b = toJsonl(mintReadRecords());
     expect(a).toBe(b);
-  }, 60000);
+  }, 240000);
 
   it('the eval split hash is stable across runs', () => {
     const evalJsonl = () => toJsonl(mintReadRecords().filter((r) => r.split === 'eval'));
     const h = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16);
     expect(h(evalJsonl())).toBe(h(evalJsonl()));
-  }, 60000);
+  }, 240000);
 
   it('monte-carlo exemplars use a fixed seed (reproducible futures)', () => {
     // run_monte_carlo / solve_spending results must be reproducible; the engine

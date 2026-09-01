@@ -22,7 +22,13 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'packages/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts', 'src/**/*.test.tsx', 'packages/**/*.test.ts',
+      // SFT corpus gates the deploy too: a leaked split would inflate the
+      // bake-off's protocol-validity scoring on any fine-tuned model, and we
+      // would never see the leak. Run training tests in the same gate.
+      'training/**/*.test.ts',
+    ],
     globals: false,
   },
 });

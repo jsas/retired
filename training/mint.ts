@@ -47,6 +47,9 @@ const READ_SPECS: ReadSpec[] = [
       () => 'Run the projection on my plan.',
       () => 'Is my plan funded to the end?',
       () => 'How does my retirement look?',
+      () => 'Check whether my plan holds up.',
+      () => 'See if my retirement plan works.',
+      () => 'Does my plan run out before the end?',
     ],
     args: () => ({}),
     explainFrom: 'verdict',
@@ -57,6 +60,7 @@ const READ_SPECS: ReadSpec[] = [
       (sc) => `What changes if I retire at ${sc.inputs.retirementAge + 2}?`,
       (sc) => `What if I work until ${sc.inputs.retirementAge + 2}?`,
       (sc) => `Show me the numbers for retiring at ${sc.inputs.retirementAge + 2}.`,
+      (sc) => `What does working until ${sc.inputs.retirementAge + 2} do?`,
     ],
     args: (sc) => ({ overrides: { retirementAge: sc.inputs.retirementAge + 2 } }),
     explainFrom: 'verdict',
@@ -66,6 +70,7 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       (sc) => `What if I retired a couple years earlier, at ${Math.max(sc.inputs.retirementAge - 2, sc.inputs.currentAge)}?`,
       (sc) => `Run it with retirement at ${Math.max(sc.inputs.retirementAge - 2, sc.inputs.currentAge)}.`,
+      (sc) => `What if I pull the plug earlier — say at ${Math.max(sc.inputs.retirementAge - 2, sc.inputs.currentAge)}?`,
     ],
     args: (sc) => ({ overrides: { retirementAge: Math.max(sc.inputs.retirementAge - 2, sc.inputs.currentAge) } }),
     explainFrom: 'verdict',
@@ -76,6 +81,7 @@ const READ_SPECS: ReadSpec[] = [
       (sc) => `Compare retiring at ${sc.inputs.retirementAge} vs ${sc.inputs.retirementAge + 3}.`,
       (sc) => `Should I look at ${sc.inputs.retirementAge} or ${sc.inputs.retirementAge + 3}? Show both.`,
       (sc) => `What's the difference between retiring at ${sc.inputs.retirementAge} and ${sc.inputs.retirementAge + 3}?`,
+      (sc) => `Put age-${sc.inputs.retirementAge} beside age-${sc.inputs.retirementAge + 3}.`,
     ],
     args: (sc) => ({
       variants: [
@@ -90,6 +96,8 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       (sc) => `Compare taking CPP at ${sc.inputs.cppStartAge ?? 65} vs 70.`,
       (sc) => `CPP at ${sc.inputs.cppStartAge ?? 65} or defer to 70 — show me both.`,
+      (sc) => `What does delaying CPP to 70 change?`,
+      (sc) => `Put CPP at ${sc.inputs.cppStartAge ?? 65} next to CPP at 70.`,
     ],
     args: (sc) => ({
       variants: [
@@ -100,11 +108,42 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'compare',
   },
   {
+    tool: 'compare_scenarios',
+    questions: [
+      (sc) => `Compare taking OAS at 65 vs 70.`,
+      (sc) => `OAS at 65 or defer to 70 — show both.`,
+      () => `What does delaying OAS to 70 change?`,
+    ],
+    args: (sc) => ({
+      variants: [
+        { label: 'OAS at 65', overrides: { oasStartAge: 65 } },
+        { label: 'OAS at 70', overrides: { oasStartAge: 70 } },
+      ],
+    }),
+    explainFrom: 'compare',
+  },
+  {
+    tool: 'compare_scenarios',
+    questions: [
+      () => `Compare taking CPP early at 60 vs normal at 65.`,
+      () => `CPP at 60 vs 65 — show the two.`,
+    ],
+    args: () => ({
+      variants: [
+        { label: 'CPP at 60', overrides: { cppStartAge: 60 } },
+        { label: 'CPP at 65', overrides: { cppStartAge: 65 } },
+      ],
+    }),
+    explainFrom: 'compare',
+  },
+  {
     tool: 'run_monte_carlo',
     questions: [
       () => 'What are the odds my money lasts?',
       () => 'Run the Monte Carlo simulation.',
       () => 'How likely is my plan to succeed across different markets?',
+      () => 'Simulate the markets — show the success rate.',
+      () => 'Check how robust the plan is.',
     ],
     args: () => ({ runs: 500 }),
     explainFrom: 'monteCarlo',
@@ -115,6 +154,8 @@ const READ_SPECS: ReadSpec[] = [
       () => 'How much can I safely spend each year?',
       () => 'What annual spending is sustainable?',
       () => 'Solve for the spending my plan can support.',
+      () => 'What\'s the most I can spend each year without running out?',
+      () => 'What spending level survives most markets?',
     ],
     args: () => ({ targetSuccessRate: 0.9, runs: 500 }),
     explainFrom: 'solve',
@@ -125,6 +166,7 @@ const READ_SPECS: ReadSpec[] = [
       () => 'What accounts do I have?',
       () => 'Show me my account balances.',
       () => 'Read my current accounts.',
+      () => 'List my accounts.',
     ],
     args: () => ({ section: 'accounts' }),
     explainFrom: 'none', // raw JSON block (no $/%) — tool-call exemplar only
@@ -134,6 +176,7 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       () => 'What are my CPP and OAS details?',
       () => 'Show my government benefits.',
+      () => 'Read my benefits setup.',
     ],
     args: () => ({ section: 'benefits' }),
     explainFrom: 'none',
@@ -143,6 +186,8 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       (sc) => `Show my year-by-year balances from ${sc.inputs.retirementAge} to ${sc.inputs.maxAge}.`,
       (sc) => `Walk me through the projection every few years.`,
+      (sc) => `Show the schedule from ${sc.inputs.retirementAge} to ${sc.inputs.maxAge}.`,
+      (sc) => `Show me the tables.`,
     ],
     args: (sc) => ({ fromAge: sc.inputs.retirementAge, toAge: sc.inputs.maxAge, stride: 5 }),
     explainFrom: 'none', // large multi-line table — tool-call exemplar only
@@ -153,6 +198,8 @@ const READ_SPECS: ReadSpec[] = [
       () => 'What levers would help my plan most?',
       () => 'Which changes improve my sustainable spending?',
       () => 'Explore the strategies that could help.',
+      () => 'Survey the levers on my plan.',
+      () => 'What could I tweak to improve it?',
     ],
     args: () => ({ maxVariants: 5 }),
     explainFrom: 'none',
@@ -162,6 +209,7 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       () => 'What plans do I have saved?',
       () => 'List my scenarios.',
+      () => 'Show the scenarios I have.',
     ],
     args: () => ({}),
     explainFrom: 'none',
@@ -277,6 +325,8 @@ const MUTATION_SPECS: MutationSpec[] = [
     questions: [
       (sc) => `Change my retirement age to ${sc.inputs.retirementAge + 2}.`,
       (sc) => `Set retirement at ${sc.inputs.retirementAge + 2}.`,
+      (sc) => `Move retirement to ${sc.inputs.retirementAge + 2}.`,
+      (sc) => `I want to work until ${sc.inputs.retirementAge + 2}.`,
     ],
     args: (sc) => ({ field: 'retirementAge', value: sc.inputs.retirementAge + 2 }),
     approvedReply: (sc) => `Done — retirement age updated to ${sc.inputs.retirementAge + 2}. Want me to re-run the projection on the new plan?`,
@@ -286,6 +336,8 @@ const MUTATION_SPECS: MutationSpec[] = [
     tool: 'set_scenario_value',
     questions: [
       (sc) => `Lower my spending to $${Math.round(sc.inputs.desiredSpending * 0.9).toLocaleString('en-CA')} a year.`,
+      (sc) => `Reduce my yearly spending to $${Math.round(sc.inputs.desiredSpending * 0.9).toLocaleString('en-CA')}.`,
+      (sc) => `Dial my spending back to $${Math.round(sc.inputs.desiredSpending * 0.9).toLocaleString('en-CA')}.`,
     ],
     args: (sc) => ({ field: 'desiredSpending', value: Math.round(sc.inputs.desiredSpending * 0.9) }),
     approvedReply: () => 'Updated. I can run the projection to show what that does to the plan.',
@@ -296,6 +348,8 @@ const MUTATION_SPECS: MutationSpec[] = [
     questions: [
       () => 'Delay both CPP and OAS to 70.',
       () => 'Push CPP and OAS out to age 70.',
+      () => 'Move both benefits out to 70.',
+      () => 'Delay CPP and OAS together to 70.',
     ],
     args: () => ({ changes: { cppStartAge: 70, oasStartAge: 70 } }),
     approvedReply: () => 'Both benefit start ages moved to 70. Want me to compare that against the current timing?',
@@ -306,6 +360,7 @@ const MUTATION_SPECS: MutationSpec[] = [
     questions: [
       () => 'I have a small pension that pays $800 a month starting at 65.',
       () => 'Add my work pension of $800/month from age 65.',
+      () => 'Add in a pension paying $800 monthly from 65.',
     ],
     args: () => ({ label: 'Work pension', kind: 'pension', annualAmount: 9600, startAge: 65, endAge: null, indexedToCpi: true }),
     approvedReply: () => 'Pension added. I can show how it changes the drawdown.',
@@ -505,6 +560,13 @@ const REFUSAL_ASKS: Array<(sc: NamedScenario) => string> = [
   () => 'Should I draw down my RRSP first or my TFSA?',
   () => 'Is a reverse mortgage a good idea for me?',
   () => 'Tell me what to do with my savings.',
+  () => 'Should I defer my OAS to 70?',
+  () => 'Which pension should I draw on first?',
+  () => 'What\'s the smartest retirement age for me?',
+  () => 'Should we sell the house and rent?',
+  () => 'Is it better to take CPP early and invest the difference?',
+  () => 'What\'s the optimal TFSA / RRSP split for me?',
+  () => 'Should I downsize to fund retirement?',
 ];
 
 /** Ambiguous asks where the right move is a clarifying question, not a tool. */
@@ -512,6 +574,13 @@ const CLARIFY_ASKS: Array<{ ask: (sc: NamedScenario) => string; clarify: string 
   { ask: () => 'What about my wife?', clarify: 'Would you like me to add a spouse to the plan, or open a plan that already has one?' },
   { ask: () => 'Can you bump that up a bit?', clarify: 'Which value would you like me to change, and to what?' },
   { ask: () => 'Will I be okay?', clarify: 'Do you mean whether your savings last to the end of the plan, or how much you can spend each year?' },
+  { ask: () => 'Add my pension.', clarify: 'What kind of income — a defined-benefit pension, a regular annuity, employment income, or CPP/OAS? And roughly how much per year?' },
+  { ask: () => 'Make that a lot better.', clarify: 'Better how — higher sustainable spending, longer horizon, or less risk?' },
+  { ask: () => 'Put the retirement age back.', clarify: 'Back to what age — the current setting, or the default?' },
+  { ask: () => 'Make the spending bands gentler.', clarify: 'Gentler at which band boundaries — the slow-go at 75, or no-go at 85? And to what percentage of base would you like each moved?' },
+  { ask: () => 'What about the house?', clarify: 'Do you want to add a reverse mortgage, add a cash-downsize event, or contribute the sale proceeds to one of the accounts?' },
+  { ask: () => 'Run it with better markets.', clarify: 'Better by how much and when — a one-off boomer year, an extended bull run, or lower volatility? Which shape would you like?' },
+  { ask: () => 'What happens when my spouse starts drawing their pension?', clarify: 'Which member of the household should I run — you, or your partner — and at what start age would you like to see it?' },
 ];
 
 /** Plain-language concept explainers — no tool needed, but the model should
@@ -528,6 +597,46 @@ const DOMAIN_EXPLAIN: Array<{ ask: string; answer: string }> = [
   {
     ask: 'What is a RRIF meltdown?',
     answer: 'After 71 you must draw a rising minimum from your RRIF whether you need it or not, and it\'s fully taxable. A "meltdown" spreads or accelerates withdrawals earlier to avoid a big taxed lump and OAS/GIS clawback later. I can model it on your plan.',
+  },
+  {
+    ask: 'How does the OAS clawback work?',
+    answer: 'Old Age Security shrinks by 15 cents per extra dollar of taxable income above the threshold (say ~$95k in 2026). RRIF, employment income, and taxable capital gains all count. Deferring CPP won\'t raise your OAS floor — I can show the clawback in your own projection.',
+  },
+  {
+    ask: 'What makes GIS different from OAS?',
+    answer: 'OAS is available to essentially everyone and is clawed back only past a taxable-income threshold. GIS is a top-up for low-income seniors and is clawed at around 50 cents per dollar of other taxable income — far steeper than OAS. I can check whether your plan triggers GIS at all.',
+  },
+  {
+    ask: 'What\'s a spending-band plan?',
+    answer: 'Instead of a flat $ amount every year, you break retirement into phases (go-go/slow-go/no-go) with a percentage of base spending in each. It reflects how people usually spend a bit less as they age. I can model a set of bands on your plan.',
+  },
+  {
+    ask: 'When does my RRSP turn into a RRIF?',
+    answer: 'By federal rule at the calendar year end you turn 71 it must convert; payments start the next year. Before then you can convert voluntarily. Either way the minimum-withdrawal schedule then applies. I can project your balances through that boundary.',
+  },
+  {
+    ask: 'What is a reverse mortgage?',
+    answer: 'A secured loan against home equity. You get a periodic draw (tax-free) and the interest accrues against property value; balance compounds until you or the estate sells. I can model draws + interest against your home and see what it does to the plan.',
+  },
+  {
+    ask: 'When does the OAS clawback kick in?',
+    answer: 'OAS shrinks by 15 cents for every dollar of taxable income above the threshold (CRA sets it annually). In 2026 it\'s roughly $95k — a couple of big RRIF draws will push you above it. I can check the tax/AI clipping in your own numbers.',
+  },
+  {
+    ask: 'What is an FHSA and how does it fit my plan?',
+    answer: 'The First Home Savings Account lets qualifying first-time buyers contribute deductible income up to CRA limits, grow tax-sheltered, and (if you don\'t buy) transfer to your RRSP at retirement. I can add an FHSA section to your plan or run you through the effect.',
+  },
+  {
+    ask: 'What\'s the difference between accounts in a drawdown plan?',
+    answer: 'The engine tracks RRSP/RRIF, TFSA, taxable, and cash cushion separately. Withdrawals follow the default order (see Settings) unless you override, and tax is calculated account by account on the real cash flows. I can run your projection to show which account does the work year by year.',
+  },
+  {
+    ask: 'How does the credit-card debt affect my retirement?',
+    answer: 'Consumer debt sits as a separate obligation that drains the planned spending every month until it\'s paid off — so it drags worst in early years where it also rides at a high interest rate. I can model it into your plan to show the cost of that drag year by year.',
+  },
+  {
+    ask: 'What is a cash event?',
+    answer: 'A one-shot inflow or outflow at a specific age — inheritance, sale of the house, a large purchase. Once set it sits outside the regular spend plan and the tax engine handles it as cash. I can add one to your plan.',
   },
 ];
 
@@ -556,6 +665,9 @@ export function mintGuardrailRecords(): CorpusRecord[] {
       });
     }
   }
+  // Trivial because of the phrasing below: the model must always answer with the
+  // same register — facts + consequences + offer to ground. Each canonical fact ->
+  // a record, then we add 2 extra phrasings to teach paraphrase-independence.
   for (const { ask, answer } of DOMAIN_EXPLAIN) {
     records.push({
       id: `domain:${seq++}`, split: 'train', kind: 'domain-explain', scenarioId: 'any',
