@@ -6,6 +6,10 @@ import type { ChatMessage } from './providers';
 
 const user = (content: string): ChatMessage => ({ role: 'user', content });
 const assistant = (content: string): ChatMessage => ({ role: 'assistant', content });
+const toolCall = (id: string, name: string): ChatMessage =>
+  ({ role: 'assistant', content: '', toolCalls: [{ id, name, args: { a: 1 } }] });
+const toolResult = (id: string, body: string): ChatMessage =>
+  ({ role: 'user', content: '', toolResults: [{ toolCallId: id, content: body }] });
 
 describe('estimateTokens', () => {
   it('counts system + message characters at ~4 chars/token', () => {
@@ -121,5 +125,81 @@ describe('planCompaction', () => {
   it('the digest note wraps whatever digest it is given', () => {
     expect(summaryNote('User is 60.')).toContain('User is 60.');
     expect(summaryNote('')).toContain('(no digest yet');
+  });
+
+  it('folds an assistant tool call + its result atomically — the excerpt never dangles', () => {
+    const long = 'lorem ipsum '.repeat(80);
+    const messages = [
+      user(long),
+      toolCall('c1', 'run_projection'),
+      toolResult('c1', 'projection: 30 years, ends at $812k'),
+      user(long),
+      assistant('recent'),
+    ];
+    const plan = planCompaction({ system: 's', messages, contextSize: 220, keepRecent: 2 });
+    expect(plan.compacted).toBe(true);
+    // The folded call and its result travel together in the excerpt — the
+    // digest model sees what the assistant DID, and never one half of a pair.
+    expect(plan.excerptToDigest).toContain('called run_projection');
+    expect(plan.excerptToDigest).toContain('Tool returned');
+    expect(plan.excerptToDigest).toContain('projection: 30 years');
+  });
+
+  it('re-renders folded tool traffic as readable notes, not raw JSON stubs', () => {
+    const long = 'lorem ipsum '.repeat(80);
+    const messages = [
+      toolCall('c1', 'get_metrics'),
+      toolResult('c1', 'end balance $1.2M'),
+      assistant(long),
+    ];
+    const plan = planCompaction({ system: 's', messages, contextSize: 120, keepRecent: 1 });
+    expect(plan.compacted).toBe(true);
+    expect(plan.excerptToDigest).toContain('Assistant called get_metrics(');
+    expect(plan.excerptToDigest).toContain('Tool returned: end balance $1.2M');
+  });
+
+  it('lists only THIS pass’s newly dropped turns in the excerpt — earlier folds stay in the prior digest', () => {
+    const prior = 'User is 60, RRSP $500k.';
+    const long = 'z'.repeat(1200);
+    const messages = [user(long), assistant(long), user('q'), assistant('a')];
+    const plan = planCompaction({ system: 's', messages, contextSize: 160, priorSummary: prior, keepRecent: 2 });
+    expect(plan.compacted).toBe(true);
+    // Prior digest is handed back for extension, not re-summarized verbatim.
+    expect(plan.excerptToDigest).toContain(`Prior digest:\n${prior}`);
+    // Only the turns dropped THIS pass are folded in (the long pair), not the
+    // kept tail.
+    expect(plan.excerptToDigest).toContain('z'.repeat(80));
+    expect(plan.excerptToDigest).not.toContain('Assistant: a');
+  });
+
+  it('bounds the excerpt on a runaway history', () => {
+    const long = 'lorem ipsum dolor '.repeat(100); // ~1800 chars each
+    const messages = Array.from({ length: 60 }, (_, i) =>
+      i % 2 === 0 ? user(`${i}:${long}`) : assistant(`${i}:${long}`));
+    const plan = planCompaction({ system: 's', messages, contextSize: 400, keepRecent: 4 });
+    expect(plan.compacted).toBe(true);
+    // The excerpt budget is a quarter of the compaction budget: 400*0.8*0.25
+    // = 80 tokens → ~320 chars. The minimum floor (500 tokens → 2000 chars)
+    // doesn't apply because the fractional bound is higher here — the excerpt
+    // must stay well under the unbounded ~100k-char history handed to it.
+    expect(plan.excerptToDigest.length).toBeLessThan(10_000);
+  });
+
+  it('keeps the newest tool pair intact when it lands on the fold boundary', () => {
+    const long = 'y'.repeat(800);
+    const messages = [
+      user(long),
+      toolCall('c9', 'list_scenarios'),
+      toolResult('c9', 'Base, What-if'),
+    ];
+    // Window too small for everything, but the boundary falls on a tool pair:
+    // it must be kept whole (call + result together), never split.
+    const plan = planCompaction({ system: 's', messages, contextSize: 140, keepRecent: 2 });
+    expect(plan.compacted).toBe(true);
+    const kept = plan.messages.slice(1); // after the digest note
+    // If the tool pair is kept, both halves are present — else neither is.
+    const keptCall = kept.find(m => m.toolCalls?.some(c => c.id === 'c9'));
+    const keptResult = kept.find(m => m.toolResults?.some(r => r.toolCallId === 'c9'));
+    expect(Boolean(keptCall)).toBe(Boolean(keptResult));
   });
 });
