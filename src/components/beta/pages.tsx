@@ -85,7 +85,7 @@ export function BetaPlansPage({ chip, assistant, managerProps, compareProps }: {
 
 export function BetaDataPage({ chip, assistant, ...props }: ComponentProps<typeof SharingPage> & { chip: VerdictChip; assistant?: ReactNode }) {
   return (
-    <BetaPage title="Data — backup, restore, share" hint="data-backup-restore" chip={chip} assistant={assistant}>
+    <BetaPage title="Data — share a plan" hint="data-backup-restore" chip={chip} assistant={assistant}>
       <div className="pt-6"><SharingPage {...props} /></div>
     </BetaPage>
   );
@@ -118,7 +118,7 @@ export function BetaHelpPage({ chip, assistant }: { chip: VerdictChip; assistant
 export function BetaPrintPage({ chip, assistant, ...props }: ComponentProps<typeof PrintOptionsCard> & { chip: VerdictChip; assistant?: ReactNode }) {
   return (
     <BetaPage title="Print & export" hint="print-export" chip={chip} assistant={assistant}>
-      <div className="pt-6 max-w-2xl"><PrintOptionsCard {...props} /></div>
+      <div className="pt-6"><PrintOptionsCard {...props} /></div>
     </BetaPage>
   );
 }
@@ -126,7 +126,7 @@ export function BetaPrintPage({ chip, assistant, ...props }: ComponentProps<type
 export function BetaDonatePage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
   return (
     <BetaPage title="Support this app" chip={chip} assistant={assistant}>
-      <div className="pt-6 max-w-2xl"><DonateCard /></div>
+      <div className="pt-6"><DonateCard /></div>
     </BetaPage>
   );
 }

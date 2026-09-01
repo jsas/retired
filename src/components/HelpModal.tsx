@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Search, X, Sparkles } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { HELP_SECTIONS, helpTopic, searchHelpTopics, type HelpTopic } from '../help/topics';
 
 // Highlight every occurrence of `query` inside string children of `node`.
@@ -85,14 +85,13 @@ export function HelpModal() {
       {/* Re-run the guided first-scenario setup (the welcome wizard). */}
       <a
         href="#/welcome"
-        className="mb-3 flex items-center gap-3 px-3 py-2.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 group"
+        className="group mb-5 flex items-baseline gap-3 border-b border-slate-200 pb-4 text-[13px] text-slate-600 hover:text-slate-900"
       >
-        <Sparkles size={16} className="shrink-0 text-blue-600" />
-        <span className="flex-1 text-xs text-slate-700">
+        <span className="flex-1">
           <span className="font-semibold text-slate-900">Walk through your first scenario</span>
           {' '}— a 5-step guided setup (ages, savings, benefits, spending).
         </span>
-        <span className="text-[11px] font-medium text-blue-600 group-hover:underline">Open →</span>
+        <span className="shrink-0 text-[11px] font-medium group-hover:underline">Open →</span>
       </a>
 
       {/* Search */}
@@ -103,7 +102,7 @@ export function HelpModal() {
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Search help — try “clawback”, “TFSA”, “share link”…"
-          className="w-full pl-8 pr-8 py-1.5 text-xs border border-slate-300 focus:outline-none focus:border-blue-500"
+          className="w-full border border-slate-300 py-1.5 pl-8 pr-8 text-xs focus:border-slate-900 focus:outline-none"
         />
         {q && (
           <button
@@ -128,7 +127,7 @@ export function HelpModal() {
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {bySection.map(([section]) => (
-            <a key={section} href={`#section-${section.replace(/\s+/g, '-').toLowerCase()}`} className="text-xs text-blue-600 hover:underline">
+            <a key={section} href={`#section-${section.replace(/\s+/g, '-').toLowerCase()}`} className="text-xs text-slate-600 hover:text-slate-900 hover:underline">
               {section}
             </a>
           ))}
@@ -154,7 +153,7 @@ export function HelpModal() {
                 key={t.id}
                 id={`topic-${t.id}`}
                 className={`py-1.5 border-b border-slate-100 last:border-0 scroll-mt-4 ${
-                  flashId === t.id ? 'bg-blue-50' : ''
+                  flashId === t.id ? 'bg-slate-100' : ''
                 }`}
               >
                 <div className="flex items-baseline gap-2">
@@ -162,7 +161,7 @@ export function HelpModal() {
                   <a
                     href={`#/help?topic=${t.id}`}
                     title="Link to this topic"
-                    className="text-[10px] text-slate-300 hover:text-blue-600"
+                    className="text-[10px] text-slate-300 hover:text-slate-900"
                   >
                     #
                   </a>
