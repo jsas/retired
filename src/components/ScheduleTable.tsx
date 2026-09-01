@@ -6,6 +6,7 @@ import {
   SCHEDULE_COLUMNS,
   SCHEDULE_COLS_PREF_KEY,
   resolveVisibleColumns,
+  DEFAULT_VISIBLE_IDS,
   type ScheduleColumn,
 } from './scheduleColumns';
 
@@ -72,21 +73,15 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
   }, [open]);
 
   const toggleable = SCHEDULE_COLUMNS.filter((c) => !c.alwaysVisible);
-  const allOn = toggleable.every((c) => visible.has(c.id));
-
-  const setAll = (on: boolean) => {
-    const next = new Set(visible);
-    for (const c of toggleable) {
-      if (on) next.add(c.id); else next.delete(c.id);
-    }
-    onChange(next);
-  };
+  // Reset = the shipped default set (not "all on" / "all off") — one click
+  // back to the columns a new user sees, persisted like any manual change.
+  const reset = () => onChange(new Set(DEFAULT_VISIBLE_IDS));
 
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen((o) => !o)}
         className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-600 border border-slate-300 hover:border-slate-900 hover:text-slate-900"
         title="Choose which columns the table shows"
       >
@@ -97,10 +92,10 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
         <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 p-2">
           <button
             type="button"
-            onClick={() => setAll(!allOn)}
+            onClick={reset}
             className="w-full text-left px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
           >
-            {allOn ? 'Show fewer' : 'Show all'}
+            Reset
           </button>
           <div className="my-1 border-t border-slate-100" />
           {toggleable.map((c) => (
@@ -329,7 +324,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
       return next;
     });
 
-  // The blue hairline row marks "stop working at". When the page hands us an
+  // The blue hairline row marks the start-drawing age. When the page hands us an
   // onChange, that row is draggable: press on the grip and pull up or down;
   // release and the retirement age moves to the row under the pointer, clamped
   // to the same bounds the lever uses. The listeners live on the DOCUMENT, not
@@ -444,7 +439,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
             canDragRetire
               ? <span
                   role="slider"
-                  aria-label={`Stop working at — drag to change (now ${effectiveRetirement})`}
+                  aria-label={`Start drawing — drag to change (now ${effectiveRetirement})`}
                   aria-valuemin={dragLo} aria-valuemax={dragHi} aria-valuenow={effectiveRetirement}
                   onPointerDown={beginRetireDrag}
                   title={`Drag to change the retirement age (now ${effectiveRetirement})`}

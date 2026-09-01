@@ -44,11 +44,11 @@ describe('primitives render', () => {
 
   it('Fader renders a labelled range input with tabular value', () => {
     const html = render(
-      <Fader label="Spend a year" value={85000} min={40000} max={160000} step={1000}
+      <Fader label="After Tax Spending" value={85000} min={40000} max={160000} step={1000}
         format={(v) => '$' + v.toLocaleString()} onChange={() => {}} />,
     );
     expect(html).toContain('type="range"');
-    expect(html).toContain('Spend a year');
+    expect(html).toContain('After Tax Spending');
     expect(html).toContain('fader');
     expect(html).toContain('num');
   });

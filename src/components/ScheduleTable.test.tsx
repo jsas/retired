@@ -55,7 +55,7 @@ describe('ScheduleTable column picker', () => {
     for (const label of ['Age', 'Starting Balance', 'Contributions', 'Market Gains', 'Withdrawals', 'CPP', 'OAS', 'Ending Balance']) {
       expect(html, label).toContain(label);
     }
-    // Off by default, one "show all" away.
+    // Off by default; the picker's Reset restores this set.
     for (const label of ['>GIS<', '>RRIF<', '>Cash Cushion<', '>Tax Burden<']) {
       expect(html, label).not.toContain(label);
     }

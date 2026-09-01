@@ -122,10 +122,10 @@ export function StyleGuide() {
             sub="Spending $85,000 a year from 62. The dot sits below the boundary."
           />
           <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <Fader label="Stop working at" value={age} min={55} max={75} step={1}
+            <Fader label="Start Drawing" value={age} min={55} max={75} step={1}
               format={(v) => `${v}`} onChange={setAge}
               hint="Working one more year moves the boundary." />
-            <Fader label="Spend a year" value={spend} min={40000} max={160000} step={1000}
+            <Fader label="After Tax Spending" value={spend} min={40000} max={160000} step={1000}
               format={(v) => '$' + v.toLocaleString('en-CA')} onChange={setSpend}
               hint="$5,000 less a year and it lasts past the plan." />
           </div>

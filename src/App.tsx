@@ -895,9 +895,14 @@ function App() {
         return (
           <LandingPage
             config={config}
-            onBuild={(plan) => {
+            onBuild={(plan, opts) => {
               setInputs(JSON.parse(JSON.stringify(plan)));
               setHasUnsavedChanges(true);
+              // "keep chatting" arrives with the assistant dock open; "go to
+              // dashboard" with it closed. The dock reads this pref on mount.
+              if (opts?.openAssistant !== undefined) {
+                try { prefKV().setItem('wealthconsole_dock_open', opts.openAssistant ? '1' : '0'); } catch { /* storage blocked */ }
+              }
               setView('projection');
             }}
           />

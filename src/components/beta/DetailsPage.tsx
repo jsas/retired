@@ -142,9 +142,9 @@ export function DetailsPage({ inputs, onChange, section }: {
       {/* the three levers, on the page too */}
       <Panel label="The big three">
         <div className="grid gap-6 md:grid-cols-3">
-          <Fader label="Stop working at" value={inputs.retirementAge} min={inputs.currentAge} max={75} step={1}
+          <Fader label="Start Drawing" value={inputs.retirementAge} min={inputs.currentAge} max={75} step={1}
             format={(v) => `${v}`} onChange={(v) => set({ retirementAge: v })} />
-          <Fader label="Spend a year" help="desired-spending" value={inputs.desiredSpending} min={0} max={ranges.spendingMax} step={1000}
+          <Fader label="After Tax Spending" help="desired-spending" value={inputs.desiredSpending} min={0} max={ranges.spendingMax} step={1000}
             format={fmtMoney} onChange={(v) => set({ desiredSpending: v })} />
           <Fader label="Markets" help="expected-return" value={Math.round(inputs.investmentReturn * 1000) / 10} min={ranges.returnMin * 100} max={ranges.returnMax * 100} step={0.1}
             format={(v) => `${v.toFixed(1)}%`} onChange={(v) => set({ investmentReturn: v / 100 })} />
@@ -340,7 +340,7 @@ function renderSection(id: string, ctx: {
     case 'spending':
       return (
         <Section id="spending" title="Spending Phases" hint="spending-phases">
-          <p className="text-[12px] text-slate-500">Base spending is the "Spend a year" lever above. Phases scale it by age (go-go / slow-go / no-go).</p>
+          <p className="text-[12px] text-slate-500">Base spending is the "After Tax Spending" lever above. Phases scale it by age (go-go / slow-go / no-go).</p>
           {bands.length === 0 && <p className="text-[12.5px] text-slate-400">No phases — spending stays flat.</p>}
           <div className="space-y-2">
             {bands.map((b, i) => (

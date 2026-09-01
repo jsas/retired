@@ -114,14 +114,14 @@ export function BetaApp({
 
             <div className="space-y-7">
               <Fader
-                label="Stop working at"
+                label="Start Drawing"
                 value={inputs.retirementAge}
                 min={MAP_WINDOW.ageMin} max={MAP_WINDOW.ageMax} step={1}
                 format={(val) => `${val}`}
                 onChange={(val) => onInputsChange({ ...inputs, retirementAge: val })}
               />
               <Fader
-                label="Spend a year"
+                label="After Tax Spending"
                 value={inputs.desiredSpending}
                 min={MAP_WINDOW.spendBottom} max={MAP_WINDOW.spendTop} step={1000}
                 format={fmtMoney}

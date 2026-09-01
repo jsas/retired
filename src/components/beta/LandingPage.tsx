@@ -1,9 +1,10 @@
 // The landing — the assistant as the front door. Five plain questions build a
-// starter plan, the engine shows how to make the money last as long as you, and two
-// doors open: the dashboard, or keep editing the details. Nothing leaves the
-// browser. This is the f7 landing (f7-final.html) rebuilt on the real engine:
-// minimal wordmark header (no app nav — this is the front door, not the app),
-// the answer affordance inline under each question, and About/Help/Legal as
+// starter plan, the engine shows how to make the money last as long as you, and
+// two exits open — both to the dashboard, one with the assistant dock opened on
+// arrival ("keep chatting"), one with it closed. Nothing leaves the browser.
+// This is the f7 landing (f7-final.html) rebuilt on the real engine: minimal
+// wordmark header (no app nav — this is the front door, not the app), the
+// answer affordance inline under each question, and About/Help/Legal as
 // permanent footnotes at the very bottom.
 import { useMemo, useState } from 'react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
@@ -11,6 +12,7 @@ import type { AppConfig } from '@retired/engine-core/appConfig';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { INK, BLUE, RED_TEXT } from '../../design/tokens';
+import { prefKV } from '../../lib/prefKv';
 import { Link } from './nav';
 
 interface Answer {
@@ -98,7 +100,10 @@ function buildPlan(a: Answer): RetirementInputs {
 
 export function LandingPage({ config, onBuild }: {
   config: AppConfig;
-  onBuild: (inputs: RetirementInputs) => void;
+  /** Carries the built plan to the dashboard. The optional second arg records
+   *  whether the assistant dock should be open when it arrives ("keep
+   *  chatting" passes true, "go to dashboard" false). */
+  onBuild: (inputs: RetirementInputs, opts?: { openAssistant?: boolean }) => void;
 }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answer>({});
@@ -195,27 +200,31 @@ export function LandingPage({ config, onBuild }: {
               <p className="mt-1 text-[13px] text-slate-500">
                 {holds
                   ? `On those numbers the plan holds${results.depletionAge == null ? ` — there's money left at ${plan.maxAge}` : ''}.`
-                  : 'Two ways to fix that from here — the dashboard lets you drag the levers, the details let you tune everything.'}
+                  : 'The dashboard lets you drag the levers and watch the answer change; the assistant can answer questions about the plan.'}
               </p>
             </div>
 
-            {/* the two doors */}
-            <div className="grid gap-3 sm:grid-cols-2">
+            {/* the two exits — both go to the dashboard; "keep chatting" just
+                opens the assistant dock on arrival */}
+            <div className="flex flex-wrap gap-3">
               <button
-                onClick={() => plan && onBuild(plan)}
-                className="group border-l-2 border-slate-900 bg-slate-900 py-3.5 pl-4 pr-4 text-left text-white hover:bg-slate-800"
+                onClick={() => {
+                  try { prefKV().setItem('wealthconsole_dock_open', '0'); } catch { /* storage blocked */ }
+                  plan && onBuild(plan, { openAssistant: false });
+                }}
+                className="bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700"
               >
-                <span className="block text-sm font-medium">Open the dashboard →</span>
-                <span className="block text-xs text-slate-400 group-hover:text-slate-300">
-                  The whole plan on a map — drag the levers and watch the answer change.
-                </span>
+                Go to dashboard
               </button>
-              <Link view="details" className="block border border-slate-300 py-3.5 pl-4 pr-4 hover:border-slate-900">
-                <span className="block text-sm font-medium text-slate-900">Tune the details</span>
-                <span className="block text-xs text-slate-400">
-                  Every input in one place — benefits, accounts, phases, withdrawal order.
-                </span>
-              </Link>
+              <button
+                onClick={() => {
+                  try { prefKV().setItem('wealthconsole_dock_open', '1'); } catch { /* storage blocked */ }
+                  plan && onBuild(plan, { openAssistant: true });
+                }}
+                className="border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-900 transition-colors hover:border-slate-900"
+              >
+                Keep chatting
+              </button>
             </div>
           </>
         )}
@@ -238,12 +247,12 @@ export function LandingPage({ config, onBuild }: {
                 onClick={() => onBuild(plan)}
                 className="ml-auto inline-flex items-center gap-1.5 bg-slate-900 px-4 py-2 text-white transition-colors hover:bg-slate-700"
               >
-                Dashboard →
+                Go to dashboard →
               </button>
             ) : (
               <Link view="projection"
                 className="ml-auto inline-flex items-center gap-1.5 bg-slate-900 px-4 py-2 text-white transition-colors hover:bg-slate-700">
-                Dashboard →
+                Go to dashboard →
               </Link>
             )}
           </nav>
