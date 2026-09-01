@@ -1,0 +1,14 @@
+# TRL SFTTrainer + eval dependencies. The pre-train corpus is generated with
+# the repo's own `npx tsx training/generate.ts`; this wraps the HF-side run.
+# Match to a specific torch-bin that your GPU driver accepts (cu12.6+ for bf16).
+torch>=2.4,<2.6
+transformers>=4.45,<4.52
+trl>=0.12,<0.15
+datasets>=2.20,<3
+accelerate>=0.33,<1
+peft>=0.12,<0.16   # only if you fall back to QLoRA (see SPIKE.md)
+bitsandbytes>=0.43,<0.46   # QLoRA-only; skip for full-SFT
+tensorboard
+# chat template / tokenizer extras (Qwen uses a chat template if provided)
+sentencepiece
+tiktoken
