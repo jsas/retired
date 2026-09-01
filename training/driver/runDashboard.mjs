@@ -115,11 +115,14 @@ async function main() {
   // Kick off server + Chrome together — they're both I/O-bound and neither
   // depends on the other, so this shaves the ~2-3s serial startup gap off every
   // run.
+  console.log('[startup] launching static server + Chrome…');
   const [server, chrome] = await Promise.all([
     serve(),
     launchChrome({ port: CDP_PORT, gpu: true, headless: false }),
   ]);
+  console.log('[startup] ready: server@' + SERVE_PORT + ' chrome@' + CDP_PORT);
 
+  console.log('[startup] opening dashboard tab…');
   const target = await openTab(`http://127.0.0.1:${SERVE_PORT}/dashboard.html`, CDP_PORT);
   const tab = new TabSession(target.webSocketDebuggerUrl);
   await tab.connect();
