@@ -72,8 +72,20 @@ never forked inside a page.
 
 **Review (written list, by file) — ✅ done, 🚧 partial, ⬜ pending:**
 
+- [x] **Wrapped-card redesign batch** (commit `249edfc`): the stable app's cards
+  mounted inside BetaPage chrome all showed a double header (BetaPage's section
+  label + the card's own `text-lg font-bold` h2) and kept the old skin's colors.
+  Redesigned, logic untouched: **PrintOptionsCard, ScenarioManager, DonateCard,
+  SharingPage, DataPage, AgentPage, ConnectionsPage, HelpModal, SettingsModal** —
+  inner headings removed (BetaPage owns the page title), `bg-blue-600`/violet/
+  emerald decoration → `cls.primaryBtn` (bg-slate-900) / hairline / rose-700
+  destructive, every `rounded`/`ring-1` stripped, toggles ink-selected squares,
+  warnings left-rule notes. Guard tests: `PrintOptionsCard.test.tsx` +
+  `ScenarioManager.test.tsx`.
 - [x] **`src/components/AgentPage.tsx`** (assistant) — bubbles/pills/panels flattened
-  (rounded-lg/full gone); both progress bars → `<Progress>`; shadows killed.
+  (rounded-lg/full gone); both progress bars → `<Progress>`; shadows killed. Plus
+  the 2026-08 deep pass above: violet user bubble → ink, violet reasoning/tool
+  chips/ChangeCard → slate system, offline copy/paste tabs → underline style.
 - [x] **`src/components/EqPage.tsx`** — range-thumb + map dot squared, shadows off.
 - [x] **`src/components/ScheduleTable.tsx`** — column-picker popover + container
   flattened (no rounded/shadow); draggable retirement marker on the grip cell.
