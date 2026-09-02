@@ -5,18 +5,17 @@ records) into a ranked program. Ordered by expected gain per hour of work.
 
 ## What the gate actually lost on
 
-169/900 invalid replies. Buckets, mapped to the fix that moves them:
+169/900 invalid replies. Buckets, mapped to the fix that moves them. Updated
+with `training/driver/mineFailures.ts` (index-join against ordered evalset —
+same shape runGate uses):
 
 | bucket | n/900 | root cause | fix |
 | --- | --- | --- | --- |
-| `get_scenario` where `run_projection` wanted | 32 | READ_SPECS siblings share "how does my plan look" phrasing | L3 paraphrases + L7 scale |
-| `run_strategies` schema fails | 31 | categories object-shape vs string list; unquoted keys | L3 schema-edge mint + L6 corpus test |
-| `get_scenario` args fail (bad `section`) | 16 | model invents sections | L3 enum-value mint |
-| `compare_scenarios` vs `run_monte_carlo` | 16 | "compare against different markets" reads as MC | L3 boundary paraphrases |
-| `solve_spending`/`compare_scenarios` vs `run_strategies` | 16+16 | solve/scenario tools overlap | same as above |
-| `get_schedule` vs `get_scenario` | 15 | read-siblings again | L3 |
-| malformed JSON (unquoted keys, stray `}`) | 32 | grammar, mostly not truncation (np=512 recovered only ~7) | L1 (greedy), L4 (more steps) |
-| truncation at np=256 | ~7 | eval-side | L1 |
+| compare_scenarios magnet | 56+30+27+23+22 | variants/patches make it look permissive | L3 contrastive mint (negative-pair) |
+| run_projection vs get_scenario | 37+19+19 | "how does my plan look" ambiguity | L3 pair-mint |
+| get_scenario enum invention | — | model invents 'balances' | done: cycle real enum values |
+| compare_scenarios duplicate-call | 23 | emits TOOL_CALL twice on one line | done: 'one variant, not a list' paraphrase |
+| run_strategies vs compare_scenarios | 27 | lever-selection wording | pending contrastive mint |
 
 Tool-choice confusion is ~83% of losses; grammar/blanks ~19%. **Fix choice
 first, grammar second.**
