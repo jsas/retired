@@ -4,7 +4,7 @@
 // tapped section (?section=…). Two-col on desktop, one-col on mobile. Every
 // field edits the real plan; the verdict, map and dock recompute together.
 import { useEffect, useRef } from 'react';
-import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt } from '@retired/engine-core/retirementEngine';
+import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt, MarketPeriod } from '@retired/engine-core/retirementEngine';
 import { Panel, Fader, HelpHint, Check } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
@@ -23,9 +23,9 @@ function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
         <input
           type="number"
           className="num w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
-          value={Number.isFinite(value) ? value : 0}
+          value={Number.isFinite(value) ? value : ''}
           step={step} min={min}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))}
         />
         {suffix && <span className="text-[11px] text-slate-400">{suffix}</span>}
       </span>
@@ -377,6 +377,45 @@ function renderSection(id: string, ctx: {
           </button>
         </Section>
       );
+    case 'markets': {
+      // The flat hypothesis: expected return plus volatility. Without
+      // volatility Monte Carlo can't run (MC refuses at 0), so this is the
+      // unlock for the Analysis section of Insights.
+      const periods = inp.marketPeriods ?? [];
+      const setPeriods = (next: MarketPeriod[]) =>
+        set({ marketPeriods: next.length ? next.sort((a, b) => a.age - b.age) : undefined });
+      const upd = (i: number, patch: Partial<MarketPeriod>) => {
+        const next = [...periods]; next[i] = { ...periods[i], ...patch }; setPeriods(next);
+      };
+      return (
+        <Section id="markets" title="Markets" hint="expected-return">
+          <div className="grid grid-cols-2 gap-3">
+            <Num label="Volatility (σ)" value={Math.round((inp.returnVolatility ?? 0) * 1000) / 10} step={0.5} min={0}
+              hint="Drives Monte Carlo — set above 0 or the analysis can’t run."
+              onChange={(v) => set({ returnVolatility: Math.max(0, v / 100) })} />
+          </div>
+          <p className="text-[12px] text-slate-500">
+            Return anchors override the flat “Markets” lever from an age on — the curve interpolates between them. Leave empty to use the flat rate all the way.
+          </p>
+          <div className="space-y-2">
+            {periods.map((p, i) => (
+              <div key={p.id} className="flex items-center gap-2 border border-slate-200 p-2">
+                <Num label="From age" value={p.age} step={1} onChange={(v) => upd(i, { age: v })} />
+                <Num label="Return %" value={Math.round(p.return * 1000) / 10} step={0.5} onChange={(v) => upd(i, { return: v / 100 })} />
+                <Num label="Vol % (blank = flat)" value={p.volatility != null ? Math.round(p.volatility * 1000) / 10 : NaN} step={0.5} min={0}
+                  onChange={(v) => upd(i, { volatility: Number.isFinite(v) ? Math.max(0, v / 100) : undefined })} />
+                <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove anchor at age ${p.age}`}
+                  onClick={() => setPeriods(periods.filter((_, j) => j !== i))}>×</button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="mt-1 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+            onClick={() => setPeriods([...periods, { id: uid(), age: (periods[periods.length - 1]?.age ?? inp.retirementAge) + 10, return: inp.investmentReturn }])}>
+            + add an anchor
+          </button>
+        </Section>
+      );
+    }
     case 'withdrawal':
       return (
         <Section id="withdrawal" title="Withdrawal Strategy" hint="withdrawal-order">
