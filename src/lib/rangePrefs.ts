@@ -25,7 +25,7 @@ export interface RangePrefs {
 }
 
 export const DEFAULT_RANGE_PREFS: RangePrefs = {
-  spendingMax: 1_000_000,
+  spendingMax: 300_000,
   savingsMax: 500_000,
   returnMin: 0,
   returnMax: 0.2,

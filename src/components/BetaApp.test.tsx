@@ -21,11 +21,11 @@ import { mapWindow } from './BetaApp';
 beforeEach(() => { store.clear(); });
 
 describe('BetaApp map window (lever-range pref)', () => {
-  it('defaults the axis to the default pref ($1,000,000 cap)', () => {
-    // The pref defaults to 1,000,000; the axis ends at the pref, so the
+  it('defaults the axis to the default pref ($300,000 cap)', () => {
+    // The pref defaults to $300,000; the axis ends at the pref, so the
     // fader's range and the map match — parity with the Details faders.
     const w = mapWindow({ desiredSpending: 60000 });
-    expect(w.spendTop).toBe(1_000_000);
+    expect(w.spendTop).toBe(300_000);
     expect(w.spendBottom).toBe(20000);
     expect(w.ageMin).toBe(55);
     expect(w.ageMax).toBe(75);
@@ -43,11 +43,11 @@ describe('BetaApp map window (lever-range pref)', () => {
     expect(w.spendTop).toBe(200000);
   });
 
-  it('defaults to the fixed 55–75 × 20k–160k axis when no pref is set', () => {
+  it('defaults to the $300,000 axis when no pref is set', () => {
     store.delete(RANGES_PREF_KEY);
     const w = mapWindow({ desiredSpending: 60000 });
-    // absent pref → DEFAULT_RANGE_PREFS.spendingMax ($1,000,000) — the axis
-    // extends that far so the fader's full default range is on the pad
-    expect(w.spendTop).toBe(1_000_000);
+    // absent pref → DEFAULT_RANGE_PREFS.spendingMax ($300,000) — the axis
+    // extends as far as the fader's default range allows
+    expect(w.spendTop).toBe(300_000);
   });
 });
