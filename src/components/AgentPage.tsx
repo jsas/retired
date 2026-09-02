@@ -60,17 +60,17 @@ interface AgentPageProps {
   config: AppConfig;
   scenarioName: string;
   scenarioList: Array<{ id: string; name: string }>;
-  /** Which scenario is active (list_scenarios marks it in the listing). */
-  activeScenarioId?: string;
-  /** Saved inputs of any scenario by id (list_scenarios withDetails). */
+  /** Which plan is active (list_plans marks it in the listing). */
+  activePlanId?: string;
+  /** Saved inputs of any plan by id (list_plans withDetails). */
   scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
   onOpenConnections: () => void;
-  /** Agent memory (scenario + global); absent only if the store failed to open. */
+  /** Agent memory (plan + global); absent only if the store failed to open. */
   memory?: MemoryStore;
-  /** Active scenario id at render time — reads stay live via the ref below. */
+  /** Active plan id at render time — reads stay live via the ref below. */
   memoryScenarioId?: string;
-  /** Agent scenario navigation: switch active scenario / save-current-as-new. */
+  /** Agent plan navigation: switch active plan / save-current-as-new. */
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
 }
@@ -227,7 +227,7 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activePlanId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -481,7 +481,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               config={config}
               scenarioName={scenarioName}
               scenarioList={scenarioList}
-              activeScenarioId={activeScenarioId}
+              activePlanId={activePlanId}
               scenarioInputsById={scenarioInputsById}
               onApply={onApply}
               patchTurns={patchTurns}
@@ -585,7 +585,7 @@ function planContextMessage(
   };
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activePlanId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -596,7 +596,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   config: AppConfig;
   scenarioName: string;
   scenarioList: Array<{ id: string; name: string }>;
-  activeScenarioId?: string;
+  activePlanId?: string;
   scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
@@ -648,7 +648,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   // re-proposes it). Keep a ref to the live inputs, updated every render, and
   // hand the loop a context whose `inputs` reads through it at tool-execution
   // time. The rest of the context (config/name/list) only changes with the
-  // scenario, so a plain memo is fine for those.
+  // plan, so a plain memo is fine for those.
   const inputsRef = useRef(inputs);
   inputsRef.current = inputs;
   // Same trick for checkpoints: the loop is long-lived across renders, and a
@@ -663,9 +663,9 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     get checkpoints() { return checkpointsRef.current; },
     config, scenarioName, scenarioList, memory,
     get memoryScenarioId() { return memoryScenarioIdRef.current; },
-    activeScenarioId, scenarioInputsById,
+    activePlanId, scenarioInputsById,
     onOpenScenario, onSaveScenarioAs,
-  }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
+  }), [config, scenarioName, scenarioList, memory, activePlanId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
 
   // The MCP-backed tool executor. The server re-resolves the LIVE context on
   // every call, so the executor closes over the memoized context object (its
@@ -1894,7 +1894,7 @@ function EmptyThread() {
     <div className="h-full flex flex-col items-center justify-center text-center py-8">
       <Bot size={28} className="text-violet-300 mb-3" />
       <p className="text-xs text-slate-500 max-w-md">
-        Ask about your plan, or describe your situation. The assistant reads your scenario and runs
+        Ask about your plan, or describe your situation. The assistant reads your plan and runs
         the real engine before answering; every change it proposes needs your approval.
       </p>
     </div>

@@ -142,7 +142,7 @@ describe('thread helpers', () => {
     expect(titleFromFirstMessage('  multi\n\nline   text ')).toBe('multi line text');
   });
 
-  it('newThread starts empty with the scenario name and timestamps', () => {
+  it('newThread starts empty with the plan name and timestamps', () => {
     const t = newThread('Retirement 2026', 5000);
     expect(t.scenarioName).toBe('Retirement 2026');
     expect(t.createdAt).toBe(5000);

@@ -107,12 +107,12 @@ describe('prefKv facade', () => {
     });
 
     it('touches only the known pref keys', () => {
-      storage.set('wealthconsole_scenarios', 'legacy-scenarios');
+      storage.set('wealthconsole_scenarios', 'legacy-plans');
       storage.set('some_other_key', 'untouched');
       db.setKv('config', '{}');
       attachPrefKv(db);
       expect(reconcilePrefKv()).toBe(false);
-      expect(storage.get('wealthconsole_scenarios')).toBe('legacy-scenarios');
+      expect(storage.get('wealthconsole_scenarios')).toBe('legacy-plans');
       expect(storage.get('some_other_key')).toBe('untouched');
       expect(db.getKv('config')).toBe('{}');
     });

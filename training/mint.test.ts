@@ -3,20 +3,20 @@ import { NAV_SPECS, mintCorpus, mintGuardrailRecords, mintMutationRecords, mintN
 import { canonicalView, pageForView, rankPages } from '@retired/mcp-tools/navigation';
 import { mintDomainKnowledgeRecords } from './domain';
 import { scoreToolReply, TOOL_NAMES } from './protocol';
-import { SCENARIOS } from './scenarios';
+import { SCENARIOS } from './plans';
 import { executeToolCall, type ToolContext } from '@retired/mcp-tools/tools';
 import { testConfig } from '@retired/engine-core/test/helpers';
 
 describe('corpus minter', () => {
   const records = mintReadRecords();
 
-  it('mints at scale: every paraphrase × scenario yields a tool-call record', () => {
+  it('mints at scale: every paraphrase × plan yields a tool-call record', () => {
     // The point of the paraphrase bank is scale — many phrasings per tool. We
     // should get well past the old 77-record skeleton toward a trainable size.
     const calls = records.filter((r) => r.kind === 'tool-call');
     expect(calls.length).toBeGreaterThan(100);
-    // Every scenario is represented.
-    expect(new Set(calls.map((r) => r.scenarioId)).size).toBe(SCENARIOS.length);
+    // Every plan is represented.
+    expect(new Set(calls.map((r) => r.planId)).size).toBe(SCENARIOS.length);
     // Multiple phrasings map to the same canonical call for a given tool.
     const runProj = calls.filter((r) => r.expect.toolName === 'run_projection');
     expect(new Set(runProj.map((r) => r.messages[0].content)).size).toBeGreaterThan(3);
@@ -53,10 +53,10 @@ describe('corpus minter', () => {
     for (const r of records.filter((x) => x.kind === 'tool-call')) {
       const v = scoreToolReply(r.messages[1].content);
       if (v.kind !== 'valid') throw new Error(`${r.id} not valid`);
-      const sc = SCENARIOS.find((x) => x.id === r.scenarioId)!;
+      const sc = SCENARIOS.find((x) => x.id === r.planId)!;
       const ctx: ToolContext = {
         inputs: sc.inputs, config: testConfig(), scenarioName: sc.name,
-        scenarioList: [], activeScenarioId: sc.id,
+        scenarioList: [], activePlanId: sc.id,
       };
       const outcome = executeToolCall(ctx, { id: 't', name: v.name, args: v.args });
       expect(outcome.kind, `${r.id} args must satisfy schema`).not.toBe('error');
@@ -202,10 +202,10 @@ describe('navigation records (issue #141)', () => {
       const callLine = r.messages.find((m) => m.role === 'assistant')!.content;
       const v = scoreToolReply(callLine);
       if (v.kind !== 'valid') throw new Error(`${r.id} not valid`);
-      const sc = SCENARIOS.find((x) => x.id === r.scenarioId)!;
+      const sc = SCENARIOS.find((x) => x.id === r.planId)!;
       const ctx: ToolContext = {
         inputs: sc.inputs, config: testConfig(), scenarioName: sc.name,
-        scenarioList: [], activeScenarioId: sc.id, canNavigate: true, currentView: 'projection',
+        scenarioList: [], activePlanId: sc.id, canNavigate: true, currentView: 'projection',
       };
       const outcome = executeToolCall(ctx, { id: 't', name: v.name, args: v.args });
       expect(outcome.kind, `${r.id} args must satisfy schema`).not.toBe('error');
@@ -228,7 +228,7 @@ describe('mutation records', () => {
     expect(mutations.length).toBeGreaterThan(0);
     // Every mutation record teaches a catalog tool.
     for (const r of mutations) expect(TOOL_NAMES.has(r.expect.toolName ?? '')).toBe(true);
-    // Three records per (spec × paraphrase × scenario): call, approved, rejected.
+    // Three records per (spec × paraphrase × plan): call, approved, rejected.
     expect(mutations.length % 3).toBe(0);
   });
 

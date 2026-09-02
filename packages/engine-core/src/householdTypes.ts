@@ -108,7 +108,7 @@ export interface Person extends PersonInputs {
  * people without a new top-level field per member.
  *
  * `Household` is DERIVED, never stored: `RetirementInputs` remains the
- * persisted source of truth (storage, share links, saved scenarios). Build it
+ * persisted source of truth (storage, share links, saved plans). Build it
  * with `toHousehold(inputs)` at the entry point and pass it down; map back
  * with `fromHousehold` where a write must persist. Deriving (rather than a
  * stored `household` field or an `isHousehold` flag) keeps one source of truth
@@ -231,7 +231,7 @@ export function fromHousehold(h: Household, base?: RetirementInputs): Retirement
  * The handful of fields a household shares. Lifting these off the person is
  * what makes a couple coherent: both partners experience the same market, file
  * in the same province, and project to the same horizon. When a spouse is a
- * reference to another scenario, these are the HOST's values — the referenced
+ * reference to another plan, these are the HOST's values — the referenced
  * plan's own shared fields are ignored (with a surfaced warning).
  */
 export interface SharedInputs {
@@ -393,7 +393,7 @@ export function eventEndpoints(ev: CashEvent): { from: TransferEndpoint; to: Tra
 
 export interface ResolvedSpouse {
   /** The materialized spouse plan the engine runs (undefined when the link
-   *  can't be resolved — e.g. the referenced scenario was deleted). */
+   *  can't be resolved — e.g. the referenced plan was deleted). */
   spouse?: SpouseInputs;
   /** Host-wins conflicts + resolution problems, surfaced to the user. */
   warnings: string[];
@@ -401,20 +401,20 @@ export interface ResolvedSpouse {
 
 /**
  * Materialize a spouse from its source. A builtin spouse is used as-is. A
- * scenario spouse is looked up among the saved scenarios and its person half
+ * plan spouse is looked up among the saved plans and its person half
  * extracted into the SpouseInputs shape; the HOST's shared household fields
  * (province, return, horizon) always win over the referenced plan's own, and
  * each overridden field that differed is reported as a warning so the UI can
  * show exactly what was ignored.
  *
  * Circular references (A's spouse is B while B's spouse is A) and self-
- * references are guarded by comparing against the host's own scenario id and
+ * references are guarded by comparing against the host's own plan id and
  * the referenced plan's own spouseSource: a detected cycle yields no spouse
  * and a warning rather than a loop.
  */
 export function resolveSpouseSource(
   host: RetirementInputs,
-  scenarios: Array<{ id: string; inputs: RetirementInputs }>,
+  plans: Array<{ id: string; inputs: RetirementInputs }>,
   hostScenarioId?: string,
 ): ResolvedSpouse {
   const src = host.spouseSource;
@@ -423,19 +423,19 @@ export function resolveSpouseSource(
   }
 
   const warnings: string[] = [];
-  const targetId = src.scenarioId;
+  const targetId = src.planId;
 
   // Self-reference is the degenerate cycle.
   if (hostScenarioId != null && targetId === hostScenarioId) {
     return { warnings: ['A plan cannot be its own spouse — the spouse link was ignored.'] };
   }
-  const target = scenarios.find(s => s.id === targetId);
+  const target = plans.find(s => s.id === targetId);
   if (!target) {
-    return { warnings: ['Linked spouse scenario was not found — the spouse link was ignored.'] };
+    return { warnings: ['Linked spouse plan was not found — the spouse link was ignored.'] };
   }
   // Direct two-way cycle: the target names this host as ITS spouse.
   const tSrc = target.inputs.spouseSource;
-  if (tSrc?.kind === 'scenario' && hostScenarioId != null && tSrc.scenarioId === hostScenarioId) {
+  if (tSrc?.kind === 'plan' && hostScenarioId != null && tSrc.planId === hostScenarioId) {
     return { warnings: ['Circular spouse reference detected — the spouse link was ignored.'] };
   }
 

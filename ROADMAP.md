@@ -59,13 +59,13 @@ have to hold them.
 - **Monorepo split: engine package + UI package.** Everything under `src/lib`
   that is pure TypeScript with no DOM/React dependency (the projection
   engine, tax tables, Monte Carlo, backtest, EQ/spending solvers, household
-  types, scenario/config schema) graduates into a standalone Node.js library
+  types, plan/config schema) graduates into a standalone Node.js library
   package — e.g. `@retired/engine` — with its own test suite, published or
   linked into the app. The React UI becomes its own package in the same
   monorepo (pnpm/npm workspaces) and consumes the engine only through its
   public API. This is what makes the engine usable from a CLI, a server, or
   a future self-contained desktop build, and it forces the data layer
-  (scenarios, config, migrations) to be platform-neutral: the storage
+  (plans, config, migrations) to be platform-neutral: the storage
   interface the UI backs with localStorage today is the same interface a
   Node consumer backs with SQLite/a file later.
 - **Data layer hardening (remaining)** — the data layer is in place: Zod

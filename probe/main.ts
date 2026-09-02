@@ -255,7 +255,7 @@ function shippedProfile(modelId: string): SamplerProfile {
 
 /** System prompt built the SAME way the app does, so what we measure is what
  *  ships: the full persona + prompt-mode tool mechanics + live program rules
- *  + scenario name + the fenced tool catalog. */
+ *  + plan name + the fenced tool catalog. */
 function sysFor(modelId: string): string {
   const toolMode = autoToolMode(modelId);
   const base = buildSystemPrompt('Probe plan', {

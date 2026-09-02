@@ -164,7 +164,7 @@ export function buildPromptToolInstructions(specs: ToolSpec[]): string {
     catalog,
     '- Prefer run_projection/compare_scenarios numbers over guessing.',
     '- NEVER ask the user for balances, ages, or account values — they are in the plan',
-    '  summary in the system prompt, and get_scenario/run_projection return them.',
+    '  summary in the system prompt, and get_plan/run_projection return them.',
     '- Every propose_* and set_scenario_value tool only PROPOSES a change; the user confirms it.',
     '- When the user asks WHERE something lives, use find_page (it tags the page they are',
     '  already on); use propose_navigate to offer opening a page — the app moves only on the',

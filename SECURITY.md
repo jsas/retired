@@ -16,7 +16,7 @@ We will acknowledge receipt and work with you to address the issue promptly.
 
 ### Client-Side Only
 
-RE: tired runs **entirely in your browser**. Your retirement scenarios and financial data:
+RE: tired runs **entirely in your browser**. Your retirement plans and financial data:
 - Are **never** sent to a server
 - Are stored **only** in your browser's `localStorage`
 - Remain under your complete control
@@ -28,7 +28,7 @@ There are no user accounts, logins, or cloud storage. You fully own your data.
 ### Data Export & Backup
 
 You can:
-- Export scenarios as JSON files
+- Export plans as JSON files
 - Generate shareable links (stored as URL hash, not on a server)
 - Print summaries locally
 
@@ -46,7 +46,7 @@ We keep dependencies up-to-date and monitor for security advisories via GitHub's
 ### Known Limitations
 
 - Browser localStorage has typical browser security constraints (origin-based isolation)
-- Shared computers may allow other users to access stored scenarios
+- Shared computers may allow other users to access stored plans
 - The app requires JavaScript enabled
 - Some calculations involve approximations — see the Disclaimer in the README
 

@@ -1,4 +1,4 @@
-// Input migration: fills fields added after a scenario was persisted so older
+// Input migration: fills fields added after a plan was persisted so older
 // payloads load cleanly. Pure — no storage. Moved out of scenarioStorage.ts when
 // the SQL store became the single source of truth; lives under data/ because
 // it's part of the persistence boundary, not the engine.
@@ -58,7 +58,7 @@ function foldToIncome(record: Record<string, unknown>): void {
   delete record.employment;
 }
 
-/** Fill in inputs fields added after a scenario was saved. */
+/** Fill in inputs fields added after a plan was saved. */
 export function migrateInputs(inputs: object): RetirementInputs {
   return migrateRecord(inputs as Record<string, unknown>);
 }
@@ -80,7 +80,7 @@ function migrateRecord(inputs: Record<string, unknown>): RetirementInputs {
   }
 
   // v2 → v3: the CPP adjustment calculator treats cppMonthlyAmount as the
-  // age-65 amount. Existing scenarios entered an already-adjusted amount, so
+  // age-65 amount. Existing plans entered an already-adjusted amount, so
   // flag them to preserve their behaviour (no double adjustment).
   if (typeof migrated.cppAdjustedAmount !== 'boolean') {
     migrated.cppAdjustedAmount = true;
@@ -108,9 +108,9 @@ function migrateRecord(inputs: Record<string, unknown>): RetirementInputs {
   {
     const src = migrated.spouseSource as Record<string, unknown> | undefined;
     const valid = src && typeof src === 'object'
-      && (src.kind === 'builtin' || (src.kind === 'scenario' && typeof src.scenarioId === 'string'));
+      && (src.kind === 'builtin' || (src.kind === 'plan' && typeof src.planId === 'string'));
     migrated.spouseSource = valid
-      ? (src.kind === 'scenario' ? { kind: 'scenario', scenarioId: src.scenarioId as string } : { kind: 'builtin' })
+      ? (src.kind === 'plan' ? { kind: 'plan', planId: src.planId as string } : { kind: 'builtin' })
       : { kind: 'builtin' };
   }
 

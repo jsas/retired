@@ -10,10 +10,10 @@ export interface SharingImportRequest {
 }
 
 interface SharingPageProps {
-  /** The active scenario's current (possibly unsaved) inputs and name. */
+  /** The active plan's current (possibly unsaved) inputs and name. */
   inputs: RetirementInputs;
   scenarioName: string;
-  /** Import a received plan as a new scenario. */
+  /** Import a received plan as a new plan. */
   onImport: (req: SharingImportRequest) => void;
 }
 
@@ -22,7 +22,7 @@ interface SharingPageProps {
 //   - Share link  — the plan code in a URL fragment; one click for the receiver
 //   - Plan code   — the same payload as pasteable text, for chat/email/notes
 // Receiving is the reverse: paste a link or a code, give the plan a name, and
-// it lands as a new scenario.
+// it lands as a new plan.
 export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps) {
   // ---- Outgoing ----
   const url = useMemo(() => buildShareUrl(inputs, scenarioName), [inputs, scenarioName]);
@@ -81,7 +81,7 @@ export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps
           <p className="text-[11px] text-slate-500 leading-snug mb-3">
             <span className="font-medium text-slate-700">{scenarioName}</span> is encoded directly
             in the link and the code (after the <code>#</code>) — nothing is uploaded. Whoever
-            receives it gets a copy as a new scenario.
+            receives it gets a copy as a new plan.
           </p>
 
           {/* Share link */}
@@ -137,8 +137,8 @@ export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps
             Receive a plan
           </div>
           <p className="text-[11px] text-slate-500 leading-snug mb-3">
-            Paste a share link or a plan code, give it a name, and it imports as a new scenario —
-            your existing scenarios are untouched.
+            Paste a share link or a plan code, give it a name, and it imports as a new plan —
+            your existing plans are untouched.
           </p>
 
           <textarea
@@ -170,8 +170,8 @@ export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps
             <input
               value={boxName}
               onChange={(e) => { setName(e.target.value); setNameTouched(true); }}
-              placeholder="Name for the imported scenario"
-              aria-label="Imported scenario name"
+              placeholder="Name for the imported plan"
+              aria-label="Imported plan name"
               className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-700 focus:outline-none focus:border-blue-500"
             />
             <button
@@ -180,7 +180,7 @@ export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
               title={parsed ? `Import as "${importName}"` : 'Paste a valid plan first'}
             >
-              <Upload size={13} /> Import scenario
+              <Upload size={13} /> Import plan
             </button>
           </div>
         </section>

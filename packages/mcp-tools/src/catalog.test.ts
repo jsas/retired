@@ -34,13 +34,13 @@ describe('tool catalog surface', () => {
 
   it('keeps the tool roster stable (sorted names)', () => {
     const expected: AgentToolName[] = [
-      'get_scenario', 'run_projection', 'compare_scenarios', 'run_strategies',
+      'get_plan', 'run_projection', 'compare_scenarios', 'run_strategies',
       'solve_spending', 'run_monte_carlo', 'get_schedule',
       'set_scenario_value', 'propose_patch', 'propose_spouse', 'propose_income',
       'propose_spending_bands', 'propose_cash_event', 'propose_reverse_mortgage',
       'propose_rdsp', 'propose_fhsa', 'propose_revert',
       'manage_cash_event', 'manage_income', 'propose_debt', 'manage_debt',
-      'remember', 'recall', 'open_scenario', 'save_scenario_as', 'list_scenarios',
+      'remember', 'recall', 'open_plan', 'save_plan_as', 'list_plans',
       'find_page', 'get_sitemap', 'propose_navigate',
     ];
     expect(Object.keys(TOOL_CATALOG).sort()).toEqual([...expected].sort());

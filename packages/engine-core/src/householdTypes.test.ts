@@ -216,7 +216,7 @@ describe('cash-event transfer helpers', () => {
 });
 
 describe('resolveSpouseSource — the spouse adapter the app stores', () => {
-  const scenarios = [
+  const plans = [
     { id: 'me', inputs: baseInputs({ provinceCode: 'ONT', investmentReturn: 0.05, maxAge: 90 }) },
     { id: 'partner', inputs: baseInputs({ provinceCode: 'QC', investmentReturn: 0.08, maxAge: 99, currentAge: 58, desiredSpending: 28000 }) },
   ];
@@ -224,15 +224,15 @@ describe('resolveSpouseSource — the spouse adapter the app stores', () => {
   it('a builtin source returns the embedded spouse unchanged, no warnings', () => {
     const host = baseInputs({ spouse: { enabled: true, currentAge: 57, retirementAge: 60, rrspBalance: 1, tfsaBalance: 2, taxableBalance: 3, cashCushionBalance: 4, rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0, cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40, desiredSpending: 25000 } });
     host.spouseSource = { kind: 'builtin' };
-    const r = resolveSpouseSource(host, scenarios, 'me');
+    const r = resolveSpouseSource(host, plans, 'me');
     expect(r.spouse?.currentAge).toBe(57);
     expect(r.warnings).toEqual([]);
   });
 
-  it('a scenario source materializes the referenced plan as the spouse', () => {
+  it('a plan source materializes the referenced plan as the spouse', () => {
     const host = baseInputs({ provinceCode: 'ONT', investmentReturn: 0.05, maxAge: 90 });
-    host.spouseSource = { kind: 'scenario', scenarioId: 'partner' };
-    const r = resolveSpouseSource(host, scenarios, 'me');
+    host.spouseSource = { kind: 'plan', planId: 'partner' };
+    const r = resolveSpouseSource(host, plans, 'me');
     expect(r.spouse?.currentAge).toBe(58);
     expect(r.spouse?.desiredSpending).toBe(28000);
     expect(r.spouse?.enabled).toBe(true);
@@ -244,27 +244,27 @@ describe('resolveSpouseSource — the spouse adapter the app stores', () => {
 
   it('guards a self-reference', () => {
     const host = baseInputs();
-    host.spouseSource = { kind: 'scenario', scenarioId: 'me' };
-    const r = resolveSpouseSource(host, scenarios, 'me');
+    host.spouseSource = { kind: 'plan', planId: 'me' };
+    const r = resolveSpouseSource(host, plans, 'me');
     expect(r.spouse).toBeUndefined();
     expect(r.warnings.some(w => w.includes('own spouse'))).toBe(true);
   });
 
   it('guards a two-way circular reference', () => {
     const host = baseInputs();
-    host.spouseSource = { kind: 'scenario', scenarioId: 'partner' };
+    host.spouseSource = { kind: 'plan', planId: 'partner' };
     // The partner names this host ('me') as ITS spouse → a cycle.
     const partnerBack = baseInputs();
-    partnerBack.spouseSource = { kind: 'scenario', scenarioId: 'me' };
+    partnerBack.spouseSource = { kind: 'plan', planId: 'me' };
     const r = resolveSpouseSource(host, [{ id: 'partner', inputs: partnerBack }], 'me');
     expect(r.spouse).toBeUndefined();
     expect(r.warnings.some(w => w.toLowerCase().includes('circular'))).toBe(true);
   });
 
-  it('a missing referenced scenario yields no spouse and a warning', () => {
+  it('a missing referenced plan yields no spouse and a warning', () => {
     const host = baseInputs();
-    host.spouseSource = { kind: 'scenario', scenarioId: 'ghost' };
-    const r = resolveSpouseSource(host, scenarios, 'me');
+    host.spouseSource = { kind: 'plan', planId: 'ghost' };
+    const r = resolveSpouseSource(host, plans, 'me');
     expect(r.spouse).toBeUndefined();
     expect(r.warnings.some(w => w.includes('not found'))).toBe(true);
   });
@@ -278,7 +278,7 @@ describe('resolveSpouseSource — the spouse adapter the app stores', () => {
     partner.spendingBands = [{ fromAge: 70, pctOfBase: 0.8 }];
     partner.reverseMortgage = { enabled: true, homeValue: 500000, appreciationRate: 0.02, interestRate: 0.06, topUp: true };
     const host = baseInputs({ provinceCode: 'ONT', investmentReturn: 0.05, maxAge: 90 });
-    host.spouseSource = { kind: 'scenario', scenarioId: 'partner' };
+    host.spouseSource = { kind: 'plan', planId: 'partner' };
     const r = resolveSpouseSource(host, [{ id: 'partner', inputs: partner }], 'me');
     expect(r.spouse?.events).toHaveLength(1);
     expect(r.spouse?.events?.[0].label).toBe('sale');

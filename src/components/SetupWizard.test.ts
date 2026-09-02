@@ -104,7 +104,7 @@ describe('SetupWizard data helpers', () => {
     expect(out.reverseMortgage).toBeUndefined();
   });
 
-  it('the scenario name never leaks into the engine inputs', () => {
+  it('the plan name never leaks into the engine inputs', () => {
     const d = wizardDataFrom(baseInputs(), 'Early Retirement');
     const out = applyWizardData(baseInputs(), d);
     expect((out as unknown as Record<string, unknown>).scenarioName).toBeUndefined();

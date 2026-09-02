@@ -4,7 +4,7 @@
 // on — every exemplar's numbers are the shipped engine's actual output.
 //
 // SCALE. A model needs thousands of exemplars, not dozens, so the minter mints
-// the cartesian product of (read-spec × question-paraphrase × scenario). Every
+// the cartesian product of (read-spec × question-paraphrase × plan). Every
 // question paraphrase for a tool maps to the SAME canonical args, so the model
 // learns "many phrasings → one correct TOOL_CALL" — the muscle memory that is
 // the whole point of the fine-tune. Engine-grounded follow-ups quote the real
@@ -24,9 +24,9 @@ import { testConfig } from '@retired/engine-core/test/helpers';
 import type { ChatMessage, CorpusRecord } from './buildCorpus';
 import { emitToolCall, wrapToolResult, mutationFeedback, navigationFeedback, ambientPageLine } from './protocol';
 import { mintDomainKnowledgeRecords } from './domain';
-import { SCENARIOS, type NamedScenario } from './scenarios';
+import { SCENARIOS, type NamedScenario } from './plans';
 
-/** A question → read-tool exemplar template. `args` may reference the scenario
+/** A question → read-tool exemplar template. `args` may reference the plan
  *  (e.g. retirementAge ± a delta) via a small resolver. */
 interface ReadSpec {
   tool: string;
@@ -35,7 +35,7 @@ interface ReadSpec {
   args: (sc: NamedScenario) => Record<string, unknown>;
   /** Which grounded-explanation template the follow-up uses, or 'none' to mint
    *  only the tool-call record (for tools whose raw result — e.g. a JSON
-   *  get_scenario block — doesn't fit the figure-grounded prose template). */
+   *  get_plan block — doesn't fit the figure-grounded prose template). */
   explainFrom: 'verdict' | 'compare' | 'monteCarlo' | 'solve' | 'none';
 }
 
@@ -49,7 +49,7 @@ const READ_SPECS: ReadSpec[] = [
       () => 'Is my plan funded to the end?',
       () => 'How does my retirement look?',
       // Boundary paraphrases (post-checkpoint-1000 gate failures): phrases that
-      // LOOK like a read (get_scenario / get_schedule) but should route to
+      // LOOK like a read (get_plan / get_schedule) but should route to
       // run_projection. Grounded by mint.test's intended-tool assertion.
       () => 'How is my plan doing right now?',
       () => 'Is my retirement plan healthy?',
@@ -140,7 +140,7 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'solve',
   },
   {
-    tool: 'get_scenario',
+    tool: 'get_plan',
     questions: [
       () => 'What accounts do I have?',
       () => 'Show me my account balances.',
@@ -153,7 +153,7 @@ const READ_SPECS: ReadSpec[] = [
       () => 'Show my account balances section.',
     ],
     args: (sc) => {
-      // Alternate across real enum values by scenario so several are
+      // Alternate across real enum values by plan so several are
       // exercised (silences the enum-invention slip).
       const sections = ['summary', 'accounts', 'benefits', 'spending'];
       const idx = SCENARIOS.indexOf(sc);
@@ -162,7 +162,7 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'none', // raw JSON block (no $/%) — tool-call exemplar only
   },
   {
-    tool: 'get_scenario',
+    tool: 'get_plan',
     questions: [
       () => 'What are my CPP and OAS details?',
       () => 'Show my government benefits.',
@@ -201,10 +201,10 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'none',
   },
   {
-    tool: 'list_scenarios',
+    tool: 'list_plans',
     questions: [
       () => 'What plans do I have saved?',
-      () => 'List my scenarios.',
+      () => 'List my plans.',
     ],
     args: () => ({}),
     explainFrom: 'none',
@@ -220,7 +220,7 @@ const READ_SPECS: ReadSpec[] = [
   //   compare_scenarios  — needs MORE-THAN-ONE option (variant labels, "vs",
   //                         "or", "either") in the question
   //   run_projection     — one named what-if (NOT a versus list)
-  //   get_scenario       — READ the plan, not run it
+  //   get_plan       — READ the plan, not run it
   //   solve_spending     — needs a target datum phrase ("how much")
   //   run_strategies     — needs an exploration sweep ("levers", "boost")
   //   get_schedule       — needs a year-by-year / schedule / table phrase
@@ -235,14 +235,14 @@ const READ_SPECS: ReadSpec[] = [
       (sc) => `Just run it with retirement at ${sc.inputs.retirementAge + 3}.`,
       (sc) => `Show me my plan if I retire at ${sc.inputs.retirementAge + 3} alone.`,
       (sc) => `One what-if: retire at ${sc.inputs.retirementAge + 3}.`,
-      (sc) => `Single scenario, retirement at ${sc.inputs.retirementAge + 3}.`,
+      (sc) => `Single plan, retirement at ${sc.inputs.retirementAge + 3}.`,
     ],
     args: (sc) => ({ overrides: { retirementAge: sc.inputs.retirementAge + 3 } }),
     explainFrom: 'verdict',
   },
   {
-    // get_scenario vs run_projection — 37+19 = 56 fails. Reads of the plan.
-    tool: 'get_scenario',
+    // get_plan vs run_projection — 37+19 = 56 fails. Reads of the plan.
+    tool: 'get_plan',
     questions: [
       () => 'Just read my plan as-is.',
       () => "Don't run anything — show what I have today.",
@@ -279,7 +279,7 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'none',
   },
   {
-    // get_schedule vs get_scenario / run_projection — 18 fails. Year-by-year
+    // get_schedule vs get_plan / run_projection — 18 fails. Year-by-year
     // wording → schedule.
     tool: 'get_schedule',
     questions: [
@@ -320,12 +320,12 @@ const CONTRAST_PAIRS: ContrastPair[] = [
       'compare_scenarios needs at least two variant labels.',
   },
   {
-    correct: 'get_scenario',
+    correct: 'get_plan',
     wrong: 'compare_scenarios',
     question: () => 'Show me my plan as-is.',
     args: () => ({ section: 'summary' }),
     rationale: () =>
-      'Plain read of the plan is get_scenario. compare_scenarios requires ' +
+      'Plain read of the plan is get_plan. compare_scenarios requires ' +
       'two-or-more variant options, which a bare "as-is" lacks.',
   },
   {
@@ -365,12 +365,12 @@ const CONTRAST_PAIRS: ContrastPair[] = [
       'a verdict comparison, not a year-by-year table.',
   },
   {
-    correct: 'get_scenario',
+    correct: 'get_plan',
     wrong: 'run_projection',
     question: () => 'Read my plan inputs, no projection.',
     args: () => ({ section: 'summary' }),
     rationale: () =>
-      'When the user says "just read them" they want get_scenario. ' +
+      'When the user says "just read them" they want get_plan. ' +
       'run_projection runs the engine — not a read.',
   },
   {
@@ -394,7 +394,7 @@ function contextFor(sc: NamedScenario): ToolContext {
     config: testConfig(),
     scenarioName: sc.name,
     scenarioList: SCENARIOS.map((x) => ({ id: x.id, name: x.name })),
-    activeScenarioId: sc.id,
+    activePlanId: sc.id,
   };
 }
 
@@ -422,7 +422,7 @@ function explain(spec: ReadSpec, resultText: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Read-tool records (tool-call + tool-followup), paraphrase × scenario sweep
+// Read-tool records (tool-call + tool-followup), paraphrase × plan sweep
 // ---------------------------------------------------------------------------
 
 export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
@@ -440,7 +440,7 @@ export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
       const base = `contrast:${pair.correct}-vs-${pair.wrong}:${sc.id}:q${seq}`;
       records.push({
         id: `${base}:call`, split: 'train', kind: 'tool-call-contrast',
-        scenarioId: sc.id,
+        planId: sc.id,
         messages: [
           { role: 'user', content: q },
           {
@@ -458,7 +458,7 @@ export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
   for (const sc of SCENARIOS) {
     for (const spec of READ_SPECS) {
       const args = spec.args(sc);
-      // Run the engine ONCE per (spec, scenario) — all paraphrases share the
+      // Run the engine ONCE per (spec, plan) — all paraphrases share the
       // same args, hence the same real result.
       const resultText = spec.explainFrom === 'none' ? null : runRead(sc, spec.tool, args);
       for (const q of spec.questions) {
@@ -467,7 +467,7 @@ export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
         const base = `${spec.tool}:${sc.id}:q${seq}`;
 
         records.push({
-          id: `${base}:call`, split, kind: 'tool-call', scenarioId: sc.id,
+          id: `${base}:call`, split, kind: 'tool-call', planId: sc.id,
           messages: [
             { role: 'user', content: question },
             { role: 'assistant', content: emitToolCall(spec.tool, args) },
@@ -477,7 +477,7 @@ export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
 
         if (spec.explainFrom === 'none' || resultText === null) continue;
         records.push({
-          id: `${base}:follow`, split, kind: 'tool-followup', scenarioId: sc.id,
+          id: `${base}:follow`, split, kind: 'tool-followup', planId: sc.id,
           messages: [
             { role: 'user', content: question },
             { role: 'assistant', content: emitToolCall(spec.tool, args) },
@@ -501,7 +501,7 @@ export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
 // These teach the model to emit the RIGHT proposal call for a change request,
 // and — after the user's confirm — to acknowledge without re-proposing. The
 // engine isn't needed for the call itself (a mutation pauses for confirm), so
-// these are minted from templates over the same scenarios.
+// these are minted from templates over the same plans.
 // ---------------------------------------------------------------------------
 
 interface MutationSpec {
@@ -624,7 +624,7 @@ const MUTATION_SPECS: MutationSpec[] = [
     rejectedReply: () => 'Okay, I won\'t keep that.',
   },
   {
-    tool: 'open_scenario',
+    tool: 'open_plan',
     questions: [
       () => 'Switch to my other plan.',
     ],
@@ -633,12 +633,12 @@ const MUTATION_SPECS: MutationSpec[] = [
     rejectedReply: () => 'Staying on the current plan.',
   },
   {
-    tool: 'save_scenario_as',
+    tool: 'save_plan_as',
     questions: [
       () => 'Keep this variant as its own plan called "Early retirement".',
     ],
     args: () => ({ name: 'Early retirement' }),
-    approvedReply: () => 'Saved as a new scenario — the original is untouched.',
+    approvedReply: () => 'Saved as a new plan — the original is untouched.',
     rejectedReply: () => 'Okay, not saved.',
   },
 ];
@@ -658,7 +658,7 @@ export function mintMutationRecords(evalEvery = 5): CorpusRecord[] {
         const base = `${spec.tool}:${sc.id}:q${seq}`;
 
         records.push({
-          id: `${base}:call`, split, kind: 'mutation-confirm', scenarioId: sc.id,
+          id: `${base}:call`, split, kind: 'mutation-confirm', planId: sc.id,
           messages: [
             { role: 'user', content: question },
             { role: 'assistant', content: emitToolCall(spec.tool, args) },
@@ -667,7 +667,7 @@ export function mintMutationRecords(evalEvery = 5): CorpusRecord[] {
         });
 
         records.push({
-          id: `${base}:approved`, split, kind: 'mutation-confirm', scenarioId: sc.id,
+          id: `${base}:approved`, split, kind: 'mutation-confirm', planId: sc.id,
           messages: [
             { role: 'user', content: question },
             { role: 'assistant', content: emitToolCall(spec.tool, args) },
@@ -678,7 +678,7 @@ export function mintMutationRecords(evalEvery = 5): CorpusRecord[] {
         });
 
         records.push({
-          id: `${base}:rejected`, split, kind: 'mutation-confirm', scenarioId: sc.id,
+          id: `${base}:rejected`, split, kind: 'mutation-confirm', planId: sc.id,
           messages: [
             { role: 'user', content: question },
             { role: 'assistant', content: emitToolCall(spec.tool, args) },
@@ -737,7 +737,7 @@ export function mintGuardrailRecords(): CorpusRecord[] {
   for (const sc of SCENARIOS) {
     for (const ask of REFUSAL_ASKS) {
       records.push({
-        id: `refusal:${sc.id}:${seq++}`, split: 'train', kind: 'refusal', scenarioId: sc.id,
+        id: `refusal:${sc.id}:${seq++}`, split: 'train', kind: 'refusal', planId: sc.id,
         messages: [
           { role: 'user', content: ask(sc) },
           { role: 'assistant', content: `${ADVICE_FREE_REDIRECT} Want me to run the comparison?` },
@@ -747,7 +747,7 @@ export function mintGuardrailRecords(): CorpusRecord[] {
     }
     for (const { ask, clarify } of CLARIFY_ASKS) {
       records.push({
-        id: `clarify:${sc.id}:${seq++}`, split: 'train', kind: 'clarify', scenarioId: sc.id,
+        id: `clarify:${sc.id}:${seq++}`, split: 'train', kind: 'clarify', planId: sc.id,
         messages: [
           { role: 'user', content: ask(sc) },
           { role: 'assistant', content: clarify },
@@ -758,7 +758,7 @@ export function mintGuardrailRecords(): CorpusRecord[] {
   }
   for (const { ask, answer } of DOMAIN_EXPLAIN) {
     records.push({
-      id: `domain:${seq++}`, split: 'train', kind: 'domain-explain', scenarioId: 'any',
+      id: `domain:${seq++}`, split: 'train', kind: 'domain-explain', planId: 'any',
       messages: [
         { role: 'user', content: ask },
         { role: 'assistant', content: answer },
@@ -775,7 +775,7 @@ export function mintGuardrailRecords(): CorpusRecord[] {
 // — it's a request to survey the levers. The right move is: run_strategies to
 // ground the options in THIS person's numbers, then frame the trade-offs in
 // plain words WITHOUT recommending one (calculator-not-planner). This is the
-// "understands the scenario/person, shows options, never dictates" register.
+// "understands the plan/person, shows options, never dictates" register.
 // ---------------------------------------------------------------------------
 
 const OPTION_ASKS: Array<(sc: NamedScenario) => string> = [
@@ -817,7 +817,7 @@ function frameOptions(resultText: string, closerIndex = 0): string {
 
 /** Mint option-framing exemplars: question → run_strategies call → real result
  *  → grounded, non-advisory survey of the options. Two records per (ask ×
- *  scenario): the tool-call and the follow-up. */
+ *  plan): the tool-call and the follow-up. */
 export function mintOptionFramingRecords(evalEvery = 5): CorpusRecord[] {
   const records: CorpusRecord[] = [];
   let seq = 0;
@@ -829,7 +829,7 @@ export function mintOptionFramingRecords(evalEvery = 5): CorpusRecord[] {
       const split = ++seq % evalEvery === 0 ? 'eval' : 'train';
       const base = `option-framing:${sc.id}:q${seq}`;
       records.push({
-        id: `${base}:call`, split, kind: 'option-framing', scenarioId: sc.id,
+        id: `${base}:call`, split, kind: 'option-framing', planId: sc.id,
         messages: [
           { role: 'user', content: question },
           { role: 'assistant', content: emitToolCall('run_strategies', args) },
@@ -837,7 +837,7 @@ export function mintOptionFramingRecords(evalEvery = 5): CorpusRecord[] {
         expect: { toolName: 'run_strategies' },
       });
       records.push({
-        id: `${base}:follow`, split, kind: 'option-framing', scenarioId: sc.id,
+        id: `${base}:follow`, split, kind: 'option-framing', planId: sc.id,
         messages: [
           { role: 'user', content: question },
           { role: 'assistant', content: emitToolCall('run_strategies', args) },
@@ -927,14 +927,14 @@ export const NAV_SPECS: NavSpec[] = [
     ],
   },
   {
-    view: 'scenarios', query: 'compare',
+    view: 'plans', query: 'compare',
     findAsks: [
       () => 'Where can I compare my saved plans side by side?',
-      () => 'Which page lists my saved scenarios?',
+      () => 'Which page lists my saved plans?',
     ],
     goAsks: [
       () => 'Take me to my saved plans.',
-      () => 'Open the scenario manager.',
+      () => 'Open the plan manager.',
     ],
   },
   {
@@ -1012,7 +1012,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
       // is a real redirect. projection (Dashboard) is always reachable.
       const ambient = here === 'projection' ? 'settings' : 'projection';
       records.push({
-        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        id: `${base}:call`, split, kind: 'navigation', planId: sc.id,
         messages: [
           { role: 'system', content: ambientPageLine(ambient) },
           { role: 'user', content: question },
@@ -1022,7 +1022,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
       });
       const resultText = runNav(sc, 'find_page', findArgs, ambient);
       records.push({
-        id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+        id: `${base}:follow`, split, kind: 'navigation', planId: sc.id,
         messages: [
           { role: 'system', content: ambientPageLine(ambient) },
           { role: 'user', content: question },
@@ -1045,7 +1045,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
       const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
       const base = `find_page-here:${sc.id}:q${seqRef.n}`;
       records.push({
-        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        id: `${base}:call`, split, kind: 'navigation', planId: sc.id,
         messages: [
           { role: 'system', content: ambientPageLine(here) },
           { role: 'user', content: question },
@@ -1055,7 +1055,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
       });
       const resultText = runNav(sc, 'find_page', findArgs, here);
       records.push({
-        id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+        id: `${base}:follow`, split, kind: 'navigation', planId: sc.id,
         messages: [
           { role: 'system', content: ambientPageLine(here) },
           { role: 'user', content: question },
@@ -1077,7 +1077,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
       const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
       const base = `propose_navigate:${sc.id}:q${seqRef.n}`;
       records.push({
-        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        id: `${base}:call`, split, kind: 'navigation', planId: sc.id,
         messages: [
           { role: 'system', content: ambientPageLine('projection') },
           { role: 'user', content: question },
@@ -1086,7 +1086,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
         expect: { toolName: 'propose_navigate' },
       });
       records.push({
-        id: `${base}:approved`, split, kind: 'navigation', scenarioId: sc.id,
+        id: `${base}:approved`, split, kind: 'navigation', planId: sc.id,
         messages: [
           { role: 'system', content: ambientPageLine('projection') },
           { role: 'user', content: question },
@@ -1097,7 +1097,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
         expect: { toolName: 'propose_navigate', mustNotContain: ['TOOL_CALL'] },
       });
       records.push({
-        id: `${base}:rejected`, split, kind: 'navigation', scenarioId: sc.id,
+        id: `${base}:rejected`, split, kind: 'navigation', planId: sc.id,
         messages: [
           { role: 'system', content: ambientPageLine('projection') },
           { role: 'user', content: question },
@@ -1120,7 +1120,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
     const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
     const base = `get_sitemap:${sc.id}:q${seqRef.n}`;
     records.push({
-      id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+      id: `${base}:call`, split, kind: 'navigation', planId: sc.id,
       messages: [
         { role: 'user', content: question },
         { role: 'assistant', content: emitToolCall('get_sitemap', sitemapArgs) },
@@ -1129,7 +1129,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
     });
     const resultText = runNav(sc, 'get_sitemap', sitemapArgs);
     records.push({
-      id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+      id: `${base}:follow`, split, kind: 'navigation', planId: sc.id,
       messages: [
         { role: 'user', content: question },
         { role: 'assistant', content: emitToolCall('get_sitemap', sitemapArgs) },

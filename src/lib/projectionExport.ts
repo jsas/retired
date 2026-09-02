@@ -36,7 +36,7 @@ export const COLUMN_GROUPS: Array<{ key: ColumnGroup; label: string; hint: strin
 ];
 
 export const METADATA_SECTIONS: Array<{ key: MetaSection; label: string; hint: string }> = [
-  { key: 'profile', label: 'Profile & inputs', hint: 'Scenario name, ages, province, account balances, spending, benefits, spouse' },
+  { key: 'profile', label: 'Profile & inputs', hint: 'Plan name, ages, province, account balances, spending, benefits, spouse' },
   { key: 'options', label: 'Projection options', hint: 'Withdrawal order, spending bands, income sources, events, reverse mortgage, verdict' },
   { key: 'settings', label: 'Engine settings', hint: 'Inflation, RRIF conversion age, tax tables, split limit and other engine config' },
 ];
@@ -320,7 +320,7 @@ export function buildProjectionObject(
 
   if (!opts.includeMetadata) return clean({ projection });
 
-  const meta: Record<string, unknown> = { generated: new Date().toISOString(), scenario: scenarioName, tool: 'RE: tired' };
+  const meta: Record<string, unknown> = { generated: new Date().toISOString(), plan: scenarioName, tool: 'RE: tired' };
   for (const section of opts.metadataSections) {
     if (section === 'profile') {
       meta.profile = {

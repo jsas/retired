@@ -33,7 +33,7 @@ npx tsx training/generate.ts
 ```
 
 `training/data/corpus.{train,eval}.jsonl` + `corpus.eval.sha256`. Any
-spec/paraphrase/scenario change must land here in the same commit (CLAUDE.md
+spec/paraphrase/plan change must land here in the same commit (CLAUDE.md
 rule 2 — don't let the eval split drift silently).
 
 ## 3. Train

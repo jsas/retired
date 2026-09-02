@@ -40,9 +40,11 @@ probe/results/*
 training/data/
 
 # #135 fine-tune: trainer output, vendored llama.cpp converter, GGUF quants.
-# All reproducible: train.py regenerates out/, fetch_llama_cpp.py re-vendors,
-# convert_hf_to_gguf.py re-quantizes. Checkpoints/quants are far too big for git.
-training/sft/out/
+# All reproducible: train.py regenerates out*/ (out/, out-v3/, out-v4/, …),
+# fetch_llama_cpp.py re-vendors, convert_hf_to_gguf.py re-quantizes.
+# Checkpoints/quants are far too big for git.
+training/sft/out*/
 training/sft/llama.cpp/
 training/sft/quantized/
 training/sft/__pycache__/
+training/driver/evalset.json

@@ -45,7 +45,7 @@ function executor() {
 describe('agent loop over the in-page MCP server', () => {
   it('runs a read tool through tools/call and feeds the text back to the model', async () => {
     const chat = scripted([
-      [{ type: 'tool_use', call: { id: 'c1', name: 'get_scenario', args: { section: 'summary' } } },
+      [{ type: 'tool_use', call: { id: 'c1', name: 'get_plan', args: { section: 'summary' } } },
        { type: 'done', stopReason: 'tool_use' }],
       [{ type: 'text', text: 'All read.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);

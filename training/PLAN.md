@@ -12,8 +12,8 @@ same shape runGate uses):
 | bucket | n/900 | root cause | fix |
 | --- | --- | --- | --- |
 | compare_scenarios magnet | 56+30+27+23+22 | variants/patches make it look permissive | L3 contrastive mint (negative-pair) |
-| run_projection vs get_scenario | 37+19+19 | "how does my plan look" ambiguity | L3 pair-mint |
-| get_scenario enum invention | — | model invents 'balances' | done: cycle real enum values |
+| run_projection vs get_plan | 37+19+19 | "how does my plan look" ambiguity | L3 pair-mint |
+| get_plan enum invention | — | model invents 'balances' | done: cycle real enum values |
 | compare_scenarios duplicate-call | 23 | emits TOOL_CALL twice on one line | done: 'one variant, not a list' paraphrase |
 | run_strategies vs compare_scenarios | 27 | lever-selection wording | pending contrastive mint |
 
@@ -44,8 +44,8 @@ pairs: same question, two replies — one showing the correct tool, one proving
 the wrong-tool reply by counter-example.
 
 1. "compare how my plan looks under different returns" → `run_projection`
-   (today: `get_scenario`). ✓ done in this corpus.
-2. "what section/page shows my balances" → `get_scenario(section=...)` with a
+   (today: `get_plan`). ✓ done in this corpus.
+2. "what section/page shows my balances" → `get_plan(section=...)` with a
    VALID enum (today: invents sections). ✓ done; cycle real enum values.
 3. "run the strategy sweep" vs "solve my spending" boundary examples —
    `run_strategies` when it's a sweep, `solve_spending` only when a target is
@@ -86,9 +86,9 @@ against silent template regressions.
 
 ## L7 — scale-out diversity
 
-Scenarios 79 in `scenarios.ts`; lean on them. Every new READ/MUTATION/NAV spec
+Plans 79 in `plans.ts`; lean on them. Every new READ/MUTATION/NAV spec
 multiplies through all of them. Also consider `ont/mixed-provinces` coverage
-for `get_scenario` section confusion (scenario id prefix visible in tool
+for `get_plan` section confusion (plan id prefix visible in tool
 args).
 
 ## L8 — when #141 nav (PR 144) is merged (done for corpus)

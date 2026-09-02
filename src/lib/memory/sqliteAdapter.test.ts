@@ -25,14 +25,14 @@ describe('SqliteMemoryAdapter', () => {
     const db = await AppDatabase.open();
     const adapter = new SqliteMemoryAdapter(db);
     adapter.put({
-      id: 'm1', scope: 'scenario', scopeKey: 'plan-a', text: 'Spouse pension pays $1,200/mo',
+      id: 'm1', scope: 'plan', scopeKey: 'plan-a', text: 'Spouse pension pays $1,200/mo',
       keywords: ['pension', 'income'],
       createdAt: 1000, lastAccessedAt: 2000, importance: 0.7, accessCount: 3,
     });
     const all = adapter.all();
     expect(all.length).toBe(1);
     expect(all[0]).toMatchObject({
-      id: 'm1', scope: 'scenario', scopeKey: 'plan-a',
+      id: 'm1', scope: 'plan', scopeKey: 'plan-a',
       text: 'Spouse pension pays $1,200/mo', keywords: ['pension', 'income'],
       importance: 0.7, accessCount: 3,
     });
@@ -101,7 +101,7 @@ describe('SqliteMemoryAdapter', () => {
   it('the full store pipeline works over SQLite: write with keywords, recall, evict', async () => {
     const db = await AppDatabase.open();
     const store = new MemoryStore(new SqliteMemoryAdapter(db));
-    store.write({ scope: 'scenario', scopeKey: 'p1', text: 'Downsizing the house at 70', importance: 0.9 });
+    store.write({ scope: 'plan', scopeKey: 'p1', text: 'Downsizing the house at 70', importance: 0.9 });
     store.write({ scope: 'global', text: 'User likes oranges.', keywords: ['fruit', 'food'], importance: 0.3 });
     // Keyword match through the persisted layer: "fruit" → the oranges fact.
     const fruit = store.recall('fruit', { scopeKey: 'p1' });

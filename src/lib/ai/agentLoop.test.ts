@@ -145,7 +145,7 @@ describe('runAgentTurn', () => {
       ],
       // Round 2 (after approval): the model re-reads the plan, then answers.
       [
-        { type: 'tool_use', call: { id: 'g1', name: 'get_scenario', args: { section: 'summary' } } },
+        { type: 'tool_use', call: { id: 'g1', name: 'get_plan', args: { section: 'summary' } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -210,7 +210,7 @@ describe('runAgentTurn', () => {
     // tools on offer so the user still gets a real answer.
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'c', name: 'get_scenario', args: {} } },
+        { type: 'tool_use', call: { id: 'c', name: 'get_plan', args: {} } },
         { type: 'done', stopReason: 'tool_use' },
       ],
     ]);
@@ -232,7 +232,7 @@ describe('runAgentTurn', () => {
   it('the forced final answer surfaces its prose to the user', async () => {
     // Round-limit path where the finalization pass actually answers.
     const { chat } = scripted([
-      [{ type: 'tool_use', call: { id: 'c', name: 'get_scenario', args: {} } }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'tool_use', call: { id: 'c', name: 'get_plan', args: {} } }, { type: 'done', stopReason: 'tool_use' }],
       [{ type: 'text', text: 'Based on the numbers, you are on track.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);
     const events = await collect(runAgentTurn({
@@ -247,7 +247,7 @@ describe('runAgentTurn', () => {
 });
 
 describe('buildSystemPrompt', () => {
-  it('names the scenario, takes a planner stance, and never refuses to plan', () => {
+  it('names the plan, takes a planner stance, and never refuses to plan', () => {
     const s = buildSystemPrompt('My Plan');
     expect(s).toContain('"My Plan"');
     // The persona must engage as a planner — the old "calculator, not a
@@ -261,7 +261,7 @@ describe('buildSystemPrompt', () => {
     const s = buildSystemPrompt('My Plan', { basePrompt: 'You are a terse actuary.' });
     expect(s).toContain('You are a terse actuary.');
     expect(s).not.toContain('planning assistant');
-    // Tool mechanics + scenario name are still appended after the persona.
+    // Tool mechanics + plan name are still appended after the persona.
     expect(s).toContain('set_scenario_value');
     expect(s).toContain('"My Plan"');
   });

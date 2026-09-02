@@ -13,7 +13,7 @@
 // Two record shapes:
 //   - fact recall:      a concept question → a plain-words answer that CITES the
 //                       real figure, then offers to ground it in the user's plan
-//   - applied reading:  a program rule stated against a scenario's real numbers
+//   - applied reading:  a program rule stated against a plan's real numbers
 // The register is the same as every other kind: consequence-explaining, never
 // advice ("here's how it works / here's what it does to YOUR numbers — your call").
 
@@ -21,7 +21,7 @@ import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
 import { HISTORICAL_REAL_RETURNS } from '../src/lib/historicalReturns';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { CorpusRecord } from './buildCorpus';
-import { SCENARIOS, type NamedScenario } from './scenarios';
+import { SCENARIOS, type NamedScenario } from './plans';
 
 const cfg = DEFAULT_APP_CONFIG;
 
@@ -37,11 +37,11 @@ interface FactSpec {
   ask: string;
   /** Extra natural phrasings of the same question — teaches recall, not echo. */
   phrasings?: string[];
-  /** Scenario ids this fact has an "applied" variant for (real household numbers). */
+  /** Plan ids this fact has an "applied" variant for (real household numbers). */
   appliedTo?: string[];
   /** Build the general answer from live config — never a hardcoded number. */
   answer: () => string;
-  /** Build the applied answer against a specific scenario's real numbers. */
+  /** Build the applied answer against a specific plan's real numbers. */
   appliedAnswer?: (inputs: RetirementInputs, s: NamedScenario) => string;
   /** Optional applied-variant question (defaults to the canonical ask). */
   appliedAsk?: (s: NamedScenario) => string;
@@ -459,7 +459,7 @@ const FACTS: FactSpec[] = [
     appliedTo: ['couple-ont'],
     appliedAsk: () => 'If my partner passes first, what CPP do I keep?',
     answer: () =>
-      `If a CPP contributor dies, their surviving spouse/common-law partner can receive a survivor's pension — up to 60% of the deceased's CPP, subject to a combined maximum with the survivor's own CPP. The formula is complex, so actual amounts depend on both CPP histories. It's one of the ways the plan protects household income after a death — and it doesn't reduce the survivor's own retirement benefit below the combined cap. I can show how the engine treats CPP in a couple scenario.`,
+      `If a CPP contributor dies, their surviving spouse/common-law partner can receive a survivor's pension — up to 60% of the deceased's CPP, subject to a combined maximum with the survivor's own CPP. The formula is complex, so actual amounts depend on both CPP histories. It's one of the ways the plan protects household income after a death — and it doesn't reduce the survivor's own retirement benefit below the combined cap. I can show how the engine treats CPP in a couple plan.`,
     appliedAnswer: (inputs) => {
       const sp = inputs.spouse;
       const ownCpp = (inputs.cppMonthlyAmount ?? 0) * 12;
@@ -569,7 +569,7 @@ const FACTS: FactSpec[] = [
     answer: () => {
       const age = cfg.engine.rrifConversionAge;
       const r71 = cfg.rrifRates['71'] ?? 0;
-      return `A common helpful heuristic is: delay CPP/OAS as long as comfortable (they index), withdraw taxable first when near the ${money0(cfg.oas.clawbackThreshold)} clawback threshold, then RRSP/RRIF (because you must convert at ${age}, with minimums rising to ${pct(r71)} at 71), saving TFSA for flexibility against marginal-rate fluctuations. But the right withdrawal order depends on your mix — running it as scenarios lets you see the final balance differences rather than picking one "right" answer. ${OFFER}`;
+      return `A common helpful heuristic is: delay CPP/OAS as long as comfortable (they index), withdraw taxable first when near the ${money0(cfg.oas.clawbackThreshold)} clawback threshold, then RRSP/RRIF (because you must convert at ${age}, with minimums rising to ${pct(r71)} at 71), saving TFSA for flexibility against marginal-rate fluctuations. But the right withdrawal order depends on your mix — running it as plans lets you see the final balance differences rather than picking one "right" answer. ${OFFER}`;
     },
     mustContain: ['withdraw', 'TFSA', 'RRSP'],
   },
@@ -615,7 +615,7 @@ const FACTS: FactSpec[] = [
  *  *concept*, not one phrasing:
  *    - fact recall:    the canonical question → grounded general answer
  *    - paraphrase:     the same fact asked differently (teaches recall, not echo)
- *    - applied:        the fact stated against a scenario's REAL numbers (teaches
+ *    - applied:        the fact stated against a plan's REAL numbers (teaches
  *                      the model to read a person, not just recite a rule)
  *  All close by offering to ground the rule in the user's own numbers — the
  *  offer is rotated across CLOSERS so the model doesn't parrot one sentence. */
@@ -623,12 +623,12 @@ export function mintDomainKnowledgeRecords(): CorpusRecord[] {
   const records: CorpusRecord[] = [];
   let i = 0;
 
-  const push = (fact: FactSpec, variant: string, ask: string, answer: string, scenarioId: string) => {
+  const push = (fact: FactSpec, variant: string, ask: string, answer: string, planId: string) => {
     records.push({
       id: `domain-knowledge:${fact.id}:${variant}:${i}`,
       split: (i % 5 === 4 ? 'eval' : 'train') as 'eval' | 'train',
       kind: 'domain-knowledge' as const,
-      scenarioId,
+      planId,
       messages: [
         { role: 'user' as const, content: ask },
         { role: 'assistant' as const, content: answer },
@@ -654,12 +654,12 @@ export function mintDomainKnowledgeRecords(): CorpusRecord[] {
       const base = fact.answer().replace(OFFER, rotated);
       push(fact, 'paraphrase', phrasing, base.includes(rotated) ? base : `${base} ${rotated}`, 'any');
     }
-    // 3. Applied — the fact against a scenario's real numbers.
-    for (const scenarioId of fact.appliedTo ?? []) {
-      const scenario = scenarioById.get(scenarioId);
-      if (!scenario || !fact.appliedAnswer) continue;
+    // 3. Applied — the fact against a plan's real numbers.
+    for (const planId of fact.appliedTo ?? []) {
+      const plan = scenarioById.get(planId);
+      if (!plan || !fact.appliedAnswer) continue;
       const appliedCloser = CLOSERS[i % CLOSERS.length];
-      push(fact, 'applied', fact.appliedAsk?.(scenario) ?? fact.ask, fact.appliedAnswer(scenario.inputs, scenario), scenario.id);
+      push(fact, 'applied', fact.appliedAsk?.(plan) ?? fact.ask, fact.appliedAnswer(plan.inputs, plan), plan.id);
       void appliedCloser;
     }
   }

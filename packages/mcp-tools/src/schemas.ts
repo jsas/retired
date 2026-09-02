@@ -4,7 +4,7 @@ import type {
   ReverseMortgage, WithdrawalAccount, RdspInputs, FhsaInputs, Debt,
 } from '@retired/engine-core/retirementEngine';
 import type { AppConfig, TaxTable } from '@retired/engine-core/appConfig';
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 
 /**
  * Zod schemas — the single source of truth for the shapes the engine and the
@@ -113,7 +113,7 @@ export const debtSchema = z.object({
 
 const spouseSourceSchema = z.union([
   z.object({ kind: z.literal('builtin') }),
-  z.object({ kind: z.literal('scenario'), scenarioId: z.string() }),
+  z.object({ kind: z.literal('plan'), planId: z.string() }),
 ]);
 
 export const spouseSchema = z.object({
@@ -184,7 +184,7 @@ export const scenarioSchema = z.object({
   id: z.string(),
   name: z.string(),
   inputs: retirementInputsSchema,
-}) satisfies z.ZodType<Scenario>;
+}) satisfies z.ZodType<Plan>;
 // ---------------------------------------------------------------------------
 // Engine configuration
 // ---------------------------------------------------------------------------

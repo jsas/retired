@@ -7,7 +7,7 @@ byte-identical, `RetirementInputs` stays the persisted source of truth.
 ## Constraint that shapes the design
 
 `RetirementInputs` (primary-at-top-level + nested `spouse`) is the persisted
-shape — storage, share links, zod schema, every saved scenario, and the whole
+shape — storage, share links, zod schema, every saved plan, and the whole
 write-path (assistant tools, Eq sliders, components) are keyed on it (~40
 files). So `Household` is **derived, never stored**: an in-memory view built by
 `toHousehold(inputs)` at the entry point, passed down to the engine and the

@@ -46,7 +46,7 @@ describe('rankPages', () => {
     expect(rankPages('backup')[0]?.viewId).toBe('data');
     expect(rankPages('tax tables')[0]?.viewId).toBe('settings');
     expect(rankPages('print')[0]?.viewId).toBe('print');
-    expect(rankPages('compare')[0]?.viewId).toBe('scenarios');
+    expect(rankPages('compare')[0]?.viewId).toBe('plans');
   });
 
   it('searches only the reachable pages — folded legacy views never surface', () => {
@@ -59,10 +59,10 @@ describe('rankPages', () => {
 
   it('hoists the current page first so "already here" is the first thing read', () => {
     const ranked = rankPages('compare', 'eq');
-    expect(ranked[0]?.viewId).toBe('scenarios');
+    expect(ranked[0]?.viewId).toBe('plans');
     // With the user on the destination itself, it leads.
-    const here = rankPages('compare', 'scenarios');
-    expect(here[0]?.viewId).toBe('scenarios');
+    const here = rankPages('compare', 'plans');
+    expect(here[0]?.viewId).toBe('plans');
     // A folded currentView canonicalizes for the hoist (on #/monte-carlo means
     // on Insights, and an Insights search result is "already here").
     const folded = rankPages('monte carlo', 'montecarlo');
@@ -88,7 +88,7 @@ describe('canonicalView / pageTitleLine', () => {
     expect(pageTitleLine('projection')).toBe('Dashboard');
     expect(pageTitleLine('details')).toBe('Details');
     expect(pageTitleLine('eq')).toBe('Insights');
-    expect(pageTitleLine('scenarios')).toBe('Profiles');
+    expect(pageTitleLine('plans')).toBe('Profiles');
     expect(pageTitleLine('data')).toBe('Data');
     // A legacy view's line is the page the user actually sees.
     expect(pageTitleLine('montecarlo')).toBe('Insights');

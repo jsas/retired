@@ -1,7 +1,7 @@
 // Comprehensive calculation & interaction review — the "whole gamut" suite.
 // Each test asserts a first-order formula or identity the engine must honour,
 // not a re-implementation of the engine. Grouped by subsystem; complements the
-// scenario-style tests in retirementEngine.test.ts.
+// plan-style tests in retirementEngine.test.ts.
 //
 // Conventions used throughout:
 //   - `config` is a fresh deep copy of DEFAULT_APP_CONFIG (testConfig()).

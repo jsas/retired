@@ -148,7 +148,7 @@ export interface AppConfig {
 
 export interface GeneralConfig {
   showWelcomeOnLoad: boolean;  // always show the getting-started welcome card at startup, even after dismissal
-  /** Ask to save before switching away from a scenario with unsaved edits.
+  /** Ask to save before switching away from a plan with unsaved edits.
    *  true (default) = prompt each time; false = switch silently (the opt-out). */
   promptToSaveOnSwitch: boolean;
 }

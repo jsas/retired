@@ -5,7 +5,7 @@ import { mintReadRecords } from './mint';
 import type { CorpusRecord } from './buildCorpus';
 
 const rec = (toolName: string): CorpusRecord => ({
-  id: `test:${toolName}`, split: 'eval', kind: 'tool-call', scenarioId: 's',
+  id: `test:${toolName}`, split: 'eval', kind: 'tool-call', planId: 's',
   messages: [],
   expect: { toolName },
 });

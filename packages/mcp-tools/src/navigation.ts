@@ -23,7 +23,7 @@ export type View =
   | 'details'
   | 'math'
   | 'eq'
-  | 'scenarios'
+  | 'plans'
   | 'data'
   | 'print'
   | 'donate'
@@ -101,11 +101,11 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     keywords: ['insights', 'steering', 'equalizer', 'levers', 'options', 'ranked', 'what helps most', 'optimize', 'best option', 'apply', 'monte carlo', 'simulation', 'odds', 'success rate', 'probabilities', 'backtest', 'historical', '1926', 'stress test', 'past markets'],
   },
   {
-    viewId: 'scenarios',
-    route: 'scenarios',
+    viewId: 'plans',
+    route: 'plans',
     title: 'Profiles',
     description: 'Your saved plans: open, rename, duplicate, delete, and roll back revisions — plus the side-by-side comparison of every profile.',
-    keywords: ['profiles', 'scenarios', 'saved plans', 'manager', 'duplicate', 'rename', 'delete', 'compare', 'side-by-side', 'which plan', 'revisions'],
+    keywords: ['profiles', 'plans', 'saved plans', 'manager', 'duplicate', 'rename', 'delete', 'compare', 'side-by-side', 'which plan', 'revisions'],
   },
   {
     viewId: 'data',
@@ -204,7 +204,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     title: 'Compare',
     description: 'Side-by-side outcomes across all saved profiles.',
     keywords: ['compare', 'side-by-side', 'which plan', 'vs'],
-    foldedInto: 'scenarios',
+    foldedInto: 'plans',
   },
   {
     viewId: 'export',

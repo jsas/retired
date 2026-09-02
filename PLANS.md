@@ -142,7 +142,7 @@ engine:1162-1168 for the shape). The fix must compute the year's pre-retirement
    comment.
 
 ### Golden master
-Check whether the canonical scenario has a pre-retirement registered transfer while
+Check whether the canonical plan has a pre-retirement registered transfer while
 employment/pension is active. If yes, results change → regenerate golden master in
 the same commit and say so. If no, golden master is unaffected.
 
@@ -270,7 +270,7 @@ silent one).
    by > $1, swap in the latest draw arrays and re-run, up to 5×.
 
 ### Golden master
-If the canonical scenario is a couple with both partners drawing registered funds
+If the canonical plan is a couple with both partners drawing registered funds
 while GIS-eligible, results change → regenerate golden master in the same commit.
 Verify with a probe before assuming.
 
@@ -359,7 +359,7 @@ Option A (clamp-to-now) — it's local, conserves household money, and turns a s
 loss into a sensible default. Mention the chosen behaviour in the PR.
 
 ### Golden master
-Only moves if the canonical scenario has a cross-age transfer that re-homes into the
+Only moves if the canonical plan has a cross-age transfer that re-homes into the
 past (unlikely). Verify; regenerate only if it shifts.
 
 ### Test recipe (there's already a `re-homed transfer events` describe — engine test)
@@ -465,7 +465,7 @@ save(): void {
 ### Test recipe (`src/data/db.test.ts` or `src/data/opfs.test.ts`)
 - Force `backend.write` to reject; call `save()`; assert localStorage was NOT
   updated (no newer mirror left behind). The test files already have an OPFS-less
-  localStorage shim — see `src/lib/scenarioRevisions.test.ts:11` for the pattern.
+  localStorage shim — see `src/lib/planRevisions.test.ts:11` for the pattern.
 
 ### Acceptance
 - A failed OPFS write never leaves localStorage newer than OPFS; full suite green;
@@ -509,7 +509,7 @@ isn't currently exposed, add a read-only accessor on the store (e.g.
 
 ### Test recipe
 - If you add `store.exportBytes()`, test it returns bytes that round-trip through
-  `AppDatabase.open(seed)` and reflect the most recent `persist`ed scenario.
+  `AppDatabase.open(seed)` and reflect the most recent `persist`ed plan.
 - Otherwise this is a wiring fix — verify by hand in `npm run dev`: make an edit,
   immediately export, re-import, confirm the edit is present.
 
@@ -531,7 +531,7 @@ fail (only a `console.warn`). The user gets **no signal** when their data isn't
 being saved — combined with D-01, a silent durability hole.
 
 ### Where
-- `src/App.tsx:201-204` — scenarios persist effect.
+- `src/App.tsx:201-204` — plans persist effect.
 - `src/App.tsx:207-209` — config persist effect.
 - `src/data/store.ts` — `persist(...)` (the method these call).
 - `src/data/db.ts:150-161` — `save()` swallows/logs errors.
@@ -915,7 +915,7 @@ in the SQL store.
 
 ## [x] PLAN D-05 · `revSeq` resets per session (revision-id collision, theoretical)
 **Maps to:** REVIEW.md **D-05** · Severity LOW
-**File:** `src/lib/scenarioRevisions.ts`
+**File:** `src/lib/planRevisions.ts`
 
 ### Problem
 The revision sequence counter resets each session, so a revision id could
@@ -923,7 +923,7 @@ theoretically collide across sessions. Low risk; confirm and, if trivial, derive
 next id from the max existing id instead of a session counter.
 
 ### Task
-- Read `scenarioRevisions.ts`. If the id is `revSeq++` from 0 each load, change it
+- Read `planRevisions.ts`. If the id is `revSeq++` from 0 each load, change it
   to `max(existingIds) + 1`. Add a test that two sessions don't collide.
 
 ### Acceptance

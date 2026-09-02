@@ -182,7 +182,7 @@ export function scoreMutationConfirm(
   continuation: string,
 ): MutationScore {
   const call = scoreReply(
-    { id: 'm', split: 'eval', kind: 'tool-call', scenarioId: 's', messages: [], expect: { toolName: expectedTool } },
+    { id: 'm', split: 'eval', kind: 'tool-call', planId: 's', messages: [], expect: { toolName: expectedTool } },
     callReply,
   );
   const callValid = call.valid;

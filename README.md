@@ -2,7 +2,7 @@
 
 Plan your Canadian retirement in minutes. Model CPP, OAS, GIS, pensions, and tax — then run Monte Carlo simulations and historical backtests — all in your browser, privately.
 
-Everything runs **locally in your browser**. Your scenarios are stored in `localStorage` only — nothing is sent to a server.
+Everything runs **locally in your browser**. Your plans are stored in `localStorage` only — nothing is sent to a server.
 
 **[Launch the app](https://jsas.github.io/retired/)** | [GitHub](https://github.com/jsas/retired)
 
@@ -30,7 +30,7 @@ Most Canadian retirement planners live in Excel spreadsheets or cost hundreds. R
 - **One-time flows** — house sale (inflow) or major purchase (outflow)
 
 ### Share & save
-- Export/import scenarios as JSON
+- Export/import plans as JSON
 - Shareable links (no server)
 - Print a one-page summary
 
@@ -86,7 +86,7 @@ Tests live beside the code as `src/**/*.test.ts` and run in Node — they gate t
 │   │   ├── monteCarlo.ts         # Monte Carlo simulation
 │   │   ├── historicalReturns.ts  # backtest return series
 │   │   ├── appConfig.ts          # tax tables + engine config (editable in Settings)
-│   │   └── …                     # scenario storage, share links, agent ingest
+│   │   └── …                     # plan storage, share links, agent ingest
 │   ├── lib/*.test.ts             # Vitest suites for the engine, tax/GIS, strategies, storage
 │   ├── test/helpers.ts           # shared fixtures (base inputs, test config)
 │   ├── App.tsx
@@ -110,7 +110,7 @@ git push origin v0.1.0
 - Monte Carlo assumes normal distribution of returns; real markets exhibit fat tails
 - GIS clawback is simplified to federal rules; provincial variations not yet modeled
 - Inflation indexation is approximate for all benefits and tax brackets
-- No support for US cross-border or non-resident scenarios
+- No support for US cross-border or non-resident plans
 
 See [ROADMAP.md](ROADMAP.md) for planned improvements and explicit non-goals.
 

@@ -42,12 +42,12 @@ Failure buckets (169 invalid / 900):
 
 - **39× → 32× malformed JSON** at np=512 — mostly `maxVariants:5` unquoted-key
   slips and stray `}}`, not truncation
-- 32× `get_scenario` where `run_projection` wanted
+- 32× `get_plan` where `run_projection` wanted
 - 31× `run_strategies` args fail schema
-- 16× `get_scenario` args fail schema
+- 16× `get_plan` args fail schema
 - 16× `compare_scenarios` where `run_monte_carlo` wanted
 - 16× `solve_spending` / 16× `compare_scenarios` where `run_strategies` wanted
-- 15× `get_schedule` where `get_scenario` wanted
+- 15× `get_schedule` where `get_plan` wanted
 
 ## Training curve (checkpoint-500 trainer_state)
 

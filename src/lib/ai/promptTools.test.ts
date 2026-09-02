@@ -32,7 +32,7 @@ describe('extractPromptToolCalls', () => {
 
   it('swallows continuation lines when args wrap', () => {
     const { calls } = extractPromptToolCalls(
-      'TOOL_CALL: {"name": "get_scenario",\n  "args": {"section": "summary"}}',
+      'TOOL_CALL: {"name": "get_plan",\n  "args": {"section": "summary"}}',
       names,
     );
     expect(calls).toHaveLength(1);
@@ -41,10 +41,10 @@ describe('extractPromptToolCalls', () => {
 
   it('supports multiple calls in one reply', () => {
     const { calls } = extractPromptToolCalls(
-      'TOOL_CALL: {"name": "get_scenario"}\nTOOL_CALL: {"name": "run_projection"}',
+      'TOOL_CALL: {"name": "get_plan"}\nTOOL_CALL: {"name": "run_projection"}',
       names,
     );
-    expect(calls.map(c => c.name)).toEqual(['get_scenario', 'run_projection']);
+    expect(calls.map(c => c.name)).toEqual(['get_plan', 'run_projection']);
   });
 
   it('flags invalid JSON as a retryable error, not a crash', () => {

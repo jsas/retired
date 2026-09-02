@@ -7,12 +7,12 @@ interface SavePromptModalProps {
   onSave: (dontAskAgain: boolean) => void;
   /** Discard the edits and switch. */
   onDiscard: (dontAskAgain: boolean) => void;
-  /** Stay on the current scenario (no switch). */
+  /** Stay on the current plan (no switch). */
   onCancel: () => void;
 }
 
 /**
- * Shown when the user tries to switch scenarios with unsaved edits. Offers
+ * Shown when the user tries to switch plans with unsaved edits. Offers
  * save-and-switch / discard-and-switch / stay, plus a "don't ask again" box
  * that flips the General setting off (the opt-out the setting controls).
  */

@@ -76,11 +76,11 @@ corpus can't drift from shipped behavior):
   model must learn: approved → confirm + fresh `run_projection`; never
   re-propose after approval, never repeat after rejection.
 - **The 24-tool catalog** (`src/lib/ai/tools.ts`): 9 pure reads
-  (`get_scenario`, `run_projection`, `compare_scenarios`, `run_strategies`,
+  (`get_plan`, `run_projection`, `compare_scenarios`, `run_strategies`,
   `solve_spending`, `run_monte_carlo`, `get_schedule`, `recall`,
-  `list_scenarios`), 12 mutation proposals (incl. `propose_fhsa`, added with
+  `list_plans`), 12 mutation proposals (incl. `propose_fhsa`, added with
   the income-register/FHSA feature #123), 3 direct writes (`remember`,
-  `open_scenario`, `save_scenario_as`). Full arg shapes + result text templates
+  `open_plan`, `save_plan_as`). Full arg shapes + result text templates
   are enumerated in the agent-produced spec (see `training/protocol.ts` and the
   tool-report in the spike notes).
 
@@ -122,14 +122,14 @@ emitter/scorer wired to the live app. Record kinds:
 | `clarify` | ambiguous ask → ask a question, don't guess a tool | ~6% |
 | `domain-explain` | projection digest → plain-words explanation (no tool needed) | ~6% |
 | `option-framing` | "what can I optimize?" → `run_strategies` + survey the levers with real deltas, frame the trade-off, hand the choice back | ~9% |
-| `domain-knowledge` | Canadian tax/benefit/market-history fact in three shapes — canonical recall, paraphrase, and per-scenario applied (real household numbers) — answered from the app's OWN shipped tables + offer to ground | ~2% |
+| `domain-knowledge` | Canadian tax/benefit/market-history fact in three shapes — canonical recall, paraphrase, and per-plan applied (real household numbers) — answered from the app's OWN shipped tables + offer to ground | ~2% |
 
 \* target mix, tuned after the first eval. **Every tool gets ≥1 tool-call and
 ≥1 follow-up exemplar; every mutation tool gets both an APPROVED and a REJECTED
 record.** That coverage matrix is `TOOL_TAXONOMY` in `buildCorpus.ts`.
 
-**Scenario sweep** grounds it all in real engine output. `src/test/helpers.ts`
-`baseInputs()` is the clean base to override per-scenario (province `'ONT'`,
+**Plan sweep** grounds it all in real engine output. `src/test/helpers.ts`
+`baseInputs()` is the clean base to override per-plan (province `'ONT'`,
 `cppStartAge`/`oasStartAge` as explicit `null`, `withdrawalOrder` array,
 `income: []`). Sweep these knobs: province (all 13, `'ONT'`-style codes),
 income/spending bands, current/retirement/max ages, account mixes
@@ -163,7 +163,7 @@ go-go/slow-go/no-go spending bands. For format-behavior SFT at ≤2B that's a
 workable first rung — the paraphrase bank (many phrasings → one canonical call)
 is what teaches the muscle memory. If the eval gate shows protocol-validity
 hasn't saturated after the first SFT rung, scale by widening the paraphrase
-banks and the scenario sweep, not by adding noise. Kind mix: tool-call 792,
+banks and the plan sweep, not by adding noise. Kind mix: tool-call 792,
 tool-followup 504, mutation-confirm 864, option-framing 240, refusal 120,
 clarify 72, domain-explain 3 — all 23 catalog tools covered.
 
@@ -215,7 +215,7 @@ gate shows it doesn't cost protocol reliability.
 ```
 ┌─ IN THIS REPO (elective, not on deploy path) ────────────────┐
 │ training/protocol.ts     lock the protocol contract to the app │
-│ training/buildCorpus.ts    mint scenario-grounded JSONL        │
+│ training/buildCorpus.ts    mint plan-grounded JSONL        │
 │ training/eval/*            protocol-validity gate (replay)     │
 └──────────────┬───────────────────────────────────────────────┘
                │ corpus.jsonl  (+ held-out eval split)
@@ -416,8 +416,8 @@ What it says:
    `EDITABLE_FIELDS` — that's executor-side, documented in the test.)
 2. **Expected-call ground truth** ✅ done — `CorpusRecord.expect.toolName`.
 3. **Pass/fail aggregation** ✅ done — `gateReport` + threshold + exit code.
-4. **Scenario injection** ✅ done (for the single-turn gate) — the corpus is
-   built *from* injected scenarios (`scenarios.ts`), each deterministically
+4. **Plan injection** ✅ done (for the single-turn gate) — the corpus is
+   built *from* injected plans (`plans.ts`), each deterministically
    requiring its tool.
 5. **Multi-turn + execution** ✅ done — `scoreFollowup` / `scoreMutationConfirm`
    grade the continuation after a fed-back `[OK]` result or an APPROVED/REJECTED

@@ -2,7 +2,7 @@
 // execute the tool catalog. The tools themselves are host-agnostic (they run
 // the engine against a plan and return read results or mutation PROPOSALS);
 // what varies by host is WHERE the live plan and its surrounding state come
-// from. The in-page web host supplies the open tab's scenario; a future
+// from. The in-page web host supplies the open tab's plan; a future
 // standalone host would supply a session's plan or stubs that report the
 // capability as unavailable.
 //

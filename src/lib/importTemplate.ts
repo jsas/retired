@@ -1,7 +1,7 @@
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 // Import template: a flat key,value CSV that someone can fill in from Excel /
-// Google Sheets and import as a new scenario — the only realistic "import
+// Google Sheets and import as a new plan — the only realistic "import
 // interop" for retirement plans, since no financial program exports plan
 // inputs in a standard shape. The template is deliberately limited to the
 // fields a spreadsheet user can sensibly type (ages, balances, benefits,
@@ -11,7 +11,7 @@ import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 //
 // Format:
 //   key,value          — header row (required)
-//   name,My plan       — optional scenario name
+//   name,My plan       — optional plan name
 //   currentAge,45      — one field per row; blank values = use the default
 // spouse fields are prefixed `spouse.`; spouse is enabled when any spouse row
 // has a non-blank value.
@@ -99,7 +99,7 @@ const KNOWN_SPOUSE_KEYS = new Set([
   'cppStartAge', 'cppMonthlyAmount', 'oasStartAge', 'oasYearsInCanada',
 ]);
 
-/** Parse template CSV text into scenario inputs, or throw with a readable reason. */
+/** Parse template CSV text into plan inputs, or throw with a readable reason. */
 export function parseTemplateCsv(text: string): CsvTemplateResult {
   const warnings: string[] = [];
   const fields = new Map<string, string>();

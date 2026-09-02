@@ -99,14 +99,14 @@
       ]
     },
     {
-      "view": "scenarios",
-      "route": "#/scenarios",
-      "url": "https://jsas.github.io/retired/#/scenarios",
+      "view": "plans",
+      "route": "#/plans",
+      "url": "https://jsas.github.io/retired/#/plans",
       "title": "Profiles",
       "description": "Your saved plans: open, rename, duplicate, delete, and roll back revisions — plus the side-by-side comparison of every profile.",
       "keywords": [
         "profiles",
-        "scenarios",
+        "plans",
         "saved plans",
         "manager",
         "duplicate",

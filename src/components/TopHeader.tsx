@@ -4,8 +4,8 @@ import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 interface TopHeaderProps {
   onToggleSidebar: () => void;
-  scenarios: Array<{ id: string; name: string; inputs: RetirementInputs }>;
-  activeScenarioId: string;
+  plans: Array<{ id: string; name: string; inputs: RetirementInputs }>;
+  activePlanId: string;
   onScenarioChange: (id: string) => void;
   onSave: () => void;
   hasUnsavedChanges: boolean;
@@ -36,8 +36,8 @@ function GitHubIcon({ size = 14 }: { size?: number }) {
 
 export function TopHeader({
   onToggleSidebar,
-  scenarios,
-  activeScenarioId,
+  plans,
+  activePlanId,
   onScenarioChange,
   onSave,
   hasUnsavedChanges,
@@ -58,7 +58,7 @@ export function TopHeader({
   const overflowItems = (
     <>
       <button onClick={() => { closeMenu(); onManageScenarios(); }} className={MENU_ITEM}>
-        <FolderOpen size={14} /> Scenarios
+        <FolderOpen size={14} /> Plans
       </button>
       <button onClick={() => { closeMenu(); onResetScenario(); }} className={MENU_ITEM}>
         <RotateCcw size={14} /> Reset
@@ -116,13 +116,13 @@ export function TopHeader({
       {/* Project selector */}
       <div className="relative min-w-0">
         <select
-          value={activeScenarioId}
+          value={activePlanId}
           onChange={(e) => onScenarioChange(e.target.value)}
           className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-800 rounded text-xs hover:bg-neutral-700 cursor-pointer appearance-none pr-7 max-w-[10rem] md:max-w-none truncate"
         >
-          {scenarios.map(scenario => (
-            <option key={scenario.id} value={scenario.id} className="bg-neutral-800">
-              {scenario.name}
+          {plans.map(plan => (
+            <option key={plan.id} value={plan.id} className="bg-neutral-800">
+              {plan.name}
             </option>
           ))}
         </select>
@@ -136,7 +136,7 @@ export function TopHeader({
         className={hasUnsavedChanges
           ? 'flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-emerald-600 text-white hover:bg-emerald-700 rounded font-medium'
           : 'flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-neutral-600 rounded cursor-not-allowed'}
-        title={hasUnsavedChanges ? 'Save current inputs to the active scenario' : 'No unsaved changes'}
+        title={hasUnsavedChanges ? 'Save current inputs to the active plan' : 'No unsaved changes'}
       >
         <Save size={14} /> Save
         {hasUnsavedChanges && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
@@ -145,14 +145,14 @@ export function TopHeader({
       {/* Desktop-only inline actions (hidden below md) */}
       <div className="hidden md:flex items-center gap-2 flex-1 min-w-0">
         <div className={SEP} />
-        <button onClick={onManageScenarios} className={BTN} title="Create, rename, duplicate, and delete scenarios">
-          <FolderOpen size={14} /> Scenarios
+        <button onClick={onManageScenarios} className={BTN} title="Create, rename, duplicate, and delete plans">
+          <FolderOpen size={14} /> Plans
         </button>
-        <button onClick={onResetScenario} className={BTN} title="Discard unsaved changes and revert to this scenario's last-saved inputs">
+        <button onClick={onResetScenario} className={BTN} title="Discard unsaved changes and revert to this plan's last-saved inputs">
           <RotateCcw size={14} /> Reset
         </button>
         <div className={SEP} />
-        <button onClick={onRunMonteCarlo} className={BTN} title="Run 500 randomized market scenarios and chart the probability bands">
+        <button onClick={onRunMonteCarlo} className={BTN} title="Run 500 randomized market plans and chart the probability bands">
           <Dices size={14} /> Monte Carlo
         </button>
         <button onClick={onRunBacktest} className={BTN} title="Replay the plan against every rolling window of historical Canadian real returns since 1970">

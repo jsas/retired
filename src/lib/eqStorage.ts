@@ -3,7 +3,7 @@
 //
 // Crops are stored as AXIS-FRACTION SCALARS (0..1 of the axis range), NOT
 // absolute values. That decouples a saved crop from the axis min/max shown in
-// the UI: if an axis's range ever changes (or differs across scenarios), a crop
+// the UI: if an axis's range ever changes (or differs across plans), a crop
 // saved as "the middle 60%" still means the middle 60% — rehydrated by scaling
 // back onto whatever the axis's current range is.
 import { AXES, fullBand, normalizeBand, type Band, type EqAxis } from '@retired/engine-core/eqConstraints';

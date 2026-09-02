@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   MAX_REVISIONS, pushRevision, inputsChanged, diffRevisions, planRollback,
   SqliteRevisionStore,
-} from './scenarioRevisions';
+} from './planRevisions';
 import { AppDatabase } from '../data/db';
 import { baseInputs } from '@retired/engine-core/test/helpers';
-import type { ScenarioRevision } from './scenarioRevisions';
+import type { PlanRevision } from './planRevisions';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 
 // Tests run in Node — give the OPFS-less mirror a localStorage to write to.
@@ -18,9 +18,9 @@ const storage = new Map<string, string>();
 };
 
 let seq = 0;
-const rev = (scenarioId: string, inputs: RetirementInputs, at = 1000 + seq): ScenarioRevision => ({
+const rev = (planId: string, inputs: RetirementInputs, at = 1000 + seq): PlanRevision => ({
   id: `rev-${++seq}`,
-  scenarioId,
+  planId,
   at,
   source: 'save',
   inputs,
@@ -33,14 +33,14 @@ beforeEach(() => {
 
 describe('pushRevision (rolling cap)', () => {
   it('appends and keeps every revision under the cap', () => {
-    let list: ScenarioRevision[] = [];
+    let list: PlanRevision[] = [];
     for (let i = 0; i < 10; i++) list = pushRevision(list, rev('a', baseInputs({ desiredSpending: 1000 + i })));
     expect(list).toHaveLength(10);
     expect(list[0].at).toBeLessThan(list[9].at); // newest last
   });
 
   it('drops the OLDEST revision when the cap is exceeded', () => {
-    let list: ScenarioRevision[] = [];
+    let list: PlanRevision[] = [];
     for (let i = 0; i < MAX_REVISIONS + 5; i++) list = pushRevision(list, rev('a', baseInputs({ desiredSpending: 1000 + i })));
     expect(list).toHaveLength(MAX_REVISIONS);
     // First 5 were dropped: the oldest surviving revision is #6.
@@ -48,12 +48,12 @@ describe('pushRevision (rolling cap)', () => {
     expect(list.at(-1)?.id).toBe(`rev-${MAX_REVISIONS + 5}`);
   });
 
-  it('caps per scenario independently', () => {
-    let list: ScenarioRevision[] = [];
+  it('caps per plan independently', () => {
+    let list: PlanRevision[] = [];
     for (let i = 0; i < MAX_REVISIONS + 1; i++) list = pushRevision(list, rev('a', baseInputs()));
     list = pushRevision(list, rev('b', baseInputs()));
-    expect(list.filter(r => r.scenarioId === 'a')).toHaveLength(MAX_REVISIONS);
-    expect(list.filter(r => r.scenarioId === 'b')).toHaveLength(1);
+    expect(list.filter(r => r.planId === 'a')).toHaveLength(MAX_REVISIONS);
+    expect(list.filter(r => r.planId === 'b')).toHaveLength(1);
   });
 
   it('replaces in place when the id already exists', () => {
@@ -122,7 +122,7 @@ describe('SqliteRevisionStore', () => {
     const store2 = new SqliteRevisionStore(reopened);
     const loaded = store2.loadAll();
     expect(loaded).toHaveLength(3);
-    expect(loaded.map(r => r.scenarioId)).toEqual(['a', 'a', 'b']);
+    expect(loaded.map(r => r.planId)).toEqual(['a', 'a', 'b']);
     expect(loaded[1].inputs.desiredSpending).toBe(42000);
     reopened.close();
   });
@@ -132,7 +132,7 @@ describe('SqliteRevisionStore', () => {
     const store = new SqliteRevisionStore(db);
     store.saveAll([rev('a', baseInputs())]);
     store.saveAll([rev('b', baseInputs())]);
-    expect(store.loadAll().map(r => r.scenarioId)).toEqual(['b']);
+    expect(store.loadAll().map(r => r.planId)).toEqual(['b']);
     db.close();
   });
 });

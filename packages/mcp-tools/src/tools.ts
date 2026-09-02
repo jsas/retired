@@ -1,12 +1,12 @@
 // The agent's tool surface: a typed API the model uses to READ the current
-// scenario, RUN the engine against it, and PROPOSE changes.
+// plan, RUN the engine against it, and PROPOSE changes.
 //
 // Every argument shape is a Zod schema — the same source of truth the data
 // layer uses — so a hallucinated field name or out-of-range number is rejected
 // before it touches anything. The JSON-Schema view of each schema is what gets
 // advertised to the provider.
 //
-// Reads are pure (get_scenario, run_projection, compare_scenarios, the
+// Reads are pure (get_plan, run_projection, compare_scenarios, the
 // strategies/solver/monte-carlo backends, get_schedule). Mutations never apply
 // themselves: every propose_* tool returns a proposed PATCH and the UI requires
 // the user to confirm it (confirm-before-apply). There is no path from model
@@ -45,7 +45,7 @@ const getScenarioArgs = z.object({
 
 const runProjectionArgs = z.object({
   overrides: z.record(z.string(), z.unknown()).optional()
-    .describe('Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the scenario schema; invalid entries are reported, not applied.'),
+    .describe('Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the plan schema; invalid entries are reported, not applied.'),
 });
 
 const compareScenariosArgs = z.object({
@@ -63,7 +63,7 @@ const setScenarioValueArgs = z.object({
   field: z.string().min(1)
     .describe('Top-level RetirementInputs field name (e.g. desiredSpending, retirementAge, rrspBalance, cppStartAge).'),
   value: z.unknown()
-    .describe('The proposed new value. Must satisfy the scenario schema (numbers as numbers; nullable ages may be null).'),
+    .describe('The proposed new value. Must satisfy the plan schema (numbers as numbers; nullable ages may be null).'),
   rationale: z.string().optional()
     .describe('One sentence on why this change helps — shown to the user on the confirm card.'),
 });
@@ -189,8 +189,8 @@ const getScheduleArgs = z.object({
 const rememberArgs = z.object({
   text: z.string().min(1).max(500)
     .describe('The fact to remember, one or two self-contained sentences (e.g. "Spouse\'s DB pension pays $1,200/mo from 65" — never "it pays that").'),
-  scope: z.enum(['scenario', 'global']).default('scenario')
-    .describe('scenario = about this plan (shown in chats on this scenario). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").'),
+  scope: z.enum(['plan', 'global']).default('plan')
+    .describe('plan = about this plan (shown in chats on this plan). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").'),
   importance: z.number().min(0).max(1).default(0.5)
     .describe('0..1: how important this fact is. Reserve 0.9+ for decisions and constraints ("user refuses to touch RRSP"), 0.3 for color.'),
   keywords: z.array(z.string().min(1)).max(12).optional()
@@ -205,16 +205,16 @@ const recallArgs = z.object({
 });
 
 const openScenarioArgs = z.object({
-  scenarioId: z.string().min(1).optional()
-    .describe('Id of the saved scenario to open (from the ids given in your context).'),
+  planId: z.string().min(1).optional()
+    .describe('Id of the saved plan to open (from the ids given in your context).'),
   name: z.string().min(1).optional()
-    .describe('Alternatively, the scenario NAME — matched case-insensitively; must be unambiguous.'),
-}).refine(v => v.scenarioId != null || v.name != null, { message: 'Give scenarioId or name.' })
-  .refine(v => v.scenarioId == null || v.name == null, { message: 'Give scenarioId or name, not both.' });
+    .describe('Alternatively, the plan NAME — matched case-insensitively; must be unambiguous.'),
+}).refine(v => v.planId != null || v.name != null, { message: 'Give planId or name.' })
+  .refine(v => v.planId == null || v.name == null, { message: 'Give planId or name, not both.' });
 
 const saveScenarioAsArgs = z.object({
   name: z.string().min(1).max(80)
-    .describe('Name for the new scenario (e.g. "Downsized at 65"). Duplicates are allowed.'),
+    .describe('Name for the new plan (e.g. "Downsized at 65"). Duplicates are allowed.'),
 });
 
 const listScenariosArgs = z.object({
@@ -246,7 +246,7 @@ const proposeNavigateArgs = z.object({
 // against the same Zod schemas the executor enforces — the executor itself is
 // the only runtime consumer.
 export const TOOL_SCHEMAS = {
-  get_scenario: getScenarioArgs,
+  get_plan: getScenarioArgs,
   run_projection: runProjectionArgs,
   compare_scenarios: compareScenariosArgs,
   run_strategies: runStrategiesArgs,
@@ -269,9 +269,9 @@ export const TOOL_SCHEMAS = {
   manage_debt: manageDebtArgs,
   remember: rememberArgs,
   recall: recallArgs,
-  open_scenario: openScenarioArgs,
-  save_scenario_as: saveScenarioAsArgs,
-  list_scenarios: listScenariosArgs,
+  open_plan: openScenarioArgs,
+  save_plan_as: saveScenarioAsArgs,
+  list_plans: listScenariosArgs,
   find_page: findPageArgs,
   get_sitemap: getSitemapArgs,
   propose_navigate: proposeNavigateArgs,
@@ -321,7 +321,7 @@ export interface ToolCatalogEntry {
  *  registers every entry with the official SDK — so both consumers see the
  *  same names, descriptions, and argument shapes from one definition. */
 export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
-  get_scenario: { description: 'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
+  get_plan: { description: 'Read the current retirement plan (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
     run_projection: { description:      'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.', schema: runProjectionArgs },
     compare_scenarios: { description:      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: compareScenariosArgs },
     run_strategies: { description:      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.', schema: runStrategiesArgs },
@@ -342,11 +342,11 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
     manage_income: { description:      'PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.', schema: manageIncomeArgs },
     propose_debt: { description:      'PROPOSE adding a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending each year until paid off, then stops — so carrying debt into retirement raises withdrawals and can flip the verdict. User confirms.', schema: proposeDebtArgs },
     manage_debt: { description:      'PROPOSE updating or REMOVING an existing debt (mortgage, credit card, loan, or line of credit, by id or unique label). User confirms. Use propose_debt to add a new one.', schema: manageDebtArgs },
-    remember: { description:      'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
+    remember: { description:      'Save a durable fact to memory for later conversations — about THIS plan (scope "plan": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
     recall: { description:      'Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don\'t know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.', schema: recallArgs },
-    open_scenario: { description:      'Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.', schema: openScenarioArgs },
-    save_scenario_as: { description:      'Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.', schema: saveScenarioAsArgs },
-    list_scenarios: { description:      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
+    open_plan: { description:      'Switch to another SAVED plan (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.', schema: openScenarioArgs },
+    save_plan_as: { description:      'Snapshot the CURRENT plan as a new saved plan with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.', schema: saveScenarioAsArgs },
+    list_plans: { description:      'List every SAVED plan: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
     find_page: { description:      'Search the site\'s page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Use whenever the user asks WHERE something lives.', schema: findPageArgs },
     get_sitemap: { description:      'The full site map: every page (view), its route (#/hash), and one-line purpose. Use for "what can this app do?", "what pages exist?", or before guessing where something lives.', schema: getSitemapArgs },
     propose_navigate: { description:      'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → the Insights page that now hosts it — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
@@ -370,15 +370,15 @@ export interface ToolContext {
   inputs: RetirementInputs;
   config: AppConfig;
   scenarioName: string;
-  /** Names/ids of other saved scenarios, for orientation. */
+  /** Names/ids of other saved plans, for orientation. */
   scenarioList: Array<{ id: string; name: string }>;
-  /** Which of scenarioList is currently open (list_scenarios marks it).
+  /** Which of scenarioList is currently open (list_plans marks it).
    *  Optional so tests and 'off'-mode callers can omit it — the marker is
    *  then simply absent from the listing. */
-  activeScenarioId?: string;
-  /** Full inputs for an arbitrary saved scenario by id (list_scenarios'
+  activePlanId?: string;
+  /** Full inputs for an arbitrary saved plan by id (list_plans'
    *  withDetails for non-active plans). Optional — callers that don't supply
-   *  it get compact lines for the other scenarios instead of numbers. */
+   *  it get compact lines for the other plans instead of numbers. */
   scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   /** Automatic checkpoints (snapshots taken before each approved change),
    *  newest last, for propose_revert. Optional so tests and 'off'-mode callers
@@ -386,14 +386,14 @@ export interface ToolContext {
   checkpoints?: PlanCheckpoint[];
   /** The agent memory store (scoped + global memories). Optional so tests and
    *  'off'-mode callers can omit it — remember/recall then report that memory
-   *  is unavailable. `scenarioId` keys scenario-scoped memories. */
+   *  is unavailable. `planId` keys plan-scoped memories. */
   memory?: MemoryStore;
   memoryScenarioId?: string;
-  /** Open another saved scenario (the sidebar-switch path). Optional so tests
-   *  and 'off'-mode callers can omit it — open_scenario then errors. */
+  /** Open another saved plan (the sidebar-switch path). Optional so tests
+   *  and 'off'-mode callers can omit it — open_plan then errors. */
   onOpenScenario?: (id: string) => void;
-  /** Snapshot the current live inputs as a new named scenario; returns its id.
-   *  Optional for the same reason — save_scenario_as then errors. */
+  /** Snapshot the current live inputs as a new named plan; returns its id.
+   *  Optional for the same reason — save_plan_as then errors. */
   onSaveScenarioAs?: (name: string) => string;
   /** The view the chat-session of a user is visiting now (for the ambient
    *  system prompt "current page" line and find_page's "already here" tag).
@@ -484,12 +484,12 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
   }
 
   switch (call.name) {
-    case 'get_scenario':
+    case 'get_plan':
       return { kind: 'result', content: describeScenario(ctx, (parsed.data as z.infer<typeof getScenarioArgs>).section) };
     case 'run_projection':
       return runProjection(ctx, (parsed.data as z.infer<typeof runProjectionArgs>).overrides);
     case 'compare_scenarios':
-      return compareScenarios(ctx, parsed.data as z.infer<typeof compareScenariosArgs>);
+      return comparePlans(ctx, parsed.data as z.infer<typeof compareScenariosArgs>);
     case 'run_strategies':
       return runStrategiesTool(ctx, parsed.data as z.infer<typeof runStrategiesArgs>);
     case 'solve_spending':
@@ -530,11 +530,11 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return rememberTool(ctx, parsed.data as z.infer<typeof rememberArgs>);
     case 'recall':
       return recallTool(ctx, parsed.data as z.infer<typeof recallArgs>);
-    case 'open_scenario':
+    case 'open_plan':
       return openScenarioTool(ctx, parsed.data as z.infer<typeof openScenarioArgs>);
-    case 'save_scenario_as':
+    case 'save_plan_as':
       return saveScenarioAsTool(ctx, parsed.data as z.infer<typeof saveScenarioAsArgs>);
-    case 'list_scenarios':
+    case 'list_plans':
       return listScenariosTool(ctx, parsed.data as z.infer<typeof listScenariosArgs>);
     case 'find_page':
       return findPageTool(ctx, parsed.data as z.infer<typeof findPageArgs>);
@@ -551,7 +551,7 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
 
 function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchema>): string {
   const i = ctx.inputs;
-  const lines: string[] = [`Scenario "${ctx.scenarioName}" (of ${ctx.scenarioList.length} saved).`];
+  const lines: string[] = [`Plan "${ctx.scenarioName}" (of ${ctx.scenarioList.length} saved).`];
 
   const summary = {
     currentAge: i.currentAge, retirementAge: i.retirementAge, maxAge: i.maxAge,
@@ -728,7 +728,7 @@ function runProjection(ctx: ToolContext, overrides?: Record<string, unknown>): T
   }
 }
 
-function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenariosArgs>): ToolOutcome {
+function comparePlans(ctx: ToolContext, args: z.infer<typeof compareScenariosArgs>): ToolOutcome {
   // The singular form stays valid (back-compat); variants win when both arrive.
   const variants: Array<{ label: string; overrides: Record<string, unknown> }> = args.variants?.length
     ? args.variants.map((v, i) => ({ label: v.label ?? `Variant ${i + 1}`, overrides: v.overrides }))
@@ -1175,7 +1175,7 @@ function recallTool(ctx: ToolContext, args: z.infer<typeof recallArgs>): ToolOut
   return { kind: 'result', content: header ? `${header}\n${lines.join('\n')}` : lines.join('\n') };
 }
 
-/** open_scenario: switch the active scenario (the sidebar-switch path). A
+/** open_plan: switch the active plan (the sidebar-switch path). A
  *  navigation, not a plan mutation — no confirm card — but the caller must
  *  announce the switch so the model/user stay oriented. Resolves by id first,
  *  then by unique case-insensitive name; unsaved edits are the caller's
@@ -1183,42 +1183,42 @@ function recallTool(ctx: ToolContext, args: z.infer<typeof recallArgs>): ToolOut
  *  sidebar uses). */
 function openScenarioTool(ctx: ToolContext, args: z.infer<typeof openScenarioArgs>): ToolOutcome {
   if (!ctx.onOpenScenario) {
-    return { kind: 'error', content: 'Scenario switching is unavailable in this session.' };
+    return { kind: 'error', content: 'Plan switching is unavailable in this session.' };
   }
   const list = ctx.scenarioList;
-  let target = args.scenarioId != null ? list.find(s => s.id === args.scenarioId) : undefined;
+  let target = args.planId != null ? list.find(s => s.id === args.planId) : undefined;
   if (!target && args.name != null) {
     const q = args.name.trim().toLowerCase();
     const matches = list.filter(s => s.name.trim().toLowerCase() === q);
     if (matches.length === 1) target = matches[0];
     else if (matches.length > 1) {
-      return { kind: 'error', content: `"${args.name}" matches ${matches.length} scenarios (${matches.map(m => `"${m.name}"`).join(', ')}). Give the scenarioId instead.` };
+      return { kind: 'error', content: `"${args.name}" matches ${matches.length} plans (${matches.map(m => `"${m.name}"`).join(', ')}). Give the planId instead.` };
     }
   }
   if (!target) {
-    return { kind: 'error', content: `No saved scenario matches ${args.scenarioId != null ? `id "${args.scenarioId}"` : `"${args.name}"`}. Known scenarios: ${list.map(s => `"${s.name}" (${s.id})`).join(', ') || 'none'}.` };
+    return { kind: 'error', content: `No saved plan matches ${args.planId != null ? `id "${args.planId}"` : `"${args.name}"`}. Known plans: ${list.map(s => `"${s.name}" (${s.id})`).join(', ') || 'none'}.` };
   }
   ctx.onOpenScenario(target.id);
-  return { kind: 'result', content: `Opened scenario "${target.name}". The plan inputs, and any numbers you compute from now on, refer to it.` };
+  return { kind: 'result', content: `Opened plan "${target.name}". The plan inputs, and any numbers you compute from now on, refer to it.` };
 }
 
-/** save_scenario_as: snapshot the CURRENT live inputs as a new named scenario
+/** save_plan_as: snapshot the CURRENT live inputs as a new named plan
  *  and make it active (so later agent edits land on the copy). A direct write
- *  (no confirm card): it ADDS a scenario and touches no existing one. */
+ *  (no confirm card): it ADDS a plan and touches no existing one. */
 function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioAsArgs>): ToolOutcome {
   if (!ctx.onSaveScenarioAs) {
-    return { kind: 'error', content: 'Saving scenarios is unavailable in this session.' };
+    return { kind: 'error', content: 'Saving plans is unavailable in this session.' };
   }
   const name = args.name.trim();
   if (!name) {
-    return { kind: 'error', content: 'Scenario name cannot be empty.' };
+    return { kind: 'error', content: 'Plan name cannot be empty.' };
   }
   ctx.onSaveScenarioAs(name);
-  return { kind: 'result', content: `Saved the current plan as scenario "${name}" and opened it. The previous plan is unchanged and still in the list.` };
+  return { kind: 'result', content: `Saved the current plan as plan "${name}" and opened it. The previous plan is unchanged and still in the list.` };
 }
 
-/** list_scenarios: enumerate the saved plans. Compact by default (one line per
- *  scenario, active marked); withDetails adds each plan's key numbers so the
+/** list_plans: enumerate the saved plans. Compact by default (one line per
+ *  plan, active marked); withDetails adds each plan's key numbers so the
  *  model can compare saved plans without opening them. A pure read. */
 // ---------------------------------------------------------------------------
 // Navigation: find_page / get_sitemap / propose_navigate
@@ -1301,10 +1301,10 @@ function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavig
 function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
   const list = ctx.scenarioList;
   if (list.length === 0) {
-    return { kind: 'result', content: 'There are no saved scenarios yet.' };
+    return { kind: 'result', content: 'There are no saved plans yet.' };
   }
-  const activeId = ctx.activeScenarioId;
-  const lines: string[] = [`${list.length} saved scenario${list.length === 1 ? '' : 's'}:`];
+  const activeId = ctx.activePlanId;
+  const lines: string[] = [`${list.length} saved plan${list.length === 1 ? '' : 's'}:`];
   for (const s of list) {
     const isActive = s.id === activeId;
     if (!args.withDetails) {

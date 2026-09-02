@@ -1,4 +1,4 @@
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { validateAppConfig } from '@retired/engine-core/appConfig';
@@ -9,11 +9,11 @@ import { MemoryStore } from '@retired/mcp-tools/memoryStore';
 import { SqliteMemoryAdapter } from '../lib/memory/sqliteAdapter';
 import {
   SqliteRevisionStore, inputsChanged, pushRevision,
-  type ScenarioRevision,
-} from '../lib/scenarioRevisions';
+  type PlanRevision,
+} from '../lib/planRevisions';
 
 /**
- * The data layer the UI talks to: one opened SQLite store holding scenarios,
+ * The data layer the UI talks to: one opened SQLite store holding plans,
  * the active selection and the engine config, mirrored to localStorage.
  *
  * Bootstrap order on first run with an empty store: nothing → the caller seeds
@@ -44,8 +44,8 @@ function seedRevSeq(revisions: Array<{ id: string }>): void {
 }
 
 export interface AppState {
-  scenarios: Scenario[];
-  activeScenarioId: string;
+  plans: Plan[];
+  activePlanId: string;
   config: AppConfig | null;
   /** Set when a stored config existed but failed wholesale validation and was
    *  replaced by defaults (issue #19). Absent when the config loaded cleanly
@@ -58,12 +58,12 @@ export class AppStore {
   private db: AppDatabase;
   private memoryStore: MemoryStore | null = null;
   private revisionStore: SqliteRevisionStore | null = null;
-  private revisions: ScenarioRevision[] = [];
+  private revisions: PlanRevision[] = [];
   private constructor(db: AppDatabase) {
     this.db = db;
   }
 
-  static async open(buildDefaults: () => Scenario[]): Promise<{ store: AppStore; state: AppState }> {
+  static async open(buildDefaults: () => Plan[]): Promise<{ store: AppStore; state: AppState }> {
     const db = await AppDatabase.open();
     const store = new AppStore(db);
     // Issue #20: the UI-preference facade writes into this store's kv table
@@ -77,17 +77,17 @@ export class AppStore {
     store.revisions = store.revisionStore.loadAll();
     seedRevSeq(store.revisions); // D-05: never re-mint a suffix the history already used
 
-    let scenarios = db.loadScenarios();
+    let plans = db.loadScenarios();
     let configRaw = db.loadConfig();
-    let activeScenarioId = db.loadActiveScenarioId();
+    let activePlanId = db.loadActiveScenarioId();
 
     // Brand-new user: seed the first-run examples.
-    if (scenarios.length === 0) {
-      scenarios = buildDefaults();
-      activeScenarioId = scenarios[0].id;
-      store.recordRevisions(scenarios); // seed = the first revision
-      db.saveScenarios(scenarios);
-      db.saveActiveScenarioId(activeScenarioId);
+    if (plans.length === 0) {
+      plans = buildDefaults();
+      activePlanId = plans[0].id;
+      store.recordRevisions(plans); // seed = the first revision
+      db.saveScenarios(plans);
+      db.saveActiveScenarioId(activePlanId);
       db.save();
     }
 
@@ -113,11 +113,11 @@ export class AppStore {
         );
       }
     }
-    const resolvedActive = activeScenarioId && scenarios.some(s => s.id === activeScenarioId)
-      ? activeScenarioId
-      : scenarios[0].id;
+    const resolvedActive = activePlanId && plans.some(s => s.id === activePlanId)
+      ? activePlanId
+      : plans[0].id;
 
-    return { store, state: { scenarios, activeScenarioId: resolvedActive, config, configLoadWarning } };
+    return { store, state: { plans, activePlanId: resolvedActive, config, configLoadWarning } };
   }
 
   /** True when the SQL store is already mirrored locally (sync checks for
@@ -140,42 +140,42 @@ export class AppStore {
     return this.db.onSaveOutcome(listener);
   }
 
-  persist(state: { scenarios?: Scenario[]; activeScenarioId?: string; config?: AppConfig; skipRevisions?: boolean }): boolean {
+  persist(state: { plans?: Plan[]; activePlanId?: string; config?: AppConfig; skipRevisions?: boolean }): boolean {
     let wroteRevisions = false;
-    if (state.scenarios) {
-      if (!state.skipRevisions) wroteRevisions = this.recordRevisions(state.scenarios);
-      this.db.saveScenarios(state.scenarios);
+    if (state.plans) {
+      if (!state.skipRevisions) wroteRevisions = this.recordRevisions(state.plans);
+      this.db.saveScenarios(state.plans);
     }
-    if (state.activeScenarioId != null) this.db.saveActiveScenarioId(state.activeScenarioId);
+    if (state.activePlanId != null) this.db.saveActiveScenarioId(state.activePlanId);
     if (state.config) this.db.saveConfig(state.config);
     this.db.save();
     return wroteRevisions;
   }
 
-  /** Snapshot the saved inputs of every scenario whose contents changed since
-   *  the LAST SAVE (newest revision last; capped per scenario at MAX_REVISIONS
-   *  via pushRevision). The comparison baseline is the scenarios table's
+  /** Snapshot the saved inputs of every plan whose contents changed since
+   *  the LAST SAVE (newest revision last; capped per plan at MAX_REVISIONS
+   *  via pushRevision). The comparison baseline is the plans table's
    *  current rows — read BEFORE this persist overwrites them — not the newest
    *  revision: a rollback rewinds the live plan while history stays put, and
    *  the next real save must diff against what was actually saved last, or a
    *  rollback would fabricate duplicate entries forever after. Renames and
-   *  no-op saves don't spam the history; deleted scenarios' revisions are
+   *  no-op saves don't spam the history; deleted plans' revisions are
    *  pruned alongside. Returns whether anything was written, so the UI knows
    *  to refresh its history view (the store's internal list isn't reactive). */
-  private recordRevisions(scenarios: Scenario[]): boolean {
+  private recordRevisions(plans: Plan[]): boolean {
     if (!this.revisionStore) return false;
     const previous = new Map(
       this.db.loadScenarios().map(s => [s.id, s.inputs]),
     );
-    const keptIds = new Set(scenarios.map(s => s.id));
-    let next = this.revisions.filter(r => keptIds.has(r.scenarioId));
+    const keptIds = new Set(plans.map(s => s.id));
+    let next = this.revisions.filter(r => keptIds.has(r.planId));
     let added = false;
-    for (const s of scenarios) {
+    for (const s of plans) {
       const before = previous.get(s.id);
       if (before && !inputsChanged(before, s.inputs)) continue;
       next = pushRevision(next, {
         id: `rev-${Date.now().toString(36)}-${(revSeq++).toString(36)}`,
-        scenarioId: s.id,
+        planId: s.id,
         at: Date.now(),
         source: 'save',
         inputs: JSON.parse(JSON.stringify(s.inputs)),
@@ -188,9 +188,9 @@ export class AppStore {
     return true;
   }
 
-  /** The whole revision history (all scenarios), newest last. The UI groups
-   *  it by scenarioId. */
-  allRevisions(): ScenarioRevision[] {
+  /** The whole revision history (all plans), newest last. The UI groups
+   *  it by planId. */
+  allRevisions(): PlanRevision[] {
     return this.revisions;
   }
 
@@ -199,15 +199,15 @@ export class AppStore {
    *  rewinds to that point rather than branching — the user asked for revert
    *  to mean "go back and drop what came after", not "keep both timelines".
    *  The target itself survives as the new newest entry. Returns null when the
-   *  revision doesn't exist (or belongs to another scenario). */
-  rollbackRevision(scenarioId: string, revisionId: string): RetirementInputs | null {
-    const target = this.revisions.find(r => r.id === revisionId && r.scenarioId === scenarioId);
+   *  revision doesn't exist (or belongs to another plan). */
+  rollbackRevision(planId: string, revisionId: string): RetirementInputs | null {
+    const target = this.revisions.find(r => r.id === revisionId && r.planId === planId);
     if (!target) return null;
-    // Drop everything strictly newer: same-scenario revisions after the
+    // Drop everything strictly newer: same-plan revisions after the
     // target in (at, id) order. Two revisions can share a millisecond, so
     // id breaks the tie — ids are generated in creation order.
     const kept = this.revisions.filter(r =>
-      r.scenarioId !== scenarioId
+      r.planId !== planId
       || r.at < target.at
       || (r.at === target.at && r.id <= target.id));
     if (kept.length !== this.revisions.length) {
@@ -222,7 +222,7 @@ export class AppStore {
     return this.db.exportBytes();
   }
 
-  /** Agent memory — scenario + global records in the same SQL store, so they
+  /** Agent memory — plan + global records in the same SQL store, so they
    *  export/import with the rest of the app. Built lazily; shared per store.
    *  The persist hook mirrors every write to localStorage/OPFS. */
   get memory(): MemoryStore {

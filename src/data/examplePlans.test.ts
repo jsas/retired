@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
+import { buildDefaultPlans } from '@retired/engine-core/examplePlans';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
 import { migrateInputs } from './migrations';
@@ -15,14 +15,14 @@ import { migrateInputs } from './migrations';
  *      promise is fiction.
  */
 
-const examples = buildDefaultScenarios();
+const examples = buildDefaultPlans();
 const byName = (name: string) => {
   const s = examples.find(e => e.name === name);
   if (!s) throw new Error(`missing example: ${name}`);
   return s;
 };
 
-describe('exampleScenarios — data audit', () => {
+describe('examplePlans — data audit', () => {
   it('ships exactly the four documented examples with unique ids', () => {
     expect(examples.map(s => s.name)).toEqual([
       'Example - Early Couple',

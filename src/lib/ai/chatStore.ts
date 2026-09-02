@@ -1,8 +1,8 @@
 // Persistent chat threads for the assistant, stored LOCALLY ONLY (localStorage
 // today; the kv table when it lands). A thread is a named conversation tied to
-// the scenario it was about, with the full transcript so it can be reopened and
+// the plan it was about, with the full transcript so it can be reopened and
 // continued. Chats are disposable — corrupt payloads fall back to an empty list
-// rather than breaking the page (unlike scenarios, which are precious).
+// rather than breaking the page (unlike plans, which are precious).
 
 import { z } from 'zod';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
@@ -63,7 +63,7 @@ const threadSchema = z.object({
   id: z.string(),
   /** Display title (first user message, or user-renamed). */
   title: z.string(),
-  /** The scenario this chat was about when it started (informational). */
+  /** The plan this chat was about when it started (informational). */
   scenarioName: z.string(),
   createdAt: z.number(),
   updatedAt: z.number(),

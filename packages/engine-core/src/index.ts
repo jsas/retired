@@ -16,4 +16,4 @@ export * from './types';
 export * from './compareMetrics';
 export * from './eqConstraints';
 export * from './eqSolver';
-export * from './exampleScenarios';
+export * from './examplePlans';

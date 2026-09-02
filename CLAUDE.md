@@ -5,7 +5,7 @@ Guidance for AI assistants (Claude Code and others) working in this repo.
 ## What this is
 
 **RE:tired** — a Canadian retirement drawdown planner. React 19 + Vite 8 +
-TypeScript + Tailwind v4 + Lucide. Everything runs client-side; scenarios live
+TypeScript + Tailwind v4 + Lucide. Everything runs client-side; plans live
 in `localStorage`. Deployed to GitHub Pages from `main`.
 
 - Repo: `jsas/retired` · Pages: https://jsas.github.io/retired/

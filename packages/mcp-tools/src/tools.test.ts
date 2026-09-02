@@ -30,13 +30,13 @@ describe('toolSpecs', () => {
   it('advertises the full tool surface with JSON schemas', () => {
     const specs = toolSpecs();
     expect(specs.map(s => s.name).sort()).toEqual([
-      'compare_scenarios', 'find_page', 'get_schedule', 'get_scenario', 'get_sitemap',
-      'list_scenarios',
+      'compare_scenarios', 'find_page', 'get_schedule', 'get_plan', 'get_sitemap',
+      'list_plans',
       'manage_cash_event', 'manage_debt', 'manage_income',
       'propose_cash_event', 'propose_debt', 'propose_fhsa', 'propose_income', 'propose_navigate', 'propose_patch',
       'propose_rdsp', 'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
-      'open_scenario', 'save_scenario_as',
+      'open_plan', 'save_plan_as',
       'run_monte_carlo', 'run_projection', 'run_strategies',
       'set_scenario_value', 'solve_spending',
     ].sort());
@@ -47,9 +47,9 @@ describe('toolSpecs', () => {
   });
 });
 
-describe('get_scenario', () => {
+describe('get_plan', () => {
   it('returns the full plan by default', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: {} });
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_plan', args: {} });
     expect(out.kind).toBe('result');
     if (out.kind !== 'result') return;
     expect(out.content).toContain('Test plan');
@@ -59,14 +59,14 @@ describe('get_scenario', () => {
   });
 
   it('returns just the requested section', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_plan', args: { section: 'accounts' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('ACCOUNTS');
     expect(out.content).not.toContain('FULL INPUTS JSON');
   });
 
   it('rejects an unknown section', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'everything' } });
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_plan', args: { section: 'everything' } });
     expect(out.kind).toBe('error');
   });
 });
@@ -235,7 +235,7 @@ describe('set_scenario_value', () => {
     expect(EDITABLE_FIELDS.has('annualWithdrawal')).toBe(false);
   });
 
-  it('rejects a value that fails the scenario schema', () => {
+  it('rejects a value that fails the plan schema', () => {
     const out = executeToolCall(ctx(), {
       id: '1', name: 'set_scenario_value',
       args: { field: 'desiredSpending', value: 'lots' },
@@ -297,7 +297,7 @@ describe('set_scenario_value', () => {
   it('rejects unknown tool names with the available list', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'delete_everything', args: {} });
     expect(out.kind).toBe('error');
-    if (out.kind === 'error') expect(out.content).toContain('get_scenario');
+    if (out.kind === 'error') expect(out.content).toContain('get_plan');
   });
 });
 
@@ -501,9 +501,9 @@ describe('propose_debt / manage_debt', () => {
     expect(out.kind === 'error' || (out.kind === 'result' && /rejected|debts/i.test(out.content))).toBe(true);
   });
 
-  it('surfaces debts in the get_scenario spending section', () => {
+  it('surfaces debts in the get_plan spending section', () => {
     const c = ctx({ inputs: baseInputs({ debts: [mortgage] }) });
-    const out = executeToolCall(c, { id: '1', name: 'get_scenario', args: { section: 'spending' } });
+    const out = executeToolCall(c, { id: '1', name: 'get_plan', args: { section: 'spending' } });
     expect(out.kind).toBe('result');
     if (out.kind === 'result') {
       expect(out.content).toContain('Mortgage');
@@ -619,14 +619,14 @@ describe('propose_rdsp', () => {
         rdsp: { enabled: true, balance: 25000, contribution: 500, familyIncome: 30000, dtcEligible: true },
       }),
     });
-    const out = executeToolCall(c, { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    const out = executeToolCall(c, { id: '1', name: 'get_plan', args: { section: 'accounts' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('rdsp');
     expect(out.content).toContain('25000');
   });
 
   it('omits rdsp from the accounts section when not configured', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_plan', args: { section: 'accounts' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).not.toContain('"rdsp"');
   });
@@ -903,14 +903,14 @@ describe('remember / recall', () => {
     const c = ctx({ memory, memoryScenarioId: 'sc-1' });
     const put = executeToolCall(c, {
       id: '1', name: 'remember',
-      args: { text: 'Spouse retires at 63, not 65.', scope: 'scenario', importance: 0.8 },
+      args: { text: 'Spouse retires at 63, not 65.', scope: 'plan', importance: 0.8 },
     });
     if (put.kind !== 'result') throw new Error('expected result');
     expect(put.content).toContain('Remembered');
 
     const got = executeToolCall(c, { id: '2', name: 'recall', args: { query: 'spouse' } });
     if (got.kind !== 'result') throw new Error('expected result');
-    expect(got.content).toContain('[scenario]');
+    expect(got.content).toContain('[plan]');
     expect(got.content).toContain('Spouse retires at 63');
     expect(got.content).toContain('importance 0.80');
   });
@@ -926,7 +926,7 @@ describe('remember / recall', () => {
     expect(out.content).toContain('Second fact.');
   });
 
-  it('global memories are visible from any scenario, scenario ones are not', () => {
+  it('global memories are visible from any plan, plan ones are not', () => {
     const memory = new MemoryStore(new InMemoryAdapter());
     const here = ctx({ memory, memoryScenarioId: 'sc-1' });
     const elsewhere = ctx({ memory, memoryScenarioId: 'sc-2' });
@@ -986,14 +986,14 @@ describe('remember / recall', () => {
   });
 });
 
-describe('open_scenario / save_scenario_as', () => {
+describe('open_plan / save_plan_as', () => {
   it('opens by id and announces the switch', () => {
     const opened: string[] = [];
     const c = ctx({
       scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
       onOpenScenario: (id) => opened.push(id),
     });
-    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { scenarioId: 'sc-2' } });
+    const out = executeToolCall(c, { id: '1', name: 'open_plan', args: { planId: 'sc-2' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(opened).toEqual(['sc-2']);
     expect(out.content).toContain('Downsized');
@@ -1005,7 +1005,7 @@ describe('open_scenario / save_scenario_as', () => {
       scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
       onOpenScenario: (id) => opened.push(id),
     });
-    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { name: '  downsized ' } });
+    const out = executeToolCall(c, { id: '1', name: 'open_plan', args: { name: '  downsized ' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(opened).toEqual(['sc-2']);
   });
@@ -1016,10 +1016,10 @@ describe('open_scenario / save_scenario_as', () => {
       scenarioList: [{ id: 'a', name: 'Plan' }, { id: 'b', name: 'plan' }, { id: 'c', name: 'Other' }],
       onOpenScenario: (id) => opened.push(id),
     });
-    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { name: 'plan' } });
+    const out = executeToolCall(c, { id: '1', name: 'open_plan', args: { name: 'plan' } });
     expect(out.kind).toBe('error');
     if (out.kind !== 'error') return;
-    expect(out.content).toContain('matches 2 scenarios');
+    expect(out.content).toContain('matches 2 plans');
     expect(opened).toEqual([]);
   });
 
@@ -1028,42 +1028,42 @@ describe('open_scenario / save_scenario_as', () => {
       scenarioList: [{ id: 'sc-1', name: 'Base' }],
       onOpenScenario: () => {},
     });
-    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { scenarioId: 'nope' } });
+    const out = executeToolCall(c, { id: '1', name: 'open_plan', args: { planId: 'nope' } });
     expect(out.kind).toBe('error');
     if (out.kind !== 'error') return;
-    expect(out.content).toContain('No saved scenario matches');
+    expect(out.content).toContain('No saved plan matches');
     expect(out.content).toContain('"Base" (sc-1)');
   });
 
-  it('errors when scenario switching is unavailable', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'open_scenario', args: { scenarioId: 'sc-1' } });
+  it('errors when plan switching is unavailable', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'open_plan', args: { planId: 'sc-1' } });
     expect(out.kind).toBe('error');
   });
 
-  it('save_scenario_as hands the name to the callback and reports success', () => {
+  it('save_plan_as hands the name to the callback and reports success', () => {
     const names: string[] = [];
     const c = ctx({ onSaveScenarioAs: (name) => { names.push(name); return 'sc-new'; } });
-    const out = executeToolCall(c, { id: '1', name: 'save_scenario_as', args: { name: ' Downsize at 65 ' } });
+    const out = executeToolCall(c, { id: '1', name: 'save_plan_as', args: { name: ' Downsize at 65 ' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(names).toEqual(['Downsize at 65']);
     expect(out.content).toContain('Downsize at 65');
   });
 
-  it('save_scenario_as errors when unavailable', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'save_scenario_as', args: { name: 'x' } });
+  it('save_plan_as errors when unavailable', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'save_plan_as', args: { name: 'x' } });
     expect(out.kind).toBe('error');
   });
 });
 
-describe('list_scenarios', () => {
-  it('lists every scenario and marks the active one', () => {
+describe('list_plans', () => {
+  it('lists every plan and marks the active one', () => {
     const c = ctx({
       scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
-      activeScenarioId: 'sc-2',
+      activePlanId: 'sc-2',
     });
-    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: {} });
+    const out = executeToolCall(c, { id: '1', name: 'list_plans', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('2 saved scenarios');
+    expect(out.content).toContain('2 saved plans');
     expect(out.content).toContain('Base');
     expect(out.content).toContain('Downsized (ACTIVE — currently open)');
     expect(out.content).toContain('[id: sc-1]');
@@ -1074,9 +1074,9 @@ describe('list_scenarios', () => {
   it('withDetails adds the active plan\'s numbers without opening anything', () => {
     const c = ctx({
       scenarioList: [{ id: 'a', name: 'Test plan' }],
-      activeScenarioId: 'a',
+      activePlanId: 'a',
     });
-    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    const out = executeToolCall(c, { id: '1', name: 'list_plans', args: { withDetails: true } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('spending');
     expect(out.content).toContain('RRSP');
@@ -1087,10 +1087,10 @@ describe('list_scenarios', () => {
     const c = ctx({
       inputs: baseInputs({ desiredSpending: 99999 }),
       scenarioList: [{ id: 'a', name: 'Test plan' }, { id: 'b', name: 'Other' }],
-      activeScenarioId: 'a',
+      activePlanId: 'a',
       scenarioInputsById: (id) => (id === 'b' ? baseInputs({ desiredSpending: 12345, currentAge: 71 }) : undefined),
     });
-    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    const out = executeToolCall(c, { id: '1', name: 'list_plans', args: { withDetails: true } });
     if (out.kind !== 'result') throw new Error('expected result');
     // Currency-formatted: the OTHER plan's number appears, and both plans show.
     expect(out.content).toContain('$12,345/yr');
@@ -1102,20 +1102,20 @@ describe('list_scenarios', () => {
     const c = ctx({
       inputs: baseInputs({ desiredSpending: 50000 }),
       scenarioList: [{ id: 'a', name: 'Test plan' }, { id: 'b', name: 'Other' }],
-      activeScenarioId: 'a',
+      activePlanId: 'a',
       // no scenarioInputsById
     });
-    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    const out = executeToolCall(c, { id: '1', name: 'list_plans', args: { withDetails: true } });
     if (out.kind !== 'result') throw new Error('expected result');
     // 'a' detailed, 'b' compact (id line only, no numbers).
     expect(out.content).toContain('spending');
     expect(out.content).toContain('- Other [id: b]');
   });
 
-  it('handles an empty scenario list', () => {
-    const out = executeToolCall(ctx({ scenarioList: [] }), { id: '1', name: 'list_scenarios', args: {} });
+  it('handles an empty plan list', () => {
+    const out = executeToolCall(ctx({ scenarioList: [] }), { id: '1', name: 'list_plans', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('no saved scenarios');
+    expect(out.content).toContain('no saved plans');
   });
 });
 
@@ -1155,7 +1155,7 @@ describe('find_page / get_sitemap / propose_navigate', () => {
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('(view details)');
     expect(out.content).toContain('(view eq)');
-    expect(out.content).toContain('(view scenarios)');
+    expect(out.content).toContain('(view plans)');
     expect(out.content).toContain('(view data)');
     expect(out.content).not.toContain('(view montecarlo)');
     expect(out.content).not.toContain('(view sharing)');

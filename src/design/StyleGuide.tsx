@@ -147,7 +147,7 @@ export function StyleGuide() {
 
           <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-6">
             <button className={T.cls.primaryBtn}>Save plan</button>
-            <button className={T.cls.hairlineBtn}>Compare scenarios</button>
+            <button className={T.cls.hairlineBtn}>Compare plans</button>
             <input className={T.cls.input} placeholder="Type an amount…" />
             <Dropdown label="Details">
               <div className="px-2 py-1 text-[12px] text-slate-600">Spouse · pensions · cash events · withdrawal order…</div>

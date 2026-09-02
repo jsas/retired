@@ -1,4 +1,4 @@
-// Scenario sweep for the corpus generator. Each NamedScenario is a valid
+// Plan sweep for the corpus generator. Each NamedScenario is a valid
 // RetirementInputs (built on the shared baseInputs fixture) plus a name, so the
 // minter can run the REAL engine across a spread of Canadian retirement
 // situations — provinces, account mixes, ages, pensions — instead of one plan.
@@ -647,5 +647,5 @@ export const SCENARIOS: NamedScenario[] = [
   }),
 ];
 
-/** Scenario used for exemplars that need a guaranteed shortfall to explain. */
+/** Plan used for exemplars that need a guaranteed shortfall to explain. */
 export const SHORTFALL_SCENARIO = SCENARIOS.find((x) => x.id === 'shortfall')!;

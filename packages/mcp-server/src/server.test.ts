@@ -41,9 +41,9 @@ describe('retirement MCP server (in-memory round trip)', () => {
     await Promise.allSettled([client.close(), server.close()]);
   });
 
-  it('runs a read tool end to end (get_scenario returns plan text)', async () => {
+  it('runs a read tool end to end (get_plan returns plan text)', async () => {
     const { client, server } = await connected(makeContext());
-    const result = await client.callTool({ name: 'get_scenario', arguments: { section: 'summary' } });
+    const result = await client.callTool({ name: 'get_plan', arguments: { section: 'summary' } });
 
     expect(result.isError).toBeFalsy();
     const text = (result.content as Array<{ type: string; text: string }>)
@@ -103,9 +103,9 @@ describe('retirement MCP server (in-memory round trip)', () => {
     const ctx = makeContext();
     const { client, server } = await connected(ctx);
 
-    await client.callTool({ name: 'get_scenario', arguments: { section: 'summary' } });
+    await client.callTool({ name: 'get_plan', arguments: { section: 'summary' } });
     ctx.scenarioName = 'Renamed plan';
-    const result = await client.callTool({ name: 'get_scenario', arguments: { section: 'summary' } });
+    const result = await client.callTool({ name: 'get_plan', arguments: { section: 'summary' } });
 
     const text = (result.content as Array<{ type: string; text: string }>)
       .filter(c => c.type === 'text').map(c => c.text).join('\n');

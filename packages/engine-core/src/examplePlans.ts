@@ -1,10 +1,10 @@
-import type { Scenario } from './types';
+import type { Plan } from './types';
 import type { RetirementInputs } from './retirementEngine';
 
 /**
- * A clean baseline plan for a BRAND-NEW scenario. Deliberately modest, neutral
- * defaults — NOT a copy of whatever scenario is active (that's "Duplicate").
- * New Scenario should give the user a fresh starting point they can shape,
+ * A clean baseline plan for a BRAND-NEW plan. Deliberately modest, neutral
+ * defaults — NOT a copy of whatever plan is active (that's "Duplicate").
+ * New Plan should give the user a fresh starting point they can shape,
  * independent of what they were last editing.
  */
 export function baselineInputs(): RetirementInputs {
@@ -38,10 +38,10 @@ export function baselineInputs(): RetirementInputs {
 }
 
 /**
- * First-run example scenarios: three realistic, mutually distinct starting
+ * First-run example plans: three realistic, mutually distinct starting
  * points that each exercise different engine features. Only used when
  * localStorage is empty (first launch or after a full reset) — the user's own
- * scenarios replace them permanently once saved.
+ * plans replace them permanently once saved.
  *
  *   Example - Early Couple ....... an embedded spouse plan + spending bands
  *   Example - Single at 60 ....... one-time cash events + CPP deferred to 70
@@ -53,9 +53,9 @@ export function baselineInputs(): RetirementInputs {
  * Keep these aligned with the current RetirementInputs shape — the test suite
  * asserts each one runs through the engine and touches the features above.
  */
-export const buildDefaultScenarios = (): Scenario[] => [
+export const buildDefaultPlans = (): Plan[] => [
   {
-    id: 'scenario-1',
+    id: 'plan-1',
     name: 'Example - Early Couple',
     inputs: {
       currentAge: 45,
@@ -104,7 +104,7 @@ export const buildDefaultScenarios = (): Scenario[] => [
     },
   },
   {
-    id: 'scenario-2',
+    id: 'plan-2',
     name: 'Example - Single at 60',
     inputs: {
       currentAge: 55,
@@ -135,7 +135,7 @@ export const buildDefaultScenarios = (): Scenario[] => [
     },
   },
   {
-    id: 'scenario-3',
+    id: 'plan-3',
     name: 'Example - Semi-retirement',
     inputs: {
       currentAge: 52,
@@ -166,7 +166,7 @@ export const buildDefaultScenarios = (): Scenario[] => [
     },
   },
   {
-    id: 'scenario-4',
+    id: 'plan-4',
     name: 'Example - RDSP Starting Out',
     inputs: {
       currentAge: 20,
