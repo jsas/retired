@@ -26,9 +26,29 @@ describe('DetailsPage inline editors', () => {
   it('renders every hint anchor including the editable collections', () => {
     const html = render();
     for (const id of ['details-profile', 'details-spouse', 'details-accounts', 'details-contributions',
-      'details-income', 'details-benefits', 'details-events', 'details-spending', 'details-withdrawal', 'details-debts']) {
+      'details-income', 'details-benefits', 'details-events', 'details-spending', 'details-withdrawal', 'details-markets', 'details-debts']) {
       expect(html, id).toContain(id);
     }
+  });
+
+  it('renders the Markets section: flat volatility and return anchors', () => {
+    const html = render({ returnVolatility: 0.15 });
+    expect(html).toContain('Volatility');
+    expect(html).toContain('value="15"');
+    expect(html).toContain('+ add an anchor');
+    const withAnchors = render({
+      marketPeriods: [{ id: 'p1', age: 62, return: -0.20, volatility: 0.25 }],
+    });
+    expect(withAnchors).toContain('From age');
+    expect(withAnchors).toContain('value="62"');
+    expect(withAnchors).toContain('value="-20"');
+    expect(withAnchors).toContain('value="25"');
+    expect(withAnchors).toContain('aria-label="Remove anchor at age 62"');
+  });
+
+  it('shows a blank volatility anchor when none is set', () => {
+    const html = render({ marketPeriods: [{ id: 'p1', age: 70, return: 0.05 }] });
+    expect(html).toContain('Vol % (blank = flat)');
   });
 
   it('renders Province as a select of the config\'s codes, keeping unknown codes', () => {
