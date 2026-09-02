@@ -27,9 +27,27 @@ export function viewFromHash(hash: string): View | null {
   return null;
 }
 
-// The canonical hash for a view ('#/steering').
+// The canonical hash for a view ('#/steering'). Folded legacy views
+// (optimize/montecarlo/backtest/compare/export/sharing) keep their own
+// routes for parsing, but the canonical link points at the page their
+// catalog entry folds into — so a "Go to Monte Carlo" link the assistant
+// prints lands on Insights, not a dead route.
 export function hashForView(view: View): string {
-  return `#/${VIEW_ROUTES[view]}`;
+  const target = foldTarget(view);
+  return `#/${VIEW_ROUTES[target]}`;
+}
+
+// Resolve a view through its catalog's foldedInto chain (one hop today;
+// looped defensively in case the catalog ever chains folds).
+export function foldTarget(view: View): View {
+  let target = view;
+  const seen = new Set<View>();
+  while (true) {
+    const entry = (NAV_CATALOG as ReadonlyArray<NavEntry>).find(e => e.viewId === target);
+    if (!entry?.foldedInto || seen.has(target)) return target;
+    seen.add(target);
+    target = entry.foldedInto;
+  }
 }
 
 // The friendly title the assistant's prompt uses conversationally.
