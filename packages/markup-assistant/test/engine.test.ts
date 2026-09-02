@@ -75,6 +75,29 @@ describe('session orchestration', () => {
     expect(states).toEqual(['accepted', 'processing', 'failed'])
   })
 
+  it('surfaces the sink failure reason in the failed detail', async () => {
+    const bus = createBus()
+    let detail = ''
+    bus.subscribe((e) => {
+      if (e.kind === 'status') {
+        const p = e.payload as { state: string; detail?: string }
+        if (p.state === 'failed') detail = p.detail ?? ''
+      }
+    })
+    const badSink: Sink = {
+      name: 'source',
+      async apply() {
+        return { state: 'failed', reason: 'not-found' }
+      },
+    }
+    startSession({ bus, engine: createStubEngine(), sinks: [badSink] })
+    bus.publish(noteIntent('ia_reason'))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(detail).toContain('not-found')
+    // the failing edit is named so the user sees which one
+    expect(detail).toContain('dom')
+  })
+
   it('treats screenshot/dom intents as context, folded into the gesture run', async () => {
     const bus = createBus()
     const seen: Array<{ intents: unknown[]; screenshot?: unknown; dom?: string }> = []

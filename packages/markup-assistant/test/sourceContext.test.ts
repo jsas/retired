@@ -50,13 +50,16 @@ describe('needlesFromDomSnapshot', () => {
 })
 
 describe('gatherSourceContext', () => {
-  it('finds the file containing the needle and returns a numbered excerpt', () => {
+  it('finds the file containing the needle and returns a verbatim excerpt', () => {
     const ctx = gatherSourceContext(root, ['Welcome to your retirement plan'])
     expect(ctx).toBeDefined()
     expect(ctx).toContain('src/components/Welcome.tsx')
-    expect(ctx).toContain('|       <h1>Welcome to your retirement plan</h1>')
-    // line numbers are printed next to the hit
-    expect(ctx).toContain('4 |')
+    // The excerpt line must match the file byte-for-byte (no gutter): the
+    // model copies it into a `find` string that has to hit on disk.
+    expect(ctx).toContain('      <h1>Welcome to your retirement plan</h1>')
+    expect(ctx).not.toMatch(/\|.*<h1>/)
+    // the header orients with the line range
+    expect(ctx).toContain('(lines 1-8)')
   })
 
   it('orders files by match count and respects the char budget', () => {

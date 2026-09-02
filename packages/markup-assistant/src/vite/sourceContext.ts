@@ -83,11 +83,11 @@ export function gatherSourceContext(
     const lines = content.split('\n')
     const from = Math.max(0, cand.firstLine - CONTEXT_LINES)
     const to = Math.min(lines.length, cand.firstLine + CONTEXT_LINES + 1)
-    const body = lines
-      .slice(from, to)
-      .map((l, i) => `${String(from + i + 1).padStart(4, ' ')} | ${l}`)
-      .join('\n')
-    const section = `--- ${cand.rel} (line ${cand.firstLine + 1}, ${cand.matches} match${cand.matches === 1 ? '' : 'es'}) ---\n${body}`
+    // Show the lines VERBATIM (no line-number gutter): the model copies this
+    // text into a `find` string, and any prefix we add would never match the
+    // file on disk. The header carries the starting line for orientation.
+    const body = lines.slice(from, to).join('\n')
+    const section = `--- ${cand.rel} (lines ${from + 1}-${to}) ---\n${body}`
     if (total + section.length > maxChars) break
     sections.push(section)
     total += section.length + 2

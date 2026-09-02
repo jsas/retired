@@ -13,12 +13,20 @@ import type { Edit, Envelope, ImagePayload, Intent } from '../core/protocol.js'
 import { isTerminalStatus, makeEnvelope, makeStatus } from '../core/protocol.js'
 import type { Engine, EngineDecision } from './engine.js'
 
+/**
+ * What a sink reports for one edit. A bare 'failed' works, but returning
+ * the failure as an object with a `reason` surfaces *why* in the status
+ * detail — "not-found" vs "ambiguous" tells the user (and the model, on a
+ * retry) exactly what went wrong.
+ */
+export type SinkResult = 'applied' | 'failed' | { state: 'failed'; reason?: string }
+
 export interface Sink {
   name: string
   /** Optional: sinks that only handle some edit kinds can skip the rest. */
   supports?(edit: Edit): boolean
   /** Apply one edit; must not throw — report failure via the returned state. */
-  apply(edit: Edit, ctx: SinkContext): Promise<'applied' | 'failed'>
+  apply(edit: Edit, ctx: SinkContext): Promise<SinkResult>
 }
 
 export interface SinkContext {
@@ -133,10 +141,10 @@ export function startSession(options: SessionOptions): { stop(): void } {
       return
     }
 
-    let applied = 0
     let failures = 0
     let skipped = 0
     const results: Edit[] = []
+    const failureNotes: string[] = []
     for (const edit of edits) {
       if (cancelled.has(interactionId)) return
       for (const sink of sinks) {
@@ -147,13 +155,15 @@ export function startSession(options: SessionOptions): { stop(): void } {
         try {
           const result = await sink.apply(edit, { interactionId })
           if (result === 'applied') {
-            applied += 1
             results.push(edit)
           } else {
             failures += 1
+            const reason = typeof result === 'object' ? result.reason : undefined
+            failureNotes.push(`${describeEdit(edit)}: ${reason ?? 'failed'}`)
           }
-        } catch {
+        } catch (err) {
           failures += 1
+          failureNotes.push(`${describeEdit(edit)}: ${String(err)}`)
         }
       }
     }
@@ -165,7 +175,13 @@ export function startSession(options: SessionOptions): { stop(): void } {
     // model returned nothing actionable. That's still informative, not a
     // zero-edit acceptance.
     if (failures > 0) {
-      publish(interactionId, 'failed', `${failures} sink application(s) failed`)
+      // Surface WHY: the model's find string not matching the file on disk
+      // ("not-found") is a different story from a permission error, and the
+      // user can't debug a bare count.
+      const detail = failureNotes.length
+        ? `failed — ${failureNotes.join('; ')}`
+        : 'sink application failed'
+      publish(interactionId, 'failed', detail)
       return
     }
     if (results.length === 0) {
@@ -214,6 +230,16 @@ export function startSession(options: SessionOptions): { stop(): void } {
       off()
     },
   }
+}
+
+/** Short human label for an edit, used in failure details. */
+function describeEdit(edit: Edit): string {
+  const e = edit as { kind?: string; file?: string; find?: string }
+  if (e.file) {
+    const preview = e.find ? ` "${e.find.slice(0, 40).replace(/\s+/g, ' ')}"` : ''
+    return `${e.kind ?? 'edit'}@${e.file}${preview}`
+  }
+  return e.kind ?? 'edit'
 }
 
 function isIntentPayload(p: unknown): p is Intent {

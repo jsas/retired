@@ -57,17 +57,23 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
     name: 'source',
     supports: (edit: Edit) => edit.kind === 'text' || edit.kind === 'write',
     async apply(edit: Edit) {
-      if (!autoApply) return 'failed'
-      if (edit.kind !== 'text' && edit.kind !== 'write') return 'failed'
+      if (!autoApply) return { state: 'failed' as const, reason: 'auto-apply disabled' }
+      if (edit.kind !== 'text' && edit.kind !== 'write') {
+        return { state: 'failed' as const, reason: 'unsupported edit kind' }
+      }
       try {
         const res = await fetch(`${origin}/__markup_assistant__/apply`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ edit }),
         })
-        return res.ok ? 'applied' : 'failed'
-      } catch {
-        return 'failed'
+        if (res.ok) return 'applied'
+        // The /apply endpoint ends with a plain-text reason (not-found,
+        // ambiguous, file unreadable, ...) — carry it to the chat bubble.
+        const reason = (await res.text().catch(() => '')).trim() || `HTTP ${res.status}`
+        return { state: 'failed' as const, reason }
+      } catch (err) {
+        return { state: 'failed' as const, reason: String(err) }
       }
     },
   }
