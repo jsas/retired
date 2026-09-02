@@ -28,6 +28,7 @@ import {
   type StreamEvent,
   type ToolSpec,
 } from './providers.js'
+import type { LoadProgress } from './webLlmProvider.js'
 import type { ModelSpec, ResolvedModel } from './types.js'
 import { BUILTIN_MODELS } from './registry.js'
 
@@ -49,12 +50,17 @@ export interface Bridge {
   selected(): ResolvedModel
   /** Select a model by id. Throws when unknown. */
   select(id: string): ResolvedModel
+  /** Select the model backing a saved connection (its `conn:<id>` entry).
+   *  Returns false when that connection isn't registered with the bridge. */
+  selectConnection(connectionId: string): boolean
   /** The selected model's backing connection (for streaming + tuning). */
   connection(): AiConnection
   /** True when the selected model is ready to attempt a call. */
   ready(): boolean
-  /** Stream a turn from the selected model (the agent loop uses this). */
-  streamChat(req: Omit<StreamChatRequest, never>): AsyncGenerator<StreamEvent>
+  /** Stream a turn from the selected model (the agent loop uses this). For a
+   *  local (webgpu) model, `onProgress` receives weight-download/compile
+   *  progress; ignored for remote providers. */
+  streamChat(req: StreamChatRequest, onProgress?: (p: LoadProgress) => void): AsyncGenerator<StreamEvent>
   /** One-shot chat: accumulate the stream into a single reply. */
   chat(req: { system?: string; messages: ChatMessage[]; signal?: AbortSignal }): Promise<{ text: string; stopReason?: string }>
 }
@@ -143,14 +149,30 @@ export function createBridge(options: BridgeOptions = {}): Bridge {
       currentId = id
       return resolve(spec)
     },
+    selectConnection(connectionId) {
+      const id = `conn:${connectionId}`
+      if (!models.has(id)) return false
+      currentId = id
+      return true
+    },
     connection: conn,
     ready: () => connectionReady(conn()),
-    streamChat(req) {
+    streamChat(req, onProgress) {
       const c = conn()
       if (!connectionReady(c)) {
         throw new Error(`ai-bridge: model "${selectedSpec().id}" is not ready (missing key or URL)`)
       }
-      return providerStreamChat(c, req as StreamChatRequest)
+      if (c.provider === 'webllm') {
+        // Local: delegate to the web-llm provider, which carries the heavy
+        // @mlc-ai/web-llm payload. Keep it a dynamic import so the main bundle
+        // never pays for it. An async generator wrapper forwards progress and
+        // preserves the streaming surface.
+        return (async function* () {
+          const { streamWebLlm } = await import('./webLlmProvider.js')
+          yield* streamWebLlm(c, req, onProgress)
+        })()
+      }
+      return providerStreamChat(c, req)
     },
     async chat(req) {
       let text = ''
