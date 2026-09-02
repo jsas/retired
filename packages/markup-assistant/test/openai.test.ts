@@ -30,6 +30,15 @@ function fetchWith(args: object): typeof fetch {
 
 const OPTS = { endpoint: 'http://x', model: 'm' }
 
+/** Stub fetch returning a plain-text assistant message (no tool call). */
+function textWith(content: string): typeof fetch {
+  return (async () =>
+    new Response(
+      JSON.stringify({ choices: [{ message: { content } }] }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )) as typeof fetch
+}
+
 describe('OpenAIEngine question handling', () => {
   it('returns answer when the model fills the answer field', async () => {
     const eng = new OpenAIEngine({ ...OPTS, fetchImpl: fetchWith({ answer: 'It is "you".', edits: [] }) })
@@ -116,5 +125,42 @@ describe('OpenAIEngine question handling', () => {
       (m) => typeof m.content === 'string' && m.content.includes('.welcome { color: navy; }'),
     )
     expect(srcMsg?.content).toContain('Source excerpts')
+  })
+})
+
+describe('OpenAIEngine prose salvage (no tool call)', () => {
+  it('answers a question with the model\'s plain text', async () => {
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: textWith('The projection summary shows your household wealth at retirement.'),
+    })
+    const d = await eng.decide(questionInput('what is this section?'))
+    expect(d.answer).toContain('household wealth')
+    expect(d.rejection).toBeUndefined()
+  })
+
+  it('surfaces prose as the rejection reason for a change request', async () => {
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: textWith('I could not find which element you circled.'),
+    })
+    const d = await eng.decide(questionInput('make it green'))
+    expect(d.answer).toBeUndefined()
+    expect(d.rejection).toContain('could not find')
+  })
+
+  it('parses a fenced JSON body as apply_edits arguments', async () => {
+    const body = '```json\n{"edits":[{"kind":"text","file":"src/a.css","find":"color: navy","replace":"color: green","description":"green"}]}\n```'
+    const eng = new OpenAIEngine({ ...OPTS, fetchImpl: textWith(body) })
+    const d = await eng.decide(questionInput('make it green'))
+    expect(d.edits).toHaveLength(1)
+    expect(d.edits[0]).toMatchObject({ kind: 'text', file: 'src/a.css' })
+    expect(d.rejection).toBeUndefined()
+  })
+
+  it('rejects with an explanation when the model returns nothing at all', async () => {
+    const eng = new OpenAIEngine({ ...OPTS, fetchImpl: textWith('   ') })
+    const d = await eng.decide(questionInput('make it green'))
+    expect(d.rejection).toContain('apply_edits')
   })
 })

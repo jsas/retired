@@ -70,33 +70,78 @@ export class OpenAIEngine implements Engine {
       throw new Error(`OpenAIEngine: HTTP ${res.status} ${body.slice(0, 300)}`)
     }
     const json = (await res.json()) as OpenAIResponse
-    const call = json.choices?.[0]?.message?.tool_calls?.[0]
-    if (!call?.function || call.function.name !== 'apply_edits') {
-      return { edits: [], rejection: 'model did not call apply_edits' }
+    const message = json.choices?.[0]?.message
+    const call = message?.tool_calls?.[0]
+
+    // The happy path is the forced apply_edits tool call. Some models/endpoints
+    // ignore tool_choice and print the arguments as plain text instead —
+    // salvage that too rather than discarding the model's work.
+    let rawArgs: string | undefined
+    if (call?.function && call.function.name === 'apply_edits') {
+      rawArgs = call.function.arguments
+    } else {
+      rawArgs = extractJsonFromText(message?.content ?? '')
+    }
+    if (rawArgs === undefined) {
+      return replyWithText(message?.content ?? '', input)
     }
     let parsed: { note?: string; answer?: string; edits?: unknown }
     try {
-      parsed = JSON.parse(call.function.arguments ?? '{}')
+      parsed = JSON.parse(rawArgs)
     } catch {
-      return { edits: [], rejection: 'model produced unparseable tool arguments' }
+      return replyWithText(message?.content ?? '', input)
     }
-    const edits = normalizeEdits(parsed.edits)
-    // A question / nothing-to-change reply: answer text with no edits.
-    if (typeof parsed.answer === 'string' && parsed.answer.trim()) {
-      return { edits: [], answer: parsed.answer.trim() }
-    }
-    if (edits.length === 0) {
-      // Small models often ignore the `answer` field and put the reply in
-      // `note`. If the user asked a question, that note IS the answer — don't
-      // dress it up as a rejection.
-      const note = parsed.note ?? ''
-      if (looksLikeQuestion(input) && note.trim()) {
-        return { edits: [], answer: note.trim() }
-      }
-      return { edits: [], rejection: note || 'model produced no edits' }
-    }
-    return { edits }
+    return finish(parsed, input)
   }
+}
+
+/** Turn a parsed apply_edits payload (tool call or salvaged text) into a decision. */
+function finish(
+  parsed: { note?: string; answer?: string; edits?: unknown },
+  input: EngineInput,
+): EngineDecision {
+  const edits = normalizeEdits(parsed.edits)
+  // A question / nothing-to-change reply: answer text with no edits.
+  if (typeof parsed.answer === 'string' && parsed.answer.trim()) {
+    return { edits: [], answer: parsed.answer.trim() }
+  }
+  if (edits.length === 0) {
+    // Small models often ignore the `answer` field and put the reply in
+    // `note`. If the user asked a question, that note IS the answer — don't
+    // dress it up as a rejection.
+    const note = parsed.note ?? ''
+    if (looksLikeQuestion(input) && note.trim()) {
+      return { edits: [], answer: note.trim() }
+    }
+    return { edits: [], rejection: note || 'model produced no edits' }
+  }
+  return { edits }
+}
+
+/**
+ * The model answered in prose instead of a tool call. Never throw its words
+ * away: a question gets the prose as an answer; a change request gets it as
+ * the rejection reason so the user can actually see what the model said.
+ */
+function replyWithText(text: string, input: EngineInput): EngineDecision {
+  const clean = text.trim()
+  if (!clean) {
+    return { edits: [], rejection: 'model did not call apply_edits and returned no text' }
+  }
+  if (looksLikeQuestion(input)) return { edits: [], answer: clean }
+  return { edits: [], rejection: clean.slice(0, 400) }
+}
+
+/**
+ * When the whole reply is a JSON object (bare or fenced in ```json), treat it
+ * as the apply_edits arguments the model meant to send as a tool call.
+ */
+function extractJsonFromText(content: string): string | undefined {
+  let text = content.trim()
+  if (!text) return undefined
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fence?.[1]) text = fence[1].trim()
+  return text.startsWith('{') ? text : undefined
 }
 
 /** True when the interaction text reads as a question, not a change request. */
@@ -119,6 +164,7 @@ function looksLikeQuestion(input: EngineInput): boolean {
 interface OpenAIResponse {
   choices?: Array<{
     message?: {
+      content?: string
       tool_calls?: Array<{ function?: { name?: string; arguments?: string } }>
     }
   }>
