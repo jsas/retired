@@ -39,27 +39,42 @@ rule 2 — don't let the eval split drift silently).
 ## 3. Train
 
 ```bash
-python training/sft/train.py \
+# 1) Detached long-run (recommended — bash tool caps at 600 s; nohup survives):
+nohup python -u training/sft/train.py \
   --model $BASE_MODEL \
   --output $OUTPUT \
   --lr 1e-5 \
-  --epochs 3 \
+  --epochs 4 \
   --batch-size 2 \
   --grad-accum 16 \
   --max-length 2048 \
   --eval-steps 250 \
-  --save-total-limit 8
+  --save-total-limit 8 \
+  > training/sft/train.log 2>&1 &
+echo "PID $!"
+
+# 2) Resume an interrupted/killed run (bare --resume = newest checkpoint-*):
+nohup python -u training/sft/train.py \
+  --model $BASE_MODEL \
+  --output $OUTPUT \
+  ... \
+  --resume \
+  > training/sft/train.log 2>&1 &
 ```
 
-On the RTX 5070 Ti (16 GB) that's ~4 s/step → ~90 min for the whole 1416-step
-run. Resume an interrupted run with `--resume` (bare flag = newest
+On the RTX 5070 Ti (16 GB) that's ~3 s/step → ~90 min for ~2k steps
+(4-epoch/16k-corpus) at batch 2 × accum 16. Resume picks the newest
 `checkpoint-<int>` under `--output`; non-integer-suffixed export dirs like
-`checkpoint-500-bf16` are ignored on purpose).
+`checkpoint-500-bf16` are ignored on purpose.
 
 Defaults: full-SFT (per SPIKE), assistant-token masking via Qwen3's chat
 template (`{% generation %}` markers — TRL 0.14 no longer takes
 `assistant_only_loss`), bf16, gradient checkpointing on, best-checkpoint on
 `eval_loss` when an eval split exists.
+
+**Bash-tool gotcha:** Claude Code's Bash tool caps any command at 600 s.
+One-shot training via a tool call will get killed at 10 min. Always
+`nohup ... > log 2>&1 &` for long runs.
 
 ## 4. Outputs
 
