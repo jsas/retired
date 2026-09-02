@@ -12,6 +12,7 @@ import type { RetirementInputs, RetirementResults } from '@retired/engine-core/r
 import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
+import { getRangePrefs } from '../lib/rangePrefs';
 import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
 import { cls, INK, RED_DOT } from '../design/tokens';
 import { ProjectionTimeline } from '../design/ProjectionTimeline';
@@ -21,10 +22,22 @@ import { MarketDial } from './beta/MarketDial';
 import { DownMarketCheck } from './beta/DownMarketCheck';
 import { EvidenceRow } from './beta/EvidenceRow';
 
-// The map's axis window — retire age × spending. The faders use the same
-// ranges so the dot and the sliders always agree. (Spending/return ranges are
-// the runaway-able ones earmarked for a Settings pref — see BETA-MAP.md §2.)
-const MAP_WINDOW = { ageMin: 55, ageMax: 75, spendTop: 160000, spendBottom: 20000 };
+// The map's axis window defaults — retire age × spending. The spending axis
+// reads the Settings lever-range pref (spendingMax) when set; age bounds stay
+// fixed (a fixed span is part of the axis's meaning — same contract as
+// rangePrefs).
+const DEFAULT_MAP_WINDOW = { ageMin: 55, ageMax: 75, spendTop: 160000, spendBottom: 20000 };
+
+// Compose the map's axis window: the spending axis ends where the lever-range
+// pref says the fader may reach, and never below the plan's own spending (a
+// dot above the axis would drag off-pad). Exported for the window test.
+export function mapWindow({ desiredSpending }: { desiredSpending: number }) {
+  const { spendingMax } = getRangePrefs();
+  return {
+    ...DEFAULT_MAP_WINDOW,
+    spendTop: Math.max(spendingMax, desiredSpending),
+  };
+}
 
 interface BetaAppProps {
   scenarios: Scenario[];
@@ -57,6 +70,7 @@ export function BetaApp({
   const breakdown = results.yearlyBreakdown ?? [];
   // Where the money runs out (null = outlasts the plan) — drives the timeline pin.
   const lifeDepletion = breakdown.find(r => r.endingBalance <= 0)?.age ?? null;
+  const window = mapWindow({ desiredSpending: inputs.desiredSpending });
   const chip: VerdictChip = {
     tone: v.holds ? 'holds' : (results.depletionAge != null && inputs.maxAge - results.depletionAge <= 6) ? 'borderline' : 'short',
     age: v.holds ? `${inputs.maxAge}+` : `${results.depletionAge ?? '—'}`,
@@ -109,7 +123,7 @@ export function BetaApp({
             <ContourMap
               inputs={inputs}
               config={config}
-              window={MAP_WINDOW}
+              window={window}
               onChange={onInputsChange}
             />
 
@@ -117,14 +131,14 @@ export function BetaApp({
               <Fader
                 label="Start Drawing"
                 value={inputs.retirementAge}
-                min={MAP_WINDOW.ageMin} max={MAP_WINDOW.ageMax} step={1}
+                min={window.ageMin} max={window.ageMax} step={1}
                 format={(val) => `${val}`}
                 onChange={(val) => onInputsChange({ ...inputs, retirementAge: val })}
               />
               <Fader
                 label="After Tax Spending"
                 value={inputs.desiredSpending}
-                min={MAP_WINDOW.spendBottom} max={MAP_WINDOW.spendTop} step={1000}
+                min={window.spendBottom} max={window.spendTop} step={1000}
                 format={fmtMoney}
                 onChange={(val) => onInputsChange({ ...inputs, desiredSpending: val })}
               />
