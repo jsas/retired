@@ -4,7 +4,7 @@ import { StyleGuide } from './design/StyleGuide';
 import { applyBetaAtBoot } from './lib/betaSkin';
 import { BetaPage } from './components/beta/BetaPage';
 import { DetailsPage } from './components/beta/DetailsPage';
-import { LandingPage } from './components/beta/LandingPage';
+import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/beta/LandingPage';
 import {
   BetaSchedulePage, BetaInsightsPage, BetaPlansPage, BetaDataPage,
   BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
@@ -37,7 +37,7 @@ import { OptimizeCard } from './components/OptimizeCard';
 import { AgentPage } from './components/AgentPage';
 import { ConnectionsPage } from './components/ConnectionsPage';
 import { CompareCard } from './components/CompareCard';
-import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
+import { WelcomeCard } from './components/WelcomeCard';
 import { SetupWizard, wizardDataFrom, applyWizardData, spouseWizardDataFrom, applySpouseWizardData, type WizardData } from './components/SetupWizard';
 import { PrintOptionsCard } from './components/PrintOptionsCard';
 import { DonateCard } from './components/DonateCard';
@@ -96,12 +96,12 @@ function App() {
   // (setConfig(state.config) below). No legacy config read — issue #21.
   const [config, setConfig] = useState<AppConfig>(() => structuredClone(DEFAULT_APP_CONFIG));
   const [store, setStore] = useState<AppStore | null>(null);
-  // Default landing: the Welcome page unless the user checked "don't show this
-  // again" (or General settings forces it on every load); otherwise the
-  // projection dashboard. An explicit hash route always wins.
+  // First-run gate (issue #153): the landing is a DRAFT-UNTIL-DOOR first-run
+  // surface — an explicit hash route (deep link / back-forward) always wins;
+  // without a hash, scenarios saved ⇒ the dashboard; nothing saved ⇒ the
+  // landing. The landing's onBuild creates the scenario at door-pick (below).
   const [view, setView] = useState<View>(() =>
-    viewFromHash(window.location.hash)
-    ?? (config.general.showWelcomeOnLoad || !isWelcomeDismissed() ? 'welcome' : 'projection')
+    welcomeLandingGate(viewFromHash(window.location.hash), scenarios.length > 0)
   );
 
   // Keep the URL hash in sync with the current view (push a history entry per
@@ -882,15 +882,38 @@ function App() {
           </BetaPage>
         );
       case 'welcome':
-        // The front door: five questions build a starter plan, then the doors.
-        // NO app chrome — no nav header, no verdict chip, no assistant. Just the
-        // wordmark and the conversation (the f7 landing shape).
+        // With saved plans the landing isn't a front door — a 'come back later'
+        // link from the welcome header would silently overwrite the plan. With
+        // any scenarios saved, the welcome hash opens the dashboard straight.
+        if (scenarios.length > 0) {
+          return (
+            <BetaApp
+              scenarios={scenarios}
+              activeScenarioId={activeScenarioId}
+              onScenarioChange={handleScenarioChange}
+              inputs={inputs}
+              onInputsChange={handleInputsChange}
+              results={results}
+              config={config}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onSave={handleSaveScenario}
+              assistant={assistantDock}
+            />
+          );
+        }
+        // The landing's first-run story: five questions build a starter PLAN —
+        // a draft only until a door is picked. "Go to dashboard" / "Keep
+        // chatting" both save the draft as the first scenario; the footer link
+        // without a plan isn't reachable here (there's nothing behind it).
         return (
           <LandingPage
             config={config}
             onBuild={(plan, opts) => {
-              setInputs(JSON.parse(JSON.stringify(plan)));
-              setHasUnsavedChanges(true);
+              const scenario = landingScenarioFromPlan(JSON.parse(JSON.stringify(plan)), Date.now());
+              setScenarios(prev => [...prev, scenario]);
+              setActiveScenarioId(scenario.id);
+              setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
+              setHasUnsavedChanges(false);
               // "keep chatting" arrives with the assistant dock open; "go to
               // dashboard" with it closed. The dock reads this pref on mount.
               if (opts?.openAssistant !== undefined) {
