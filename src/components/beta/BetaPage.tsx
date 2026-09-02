@@ -8,6 +8,7 @@
 // never traps you.
 import { useState, type ReactNode } from 'react';
 import { Link } from './nav';
+import type { View } from '../../lib/viewRoutes';
 import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { DETAILS_SECTIONS } from './detailsSections';
@@ -17,8 +18,18 @@ import { prefKV } from '../../lib/prefKv';
 const DOCK_PREF_KEY = 'wealthconsole_dock_open';
 // Remember the dock's open state across loads (issue #20 prefKV — captured by
 // every full backup). Default open on desktop; closed reads as the literal '0'.
-function readDockOpen(): boolean {
+function readDockOpen(openRoute = false): boolean {
+  if (openRoute) return true; // the #/assistant route is an explicit open
   return prefKV().getItem(DOCK_PREF_KEY) !== '0';
+}
+
+// Is the current view the assistant's own route? The hash tells the route
+// even before the view state catches up, and the initial mount is the
+// important case. SSR-safe: node-rendered pages never take the open-route
+// override without a browser hash to read.
+function isAssistantRoute(): boolean {
+  return typeof window !== 'undefined'
+    && window.location.hash.replace(/^#\/?/, '').replace(/\?.*$/, '') === 'assistant';
 }
 
 export interface VerdictChip {
@@ -30,7 +41,7 @@ export interface VerdictChip {
 /** The phone menu's contents — the same named homes the desktop row shows
  *  (plus Dashboard/Details/Help, which desktop reaches other ways). Exported
  *  so tests can prove nothing was dropped on phones. */
-export const MOBILE_MENU_ITEMS: Array<{ view: 'projection' | 'math' | 'eq' | 'scenarios' | 'details' | 'data' | 'print' | 'settings' | 'help'; label: string }> = [
+export const MOBILE_MENU_ITEMS: Array<{ view: View; label: string }> = [
   { view: 'projection', label: 'Dashboard' },
   { view: 'math', label: 'Schedule' },
   { view: 'eq', label: 'Insights' },
@@ -39,6 +50,7 @@ export const MOBILE_MENU_ITEMS: Array<{ view: 'projection' | 'math' | 'eq' | 'sc
   { view: 'data', label: 'Data' },
   { view: 'print', label: 'Print' },
   { view: 'settings', label: 'Settings' },
+  { view: 'connections', label: 'Assistant connection' },
   { view: 'help', label: 'Help' },
 ];
 
@@ -61,12 +73,14 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
 }) {
   // The dock's open state is remembered (prefKV) — closing it once keeps it
   // closed across loads and pages until reopened. Default open. Fullscreen is
-  // session-only: it's a viewing mode, not a preference.
-  const [dockOpen, setDockOpenState] = useState<boolean>(readDockOpen);
+  // session-only: it's a viewing mode, not a preference. The assistant's own
+  // route (#/assistant) is an explicit open — the pref can't close it there.
+  const openRoute = isAssistantRoute();
+  const [dockOpen, setDockOpenState] = useState<boolean>(() => readDockOpen(openRoute));
   const [fullscreen, setAssistantFullscreen] = useState(false);
   const setDockOpen = (open: boolean) => {
-    setDockOpenState(open);
-    try { prefKV().setItem(DOCK_PREF_KEY, open ? '1' : '0'); } catch { /* storage blocked */ }
+    setDockOpenState(open || openRoute);
+    try { prefKV().setItem(DOCK_PREF_KEY, (open || openRoute) ? '1' : '0'); } catch { /* storage blocked */ }
   };
 
   return (
