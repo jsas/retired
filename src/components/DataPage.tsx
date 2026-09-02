@@ -64,7 +64,7 @@ interface DataPageProps {
   exportOptions: ProjectionExportOptions;
   onExportOptionsChange: (opts: ProjectionExportOptions) => void;
   hasSpouse: boolean;
-  scenarioName: string;
+  planName: string;
   inputs: RetirementInputs;
   results: RetirementResults;
   config: AppConfig;
@@ -115,7 +115,7 @@ export function DataPage(props: DataPageProps) {
 // ---------------------------------------------------------------------------
 function ProjectionExportSection({
   exportOptions: options, onExportOptionsChange: onChange, hasSpouse,
-  scenarioName, inputs, results, config,
+  planName, inputs, results, config,
 }: DataPageProps) {
   const set = (patch: Partial<ProjectionExportOptions>) => onChange({ ...options, ...patch });
   const toggleGroup = (g: ColumnGroup) =>
@@ -128,12 +128,12 @@ function ProjectionExportSection({
 
   // The exact payload the buttons act on.
   const payload = useMemo(
-    () => buildExport(scenarioName, inputs, results, config, options),
-    [scenarioName, inputs, results, config, options],
+    () => buildExport(planName, inputs, results, config, options),
+    [planName, inputs, results, config, options],
   );
 
   // Editable filename (without extension); a default derived from the plan.
-  const defaultBase = `retirement-projection-${scenarioName.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}`;
+  const defaultBase = `retirement-projection-${planName.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}`;
   const [baseName, setBaseName] = useState(defaultBase);
   const [nameTouched, setNameTouched] = useState(false);
   const fileBase = (nameTouched ? baseName : defaultBase) || defaultBase;
@@ -162,7 +162,7 @@ function ProjectionExportSection({
     <section>
       <div className={SECTION}>Export projection</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
-        The computed year-by-year numbers for <span className="font-medium text-slate-700">{scenarioName}</span>,
+        The computed year-by-year numbers for <span className="font-medium text-slate-700">{planName}</span>,
         in the shape you choose below. JSON can be re-imported as a plan further down this page.
       </p>
 

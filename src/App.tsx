@@ -489,7 +489,7 @@ function App() {
     // the new plan survives a reload without a separate "save" click. The name
     // must be included here — setScenarios and setInputs flush together, so
     // renaming in the same functional update keeps name and inputs in sync.
-    const name = data.scenarioName.trim() || 'My Plan';
+    const name = data.planName.trim() || 'My Plan';
     setScenarios(prev => prev.map(s =>
       s.id === activePlanId ? { ...s, name, inputs: JSON.parse(JSON.stringify(finalInputs)) } : s
     ));
@@ -751,7 +751,7 @@ function App() {
     <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
       {/* Print-only one-page summary (hidden on screen; see index.css) */}
       <PrintSummary
-        scenarioName={activeScenario.name}
+        planName={activeScenario.name}
         inputs={resolvedInputs}
         results={results}
         householdBreakdown={householdBreakdown}
@@ -1008,10 +1008,10 @@ function App() {
               <AgentPage
                 inputs={resolvedInputs}
                 config={config}
-                scenarioName={activeScenario.name}
-                scenarioList={plans.map(s => ({ id: s.id, name: s.name }))}
+                planName={activeScenario.name}
+                planList={plans.map(s => ({ id: s.id, name: s.name }))}
                 activePlanId={activePlanId}
-                scenarioInputsById={(id) => plans.find(s => s.id === id)?.inputs}
+                planInputsById={(id) => plans.find(s => s.id === id)?.inputs}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
                 onOpenConnections={() => setView('connections')}
                 memory={store?.memory}
@@ -1060,7 +1060,7 @@ function App() {
                 exportOptions={exportOptions}
                 onExportOptionsChange={updateExportOptions}
                 hasSpouse={!!exportResults.spouse}
-                scenarioName={activeScenario.name}
+                planName={activeScenario.name}
                 inputs={inputs}
                 results={exportResults}
                 config={config}
@@ -1103,7 +1103,7 @@ function App() {
             {view === 'sharing' && (
               <SharingPage
                 inputs={inputs}
-                scenarioName={activeScenario.name}
+                planName={activeScenario.name}
                 onImport={handleSharingImport}
               />
             )}
@@ -1165,7 +1165,7 @@ function App() {
 
       {pendingSwitch != null && (
         <SavePromptModal
-          scenarioName={activeScenario.name}
+          planName={activeScenario.name}
           onSave={(dontAsk) => resolvePendingSwitch('save', dontAsk)}
           onDiscard={(dontAsk) => resolvePendingSwitch('discard', dontAsk)}
           onCancel={() => resolvePendingSwitch('cancel', false)}

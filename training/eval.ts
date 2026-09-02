@@ -151,7 +151,7 @@ export function scoreFollowup(record: CorpusRecord, callReply: string, continuat
 }
 
 // ---------------------------------------------------------------------------
-// Mutation-confirm grading. After a propose_* / set_scenario_value the loop
+// Mutation-confirm grading. After a propose_* / set_plan_value the loop
 // feeds back APPROVED ("now APPLIED … do NOT re-propose") or REJECTED ("NOT
 // applied … do not repeat unprompted"). The model must learn the discipline:
 // confirm and move on — never re-emit the same proposal.

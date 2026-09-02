@@ -8,7 +8,7 @@
 // gets a retry with feedback, and a per-turn call cap breaks degenerate loops
 // of repeated broken calls.
 //
-// The confirm-before-apply guarantee is unchanged: set_scenario_value still
+// The confirm-before-apply guarantee is unchanged: set_plan_value still
 // produces a mutation proposal that pauses the loop for user approval.
 
 import { z } from 'zod';
@@ -162,10 +162,10 @@ export function buildPromptToolInstructions(specs: ToolSpec[]): string {
     '- Never call the same tool twice in a row with the same arguments.',
     '- Available tools:',
     catalog,
-    '- Prefer run_projection/compare_scenarios numbers over guessing.',
+    '- Prefer run_projection/compare_plans numbers over guessing.',
     '- NEVER ask the user for balances, ages, or account values — they are in the plan',
     '  summary in the system prompt, and get_plan/run_projection return them.',
-    '- Every propose_* and set_scenario_value tool only PROPOSES a change; the user confirms it.',
+    '- Every propose_* and set_plan_value tool only PROPOSES a change; the user confirms it.',
     '- When the user asks WHERE something lives, use find_page (it tags the page they are',
     '  already on); use propose_navigate to offer opening a page — the app moves only on the',
     '  card the user approves. Never claim a page opened unless the result says it did.',

@@ -64,7 +64,7 @@ export const TOOL_TAXONOMY: ReadonlyArray<{
   { tool: 'run_projection', mutation: false, sampleQuestions: [
     'Am I on track?', 'What happens if I retire at {retirementAge±3}?',
     'Is my plan funded to 95?'] },
-  { tool: 'compare_scenarios', mutation: false, sampleQuestions: [
+  { tool: 'compare_plans', mutation: false, sampleQuestions: [
     'Should I retire at 60, 65, or 70?', 'Compare taking CPP at 60 vs 65 vs 70.'] },
   { tool: 'run_strategies', mutation: false, sampleQuestions: [
     'What levers would help my plan most?', 'Which changes improve my sustainable spending?'] },
@@ -80,7 +80,7 @@ export const TOOL_TAXONOMY: ReadonlyArray<{
     '(conversation start — ground yourself)', 'What do you remember about my pension?'] },
   { tool: 'list_plans', mutation: false, sampleQuestions: [
     'What plans do I have saved?', 'Which plans exist?'] },
-  { tool: 'set_scenario_value', mutation: true, sampleQuestions: [
+  { tool: 'set_plan_value', mutation: true, sampleQuestions: [
     'Set my CPP start age to 70.', 'Change my retirement age to 62.'] },
   { tool: 'propose_patch', mutation: true, sampleQuestions: [
     'Defer both CPP and OAS to 70.', 'Move my retirement and CPP to 65.'] },

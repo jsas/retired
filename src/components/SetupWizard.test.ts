@@ -14,7 +14,7 @@ describe('SetupWizard data helpers', () => {
     const d = wizardDataFrom(inputs, 'Retire at 60');
     expect(d).toEqual({
       person: 'primary',
-      scenarioName: 'Retire at 60',
+      planName: 'Retire at 60',
       currentAge: 55, retirementAge: 60, maxAge: 95,
       rrspBalance: 600000, tfsaBalance: 120000, taxableBalance: 80000, cashCushionBalance: 40000,
       rrspContribution: 20000, tfsaContribution: 7000, taxableContribution: 0,
@@ -107,7 +107,7 @@ describe('SetupWizard data helpers', () => {
   it('the plan name never leaks into the engine inputs', () => {
     const d = wizardDataFrom(baseInputs(), 'Early Retirement');
     const out = applyWizardData(baseInputs(), d);
-    expect((out as unknown as Record<string, unknown>).scenarioName).toBeUndefined();
+    expect((out as unknown as Record<string, unknown>).planName).toBeUndefined();
   });
 });
 

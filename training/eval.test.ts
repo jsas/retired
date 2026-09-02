@@ -73,17 +73,17 @@ describe('eval gate — scoreReply tiers', () => {
     expect(s.reason).toMatch(/multiple calls/);
   });
 
-  it('set_scenario_value: schema validates shape, not field membership', () => {
-    const setRec = rec('set_scenario_value');
-    const good = scoreReply(setRec, emitToolCall('set_scenario_value', { field: 'cppStartAge', value: 70 }));
+  it('set_plan_value: schema validates shape, not field membership', () => {
+    const setRec = rec('set_plan_value');
+    const good = scoreReply(setRec, emitToolCall('set_plan_value', { field: 'cppStartAge', value: 70 }));
     expect(good.valid).toBe(true);
     // `field` is z.string().min(1) — EDITABLE_FIELDS membership is enforced by
     // the EXECUTOR, not the schema, so a bogus field is still "argsValid" at
     // this tier. The gate reports the honest schema-level result.
-    const bogusField = scoreReply(setRec, emitToolCall('set_scenario_value', { field: 'bogusField', value: 1 }));
+    const bogusField = scoreReply(setRec, emitToolCall('set_plan_value', { field: 'bogusField', value: 1 }));
     expect(bogusField.argsValid).toBe(true);
     // …but an empty field string IS a schema failure (min(1)).
-    const emptyField = scoreReply(setRec, emitToolCall('set_scenario_value', { field: '', value: 1 }));
+    const emptyField = scoreReply(setRec, emitToolCall('set_plan_value', { field: '', value: 1 }));
     expect(emptyField.argsValid).toBe(false);
     expect(emptyField.valid).toBe(false);
   });
@@ -159,17 +159,17 @@ describe('eval gate — multi-turn followup grading', () => {
 });
 
 describe('eval gate — mutation-confirm grading', () => {
-  const proposeCall = emitToolCall('set_scenario_value', { field: 'cppStartAge', value: 70 });
+  const proposeCall = emitToolCall('set_plan_value', { field: 'cppStartAge', value: 70 });
 
   it('approved: pass when the model confirms without re-proposing', () => {
-    const s = scoreMutationConfirm(proposeCall, 'set_scenario_value', true,
+    const s = scoreMutationConfirm(proposeCall, 'set_plan_value', true,
       'Done — CPP now starts at 70 and it is live in your plan.');
     expect(s.callValid && s.noRepropose && s.acknowledges).toBe(true);
     expect(s.pass).toBe(true);
   });
 
   it('approved: fail when the model re-proposes the same change', () => {
-    const s = scoreMutationConfirm(proposeCall, 'set_scenario_value', true,
+    const s = scoreMutationConfirm(proposeCall, 'set_plan_value', true,
       `Confirmed.\n${proposeCall}`);
     expect(s.noRepropose).toBe(false);
     expect(s.pass).toBe(false);
@@ -177,19 +177,19 @@ describe('eval gate — mutation-confirm grading', () => {
   });
 
   it('rejected: pass when the model accepts and does not repeat', () => {
-    const s = scoreMutationConfirm(proposeCall, 'set_scenario_value', false,
+    const s = scoreMutationConfirm(proposeCall, 'set_plan_value', false,
       'Understood — I have left the plan unchanged.');
     expect(s.pass).toBe(true);
   });
 
   it('rejected: fail when the model pushes the change again', () => {
-    const s = scoreMutationConfirm(proposeCall, 'set_scenario_value', false,
+    const s = scoreMutationConfirm(proposeCall, 'set_plan_value', false,
       `You really should do this.\n${proposeCall}`);
     expect(s.pass).toBe(false);
   });
 
   it('fails when the mutation call itself is malformed', () => {
-    const s = scoreMutationConfirm('TOOL_CALL: {bad json', 'set_scenario_value', true, 'done');
+    const s = scoreMutationConfirm('TOOL_CALL: {bad json', 'set_plan_value', true, 'done');
     expect(s.callValid).toBe(false);
     expect(s.pass).toBe(false);
   });

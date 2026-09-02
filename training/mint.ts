@@ -79,13 +79,13 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'verdict',
   },
   {
-    tool: 'compare_scenarios',
+    tool: 'compare_plans',
     questions: [
       (sc) => `Compare retiring at ${sc.inputs.retirementAge} vs ${sc.inputs.retirementAge + 3}.`,
       (sc) => `Should I look at ${sc.inputs.retirementAge} or ${sc.inputs.retirementAge + 3}? Show both.`,
       (sc) => `What's the difference between retiring at ${sc.inputs.retirementAge} and ${sc.inputs.retirementAge + 3}?`,
       // Contrast-discrimination (post-checkpoint-1000): the multiple-call slip
-      // clusters on compare_scenarios. Teach that ONE call produces ONE answer;
+      // clusters on compare_plans. Teach that ONE call produces ONE answer;
       // subsequent explanation is prose, not a second call.
       (sc) => `Retiring at ${sc.inputs.retirementAge} or ${sc.inputs.retirementAge + 3} — one variant, not a list.`,
     ],
@@ -98,7 +98,7 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'compare',
   },
   {
-    tool: 'compare_scenarios',
+    tool: 'compare_plans',
     questions: [
       (sc) => `Compare taking CPP at ${sc.inputs.cppStartAge ?? 65} vs 70.`,
       (sc) => `CPP at ${sc.inputs.cppStartAge ?? 65} or defer to 70 — show me both.`,
@@ -217,7 +217,7 @@ const READ_SPECS: ReadSpec[] = [
   // via explicit instruction.
   //
   // Pair → discriminators we keep distinct:
-  //   compare_scenarios  — needs MORE-THAN-ONE option (variant labels, "vs",
+  //   compare_plans  — needs MORE-THAN-ONE option (variant labels, "vs",
   //                         "or", "either") in the question
   //   run_projection     — one named what-if (NOT a versus list)
   //   get_plan       — READ the plan, not run it
@@ -227,7 +227,7 @@ const READ_SPECS: ReadSpec[] = [
   //   run_monte_carlo    — needs a probability/simulation/odds question
   // -------------------------------------------------------------------------
   {
-    // compare_scenarios vs run_projection — 56+14 = 70 fails previously. The
+    // compare_plans vs run_projection — 56+14 = 70 fails previously. The
     // projections below all have a single "what-if" (one number), NOT a vs-list.
     tool: 'run_projection',
     questions: [
@@ -254,7 +254,7 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'none',
   },
   {
-    // solve_spending vs compare_scenarios — 22 fails. 'how much' → solver.
+    // solve_spending vs compare_plans — 22 fails. 'how much' → solver.
     tool: 'solve_spending',
     questions: [
       () => 'How much yearly spend gives me 90% success?',
@@ -266,7 +266,7 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'solve',
   },
   {
-    // run_strategies vs compare_scenarios — 27 fails. Sweep-of-levers, not
+    // run_strategies vs compare_plans — 27 fails. Sweep-of-levers, not
     // a pinned compare.
     tool: 'run_strategies',
     questions: [
@@ -309,59 +309,59 @@ interface ContrastPair {
 }
 
 const CONTRAST_PAIRS: ContrastPair[] = [
-  // compare_scenarios magnet (largest single cluster).
+  // compare_plans magnet (largest single cluster).
   {
     correct: 'run_projection',
-    wrong: 'compare_scenarios',
+    wrong: 'compare_plans',
     question: (sc) => `What if I retire at ${sc.inputs.retirementAge + 3}?`,
     args: (sc) => ({ overrides: { retirementAge: sc.inputs.retirementAge + 3 } }),
     rationale: () =>
       'Single what-if (one number change) is a run_projection call — ' +
-      'compare_scenarios needs at least two variant labels.',
+      'compare_plans needs at least two variant labels.',
   },
   {
     correct: 'get_plan',
-    wrong: 'compare_scenarios',
+    wrong: 'compare_plans',
     question: () => 'Show me my plan as-is.',
     args: () => ({ section: 'summary' }),
     rationale: () =>
-      'Plain read of the plan is get_plan. compare_scenarios requires ' +
+      'Plain read of the plan is get_plan. compare_plans requires ' +
       'two-or-more variant options, which a bare "as-is" lacks.',
   },
   {
     correct: 'run_monte_carlo',
-    wrong: 'compare_scenarios',
+    wrong: 'compare_plans',
     question: () => 'What are the odds my plan succeeds?',
     args: () => ({ runs: 500 }),
     rationale: () =>
       'Probability across markets is a Monte Carlo simulation. ' +
-      "compare_scenarios picks two named variants — 'odds' isn't a variant.",
+      "compare_plans picks two named variants — 'odds' isn't a variant.",
   },
   {
     correct: 'solve_spending',
-    wrong: 'compare_scenarios',
+    wrong: 'compare_plans',
     question: () => 'How much can I safely spend each year?',
     args: () => ({ targetSuccessRate: 0.9, runs: 300 }),
     rationale: () =>
       "'How much' is a target-datum question — solve_spending computes one " +
-      'number. compare_scenarios compares two options, not a solve target.',
+      'number. compare_plans compares two options, not a solve target.',
   },
   {
     correct: 'run_strategies',
-    wrong: 'compare_scenarios',
+    wrong: 'compare_plans',
     question: () => 'Which levers would help my plan most?',
     args: () => ({ maxVariants: 5 }),
     rationale: () =>
-      "A sweep-of-levers is run_strategies. compare_scenarios compares " +
+      "A sweep-of-levers is run_strategies. compare_plans compares " +
       'pinned variants — lever exploration is a strategy scan, not a pin.',
   },
   {
     correct: 'get_schedule',
-    wrong: 'compare_scenarios',
+    wrong: 'compare_plans',
     question: (sc) => `Year-by-year table, ages ${sc.inputs.retirementAge}–${sc.inputs.maxAge}.`,
     args: (sc) => ({ fromAge: sc.inputs.retirementAge, toAge: sc.inputs.maxAge, stride: 3 }),
     rationale: () =>
-      'A schedule/table request is get_schedule. compare_scenarios produces ' +
+      'A schedule/table request is get_schedule. compare_plans produces ' +
       'a verdict comparison, not a year-by-year table.',
   },
   {
@@ -392,8 +392,8 @@ function contextFor(sc: NamedScenario): ToolContext {
   return {
     inputs: sc.inputs,
     config: testConfig(),
-    scenarioName: sc.name,
-    scenarioList: SCENARIOS.map((x) => ({ id: x.id, name: x.name })),
+    planName: sc.name,
+    planList: SCENARIOS.map((x) => ({ id: x.id, name: x.name })),
     activePlanId: sc.id,
   };
 }
@@ -497,7 +497,7 @@ export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
 }
 
 // ---------------------------------------------------------------------------
-// Mutation-tool records (propose_*/set_scenario_value/remember/recall/...).
+// Mutation-tool records (propose_*/set_plan_value/remember/recall/...).
 // These teach the model to emit the RIGHT proposal call for a change request,
 // and — after the user's confirm — to acknowledge without re-proposing. The
 // engine isn't needed for the call itself (a mutation pauses for confirm), so
@@ -516,7 +516,7 @@ interface MutationSpec {
 
 const MUTATION_SPECS: MutationSpec[] = [
   {
-    tool: 'set_scenario_value',
+    tool: 'set_plan_value',
     questions: [
       (sc) => `Change my retirement age to ${sc.inputs.retirementAge + 2}.`,
       (sc) => `Set retirement at ${sc.inputs.retirementAge + 2}.`,
@@ -526,7 +526,7 @@ const MUTATION_SPECS: MutationSpec[] = [
     rejectedReply: () => 'No problem — I\'ve left the plan unchanged.',
   },
   {
-    tool: 'set_scenario_value',
+    tool: 'set_plan_value',
     questions: [
       (sc) => `Lower my spending to $${Math.round(sc.inputs.desiredSpending * 0.9).toLocaleString('en-CA')} a year.`,
     ],

@@ -25,7 +25,7 @@ export interface WizardData {
   person: 'primary' | 'spouse';
   /** Plan name — user-editable on the review step; we suggest one.
    *  (Primary pass only; a spouse pass leaves it untouched.) */
-  scenarioName: string;
+  planName: string;
   currentAge: number;
   retirementAge: number;
   maxAge: number;
@@ -50,7 +50,7 @@ export interface WizardData {
 export function wizardDataFrom(inputs: RetirementInputs, suggestedName = 'My Plan'): WizardData {
   return {
     person: 'primary',
-    scenarioName: suggestedName,
+    planName: suggestedName,
     currentAge: inputs.currentAge,
     retirementAge: inputs.retirementAge,
     maxAge: inputs.maxAge,
@@ -77,7 +77,7 @@ export function wizardDataFrom(inputs: RetirementInputs, suggestedName = 'My Pla
  *  the name labels the plan, and the home answer becomes a (disabled)
  *  reverse-mortgage section so the question is never a dead end. */
 export function applyWizardData(base: RetirementInputs, data: WizardData): RetirementInputs {
-  const { scenarioName: _name, ownsHome, homeValue, ...numbers } = data;
+  const { planName: _name, ownsHome, homeValue, ...numbers } = data;
   const next: RetirementInputs = { ...base, ...numbers };
   if (ownsHome === true) {
     // Record/update the equity so the RM section and the Optimize tab have
@@ -110,7 +110,7 @@ export function spouseWizardDataFrom(host: RetirementInputs): WizardData {
   const sp = host.spouse;
   return {
     person: 'spouse',
-    scenarioName: '',
+    planName: '',
     currentAge: sp?.currentAge ?? host.currentAge,
     retirementAge: sp?.retirementAge ?? host.retirementAge,
     maxAge: host.maxAge, // shared horizon — not asked in the spouse pass
@@ -329,8 +329,8 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
               <input
                 type="text"
                 className={NUM_CLS}
-                value={data.scenarioName}
-                onChange={(e) => set('scenarioName', e.target.value)}
+                value={data.planName}
+                onChange={(e) => set('planName', e.target.value)}
                 placeholder="My Plan"
               />
             </div>
@@ -466,8 +466,8 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
         </button>
         <button
           onClick={next}
-          disabled={isLast && !isSpousePass && !data.scenarioName.trim()}
-          title={isLast && !isSpousePass && !data.scenarioName.trim() ? 'Give the plan a name first' : undefined}
+          disabled={isLast && !isSpousePass && !data.planName.trim()}
+          title={isLast && !isSpousePass && !data.planName.trim() ? 'Give the plan a name first' : undefined}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLast

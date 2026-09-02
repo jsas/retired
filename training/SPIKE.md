@@ -69,14 +69,14 @@ corpus can't drift from shipped behavior):
 - **Result envelope**: results come back as the **next user message** under a
   `Tool results:` header with `[OK] …` / `[ERROR] …` blocks. There is **no
   `TOOL_RESULT:` line** the model ever emits.
-- **Mutation discipline**: every `propose_*` / `set_scenario_value` only
+- **Mutation discipline**: every `propose_*` / `set_plan_value` only
   *proposes*; the loop pauses for a user confirm card, then feeds back
   **APPROVED** ("now APPLIED … do NOT re-propose … report the resulting
   numbers") or **REJECTED** ("NOT applied … do not repeat unprompted"). The
   model must learn: approved → confirm + fresh `run_projection`; never
   re-propose after approval, never repeat after rejection.
 - **The 24-tool catalog** (`src/lib/ai/tools.ts`): 9 pure reads
-  (`get_plan`, `run_projection`, `compare_scenarios`, `run_strategies`,
+  (`get_plan`, `run_projection`, `compare_plans`, `run_strategies`,
   `solve_spending`, `run_monte_carlo`, `get_schedule`, `recall`,
   `list_plans`), 12 mutation proposals (incl. `propose_fhsa`, added with
   the income-register/FHSA feature #123), 3 direct writes (`remember`,
@@ -412,7 +412,7 @@ What it says:
 
 1. **Arg-schema validation** ✅ done — `scoreReply` applies
    `TOOL_SCHEMAS[name].safeParse(args)` per call. (Honest edge: free-string
-   fields like `set_scenario_value.field` are schema-valid even when not in
+   fields like `set_plan_value.field` are schema-valid even when not in
    `EDITABLE_FIELDS` — that's executor-side, documented in the test.)
 2. **Expected-call ground truth** ✅ done — `CorpusRecord.expect.toolName`.
 3. **Pass/fail aggregation** ✅ done — `gateReport` + threshold + exit code.
@@ -466,7 +466,7 @@ grounding** (did the follow-up quote the returned figure). The hard half of
 questions — timeline + interaction (METHODOLOGY §4) — need a third grading mode
 for the *interpretation of a comparison*:
 
-- For `compare_scenarios` / `run_strategies` records, the engine computes both
+- For `compare_plans` / `run_strategies` records, the engine computes both
   branches deterministically. Extend the follow-up grader to check that the
   model's explanation matches the **sign and rough magnitude of the real computed
   delta** (e.g. "delaying CPP raises sustainable spending" must agree with the

@@ -11,11 +11,11 @@ same shape runGate uses):
 
 | bucket | n/900 | root cause | fix |
 | --- | --- | --- | --- |
-| compare_scenarios magnet | 56+30+27+23+22 | variants/patches make it look permissive | L3 contrastive mint (negative-pair) |
+| compare_plans magnet | 56+30+27+23+22 | variants/patches make it look permissive | L3 contrastive mint (negative-pair) |
 | run_projection vs get_plan | 37+19+19 | "how does my plan look" ambiguity | L3 pair-mint |
 | get_plan enum invention | — | model invents 'balances' | done: cycle real enum values |
-| compare_scenarios duplicate-call | 23 | emits TOOL_CALL twice on one line | done: 'one variant, not a list' paraphrase |
-| run_strategies vs compare_scenarios | 27 | lever-selection wording | pending contrastive mint |
+| compare_plans duplicate-call | 23 | emits TOOL_CALL twice on one line | done: 'one variant, not a list' paraphrase |
+| run_strategies vs compare_plans | 27 | lever-selection wording | pending contrastive mint |
 
 Tool-choice confusion is ~83% of losses; grammar/blanks ~19%. **Fix choice
 first, grammar second.**
@@ -39,7 +39,7 @@ first, grammar second.**
 
 Add to `mint.ts` READ_SPECS, aimed at the confusion pairs above. In this
 round: the earlier fixes (boundary paraphrases + enum-value cycling). After
-this run lands again with `compare_scenarios` as the magnet, mint negative
+this run lands again with `compare_plans` as the magnet, mint negative
 pairs: same question, two replies — one showing the correct tool, one proving
 the wrong-tool reply by counter-example.
 
@@ -53,7 +53,7 @@ the wrong-tool reply by counter-example.
 4. Compare_scenarios deterrent: 'one variant, not a list' paraphrase.
    ✓ done.
 5. **NEW pending:** Contrastive negative-pair mint: for each eval pair
-   (e.g. compare_scenarios vs run_projection), add both a positive-correct
+   (e.g. compare_plans vs run_projection), add both a positive-correct
    paraphrase and a negative-example-instruct ("when asked X, the right call
    is Y, not Z"). Shape: `messages = [user → assistant(tool=Y)] ` plus an
    explicit "not Z" note in the assistant narrative, or as a separate

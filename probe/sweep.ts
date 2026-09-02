@@ -20,7 +20,7 @@ export const SWEEP_PROMPTS: Array<{ id: string; label: string; system: string; u
     id: 'propose-rdsp',
     label: 'RDSP proposal (tool-protocol mimicry)',
     system: 'You propose plan changes as fenced JSON tool calls like ```tool ' +
-      '{"name":"set_scenario_value","args":{...}}```. The user confirms each one.',
+      '{"name":"set_plan_value","args":{...}}```. The user confirms each one.',
     user: 'help me setup my rdsp',
   },
   {

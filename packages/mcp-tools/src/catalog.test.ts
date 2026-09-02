@@ -34,9 +34,9 @@ describe('tool catalog surface', () => {
 
   it('keeps the tool roster stable (sorted names)', () => {
     const expected: AgentToolName[] = [
-      'get_plan', 'run_projection', 'compare_scenarios', 'run_strategies',
+      'get_plan', 'run_projection', 'compare_plans', 'run_strategies',
       'solve_spending', 'run_monte_carlo', 'get_schedule',
-      'set_scenario_value', 'propose_patch', 'propose_spouse', 'propose_income',
+      'set_plan_value', 'propose_patch', 'propose_spouse', 'propose_income',
       'propose_spending_bands', 'propose_cash_event', 'propose_reverse_mortgage',
       'propose_rdsp', 'propose_fhsa', 'propose_revert',
       'manage_cash_event', 'manage_income', 'propose_debt', 'manage_debt',

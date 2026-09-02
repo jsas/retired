@@ -45,8 +45,8 @@ Failure buckets (169 invalid / 900):
 - 32× `get_plan` where `run_projection` wanted
 - 31× `run_strategies` args fail schema
 - 16× `get_plan` args fail schema
-- 16× `compare_scenarios` where `run_monte_carlo` wanted
-- 16× `solve_spending` / 16× `compare_scenarios` where `run_strategies` wanted
+- 16× `compare_plans` where `run_monte_carlo` wanted
+- 16× `solve_spending` / 16× `compare_plans` where `run_strategies` wanted
 - 15× `get_schedule` where `get_plan` wanted
 
 ## Training curve (checkpoint-500 trainer_state)

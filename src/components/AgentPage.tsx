@@ -58,12 +58,12 @@ import { Markdown } from './Markdown';
 interface AgentPageProps {
   inputs: RetirementInputs;
   config: AppConfig;
-  scenarioName: string;
-  scenarioList: Array<{ id: string; name: string }>;
+  planName: string;
+  planList: Array<{ id: string; name: string }>;
   /** Which plan is active (list_plans marks it in the listing). */
   activePlanId?: string;
   /** Saved inputs of any plan by id (list_plans withDetails). */
-  scenarioInputsById?: (id: string) => RetirementInputs | undefined;
+  planInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
   onOpenConnections: () => void;
   /** Agent memory (plan + global); absent only if the store failed to open. */
@@ -227,7 +227,7 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activePlanId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
+export function AgentPage({ inputs, config, planName, planList, activePlanId, planInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -262,7 +262,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activePl
     });
 
   const newChat = () => {
-    const t = newThread(scenarioName, Date.now());
+    const t = newThread(planName, Date.now());
     // A fresh thread starts from an EMPTY context — never the last chat's
     // KV cache (see setActiveThread).
     void resetWebLlmChat();
@@ -479,10 +479,10 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activePl
               onSettingsChange={setSettings}
               inputs={inputs}
               config={config}
-              scenarioName={scenarioName}
-              scenarioList={scenarioList}
+              planName={planName}
+              planList={planList}
               activePlanId={activePlanId}
-              scenarioInputsById={scenarioInputsById}
+              planInputsById={planInputsById}
               onApply={onApply}
               patchTurns={patchTurns}
               patchThread={patchThread}
@@ -548,18 +548,18 @@ export function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
  *  plan edit doesn't invalidate the engine's cached system prefix. */
 function buildSystemBody(
   toolMode: 'native' | 'prompt' | 'off',
-  scenarioName: string,
+  planName: string,
   basePrompt: string | undefined,
   config: AppConfig,
 ): string {
   if (toolMode === 'prompt') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
+    return buildSystemPrompt(planName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
       buildPromptToolInstructions(toolSpecs());
   }
   if (toolMode === 'off') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config });
+    return buildSystemPrompt(planName, { toolMode: 'off', basePrompt, config });
   }
-  return buildSystemPrompt(scenarioName, { basePrompt, config });
+  return buildSystemPrompt(planName, { basePrompt, config });
 }
 
 /** The live plan digest for chat-only local models ('prompt' and 'off'
@@ -585,7 +585,7 @@ function planContextMessage(
   };
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activePlanId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
+function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, planName, planList, activePlanId, planInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -594,10 +594,10 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   onSettingsChange: (mutate: (prev: AiSettings) => AiSettings) => void;
   inputs: RetirementInputs;
   config: AppConfig;
-  scenarioName: string;
-  scenarioList: Array<{ id: string; name: string }>;
+  planName: string;
+  planList: Array<{ id: string; name: string }>;
   activePlanId?: string;
-  scenarioInputsById?: (id: string) => RetirementInputs | undefined;
+  planInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
   patchThread: (patch: Partial<ChatThread>) => void;
@@ -661,11 +661,11 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const toolContext: ToolContext = useMemo(() => ({
     get inputs() { return inputsRef.current; },
     get checkpoints() { return checkpointsRef.current; },
-    config, scenarioName, scenarioList, memory,
+    config, planName, planList, memory,
     get memoryScenarioId() { return memoryScenarioIdRef.current; },
-    activePlanId, scenarioInputsById,
+    activePlanId, planInputsById,
     onOpenScenario, onSaveScenarioAs,
-  }), [config, scenarioName, scenarioList, memory, activePlanId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
+  }), [config, planName, planList, memory, activePlanId, planInputsById, onOpenScenario, onSaveScenarioAs]);
 
   // The MCP-backed tool executor. The server re-resolves the LIVE context on
   // every call, so the executor closes over the memoized context object (its
@@ -686,7 +686,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
     const basePrompt = settings.systemPromptOverride;
-    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config);
+    const base = buildSystemBody(toolMode, planName, basePrompt, config);
     const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
     const planContext = planContextMessage(toolMode, inputs, config);
     const history = toHistory(turns);
@@ -695,7 +695,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
       return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...full]);
     }
     return estimateTokens(system, full);
-  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config]);
+  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns, toolMode, planName, inputs, config]);
 
   /**
    * Run one assistant turn: append (or replace) a streaming assistant bubble
@@ -744,7 +744,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     };
 
     const basePrompt = settings.systemPromptOverride;
-    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config);
+    const baseSystem = buildSystemBody(toolMode, planName, basePrompt, config);
     // The chat's standing instructions go last so they read as the user's own
     // voice; they can steer tone/focus but the base prompt's rules come first.
     const system = thread.systemNote?.trim()

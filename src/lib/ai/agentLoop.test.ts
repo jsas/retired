@@ -8,8 +8,8 @@ function ctx(): ToolContext {
   return {
     inputs: baseInputs(),
     config: testConfig(),
-    scenarioName: 'Test plan',
-    scenarioList: [{ id: 'a', name: 'Test plan' }],
+    planName: 'Test plan',
+    planList: [{ id: 'a', name: 'Test plan' }],
   };
 }
 
@@ -99,7 +99,7 @@ describe('runAgentTurn', () => {
   it('pauses on a mutation proposal and reports the user decision to the model', async () => {
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'cppStartAge', value: 70 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'set_plan_value', args: { field: 'cppStartAge', value: 70 } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -134,13 +134,13 @@ describe('runAgentTurn', () => {
     const liveCtx: ToolContext = {
       get inputs() { return live.inputs; },
       config: testConfig(),
-      scenarioName: 'Test plan',
-      scenarioList: [{ id: 'a', name: 'Test plan' }],
+      planName: 'Test plan',
+      planList: [{ id: 'a', name: 'Test plan' }],
     };
     const { chat } = scripted([
       // Round 1: propose lowering spending.
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 42000 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'set_plan_value', args: { field: 'desiredSpending', value: 42000 } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       // Round 2 (after approval): the model re-reads the plan, then answers.
@@ -172,7 +172,7 @@ describe('runAgentTurn', () => {
   it('tells the model when the user rejects a change', async () => {
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 90000 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'set_plan_value', args: { field: 'desiredSpending', value: 90000 } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -254,7 +254,7 @@ describe('buildSystemPrompt', () => {
     // planner" guardrail made small models parrot "I'm not a planner" back.
     expect(s).toContain('planning assistant');
     expect(s).not.toContain('not a planner');
-    expect(s).toContain('set_scenario_value');
+    expect(s).toContain('set_plan_value');
   });
 
   it('uses a user-supplied base prompt in place of the default persona', () => {
@@ -262,7 +262,7 @@ describe('buildSystemPrompt', () => {
     expect(s).toContain('You are a terse actuary.');
     expect(s).not.toContain('planning assistant');
     // Tool mechanics + plan name are still appended after the persona.
-    expect(s).toContain('set_scenario_value');
+    expect(s).toContain('set_plan_value');
     expect(s).toContain('"My Plan"');
   });
 
@@ -289,7 +289,7 @@ describe('buildSystemPrompt', () => {
 
   it('drops tool instructions for chat-only providers', () => {
     const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
-    expect(s).not.toContain('set_scenario_value');
+    expect(s).not.toContain('set_plan_value');
     // Grounded in the plan summary, and honest that it can't change the plan.
     expect(s).toContain('plan summary');
     expect(s).toContain('can\'t change the plan');

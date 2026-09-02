@@ -27,7 +27,7 @@ corpus, and each has a failure mode the data is built to prevent.
 |---|---|---|---|
 | 1 | **Drive the tools** — emit ONE clean `TOOL_CALL:` line with valid args | `tool-call` | malformed/hallucinated calls, multi-call spam |
 | 2 | **Read the person** — ground every answer in *their* numbers, not generic rules | `tool-followup`, plan sweep | vague "it depends" non-answers |
-| 3 | **Lay out options** — survey the levers and show what each is worth | `option-framing`, `compare_scenarios` follow-ups | "I can't help" shrugs, or a single pushy recommendation |
+| 3 | **Lay out options** — survey the levers and show what each is worth | `option-framing`, `compare_plans` follow-ups | "I can't help" shrugs, or a single pushy recommendation |
 | 4 | **Know the domain** — explain CPP/OAS/GIS/tax/market-history correctly | `domain-knowledge` | confidently-wrong figures, generic non-answers |
 | 5 | **Stay in the lane** — never prescribe; hand the choice back | `refusal`, the close of every `option-framing` reply | "you should retire at 65" |
 
@@ -266,7 +266,7 @@ on-ramp to a true RLVR pass later, where "protocol-valid + numerically-faithful"
 What that demands of the training:
 
 1. **The signal for interactions is a comparison, not a point.** Grading can
-   still be deterministic — the model proposes `compare_scenarios` /
+   still be deterministic — the model proposes `compare_plans` /
    `run_strategies` across two benefit timings, the engine computes both
    branches, and "right" = it chose the comparison tool *and* its explanation
    matches the **sign and rough magnitude of the real computed delta** (not just

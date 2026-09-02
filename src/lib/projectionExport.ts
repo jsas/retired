@@ -287,7 +287,7 @@ function clean<T>(v: T): T {
 }
 
 export function buildProjectionObject(
-  scenarioName: string,
+  planName: string,
   inputs: RetirementInputs,
   results: RetirementResults,
   config: AppConfig,
@@ -320,7 +320,7 @@ export function buildProjectionObject(
 
   if (!opts.includeMetadata) return clean({ projection });
 
-  const meta: Record<string, unknown> = { generated: new Date().toISOString(), plan: scenarioName, tool: 'RE: tired' };
+  const meta: Record<string, unknown> = { generated: new Date().toISOString(), plan: planName, tool: 'RE: tired' };
   for (const section of opts.metadataSections) {
     if (section === 'profile') {
       meta.profile = {
@@ -438,7 +438,7 @@ export interface ExportPayload {
 }
 
 export function buildExport(
-  scenarioName: string,
+  planName: string,
   inputs: RetirementInputs,
   results: RetirementResults,
   config: AppConfig,
@@ -447,7 +447,7 @@ export function buildExport(
   if (opts.format === 'csv') {
     return { content: buildCsv(results, inputs, opts.columnGroups), mime: 'text/csv', extension: 'csv' };
   }
-  const obj = buildProjectionObject(scenarioName, inputs, results, config, opts);
+  const obj = buildProjectionObject(planName, inputs, results, config, opts);
   if (opts.format === 'yaml') {
     return { content: toYaml(obj) + '\n', mime: 'text/yaml', extension: 'yaml' };
   }

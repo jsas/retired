@@ -64,7 +64,7 @@ const threadSchema = z.object({
   /** Display title (first user message, or user-renamed). */
   title: z.string(),
   /** The plan this chat was about when it started (informational). */
-  scenarioName: z.string(),
+  planName: z.string(),
   createdAt: z.number(),
   updatedAt: z.number(),
   turns: z.array(turnSchema),
@@ -182,11 +182,11 @@ export function titleFromFirstMessage(text: string): string {
 }
 
 /** Create a fresh empty thread. `now` is injected for tests. */
-export function newThread(scenarioName: string, now: number): ChatThread {
+export function newThread(planName: string, now: number): ChatThread {
   return {
     id: newThreadId(),
     title: 'New chat',
-    scenarioName,
+    planName,
     createdAt: now,
     updatedAt: now,
     turns: [],

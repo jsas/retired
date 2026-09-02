@@ -5,7 +5,7 @@
 //   - the model emits ONE bare line:  TOOL_CALL: {"name": "<tool>", "args": {…}}
 //   - results come back as the next USER message under a "Tool results:" header
 //     with "[OK] …" / "[ERROR] …" blocks (never a TOOL_RESULT: line),
-//   - a mutation (propose_* / set_scenario_value) pauses for a confirm card and
+//   - a mutation (propose_* / set_plan_value) pauses for a confirm card and
 //     is then reported APPROVED (applied — do not re-propose) or REJECTED.
 //
 // Rather than re-implement any of that, we IMPORT the real catalog + parser so

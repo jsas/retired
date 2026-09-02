@@ -121,7 +121,7 @@ export const SEED_PROMPTS: AiPromptPreset[] = [
       'my age, province, account balances (RRSP, TFSA, taxable, cash), annual contributions, pensions, ' +
       'when I want to retire, and what I expect to spend. Ask about my spouse/partner too if I have one. ' +
       'Use the get_plan tool to see what is already filled in, and propose changes with ' +
-      'set_scenario_value as we go — never set anything without my agreement. When the basics are in ' +
+      'set_plan_value as we go — never set anything without my agreement. When the basics are in ' +
       'place, run the projection with run_projection and walk me through what it says.',
   },
   {
@@ -150,7 +150,7 @@ export const SEED_PROMPTS: AiPromptPreset[] = [
     builtin: true,
     text:
       'I want to see how one change would affect my plan. Ask me which lever and value to try, then use ' +
-      'compare_scenarios to run my current inputs against that variant. Report the difference in ' +
+      'compare_plans to run my current inputs against that variant. Report the difference in ' +
       'sustainable outcome — depletion age, lifetime tax, ending balance — and whether the change is ' +
       'worth applying. Do not apply it without my say-so.',
   },

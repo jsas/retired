@@ -88,7 +88,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       },
       "type": "object",
     },
-    "name": "compare_scenarios",
+    "name": "compare_plans",
   },
   {
     "inputSchema": {
@@ -246,7 +246,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       ],
       "type": "object",
     },
-    "name": "set_scenario_value",
+    "name": "set_plan_value",
   },
   {
     "inputSchema": {
@@ -1157,7 +1157,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       },
       "type": "object",
     },
-    "name": "compare_scenarios",
+    "name": "compare_plans",
   },
   {
     "description": "Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.",
@@ -1320,7 +1320,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       ],
       "type": "object",
     },
-    "name": "set_scenario_value",
+    "name": "set_plan_value",
   },
   {
     "description": "PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.",

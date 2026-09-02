@@ -55,8 +55,8 @@ describe('corpus minter', () => {
       if (v.kind !== 'valid') throw new Error(`${r.id} not valid`);
       const sc = SCENARIOS.find((x) => x.id === r.planId)!;
       const ctx: ToolContext = {
-        inputs: sc.inputs, config: testConfig(), scenarioName: sc.name,
-        scenarioList: [], activePlanId: sc.id,
+        inputs: sc.inputs, config: testConfig(), planName: sc.name,
+        planList: [], activePlanId: sc.id,
       };
       const outcome = executeToolCall(ctx, { id: 't', name: v.name, args: v.args });
       expect(outcome.kind, `${r.id} args must satisfy schema`).not.toBe('error');
@@ -204,8 +204,8 @@ describe('navigation records (issue #141)', () => {
       if (v.kind !== 'valid') throw new Error(`${r.id} not valid`);
       const sc = SCENARIOS.find((x) => x.id === r.planId)!;
       const ctx: ToolContext = {
-        inputs: sc.inputs, config: testConfig(), scenarioName: sc.name,
-        scenarioList: [], activePlanId: sc.id, canNavigate: true, currentView: 'projection',
+        inputs: sc.inputs, config: testConfig(), planName: sc.name,
+        planList: [], activePlanId: sc.id, canNavigate: true, currentView: 'projection',
       };
       const outcome = executeToolCall(ctx, { id: 't', name: v.name, args: v.args });
       expect(outcome.kind, `${r.id} args must satisfy schema`).not.toBe('error');

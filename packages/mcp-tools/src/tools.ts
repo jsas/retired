@@ -6,7 +6,7 @@
 // before it touches anything. The JSON-Schema view of each schema is what gets
 // advertised to the provider.
 //
-// Reads are pure (get_plan, run_projection, compare_scenarios, the
+// Reads are pure (get_plan, run_projection, compare_plans, the
 // strategies/solver/monte-carlo backends, get_schedule). Mutations never apply
 // themselves: every propose_* tool returns a proposed PATCH and the UI requires
 // the user to confirm it (confirm-before-apply). There is no path from model
@@ -48,7 +48,7 @@ const runProjectionArgs = z.object({
     .describe('Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the plan schema; invalid entries are reported, not applied.'),
 });
 
-const compareScenariosArgs = z.object({
+const comparePlansArgs = z.object({
   overrides: z.record(z.string(), z.unknown()).optional()
     .describe('Flat patch of top-level RetirementInputs fields defining ONE variant to compare against the current plan. Use variants for several.'),
   variants: z.array(z.object({
@@ -59,7 +59,7 @@ const compareScenariosArgs = z.object({
     .describe('Up to 4 variants compared in ONE call (e.g. three retirement ages). Current plan is always included as the baseline. Takes precedence over the singular overrides.'),
 });
 
-const setScenarioValueArgs = z.object({
+const setPlanValueArgs = z.object({
   field: z.string().min(1)
     .describe('Top-level RetirementInputs field name (e.g. desiredSpending, retirementAge, rrspBalance, cppStartAge).'),
   value: z.unknown()
@@ -248,12 +248,12 @@ const proposeNavigateArgs = z.object({
 export const TOOL_SCHEMAS = {
   get_plan: getScenarioArgs,
   run_projection: runProjectionArgs,
-  compare_scenarios: compareScenariosArgs,
+  compare_plans: comparePlansArgs,
   run_strategies: runStrategiesArgs,
   solve_spending: solveSpendingArgs,
   run_monte_carlo: runMonteCarloArgs,
   get_schedule: getScheduleArgs,
-  set_scenario_value: setScenarioValueArgs,
+  set_plan_value: setPlanValueArgs,
   propose_patch: proposePatchArgs,
   propose_spouse: proposeSpouseArgs,
   propose_income: proposeIncomeArgs,
@@ -283,7 +283,7 @@ export function isAgentToolName(name: string): name is AgentToolName {
   return name in TOOL_SCHEMAS;
 }
 
-/** Top-level scalar fields the agent may propose changing (via set_scenario_value
+/** Top-level scalar fields the agent may propose changing (via set_plan_value
  *  or propose_patch). Structural blocks (spouse, events, income, spendingBands,
  *  reverseMortgage, rdsp, fhsa, debts) go through their own propose_* tools. */
 export const EDITABLE_FIELDS = new Set([
@@ -323,12 +323,12 @@ export interface ToolCatalogEntry {
 export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
   get_plan: { description: 'Read the current retirement plan (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
     run_projection: { description:      'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.', schema: runProjectionArgs },
-    compare_scenarios: { description:      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: compareScenariosArgs },
+    compare_plans: { description:      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: comparePlansArgs },
     run_strategies: { description:      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.', schema: runStrategiesArgs },
     solve_spending: { description:      'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"', schema: solveSpendingArgs },
     run_monte_carlo: { description:      'Run the Monte Carlo simulation on the current plan (optionally with overrides) and return the success rate, median final balance, and depletion spread across market futures.', schema: runMonteCarloArgs },
     get_schedule: { description:      'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.', schema: getScheduleArgs },
-    set_scenario_value: { description:      'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.', schema: setScenarioValueArgs },
+    set_plan_value: { description:      'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.', schema: setPlanValueArgs },
     propose_patch: { description:      'PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.', schema: proposePatchArgs },
     propose_spouse: { description:      'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.', schema: proposeSpouseArgs },
     propose_income: { description:      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.', schema: proposeIncomeArgs },
@@ -369,17 +369,17 @@ export interface ToolContext {
   /** The plan exactly as the user sees it in the sidebar (resolved inputs). */
   inputs: RetirementInputs;
   config: AppConfig;
-  scenarioName: string;
+  planName: string;
   /** Names/ids of other saved plans, for orientation. */
-  scenarioList: Array<{ id: string; name: string }>;
-  /** Which of scenarioList is currently open (list_plans marks it).
+  planList: Array<{ id: string; name: string }>;
+  /** Which of planList is currently open (list_plans marks it).
    *  Optional so tests and 'off'-mode callers can omit it — the marker is
    *  then simply absent from the listing. */
   activePlanId?: string;
   /** Full inputs for an arbitrary saved plan by id (list_plans'
    *  withDetails for non-active plans). Optional — callers that don't supply
    *  it get compact lines for the other plans instead of numbers. */
-  scenarioInputsById?: (id: string) => RetirementInputs | undefined;
+  planInputsById?: (id: string) => RetirementInputs | undefined;
   /** Automatic checkpoints (snapshots taken before each approved change),
    *  newest last, for propose_revert. Optional so tests and 'off'-mode callers
    *  can omit it — revert then simply reports that no checkpoints exist. */
@@ -444,7 +444,7 @@ function zodIssues(error: z.ZodError): string {
  *  obvious scalar forms coerced. Raw-first ordering means legitimate string
  *  fields (labels, province codes) are never mangled — coercion only rescues
  *  values the schema already rejected. Used on the top-level scalar paths
- *  (set_scenario_value, propose_patch, flat overrides). */
+ *  (set_plan_value, propose_patch, flat overrides). */
 function safeParseTolerant(schema: z.ZodType, value: unknown) {
   const raw = schema.safeParse(value);
   if (raw.success || typeof value !== 'string') return raw;
@@ -488,8 +488,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return { kind: 'result', content: describeScenario(ctx, (parsed.data as z.infer<typeof getScenarioArgs>).section) };
     case 'run_projection':
       return runProjection(ctx, (parsed.data as z.infer<typeof runProjectionArgs>).overrides);
-    case 'compare_scenarios':
-      return comparePlans(ctx, parsed.data as z.infer<typeof compareScenariosArgs>);
+    case 'compare_plans':
+      return comparePlans(ctx, parsed.data as z.infer<typeof comparePlansArgs>);
     case 'run_strategies':
       return runStrategiesTool(ctx, parsed.data as z.infer<typeof runStrategiesArgs>);
     case 'solve_spending':
@@ -498,8 +498,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return runMonteCarloTool(ctx, parsed.data as z.infer<typeof runMonteCarloArgs>);
     case 'get_schedule':
       return getScheduleTool(ctx, parsed.data as z.infer<typeof getScheduleArgs>);
-    case 'set_scenario_value':
-      return proposeSet(ctx, parsed.data as z.infer<typeof setScenarioValueArgs>);
+    case 'set_plan_value':
+      return proposeSet(ctx, parsed.data as z.infer<typeof setPlanValueArgs>);
     case 'propose_patch':
       return proposePatch(ctx, parsed.data as z.infer<typeof proposePatchArgs>);
     case 'propose_spouse':
@@ -551,7 +551,7 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
 
 function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchema>): string {
   const i = ctx.inputs;
-  const lines: string[] = [`Plan "${ctx.scenarioName}" (of ${ctx.scenarioList.length} saved).`];
+  const lines: string[] = [`Plan "${ctx.planName}" (of ${ctx.planList.length} saved).`];
 
   const summary = {
     currentAge: i.currentAge, retirementAge: i.retirementAge, maxAge: i.maxAge,
@@ -728,7 +728,7 @@ function runProjection(ctx: ToolContext, overrides?: Record<string, unknown>): T
   }
 }
 
-function comparePlans(ctx: ToolContext, args: z.infer<typeof compareScenariosArgs>): ToolOutcome {
+function comparePlans(ctx: ToolContext, args: z.infer<typeof comparePlansArgs>): ToolOutcome {
   // The singular form stays valid (back-compat); variants win when both arrive.
   const variants: Array<{ label: string; overrides: Record<string, unknown> }> = args.variants?.length
     ? args.variants.map((v, i) => ({ label: v.label ?? `Variant ${i + 1}`, overrides: v.overrides }))
@@ -1185,7 +1185,7 @@ function openScenarioTool(ctx: ToolContext, args: z.infer<typeof openScenarioArg
   if (!ctx.onOpenScenario) {
     return { kind: 'error', content: 'Plan switching is unavailable in this session.' };
   }
-  const list = ctx.scenarioList;
+  const list = ctx.planList;
   let target = args.planId != null ? list.find(s => s.id === args.planId) : undefined;
   if (!target && args.name != null) {
     const q = args.name.trim().toLowerCase();
@@ -1299,7 +1299,7 @@ function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavig
 }
 
 function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
-  const list = ctx.scenarioList;
+  const list = ctx.planList;
   if (list.length === 0) {
     return { kind: 'result', content: 'There are no saved plans yet.' };
   }
@@ -1313,7 +1313,7 @@ function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosA
     }
     const inputs = s.id === activeId
       ? ctx.inputs
-      : ctx.scenarioInputsById?.(s.id);
+      : ctx.planInputsById?.(s.id);
     const head = `- ${s.name}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`;
     if (!inputs) {
       // Not the active plan and the caller supplied no detail source: fall

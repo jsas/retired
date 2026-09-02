@@ -12,7 +12,7 @@ export interface SharingImportRequest {
 interface SharingPageProps {
   /** The active plan's current (possibly unsaved) inputs and name. */
   inputs: RetirementInputs;
-  scenarioName: string;
+  planName: string;
   /** Import a received plan as a new plan. */
   onImport: (req: SharingImportRequest) => void;
 }
@@ -23,10 +23,10 @@ interface SharingPageProps {
 //   - Plan code   — the same payload as pasteable text, for chat/email/notes
 // Receiving is the reverse: paste a link or a code, give the plan a name, and
 // it lands as a new plan.
-export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps) {
+export function SharingPage({ inputs, planName, onImport }: SharingPageProps) {
   // ---- Outgoing ----
-  const url = useMemo(() => buildShareUrl(inputs, scenarioName), [inputs, scenarioName]);
-  const planCode = useMemo(() => buildPlanCode(inputs, scenarioName), [inputs, scenarioName]);
+  const url = useMemo(() => buildShareUrl(inputs, planName), [inputs, planName]);
+  const planCode = useMemo(() => buildPlanCode(inputs, planName), [inputs, planName]);
   const [copiedWhat, setCopiedWhat] = useState<null | 'link' | 'code'>(null);
 
   const copy = (text: string, what: 'link' | 'code') => {
@@ -79,7 +79,7 @@ export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps
             Send this plan
           </div>
           <p className="text-[11px] text-slate-500 leading-snug mb-3">
-            <span className="font-medium text-slate-700">{scenarioName}</span> is encoded directly
+            <span className="font-medium text-slate-700">{planName}</span> is encoded directly
             in the link and the code (after the <code>#</code>) — nothing is uploaded. Whoever
             receives it gets a copy as a new plan.
           </p>

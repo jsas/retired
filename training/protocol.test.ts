@@ -17,7 +17,7 @@ describe('protocol corpus contract', () => {
     expect(SPECS.length).toBe(29);
     expect(TOOL_NAMES.has('run_projection')).toBe(true);
     expect(TOOL_NAMES.has('propose_reverse_mortgage')).toBe(true);
-    expect(TOOL_NAMES.has('set_scenario_value')).toBe(true);
+    expect(TOOL_NAMES.has('set_plan_value')).toBe(true);
     expect(TOOL_NAMES.has('propose_fhsa')).toBe(true);
     expect(TOOL_NAMES.has('propose_debt')).toBe(true);
     expect(TOOL_NAMES.has('manage_debt')).toBe(true);
@@ -32,7 +32,7 @@ describe('protocol corpus contract', () => {
   });
 
   it('a canonical emitted call parses back as valid via the app parser', () => {
-    const reply = emitToolCall('compare_scenarios', {
+    const reply = emitToolCall('compare_plans', {
       variants: [
         { label: 'Retire 60', overrides: { retirementAge: 60 } },
         { label: 'Retire 65', overrides: { retirementAge: 65 } },
@@ -40,7 +40,7 @@ describe('protocol corpus contract', () => {
     });
     const v = scoreToolReply(reply);
     expect(v.kind).toBe('valid');
-    if (v.kind === 'valid') expect(v.name).toBe('compare_scenarios');
+    if (v.kind === 'valid') expect(v.name).toBe('compare_plans');
   });
 
   it('tolerates prose before the call but still scores it valid', () => {
