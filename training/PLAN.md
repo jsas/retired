@@ -35,19 +35,29 @@ first, grammar second.**
   update `post-train-report.md` (expect +a few pts on tool-match; not enough
   alone for 95%).
 
-## L3 — targeted corpus paraphrases (next big lever)
+## L3 — targeted corpus paraphrases + contrastive negative-pair mint
 
-Add to `mint.ts` READ_SPECS, aimed at the confusion pairs above:
+Add to `mint.ts` READ_SPECS, aimed at the confusion pairs above. In this
+round: the earlier fixes (boundary paraphrases + enum-value cycling). After
+this run lands again with `compare_scenarios` as the magnet, mint negative
+pairs: same question, two replies — one showing the correct tool, one proving
+the wrong-tool reply by counter-example.
 
 1. "compare how my plan looks under different returns" → `run_projection`
-   (today: `get_scenario`).
+   (today: `get_scenario`). ✓ done in this corpus.
 2. "what section/page shows my balances" → `get_scenario(section=...)` with a
-   VALID enum (today: invents sections).
+   VALID enum (today: invents sections). ✓ done; cycle real enum values.
 3. "run the strategy sweep" vs "solve my spending" boundary examples —
    `run_strategies` when it's a sweep, `solve_spending` only when a target is
-   named.
-4. Schema-edge minting: `run_strategies` category objects (label/value/overrides)
-   AND compact string lists, so both shapes reinforce.
+   named. ✓ done.
+4. Compare_scenarios deterrent: 'one variant, not a list' paraphrase.
+   ✓ done.
+5. **NEW pending:** Contrastive negative-pair mint: for each eval pair
+   (e.g. compare_scenarios vs run_projection), add both a positive-correct
+   paraphrase and a negative-example-instruct ("when asked X, the right call
+   is Y, not Z"). Shape: `messages = [user → assistant(tool=Y)] ` plus an
+   explicit "not Z" note in the assistant narrative, or as a separate
+   `kind: 'tool-call-negative'` corpus.
 
 Golden-master rule: any corpus change regenerates corpus + eval hash in the
 same commit (CLAUDE.md rule 2).
