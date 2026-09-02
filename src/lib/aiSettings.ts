@@ -50,6 +50,9 @@ export interface AiSettings {
   /** User-edited replacement for the assistant's base persona prompt. When
    *  unset the built-in DEFAULT_SYSTEM_PROMPT (agentLoop) is used. */
   systemPromptOverride?: string;
+  /** Opt-in: show the markup overlay (Ctrl+Shift+M) so you can draw / drag /
+   *  note on the app and have the assistant interpret it. Default off. */
+  markupOverlay?: boolean;
 }
 
 const generationSchema = z.object({
@@ -83,6 +86,7 @@ const settingsSchema = z.object({
   activeConnectionId: z.string().nullable(),
   prompts: z.array(promptSchema),
   systemPromptOverride: z.string().optional(),
+  markupOverlay: z.boolean().optional(),
 });
 
 const STORAGE_KEY = 'retirement_ai_settings';
