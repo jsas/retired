@@ -30,10 +30,10 @@ describe('toolSpecs', () => {
   it('advertises the full tool surface with JSON schemas', () => {
     const specs = toolSpecs();
     expect(specs.map(s => s.name).sort()).toEqual([
-      'compare_scenarios', 'get_schedule', 'get_scenario',
+      'compare_scenarios', 'find_page', 'get_schedule', 'get_scenario', 'get_sitemap',
       'list_scenarios',
       'manage_cash_event', 'manage_debt', 'manage_income',
-      'propose_cash_event', 'propose_debt', 'propose_fhsa', 'propose_income', 'propose_market_periods', 'propose_patch',
+      'propose_cash_event', 'propose_debt', 'propose_fhsa', 'propose_income', 'propose_navigate', 'propose_patch',
       'propose_rdsp', 'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
       'open_scenario', 'save_scenario_as',
@@ -525,59 +525,6 @@ describe('propose_spending_bands', () => {
   it('rejects an out-of-range pctOfBase', () => {
     const out = executeToolCall(ctx(), {
       id: '1', name: 'propose_spending_bands', args: { bands: [{ fromAge: 65, pctOfBase: 9 }] },
-    });
-    expect(out.kind).toBe('error');
-  });
-});
-
-describe('propose_market_periods', () => {
-  it('proposes a sorted anchor set with minted ids, any-order input', () => {
-    const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_market_periods',
-      args: { periods: [{ age: 70, return: 0.10 }, { age: 68, return: -0.30, volatility: 0.30 }] },
-    });
-    if (out.kind !== 'mutation') throw new Error('expected mutation');
-    const periods = out.patch.marketPeriods as Array<{ id: string; age: number; return: number; volatility?: number }>;
-    // Handler sorts by age and mints an id per anchor (mp-<idx>-<age>).
-    expect(periods.map(p => p.age)).toEqual([68, 70]);
-    expect(periods[0].id).toBe('mp-0-68');
-    expect(periods[0].return).toBe(-0.30);
-    expect(periods[0].volatility).toBe(0.30);
-    expect(periods[1].id).toBe('mp-1-70');
-  });
-
-  it('labels the mutation and previews each anchor', () => {
-    const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_market_periods',
-      args: { periods: [{ age: 68, return: -0.30, volatility: 0.30 }, { age: 70, return: 0.10 }] },
-    });
-    if (out.kind !== 'mutation') throw new Error('expected mutation');
-    expect(out.label).toBe('Set market hypothesis (2 anchors)');
-    const periods = (out.preview as { periods: string[] }).periods;
-    expect(periods[0]).toContain('age 68');
-    expect(periods[0]).toContain('(σ 30.0%)');
-  });
-
-  it('an empty array clears the hypothesis back to flat constants', () => {
-    const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_market_periods', args: { periods: [] },
-    });
-    if (out.kind !== 'mutation') throw new Error('expected mutation');
-    expect(out.label).toBe('Clear market hypothesis');
-    expect(out.patch.marketPeriods).toEqual([]);
-  });
-
-  it('rejects a negative volatility', () => {
-    const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_market_periods', args: { periods: [{ age: 68, return: 0.05, volatility: -0.1 }] },
-    });
-    expect(out.kind).toBe('error');
-    if (out.kind === 'error') expect(out.content).toContain('volatility');
-  });
-
-  it('rejects a non-numeric return', () => {
-    const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_market_periods', args: { periods: [{ age: 68, return: 'low' }] },
     });
     expect(out.kind).toBe('error');
   });
@@ -1169,5 +1116,86 @@ describe('list_scenarios', () => {
     const out = executeToolCall(ctx({ scenarioList: [] }), { id: '1', name: 'list_scenarios', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('no saved scenarios');
+  });
+});
+
+describe('find_page / get_sitemap / propose_navigate', () => {
+  it('find_page resolves plain words to the page that holds them', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'tfsa room' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    // Contribution room lives in the details page's account section.
+    expect(out.content).toMatch(/\n1\. Details — #\/details/);
+  });
+
+  it('find_page routes a folded feature name to its destination page', () => {
+    // "monte carlo" is a keyword on the (folded) legacy view and on eq.
+    const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'monte carlo' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('Insights');
+    expect(out.content).toContain('#/steering');
+    // The folded page must not surface as its own destination.
+    expect(out.content).not.toContain('#/monte-carlo');
+  });
+
+  it('find_page tags the page the user is on as "already here"', () => {
+    const out = executeToolCall(ctx({ currentView: 'details' }), { id: '1', name: 'find_page', args: { query: 'balances' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('(you are already here)');
+  });
+
+  it('find_page with an unmatched query points at get_sitemap', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'zzz nonexistent' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('No page matches');
+    expect(out.content).toContain('get_sitemap');
+  });
+
+  it('get_sitemap lists the reachable pages, not the folded legacy names', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_sitemap', args: {} });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('(view details)');
+    expect(out.content).toContain('(view eq)');
+    expect(out.content).toContain('(view scenarios)');
+    expect(out.content).toContain('(view data)');
+    expect(out.content).not.toContain('(view montecarlo)');
+    expect(out.content).not.toContain('(view sharing)');
+  });
+
+  it('propose_navigate returns a confirm card with the destination, empty patch', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'steering', label: 'Open Insights' },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.patch).toEqual({});
+    expect(out.navigate).toBe('eq');
+    expect(out.label).toBe('Open Insights');
+    expect(out.preview).toMatchObject({ Page: 'Insights', Route: '#/steering' });
+  });
+
+  it('propose_navigate redirects a folded view to the page that hosts it', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'montecarlo', label: 'Open Monte Carlo' },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.navigate).toBe('eq');
+    expect(out.preview).toMatchObject({ Page: 'Insights' });
+  });
+
+  it('propose_navigate without a UI returns the shareable hash instead', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_navigate', args: { view: 'print', label: 'Open Print' },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('#/print');
+  });
+
+  it('propose_navigate rejects an unknown view with the real view ids', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'bogus-page', label: 'X' },
+    });
+    if (out.kind !== 'error') throw new Error('expected error');
+    expect(out.content).toContain('Unknown view');
+    expect(out.content).toContain('projection');
+    expect(out.content).not.toContain('montecarlo');
   });
 });

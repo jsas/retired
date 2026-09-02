@@ -193,11 +193,20 @@ def main() -> None:
     resume_from: Optional[str] = None
     if args.resume:
         if args.resume == 'auto':
+            # Only real trainer checkpoints: 'checkpoint-<int>'. Exports like
+            # 'checkpoint-500-bf16' share the prefix but aren't resumable.
+            def _step(p: Path) -> Optional[int]:
+                try:
+                    return int(p.name.split('-')[-1])
+                except ValueError:
+                    return None
+
             checkpoints = sorted(
-                (p for p in Path(args.output).glob('checkpoint-*') if p.is_dir()),
-                key=lambda p: int(p.name.split('-')[-1]),
+                ((s, p) for p in Path(args.output).glob('checkpoint-*')
+                 if p.is_dir() and (s := _step(p)) is not None),
+                key=lambda sp: sp[0],
             )
-            resume_from = str(checkpoints[-1]) if checkpoints else None
+            resume_from = str(checkpoints[-1][1]) if checkpoints else None
             if resume_from is None:
                 print('[sft] --resume auto: no checkpoints found under', args.output)
         else:

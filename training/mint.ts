@@ -19,9 +19,10 @@
 //   - 'domain-explain'   a concept question → plain-words explainer, no tool needed
 
 import { executeToolCall, type ToolContext } from '@retired/mcp-tools/tools';
+import { canonicalView, pageForView, pageTitleLine, type View } from '@retired/mcp-tools/navigation';
 import { testConfig } from '@retired/engine-core/test/helpers';
 import type { ChatMessage, CorpusRecord } from './buildCorpus';
-import { emitToolCall, wrapToolResult, mutationFeedback } from './protocol';
+import { emitToolCall, wrapToolResult, mutationFeedback, navigationFeedback, ambientPageLine } from './protocol';
 import { mintDomainKnowledgeRecords } from './domain';
 import { SCENARIOS, type NamedScenario } from './scenarios';
 
@@ -47,9 +48,13 @@ const READ_SPECS: ReadSpec[] = [
       () => 'Run the projection on my plan.',
       () => 'Is my plan funded to the end?',
       () => 'How does my retirement look?',
-      () => 'Check whether my plan holds up.',
-      () => 'See if my retirement plan works.',
-      () => 'Does my plan run out before the end?',
+      // Boundary paraphrases (post-checkpoint-1000 gate failures): phrases that
+      // LOOK like a read (get_scenario / get_schedule) but should route to
+      // run_projection. Grounded by mint.test's intended-tool assertion.
+      () => 'How is my plan doing right now?',
+      () => 'Is my retirement plan healthy?',
+      () => 'Tell me how my plan performs.',
+      () => 'Give me a health-check on my retirement plan.',
     ],
     args: () => ({}),
     explainFrom: 'verdict',
@@ -60,7 +65,6 @@ const READ_SPECS: ReadSpec[] = [
       (sc) => `What changes if I retire at ${sc.inputs.retirementAge + 2}?`,
       (sc) => `What if I work until ${sc.inputs.retirementAge + 2}?`,
       (sc) => `Show me the numbers for retiring at ${sc.inputs.retirementAge + 2}.`,
-      (sc) => `What does working until ${sc.inputs.retirementAge + 2} do?`,
     ],
     args: (sc) => ({ overrides: { retirementAge: sc.inputs.retirementAge + 2 } }),
     explainFrom: 'verdict',
@@ -70,7 +74,6 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       (sc) => `What if I retired a couple years earlier, at ${Math.max(sc.inputs.retirementAge - 2, sc.inputs.currentAge)}?`,
       (sc) => `Run it with retirement at ${Math.max(sc.inputs.retirementAge - 2, sc.inputs.currentAge)}.`,
-      (sc) => `What if I pull the plug earlier — say at ${Math.max(sc.inputs.retirementAge - 2, sc.inputs.currentAge)}?`,
     ],
     args: (sc) => ({ overrides: { retirementAge: Math.max(sc.inputs.retirementAge - 2, sc.inputs.currentAge) } }),
     explainFrom: 'verdict',
@@ -81,7 +84,10 @@ const READ_SPECS: ReadSpec[] = [
       (sc) => `Compare retiring at ${sc.inputs.retirementAge} vs ${sc.inputs.retirementAge + 3}.`,
       (sc) => `Should I look at ${sc.inputs.retirementAge} or ${sc.inputs.retirementAge + 3}? Show both.`,
       (sc) => `What's the difference between retiring at ${sc.inputs.retirementAge} and ${sc.inputs.retirementAge + 3}?`,
-      (sc) => `Put age-${sc.inputs.retirementAge} beside age-${sc.inputs.retirementAge + 3}.`,
+      // Contrast-discrimination (post-checkpoint-1000): the multiple-call slip
+      // clusters on compare_scenarios. Teach that ONE call produces ONE answer;
+      // subsequent explanation is prose, not a second call.
+      (sc) => `Retiring at ${sc.inputs.retirementAge} or ${sc.inputs.retirementAge + 3} — one variant, not a list.`,
     ],
     args: (sc) => ({
       variants: [
@@ -96,8 +102,6 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       (sc) => `Compare taking CPP at ${sc.inputs.cppStartAge ?? 65} vs 70.`,
       (sc) => `CPP at ${sc.inputs.cppStartAge ?? 65} or defer to 70 — show me both.`,
-      (sc) => `What does delaying CPP to 70 change?`,
-      (sc) => `Put CPP at ${sc.inputs.cppStartAge ?? 65} next to CPP at 70.`,
     ],
     args: (sc) => ({
       variants: [
@@ -108,42 +112,15 @@ const READ_SPECS: ReadSpec[] = [
     explainFrom: 'compare',
   },
   {
-    tool: 'compare_scenarios',
-    questions: [
-      (sc) => `Compare taking OAS at 65 vs 70.`,
-      (sc) => `OAS at 65 or defer to 70 — show both.`,
-      () => `What does delaying OAS to 70 change?`,
-    ],
-    args: (sc) => ({
-      variants: [
-        { label: 'OAS at 65', overrides: { oasStartAge: 65 } },
-        { label: 'OAS at 70', overrides: { oasStartAge: 70 } },
-      ],
-    }),
-    explainFrom: 'compare',
-  },
-  {
-    tool: 'compare_scenarios',
-    questions: [
-      () => `Compare taking CPP early at 60 vs normal at 65.`,
-      () => `CPP at 60 vs 65 — show the two.`,
-    ],
-    args: () => ({
-      variants: [
-        { label: 'CPP at 60', overrides: { cppStartAge: 60 } },
-        { label: 'CPP at 65', overrides: { cppStartAge: 65 } },
-      ],
-    }),
-    explainFrom: 'compare',
-  },
-  {
     tool: 'run_monte_carlo',
     questions: [
       () => 'What are the odds my money lasts?',
       () => 'Run the Monte Carlo simulation.',
       () => 'How likely is my plan to succeed across different markets?',
-      () => 'Simulate the markets — show the success rate.',
-      () => 'Check how robust the plan is.',
+      // Boundary vs run_projection: "different markets" reads like a plan
+      // outcome; route the ODDS question to the MC tool, not run_projection.
+      () => 'Estimate the probability my plan works.',
+      () => 'What are the chances this retires me comfortably?',
     ],
     args: () => ({ runs: 500 }),
     explainFrom: 'monteCarlo',
@@ -154,8 +131,10 @@ const READ_SPECS: ReadSpec[] = [
       () => 'How much can I safely spend each year?',
       () => 'What annual spending is sustainable?',
       () => 'Solve for the spending my plan can support.',
-      () => 'What\'s the most I can spend each year without running out?',
-      () => 'What spending level survives most markets?',
+      // Boundary vs run_strategies: a TARGET-DATUM question ("how much") routes
+      // to solve_spending; "what should I compare" routes to run_strategies.
+      () => 'How much should I aim to spend yearly?',
+      () => 'Tell me the safe yearly spend.',
     ],
     args: () => ({ targetSuccessRate: 0.9, runs: 500 }),
     explainFrom: 'solve',
@@ -166,9 +145,20 @@ const READ_SPECS: ReadSpec[] = [
       () => 'What accounts do I have?',
       () => 'Show me my account balances.',
       () => 'Read my current accounts.',
-      () => 'List my accounts.',
+      // Enum-value minting (post-checkpoint-1000): model sometimes invents
+      // sections; reinforce the exact enum set (full/summary/accounts/
+      // benefits/spending/spouse). 'benefits' covers projection-ish queries;
+      // 'accounts' balances/holdings; 'summary' for the overview.
+      () => 'Give me the overall summary of my plan.',
+      () => 'Show my account balances section.',
     ],
-    args: () => ({ section: 'accounts' }),
+    args: (sc) => {
+      // Alternate across real enum values by scenario so several are
+      // exercised (silences the enum-invention slip).
+      const sections = ['summary', 'accounts', 'benefits', 'spending'];
+      const idx = SCENARIOS.indexOf(sc);
+      return { section: sections[idx % sections.length] };
+    },
     explainFrom: 'none', // raw JSON block (no $/%) — tool-call exemplar only
   },
   {
@@ -176,7 +166,6 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       () => 'What are my CPP and OAS details?',
       () => 'Show my government benefits.',
-      () => 'Read my benefits setup.',
     ],
     args: () => ({ section: 'benefits' }),
     explainFrom: 'none',
@@ -186,8 +175,6 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       (sc) => `Show my year-by-year balances from ${sc.inputs.retirementAge} to ${sc.inputs.maxAge}.`,
       (sc) => `Walk me through the projection every few years.`,
-      (sc) => `Show the schedule from ${sc.inputs.retirementAge} to ${sc.inputs.maxAge}.`,
-      (sc) => `Show me the tables.`,
     ],
     args: (sc) => ({ fromAge: sc.inputs.retirementAge, toAge: sc.inputs.maxAge, stride: 5 }),
     explainFrom: 'none', // large multi-line table — tool-call exemplar only
@@ -198,8 +185,17 @@ const READ_SPECS: ReadSpec[] = [
       () => 'What levers would help my plan most?',
       () => 'Which changes improve my sustainable spending?',
       () => 'Explore the strategies that could help.',
-      () => 'Survey the levers on my plan.',
-      () => 'What could I tweak to improve it?',
+      // Boundary vs solve_spending: a sweep-of-options question routes to
+      // run_strategies (today's ask "compare candidate levers") — solve only
+      // when the user fixes a target datum.
+      () => 'Compare some candidate levers for my plan.',
+      () => 'Show me a few ways to boost my plan.',
+      // Schema-edge mint: 'categories' accepts EITHER the label/value/overrides
+      // object shape OR the compact string list — both are valid — and the
+      // model keeps emitting the wrong one after the schema check. Exercise
+      // both shapes so the Zod union-training signal doesn't asymmetrize.
+      () => 'Compare CPP at 70 vs 72.',
+      () => 'Check OAS at 65 vs 70.',
     ],
     args: () => ({ maxVariants: 5 }),
     explainFrom: 'none',
@@ -209,7 +205,6 @@ const READ_SPECS: ReadSpec[] = [
     questions: [
       () => 'What plans do I have saved?',
       () => 'List my scenarios.',
-      () => 'Show the scenarios I have.',
     ],
     args: () => ({}),
     explainFrom: 'none',
@@ -325,8 +320,6 @@ const MUTATION_SPECS: MutationSpec[] = [
     questions: [
       (sc) => `Change my retirement age to ${sc.inputs.retirementAge + 2}.`,
       (sc) => `Set retirement at ${sc.inputs.retirementAge + 2}.`,
-      (sc) => `Move retirement to ${sc.inputs.retirementAge + 2}.`,
-      (sc) => `I want to work until ${sc.inputs.retirementAge + 2}.`,
     ],
     args: (sc) => ({ field: 'retirementAge', value: sc.inputs.retirementAge + 2 }),
     approvedReply: (sc) => `Done — retirement age updated to ${sc.inputs.retirementAge + 2}. Want me to re-run the projection on the new plan?`,
@@ -336,8 +329,6 @@ const MUTATION_SPECS: MutationSpec[] = [
     tool: 'set_scenario_value',
     questions: [
       (sc) => `Lower my spending to $${Math.round(sc.inputs.desiredSpending * 0.9).toLocaleString('en-CA')} a year.`,
-      (sc) => `Reduce my yearly spending to $${Math.round(sc.inputs.desiredSpending * 0.9).toLocaleString('en-CA')}.`,
-      (sc) => `Dial my spending back to $${Math.round(sc.inputs.desiredSpending * 0.9).toLocaleString('en-CA')}.`,
     ],
     args: (sc) => ({ field: 'desiredSpending', value: Math.round(sc.inputs.desiredSpending * 0.9) }),
     approvedReply: () => 'Updated. I can run the projection to show what that does to the plan.',
@@ -348,8 +339,6 @@ const MUTATION_SPECS: MutationSpec[] = [
     questions: [
       () => 'Delay both CPP and OAS to 70.',
       () => 'Push CPP and OAS out to age 70.',
-      () => 'Move both benefits out to 70.',
-      () => 'Delay CPP and OAS together to 70.',
     ],
     args: () => ({ changes: { cppStartAge: 70, oasStartAge: 70 } }),
     approvedReply: () => 'Both benefit start ages moved to 70. Want me to compare that against the current timing?',
@@ -360,7 +349,6 @@ const MUTATION_SPECS: MutationSpec[] = [
     questions: [
       () => 'I have a small pension that pays $800 a month starting at 65.',
       () => 'Add my work pension of $800/month from age 65.',
-      () => 'Add in a pension paying $800 monthly from 65.',
     ],
     args: () => ({ label: 'Work pension', kind: 'pension', annualAmount: 9600, startAge: 65, endAge: null, indexedToCpi: true }),
     approvedReply: () => 'Pension added. I can show how it changes the drawdown.',
@@ -425,49 +413,6 @@ const MUTATION_SPECS: MutationSpec[] = [
     args: () => ({ action: 'remove', target: 'Credit card' }),
     approvedReply: () => 'Credit-card debt removed — that frees up the payment going forward. I can re-run the plan to show the difference.',
     rejectedReply: () => 'Okay — card debt kept in the plan.',
-  },
-  {
-    tool: 'propose_market_periods',
-    questions: [
-      () => 'Model a crash — markets drop 30% the year I turn 68.',
-      () => 'What if there\'s a 30% market crash right when my drawdown starts?',
-    ],
-    args: () => ({ periods: [{ age: 68, return: -0.30 }] }),
-    approvedReply: () => 'Crash year added — the projection follows the hypothesis curve for that age, then eases back to your flat expected return. I can run it to show the hit.',
-    rejectedReply: () => 'Okay — hypothesis left out.',
-  },
-  {
-    tool: 'propose_market_periods',
-    questions: [
-      () => 'Let\'s stress-test the plan — early years volatile, then a strong recovery.',
-      () => 'Model a rough patch followed by a rebound in the markets.',
-    ],
-    args: () => ({ periods: [
-      { age: 68, return: -0.30, volatility: 0.30 },
-      { age: 70, return: 0.10 },
-    ] }),
-    approvedReply: () => 'Hypothesis set — the crash year shapes both the projection and the Monte Carlo spread, then the curve returns to your flat baseline. Want me to re-run it?',
-    rejectedReply: () => 'Okay — hypothesis not added.',
-  },
-  {
-    tool: 'propose_market_periods',
-    questions: [
-      () => 'Model a boom — markets up 15% when I\'m 75.',
-      () => 'What if there\'s a strong year in my mid-70s?',
-    ],
-    args: () => ({ periods: [{ age: 75, return: 0.15 }] }),
-    approvedReply: () => 'Boom year added — the projection follows that one-year lift, then eases back to your flat expected return. Want me to run it?',
-    rejectedReply: () => 'Okay — hypothesis left out.',
-  },
-  {
-    tool: 'propose_market_periods',
-    questions: [
-      () => 'Clear the market hypothesis — back to flat constants.',
-      () => 'Actually, get rid of the crash scenario.',
-    ],
-    args: () => ({ periods: [] }),
-    approvedReply: () => 'Cleared — back to your flat expected return for the whole horizon.',
-    rejectedReply: () => 'Okay — hypothesis kept.',
   },
   {
     tool: 'remember',
@@ -560,13 +505,6 @@ const REFUSAL_ASKS: Array<(sc: NamedScenario) => string> = [
   () => 'Should I draw down my RRSP first or my TFSA?',
   () => 'Is a reverse mortgage a good idea for me?',
   () => 'Tell me what to do with my savings.',
-  () => 'Should I defer my OAS to 70?',
-  () => 'Which pension should I draw on first?',
-  () => 'What\'s the smartest retirement age for me?',
-  () => 'Should we sell the house and rent?',
-  () => 'Is it better to take CPP early and invest the difference?',
-  () => 'What\'s the optimal TFSA / RRSP split for me?',
-  () => 'Should I downsize to fund retirement?',
 ];
 
 /** Ambiguous asks where the right move is a clarifying question, not a tool. */
@@ -574,13 +512,6 @@ const CLARIFY_ASKS: Array<{ ask: (sc: NamedScenario) => string; clarify: string 
   { ask: () => 'What about my wife?', clarify: 'Would you like me to add a spouse to the plan, or open a plan that already has one?' },
   { ask: () => 'Can you bump that up a bit?', clarify: 'Which value would you like me to change, and to what?' },
   { ask: () => 'Will I be okay?', clarify: 'Do you mean whether your savings last to the end of the plan, or how much you can spend each year?' },
-  { ask: () => 'Add my pension.', clarify: 'What kind of income — a defined-benefit pension, a regular annuity, employment income, or CPP/OAS? And roughly how much per year?' },
-  { ask: () => 'Make that a lot better.', clarify: 'Better how — higher sustainable spending, longer horizon, or less risk?' },
-  { ask: () => 'Put the retirement age back.', clarify: 'Back to what age — the current setting, or the default?' },
-  { ask: () => 'Make the spending bands gentler.', clarify: 'Gentler at which band boundaries — the slow-go at 75, or no-go at 85? And to what percentage of base would you like each moved?' },
-  { ask: () => 'What about the house?', clarify: 'Do you want to add a reverse mortgage, add a cash-downsize event, or contribute the sale proceeds to one of the accounts?' },
-  { ask: () => 'Run it with better markets.', clarify: 'Better by how much and when — a one-off boomer year, an extended bull run, or lower volatility? Which shape would you like?' },
-  { ask: () => 'What happens when my spouse starts drawing their pension?', clarify: 'Which member of the household should I run — you, or your partner — and at what start age would you like to see it?' },
 ];
 
 /** Plain-language concept explainers — no tool needed, but the model should
@@ -597,46 +528,6 @@ const DOMAIN_EXPLAIN: Array<{ ask: string; answer: string }> = [
   {
     ask: 'What is a RRIF meltdown?',
     answer: 'After 71 you must draw a rising minimum from your RRIF whether you need it or not, and it\'s fully taxable. A "meltdown" spreads or accelerates withdrawals earlier to avoid a big taxed lump and OAS/GIS clawback later. I can model it on your plan.',
-  },
-  {
-    ask: 'How does the OAS clawback work?',
-    answer: 'Old Age Security shrinks by 15 cents per extra dollar of taxable income above the threshold (say ~$95k in 2026). RRIF, employment income, and taxable capital gains all count. Deferring CPP won\'t raise your OAS floor — I can show the clawback in your own projection.',
-  },
-  {
-    ask: 'What makes GIS different from OAS?',
-    answer: 'OAS is available to essentially everyone and is clawed back only past a taxable-income threshold. GIS is a top-up for low-income seniors and is clawed at around 50 cents per dollar of other taxable income — far steeper than OAS. I can check whether your plan triggers GIS at all.',
-  },
-  {
-    ask: 'What\'s a spending-band plan?',
-    answer: 'Instead of a flat $ amount every year, you break retirement into phases (go-go/slow-go/no-go) with a percentage of base spending in each. It reflects how people usually spend a bit less as they age. I can model a set of bands on your plan.',
-  },
-  {
-    ask: 'When does my RRSP turn into a RRIF?',
-    answer: 'By federal rule at the calendar year end you turn 71 it must convert; payments start the next year. Before then you can convert voluntarily. Either way the minimum-withdrawal schedule then applies. I can project your balances through that boundary.',
-  },
-  {
-    ask: 'What is a reverse mortgage?',
-    answer: 'A secured loan against home equity. You get a periodic draw (tax-free) and the interest accrues against property value; balance compounds until you or the estate sells. I can model draws + interest against your home and see what it does to the plan.',
-  },
-  {
-    ask: 'When does the OAS clawback kick in?',
-    answer: 'OAS shrinks by 15 cents for every dollar of taxable income above the threshold (CRA sets it annually). In 2026 it\'s roughly $95k — a couple of big RRIF draws will push you above it. I can check the tax/AI clipping in your own numbers.',
-  },
-  {
-    ask: 'What is an FHSA and how does it fit my plan?',
-    answer: 'The First Home Savings Account lets qualifying first-time buyers contribute deductible income up to CRA limits, grow tax-sheltered, and (if you don\'t buy) transfer to your RRSP at retirement. I can add an FHSA section to your plan or run you through the effect.',
-  },
-  {
-    ask: 'What\'s the difference between accounts in a drawdown plan?',
-    answer: 'The engine tracks RRSP/RRIF, TFSA, taxable, and cash cushion separately. Withdrawals follow the default order (see Settings) unless you override, and tax is calculated account by account on the real cash flows. I can run your projection to show which account does the work year by year.',
-  },
-  {
-    ask: 'How does the credit-card debt affect my retirement?',
-    answer: 'Consumer debt sits as a separate obligation that drains the planned spending every month until it\'s paid off — so it drags worst in early years where it also rides at a high interest rate. I can model it into your plan to show the cost of that drag year by year.',
-  },
-  {
-    ask: 'What is a cash event?',
-    answer: 'A one-shot inflow or outflow at a specific age — inheritance, sale of the house, a large purchase. Once set it sits outside the regular spend plan and the tax engine handles it as cash. I can add one to your plan.',
   },
 ];
 
@@ -665,9 +556,6 @@ export function mintGuardrailRecords(): CorpusRecord[] {
       });
     }
   }
-  // Trivial because of the phrasing below: the model must always answer with the
-  // same register — facts + consequences + offer to ground. Each canonical fact ->
-  // a record, then we add 2 extra phrasings to teach paraphrase-independence.
   for (const { ask, answer } of DOMAIN_EXPLAIN) {
     records.push({
       id: `domain:${seq++}`, split: 'train', kind: 'domain-explain', scenarioId: 'any',
@@ -767,8 +655,319 @@ export function mintOptionFramingRecords(evalEvery = 5): CorpusRecord[] {
   return records;
 }
 
+// ---------------------------------------------------------------------------
+// Navigation records (issue #141): the site-awareness layer. Where the reads
+// answer "what does my plan say", these answer "where do I go to see/change it".
+// The whole minter is driven off the LIVE catalog (searchablePages()), so when
+// the UI is re-targeted — beta becomes the skin, a page is renamed or folded —
+// the exemplars follow the same single source of truth the tools and the
+// sitemap artifact use; no nav copy can rot against the routes.
+//
+// Two shapes the fine-tune must learn, both keyed to the ambient "you are
+// currently on the X page" line (the app's buildSystemPrompt adds it; here it
+// rides as a per-record SYSTEM message so a chat-template trainer conditions on
+// it, while the spike's single-systemPrompt bake-off stays untouched):
+//   - a "where is it" ask → find_page (and, once, that the answer is "you are
+//     already here" when the user is ON the page — never propose a no-op jump)
+//   - a "take me there" ask → propose_navigate confirm card, then acknowledge
+//     the page OPENED (UI moved, no plan numbers to report).
+// Split rotation matches the rest of the corpus. NOTE the bake-off gate
+// (runGate/extractEvalSet) scores only `mintReadRecords()` eval records, so
+// adding these does NOT change #112's frozen eval hash — the nav records mint
+// into corpus.train.jsonl alongside everything else. The ambient current-page
+// line rides as a per-record SYSTEM message (a chat-template trainer conditions
+// on it), which the single-systemPrompt bake-off simply never reads.
+// ---------------------------------------------------------------------------
+
+/** One canonical destination page's worth of nav exemplars. `query` is a
+ *  phrase that must rank THIS page first via find_page (mint.test asserts it,
+ *  so the mapping can't silently drift from the keywords). */
+interface NavSpec {
+  view: View;
+  query: string;
+  /** Phrasings of "where does this live?" → find_page(query). */
+  findAsks: Array<(sc: NamedScenario) => string>;
+  /** Phrasings of "take me there" → propose_navigate. */
+  goAsks: Array<(sc: NamedScenario) => string>;
+}
+
+/** Pick a human-sounding label for a go-card from the destination's title. A
+ *  folded legacy view resolves to its destination, so the card names the page
+ *  the user actually sees. */
+function navLabel(view: View): string {
+  const entry = pageForView(canonicalView(view));
+  const title = (entry?.title ?? view).replace(/\s*\(.*\)$/, '');
+  return `Open the ${title} page`;
+}
+
+/** Exported for the mint tests' query↔page drift guard: every `query` must
+ *  rank its spec's (canonicalized) page first via the live catalog. */
+export const NAV_SPECS: NavSpec[] = [
+  {
+    view: 'details', query: 'tfsa room',
+    findAsks: [
+      () => 'Where do I enter my TFSA and RRSP contribution room?',
+      () => 'Which page has my account balances?',
+      () => 'Where are my government benefit settings?',
+    ],
+    goAsks: [
+      () => 'Take me to the page where I edit my accounts and balances.',
+      () => 'Open my plan inputs.',
+    ],
+  },
+  {
+    view: 'eq', query: 'monte carlo',
+    findAsks: [
+      () => 'Where can I see the odds my money lasts?',
+      () => 'Which page runs the simulation?',
+    ],
+    goAsks: [
+      () => 'Take me to the Monte Carlo page.',
+      () => 'Show me my options and what helps most.',
+    ],
+  },
+  {
+    view: 'scenarios', query: 'compare',
+    findAsks: [
+      () => 'Where can I compare my saved plans side by side?',
+      () => 'Which page lists my saved scenarios?',
+    ],
+    goAsks: [
+      () => 'Take me to my saved plans.',
+      () => 'Open the scenario manager.',
+    ],
+  },
+  {
+    view: 'data', query: 'backup',
+    findAsks: [
+      () => 'Where do I back up or restore my plan?',
+      () => 'How do I export everything to a file?',
+    ],
+    goAsks: [
+      () => 'Take me to the data backup page.',
+      () => 'I want to share my plan — where is that?',
+    ],
+  },
+  {
+    view: 'settings', query: 'tax tables',
+    findAsks: [
+      () => 'Where can I edit the tax tables?',
+      () => 'Which page has the app settings?',
+    ],
+    goAsks: [
+      () => 'Open settings.',
+    ],
+  },
+  {
+    view: 'print', query: 'print',
+    findAsks: [
+      () => 'Where do I get a printable summary?',
+    ],
+    goAsks: [
+      () => 'Take me to the print page.',
+    ],
+  },
+];
+
+/** Run a nav tool for real (against the executor + current ctx) to capture the
+ *  exact result text the model would see, including the "already here" tag. */
+function runNav(sc: NamedScenario, tool: string, args: Record<string, unknown>, currentView?: View): string {
+  const c: ToolContext = { ...contextFor(sc), currentView, canNavigate: true };
+  const outcome = executeToolCall(c, { id: 'mint-nav', name: tool, args });
+  if (outcome.kind === 'mutation' || outcome.kind === 'error') {
+    throw new Error(`mint ${tool} failed for ${sc.id}: ${outcome.content}`);
+  }
+  return outcome.content;
+}
+
+/** Ground the find_page follow-up in the real result: name the destination page
+ *  (first match's title, stripped of the "already here" tag) and its hash — the
+ *  model learns to point the user somewhere concrete, not to say "somewhere". */
+function explainFind(resultText: string): string {
+  const firstMatch = resultText.split('\n').find((l) => /^\s*1\.\s/.test(l)) ?? '';
+  // e.g. "1. Insights (you are already here) — #/steering — desc" → title + hash.
+  const title = firstMatch.replace(/^\s*1\.\s+/, '').replace(/\s*\(you are already here\).*/, '').split(' — ')[0].trim();
+  const hash = firstMatch.match(/#\S+/)?.[0] ?? '';
+  const alreadyHere = /\(you are already here\)/.test(firstMatch);
+  if (alreadyHere) {
+    return `You're already on the ${title} page${hash ? ` (${hash})` : ''} — it's what's in front of you right now.`;
+  }
+  return `The ${title} page is where that lives${hash ? ` (open ${hash})` : ''}. It's one of the app's pages — I can take you there if you'd like.`;
+}
+
+function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: number): CorpusRecord[] {
+  const records: CorpusRecord[] = [];
+  for (const spec of NAV_SPECS) {
+    const here = canonicalView(spec.view);
+    const findArgs = { query: spec.query };
+    const goArgs = { view: spec.view, label: navLabel(spec.view) };
+
+    // (a) "where is it" — find_page, with the user somewhere ELSE (the common
+    // case): the follow-up points at the destination.
+    for (const ask of spec.findAsks) {
+      const question = ask(sc);
+      const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
+      const base = `find_page:${sc.id}:q${seqRef.n}`;
+      // Ambient line: put the user on a DIFFERENT reachable page so the answer
+      // is a real redirect. projection (Dashboard) is always reachable.
+      const ambient = here === 'projection' ? 'settings' : 'projection';
+      records.push({
+        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine(ambient) },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('find_page', findArgs) },
+        ],
+        expect: { toolName: 'find_page' },
+      });
+      const resultText = runNav(sc, 'find_page', findArgs, ambient);
+      records.push({
+        id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine(ambient) },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('find_page', findArgs) },
+          { role: 'user', content: wrapToolResult(resultText) },
+          { role: 'assistant', content: explainFind(resultText) },
+        ],
+        expect: {
+          toolName: 'find_page',
+          mustNotContain: ['you should', 'i recommend', 'you ought to'],
+        },
+      });
+    }
+
+    // (b) "where is it" WHEN THE USER IS ALREADY ON THE PAGE — the
+    // page-context-awareness case: find_page must return the already-here tag
+    // and the reply must say so, never propose a jump that goes nowhere.
+    {
+      const question = `Where do I set my ${spec.query}?`;
+      const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
+      const base = `find_page-here:${sc.id}:q${seqRef.n}`;
+      records.push({
+        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine(here) },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('find_page', findArgs) },
+        ],
+        expect: { toolName: 'find_page' },
+      });
+      const resultText = runNav(sc, 'find_page', findArgs, here);
+      records.push({
+        id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine(here) },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('find_page', findArgs) },
+          { role: 'user', content: wrapToolResult(resultText) },
+          { role: 'assistant', content: explainFind(resultText) },
+        ],
+        expect: {
+          toolName: 'find_page',
+          mustContain: ['already on'],
+          mustNotContain: ['TOOL_CALL', 'you should', 'i recommend'],
+        },
+      });
+    }
+
+    // (c) "take me there" — propose_navigate card, then approve/reject.
+    for (const ask of spec.goAsks) {
+      const question = ask(sc);
+      const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
+      const base = `propose_navigate:${sc.id}:q${seqRef.n}`;
+      records.push({
+        id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine('projection') },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('propose_navigate', goArgs) },
+        ],
+        expect: { toolName: 'propose_navigate' },
+      });
+      records.push({
+        id: `${base}:approved`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine('projection') },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('propose_navigate', goArgs) },
+          { role: 'user', content: navigationFeedback(true, goArgs.label) },
+          { role: 'assistant', content: `Opened it — the ${pageTitleLine(here)} page is now on screen. What would you like to look at?` },
+        ],
+        expect: { toolName: 'propose_navigate', mustNotContain: ['TOOL_CALL'] },
+      });
+      records.push({
+        id: `${base}:rejected`, split, kind: 'navigation', scenarioId: sc.id,
+        messages: [
+          { role: 'system', content: ambientPageLine('projection') },
+          { role: 'user', content: question },
+          { role: 'assistant', content: emitToolCall('propose_navigate', goArgs) },
+          { role: 'user', content: navigationFeedback(false, goArgs.label) },
+          { role: 'assistant', content: `No problem — staying where you are. I can still answer questions from here.` },
+        ],
+        expect: { toolName: 'propose_navigate', mustNotContain: ['TOOL_CALL'] },
+      });
+    }
+  }
+
+  // (d) the "show me everything" ask → get_sitemap.
+  const sitemapArgs = {};
+  for (const question of [
+    'What can this app do?',
+    'What pages are in here?',
+    'Give me a tour of the app.',
+  ]) {
+    const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
+    const base = `get_sitemap:${sc.id}:q${seqRef.n}`;
+    records.push({
+      id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
+      messages: [
+        { role: 'user', content: question },
+        { role: 'assistant', content: emitToolCall('get_sitemap', sitemapArgs) },
+      ],
+      expect: { toolName: 'get_sitemap' },
+    });
+    const resultText = runNav(sc, 'get_sitemap', sitemapArgs);
+    records.push({
+      id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
+      messages: [
+        { role: 'user', content: question },
+        { role: 'assistant', content: emitToolCall('get_sitemap', sitemapArgs) },
+        { role: 'user', content: wrapToolResult(resultText) },
+        { role: 'assistant', content: explainSitemap(resultText) },
+      ],
+      expect: {
+        toolName: 'get_sitemap',
+        mustNotContain: ['you should', 'i recommend'],
+      },
+    });
+  }
+  return records;
+}
+
+/** Ground the get_sitemap follow-up: name a couple of the pages the result
+ *  lists, so the reply proves it READ the map rather than reciting a canned
+ *  tour. Deterministic: the first two listed pages by catalog order. */
+function explainSitemap(resultText: string): string {
+  const pages = resultText
+    .split('\n')
+    .map((l) => l.replace(/^\s*\d+\.\s+/, '').split(/\s+\(view\s/)[0])
+    .filter((l) => l && !l.startsWith('The site map'));
+  const named = pages.slice(0, 3).join(', ');
+  return `This app is a Canadian retirement drawdown planner. The pages cover the plan itself (the dashboard and your inputs), the year-by-year schedule, insights (levers, Monte Carlo odds, backtest), saved profiles, data (share/backup/export), plus print, settings, help, and the assistant. Say the word and I can open any of them — for example ${named}.`;
+}
+
+export function mintNavRecords(evalEvery = 5): CorpusRecord[] {
+  const records: CorpusRecord[] = [];
+  const seqRef = { n: 0 };
+  for (const sc of SCENARIOS) {
+    records.push(...mintNavRecordsFor(sc, seqRef, evalEvery));
+  }
+  return records;
+}
+
 /** The full corpus: engine-grounded reads + mutations + guardrail + options +
- *  domain knowledge. */
+ *  domain knowledge + navigation. */
 export function mintCorpus(): CorpusRecord[] {
   return [
     ...mintReadRecords(),
@@ -776,6 +975,7 @@ export function mintCorpus(): CorpusRecord[] {
     ...mintGuardrailRecords(),
     ...mintOptionFramingRecords(),
     ...mintDomainKnowledgeRecords(),
+    ...mintNavRecords(),
   ];
 }
 

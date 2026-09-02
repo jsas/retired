@@ -1,0 +1,254 @@
+{
+  "pages": [
+    {
+      "view": "projection",
+      "route": "#/projection",
+      "url": "https://jsas.github.io/retired/#/projection",
+      "title": "Dashboard",
+      "description": "The plan at a glance: the verdict (funded or depleted, with age and shortfall), key metrics, and the doors to everything else.",
+      "keywords": [
+        "dashboard",
+        "home",
+        "verdict",
+        "funded",
+        "depleted",
+        "run out",
+        "shortfall",
+        "money run out",
+        "projection",
+        "overview",
+        "main page"
+      ]
+    },
+    {
+      "view": "details",
+      "route": "#/details",
+      "url": "https://jsas.github.io/retired/#/details",
+      "title": "Details",
+      "description": "Every input behind the plan, sectioned: personal profile, spouse, account balances and contribution room (TFSA/RRSP), contribution rates, income, government benefits, cash events, spending phases, debts and the reverse mortgage, and market hypotheses.",
+      "keywords": [
+        "tfsa room",
+        "rrsp room",
+        "contribution room",
+        "caps",
+        "balances",
+        "accounts",
+        "contributions",
+        "income",
+        "benefits",
+        "cpp",
+        "oas",
+        "spending",
+        "spouse",
+        "debts",
+        "loan",
+        "reverse mortgage",
+        "volatility",
+        "returns",
+        "market hypotheses",
+        "inputs",
+        "edit",
+        "change my numbers",
+        "the details"
+      ]
+    },
+    {
+      "view": "math",
+      "route": "#/year-math",
+      "url": "https://jsas.github.io/retired/#/year-math",
+      "title": "Year-by-year",
+      "description": "The schedule table: one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.",
+      "keywords": [
+        "schedule",
+        "year-by-year",
+        "year by year",
+        "table",
+        "columns",
+        "withdrawals",
+        "tax paid",
+        "one year"
+      ]
+    },
+    {
+      "view": "eq",
+      "route": "#/steering",
+      "url": "https://jsas.github.io/retired/#/steering",
+      "title": "Insights",
+      "description": "Everything the plan can be nudged by: the equalizer lever ranking (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work), the optimize variants with one-click apply, the Monte Carlo odds, and the historical backtest.",
+      "keywords": [
+        "insights",
+        "steering",
+        "equalizer",
+        "levers",
+        "options",
+        "ranked",
+        "what helps most",
+        "optimize",
+        "best option",
+        "apply",
+        "monte carlo",
+        "simulation",
+        "odds",
+        "success rate",
+        "probabilities",
+        "backtest",
+        "historical",
+        "1926",
+        "stress test",
+        "past markets"
+      ]
+    },
+    {
+      "view": "scenarios",
+      "route": "#/scenarios",
+      "url": "https://jsas.github.io/retired/#/scenarios",
+      "title": "Profiles",
+      "description": "Your saved plans: open, rename, duplicate, delete, and roll back revisions — plus the side-by-side comparison of every profile.",
+      "keywords": [
+        "profiles",
+        "scenarios",
+        "saved plans",
+        "manager",
+        "duplicate",
+        "rename",
+        "delete",
+        "compare",
+        "side-by-side",
+        "which plan",
+        "revisions"
+      ]
+    },
+    {
+      "view": "data",
+      "route": "#/data",
+      "url": "https://jsas.github.io/retired/#/data",
+      "title": "Data",
+      "description": "Everything in and out: share a plan by link or code, full backup and restore, and exporting the plan or projections to CSV/JSON.",
+      "keywords": [
+        "data",
+        "backup",
+        "restore",
+        "export",
+        "csv",
+        "json",
+        "download",
+        "spreadsheet",
+        "share",
+        "link",
+        "code",
+        "snapshot",
+        "import",
+        "send plan"
+      ]
+    },
+    {
+      "view": "print",
+      "route": "#/print",
+      "url": "https://jsas.github.io/retired/#/print",
+      "title": "Print & export",
+      "description": "One-page printable summary of the plan and its key numbers, with the export options.",
+      "keywords": [
+        "print",
+        "summary",
+        "one page",
+        "pdf",
+        "report"
+      ]
+    },
+    {
+      "view": "settings",
+      "route": "#/settings",
+      "url": "https://jsas.github.io/retired/#/settings",
+      "title": "Settings",
+      "description": "Tax tables (user-editable), export defaults, assistant/system prompt defaults.",
+      "keywords": [
+        "settings",
+        "tax tables",
+        "defaults",
+        "prompt",
+        "province",
+        "edit table"
+      ]
+    },
+    {
+      "view": "connections",
+      "route": "#/connections",
+      "url": "https://jsas.github.io/retired/#/connections",
+      "title": "Assistant connection",
+      "description": "Where the assistant runs: local model or online provider, the API key, and exactly what the chat may see.",
+      "keywords": [
+        "connections",
+        "api key",
+        "llm",
+        "provider",
+        "local",
+        "online",
+        "model",
+        "privacy",
+        "wire"
+      ]
+    },
+    {
+      "view": "agent",
+      "route": "#/assistant",
+      "url": "https://jsas.github.io/retired/#/assistant",
+      "title": "Assistant",
+      "description": "The AI assistant full-screen: ask about the plan, what-if it, or change it with propose_* cards you approve.",
+      "keywords": [
+        "assistant",
+        "ai",
+        "chat",
+        "help me",
+        "what-if",
+        "ask",
+        "agent"
+      ]
+    },
+    {
+      "view": "help",
+      "route": "#/help",
+      "url": "https://jsas.github.io/retired/#/help",
+      "title": "Help",
+      "description": "In-app explanation of every feature in the plain-language terms the app itself uses.",
+      "keywords": [
+        "help",
+        "docs",
+        "explain",
+        "how do i",
+        "how to",
+        "manual",
+        "faq"
+      ]
+    },
+    {
+      "view": "donate",
+      "route": "#/donate",
+      "url": "https://jsas.github.io/retired/#/donate",
+      "title": "Support this app",
+      "description": "Ways to support the app (it is free and open source).",
+      "keywords": [
+        "donate",
+        "support",
+        "contribute",
+        "sponsor",
+        "pay"
+      ]
+    },
+    {
+      "view": "welcome",
+      "route": "#/welcome",
+      "url": "https://jsas.github.io/retired/#/welcome",
+      "title": "Welcome",
+      "description": "The front door: five questions build a starter plan, then the doors to the rest of the app.",
+      "keywords": [
+        "welcome",
+        "start",
+        "getting started",
+        "onboarding",
+        "first time",
+        "new plan",
+        "build a plan"
+      ]
+    }
+  ]
+}

@@ -413,49 +413,6 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "properties": {
-        "periods": {
-          "description": "Market-hypothesis anchors, any order. The engine sorts by age and interpolates linearly between them; outside the outermost anchors the flat investmentReturn/returnVolatility hold. The projection follows the return curve; volatility shapes Monte Carlo only. Empty array clears the hypothesis (back to flat constants). Replaces the whole set.",
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "age": {
-                "description": "The age this anchor applies at.",
-                "type": "number",
-              },
-              "return": {
-                "description": "Expected annual return (decimal, e.g. -0.30 for a 30% crash, 0.07 for 7% growth). May be negative.",
-                "type": "number",
-              },
-              "volatility": {
-                "description": "Annual return standard deviation at this age (decimal, e.g. 0.25). Omit to keep the plan's flat volatility.",
-                "minimum": 0,
-                "type": "number",
-              },
-            },
-            "required": [
-              "age",
-              "return",
-            ],
-            "type": "object",
-          },
-          "type": "array",
-        },
-        "rationale": {
-          "type": "string",
-        },
-      },
-      "required": [
-        "periods",
-      ],
-      "type": "object",
-    },
-    "name": "propose_market_periods",
-  },
-  {
-    "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "additionalProperties": false,
       "description": "A one-time or recurring cash event (inflow to an account, or outflow adding to spending). Set endAge to repeat yearly through that age.",
       "properties": {
         "account": {
@@ -1052,6 +1009,60 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
     },
     "name": "list_scenarios",
   },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Match is deterministic; the catalog has the right keywords in it — re-case freely.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "find_page",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "get_sitemap",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "description": "Confirm-card label, e.g. "Open the Monte Carlo page".",
+          "minLength": 1,
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "view": {
+          "description": "View id, from find_page or get_sitemap (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "view",
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "propose_navigate",
+  },
 ]
 `;
 
@@ -1475,50 +1486,6 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       "type": "object",
     },
     "name": "propose_spending_bands",
-  },
-  {
-    "description": "PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.",
-    "jsonSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "additionalProperties": false,
-      "properties": {
-        "periods": {
-          "description": "Market-hypothesis anchors, any order. The engine sorts by age and interpolates linearly between them; outside the outermost anchors the flat investmentReturn/returnVolatility hold. The projection follows the return curve; volatility shapes Monte Carlo only. Empty array clears the hypothesis (back to flat constants). Replaces the whole set.",
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "age": {
-                "description": "The age this anchor applies at.",
-                "type": "number",
-              },
-              "return": {
-                "description": "Expected annual return (decimal, e.g. -0.30 for a 30% crash, 0.07 for 7% growth). May be negative.",
-                "type": "number",
-              },
-              "volatility": {
-                "description": "Annual return standard deviation at this age (decimal, e.g. 0.25). Omit to keep the plan's flat volatility.",
-                "minimum": 0,
-                "type": "number",
-              },
-            },
-            "required": [
-              "age",
-              "return",
-            ],
-            "type": "object",
-          },
-          "type": "array",
-        },
-        "rationale": {
-          "type": "string",
-        },
-      },
-      "required": [
-        "periods",
-      ],
-      "type": "object",
-    },
-    "name": "propose_market_periods",
   },
   {
     "description": "PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.",
@@ -2133,6 +2100,63 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       "type": "object",
     },
     "name": "list_scenarios",
+  },
+  {
+    "description": "Search the site's page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Use whenever the user asks WHERE something lives.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Match is deterministic; the catalog has the right keywords in it — re-case freely.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "find_page",
+  },
+  {
+    "description": "The full site map: every page (view), its route (#/hash), and one-line purpose. Use for "what can this app do?", "what pages exist?", or before guessing where something lives.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "get_sitemap",
+  },
+  {
+    "description": "PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → the Insights page that now hosts it — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "description": "Confirm-card label, e.g. "Open the Monte Carlo page".",
+          "minLength": 1,
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "view": {
+          "description": "View id, from find_page or get_sitemap (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "view",
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "propose_navigate",
   },
 ]
 `;

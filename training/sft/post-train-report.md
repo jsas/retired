@@ -9,13 +9,15 @@ quantized to q8_0 GGUF and served via Ollama as `retire-0.6b:latest`.
 
 ## Result tables
 
-| metric | baseline (Qwen3-0.6B, no-think) | fine-tuned (checkpoint-500, q8_0, Ollama) |
-| --- | --- | --- |
-| Protocol validity | 70.9% | **81.1%** (900/900 eval records) |
-| parseable TOOL_CALL | bake-off | 96% |
-| in-catalog tool | bake-off | 96% |
-| args-valid | bake-off | 92% |
-| tool-match | bake-off | 83% |
+| metric | baseline (Qwen3-0.6B, no-think) | checkpoint-500 (1416-step run) | checkpoint-1000 (full run) |
+| --- | --- | --- | --- |
+| Protocol validity | 70.9% | 81.1% (t=0.2, np=256) | 80.4% (greedy, 29-tool) |
+| parseable / in-catalog / args-valid / tool-match | — | 96 / 96 / 92 / 83 | 96 / 96 / 93 / 83 |
+
+Truncation at 256 tokens was NOT the main failure driver (only ~7 of 39
+malformed-JSON replies recovered at 512). The losses that matter are tool
+*choice* confusions — expect training-side fixes (more steps / corpus
+paraphrases) to move them, not eval knobs.
 
 Gate command used:
 
@@ -28,15 +30,14 @@ Result: **FAIL vs the 95% ship bar** (+10.2 pts over baseline but short).
 
 Failure buckets (169 invalid / 900):
 
-- 39× malformed JSON — mostly truncation at 256 new tokens (unbalanced
-  braces) plus a few `maxVariants:5` unquoted-key slips
+- **39× → 32× malformed JSON** at np=512 — mostly `maxVariants:5` unquoted-key
+  slips and stray `}}`, not truncation
 - 32× `get_scenario` where `run_projection` wanted
-- 20× `run_strategies` args fail schema
+- 31× `run_strategies` args fail schema
 - 16× `get_scenario` args fail schema
+- 16× `compare_scenarios` where `run_monte_carlo` wanted
 - 16× `solve_spending` / 16× `compare_scenarios` where `run_strategies` wanted
-- 14× `get_schedule` where `get_scenario` wanted
-- 11× `run_projection` where `compare_scenarios` wanted
-- 6× misc tool swaps
+- 15× `get_schedule` where `get_scenario` wanted
 
 ## Training curve (checkpoint-500 trainer_state)
 

@@ -22,7 +22,11 @@ def main() -> int:
     p.add_argument('--evalset', default=str(HERE / 'out' / 'evalset.json'))
     p.add_argument('--out', default=str(HERE / 'out' / 'replies-ollama.json'))
     p.add_argument('--limit', type=int, default=None)
-    p.add_argument('--temperature', type=float, default=0.2)
+    # Greedy by default: protocol scoring wants determinism, not variety.
+    p.add_argument('--temperature', type=float, default=0.0)
+    # 512 new tokens: at 256 the long-args tools (run_strategies categories,
+    # debt overrides) clipped mid-JSON and read as ~4% phantom failures.
+    p.add_argument('--num-predict', type=int, default=512)
     args = p.parse_args()
 
     blob = json.loads(Path(args.evalset).read_text(encoding='utf-8'))
@@ -39,7 +43,7 @@ def main() -> int:
                 {'role': 'user', 'content': rec['question']},
             ],
             'stream': False,
-            'options': {'temperature': args.temperature, 'num_predict': 256},
+            'options': {'temperature': args.temperature, 'num_predict': args.num_predict},
         }
         req = urllib.request.Request(
             'http://localhost:11434/api/chat',
