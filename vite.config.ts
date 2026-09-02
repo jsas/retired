@@ -59,6 +59,7 @@ export default defineConfig(({ mode }) => {
         { find: '@retired/mcp-tools', replacement: join(here, 'packages/mcp-tools/src') },
         { find: '@retired/mcp-server', replacement: join(here, 'packages/mcp-server/src') },
         { find: '@retired/markup-assistant', replacement: join(here, 'packages/markup-assistant/src') },
+        { find: '@retired/ai-bridge', replacement: join(here, 'packages/ai-bridge/src') },
       ],
     },
     define: {

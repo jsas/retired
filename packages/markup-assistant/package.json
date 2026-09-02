@@ -9,6 +9,7 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
+    "@retired/ai-bridge": "*",
     "zod": "^4.4.3"
   }
 }

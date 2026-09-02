@@ -1,58 +1,40 @@
-// AI agent settings: provider connections (BYO API key) and the prompt library.
+// AI agent settings: persistence for provider connections (BYO API key) and
+// the prompt library.
 //
 // Everything here is stored LOCALLY ONLY (localStorage today; the kv table when
 // the data layer folds preferences in). Keys never leave the device except as
 // the Authorization header on a direct browser→provider HTTPS call — the app
 // has no server and proxies nothing. No key configured → the whole AI feature
 // is inert (see ROADMAP "No bundled AI").
+//
+// The connection model + provider/generation primitives (AiConnection,
+// effectiveGeneration, connectionReady, the DEFAULT_* constants) live in
+// @retired/ai-bridge — the shared model-selection surface — and are re-exported
+// here so existing imports keep working. New code should import them from
+// '@retired/ai-bridge'.
 
 import { z } from 'zod';
+import {
+  AI_PROVIDERS,
+  type AiConnection,
+  type AiGenerationSettings,
+  type AiProviderId,
+} from '@retired/ai-bridge';
 
-export const AI_PROVIDERS = [
-  'anthropic',
-  'openai',
-  'openrouter',
-  'gemini',
-  'ollama',
-  'openai-compatible',
-  'webllm',
-] as const;
-
-export type AiProviderId = (typeof AI_PROVIDERS)[number];
-
-/** Per-connection generation tuning. Every field is optional — when omitted
- *  the provider's DEFAULT_* constant applies, so a connection the user never
- *  tunes behaves exactly as before. Surfaced on the Connections page. */
-export interface AiGenerationSettings {
-  /** Max tokens the model may generate per turn (chain-of-thought included).
-   *  Anthropic/OpenAI-compatible REQUIRE the field, so "no limit" isn't
-   *  possible — the default is generous instead (DEFAULT_MAX_TOKENS). */
-  maxTokens?: number;
-  /** Sampling temperature (0 = deterministic). Provider default when unset. */
-  temperature?: number;
-  /** Local (web-llm) only: whole-n-gram repeat penalty, the anti-ramble guard. */
-  repetitionPenalty?: number;
-  /** Local (web-llm) only: presence penalty (encourages new topics). */
-  presencePenalty?: number;
-  /** Local (web-llm) only: frequency penalty (discourages re-using the same
-   *  words). web-llm pairs this with presence — whichever is unset gets
-   *  zeroed — so setting both is what makes either one bite. */
-  frequencyPenalty?: number;
-}
-
-export interface AiConnection {
-  id: string;
-  provider: AiProviderId;
-  label: string;         // user-facing name ("My Claude key", "Local Ollama")
-  apiKey: string;        // '' for Ollama / unauthenticated local endpoints
-  model: string;
-  /** OpenAI-compatible providers only; the provider's default when omitted. */
-  baseUrl?: string;
-  /** Context window in tokens, for the usage indicator + compaction trigger.
-   *  When omitted a provider default is assumed (small for local models). */
-  contextSize?: number;
-  generation?: AiGenerationSettings;
-}
+export {
+  AI_PROVIDERS,
+  DEFAULT_MAX_TOKENS,
+  DEFAULT_LOCAL_TEMPERATURE,
+  DEFAULT_LOCAL_REPETITION_PENALTY,
+  DEFAULT_LOCAL_PRESENCE_PENALTY,
+  DEFAULT_LOCAL_FREQUENCY_PENALTY,
+  MODEL_SAMPLER_DEFAULTS,
+  effectiveGeneration,
+  defaultModelFor,
+  defaultBaseUrlFor,
+  connectionReady,
+} from '@retired/ai-bridge';
+export type { AiConnection, AiGenerationSettings, AiProviderId };
 
 export interface AiPromptPreset {
   id: string;
@@ -224,107 +206,4 @@ export function saveAiSettings(settings: AiSettings, kv: KV = defaultKV()): void
 
 export function newConnectionId(): string {
   return `conn-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
-}
-
-/** Generation defaults. max_tokens is deliberately generous: reasoning models
- *  (DeepSeek-R1, Qwen3-thinking, GLM) spend their chain of thought INSIDE the
- *  same budget before writing the visible answer, so a small cap yields a
- *  thought-then-nothing turn or a mid-sentence cutoff. 16384 leaves room for
- *  both; the user can raise or lower it per connection on the Connections
- *  page. Temperature defaults differ by tier: cloud providers get their own
- *  (omit the field); local math/reasoning models stay deterministic-ish. */
-export const DEFAULT_MAX_TOKENS = 16384;
-export const DEFAULT_LOCAL_TEMPERATURE = 0.3;
-export const DEFAULT_LOCAL_REPETITION_PENALTY = 1.15;
-export const DEFAULT_LOCAL_PRESENCE_PENALTY = 0.3;
-export const DEFAULT_LOCAL_FREQUENCY_PENALTY = 0.3;
-
-/** Sampler tuning keyed by web-llm model id. Models loop differently —
- *  Phi-4-mini's failure is the diverse word-salad, which the generic
- *  defaults don't restrain — so a loop-prone model carries its own
- *  defaults here, applied only when the user hasn't set an explicit value
- *  on the connection. Kept in this module (not webLlmModels) so
- *  effectiveGeneration has no import cycle. */
-export const MODEL_SAMPLER_DEFAULTS: Record<string, {
-  temperature?: number;
-  repetitionPenalty?: number;
-  presencePenalty?: number;
-  /** web-llm pairs frequency with presence (zeroing whichever is unset), so
-   *  a presence-only setting under-delivers — set both for the intended bite. */
-  frequencyPenalty?: number;
-}> = {
-  // Phi-4-mini's failure mode is the diverse word-salad: hundreds of
-  // mostly-unique jargon tokens at a runaway pace. The generic defaults
-  // (rep 1.15, presence-only 0.3) don't restrain it — and web-llm zeroes an
-  // unpaired presence penalty, halving what bite it had. Give this model a
-  // stronger, frequency-backed anti-repeat profile.
-  'Phi-4-mini-instruct-q4f16_1-MLC': {
-    temperature: 0.6,
-    repetitionPenalty: 1.3,
-    presencePenalty: 0.5,
-    frequencyPenalty: 0.5,
-  },
-};
-
-/** Resolve a connection's effective generation settings: the user's override
- *  when present, then the MODEL's own sampler defaults (loop-prone local
- *  models above), then the generic provider default. Cloud temperature stays
- *  undefined (the provider's own default applies — omitting the field is
- *  different from sending one). */
-export function effectiveGeneration(c: AiConnection): {
-  maxTokens: number;
-  temperature: number | undefined;
-  repetitionPenalty: number;
-  presencePenalty: number;
-  frequencyPenalty: number;
-} {
-  const sampler = c.provider === 'webllm' ? MODEL_SAMPLER_DEFAULTS[c.model] : undefined;
-  return {
-    maxTokens: c.generation?.maxTokens ?? DEFAULT_MAX_TOKENS,
-    temperature: c.generation?.temperature ?? sampler?.temperature,
-    repetitionPenalty: c.generation?.repetitionPenalty
-      ?? sampler?.repetitionPenalty ?? DEFAULT_LOCAL_REPETITION_PENALTY,
-    presencePenalty: c.generation?.presencePenalty
-      ?? sampler?.presencePenalty ?? DEFAULT_LOCAL_PRESENCE_PENALTY,
-    frequencyPenalty: c.generation?.frequencyPenalty
-      ?? sampler?.frequencyPenalty ?? DEFAULT_LOCAL_FREQUENCY_PENALTY,
-  };
-}
-
-/** The default model id a provider gets when a connection is first added, so
- *  the chat works without the user knowing model names. All editable. */
-export function defaultModelFor(provider: AiProviderId): string {
-  switch (provider) {
-    case 'anthropic': return 'claude-sonnet-4-20250514';
-    case 'openai': return 'gpt-4o-mini';
-    case 'openrouter': return 'anthropic/claude-sonnet-4';
-    case 'gemini': return 'gemini-2.0-flash';
-    case 'ollama': return 'llama3.1';
-    // Default to the newest 4B all-rounder — strong instruction-following at a
-    // size most GPUs hold. Weaker models derail on the tool protocol.
-    case 'webllm': return 'Qwen3.5-4B-q4f16_1-MLC';
-    case 'openai-compatible': return '';
-  }
-}
-
-export function defaultBaseUrlFor(provider: AiProviderId): string | undefined {
-  switch (provider) {
-    case 'openai': return 'https://api.openai.com/v1';
-    case 'openrouter': return 'https://openrouter.ai/api/v1';
-    case 'ollama': return 'http://localhost:11434/v1';
-    default: return undefined; // anthropic & gemini endpoints are fixed
-  }
-}
-
-/** True when a connection has everything needed to attempt a call. Ollama may
- *  legitimately have no key; web-llm needs no key or URL (in-browser); a
- *  generic compatible endpoint needs a URL. */
-export function connectionReady(c: AiConnection): boolean {
-  if (!c.model.trim()) return false;
-  if (c.provider === 'webllm') return true; // in-browser: a model id is enough
-  if (c.provider === 'ollama') return (c.baseUrl ?? '').trim().length > 0;
-  if (c.provider === 'openai-compatible') {
-    return (c.baseUrl ?? '').trim().length > 0 && c.apiKey.trim().length > 0;
-  }
-  return c.apiKey.trim().length > 0;
 }
