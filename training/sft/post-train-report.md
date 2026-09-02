@@ -9,15 +9,20 @@ quantized to q8_0 GGUF and served via Ollama as `retire-0.6b:latest`.
 
 ## Result tables
 
-| metric | baseline (Qwen3-0.6B, no-think) | checkpoint-500 (1416-step run) | checkpoint-1000 (full run, v2) | checkpoint-1828 (v3, new eval) |
+| metric | baseline (old eval) | v2 (old eval) | v3 (new eval) | v4 (contrast corpus, new eval) |
 | --- | --- | --- | --- | --- |
-| Protocol validity | 70.9% | 81.1% (t=0.2, np=256, OLD eval) | 80.4% (greedy, OLD eval) | **65.0%** (greedy, NEW eval) |
-| parseable / in-catalog / args-valid / tool-match | — | 96 / 96 / 92 / 83 | 96 / 96 / 93 / 83 | 96 / 95 / 95 / 65 |
+| Protocol validity | 70.9% | 80.4% | 65.0% | **72.3%** |
+| parseable / in-catalog / args-valid / tool-match | — | 96 / 96 / 93 / 83 | 96 / 95 / 95 / 65 | 93 / 89 / 89 / **72** |
 
 **NEW vs OLD eval caveat:** v3's 65% is against a NEW harder eval (1090
 records, including boundary + contrast paraphrases) after the corpus regrew.
 Prior runs scored against the OLD eval (900 records); direct comparison is
-invalid — capability has not demonstrably regressed. New baseline: 65%.
+invalid — capability has not demonstrably regressed.
+
+**v4 verdict:** the contrast corpus helped tool-match by +7pp (65→72);
+parseable/args slipped rather than improved — those are corpus-hygiene
+trade-offs. Best eval_loss moved 0.167 (old corpus) → 0.1525 (new). Path
+to 95%: more contrast pairs on the residual confusion.
 
 Truncation at 256 tokens was NOT the main failure driver (only ~7 of 39
 malformed-JSON replies recovered at 512). The losses that matter are tool
