@@ -4,7 +4,7 @@
 // tapped section (?section=…). Two-col on desktop, one-col on mobile. Every
 // field edits the real plan; the verdict, map and dock recompute together.
 import { useEffect, useRef } from 'react';
-import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt } from '@retired/engine-core/retirementEngine';
+import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt, MarketPeriod } from '@retired/engine-core/retirementEngine';
 import { Panel, Fader, HelpHint, Check } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
@@ -23,9 +23,9 @@ function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
         <input
           type="number"
           className="num w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
-          value={Number.isFinite(value) ? value : 0}
+          value={Number.isFinite(value) ? value : ''}
           step={step} min={min}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))}
         />
         {suffix && <span className="text-[11px] text-slate-400">{suffix}</span>}
       </span>
@@ -135,12 +135,9 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes }: {
   // Lever ranges are a user preference (Settings); the faders read them here.
   const ranges = getRangePrefs();
 
-  const visibleSections = DETAILS_SECTIONS.filter(s => {
-    if (s.conditional === 'rdsp') return inputs.rdsp != null;
-    if (s.conditional === 'fhsa') return inputs.fhsa != null;
-    if (s.conditional === 'home') return inputs.reverseMortgage?.enabled === true;
-    return true;
-  });
+  // The conditional sections are no longer gated on existing data — the
+  // enable toggle lives INSIDE each section, so they always render.
+  const visibleSections = DETAILS_SECTIONS;
 
   return (
     <div>
@@ -174,10 +171,9 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes }: {
   );
 }
 
-/* Render one section's editor. Each is intentionally simple — the full-featured
-   editors (multi-source income, events, RDSP/FHSA wizards) live on the stable
-   app's pages; this page covers the always-present core so the plan is fully
-   editable in one place. */
+/* Render one section's editor. Every register edits in place — including the
+   conditional ones (RDSP / FHSA / Home Equity), whose enable toggles live
+   inside the section body. */
 function renderSection(id: string, ctx: {
   inputs: RetirementInputs;
   set: (p: Partial<RetirementInputs>) => void;
@@ -476,6 +472,45 @@ function renderSection(id: string, ctx: {
           </button>
         </Section>
       );
+    case 'markets': {
+      // The flat hypothesis: expected return plus volatility. Without
+      // volatility Monte Carlo can't run (MC refuses at 0), so this is the
+      // unlock for the Analysis section of Insights.
+      const periods = inp.marketPeriods ?? [];
+      const setPeriods = (next: MarketPeriod[]) =>
+        set({ marketPeriods: next.length ? next.sort((a, b) => a.age - b.age) : undefined });
+      const upd = (i: number, patch: Partial<MarketPeriod>) => {
+        const next = [...periods]; next[i] = { ...periods[i], ...patch }; setPeriods(next);
+      };
+      return (
+        <Section id="markets" title="Markets" hint="expected-return">
+          <div className="grid grid-cols-2 gap-3">
+            <Num label="Volatility (σ)" value={Math.round((inp.returnVolatility ?? 0) * 1000) / 10} step={0.5} min={0}
+              hint="Drives Monte Carlo — set above 0 or the analysis can’t run."
+              onChange={(v) => set({ returnVolatility: Math.max(0, v / 100) })} />
+          </div>
+          <p className="text-[12px] text-slate-500">
+            Return anchors override the flat “Markets” lever from an age on — the curve interpolates between them. Leave empty to use the flat rate all the way.
+          </p>
+          <div className="space-y-2">
+            {periods.map((p, i) => (
+              <div key={p.id} className="flex items-center gap-2 border border-slate-200 p-2">
+                <Num label="From age" value={p.age} step={1} onChange={(v) => upd(i, { age: v })} />
+                <Num label="Return %" value={Math.round(p.return * 1000) / 10} step={0.5} onChange={(v) => upd(i, { return: v / 100 })} />
+                <Num label="Vol % (blank = flat)" value={p.volatility != null ? Math.round(p.volatility * 1000) / 10 : NaN} step={0.5} min={0}
+                  onChange={(v) => upd(i, { volatility: Number.isFinite(v) ? Math.max(0, v / 100) : undefined })} />
+                <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove anchor at age ${p.age}`}
+                  onClick={() => setPeriods(periods.filter((_, j) => j !== i))}>×</button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="mt-1 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+            onClick={() => setPeriods([...periods, { id: uid(), age: (periods[periods.length - 1]?.age ?? inp.retirementAge) + 10, return: inp.investmentReturn }])}>
+            + add an anchor
+          </button>
+        </Section>
+      );
+    }
     case 'withdrawal':
       return (
         <Section id="withdrawal" title="Withdrawal Strategy" hint="withdrawal-order">
@@ -530,31 +565,98 @@ function renderSection(id: string, ctx: {
         </Section>
       );
     }
-    case 'home':
+    case 'home': {
+      const rm = inp.reverseMortgage;
+      const enabled = rm?.enabled === true;
+      const base = rm ?? { enabled: false, homeValue: 0, appreciationRate: 0.02, interestRate: 0.065 };
+      const setRm = (patch: Partial<NonNullable<typeof rm>>) =>
+        set({ reverseMortgage: { ...base, ...patch } });
+      const hasSchedule = (rm?.drawAmount ?? 0) > 0;
       return (
         <Section id="home" title="Home Equity" hint="home-equity">
-          {inp.reverseMortgage?.enabled ? (
-            <div className="grid grid-cols-2 gap-3">
-              <Num label="Home value" value={inp.reverseMortgage.homeValue} step={5000} onChange={(v) => set({ reverseMortgage: { ...inp.reverseMortgage!, homeValue: v } })} />
-              <Num label="Loan rate %" value={Math.round(inp.reverseMortgage.interestRate * 1000) / 10} step={0.1} onChange={(v) => set({ reverseMortgage: { ...inp.reverseMortgage!, interestRate: v / 100 } })} />
+          <Check checked={enabled} onChange={(on) => setRm({ enabled: on })} label="Borrow against the home" />
+          {enabled && rm && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Sel label="Product" value={rm.mode ?? 'reverse'} onChange={(v) => setRm({ mode: v })}
+                  options={[
+                    { value: 'reverse', label: 'Reverse mortgage (interest compounds)' },
+                    { value: 'heloc', label: 'HELOC (interest paid yearly)' },
+                  ]} />
+                <Num label="Home value" value={rm.homeValue} step={10000} onChange={(v) => setRm({ homeValue: v })} />
+                <Num label="Appreciation %/yr" value={Math.round(rm.appreciationRate * 1000) / 10} step={0.5}
+                  onChange={(v) => setRm({ appreciationRate: v / 100 })} />
+                <Num label="Loan rate %/yr" value={Math.round(rm.interestRate * 1000) / 10} step={0.1}
+                  onChange={(v) => setRm({ interestRate: Math.max(0, v / 100) })} />
+                <Num label="Max loan-to-value" value={Math.round((rm.maxLtv ?? 0.55) * 100)} step={5} min={0}
+                  hint="Borrowing stops at this share of home value."
+                  onChange={(v) => setRm({ maxLtv: Math.max(0, v / 100) })} />
+              </div>
+              <Check checked={hasSchedule} onChange={(on) => on
+                ? setRm({ drawAmount: rm.drawAmount && rm.drawAmount > 0 ? rm.drawAmount : 1000,
+                          startAge: rm.startAge ?? inp.currentAge,
+                          durationYears: rm.durationYears ?? 10 })
+                : setRm({ drawAmount: undefined, startAge: undefined, durationYears: undefined })}
+                label="Scheduled draws" />
+              {hasSchedule && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Num label="Draw $/yr" value={rm.drawAmount ?? 0} onChange={(v) => setRm({ drawAmount: v })} />
+                  <Num label="From age" value={rm.startAge ?? inp.currentAge} step={1} onChange={(v) => setRm({ startAge: v })} />
+                  <Num label="For years" value={rm.durationYears ?? 10} step={1} onChange={(v) => setRm({ durationYears: v })} />
+                </div>
+              )}
+              <Check checked={rm.topUp === true} onChange={(v) => setRm({ topUp: v })}
+                label="Last-resort top-up (borrow what the plan still needs)" />
             </div>
-          ) : (
-            <p className="text-[12.5px] text-slate-500">No reverse mortgage on this plan.</p>
           )}
         </Section>
       );
-    case 'rdsp':
+    }
+    case 'rdsp': {
+      const rd = inp.rdsp;
+      const enabled = rd?.enabled === true;
+      const base = rd ?? { enabled: false, balance: 0, contribution: 0, familyIncome: 0, dtcEligible: true };
+      const setRd = (patch: Partial<NonNullable<typeof rd>>) =>
+        set({ rdsp: { ...base, ...patch } });
       return (
         <Section id="rdsp" title="RDSP (Disability Savings)" hint="rdsp">
-          <p className="text-[12.5px] text-slate-500">An RDSP is enabled on this plan. Grants, bonds and withdrawals are configured in the stable app\'s RDSP section.</p>
+          <Check checked={enabled} onChange={(on) => setRd({ enabled: on })} label="Enabled" />
+          {enabled && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Num label="Balance" value={rd!.balance} onChange={(v) => setRd({ balance: v })} />
+                <Num label="Contribution / yr" value={rd!.contribution} onChange={(v) => setRd({ contribution: v })} />
+                <Num label="Family income" value={rd!.familyIncome} onChange={(v) => setRd({ familyIncome: v })}
+                  hint="CDSG/CDSB income tests read this." />
+              </div>
+              <Check checked={rd!.dtcEligible} onChange={(v) => setRd({ dtcEligible: v })}
+                size={12} label="DTC eligible (grants &amp; bonds require it)" />
+            </div>
+          )}
         </Section>
       );
-    case 'fhsa':
+    }
+    case 'fhsa': {
+      const fh = inp.fhsa;
+      const enabled = fh?.enabled === true;
+      const base = fh ?? { enabled: false, balance: 0, contribution: 0 };
+      const setFh = (patch: Partial<NonNullable<typeof fh>>) =>
+        set({ fhsa: { ...base, ...patch } });
       return (
         <Section id="fhsa" title="FHSA (First Home Savings)" hint="fhsa">
-          <p className="text-[12.5px] text-slate-500">An FHSA is enabled — contributions accumulate and transfer to the RRSP at retirement. Configured in the stable app\'s FHSA section.</p>
+          <Check checked={enabled} onChange={(on) => setFh({ enabled: on })} label="Enabled" />
+          {enabled && (
+            <div className="grid grid-cols-2 gap-3">
+              <Num label="Balance" value={fh!.balance} onChange={(v) => setFh({ balance: v })} />
+              <Num label="Contribution / yr" value={fh!.contribution} onChange={(v) => setFh({ contribution: v })} />
+              <Num label="Opened at age (blank = this year)" value={fh!.openAge ?? NaN} step={1}
+                hint="The 15-year clock runs from the open age."
+                onChange={(v) => setFh({ openAge: Number.isFinite(v) ? v : undefined })} />
+            </div>
+          )}
         </Section>
       );
+    }
     default:
       return null;
   }

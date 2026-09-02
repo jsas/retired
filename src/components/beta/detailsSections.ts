@@ -7,6 +7,8 @@ export interface DetailsSection {
   id: string;
   label: string;
   group: string;
+  // Kept for reference — RDSP/FHSA/Home used to gate on existing data. Their
+  // enable toggles now live inside the section body, so nothing is hidden.
   conditional?: 'rdsp' | 'fhsa' | 'home';
 }
 
@@ -24,6 +26,7 @@ export const DETAILS_SECTIONS: DetailsSection[] = [
   { id: 'events', label: 'Cash Events', group: 'Income' },
   { id: 'spending', label: 'Spending Phases', group: 'Spending' },
   { id: 'withdrawal', label: 'Withdrawal Strategy', group: 'Spending' },
+  { id: 'markets', label: 'Markets', group: 'Spending' },
   { id: 'debts', label: 'Debts', group: 'Spending' },
   { id: 'home', label: 'Home Equity', group: 'Property', conditional: 'home' },
 ];
