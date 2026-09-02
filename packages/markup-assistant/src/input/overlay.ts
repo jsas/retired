@@ -256,15 +256,15 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       status === 'failed' || status === 'rejected' ? '#ff453a' :
       status === 'processing' ? '#0a84ff' : '#8e8e93'
     bubble.style.borderLeft = `2px solid ${statusColor}`
-    if (detail && status !== 'processing') {
-      // Append or replace the reply line.
-      const existing = bubble.querySelector('span[data-reply]') as HTMLElement | null
-      const line: HTMLElement = existing ?? document.createElement('span')
-      line.dataset.reply = '1'
-      line.style.cssText = 'display:block;margin-top:4px;color:#c7c7cc;'
-      line.textContent = `${STATUS_TEXT[status] ?? status} — ${detail}`
-      if (!existing) bubble.appendChild(line)
-    }
+    // The reply line is the whole point of the bubble — replace the
+    // 'processing…' placeholder with the terminal text. For an answer, the
+    // detail IS the reply, so show it verbatim; other statuses lead with
+    // their label.
+    const reply =
+      status === 'answered' && detail
+        ? detail
+        : `${STATUS_TEXT[status] ?? status}${detail ? ` — ${detail}` : ''}`
+    bubble.textContent = reply
   }
 
   // Composer row at the panel bottom.
@@ -790,17 +790,14 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       const text = composerInput.value.trim()
       if (draft) {
         // Capture the id BEFORE finalizeDraft clears it.
-        const id = draft.interactionId
         const intentText = text
         finalizeDraft(text)
         closeComposer()
-        if (intentText) {
-          chatByInteraction.set(id, chatAdd('user', intentText))
-        }
+        if (intentText) chatAdd('user', intentText)
       } else if (text) {
         closeComposer()
-        const id = emit({ kind: 'note', text, anchor: { x: 16, y: 16 } } as Intent)
-        chatByInteraction.set(id, chatAdd('user', text))
+        emit({ kind: 'note', text, anchor: { x: 16, y: 16 } } as Intent)
+        chatAdd('user', text)
       }
       e.preventDefault()
     } else if (e.key === 'Escape') {
@@ -822,14 +819,22 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     const entry = committed.get(payload.interactionId)
     if (!entry) return
     entry.status = payload.state
-    // Update the chat bubble for this interaction; if the user sent no text
-    // (e.g. gesture with empty note), create a model-side bubble on terminal.
-    let bubble = chatByInteraction.get(payload.interactionId)
-    if (!bubble && ['applied', 'answered', 'failed', 'rejected'].includes(payload.state)) {
-      bubble = chatAdd('model', STATUS_TEXT[payload.state] ?? payload.state, payload.state)
-      chatByInteraction.set(payload.interactionId, bubble)
+    // The model's reply is always its OWN bubble (never appended to the
+    // user's). Intermediate states get one 'processing' bubble that later
+    // terminal states update in place, so the thread reads: user → model.
+    if (payload.state === 'processing') {
+      if (!chatByInteraction.has(payload.interactionId)) {
+        const b = chatAdd('model', STATUS_TEXT.processing, 'processing')
+        chatByInteraction.set(payload.interactionId, b)
+      }
+    } else if (['applied', 'answered', 'failed', 'rejected'].includes(payload.state)) {
+      let bubble = chatByInteraction.get(payload.interactionId)
+      if (!bubble) {
+        bubble = chatAdd('model', STATUS_TEXT[payload.state] ?? payload.state, payload.state)
+        chatByInteraction.set(payload.interactionId, bubble)
+      }
+      chatUpdate(bubble, payload.state, payload.detail)
     }
-    if (bubble) chatUpdate(bubble, payload.state, payload.detail)
     // Once the engine is done with an interaction, retracting it can't
     // un-apply anything, so drop it from the undo stack.
     if (['applied', 'answered', 'failed', 'rejected', 'cancelled'].includes(payload.state)) {

@@ -15,10 +15,11 @@
  * never expose the dev server beyond it.
  */
 import type { Plugin, ResolvedConfig } from 'vite'
-// The node-dist of markup-assistant (built by packages/markup-assistant/npm run
-// build). The vite config runs in node, so it must import real .js — the
-// package's /node subpath points at dist/ rather than the source the client
-// bundle consumes.
+// The node-dist of markup-assistant (built by `npm run build` in the package
+// — wired into `predev`/`dev` so it can never go stale). The vite config runs
+// in node, which can't resolve the package's .js→.ts source imports, so the
+// /node subpath points at dist/ rather than the source the client bundle
+// consumes.
 import { markupAssistant } from '@retired/markup-assistant/node'
 import {
   createStubEngine,
