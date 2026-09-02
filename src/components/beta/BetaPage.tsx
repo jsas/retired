@@ -1,7 +1,8 @@
 // The shared beta page chrome — brand header, the named homes (Details ▾,
-// Profiles, Schedule, Insights, Data, style guide), the persistent verdict
-// chip, and the assistant dock. Every beta page sits inside this so navigation
-// and the answer are always one glance away. Flat, hairline, sticky.
+// Projection, Tools ▾: Steering/Optimizer/Monte Carlo/Backtest/Solver,
+// Profiles, Data), the persistent verdict chip, and the assistant dock. Every
+// beta page sits inside this so navigation and the answer are always one
+// glance away. Flat, hairline, sticky.
 //
 // The dock (f7's star): a 340px right rail on desktop, a full-screen sheet on
 // phones. The app works without it — the Assistant button toggles it and it
@@ -38,15 +39,27 @@ export interface VerdictChip {
   label: string;
 }
 
+/** The Tools menu (issue #162): the five analytic surfaces, each its own page.
+ *  Desktop opens them from the header dropdown; the phone menu carries the same
+ *  items flat (a dropdown inside a dropdown would close on the first tap). */
+export const TOOLS_MENU_ITEMS: Array<{ view: View; label: string }> = [
+  { view: 'eq', label: 'Steering' },
+  { view: 'optimize', label: 'Optimizer' },
+  { view: 'montecarlo', label: 'Monte Carlo' },
+  { view: 'backtest', label: 'Backtest' },
+  { view: 'solver', label: 'Solver' },
+];
+
 /** The phone menu's contents — the same named homes the desktop row shows
  *  (plus Dashboard/Details/Help, which desktop reaches other ways). Exported
  *  so tests can prove nothing was dropped on phones. */
 export const MOBILE_MENU_ITEMS: Array<{ view: View; label: string }> = [
   { view: 'projection', label: 'Dashboard' },
-  { view: 'math', label: 'Schedule' },
-  { view: 'eq', label: 'Insights' },
-  { view: 'scenarios', label: 'Profiles' },
+  { view: 'math', label: 'Projection' },
   { view: 'details', label: 'Details' },
+  // Tools ▾ flattened: every tool one tap away on phones.
+  ...TOOLS_MENU_ITEMS,
+  { view: 'scenarios', label: 'Profiles' },
   { view: 'data', label: 'Data' },
   { view: 'print', label: 'Print' },
   { view: 'settings', label: 'Settings' },
@@ -108,8 +121,28 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             </p>
           </Dropdown>
 
-          <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Schedule</Link>
-          <Link view="eq" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Insights</Link>
+          <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Projection</Link>
+
+          {/* The Tools menu (issue #162): the five analytic surfaces, each its
+              own page — steered by the same projection timeline they all show. */}
+          <div className="hidden md:block">
+            <Dropdown label="Tools">
+              <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Ask the plan a different question
+              </p>
+              <div className="flex flex-col">
+                {TOOLS_MENU_ITEMS.map(t => (
+                  <Link key={t.view} view={t.view} className="px-2 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    {t.label}
+                  </Link>
+                ))}
+              </div>
+              <p className="border-t border-slate-100 px-2 pt-1.5 text-[10.5px] text-slate-400">
+                Steering drags · Optimizer compares · Monte Carlo rolls the futures · Backtest replays history · Solver inverts the verdict
+              </p>
+            </Dropdown>
+          </div>
+
           <Link view="scenarios" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Profiles</Link>
           <Link view="data" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Data</Link>
           <Link view="print" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Print</Link>

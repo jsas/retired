@@ -42,18 +42,30 @@ describe('NAV_CATALOG shape', () => {
 describe('rankPages', () => {
   it('routes plain words to the page that holds them', () => {
     expect(rankPages('tfsa room')[0]?.viewId).toBe('details');
-    expect(rankPages('monte carlo')[0]?.viewId).toBe('eq');
+    // Issue #162: the Tools menu gave each analytic surface its own page, so
+    // the words now resolve straight to it — no hop through a combined page.
+    expect(rankPages('monte carlo')[0]?.viewId).toBe('montecarlo');
+    expect(rankPages('backtest')[0]?.viewId).toBe('backtest');
+    expect(rankPages('optimize')[0]?.viewId).toBe('optimize');
+    expect(rankPages('solver')[0]?.viewId).toBe('solver');
+    expect(rankPages('how much can i spend')[0]?.viewId).toBe('solver');
+    expect(rankPages('steering')[0]?.viewId).toBe('eq');
     expect(rankPages('backup')[0]?.viewId).toBe('data');
     expect(rankPages('tax tables')[0]?.viewId).toBe('settings');
     expect(rankPages('print')[0]?.viewId).toBe('print');
     expect(rankPages('compare')[0]?.viewId).toBe('scenarios');
+    expect(rankPages('schedule')[0]?.viewId).toBe('math');
+    expect(rankPages('projection')[0]?.viewId).toBe('math');
   });
 
   it('searches only the reachable pages — folded legacy views never surface', () => {
-    for (const q of ['monte carlo', 'optimize', 'export', 'sharing', 'backtest', 'compare']) {
+    // Only the truly-merged legacy names fold now; the Tools surfaces are real
+    // pages and DO surface for their own words.
+    for (const q of ['export', 'sharing', 'compare']) {
       const ids = rankPages(q).map((e) => e.viewId);
-      expect(ids, `query "${q}" surfaced a folded page`).not.toContain('montecarlo');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('export');
+      expect(ids, `query "${q}" surfaced a folded page`).not.toContain('sharing');
+      expect(ids, `query "${q}" surfaced a folded page`).not.toContain('compare');
     }
   });
 
@@ -63,10 +75,10 @@ describe('rankPages', () => {
     // With the user on the destination itself, it leads.
     const here = rankPages('compare', 'scenarios');
     expect(here[0]?.viewId).toBe('scenarios');
-    // A folded currentView canonicalizes for the hoist (on #/monte-carlo means
-    // on Insights, and an Insights search result is "already here").
-    const folded = rankPages('monte carlo', 'montecarlo');
-    expect(folded[0]?.viewId).toBe('eq');
+    // A folded currentView canonicalizes for the hoist (on #/export means on
+    // Data, and a Data search result is "already here").
+    const folded = rankPages('export', 'export');
+    expect(folded[0]?.viewId).toBe('data');
   });
 
   it('is deterministic: no query, no matches', () => {
@@ -78,8 +90,12 @@ describe('rankPages', () => {
 
 describe('canonicalView / pageTitleLine', () => {
   it('maps folded views to their destination, identity otherwise', () => {
-    expect(canonicalView('montecarlo')).toBe('eq');
     expect(canonicalView('sharing')).toBe('data');
+    expect(canonicalView('compare')).toBe('scenarios');
+    // Issue #162 unfurled the Tools surfaces — they are destinations now.
+    expect(canonicalView('montecarlo')).toBe('montecarlo');
+    expect(canonicalView('backtest')).toBe('backtest');
+    expect(canonicalView('optimize')).toBe('optimize');
     expect(canonicalView('eq')).toBe('eq');
     expect(canonicalView('projection')).toBe('projection');
   });
@@ -87,11 +103,16 @@ describe('canonicalView / pageTitleLine', () => {
   it('names pages by their UI title — folded pages report their destination', () => {
     expect(pageTitleLine('projection')).toBe('Dashboard');
     expect(pageTitleLine('details')).toBe('Details');
-    expect(pageTitleLine('eq')).toBe('Insights');
+    expect(pageTitleLine('eq')).toBe('Steering');
+    expect(pageTitleLine('math')).toBe('Projection');
+    expect(pageTitleLine('optimize')).toBe('Optimizer');
+    expect(pageTitleLine('montecarlo')).toBe('Monte Carlo');
+    expect(pageTitleLine('backtest')).toBe('Backtest');
+    expect(pageTitleLine('solver')).toBe('Solver');
     expect(pageTitleLine('scenarios')).toBe('Profiles');
     expect(pageTitleLine('data')).toBe('Data');
     // A legacy view's line is the page the user actually sees.
-    expect(pageTitleLine('montecarlo')).toBe('Insights');
+    expect(pageTitleLine('compare')).toBe('Profiles');
   });
 
   it('titles are article-safe (no leading The/An/A — "on the X page" reads right)', () => {
@@ -118,8 +139,12 @@ describe('sitemap artifact serialization', () => {
       expect(p.url).toBe(`${PAGES_ORIGIN}/${p.route}`);
       expect(p.title.length).toBeGreaterThan(0);
     }
-    // Folded legacy views and beta-only chrome never appear.
-    expect(views).not.toContain('montecarlo');
+    // Folded legacy views (compare/export/sharing) and beta-only chrome never
+    // appear; the Tools surfaces (montecarlo et al.) do — issue #162.
+    expect(views).toContain('montecarlo');
+    expect(views).toContain('solver');
+    expect(views).not.toContain('compare');
+    expect(views).not.toContain('export');
     expect(views).not.toContain('styleguide');
   });
 

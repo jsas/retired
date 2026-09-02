@@ -28,10 +28,11 @@ export function viewFromHash(hash: string): View | null {
 }
 
 // The canonical hash for a view ('#/steering'). Folded legacy views
-// (optimize/montecarlo/backtest/compare/export/sharing) keep their own
-// routes for parsing, but the canonical link points at the page their
-// catalog entry folds into — so a "Go to Monte Carlo" link the assistant
-// prints lands on Insights, not a dead route.
+// (compare/export/sharing) keep their own routes for parsing, but the
+// canonical link points at the page their catalog entry folds into — so a
+// "Go to Compare" link the assistant prints lands on Profiles, not a dead
+// route. (Issue #162 unfurled optimize/montecarlo/backtest into the Tools
+// menu — those are real pages now and print their own hashes.)
 export function hashForView(view: View): string {
   const target = foldTarget(view);
   return `#/${VIEW_ROUTES[target]}`;

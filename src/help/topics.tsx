@@ -357,7 +357,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'The down-market check',
     section: 'Reading the answer',
     keywords: ['stress test', 'pessimistic', 'low return', 'bear market'],
-    body: <P>Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo on the Insights page.</P>,
+    body: <P>Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo in the Tools menu.</P>,
   },
   {
     id: 'life-timeline',
@@ -421,31 +421,41 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'levers-ranked',
-    title: 'Levers, ranked (the equalizer)',
+    title: 'Steering (the equalizer)',
     section: 'Analysis',
-    keywords: ['eq', 'equalizer', 'sliders', 'drag pad', 'strategy ranking', 'crops'],
+    keywords: ['eq', 'equalizer', 'sliders', 'drag pad', 'strategy ranking', 'crops', 'steering'],
     body: (
       <>
-        <P>The equalizer is a goals-level surface over your whole plan: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast.</P>
-        <P>The Strategy Explorer re-runs your plan under a menu of alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing — each scored on the sustainable after-tax spending it supports, with a one-click Apply.</P>
+        <P>Steering is a goals-level surface over your whole plan: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast. The projection timeline under the controls redraws with every drag.</P>
+      </>
+    ),
+  },
+  {
+    id: 'strategy-explorer',
+    title: 'Optimizer (strategy explorer)',
+    section: 'Analysis',
+    keywords: ['optimize', 'strategies', 'variants', 'apply', 'what helps most'],
+    body: (
+      <>
+        <P>The Optimizer re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.</P>
       </>
     ),
   },
   {
     id: 'optimize-spending',
-    title: 'Sustainable spending solve',
+    title: 'Solver: sustainable spending',
     section: 'Analysis',
-    keywords: ['how much can i spend', 'solve', 'maximum spending', 'safe withdrawal'],
-    body: <P>Answers "how much could I spend?" instead of "will my spending last?" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures.</P>,
+    keywords: ['how much can i spend', 'solve', 'solver', 'maximum spending', 'safe withdrawal'],
+    body: <P>The Solver answers "how much could I spend?" instead of "will my spending last?" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures.</P>,
   },
 
   // ── Schedule ───────────────────────────────────────────────────────────
   {
     id: 'schedule-columns',
-    title: 'The schedule columns',
+    title: 'The Projection page columns',
     section: 'Schedule',
-    keywords: ['year by year', 'table', 'column picker', 'show all', 'balances'],
-    body: <P>The year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The <strong>Columns</strong> button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one "show all" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail.</P>,
+    keywords: ['projection', 'year by year', 'table', 'column picker', 'show all', 'balances'],
+    body: <P>The Projection page's year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The <strong>Columns</strong> button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one "show all" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail.</P>,
   },
 
   // ── Profiles ──────────────────────────────────────────────────────────────

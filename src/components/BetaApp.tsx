@@ -165,7 +165,7 @@ export function BetaApp({
         </Panel>
 
         <Footnote>
-          Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, levers ranked and backtests live one level down. · The old site stays up as a reference for a while — <a className="underline" href="?beta">open it</a> ({BETA_COOKIE_NAME} cookie remembers; <a className="underline" href="?beta=off">back to the app</a>)
+          Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, the levers, the odds, the history and the solver live under the Tools menu. · The old site stays up as a reference for a while — <a className="underline" href="?beta">open it</a> ({BETA_COOKIE_NAME} cookie remembers; <a className="underline" href="?beta=off">back to the app</a>)
         </Footnote>
     </BetaPage>
   );

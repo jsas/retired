@@ -1127,14 +1127,22 @@ describe('find_page / get_sitemap / propose_navigate', () => {
     expect(out.content).toMatch(/\n1\. Details — #\/details/);
   });
 
-  it('find_page routes a folded feature name to its destination page', () => {
-    // "monte carlo" is a keyword on the (folded) legacy view and on eq.
+  it('find_page routes a tool name straight to its own page (issue #162)', () => {
+    // The Tools menu unfurled the surfaces that used to fold into Insights —
+    // "monte carlo" now resolves to the Monte Carlo page itself.
     const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'monte carlo' } });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('Insights');
-    expect(out.content).toContain('#/steering');
-    // The folded page must not surface as its own destination.
-    expect(out.content).not.toContain('#/monte-carlo');
+    expect(out.content).toContain('Monte Carlo');
+    expect(out.content).toContain('#/monte-carlo');
+    expect(out.content).not.toContain('Steering');
+  });
+
+  it('find_page still routes a folded legacy name to its destination page', () => {
+    // "sharing" has no page of its own — Data hosts it.
+    const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'share' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('#/data');
+    expect(out.content).not.toContain('#/sharing');
   });
 
   it('find_page tags the page the user is on as "already here"', () => {
@@ -1157,28 +1165,40 @@ describe('find_page / get_sitemap / propose_navigate', () => {
     expect(out.content).toContain('(view eq)');
     expect(out.content).toContain('(view scenarios)');
     expect(out.content).toContain('(view data)');
-    expect(out.content).not.toContain('(view montecarlo)');
+    // The Tools surfaces are pages now (issue #162) — they belong on the map.
+    expect(out.content).toContain('(view montecarlo)');
+    expect(out.content).toContain('(view solver)');
     expect(out.content).not.toContain('(view sharing)');
+    expect(out.content).not.toContain('(view compare)');
   });
 
   it('propose_navigate returns a confirm card with the destination, empty patch', () => {
     const out = executeToolCall(ctx({ canNavigate: true }), {
-      id: '1', name: 'propose_navigate', args: { view: 'steering', label: 'Open Insights' },
+      id: '1', name: 'propose_navigate', args: { view: 'steering', label: 'Open Steering' },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
     expect(out.patch).toEqual({});
     expect(out.navigate).toBe('eq');
-    expect(out.label).toBe('Open Insights');
-    expect(out.preview).toMatchObject({ Page: 'Insights', Route: '#/steering' });
+    expect(out.label).toBe('Open Steering');
+    expect(out.preview).toMatchObject({ Page: 'Steering', Route: '#/steering' });
   });
 
-  it('propose_navigate redirects a folded view to the page that hosts it', () => {
+  it('propose_navigate lands an unfurled tool on its own page (issue #162)', () => {
     const out = executeToolCall(ctx({ canNavigate: true }), {
       id: '1', name: 'propose_navigate', args: { view: 'montecarlo', label: 'Open Monte Carlo' },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
-    expect(out.navigate).toBe('eq');
-    expect(out.preview).toMatchObject({ Page: 'Insights' });
+    expect(out.navigate).toBe('montecarlo');
+    expect(out.preview).toMatchObject({ Page: 'Monte Carlo' });
+  });
+
+  it('propose_navigate still redirects a merged legacy view to its host page', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'compare', label: 'Open Compare' },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.navigate).toBe('scenarios');
+    expect(out.preview).toMatchObject({ Page: 'Profiles' });
   });
 
   it('propose_navigate without a UI returns the shareable hash instead', () => {
@@ -1196,6 +1216,9 @@ describe('find_page / get_sitemap / propose_navigate', () => {
     if (out.kind !== 'error') throw new Error('expected error');
     expect(out.content).toContain('Unknown view');
     expect(out.content).toContain('projection');
-    expect(out.content).not.toContain('montecarlo');
+    // Issue #162: the Tools surfaces are real view ids now — the suggestion
+    // list carries them; the still-folded legacy ones stay out.
+    expect(out.content).toContain('montecarlo');
+    expect(out.content).not.toContain('compare');
   });
 });

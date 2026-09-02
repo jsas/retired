@@ -365,7 +365,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
     list_scenarios: { description:      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
     find_page: { description:      'Search the site\'s page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Use whenever the user asks WHERE something lives.', schema: findPageArgs },
     get_sitemap: { description:      'The full site map: every page (view), its route (#/hash), and one-line purpose. Use for "what can this app do?", "what pages exist?", or before guessing where something lives.', schema: getSitemapArgs },
-    propose_navigate: { description:      'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → the Insights page that now hosts it — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
+    propose_navigate: { description:      'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → montecarlo, "solver" → solver — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
 };
 
 /** Tool specs advertised to providers: the catalog rendered as JSON Schema. */
@@ -1275,7 +1275,7 @@ function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioA
 
 /** Resolve a name to its catalog entry (view id, route, title, or keyword).
  *  Returns null instead of guessing-then-erroring. The whole catalog is
- *  searched — a folded legacy name ("montecarlo") resolves so the tool can
+ *  searched — a folded legacy name ("compare") resolves so the tool can
  *  redirect it to its destination rather than reject a request the UI can
  *  satisfy. */
 function resolveNavView(name: string | View): NavEntry | null {
@@ -1321,7 +1321,7 @@ function getSitemapTool(): ToolOutcome {
  *  direct navigate, which would yank the user out of this chat mid-answer).
  *  Unbound hosts return the #/hash (not an error) — the model can share the
  *  destination as a link instead of actioning it. A folded legacy view is
- *  redirected to the page the UI shows (montecarlo → Insights), so the card
+ *  redirected to the page the UI shows (compare → Profiles), so the card
  *  always opens a real destination. */
 function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavigateArgs>): ToolOutcome {
   const found = resolveNavView(args.view);

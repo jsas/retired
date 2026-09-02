@@ -279,10 +279,13 @@ describe('buildSystemPrompt', () => {
   });
 
   it('names the destination page for a folded legacy view, and drops the line when absent', () => {
-    // The beta folds Monte Carlo into Insights — the user is on the Insights
-    // page even at a legacy #/monte-carlo route.
-    const folded = buildSystemPrompt('My Plan', { currentView: 'montecarlo' });
-    expect(folded).toContain('The user is currently on the Insights page.');
+    // Compare has no page of its own — the user is on Profiles even at a
+    // legacy #/compare route. (The Tools surfaces unfurled in issue #162.)
+    const folded = buildSystemPrompt('My Plan', { currentView: 'compare' });
+    expect(folded).toContain('The user is currently on the Profiles page.');
+    // An unfurled tool names its own page.
+    expect(buildSystemPrompt('My Plan', { currentView: 'montecarlo' }))
+      .toContain('The user is currently on the Monte Carlo page.');
     // No currentView (tests / MCP hosts): the line simply falls out.
     expect(buildSystemPrompt('My Plan')).not.toContain('currently on the');
   });

@@ -9,12 +9,13 @@
 // is a one-file change and the combined test fails on half-drift.
 //
 // KEYED FOR THE BETA SKIN (issue #141): titles/descriptions match what the
-// beta chrome shows (Dashboard, The details, Insights, Profiles, Data). The
-// surfaces the beta fold into those pages (optimize/monte-carlo/backtest →
-// Insights; export/sharing → Data; compare → Profiles) keep their legacy view
-// ids for back-compat routing on the stable skin, but carry `foldedInto` and
-// are hidden from search/sitemap/proposals. When beta becomes the UI, delete
-// the folded entries and the drift test keeps the routes honest.
+// beta chrome shows (Dashboard, The details, the Tools menu, Profiles, Data).
+// Issue #162 unfurled the analytics surfaces into the Tools menu — Steering,
+// Optimizer, Monte Carlo, Backtest and the new Solver are each their own page
+// again. Only the truly-merged legacy routes still fold (export/sharing →
+// Data; compare → Profiles); they keep their legacy view ids for back-compat
+// routing on the stable skin, carry `foldedInto`, and hide from
+// search/sitemap/proposals.
 
 /** One navigable page (view) in the SPA. `viewId` must be importable by
  *  host-agnostic packages without depending on the app, so it lives here. */
@@ -22,7 +23,12 @@ export type View =
   | 'projection'
   | 'details'
   | 'math'
+  // The Tools menu (issue #162): each surface is its own page again.
   | 'eq'
+  | 'optimize'
+  | 'montecarlo'
+  | 'backtest'
+  | 'solver'
   | 'scenarios'
   | 'data'
   | 'print'
@@ -36,13 +42,10 @@ export type View =
   // App renders it from the beta branch, but it must be a recognized view so
   // the URL-sync effect doesn't rewrite #/styleguide back to the default view.
   | 'styleguide'
-  // Legacy stable-skin pages. On the beta skin these routes land on the page
-  // named in `foldedInto` below (or the dashboard for unhandled ones); they
-  // stay routable for existing deep links while beta is opt-in.
-  | 'optimize'
+  // Legacy stable-skin pages whose content merged into a beta home. On the
+  // beta skin these routes land on the page named in `foldedInto`; they stay
+  // routable for existing deep links.
   | 'compare'
-  | 'montecarlo'
-  | 'backtest'
   | 'export'
   | 'sharing';
 
@@ -75,7 +78,9 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     route: 'projection',
     title: 'Dashboard',
     description: 'The plan at a glance: the verdict (funded or depleted, with age and shortfall), key metrics, and the doors to everything else.',
-    keywords: ['dashboard', 'home', 'verdict', 'funded', 'depleted', 'run out', 'shortfall', 'money run out', 'projection', 'overview', 'main page'],
+    // 'projection' left this keyword list when the schedule page was renamed
+    // Projection (issue #162) — the word belongs to that page now.
+    keywords: ['dashboard', 'home', 'verdict', 'funded', 'depleted', 'run out', 'shortfall', 'money run out', 'overview', 'main page'],
   },
   {
     viewId: 'details',
@@ -89,16 +94,44 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'math',
     route: 'year-math',
-    title: 'Year-by-year',
-    description: 'The schedule table: one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.',
-    keywords: ['schedule', 'year-by-year', 'year by year', 'table', 'columns', 'withdrawals', 'tax paid', 'one year'],
+    title: 'Projection',
+    description: 'The projection: the money-over-age timeline plus the schedule table — one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.',
+    keywords: ['projection', 'schedule', 'year-by-year', 'year by year', 'table', 'columns', 'withdrawals', 'tax paid', 'one year', 'timeline'],
   },
   {
     viewId: 'eq',
     route: 'steering',
-    title: 'Insights',
-    description: 'Everything the plan can be nudged by: the equalizer lever ranking (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work), the optimize variants with one-click apply, the Monte Carlo odds, and the historical backtest.',
-    keywords: ['insights', 'steering', 'equalizer', 'levers', 'options', 'ranked', 'what helps most', 'optimize', 'best option', 'apply', 'monte carlo', 'simulation', 'odds', 'success rate', 'probabilities', 'backtest', 'historical', '1926', 'stress test', 'past markets'],
+    title: 'Steering',
+    description: 'The equalizer: drag the plan’s levers (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) with the projection timeline under your hands, and see the ranking of what helps most.',
+    keywords: ['steering', 'insights', 'equalizer', 'levers', 'options', 'ranked', 'what helps most', 'nudge', 'tools', 'drag'],
+  },
+  {
+    viewId: 'optimize',
+    route: 'optimize',
+    title: 'Optimizer',
+    description: 'The strategy explorer: named plan variants (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) each replayed and scored on sustainable spending, lifetime tax and GIS — with one-click apply.',
+    keywords: ['optimize', 'optimiser', 'optimizer', 'strategies', 'variants', 'best option', 'best lever', 'compare timing', 'apply', 'sustainable spending'],
+  },
+  {
+    viewId: 'montecarlo',
+    route: 'monte-carlo',
+    title: 'Monte Carlo',
+    description: 'Probabilistic run: 500 randomized market futures over your plan — the success-rate fan, the odds of lasting, and a depletion histogram.',
+    keywords: ['monte carlo', 'simulation', 'odds', 'success rate', 'probabilities', 'market futures', 'probabilistic', 'fan chart', 'risk'],
+  },
+  {
+    viewId: 'backtest',
+    route: 'backtest',
+    title: 'Backtest',
+    description: 'Run the plan against every historical market stretch on record — real returns, not invented ones — and see how often it would have survived.',
+    keywords: ['backtest', 'historical', '1926', '1970', 'stress test', 'past markets', 'sequence risk', 'crash'],
+  },
+  {
+    viewId: 'solver',
+    route: 'solver',
+    title: 'Solver',
+    description: 'Invert the verdict: pick a confidence level and the solver binary-searches the most you can spend per year while the Monte Carlo still succeeds that often — then apply it in one click.',
+    keywords: ['solver', 'solve', 'how much can i spend', 'maximum spending', 'safe withdrawal', 'sustainable', 'target success rate', 'spend freely'],
   },
   {
     viewId: 'scenarios',
@@ -171,33 +204,10 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     keywords: ['style guide', 'design', 'beta', 'components'],
     betaOnly: true,
   },
-  // ── Legacy stable-skin pages, folded on beta ────────────────────────────
-  // Kept so #/optimize etc. keep parsing and the stable header still compiles;
-  // hidden from search/sitemap because beta is the destination UI.
-  {
-    viewId: 'optimize',
-    route: 'optimize',
-    title: 'Optimize',
-    description: 'Named plan variants scored on sustainable spending, with one-click apply.',
-    keywords: ['optimize', 'variants', 'best lever', 'compare timing', 'apply best'],
-    foldedInto: 'eq',
-  },
-  {
-    viewId: 'montecarlo',
-    route: 'monte-carlo',
-    title: 'Monte Carlo',
-    description: 'Probabilistic run: success rate across market futures and a depletion histogram.',
-    keywords: ['monte carlo', 'simulation', 'odds', 'success rate', 'market futures', 'probabilistic'],
-    foldedInto: 'eq',
-  },
-  {
-    viewId: 'backtest',
-    route: 'backtest',
-    title: 'Backtest',
-    description: 'Run the plan against every historical market stretch back to 1926.',
-    keywords: ['backtest', 'historical', '1926', 'stress test', 'past markets'],
-    foldedInto: 'eq',
-  },
+  // ── Legacy stable-skin pages still folded on beta ───────────────────────
+  // (issue #162 unfurled optimize/montecarlo/backtest into the Tools menu;
+  // these three are what's left — their content merged into a neighbouring
+  // home rather than becoming a page of its own.)
   {
     viewId: 'compare',
     route: 'compare',
@@ -229,7 +239,7 @@ export function hashForEntry(entry: NavEntry): string {
   return `#/${entry.route}`;
 }
 
-/** "Dashboard", "Insights", … — the phrasing for the ambient current-page
+/** "Dashboard", "Steering", … — the phrasing for the ambient current-page
  *  line (`buildSystemPrompt` uses this so the prompt and find_page's
  *  "already here" start with the same friendly title). A folded legacy view
  *  reports its destination's title, since that is the page the user sees. */

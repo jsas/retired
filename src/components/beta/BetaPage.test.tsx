@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { BetaPage, MOBILE_MENU_ITEMS, type VerdictChip } from './BetaPage';
+import { BetaPage, MOBILE_MENU_ITEMS, TOOLS_MENU_ITEMS, type VerdictChip } from './BetaPage';
 
 // Node has no localStorage — stub it so the dock-open pref read/write works.
 const store = new Map<string, string>();
@@ -48,9 +48,22 @@ describe('BetaPage assistant dock', () => {
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('90+');
-    for (const label of ['Details', 'Schedule', 'Insights', 'Profiles']) {
+    for (const label of ['Details', 'Projection', 'Tools', 'Profiles']) {
       expect(html, label).toContain(label);
     }
+  });
+
+  it('the Tools menu carries all five analytic surfaces', () => {
+    // Issue #162: Steering, Optimizer, Monte Carlo, Backtest, Solver — the
+    // dropdown's item list is the contract the pages hang off. (The Dropdown
+    // renders its children only when open, so the static markup proves the
+    // trigger; the item list is proven against the exported source of truth.)
+    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['eq', 'optimize', 'montecarlo', 'backtest', 'solver']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver']);
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+    );
+    expect(html).toContain('>Tools');
   });
 
   it('offers a phone Menu carrying the same named homes', () => {
@@ -62,7 +75,7 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toContain('Menu');
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    for (const label of ['Dashboard', 'Schedule', 'Insights', 'Profiles', 'Details', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
+    for (const label of ['Dashboard', 'Projection', 'Details', 'Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Profiles', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
       expect(labels, label).toContain(label);
     }
   });

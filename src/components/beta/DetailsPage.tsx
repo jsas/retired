@@ -475,7 +475,7 @@ function renderSection(id: string, ctx: {
     case 'markets': {
       // The flat hypothesis: expected return plus volatility. Without
       // volatility Monte Carlo can't run (MC refuses at 0), so this is the
-      // unlock for the Analysis section of Insights.
+      // unlock for the Monte Carlo and Solver pages in the Tools menu.
       const periods = inp.marketPeriods ?? [];
       const setPeriods = (next: MarketPeriod[]) =>
         set({ marketPeriods: next.length ? next.sort((a, b) => a.age - b.age) : undefined });
