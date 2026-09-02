@@ -209,6 +209,179 @@ const READ_SPECS: ReadSpec[] = [
     args: () => ({}),
     explainFrom: 'none',
   },
+  // -------------------------------------------------------------------------
+  // Contrastive boundary minting (post-v2 gate): for the top confusion pairs
+  // from mineFailures, mint questions whose wording deliberately SITS ON THE
+  // BOUNDARY — the user's phrasing could be either tool, but we ground the
+  // RIGHT one. Model learns the discriminative feature via repetition, not
+  // via explicit instruction.
+  //
+  // Pair → discriminators we keep distinct:
+  //   compare_scenarios  — needs MORE-THAN-ONE option (variant labels, "vs",
+  //                         "or", "either") in the question
+  //   run_projection     — one named what-if (NOT a versus list)
+  //   get_scenario       — READ the plan, not run it
+  //   solve_spending     — needs a target datum phrase ("how much")
+  //   run_strategies     — needs an exploration sweep ("levers", "boost")
+  //   get_schedule       — needs a year-by-year / schedule / table phrase
+  //   run_monte_carlo    — needs a probability/simulation/odds question
+  // -------------------------------------------------------------------------
+  {
+    // compare_scenarios vs run_projection — 56+14 = 70 fails previously. The
+    // projections below all have a single "what-if" (one number), NOT a vs-list.
+    tool: 'run_projection',
+    questions: [
+      (sc) => `What if I retire at ${sc.inputs.retirementAge + 3}?`,
+      (sc) => `Just run it with retirement at ${sc.inputs.retirementAge + 3}.`,
+      (sc) => `Show me my plan if I retire at ${sc.inputs.retirementAge + 3} alone.`,
+      (sc) => `One what-if: retire at ${sc.inputs.retirementAge + 3}.`,
+      (sc) => `Single scenario, retirement at ${sc.inputs.retirementAge + 3}.`,
+    ],
+    args: (sc) => ({ overrides: { retirementAge: sc.inputs.retirementAge + 3 } }),
+    explainFrom: 'verdict',
+  },
+  {
+    // get_scenario vs run_projection — 37+19 = 56 fails. Reads of the plan.
+    tool: 'get_scenario',
+    questions: [
+      () => 'Just read my plan as-is.',
+      () => "Don't run anything — show what I have today.",
+      () => 'Walk me through the inputs I gave you.',
+      () => 'Show the plan inputs I saved, nothing more.',
+      () => 'Read the current plan — no projection, just the inputs.',
+    ],
+    args: () => ({ section: 'summary' }),
+    explainFrom: 'none',
+  },
+  {
+    // solve_spending vs compare_scenarios — 22 fails. 'how much' → solver.
+    tool: 'solve_spending',
+    questions: [
+      () => 'How much yearly spend gives me 90% success?',
+      () => "Solve for a safe spending target; don't compare options yet.",
+      () => 'Figure out one number: the safe yearly spend.',
+      () => 'Calculate my affordable yearly spend.',
+    ],
+    args: () => ({ targetSuccessRate: 0.9, runs: 300 }),
+    explainFrom: 'solve',
+  },
+  {
+    // run_strategies vs compare_scenarios — 27 fails. Sweep-of-levers, not
+    // a pinned compare.
+    tool: 'run_strategies',
+    questions: [
+      () => 'Scan all the levers and rank what helps.',
+      () => "Don't pin two options yet — tell me which levers matter.",
+      () => 'Find the best improvements across CPP/OAS/pension timing.',
+      () => "Broad sweep: which strategies do well on my plan?",
+    ],
+    args: () => ({ maxVariants: 6 }),
+    explainFrom: 'none',
+  },
+  {
+    // get_schedule vs get_scenario / run_projection — 18 fails. Year-by-year
+    // wording → schedule.
+    tool: 'get_schedule',
+    questions: [
+      (sc) => `Year-by-year table from ${sc.inputs.retirementAge} to ${sc.inputs.maxAge}.`,
+      (sc) => `Show the schedule, ages ${sc.inputs.retirementAge} through ${sc.inputs.maxAge}.`,
+      (sc) => `Walk me through the table between ${sc.inputs.retirementAge} and ${sc.inputs.maxAge}.`,
+    ],
+    args: (sc) => ({ fromAge: sc.inputs.retirementAge, toAge: sc.inputs.maxAge, stride: 3 }),
+    explainFrom: 'none',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Contrastive negative-pair minting (L3.5). For the top confusion pair from
+// mineFailures, mint an explicit "the right call here is X, not Y" assistant
+// reply. Format: prose first (plain-text explanation), then ONE TOOL_CALL
+// line — still protocol-valid.
+// ---------------------------------------------------------------------------
+
+interface ContrastPair {
+  correct: string;
+  wrong: string;
+  question: (sc: NamedScenario) => string;
+  args: (sc: NamedScenario) => Record<string, unknown>;
+  /** One-sentence rationale distinguishing the two tools for THIS question. */
+  rationale: (sc: NamedScenario) => string;
+}
+
+const CONTRAST_PAIRS: ContrastPair[] = [
+  // compare_scenarios magnet (largest single cluster).
+  {
+    correct: 'run_projection',
+    wrong: 'compare_scenarios',
+    question: (sc) => `What if I retire at ${sc.inputs.retirementAge + 3}?`,
+    args: (sc) => ({ overrides: { retirementAge: sc.inputs.retirementAge + 3 } }),
+    rationale: () =>
+      'Single what-if (one number change) is a run_projection call — ' +
+      'compare_scenarios needs at least two variant labels.',
+  },
+  {
+    correct: 'get_scenario',
+    wrong: 'compare_scenarios',
+    question: () => 'Show me my plan as-is.',
+    args: () => ({ section: 'summary' }),
+    rationale: () =>
+      'Plain read of the plan is get_scenario. compare_scenarios requires ' +
+      'two-or-more variant options, which a bare "as-is" lacks.',
+  },
+  {
+    correct: 'run_monte_carlo',
+    wrong: 'compare_scenarios',
+    question: () => 'What are the odds my plan succeeds?',
+    args: () => ({ runs: 500 }),
+    rationale: () =>
+      'Probability across markets is a Monte Carlo simulation. ' +
+      "compare_scenarios picks two named variants — 'odds' isn't a variant.",
+  },
+  {
+    correct: 'solve_spending',
+    wrong: 'compare_scenarios',
+    question: () => 'How much can I safely spend each year?',
+    args: () => ({ targetSuccessRate: 0.9, runs: 300 }),
+    rationale: () =>
+      "'How much' is a target-datum question — solve_spending computes one " +
+      'number. compare_scenarios compares two options, not a solve target.',
+  },
+  {
+    correct: 'run_strategies',
+    wrong: 'compare_scenarios',
+    question: () => 'Which levers would help my plan most?',
+    args: () => ({ maxVariants: 5 }),
+    rationale: () =>
+      "A sweep-of-levers is run_strategies. compare_scenarios compares " +
+      'pinned variants — lever exploration is a strategy scan, not a pin.',
+  },
+  {
+    correct: 'get_schedule',
+    wrong: 'compare_scenarios',
+    question: (sc) => `Year-by-year table, ages ${sc.inputs.retirementAge}–${sc.inputs.maxAge}.`,
+    args: (sc) => ({ fromAge: sc.inputs.retirementAge, toAge: sc.inputs.maxAge, stride: 3 }),
+    rationale: () =>
+      'A schedule/table request is get_schedule. compare_scenarios produces ' +
+      'a verdict comparison, not a year-by-year table.',
+  },
+  {
+    correct: 'get_scenario',
+    wrong: 'run_projection',
+    question: () => 'Read my plan inputs, no projection.',
+    args: () => ({ section: 'summary' }),
+    rationale: () =>
+      'When the user says "just read them" they want get_scenario. ' +
+      'run_projection runs the engine — not a read.',
+  },
+  {
+    correct: 'solve_spending',
+    wrong: 'run_strategies',
+    question: () => 'Solve for the safe yearly spend.',
+    args: () => ({ targetSuccessRate: 0.9, runs: 300 }),
+    rationale: () =>
+      "A 'solve for …' phrasing with a target datum is solve_spending. " +
+      'run_strategies sweeps levers without computing one target number.',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -255,6 +428,33 @@ function explain(spec: ReadSpec, resultText: string): string {
 export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
   const records: CorpusRecord[] = [];
   let seq = 0;
+
+  // Contrastive negative-pair records (L3.5): explicit "the right call here is
+  // X, not Y" replies. Skips the eval split — these are train-only.
+  for (const sc of SCENARIOS) {
+    for (const pair of CONTRAST_PAIRS) {
+      const q = pair.question(sc);
+      const args = pair.args(sc);
+      const rationale = pair.rationale(sc);
+      seq += 1;
+      const base = `contrast:${pair.correct}-vs-${pair.wrong}:${sc.id}:q${seq}`;
+      records.push({
+        id: `${base}:call`, split: 'train', kind: 'tool-call-contrast',
+        scenarioId: sc.id,
+        messages: [
+          { role: 'user', content: q },
+          {
+            role: 'assistant',
+            content:
+              `${rationale} The right call here is ${pair.correct}, not ${pair.wrong}.\n` +
+              emitToolCall(pair.correct, args),
+          },
+        ],
+        expect: { toolName: pair.correct },
+      });
+    }
+  }
+
   for (const sc of SCENARIOS) {
     for (const spec of READ_SPECS) {
       const args = spec.args(sc);

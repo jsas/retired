@@ -26,6 +26,8 @@ export interface CorpusRecord {
   split: 'train' | 'eval';
   kind:
     | 'tool-call'          // question → one in-catalog TOOL_CALL (the core skill)
+    | 'tool-call-contrast' // question → assistant explains the correct tool
+                          //   then calls it (negative-pair explicit disambiguation)
     | 'tool-followup'      // TOOL_CALL → result → plain-prose explanation
     | 'mutation-confirm'   // propose_* → APPROVED/REJECTED → confirm, never re-propose
     | 'refusal'            // out-of-guardrail ask → deflect, calculator-not-planner
