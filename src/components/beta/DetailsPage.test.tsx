@@ -100,4 +100,51 @@ describe('DetailsPage inline editors', () => {
     expect(on).toContain('Partner age');
     expect(on).toContain('CPP start age');
   });
+
+  it('offers the RDSP toggle and editors once enabled', () => {
+    const off = render();
+    expect(off, 'rdsp section always present').toContain('details-rdsp');
+    expect(off).not.toContain('DTC eligible');
+    const on = render({ rdsp: { enabled: true, balance: 10000, contribution: 1000, familyIncome: 40000, dtcEligible: true } });
+    expect(on).toContain('Family income');
+    expect(on).toContain('DTC eligible');
+    expect(on).toContain('value="10000"');
+    expect(on).toContain('value="40000"');
+  });
+
+  it('offers the FHSA toggle and editors once enabled', () => {
+    const off = render();
+    expect(off).toContain('details-fhsa');
+    const on = render({ fhsa: { enabled: true, balance: 5000, contribution: 8000, openAge: 30 } });
+    expect(on).toContain('Opened at age');
+    expect(on).toContain('value="30"');
+    expect(on).toContain('value="5000"');
+    expect(on).toContain('value="8000"');
+  });
+
+  it('offers the home-equity toggle and full editor once enabled', () => {
+    const off = render();
+    expect(off).toContain('details-home');
+    expect(off).toContain('Borrow against the home');
+    const on = render({
+      reverseMortgage: {
+        enabled: true, homeValue: 900000, appreciationRate: 0.02, interestRate: 0.065,
+        mode: 'heloc', maxLtv: 0.5, drawAmount: 12000, startAge: 70, durationYears: 15, topUp: true,
+      },
+    });
+    expect(on).toContain('HELOC (interest paid yearly)');
+    expect(on).toContain('value="900000"');
+    expect(on).toContain('Max loan-to-value');
+    expect(on).toContain('Draw $/yr');
+    expect(on).toContain('value="12000"');
+    expect(on).toContain('value="70"');
+    expect(on).toContain('value="15"');
+    expect(on).toContain('Last-resort top-up');
+  });
+
+  it('turns home-equity scheduled draws on with defaults', () => {
+    const html = render({ reverseMortgage: { enabled: true, homeValue: 500000, appreciationRate: 0.02, interestRate: 0.06 } });
+    expect(html).toContain('Scheduled draws');
+    expect(html).not.toContain('Draw $/yr');
+  });
 });
