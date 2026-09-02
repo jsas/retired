@@ -7,20 +7,21 @@ describe('devMarkupOverlay', () => {
     expect(devMarkupOverlay({ env: { MARKUP_MODEL_API_KEY: 'x' } })).toEqual([])
   })
 
-  it('builds bridge + bootstrap plugins when enabled', () => {
+  it('builds bridge + console + bootstrap when enabled', () => {
     const plugins = devMarkupOverlay({
       env: { MARKUP_MODEL_ENDPOINT: 'http://x', MARKUP_MODEL: 'm' },
     })
-    expect(plugins).toHaveLength(2)
+    expect(plugins).toHaveLength(3)
     const names = plugins.map((p) => p?.name ?? '')
     expect(names).toContain('markup-assistant')
+    expect(names).toContain('dev-markup-console')
     expect(names).toContain('dev-markup-overlay-bootstrap')
   })
 
   it('falls back to the stub engine when endpoint set but model missing', () => {
     // Endpoint-only env: still enabled (you can exercise the loop offline).
     const plugins = devMarkupOverlay({ env: { MARKUP_MODEL_ENDPOINT: 'http://x' } })
-    expect(plugins).toHaveLength(2)
+    expect(plugins).toHaveLength(3)
   })
 
   it('honors auto-apply and vision toggles without throwing', () => {
@@ -33,6 +34,6 @@ describe('devMarkupOverlay', () => {
         MARKUP_HOTKEY: 'alt+k',
       },
     })
-    expect(plugins).toHaveLength(2)
+    expect(plugins).toHaveLength(3)
   })
 })

@@ -6,7 +6,7 @@
  * The model must answer with one apply_edits tool call; a rejection is an
  * empty edits array plus a note.
  */
-import type { DomOp, Edit, Intent } from '../core/index.js'
+import type { DomOp, Edit, Intent } from '../core/protocol.js'
 import type { Engine, EngineDecision, EngineInput } from './engine.js'
 import { APPLY_EDITS_TOOL } from './tool-schema.js'
 

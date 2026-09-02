@@ -30,6 +30,8 @@
     "src/engine/tool-schema.ts",
     "src/engine/bridgeEngine.ts",
     "src/engine/envConfig.ts",
+    "src/engine/recorder.ts",
+    "src/engine/revertable.ts",
     "src/output/diff.ts",
     "src/vite/plugin.ts",
     "src/vite/index.ts"

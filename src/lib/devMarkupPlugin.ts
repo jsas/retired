@@ -1,18 +1,18 @@
 /**
  * devMarkupOverlay(): the app's dev-time markup loop, gated on env.
  *
- * Composes the markup-assistant vite bridge (intent/apply/events endpoints) with
- * a source sink that posts edits back to /apply, so the model's edits land on
- * disk and HMR reloads the page — the "mark -> snap -> send -> reload -> markup
- * clears" loop. Everything is driven by MARKUP_* env vars (see
- * engine/envConfig.ts); with no MARKUP_MODEL_ENDPOINT set, the function returns
- * null and the dev server is untouched (fully offline).
+ * Composes the markup-assistant vite bridge (intent/apply/events/record/revert
+ * endpoints) with the bootstrap-injection plugin and a console plugin that
+ * serves /__markup_console__ (per-interaction history + undo) reading from
+ * the SSE. Everything is driven by MARKUP_* env vars (see
+ * engine/envConfig.ts); with no MARKUP_MODEL_ENDPOINT set, the function
+ * returns [] and the dev server is untouched.
  *
  * Security: the model API key is read here, in node, and never serialized to
  * the client. The injected bootstrap receives only the non-secret toggles
- * (hotkey, vision, dom-snapshot). The /intent /apply /events endpoints are
- * unauthenticated same-origin dev routes — fine on localhost, never expose the
- * dev server beyond it.
+ * (hotkey, vision, dom-snapshot). The /intent /apply /events /record /revert
+ * endpoints are unauthenticated same-origin dev routes — fine on localhost,
+ * never expose the dev server beyond it.
  */
 import type { Plugin } from 'vite'
 // The node-dist of markup-assistant (built by packages/markup-assistant/npm run
@@ -37,9 +37,9 @@ export interface DevMarkupOverlayOptions {
 }
 
 /**
- * Returns the bridge plugin + the bootstrap-injection plugin when the loop is
- * enabled (MARKUP_MODEL_ENDPOINT set), otherwise []. Spread into the app's
- * plugins array.
+ * Returns [bridge, console, bootstrap] when the loop is enabled
+ * (MARKUP_MODEL_ENDPOINT set), otherwise []. Spread into the app's plugins
+ * array.
  */
 export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[] {
   const env = options.env ?? process.env
@@ -77,6 +77,21 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
     sinks: [sourceSink],
   })
 
+  // Console: serves a self-contained page at /__markup_console__ that polls
+  // /record for the history ledger and offers per-file revert buttons that
+  // post to /revert. Lives in the app so we can keep the plugin console-free.
+  const consolePlugin: Plugin = {
+    name: 'dev-markup-console',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url !== '/__markup_console__') return next()
+        if (req.method !== 'GET') return next()
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+        res.end(consoleHtml())
+      })
+    },
+  }
+
   // Inject the bootstrap script (a real app module, so the alias resolves it
   // to source and vite import-analysis rewrites it). The non-secret overlay
   // config is serialized into a window binding so the page stays in step
@@ -103,5 +118,60 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
     },
   }
 
-  return [bridge, bootstrap]
+  return [bridge, consolePlugin, bootstrap]
+}
+
+/**
+ * Self-contained console page. Polls /record every 750 ms; per-file "revert"
+ * button for entries whose edits are source edits. No build step: plain HTML
+ * + inline module, served from the dev middleware pipeline.
+ */
+function consoleHtml(): string {
+  return `<!doctype html>
+<html><head><title>markup console</title><style>
+body{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#111;color:#eee;margin:0;padding:12px}
+h1{font-size:13px;margin:0 0 8px}
+.entry{border:1px solid #333;border-radius:4px;margin:6px 0;padding:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.tag{background:#222;padding:1px 5px;border-radius:3px}
+.ok{color:#8f8}.fail{color:#f88}.pend{color:#cc8}
+.edit{margin:2px 0;padding:3px;background:#1a1a1a;border-radius:2px}
+button{background:#333;border:1px solid #555;color:#eee;padding:2px 6px;border-radius:3px;cursor:pointer}
+button:hover{background:#444}
+</style></head><body>
+<h1>markup console</h1>
+<div id="list"></div>
+<script type="module">
+const P='/__markup_assistant__';
+async function refresh(){
+  const r=await fetch(P+'/record');
+  const j=await r.json();
+  render(j.history);
+}
+function render(h){
+  const el=document.getElementById('list');
+  el.innerHTML='';
+  for(const e of h){
+    const d=document.createElement('div');d.className='entry';
+    d.innerHTML='<div class="row"><span class="tag">'+e.interactionId+'</span>'
+      +'<span class="tag '+(e.terminal==='applied'?'ok':e.terminal?'fail':'pend')+'">'+(e.terminal??e.lastStatus??'received')+'</span>'
+      +(e.gesture?'<span class="tag">'+e.gesture.kind+'</span>':'')+'</div>'
+      +(e.detail?'<div>'+e.detail+'</div>':'');
+    if(e.gesture&&e.gesture.summary){const s=document.createElement('div');s.textContent='gesture: '+e.gesture.summary;d.appendChild(s)}
+    for(const c of (e.context||[])){const s=document.createElement('div');s.textContent='ctx['+c.kind+']: '+c.summary;d.appendChild(s)}
+    for(const ed of e.edits||[]){
+      const row=document.createElement('div');row.className='edit';
+      row.textContent=ed.kind+' '+ (ed.file||'');
+      if(ed.kind==='text'||ed.kind==='write'){
+        const b=document.createElement('button');b.textContent='revert';
+        b.onclick=async()=>{await fetch(P+'/revert',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({edit:ed})});refresh()};
+        row.appendChild(b)
+      }
+      d.appendChild(row)
+    }
+    el.appendChild(d)
+  }
+}
+refresh(); setInterval(refresh,750);
+</script></body></html>`
 }
