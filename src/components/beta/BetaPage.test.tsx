@@ -62,9 +62,23 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toContain('Menu');
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    for (const label of ['Dashboard', 'Schedule', 'Insights', 'Profiles', 'Details', 'Data', 'Print', 'Settings', 'Help']) {
+    for (const label of ['Dashboard', 'Schedule', 'Insights', 'Profiles', 'Details', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
       expect(labels, label).toContain(label);
     }
+  });
+
+  it('the assistant route opens the dock regardless of the saved pref', () => {
+    // '#/assistant' is an explicit open — a closed-dock pref can't beat it.
+    store.set('wealthconsole_dock_open', '0');
+    const fakeWindow = { location: { hash: '#/assistant' } };
+    vi.stubGlobal('window', fakeWindow);
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, assistant: createElement('div', null, 'chat-body'), children: createElement('div') }),
+    );
+    expect(html).toContain('chat-body');
+    // the rail is mounted (fixed sheet on phones / sticky rail on desktop)
+    expect(html).toMatch(/fixed inset-0 top-12 z-50 flex flex-col/);
+    vi.unstubAllGlobals();
   });
 
   it('the dock header carries the fullscreen expand control', () => {
