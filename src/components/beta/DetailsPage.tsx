@@ -245,9 +245,108 @@ function renderSection(id: string, ctx: {
                 <Num label="OAS start age" value={sp.oasStartAge ?? 65} step={1} min={65} onChange={(v) => setSpouse({ oasStartAge: v })} />
                 <Num label="OAS years in Canada" value={sp.oasYearsInCanada} step={1} onChange={(v) => setSpouse({ oasYearsInCanada: v })} />
               </div>
-              <p className="text-[11px] leading-relaxed text-slate-400">
-                Contributions, income, events and phases for the partner are full-parity fields — the combined verdict already counts them.
-              </p>
+
+              <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Partner contributions</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <Num label="RRSP / yr" value={sp.rrspContribution} onChange={(v) => setSpouse({ rrspContribution: v })} />
+                <Num label="TFSA / yr" value={sp.tfsaContribution} onChange={(v) => setSpouse({ tfsaContribution: v })} />
+                <Num label="Taxable / yr" value={sp.taxableContribution} onChange={(v) => setSpouse({ taxableContribution: v })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Num label="TFSA room (blank = unlimited)" value={sp.tfsaRoom ?? NaN} step={1000}
+                  onChange={(v) => setSpouse({ tfsaRoom: Number.isFinite(v) ? v : null })} />
+                <Num label="RRSP room (blank = unlimited)" value={sp.rrspRoom ?? NaN} step={1000}
+                  onChange={(v) => setSpouse({ rrspRoom: Number.isFinite(v) ? v : null })} />
+              </div>
+
+              <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Partner income</h4>
+              <div className="space-y-2">
+                {(sp.income ?? []).map((s, i) => (
+                  <div key={s.id} className="space-y-2 border border-slate-200 p-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"><Txt label="Name" value={s.label} placeholder="e.g. Part-time work, DB pension" onChange={(v) => {
+                        const next = [...(sp.income ?? [])]; next[i] = { ...s, label: v }; setSpouse({ income: next });
+                      }} /></div>
+                      <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${s.label || 'income'}`}
+                        onClick={() => setSpouse({ income: (sp.income ?? []).filter((_, j) => j !== i) })}>×</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Sel label="Kind" value={s.kind} onChange={(v) => {
+                        const next = [...(sp.income ?? [])]; next[i] = { ...s, kind: v }; setSpouse({ income: next });
+                      }} options={(Object.keys(INCOME_KIND_LABEL) as IncomeKind[]).map(k => ({ value: k, label: INCOME_KIND_LABEL[k] }))} />
+                      <Num label="$ a year" value={s.annualAmount} step={1000} onChange={(v) => {
+                        const next = [...(sp.income ?? [])]; next[i] = { ...s, annualAmount: v }; setSpouse({ income: next });
+                      }} />
+                      <Num label="From age" value={s.startAge} step={1} onChange={(v) => {
+                        const next = [...(sp.income ?? [])]; next[i] = { ...s, startAge: v }; setSpouse({ income: next });
+                      }} />
+                      <Num label="To age (blank = forever)" value={s.endAge ?? NaN} step={1} onChange={(v) => {
+                        const next = [...(sp.income ?? [])]; next[i] = { ...s, endAge: Number.isFinite(v) && v > 0 ? v : null }; setSpouse({ income: next });
+                      }} />
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+                  onClick={() => setSpouse({ income: [...(sp.income ?? []), { id: uid(), label: '', kind: 'employment' as IncomeKind, annualAmount: 0, startAge: sp.currentAge, endAge: sp.retirementAge, indexedToCpi: true }] })}>
+                  + add income
+                </button>
+              </div>
+
+              <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Partner cash events</h4>
+              <div className="space-y-2">
+                {(sp.events ?? []).map((e, i) => (
+                  <div key={e.id} className="space-y-2 border border-slate-200 p-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"><Txt label="Name" value={e.label} placeholder="e.g. Inheritance, renovation" onChange={(v) => {
+                        const next = [...(sp.events ?? [])]; next[i] = { ...e, label: v }; setSpouse({ events: next });
+                      }} /></div>
+                      <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${e.label || 'event'}`}
+                        onClick={() => setSpouse({ events: (sp.events ?? []).filter((_, j) => j !== i) })}>×</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Sel label="Direction" value={e.direction} onChange={(v) => {
+                        const next = [...(sp.events ?? [])]; next[i] = { ...e, direction: v }; setSpouse({ events: next });
+                      }} options={[{ value: 'in' as const, label: 'Inflow' }, { value: 'out' as const, label: 'Outflow' }]} />
+                      <Num label="$ amount" value={e.amount} step={1000} onChange={(v) => {
+                        const next = [...(sp.events ?? [])]; next[i] = { ...e, amount: v }; setSpouse({ events: next });
+                      }} />
+                      <Num label="At age" value={e.age} step={1} onChange={(v) => {
+                        const next = [...(sp.events ?? [])]; next[i] = { ...e, age: v }; setSpouse({ events: next });
+                      }} />
+                      <Num label="Repeat to age (blank = once)" value={e.endAge ?? NaN} step={1} onChange={(v) => {
+                        const next = [...(sp.events ?? [])]; next[i] = { ...e, endAge: Number.isFinite(v) && v > 0 ? v : null }; setSpouse({ events: next });
+                      }} />
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+                    onClick={() => setSpouse({ events: [...(sp.events ?? []), { id: uid(), age: inp.retirementAge, label: '', amount: 0, direction: 'in' }] })}>+ add inflow</button>
+                  <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+                    onClick={() => setSpouse({ events: [...(sp.events ?? []), { id: uid(), age: inp.retirementAge, label: '', amount: 0, direction: 'out' }] })}>+ add outflow</button>
+                </div>
+              </div>
+
+              <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Partner spending phases</h4>
+              <p className="text-[12px] text-slate-500">Scale the partner's spending goal by age (go-go / slow-go / no-go).</p>
+              <div className="space-y-2">
+                {(sp.spendingBands ?? []).map((b, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Num label="From age" value={b.fromAge} step={1} onChange={(v) => {
+                      const next = [...(sp.spendingBands ?? [])]; next[i] = { ...b, fromAge: v }; setSpouse({ spendingBands: next });
+                    }} />
+                    <Num label="% of base" value={Math.round(b.pctOfBase * 100)} step={5} onChange={(v) => {
+                      const next = [...(sp.spendingBands ?? [])]; next[i] = { ...b, pctOfBase: v / 100 }; setSpouse({ spendingBands: next });
+                    }} />
+                    <button className="mt-4 text-slate-400 hover:text-rose-600" aria-label="Remove phase"
+                      onClick={() => setSpouse({ spendingBands: (sp.spendingBands ?? []).filter((_, j) => j !== i) })}>×</button>
+                  </div>
+                ))}
+                <button className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+                  onClick={() => setSpouse({ spendingBands: [...(sp.spendingBands ?? []), { fromAge: ((sp.spendingBands ?? [])[(sp.spendingBands ?? []).length - 1]?.fromAge ?? sp.retirementAge) + 10, pctOfBase: 0.8 }] })}>
+                  + add a phase
+                </button>
+              </div>
             </div>
           )}
         </Section>

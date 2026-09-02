@@ -80,4 +80,32 @@ describe('DetailsPage inline editors', () => {
     expect(on).toContain('Partner age');
     expect(on).toContain('CPP start age');
   });
+
+  it('renders the full partner register: contributions, room, income, events, phases', () => {
+    const html = render({
+      spouse: {
+        enabled: true, currentAge: 55, retirementAge: 60,
+        rrspBalance: 1, tfsaBalance: 2, taxableBalance: 3, cashCushionBalance: 4,
+        rrspContribution: 3000, tfsaContribution: 6000, taxableContribution: 0,
+        tfsaRoom: 40000, rrspRoom: 25000,
+        cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 0,
+        income: [{ id: 'i1', label: 'Consulting', kind: 'employment', annualAmount: 20000, startAge: 60, endAge: 65, indexedToCpi: true }],
+        events: [{ id: 'e1', label: 'Gift', amount: 50000, age: 70, direction: 'out' }],
+        spendingBands: [{ fromAge: 70, pctOfBase: 0.7 }],
+      },
+    });
+    expect(html).toContain('Partner contributions');
+    expect(html).toContain('Partner income');
+    expect(html).toContain('Partner cash events');
+    expect(html).toContain('Partner spending phases');
+    expect(html).toContain('Consulting');
+    expect(html).toContain('Gift');
+    expect(html).toContain('TFSA room');
+    expect(html).toContain('value="40000"');
+    expect(html).toContain('value="25000"');
+    expect(html).toContain('value="3000"');
+    expect(html).toContain('value="6000"');
+    expect(html).toContain('% of base');
+  });
 });
