@@ -8,11 +8,13 @@
 // permanent footnotes at the very bottom.
 import { useMemo, useState } from 'react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { INK, BLUE, RED_TEXT } from '../../design/tokens';
 import { prefKV } from '../../lib/prefKv';
+import type { View } from '../../lib/viewRoutes';
 import { Link } from './nav';
 
 interface Answer {
@@ -96,6 +98,21 @@ function buildPlan(a: Answer): RetirementInputs {
     oasStartAge: benefits === 'none' ? null : 65,
     oasYearsInCanada: benefits === 'none' ? 0 : 40,
   };
+}
+
+// The landing's first-run gate (issue #153): with any scenarios saved, the
+// welcome hash opens the dashboard — the landing can never overwrite a plan.
+// Pure so the behavior is testable without mounting App.
+export function welcomeLandingGate(hashView: View | null, hasScenarios: boolean): View {
+  if (hashView) return hashView;
+  return hasScenarios ? 'projection' : 'welcome';
+}
+
+// The door-picked scenario (issue #153): onBuild drafts → one click saves the
+// starter plan as the FIRST scenario, activated with clean history. The "Keep
+// chatting" door vs "Go to dashboard" only differs in the dock pref (caller).
+export function landingScenarioFromPlan(plan: RetirementInputs, stamp: number): Scenario {
+  return { id: `scenario-${stamp.toString(36)}`, name: 'My plan', inputs: plan };
 }
 
 export function LandingPage({ config, onBuild }: {

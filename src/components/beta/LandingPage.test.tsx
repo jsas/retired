@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { LandingPage } from './LandingPage';
+import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './LandingPage';
 import { testConfig } from '../../../packages/engine-core/test/helpers';
 
 const config = testConfig();
@@ -119,5 +119,27 @@ describe('LandingPage', () => {
     expect(container.querySelector('a[href="https://github.com/jsas/retired"]')).toBeTruthy();
     expect(container.querySelector('a[href="#/help"]'));
     expect(container.textContent).toContain('stays in this browser');
+  });
+
+  describe('first-run gate (#153)', () => {
+    it('hash route wins (deep links / back-forward)', () => {
+      expect(welcomeLandingGate('help', true)).toBe('help');
+      expect(welcomeLandingGate('details', false)).toBe('details');
+    });
+
+    it('without a hash: scenarios ⇒ dashboard, no scenarios ⇒ landing', () => {
+      expect(welcomeLandingGate(null, true)).toBe('projection');
+      expect(welcomeLandingGate(null, false)).toBe('welcome');
+    });
+  });
+
+  describe('door-picked scenario (#153)', () => {
+    it('builds a Scenario named for its plan with a timestamp id', () => {
+      const plan = { currentAge: 55 } as const;
+      const s = landingScenarioFromPlan(plan as never, 1735723200000);
+      expect(s.name).toBe('My plan');
+      expect(s.inputs).toBe(plan);
+      expect(s.id).toMatch(/^scenario-[a-z0-9]+$/);
+    });
   });
 });
