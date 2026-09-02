@@ -48,6 +48,27 @@ describe('OpenAIEngine question handling', () => {
     expect(d.rejection).toBeUndefined()
   })
 
+  it('detects a question carried in a stroke note', async () => {
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: fetchWith({ note: 'The checkbox suppresses the welcome screen.', edits: [] }),
+    })
+    const input: EngineInput = {
+      interactionId: 'ia_s',
+      intents: [
+        {
+          kind: 'stroke',
+          strokes: [{ points: [{ x: 1, y: 1 }], color: '#f00', width: 3 }],
+          bounds: { x: 1, y: 1, w: 20, h: 20 },
+          note: 'what is this?',
+        } as EngineInput['intents'][number],
+      ],
+    }
+    const d = await eng.decide(input)
+    expect(d.answer).toContain('checkbox')
+    expect(d.rejection).toBeUndefined()
+  })
+
   it('still rejects a zero-edit reply to a change request', async () => {
     const eng = new OpenAIEngine({
       ...OPTS,

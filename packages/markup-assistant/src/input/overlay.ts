@@ -516,7 +516,6 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     order.push(interactionId)
     redraw()
     draft = { intent, interactionId }
-    draftInteractionId = interactionId
     openComposer(defaultIntentFor(draft.intent))
     return interactionId
   }
@@ -547,7 +546,6 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
         ? ({ ...intent, text } as Intent)
         : ({ ...intent, note: text } as Intent)
     draft = null
-    draftInteractionId = null
     commitAndEmit(interactionId, merged)
   }
 
@@ -558,7 +556,6 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     const at = order.indexOf(interactionId)
     if (at !== -1) order.splice(at, 1)
     draft = null
-    draftInteractionId = null
     redraw()
   }
 
@@ -792,11 +789,13 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     if (e.key === 'Enter') {
       const text = composerInput.value.trim()
       if (draft) {
+        // Capture the id BEFORE finalizeDraft clears it.
+        const id = draft.interactionId
         const intentText = text
         finalizeDraft(text)
         closeComposer()
         if (intentText) {
-          chatByInteraction.set(draftInteractionId ?? '', chatAdd('user', intentText))
+          chatByInteraction.set(id, chatAdd('user', intentText))
         }
       } else if (text) {
         closeComposer()
@@ -811,8 +810,6 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     }
   })
 
-  /** interactionId of the in-flight draft, so chatAdd can key the bubble. */
-  let draftInteractionId: string | null = null
 
   // ---------------------------------------------------------------------------
   // Status feedback: recolor committed markup as the engine works
