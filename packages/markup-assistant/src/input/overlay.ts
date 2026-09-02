@@ -488,7 +488,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       if (image) intentEnvelope(bus, source, { kind: 'screenshot', image }, interactionId)
     }
     if (captureDom) {
-      intentEnvelope(bus, source, { kind: 'dom', snapshot: serializeDom(document) }, interactionId)
+      intentEnvelope(bus, source, { kind: 'dom', snapshot: serializeDom(document, 20000, bounds ?? undefined) }, interactionId)
     }
 
     intentEnvelope(bus, source, intent, interactionId)
@@ -563,8 +563,9 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
   }
 
   function commitAndEmit(interactionId: string, merged: Intent): void {
+    const gestureBounds = committedEntryBounds(merged)
     if (captureDom) {
-      intentEnvelope(bus, source, { kind: 'dom', snapshot: serializeDom(document) }, interactionId)
+      intentEnvelope(bus, source, { kind: 'dom', snapshot: serializeDom(document, 20000, gestureBounds ?? undefined) }, interactionId)
     }
     if (captureImage) {
       const bounds = committedEntryBounds(merged)

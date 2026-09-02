@@ -75,20 +75,45 @@ export function describeElement(el: Element, maxText = 80) {
  * with tag, selector-ish path, and short text — enough for the model to find
  * real selectors without shipping the full HTML. Bounded to ~maxChars.
  */
-export function serializeDom(root: Document | Element, maxChars = 20000): string {
-  const lines: string[] = []
+/**
+ * Serialize a DOM snapshot for model context: one line per visible element
+ * with tag, selector, viewport geometry [x,y w×h], and short text. Elements
+ * are ordered by distance to `focus` (the gesture region) so the circled /
+ * underlined thing always survives the char budget — a blind top-down walk
+ * used to truncate away whatever the user actually pointed at.
+ */
+export function serializeDom(
+  root: Document | Element,
+  maxChars = 20000,
+  focus?: { x: number; y: number; w: number; h: number },
+): string {
   const base = root instanceof Element ? root : root.documentElement
-  for (const el of Array.from(base.querySelectorAll('*'))) {
-    // Skip the overlay's own chrome — it pollutes the snapshot.
-    if ((el as HTMLElement).dataset?.maOverlay !== undefined) continue
+  const all = Array.from(base.querySelectorAll('*')).filter((el) => {
+    if ((el as HTMLElement).dataset?.maOverlay !== undefined) return false
+    const r = el.getBoundingClientRect()
+    return r.width > 0 && r.height > 0
+  })
+  const cx = focus ? focus.x + focus.w / 2 : 0
+  const cy = focus ? focus.y + focus.h / 2 : 0
+  const scored = all.map((el) => {
+    const r = el.getBoundingClientRect()
+    const d = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy)
+    return { el, d }
+  })
+  if (focus) scored.sort((a, b) => a.d - b.d)
+
+  const lines: string[] = []
+  let total = 0
+  for (const { el } of scored) {
     const desc = describeElement(el, 60)
     const cls = desc.classes && desc.classes.length ? `.${desc.classes.join('.')}` : ''
     const id = desc.id ? `#${desc.id}` : ''
     const text = desc.textPreview ? ` "${desc.textPreview}"` : ''
-    // Geometry the model can compare gesture bounds against (x,y w×h viewport px).
     const geo = ` [${Math.round(desc.rect.x)},${Math.round(desc.rect.y)} ${Math.round(desc.rect.w)}x${Math.round(desc.rect.h)}]`
-    lines.push(`<${desc.tag}${id}${cls}>${geo}${text}`)
-    if (lines.join('\n').length > maxChars) break
+    const line = `<${desc.tag}${id}${cls}>${geo}${text}`
+    if (total + line.length > maxChars) break
+    lines.push(line)
+    total += line.length + 1
   }
   return lines.join('\n')
 }
