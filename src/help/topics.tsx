@@ -313,6 +313,18 @@ export const HELP_TOPICS: HelpTopic[] = [
     body: <P>Standard deviation of annual returns, used only by Monte Carlo. 0% means "every year equals the expected return" (the simulation collapses to the deterministic answer); 15–20% is a typical equity-heavy portfolio. Returns are not mean-reverting and sequence risk is real: a crash early in retirement hurts far more than one late.</P>,
   },
   {
+    id: 'market-hypothesis',
+    title: 'Market hypothesis (periods)',
+    section: 'Levers',
+    keywords: ['crash', 'boom', 'bear market', 'sequence', 'market periods', 'return anchors', 'choppy'],
+    body: (
+      <>
+        <P>The Markets dial assumes one average return every year. To model a <strong>crash, a boom, or a choppy stretch</strong>, shape a curve with <strong>return anchors</strong> — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.</P>
+        <P>The projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.</P>
+      </>
+    ),
+  },
+  {
     id: 'lever-ranges',
     title: 'Lever ranges (Settings pref)',
     section: 'Levers',

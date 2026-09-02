@@ -1,5 +1,6 @@
 import { calculateHouseholdModel, householdOutcome, type RetirementInputs } from './retirementEngine';
 import { toHousehold } from './householdTypes';
+import { buildVolatilitySequence } from './marketPeriods';
 
 import type { AppConfig } from './appConfig';
 
@@ -82,11 +83,16 @@ export function generateReturnSequence(
   maxAge: number,
   mean: number,
   volatility: number,
-  rng: () => number
+  rng: () => number,
+  // Per-age σ override (issue #138): when the plan's market periods carry a
+  // volatility curve, each age samples around its OWN σ instead of the flat
+  // `volatility`. An age absent from the map falls back to `volatility`.
+  volatilitySequence?: Record<number, number>
 ): Record<number, number> {
   const seq: Record<number, number> = {};
   for (let age = startAge; age <= maxAge; age++) {
-    seq[age] = randomAnnualReturn(mean, volatility, rng);
+    const vol = volatilitySequence?.[age] ?? volatility;
+    seq[age] = randomAnnualReturn(mean, vol, rng);
   }
   return seq;
 }
@@ -113,8 +119,11 @@ export function runMonteCarlo(request: MonteCarloRequest): MonteCarloResults {
   // shares it (the engine runs off the model directly), rather than re-deriving
   // it per run inside calculateHousehold.
   const household = toHousehold(inputs);
+  // Per-age volatility from the plan's market hypothesis (issue #138); when no
+  // period carries a σ this is undefined and every age uses the flat `volatility`.
+  const volSeq = buildVolatilitySequence(inputs.marketPeriods, inputs.currentAge, inputs.maxAge, volatility);
   for (let run = 0; run < runs; run++) {
-    const seq = generateReturnSequence(inputs.currentAge, inputs.maxAge, inputs.investmentReturn, volatility, rng);
+    const seq = generateReturnSequence(inputs.currentAge, inputs.maxAge, inputs.investmentReturn, volatility, rng, volSeq);
     const result = calculateHouseholdModel(household, config, { returnSequence: seq });
     // Household-first: a run succeeds when the COMBINED money lasts to max age.
     const ho = householdOutcome(result, household);
@@ -221,11 +230,13 @@ export function generateSequences(
   mean: number,
   volatility: number,
   seed: number,
+  // Optional per-age σ (issue #138); absent = flat `volatility` every age.
+  volatilitySequence?: Record<number, number>,
 ): Record<number, number>[] {
   const rng = mulberry32(seed);
   const out: Record<number, number>[] = [];
   for (let i = 0; i < runs; i++) {
-    out.push(generateReturnSequence(startAge, maxAge, mean, volatility, rng));
+    out.push(generateReturnSequence(startAge, maxAge, mean, volatility, rng, volatilitySequence));
   }
   return out;
 }

@@ -13,7 +13,7 @@
 // Carlo, the solvers) can migrate to the unified model independently while the
 // wire/storage formats stay stable.
 
-import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, IncomeSource, SpendingBand, ReverseMortgage, RdspInputs, FhsaInputs, Debt } from './retirementEngine';
+import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, IncomeSource, SpendingBand, ReverseMortgage, RdspInputs, FhsaInputs, Debt, MarketPeriod } from './retirementEngine';
 
 // ---------------------------------------------------------------------------
 // Accounts & transfers
@@ -170,6 +170,7 @@ export function fromHousehold(h: Household, base?: RetirementInputs): Retirement
     annualWithdrawal: base?.annualWithdrawal ?? 0,
     investmentReturn: shared.investmentReturn,
     returnVolatility: shared.returnVolatility,
+    marketPeriods: shared.marketPeriods,
     provinceCode: shared.provinceCode,
     cppStartAge: primary.cppStartAge,
     cppMonthlyAmount: primary.cppMonthlyAmount,
@@ -237,6 +238,9 @@ export interface SharedInputs {
   maxAge: number;
   investmentReturn: number;
   returnVolatility: number;
+  // Market hypothesis periods (issue #138) — shared like the market return:
+  // both partners experience the same per-age regime. Absent = flat constants.
+  marketPeriods?: MarketPeriod[];
   provinceCode: string;
 }
 
@@ -282,6 +286,7 @@ export function legacyToShared(inputs: RetirementInputs): SharedInputs {
     maxAge: inputs.maxAge,
     investmentReturn: inputs.investmentReturn,
     returnVolatility: inputs.returnVolatility,
+    marketPeriods: inputs.marketPeriods,
     provinceCode: inputs.provinceCode,
   };
 }
