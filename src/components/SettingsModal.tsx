@@ -16,11 +16,11 @@ interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
 }
 
-// EVERY persisted key — "reset means reset": scenarios, engine config, the
+// EVERY persisted key — "reset means reset": plans, engine config, the
 // SQL database (localStorage mirror here; the OPFS file itself is cleared via
 // AsyncOpfsBackend below), agent memories (a table inside that database), EQ
 // crops, panel layouts, AI chat threads and AI model connections. The reload
-// lands on factory defaults + the first-run example scenarios.
+// lands on factory defaults + the first-run example plans.
 //   wealthconsole_db                — the SQLite bytes (localStorage mirror);
 //                                     its kv table holds the UI preferences
 //                                     (panels/print/export/welcome, EQ crops —
@@ -99,7 +99,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   // removal is; the reload only fires once the bytes are gone so the app
   // can't boot from the old database.
   const handleEraseAll = async () => {
-    if (!window.confirm('Erase EVERYTHING — all scenarios, engine settings, agent memories, AI chats and model connections — from this browser? This cannot be undone.')) return;
+    if (!window.confirm('Erase EVERYTHING — all plans, engine settings, agent memories, AI chats and model connections — from this browser? This cannot be undone.')) return;
     if (!window.confirm('Really erase everything? Nothing is kept; the app restarts with factory defaults.')) return;
     try {
       const backend = await AsyncOpfsBackend.open();
@@ -178,9 +178,9 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                     className="mt-0.5"
                   />
                   <span>
-                    Ask before switching away from a scenario with unsaved edits
+                    Ask before switching away from a plan with unsaved edits
                     <span className="block text-[11px] text-slate-500 mt-0.5">
-                      When on, changing scenarios with unsaved edits asks whether to save first —
+                      When on, changing plans with unsaved edits asks whether to save first —
                       with a "don't ask again" box that turns this off. Off = switch silently.
                     </span>
                   </span>
@@ -194,7 +194,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <div className="border border-red-300 bg-red-50/60 rounded p-3">
                 <h3 className="text-xs font-semibold text-red-800 mb-1">Danger zone</h3>
                 <p className="text-[11px] text-red-700 leading-snug mb-2">
-                  Erase it all: every scenario, engine setting, agent memory, AI chat, model
+                  Erase it all: every plan, engine setting, agent memory, AI chat, model
                   connection, panel layout and dismissal is permanently deleted from this browser —
                   including the database file itself — and the app restarts with factory defaults.
                   Nothing is kept. Export a backup first if you might want any of it back.
@@ -466,7 +466,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <NumberField label="RRSP annual maximum ($/yr)" value={draft.engine.rrspAnnualMax} step="500"
                 onChange={v => update(c => { c.engine.rrspAnnualMax = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug -mt-1">
-                Used only when a scenario tracks contribution room (TFSA/RRSP room set on the sidebar).
+                Used only when a plan tracks contribution room (TFSA/RRSP room set on the sidebar).
                 Each year TFSA room grows by this limit; RRSP room grows by 18% of earned income up to
                 this maximum (minus any pension adjustment). When "Index tax tables" is on, both grow
                 with CPI like the real CRA limits.

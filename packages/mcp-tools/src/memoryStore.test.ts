@@ -31,12 +31,12 @@ const DAY = 24 * 60 * 60 * 1000;
 describe('write', () => {
   it('stores a memory with defaults and refuses empty text', () => {
     const { store } = makeStore();
-    const m = store.write({ scope: 'scenario', scopeKey: 's1', text: 'Spouse pension pays $1,200/mo' });
+    const m = store.write({ scope: 'plan', scopeKey: 's1', text: 'Spouse pension pays $1,200/mo' });
     expect(m).not.toBeNull();
     expect(m!.importance).toBe(0.5);
-    expect(store.write({ scope: 'scenario', scopeKey: 's1', text: '   ' })).toBeNull();
-    // A scenario memory without a scope key is invalid, not global.
-    expect(store.write({ scope: 'scenario', text: 'orphan' })).toBeNull();
+    expect(store.write({ scope: 'plan', scopeKey: 's1', text: '   ' })).toBeNull();
+    // A plan memory without a scope key is invalid, not global.
+    expect(store.write({ scope: 'plan', text: 'orphan' })).toBeNull();
   });
 
   it('rewriting identical text refreshes instead of duplicating', () => {
@@ -64,13 +64,13 @@ describe('write', () => {
   it('evicts the lowest-ranked memory when the scope is full', () => {
     const { store, tick } = makeStore();
     for (let i = 0; i < MAX_PER_SCOPE; i++) {
-      store.write({ scope: 'scenario', scopeKey: 's1', text: `fact ${i}`, importance: 0.5 });
+      store.write({ scope: 'plan', scopeKey: 's1', text: `fact ${i}`, importance: 0.5 });
       tick(DAY); // time separation so ranks genuinely differ
     }
     expect(store.list('s1').length).toBe(MAX_PER_SCOPE);
     // The new memory is the freshest (highest recency), so the OLDEST —
     // decayed the furthest — is the weakest resident and gets evicted.
-    const ok = store.write({ scope: 'scenario', scopeKey: 's1', text: 'the newest fact', importance: 0.5 });
+    const ok = store.write({ scope: 'plan', scopeKey: 's1', text: 'the newest fact', importance: 0.5 });
     expect(ok).not.toBeNull();
     expect(store.list('s1').length).toBe(MAX_PER_SCOPE);
     expect(store.list('s1').some(m => m.text === 'fact 0')).toBe(false); // oldest evicted
@@ -89,12 +89,12 @@ describe('write', () => {
     expect(store.list().some(m => m.text === 'trivial')).toBe(false);
   });
 
-  it('scopes are budgeted independently (global full does not block a scenario)', () => {
+  it('scopes are budgeted independently (global full does not block a plan)', () => {
     const { store } = makeStore();
     for (let i = 0; i < MAX_PER_SCOPE; i++) {
       store.write({ scope: 'global', text: `global ${i}`, importance: 0.9 });
     }
-    const s = store.write({ scope: 'scenario', scopeKey: 's1', text: 'scenario fact', importance: 0.1 });
+    const s = store.write({ scope: 'plan', scopeKey: 's1', text: 'plan fact', importance: 0.1 });
     expect(s).not.toBeNull();
   });
 });
@@ -182,11 +182,11 @@ describe('recall + weighting', () => {
     expect(top[0]!.text).toBe('vital');
   });
 
-  it('respects the scope filter: scenario recall includes global, not other scenarios', () => {
+  it('respects the scope filter: plan recall includes global, not other plans', () => {
     const { store } = makeStore();
     store.write({ scope: 'global', text: 'user fact' });
-    store.write({ scope: 'scenario', scopeKey: 's1', text: 's1 fact' });
-    store.write({ scope: 'scenario', scopeKey: 's2', text: 's2 fact' });
+    store.write({ scope: 'plan', scopeKey: 's1', text: 's1 fact' });
+    store.write({ scope: 'plan', scopeKey: 's2', text: 's2 fact' });
     const hits = store.recall('', { scopeKey: 's1' });
     expect(hits.map(h => h.text).sort()).toEqual(['s1 fact', 'user fact']);
   });

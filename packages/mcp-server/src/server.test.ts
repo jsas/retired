@@ -14,8 +14,8 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
     inputs: baseInputs(),
     config: testConfig(),
-    scenarioName: 'Test plan',
-    scenarioList: [{ id: 's1', name: 'Test plan' }],
+    planName: 'Test plan',
+    planList: [{ id: 's1', name: 'Test plan' }],
     ...overrides,
   };
 }
@@ -41,9 +41,9 @@ describe('retirement MCP server (in-memory round trip)', () => {
     await Promise.allSettled([client.close(), server.close()]);
   });
 
-  it('runs a read tool end to end (get_scenario returns plan text)', async () => {
+  it('runs a read tool end to end (get_plan returns plan text)', async () => {
     const { client, server } = await connected(makeContext());
-    const result = await client.callTool({ name: 'get_scenario', arguments: { section: 'summary' } });
+    const result = await client.callTool({ name: 'get_plan', arguments: { section: 'summary' } });
 
     expect(result.isError).toBeFalsy();
     const text = (result.content as Array<{ type: string; text: string }>)
@@ -66,7 +66,7 @@ describe('retirement MCP server (in-memory round trip)', () => {
   it('reports tool-level errors as isError text, not a transport failure', async () => {
     const { client, server } = await connected(makeContext());
     const result = await client.callTool({
-      name: 'set_scenario_value',
+      name: 'set_plan_value',
       arguments: { field: 'events', value: [] }, // structural field: refused
     });
 
@@ -80,7 +80,7 @@ describe('retirement MCP server (in-memory round trip)', () => {
   it('carries a mutation proposal in structuredContent (confirm-before-apply survives MCP)', async () => {
     const { client, server } = await connected(makeContext());
     const result = await client.callTool({
-      name: 'set_scenario_value',
+      name: 'set_plan_value',
       arguments: { field: 'cppStartAge', value: 65 },
     });
 
@@ -103,9 +103,9 @@ describe('retirement MCP server (in-memory round trip)', () => {
     const ctx = makeContext();
     const { client, server } = await connected(ctx);
 
-    await client.callTool({ name: 'get_scenario', arguments: { section: 'summary' } });
-    ctx.scenarioName = 'Renamed plan';
-    const result = await client.callTool({ name: 'get_scenario', arguments: { section: 'summary' } });
+    await client.callTool({ name: 'get_plan', arguments: { section: 'summary' } });
+    ctx.planName = 'Renamed plan';
+    const result = await client.callTool({ name: 'get_plan', arguments: { section: 'summary' } });
 
     const text = (result.content as Array<{ type: string; text: string }>)
       .filter(c => c.type === 'text').map(c => c.text).join('\n');

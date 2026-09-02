@@ -33,7 +33,7 @@ If applicable, add screenshots to help explain the problem.
 
 - **Browser:** (e.g., Chrome 130, Firefox 132)
 - **OS:** (e.g., macOS 15, Windows 11)
-- **Link to shared scenario:** (optional, if applicable)
+- **Link to shared plan:** (optional, if applicable)
 
 ## Additional Context
 

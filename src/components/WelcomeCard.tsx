@@ -52,7 +52,7 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
     {
       icon: Sparkles,
       title: 'Improve it',
-      body: 'Optimize ranks CPP/OAS timing, withdrawal orders and reverse-mortgage timing. Steering lets you drag the plan and watch the success rate move. Compare puts saved scenarios side by side. Help documents every input.',
+      body: 'Optimize ranks CPP/OAS timing, withdrawal orders and reverse-mortgage timing. Steering lets you drag the plan and watch the success rate move. Compare puts saved plans side by side. Help documents every input.',
     },
   ];
 
@@ -90,7 +90,7 @@ export function WelcomeCard({ onContinue }: WelcomeCardProps) {
         <ShieldCheck size={18} className="shrink-0 text-emerald-600 mt-0.5" />
         <p className="text-[13px] text-slate-600 leading-relaxed">
           <span className="font-semibold text-slate-800">Your data never leaves this device.</span>{' '}
-          Scenarios, settings and results live only in this browser's local storage. Clearing browser
+          Plans, settings and results live only in this browser's local storage. Clearing browser
           data (or switching device) starts fresh — use the Data page to keep a backup file.
         </p>
       </div>

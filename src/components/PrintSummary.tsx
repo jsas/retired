@@ -402,8 +402,8 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
 // compact plan summary: inputs, verdict, depletion — plus optional sections
 // chosen in the print-options card (timeline chart, Monte Carlo fan,
 // milestones table).
-export function PrintSummary({ scenarioName, inputs, results, householdBreakdown, options, mcResults, rrifConversionAge }: {
-  scenarioName: string;
+export function PrintSummary({ planName, inputs, results, householdBreakdown, options, mcResults, rrifConversionAge }: {
+  planName: string;
   inputs: RetirementInputs;
   results: RetirementResults;
   householdBreakdown: YearlyBreakdown[];
@@ -428,7 +428,7 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
         <div style={{ width: '22px', height: '22px', background: '#2563eb', borderRadius: '4px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '9px' }}>RE:</div>
         <div>
           <div style={{ fontWeight: 700, fontSize: '15px' }}>RE: tired — Retirement Plan Summary</div>
-          <div style={{ fontSize: '11px', color: '#64748b' }}>{scenarioName} · generated {today}</div>
+          <div style={{ fontSize: '11px', color: '#64748b' }}>{planName} · generated {today}</div>
         </div>
       </div>
 

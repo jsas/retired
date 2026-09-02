@@ -1,12 +1,12 @@
 // The agent's tool surface: a typed API the model uses to READ the current
-// scenario, RUN the engine against it, and PROPOSE changes.
+// plan, RUN the engine against it, and PROPOSE changes.
 //
 // Every argument shape is a Zod schema — the same source of truth the data
 // layer uses — so a hallucinated field name or out-of-range number is rejected
 // before it touches anything. The JSON-Schema view of each schema is what gets
 // advertised to the provider.
 //
-// Reads are pure (get_scenario, run_projection, compare_scenarios, the
+// Reads are pure (get_plan, run_projection, compare_plans, the
 // strategies/solver/monte-carlo backends, get_schedule). Mutations never apply
 // themselves: every propose_* tool returns a proposed PATCH and the UI requires
 // the user to confirm it (confirm-before-apply). There is no path from model
@@ -27,6 +27,10 @@ import {
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
 import { MemoryStore } from './memoryStore';
 import type { AgentToolCall, ToolSpec } from './toolTypes';
+import {
+  NAV_CATALOG, rankPages, hashForEntry, canonicalView, pageForView, searchablePages,
+  type NavEntry, type View,
+} from './navigation';
 
 // ---------------------------------------------------------------------------
 // Tool argument schemas
@@ -41,10 +45,10 @@ const getScenarioArgs = z.object({
 
 const runProjectionArgs = z.object({
   overrides: z.record(z.string(), z.unknown()).optional()
-    .describe('Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the scenario schema; invalid entries are reported, not applied.'),
+    .describe('Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the plan schema; invalid entries are reported, not applied.'),
 });
 
-const compareScenariosArgs = z.object({
+const comparePlansArgs = z.object({
   overrides: z.record(z.string(), z.unknown()).optional()
     .describe('Flat patch of top-level RetirementInputs fields defining ONE variant to compare against the current plan. Use variants for several.'),
   variants: z.array(z.object({
@@ -55,11 +59,11 @@ const compareScenariosArgs = z.object({
     .describe('Up to 4 variants compared in ONE call (e.g. three retirement ages). Current plan is always included as the baseline. Takes precedence over the singular overrides.'),
 });
 
-const setScenarioValueArgs = z.object({
+const setPlanValueArgs = z.object({
   field: z.string().min(1)
     .describe('Top-level RetirementInputs field name (e.g. desiredSpending, retirementAge, rrspBalance, cppStartAge).'),
   value: z.unknown()
-    .describe('The proposed new value. Must satisfy the scenario schema (numbers as numbers; nullable ages may be null).'),
+    .describe('The proposed new value. Must satisfy the plan schema (numbers as numbers; nullable ages may be null).'),
   rationale: z.string().optional()
     .describe('One sentence on why this change helps — shown to the user on the confirm card.'),
 });
@@ -94,20 +98,6 @@ const manageIncomeArgs = z.object({
 const proposeSpendingBandsArgs = z.object({
   bands: z.array(z.object({ fromAge: z.number(), pctOfBase: z.number() }))
     .describe('Spending phases: pctOfBase (fraction of desiredSpending, e.g. 1, 0.85, 0.7) applying fromAge until the next band. Replaces the whole set.'),
-  rationale: z.string().optional(),
-});
-
-// Market hypothesis (issue #138). Each anchor sets the expected return at an
-// age; volatility is optional (absent = the plan's flat returnVolatility holds).
-const marketPeriodSchema = z.object({
-  age: z.number().describe('The age this anchor applies at.'),
-  return: z.number().describe('Expected annual return (decimal, e.g. -0.30 for a 30% crash, 0.07 for 7% growth). May be negative.'),
-  volatility: z.number().min(0).optional().describe('Annual return standard deviation at this age (decimal, e.g. 0.25). Omit to keep the plan\'s flat volatility.'),
-});
-
-const proposeMarketPeriodsArgs = z.object({
-  periods: z.array(marketPeriodSchema)
-    .describe('Market-hypothesis anchors, any order. The engine sorts by age and interpolates linearly between them; outside the outermost anchors the flat investmentReturn/returnVolatility hold. The projection follows the return curve; volatility shapes Monte Carlo only. Empty array clears the hypothesis (back to flat constants). Replaces the whole set.'),
   rationale: z.string().optional(),
 });
 
@@ -199,8 +189,8 @@ const getScheduleArgs = z.object({
 const rememberArgs = z.object({
   text: z.string().min(1).max(500)
     .describe('The fact to remember, one or two self-contained sentences (e.g. "Spouse\'s DB pension pays $1,200/mo from 65" — never "it pays that").'),
-  scope: z.enum(['scenario', 'global']).default('scenario')
-    .describe('scenario = about this plan (shown in chats on this scenario). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").'),
+  scope: z.enum(['plan', 'global']).default('plan')
+    .describe('plan = about this plan (shown in chats on this plan). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").'),
   importance: z.number().min(0).max(1).default(0.5)
     .describe('0..1: how important this fact is. Reserve 0.9+ for decisions and constraints ("user refuses to touch RRSP"), 0.3 for color.'),
   keywords: z.array(z.string().min(1)).max(12).optional()
@@ -215,16 +205,16 @@ const recallArgs = z.object({
 });
 
 const openScenarioArgs = z.object({
-  scenarioId: z.string().min(1).optional()
-    .describe('Id of the saved scenario to open (from the ids given in your context).'),
+  planId: z.string().min(1).optional()
+    .describe('Id of the saved plan to open (from the ids given in your context).'),
   name: z.string().min(1).optional()
-    .describe('Alternatively, the scenario NAME — matched case-insensitively; must be unambiguous.'),
-}).refine(v => v.scenarioId != null || v.name != null, { message: 'Give scenarioId or name.' })
-  .refine(v => v.scenarioId == null || v.name == null, { message: 'Give scenarioId or name, not both.' });
+    .describe('Alternatively, the plan NAME — matched case-insensitively; must be unambiguous.'),
+}).refine(v => v.planId != null || v.name != null, { message: 'Give planId or name.' })
+  .refine(v => v.planId == null || v.name == null, { message: 'Give planId or name, not both.' });
 
 const saveScenarioAsArgs = z.object({
   name: z.string().min(1).max(80)
-    .describe('Name for the new scenario (e.g. "Downsized at 65"). Duplicates are allowed.'),
+    .describe('Name for the new plan (e.g. "Downsized at 65"). Duplicates are allowed.'),
 });
 
 const listScenariosArgs = z.object({
@@ -232,23 +222,42 @@ const listScenariosArgs = z.object({
     .describe('true = include the key numbers of each plan (ages, balances, spending, benefits) so you can compare saved plans without opening them. Omit/false for a compact list.'),
 });
 
+// Navigation: plain-words page lookup (find_page, get_sitemap) and the
+// page-switch proposal (propose_navigate). The lookups are pure reads; the
+// proposal is a confirm card, not a plan mutation (empty patch, no
+// checkpoint). The model counting on a find_page for "where" is trained by
+// the same catalog the sitemap artifacts emit.
+const findPageArgs = z.object({
+  query: z.string().min(1)
+    .describe('Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Match is deterministic; the catalog has the right keywords in it — re-case freely.'),
+});
+
+const getSitemapArgs = z.object({});
+
+const proposeNavigateArgs = z.object({
+  view: z.string().min(1)
+    .describe('View id, from find_page or get_sitemap (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.'),
+  label: z.string().min(1)
+    .describe('Confirm-card label, e.g. "Open the Monte Carlo page".'),
+  rationale: z.string().optional(),
+});
+
 // Exported so the fine-tuning spike's eval gate (training/) can validate args
 // against the same Zod schemas the executor enforces — the executor itself is
 // the only runtime consumer.
 export const TOOL_SCHEMAS = {
-  get_scenario: getScenarioArgs,
+  get_plan: getScenarioArgs,
   run_projection: runProjectionArgs,
-  compare_scenarios: compareScenariosArgs,
+  compare_plans: comparePlansArgs,
   run_strategies: runStrategiesArgs,
   solve_spending: solveSpendingArgs,
   run_monte_carlo: runMonteCarloArgs,
   get_schedule: getScheduleArgs,
-  set_scenario_value: setScenarioValueArgs,
+  set_plan_value: setPlanValueArgs,
   propose_patch: proposePatchArgs,
   propose_spouse: proposeSpouseArgs,
   propose_income: proposeIncomeArgs,
   propose_spending_bands: proposeSpendingBandsArgs,
-  propose_market_periods: proposeMarketPeriodsArgs,
   propose_cash_event: proposeCashEventArgs,
   propose_reverse_mortgage: proposeReverseMortgageArgs,
   propose_rdsp: proposeRdspArgs,
@@ -260,9 +269,12 @@ export const TOOL_SCHEMAS = {
   manage_debt: manageDebtArgs,
   remember: rememberArgs,
   recall: recallArgs,
-  open_scenario: openScenarioArgs,
-  save_scenario_as: saveScenarioAsArgs,
-  list_scenarios: listScenariosArgs,
+  open_plan: openScenarioArgs,
+  save_plan_as: saveScenarioAsArgs,
+  list_plans: listScenariosArgs,
+  find_page: findPageArgs,
+  get_sitemap: getSitemapArgs,
+  propose_navigate: proposeNavigateArgs,
 } as const;
 
 export type AgentToolName = keyof typeof TOOL_SCHEMAS;
@@ -271,7 +283,7 @@ export function isAgentToolName(name: string): name is AgentToolName {
   return name in TOOL_SCHEMAS;
 }
 
-/** Top-level scalar fields the agent may propose changing (via set_scenario_value
+/** Top-level scalar fields the agent may propose changing (via set_plan_value
  *  or propose_patch). Structural blocks (spouse, events, income, spendingBands,
  *  reverseMortgage, rdsp, fhsa, debts) go through their own propose_* tools. */
 export const EDITABLE_FIELDS = new Set([
@@ -290,7 +302,7 @@ export const EDITABLE_FIELDS = new Set([
 /** Structural top-level keys that are refused in flat override patches — they
  *  have dedicated propose_* tools with element-level validation. */
 const STRUCTURAL_FIELDS = new Set([
-  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa', 'debts', 'marketPeriods',
+  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa', 'debts',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -309,19 +321,18 @@ export interface ToolCatalogEntry {
  *  registers every entry with the official SDK — so both consumers see the
  *  same names, descriptions, and argument shapes from one definition. */
 export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
-  get_scenario: { description: 'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
+  get_plan: { description: 'Read the current retirement plan (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
     run_projection: { description:      'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.', schema: runProjectionArgs },
-    compare_scenarios: { description:      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: compareScenariosArgs },
+    compare_plans: { description:      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: comparePlansArgs },
     run_strategies: { description:      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.', schema: runStrategiesArgs },
     solve_spending: { description:      'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"', schema: solveSpendingArgs },
     run_monte_carlo: { description:      'Run the Monte Carlo simulation on the current plan (optionally with overrides) and return the success rate, median final balance, and depletion spread across market futures.', schema: runMonteCarloArgs },
     get_schedule: { description:      'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.', schema: getScheduleArgs },
-    set_scenario_value: { description:      'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.', schema: setScenarioValueArgs },
+    set_plan_value: { description:      'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.', schema: setPlanValueArgs },
     propose_patch: { description:      'PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.', schema: proposePatchArgs },
     propose_spouse: { description:      'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.', schema: proposeSpouseArgs },
     propose_income: { description:      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.', schema: proposeIncomeArgs },
     propose_spending_bands: { description:      'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.', schema: proposeSpendingBandsArgs },
-    propose_market_periods: { description:      'PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.', schema: proposeMarketPeriodsArgs },
     propose_cash_event: { description:      'PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.', schema: proposeCashEventArgs },
     propose_reverse_mortgage: { description:      'PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.', schema: proposeReverseMortgageArgs },
     propose_rdsp: { description:      'PROPOSE enabling/configuring (or disabling) an RDSP (Registered Disability Savings Plan). Models CDSG grants, CDSB bonds, tax-sheltered growth, and taxable-fraction withdrawals. User confirms.', schema: proposeRdspArgs },
@@ -331,11 +342,14 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
     manage_income: { description:      'PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.', schema: manageIncomeArgs },
     propose_debt: { description:      'PROPOSE adding a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending each year until paid off, then stops — so carrying debt into retirement raises withdrawals and can flip the verdict. User confirms.', schema: proposeDebtArgs },
     manage_debt: { description:      'PROPOSE updating or REMOVING an existing debt (mortgage, credit card, loan, or line of credit, by id or unique label). User confirms. Use propose_debt to add a new one.', schema: manageDebtArgs },
-    remember: { description:      'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
+    remember: { description:      'Save a durable fact to memory for later conversations — about THIS plan (scope "plan": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
     recall: { description:      'Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don\'t know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.', schema: recallArgs },
-    open_scenario: { description:      'Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.', schema: openScenarioArgs },
-    save_scenario_as: { description:      'Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.', schema: saveScenarioAsArgs },
-    list_scenarios: { description:      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
+    open_plan: { description:      'Switch to another SAVED plan (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.', schema: openScenarioArgs },
+    save_plan_as: { description:      'Snapshot the CURRENT plan as a new saved plan with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.', schema: saveScenarioAsArgs },
+    list_plans: { description:      'List every SAVED plan: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
+    find_page: { description:      'Search the site\'s page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Use whenever the user asks WHERE something lives.', schema: findPageArgs },
+    get_sitemap: { description:      'The full site map: every page (view), its route (#/hash), and one-line purpose. Use for "what can this app do?", "what pages exist?", or before guessing where something lives.', schema: getSitemapArgs },
+    propose_navigate: { description:      'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → the Insights page that now hosts it — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
 };
 
 /** Tool specs advertised to providers: the catalog rendered as JSON Schema. */
@@ -355,32 +369,43 @@ export interface ToolContext {
   /** The plan exactly as the user sees it in the sidebar (resolved inputs). */
   inputs: RetirementInputs;
   config: AppConfig;
-  scenarioName: string;
-  /** Names/ids of other saved scenarios, for orientation. */
-  scenarioList: Array<{ id: string; name: string }>;
-  /** Which of scenarioList is currently open (list_scenarios marks it).
+  planName: string;
+  /** Names/ids of other saved plans, for orientation. */
+  planList: Array<{ id: string; name: string }>;
+  /** Which of planList is currently open (list_plans marks it).
    *  Optional so tests and 'off'-mode callers can omit it — the marker is
    *  then simply absent from the listing. */
-  activeScenarioId?: string;
-  /** Full inputs for an arbitrary saved scenario by id (list_scenarios'
+  activePlanId?: string;
+  /** Full inputs for an arbitrary saved plan by id (list_plans'
    *  withDetails for non-active plans). Optional — callers that don't supply
-   *  it get compact lines for the other scenarios instead of numbers. */
-  scenarioInputsById?: (id: string) => RetirementInputs | undefined;
+   *  it get compact lines for the other plans instead of numbers. */
+  planInputsById?: (id: string) => RetirementInputs | undefined;
   /** Automatic checkpoints (snapshots taken before each approved change),
    *  newest last, for propose_revert. Optional so tests and 'off'-mode callers
    *  can omit it — revert then simply reports that no checkpoints exist. */
   checkpoints?: PlanCheckpoint[];
   /** The agent memory store (scoped + global memories). Optional so tests and
    *  'off'-mode callers can omit it — remember/recall then report that memory
-   *  is unavailable. `scenarioId` keys scenario-scoped memories. */
+   *  is unavailable. `planId` keys plan-scoped memories. */
   memory?: MemoryStore;
   memoryScenarioId?: string;
-  /** Open another saved scenario (the sidebar-switch path). Optional so tests
-   *  and 'off'-mode callers can omit it — open_scenario then errors. */
+  /** Open another saved plan (the sidebar-switch path). Optional so tests
+   *  and 'off'-mode callers can omit it — open_plan then errors. */
   onOpenScenario?: (id: string) => void;
-  /** Snapshot the current live inputs as a new named scenario; returns its id.
-   *  Optional for the same reason — save_scenario_as then errors. */
+  /** Snapshot the current live inputs as a new named plan; returns its id.
+   *  Optional for the same reason — save_plan_as then errors. */
   onSaveScenarioAs?: (name: string) => string;
+  /** The view the chat-session of a user is visiting now (for the ambient
+   *  system prompt "current page" line and find_page's "already here" tag).
+   *  Optional: tests / MCP-server-host callers omit it, and the prompt line
+   *  simply goes absent (as it does in 'off'-mode). */
+  currentView?: View;
+  /** True when the host renders a UI the user can move (confirm cards route
+   *  via propose_navigate). When absent (MCP hosts without a page, plain
+   *  tests), propose_navigate returns the #/hash for the model to share —
+   *  there's no view to switch. The flag only GATES the card; switching
+   *  itself happens in the host after the user approves (see MutationProposal). */
+  canNavigate?: boolean;
 }
 
 export type ToolOutcome =
@@ -389,8 +414,13 @@ export type ToolOutcome =
       kind: 'mutation';
       /** The proposed change as a partial inputs patch (merged over the plan
        *  on approval). Always present — structural proposals put their block
-       *  here; single-field ones put { [field]: value }. */
+       *  here; single-field ones put { [field]: value }. UI-only mutations
+       *  (propose_navigate) carry an empty patch and use `navigate` instead. */
       patch: Partial<RetirementInputs>;
+      /** Set on page-navigation proposals: the view to open on approval. The
+       *  UI routes it (host setView) instead of merging a plan patch, and no
+       *  checkpoint is recorded — the plan never changed. */
+      navigate?: View;
       /** Short label for the card ("Set CPP start age", "Add spouse"). */
       label: string;
       /** Human-readable preview lines shown on the confirm card. */
@@ -414,7 +444,7 @@ function zodIssues(error: z.ZodError): string {
  *  obvious scalar forms coerced. Raw-first ordering means legitimate string
  *  fields (labels, province codes) are never mangled — coercion only rescues
  *  values the schema already rejected. Used on the top-level scalar paths
- *  (set_scenario_value, propose_patch, flat overrides). */
+ *  (set_plan_value, propose_patch, flat overrides). */
 function safeParseTolerant(schema: z.ZodType, value: unknown) {
   const raw = schema.safeParse(value);
   if (raw.success || typeof value !== 'string') return raw;
@@ -454,12 +484,12 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
   }
 
   switch (call.name) {
-    case 'get_scenario':
+    case 'get_plan':
       return { kind: 'result', content: describeScenario(ctx, (parsed.data as z.infer<typeof getScenarioArgs>).section) };
     case 'run_projection':
       return runProjection(ctx, (parsed.data as z.infer<typeof runProjectionArgs>).overrides);
-    case 'compare_scenarios':
-      return compareScenarios(ctx, parsed.data as z.infer<typeof compareScenariosArgs>);
+    case 'compare_plans':
+      return comparePlans(ctx, parsed.data as z.infer<typeof comparePlansArgs>);
     case 'run_strategies':
       return runStrategiesTool(ctx, parsed.data as z.infer<typeof runStrategiesArgs>);
     case 'solve_spending':
@@ -468,8 +498,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return runMonteCarloTool(ctx, parsed.data as z.infer<typeof runMonteCarloArgs>);
     case 'get_schedule':
       return getScheduleTool(ctx, parsed.data as z.infer<typeof getScheduleArgs>);
-    case 'set_scenario_value':
-      return proposeSet(ctx, parsed.data as z.infer<typeof setScenarioValueArgs>);
+    case 'set_plan_value':
+      return proposeSet(ctx, parsed.data as z.infer<typeof setPlanValueArgs>);
     case 'propose_patch':
       return proposePatch(ctx, parsed.data as z.infer<typeof proposePatchArgs>);
     case 'propose_spouse':
@@ -478,8 +508,6 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return proposeElement(ctx, 'income', incomeSourceSchema, parsed.data, 'income source');
     case 'propose_spending_bands':
       return proposeSpendingBands(ctx, parsed.data as z.infer<typeof proposeSpendingBandsArgs>);
-    case 'propose_market_periods':
-      return proposeMarketPeriods(ctx, parsed.data as z.infer<typeof proposeMarketPeriodsArgs>);
     case 'propose_cash_event':
       return proposeElement(ctx, 'events', cashEventSchema, parsed.data, 'cash event');
     case 'propose_reverse_mortgage':
@@ -502,12 +530,18 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return rememberTool(ctx, parsed.data as z.infer<typeof rememberArgs>);
     case 'recall':
       return recallTool(ctx, parsed.data as z.infer<typeof recallArgs>);
-    case 'open_scenario':
+    case 'open_plan':
       return openScenarioTool(ctx, parsed.data as z.infer<typeof openScenarioArgs>);
-    case 'save_scenario_as':
+    case 'save_plan_as':
       return saveScenarioAsTool(ctx, parsed.data as z.infer<typeof saveScenarioAsArgs>);
-    case 'list_scenarios':
+    case 'list_plans':
       return listScenariosTool(ctx, parsed.data as z.infer<typeof listScenariosArgs>);
+    case 'find_page':
+      return findPageTool(ctx, parsed.data as z.infer<typeof findPageArgs>);
+    case 'get_sitemap':
+      return getSitemapTool();
+    case 'propose_navigate':
+      return proposeNavigateTool(ctx, parsed.data as z.infer<typeof proposeNavigateArgs>);
   }
 }
 
@@ -517,7 +551,7 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
 
 function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchema>): string {
   const i = ctx.inputs;
-  const lines: string[] = [`Scenario "${ctx.scenarioName}" (of ${ctx.scenarioList.length} saved).`];
+  const lines: string[] = [`Plan "${ctx.planName}" (of ${ctx.planList.length} saved).`];
 
   const summary = {
     currentAge: i.currentAge, retirementAge: i.retirementAge, maxAge: i.maxAge,
@@ -525,12 +559,6 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
     hasSpouse: i.spouse?.enabled === true,
     desiredSpending: i.desiredSpending,
     investmentReturn: i.investmentReturn, returnVolatility: i.returnVolatility,
-    // Market hypothesis (issue #138): shown only when anchors exist, so the
-    // agent knows the projection/MC follow a curve, not the flat constants.
-    ...((i.marketPeriods?.length ?? 0) > 0 ? {
-      marketHypothesis: (i.marketPeriods ?? []).map(p =>
-        `age ${p.age}: ${(p.return * 100).toFixed(1)}%${p.volatility != null ? ` (σ ${(p.volatility * 100).toFixed(1)}%)` : ''}`),
-    } : {}),
   };
   const accounts = {
     rrsp: i.rrspBalance, tfsa: i.tfsaBalance, taxable: i.taxableBalance,
@@ -700,7 +728,7 @@ function runProjection(ctx: ToolContext, overrides?: Record<string, unknown>): T
   }
 }
 
-function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenariosArgs>): ToolOutcome {
+function comparePlans(ctx: ToolContext, args: z.infer<typeof comparePlansArgs>): ToolOutcome {
   // The singular form stays valid (back-compat); variants win when both arrive.
   const variants: Array<{ label: string; overrides: Record<string, unknown> }> = args.variants?.length
     ? args.variants.map((v, i) => ({ label: v.label ?? `Variant ${i + 1}`, overrides: v.overrides }))
@@ -892,31 +920,6 @@ function proposeSpendingBands(
     label: 'Set spending phases',
     rationale: args.rationale,
     preview: { bands: sorted.map(b => `${(b.pctOfBase * 100).toFixed(0)}% from age ${b.fromAge}`) },
-  };
-}
-
-/** Replace the whole market-hypothesis set (issue #138). The engine needs a
- *  stable id per anchor (the UI keys drag targets by it); the caller supplies
- *  only age/return/volatility, so we mint ids here. Empty array = clear. */
-function proposeMarketPeriods(
-  _ctx: ToolContext,
-  args: { periods: Array<{ age: number; return: number; volatility?: number }>; rationale?: string },
-): ToolOutcome {
-  const res = z.array(marketPeriodSchema).safeParse(args.periods);
-  if (!res.success) {
-    return { kind: 'error', content: `Invalid market periods: ${zodIssues(res.error)}` };
-  }
-  const sorted = [...res.data].sort((a, b) => a.age - b.age);
-  const withIds = sorted.map((p, i) => ({ id: `mp-${i}-${p.age}`, ...p }));
-  return {
-    kind: 'mutation',
-    patch: { marketPeriods: withIds },
-    label: withIds.length > 0 ? `Set market hypothesis (${withIds.length} anchors)` : 'Clear market hypothesis',
-    rationale: args.rationale,
-    preview: {
-      periods: withIds.map(p =>
-        `age ${p.age}: ${(p.return * 100).toFixed(1)}%${p.volatility != null ? ` (σ ${(p.volatility * 100).toFixed(1)}%)` : ''}`),
-    },
   };
 }
 
@@ -1172,7 +1175,7 @@ function recallTool(ctx: ToolContext, args: z.infer<typeof recallArgs>): ToolOut
   return { kind: 'result', content: header ? `${header}\n${lines.join('\n')}` : lines.join('\n') };
 }
 
-/** open_scenario: switch the active scenario (the sidebar-switch path). A
+/** open_plan: switch the active plan (the sidebar-switch path). A
  *  navigation, not a plan mutation — no confirm card — but the caller must
  *  announce the switch so the model/user stay oriented. Resolves by id first,
  *  then by unique case-insensitive name; unsaved edits are the caller's
@@ -1180,50 +1183,128 @@ function recallTool(ctx: ToolContext, args: z.infer<typeof recallArgs>): ToolOut
  *  sidebar uses). */
 function openScenarioTool(ctx: ToolContext, args: z.infer<typeof openScenarioArgs>): ToolOutcome {
   if (!ctx.onOpenScenario) {
-    return { kind: 'error', content: 'Scenario switching is unavailable in this session.' };
+    return { kind: 'error', content: 'Plan switching is unavailable in this session.' };
   }
-  const list = ctx.scenarioList;
-  let target = args.scenarioId != null ? list.find(s => s.id === args.scenarioId) : undefined;
+  const list = ctx.planList;
+  let target = args.planId != null ? list.find(s => s.id === args.planId) : undefined;
   if (!target && args.name != null) {
     const q = args.name.trim().toLowerCase();
     const matches = list.filter(s => s.name.trim().toLowerCase() === q);
     if (matches.length === 1) target = matches[0];
     else if (matches.length > 1) {
-      return { kind: 'error', content: `"${args.name}" matches ${matches.length} scenarios (${matches.map(m => `"${m.name}"`).join(', ')}). Give the scenarioId instead.` };
+      return { kind: 'error', content: `"${args.name}" matches ${matches.length} plans (${matches.map(m => `"${m.name}"`).join(', ')}). Give the planId instead.` };
     }
   }
   if (!target) {
-    return { kind: 'error', content: `No saved scenario matches ${args.scenarioId != null ? `id "${args.scenarioId}"` : `"${args.name}"`}. Known scenarios: ${list.map(s => `"${s.name}" (${s.id})`).join(', ') || 'none'}.` };
+    return { kind: 'error', content: `No saved plan matches ${args.planId != null ? `id "${args.planId}"` : `"${args.name}"`}. Known plans: ${list.map(s => `"${s.name}" (${s.id})`).join(', ') || 'none'}.` };
   }
   ctx.onOpenScenario(target.id);
-  return { kind: 'result', content: `Opened scenario "${target.name}". The plan inputs, and any numbers you compute from now on, refer to it.` };
+  return { kind: 'result', content: `Opened plan "${target.name}". The plan inputs, and any numbers you compute from now on, refer to it.` };
 }
 
-/** save_scenario_as: snapshot the CURRENT live inputs as a new named scenario
+/** save_plan_as: snapshot the CURRENT live inputs as a new named plan
  *  and make it active (so later agent edits land on the copy). A direct write
- *  (no confirm card): it ADDS a scenario and touches no existing one. */
+ *  (no confirm card): it ADDS a plan and touches no existing one. */
 function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioAsArgs>): ToolOutcome {
   if (!ctx.onSaveScenarioAs) {
-    return { kind: 'error', content: 'Saving scenarios is unavailable in this session.' };
+    return { kind: 'error', content: 'Saving plans is unavailable in this session.' };
   }
   const name = args.name.trim();
   if (!name) {
-    return { kind: 'error', content: 'Scenario name cannot be empty.' };
+    return { kind: 'error', content: 'Plan name cannot be empty.' };
   }
   ctx.onSaveScenarioAs(name);
-  return { kind: 'result', content: `Saved the current plan as scenario "${name}" and opened it. The previous plan is unchanged and still in the list.` };
+  return { kind: 'result', content: `Saved the current plan as plan "${name}" and opened it. The previous plan is unchanged and still in the list.` };
 }
 
-/** list_scenarios: enumerate the saved plans. Compact by default (one line per
- *  scenario, active marked); withDetails adds each plan's key numbers so the
+/** list_plans: enumerate the saved plans. Compact by default (one line per
+ *  plan, active marked); withDetails adds each plan's key numbers so the
  *  model can compare saved plans without opening them. A pure read. */
-function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
-  const list = ctx.scenarioList;
-  if (list.length === 0) {
-    return { kind: 'result', content: 'There are no saved scenarios yet.' };
+// ---------------------------------------------------------------------------
+// Navigation: find_page / get_sitemap / propose_navigate
+// ---------------------------------------------------------------------------
+
+/** Resolve a name to its catalog entry (view id, route, title, or keyword).
+ *  Returns null instead of guessing-then-erroring. The whole catalog is
+ *  searched — a folded legacy name ("montecarlo") resolves so the tool can
+ *  redirect it to its destination rather than reject a request the UI can
+ *  satisfy. */
+function resolveNavView(name: string | View): NavEntry | null {
+  const q = name.toLowerCase().trim();
+  const found = NAV_CATALOG.find((e) =>
+    e.viewId.toLowerCase() === q ||
+    e.route.toLowerCase() === q ||
+    e.title.toLowerCase() === q ||
+    e.keywords.some((k) => k.toLowerCase() === q));
+  return found ?? null;
+}
+
+/** Follow `foldedInto` to the page the UI actually shows. */
+function destinationEntry(entry: NavEntry): NavEntry {
+  return entry.foldedInto ? pageForView(entry.foldedInto) ?? entry : entry;
+}
+
+/** find_page: ranked search over the reachable page map. Pure read;
+ *  idempotent-friendly (it's one catalog the user will reach the same way). */
+function findPageTool(ctx: ToolContext, args: z.infer<typeof findPageArgs>): ToolOutcome {
+  const ranked = rankPages(args.query, ctx.currentView);
+  if (ranked.length === 0) {
+    return { kind: 'result', content: `No page matches "${args.query}". Try get_sitemap for the whole map first.` };
   }
-  const activeId = ctx.activeScenarioId;
-  const lines: string[] = [`${list.length} saved scenario${list.length === 1 ? '' : 's'}:`];
+  const here = ctx.currentView != null ? canonicalView(ctx.currentView) : null;
+  const lines = ranked.slice(0, 5).map((e, i) => {
+    const isHere = here != null && e.viewId === here;
+    return `${i + 1}. ${e.title} ${isHere ? '(you are already here) ' : ''}— ${hashForEntry(e)} — ${e.description}`;
+  });
+  return { kind: 'result', content: `Matches for "${args.query}":\n${lines.join('\n')}` };
+}
+
+/** get_sitemap: the page map a user can reach, machine-readable. Folded
+ *  legacy pages are left out — the map should read as the site, not as the
+ *  view union. Pure read; idempotent — it's the same list regardless of state. */
+function getSitemapTool(): ToolOutcome {
+  const lines = searchablePages().map((e, i) =>
+    `${i + 1}. ${e.title} (view ${e.viewId}) — ${hashForEntry(e)} — ${e.description}${e.betaOnly ? ' (beta-only)' : ''}`);
+  return { kind: 'result', content: `The site map:\n${lines.join('\n')}` };
+}
+
+/** propose_navigate: PROPOSE a UI page switch as a confirm card (unlike a
+ *  direct navigate, which would yank the user out of this chat mid-answer).
+ *  Unbound hosts return the #/hash (not an error) — the model can share the
+ *  destination as a link instead of actioning it. A folded legacy view is
+ *  redirected to the page the UI shows (montecarlo → Insights), so the card
+ *  always opens a real destination. */
+function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavigateArgs>): ToolOutcome {
+  const found = resolveNavView(args.view);
+  if (!found) {
+    const routes = searchablePages().map((e) => e.viewId).join(', ');
+    return { kind: 'error', content: `Unknown view "${args.view}". Give a view id from find_page/get_sitemap (${routes}).` };
+  }
+  const entry = destinationEntry(found);
+  if (!ctx.canNavigate) {
+    return { kind: 'result', content: `To open "${entry.title}", share: ${hashForEntry(entry)} (view ${entry.viewId}).` };
+  }
+  // UI-only proposal: an empty plan patch + a `navigate` destination. The UI
+  // routes on approval (and skips the checkpoint, since the plan never
+  // changed) — the confirm card is the whole point: the user sees WHERE
+  // before the app moves them there.
+  return {
+    kind: 'mutation',
+    patch: {},
+    navigate: entry.viewId,
+    label: args.label,
+    preview: { Page: entry.title, Route: hashForEntry(entry) },
+    rationale: args.rationale,
+  };
+}
+
+function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
+  const list = ctx.planList;
+  if (list.length === 0) {
+    return { kind: 'result', content: 'There are no saved plans yet.' };
+  }
+  const activeId = ctx.activePlanId;
+  const lines: string[] = [`${list.length} saved plan${list.length === 1 ? '' : 's'}:`];
   for (const s of list) {
     const isActive = s.id === activeId;
     if (!args.withDetails) {
@@ -1232,7 +1313,7 @@ function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosA
     }
     const inputs = s.id === activeId
       ? ctx.inputs
-      : ctx.scenarioInputsById?.(s.id);
+      : ctx.planInputsById?.(s.id);
     const head = `- ${s.name}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`;
     if (!inputs) {
       // Not the active plan and the caller supplied no detail source: fall

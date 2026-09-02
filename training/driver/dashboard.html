@@ -1,0 +1,184 @@
+<!doctype html>
+<!-- Bake-off DASHBOARD. One persistent page that runs every base sequentially and
+     shows a live status card per model — so you can see the whole sweep at a
+     glance: which base is downloading / running / done, its progress, and whether
+     anything is stuck. No scrolling Q&A dump; the detail is one "last reply"
+     snippet per card, for a heartbeat.
+
+     The Node driver drives two channels over CDP:
+       BAKEOFF.load(modelId, onProgress)   → download + warm one model
+       BAKEOFF.reply(systemPrompt, q)      → one chat completion (think OFF)
+     and pushes UI state by calling window.DASH.update(cardId, patch). Everything
+     runs client-side; web-llm comes from the CDN (no bundler, no server). -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>bake-off dashboard</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+         background: #0b1220; color: #cbd5e1; padding: 16px; }
+  h1 { font-size: 15px; margin: 0 0 4px; color: #f1f5f9; font-weight: 600; }
+  #sub { color: #64748b; font-size: 11px; margin-bottom: 14px; }
+  #banner { padding: 8px 12px; border-radius: 8px; background: #1e293b; margin-bottom: 14px;
+            font-size: 12px; color: #94a3b8; }
+  #banner.run { background: #052e16; color: #4ade80; }
+  #banner.stuck { background: #450a0a; color: #f87171; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .card { background: #111a2e; border: 1px solid #1e293b; border-radius: 10px; padding: 12px; }
+  .card.active { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+  .card.done { border-color: #166534; }
+  .card.failed { border-color: #7f1d1d; }
+  .label { font-weight: 600; color: #e2e8f0; font-size: 13px; display: flex; justify-content: space-between; }
+  .label .sz { color: #64748b; font-weight: 400; font-size: 11px; }
+  .phase { margin-top: 6px; font-size: 11px; color: #94a3b8; }
+  .phase.active { color: #60a5fa; }
+  .phase.done { color: #4ade80; }
+  .phase.failed { color: #f87171; }
+  .bar { height: 6px; background: #1e293b; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0%; background: #3b82f6; transition: width .2s; }
+  .card.done .bar > div { background: #22c55e; }
+  .card.failed .bar > div { background: #ef4444; }
+  .pct { float: right; color: #94a3b8; }
+  .last { margin-top: 8px; font-size: 10px; color: #475569; white-space: nowrap;
+          overflow: hidden; text-overflow: ellipsis; }
+  .score { margin-top: 8px; font-size: 12px; font-weight: 600; }
+  .score.pass { color: #4ade80; } .score.fail { color: #f87171; }
+  .tiers { font-size: 10px; color: #64748b; font-weight: 400; margin-top: 2px; }
+  .skip { margin-top: 4px; font-size: 10px; background: #334155; color: #cbd5e1;
+          border: none; border-radius: 4px; padding: 1px 6px; cursor: pointer; }
+  .skip.armed { background: #7f1d1d; color: #fff; }
+</style>
+</head>
+<body>
+<h1>Bake-off — stock bases, smallest first</h1>
+<div id="sub">temperature 0 · thinking allowed (not suppressed) · max_tokens 2048</div>
+<div id="banner">starting…</div>
+<div id="grid"></div>
+
+<script type="module">
+  import * as webllm from 'https://esm.run/@mlc-ai/web-llm';
+
+  const grid = document.getElementById('grid');
+  const banner = document.getElementById('banner');
+  const cards = new Map();   // cardId -> { el, phaseEl, barEl, pctEl, lastEl, scoreEl, tiersEl, skipBtn }
+
+  let engine = null;
+  let loadedId = null;
+  // Skip is a TOGGLE: press once to arm (acknowledged immediately by the button
+  // turning red + relabeling "cancel"), press again to disarm. Node polls the
+  // flag BEFORE each reply() call and BEFORE a model starts loading, so an
+  // armed skip halts before the next expensive step — not after it.
+  window.SKIP_FLAGS = window.SKIP_FLAGS || {};
+
+  // Thinking models think — we do NOT suppress it. A base's reasoning is part of
+  // why it routes well, and the parser ignores prose before/after the call, so the
+  // think text never reaches the score. The failure to avoid is TRUNCATION: a
+  // 400-token cap let a long <think> run out the budget so the TOOL_CALL: never got
+  // emitted. Give thinking room to finish, then the call.
+  const MAX_TOKENS = 2048;   // headroom for think + tool call; the gate scores the call only
+
+  function makeCard(id, label, sizeGB) {
+    const el = document.createElement('div');
+    el.className = 'card'; el.id = 'card-' + id;
+    el.innerHTML = `
+      <div class="label"><span>${label}</span><span class="sz">~${sizeGB}GB</span></div>
+      <div class="phase">queued</div>
+      <div class="bar"><div></div></div>
+      <div class="last"></div>
+      <div class="score"></div>
+      <div class="tiers"></div>
+      <button class="skip">skip</button>`;
+    const btn = el.querySelector('.skip');
+    btn.addEventListener('click', () => {
+      // Toggle: arm ⇄ disarm. Show the state right now, so a click that the
+      // driver hasn't seen yet still gives feedback ("it heard me").
+      const cur = !!window.SKIP_FLAGS[id];
+      window.SKIP_FLAGS[id] = !cur;
+      btn.textContent = !cur ? 'cancel skip' : 'skip';
+      btn.classList.toggle('armed', !cur);
+    });
+    grid.appendChild(el);
+    cards.set(id, {
+      el,
+      phaseEl: el.querySelector('.phase'),
+      barEl: el.querySelector('.bar > div'),
+      lastEl: el.querySelector('.last'),
+      scoreEl: el.querySelector('.score'),
+      tiersEl: el.querySelector('.tiers'),
+      skipBtn: btn,
+    });
+  }
+
+  // Node pushes UI state here. patch: { phase, phaseClass, pct, last, score, scoreClass, tiers, active }
+  function update(id, patch) {
+    const c = cards.get(id); if (!c) return;
+    if (patch.phase !== undefined) c.phaseEl.textContent = patch.phase;
+    if (patch.phaseClass !== undefined) c.phaseEl.className = 'phase ' + patch.phaseClass;
+    if (patch.pct !== undefined) c.barEl.style.width = Math.round(patch.pct * 100) + '%';
+    if (patch.last !== undefined) c.lastEl.textContent = patch.last;
+    if (patch.score !== undefined) { c.scoreEl.textContent = patch.score; c.scoreEl.className = 'score ' + (patch.scoreClass ?? ''); }
+    if (patch.tiers !== undefined) c.tiersEl.textContent = patch.tiers;
+    if (patch.active !== undefined) c.el.classList.toggle('active', patch.active);
+    if (patch.cardClass !== undefined) c.el.className = 'card ' + patch.cardClass;
+  }
+
+  function setBanner(text, cls) { banner.textContent = text; banner.className = cls ?? ''; }
+
+  async function load(modelId, cardId) {
+    if (engine && loadedId === modelId) return { ok: true, cached: true };
+    if (engine) { try { await engine.unload(); } catch {} engine = null; loadedId = null; }
+    engine = await webllm.CreateMLCEngine(modelId, {
+      initProgressCallback: (p) => {
+        // p.progress (0..1) is the download/compile fraction; p.text is the stage.
+        // Render BOTH — a bare stage string alone (e.g. "fetching") can sit for
+        // minutes, so always prefix an explicit percent so the bar visibly moves.
+        const pct = Math.round((p.progress ?? 0) * 100);
+        const txt = (p.text ?? '').split('\n').pop() ?? '';
+        update(cardId, { phase: `loading ${pct}%${txt ? ' — ' + txt.slice(0, 40) : ''}`, pct: p.progress ?? 0 });
+      },
+    });
+    loadedId = modelId;
+    return { ok: true };
+  }
+
+  // THINK ON (natural) or OFF (`/no_think`), routed per question. The OFF
+  // suffix tells Qwen3*/3.5* to answer immediately instead of reasoning —
+  // matching how the app's assistant uses these models. The `noThink` flag is
+  // set by Node per question so both modes can be measured in one sweep.
+  async function reply(systemPrompt, question, noThink) {
+    if (!engine) throw new Error('no model loaded');
+    const content = noThink ? question + ' /no_think' : question;
+    const out = await engine.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: content },
+      ],
+      temperature: 0,
+      max_tokens: MAX_TOKENS,
+    });
+    const text = out.choices[0]?.message?.content ?? '';
+    // Diagnostics so the run is self-auditing: did the model think, and did the
+    // completion finish naturally ('stop') or get cut off at max_tokens ('length')?
+    // A 'length' on a thinking base means 2048 still wasn't enough headroom — we
+    // want to see that in the artifact, not infer it from a missing TOOL_CALL.
+    return {
+      text,
+      finishReason: out.choices[0]?.finish_reason ?? null,
+      thought: /<think>/i.test(text) && !noThink,
+      hasCall: /tool_call\s*:/i.test(text),
+    };
+  }
+
+  async function hasWebGPU() {
+    if (!navigator.gpu) return false;
+    try { return !!(await navigator.gpu.requestAdapter()); } catch { return false; }
+  }
+
+  window.DASH = { makeCard, update, setBanner };
+  window.BAKEOFF = { load, reply, hasWebGPU, version: webllm.MODEL_VERSION ?? 'unknown' };
+  window.BAKEOFF_READY = true;
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent, type IncomeSource, type RetirementInputs } from './retirementEngine';
 import { legacyToPerson, legacyToShared, legacySpouseToPerson, toHousehold } from './householdTypes';
 import { calculateTax } from './canadianTax';
-import { baselineInputs } from './exampleScenarios';
+import { baselineInputs } from './examplePlans';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
 const config = testConfig();
@@ -754,7 +754,7 @@ describe('spouse toggle / unlink (regression)', () => {
 
   it('a builtin spouseSource with no spouse never re-materializes one', () => {
     // The uncheck path also detaches the link (spouseSource → builtin) so a
-    // lingering scenario reference can't resurrect the spouse. With builtin +
+    // lingering plan reference can't resurrect the spouse. With builtin +
     // no spouse there is nothing to resolve.
     const inputs = withSpouse();
     inputs.spouse = undefined;
@@ -932,7 +932,7 @@ describe('re-homed transfer events (authored on the wrong person)', () => {
       },
     });
     // Authored on the primary at 63 (in the primary's own past — a saved or
-    // imported scenario can carry this even though the UI clamps new entries);
+    // imported plan can carry this even though the UI clamps new entries);
     // the money leaves the spouse's TFSA.
     inputs.events = [{
       id: 'past', age: 63, label: 'late meltdown', amount: 40000, direction: 'out',
@@ -980,10 +980,10 @@ describe('re-homed transfer events (authored on the wrong person)', () => {
   });
 });
 
-describe('baseline plan (New Scenario defaults)', () => {
-  it('a fresh New-Scenario plan runs end-to-end to maxAge', () => {
-    // Guards the New Scenario flow: the baseline defaults must always produce a
-    // runnable projection (the wizard and ScenarioManager both seed from it).
+describe('baseline plan (New Plan defaults)', () => {
+  it('a fresh New-Plan plan runs end-to-end to maxAge', () => {
+    // Guards the New Plan flow: the baseline defaults must always produce a
+    // runnable projection (the wizard and PlanManager both seed from it).
     const r = calculateHousehold(baselineInputs(), config);
     expect(r.yearlyBreakdown.length).toBeGreaterThan(0);
     expect(r.yearlyBreakdown[r.yearlyBreakdown.length - 1].age).toBe(baselineInputs().maxAge);

@@ -1,111 +1,111 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit3, Trash2, Save, X, Copy, Check, History, Undo2 } from 'lucide-react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
-import { baselineInputs } from '@retired/engine-core/exampleScenarios';
-import { diffRevisions, MAX_REVISIONS, type ScenarioRevision } from '../lib/scenarioRevisions';
+import { baselineInputs } from '@retired/engine-core/examplePlans';
+import { diffRevisions, MAX_REVISIONS, type PlanRevision } from '../lib/planRevisions';
 
-interface Scenario {
+interface Plan {
   id: string;
   name: string;
   inputs: RetirementInputs;
-  /** True when this is a clean baseline (New Scenario) so the parent can run
+  /** True when this is a clean baseline (New Plan) so the parent can run
    *  the setup wizard; false/undefined for a Duplicate (already-filled plan). */
   isFresh?: boolean;
 }
 
 interface ScenarioManagerProps {
-  scenarios: Scenario[];
-  activeScenarioId: string;
-  onScenariosChange: (scenarios: Scenario[]) => void;
-  /** Every scenario's revision history (all scenarios, newest last). */
-  revisions: ScenarioRevision[];
-  /** Roll the ACTIVE scenario back to a revision (parent applies + persists). */
+  plans: Plan[];
+  activePlanId: string;
+  onScenariosChange: (plans: Plan[]) => void;
+  /** Every plan's revision history (all plans, newest last). */
+  revisions: PlanRevision[];
+  /** Roll the ACTIVE plan back to a revision (parent applies + persists). */
   onRollback: (revisionId: string) => void;
-  /** Select a scenario and navigate back to the dashboard. */
+  /** Select a plan and navigate back to the dashboard. */
   onSelectScenario: (id: string) => void;
-  /** Add a freshly-built scenario and make it active. The parent owns this so
-   *  the new scenario is registered AND selected in one update — calling
+  /** Add a freshly-built plan and make it active. The parent owns this so
+   *  the new plan is registered AND selected in one update — calling
    *  onScenariosChange then onSelectScenario separately races (the select reads
-   *  the scenario list before the new one has been added). */
-  onCreateScenario: (scenario: Scenario) => void;
+   *  the plan list before the new one has been added). */
+  onCreateScenario: (plan: Plan) => void;
 }
 
-// Manage-scenarios page (was a modal). Light-themed to match the other routed
-// pages; selecting a scenario loads it and returns to the projection dashboard.
-export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, revisions, onRollback, onSelectScenario, onCreateScenario }: ScenarioManagerProps) {
+// Manage-plans page (was a modal). Light-themed to match the other routed
+// pages; selecting a plan loads it and returns to the projection dashboard.
+export function PlanManager({ plans, activePlanId, onScenariosChange, revisions, onRollback, onSelectScenario, onCreateScenario }: ScenarioManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  /** Which scenario's history is expanded (one at a time keeps it readable). */
+  /** Which plan's history is expanded (one at a time keeps it readable). */
   const [historyFor, setHistoryFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (editingId) {
-      const scenario = scenarios.find(s => s.id === editingId);
-      if (scenario) setEditingName(scenario.name);
+      const plan = plans.find(s => s.id === editingId);
+      if (plan) setEditingName(plan.name);
     }
-  }, [editingId, scenarios]);
+  }, [editingId, plans]);
 
-  // New Scenario = a clean baseline, NOT a copy of the active plan. Branching
+  // New Plan = a clean baseline, NOT a copy of the active plan. Branching
   // the current plan is what Duplicate is for.
   const handleCreateNew = () => {
     onCreateScenario({
-      id: `scenario-${Date.now()}`,
-      name: `New Scenario ${scenarios.length + 1}`,
+      id: `plan-${Date.now()}`,
+      name: `New Plan ${plans.length + 1}`,
       inputs: baselineInputs(),
       isFresh: true,
     });
   };
 
   const handleDuplicate = (id: string) => {
-    const scenario = scenarios.find(s => s.id === id);
-    if (!scenario) return;
+    const plan = plans.find(s => s.id === id);
+    if (!plan) return;
     onCreateScenario({
-      id: `scenario-${Date.now()}`,
-      name: `${scenario.name} Copy`,
-      inputs: JSON.parse(JSON.stringify(scenario.inputs)),
+      id: `plan-${Date.now()}`,
+      name: `${plan.name} Copy`,
+      inputs: JSON.parse(JSON.stringify(plan.inputs)),
       isFresh: false,
     });
   };
 
   const handleRename = () => {
     if (!editingId || !editingName.trim()) return;
-    onScenariosChange(scenarios.map(s => (s.id === editingId ? { ...s, name: editingName.trim() } : s)));
+    onScenariosChange(plans.map(s => (s.id === editingId ? { ...s, name: editingName.trim() } : s)));
     setEditingId(null);
     setEditingName('');
   };
 
   const handleDelete = (id: string) => {
-    if (scenarios.length <= 1) return;
-    const updated = scenarios.filter(s => s.id !== id);
+    if (plans.length <= 1) return;
+    const updated = plans.filter(s => s.id !== id);
     onScenariosChange(updated);
-    if (id === activeScenarioId) onSelectScenario(updated[0].id);
+    if (id === activePlanId) onSelectScenario(updated[0].id);
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Manage Scenarios</h2>
+          <h2 className="text-lg font-bold text-slate-900">Manage Plans</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Click a scenario to load it. Duplicate to branch a what-if; rename or delete below.
-            Each save keeps a revision (last {MAX_REVISIONS} per scenario) you can roll back to.
+            Click a plan to load it. Duplicate to branch a what-if; rename or delete below.
+            Each save keeps a revision (last {MAX_REVISIONS} per plan) you can roll back to.
           </p>
         </div>
         <button
           onClick={handleCreateNew}
           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white flex items-center gap-1.5"
         >
-          <Plus size={12} /> New Scenario
+          <Plus size={12} /> New Plan
         </button>
       </div>
 
       <div className="space-y-2">
-        {scenarios.map(scenario => {
-          const isActive = scenario.id === activeScenarioId;
-          const isEditing = editingId === scenario.id;
+        {plans.map(plan => {
+          const isActive = plan.id === activePlanId;
+          const isEditing = editingId === plan.id;
           return (
             <div
-              key={scenario.id}
+              key={plan.id}
               className={`p-3 rounded border bg-white ${
                 isActive ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200'
               }`}
@@ -133,8 +133,8 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
                   </div>
                 ) : (
                   <>
-                    <button onClick={() => onSelectScenario(scenario.id)} className="flex-1 text-left min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate">{scenario.name}</div>
+                    <button onClick={() => onSelectScenario(plan.id)} className="flex-1 text-left min-w-0">
+                      <div className="text-sm font-medium text-slate-900 truncate">{plan.name}</div>
                       <div className="text-[11px] text-slate-500">
                         {isActive ? 'Active — currently loaded' : 'Click to load'}
                       </div>
@@ -142,31 +142,31 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
                     <div className="flex items-center gap-1 shrink-0">
                       {isActive && <Check size={15} className="text-blue-600 mr-1" />}
                       <button
-                        onClick={() => setHistoryFor(historyFor === scenario.id ? null : scenario.id)}
-                        className={`p-1.5 rounded ${historyFor === scenario.id ? 'bg-blue-50' : 'hover:bg-slate-100'}`}
+                        onClick={() => setHistoryFor(historyFor === plan.id ? null : plan.id)}
+                        className={`p-1.5 rounded ${historyFor === plan.id ? 'bg-blue-50' : 'hover:bg-slate-100'}`}
                         title="Revision history"
                       >
                         <History size={14} className="text-slate-500" />
                       </button>
                       <button
-                        onClick={() => handleDuplicate(scenario.id)}
+                        onClick={() => handleDuplicate(plan.id)}
                         className="p-1.5 hover:bg-slate-100 rounded"
                         title="Duplicate"
                       >
                         <Copy size={14} className="text-slate-500" />
                       </button>
                       <button
-                        onClick={() => setEditingId(scenario.id)}
+                        onClick={() => setEditingId(plan.id)}
                         className="p-1.5 hover:bg-slate-100 rounded"
                         title="Rename"
                       >
                         <Edit3 size={14} className="text-slate-500" />
                       </button>
                       <button
-                        onClick={() => handleDelete(scenario.id)}
-                        disabled={scenarios.length <= 1}
+                        onClick={() => handleDelete(plan.id)}
+                        disabled={plans.length <= 1}
                         className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-30"
-                        title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete'}
+                        title={plans.length <= 1 ? 'Keep at least one plan' : 'Delete'}
                       >
                         <Trash2 size={14} className="text-slate-500" />
                       </button>
@@ -175,13 +175,13 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
                 )}
               </div>
 
-              {/* Revision history for this scenario, newest first. Only the
-                  active scenario can roll back (the parent applies to it). */}
-              {historyFor === scenario.id && (
+              {/* Revision history for this plan, newest first. Only the
+                  active plan can roll back (the parent applies to it). */}
+              {historyFor === plan.id && (
                 <RevisionList
-                  scenarioId={scenario.id}
+                  planId={plan.id}
                   revisions={revisions}
-                  currentInputs={scenario.inputs}
+                  currentInputs={plan.inputs}
                   canRollback={isActive}
                   onRollback={onRollback}
                 />
@@ -194,29 +194,29 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
   );
 }
 
-/** One scenario's revisions, newest first. Each row diffs against the
+/** One plan's revisions, newest first. Each row diffs against the
  *  NEXT-NEWER revision (or the current plan for the newest) — i.e. what
  *  changed to get here — and rolling back to a row DELETES every revision
  *  newer than it (history rewinds, doesn't branch). */
-function RevisionList({ scenarioId, revisions, currentInputs, canRollback, onRollback }: {
-  scenarioId: string;
-  revisions: ScenarioRevision[];
-  /** This scenario's inputs as saved right now (the newest row's baseline). */
+function RevisionList({ planId, revisions, currentInputs, canRollback, onRollback }: {
+  planId: string;
+  revisions: PlanRevision[];
+  /** This plan's inputs as saved right now (the newest row's baseline). */
   currentInputs: RetirementInputs;
   canRollback: boolean;
   onRollback: (revisionId: string) => void;
 }) {
   const mine = useMemo(
     () => revisions
-      .filter(r => r.scenarioId === scenarioId)
+      .filter(r => r.planId === planId)
       .sort((a, b) => (b.at - a.at) || (b.id < a.id ? -1 : 1)), // newest first
-    [revisions, scenarioId],
+    [revisions, planId],
   );
 
   if (mine.length === 0) {
     return (
       <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
-        No revisions yet. Every save of this scenario keeps one here (last {MAX_REVISIONS}).
+        No revisions yet. Every save of this plan keeps one here (last {MAX_REVISIONS}).
       </div>
     );
   }
@@ -239,7 +239,7 @@ function RevisionList({ scenarioId, revisions, currentInputs, canRollback, onRol
 }
 
 function RevisionRow({ rev, baseline, canRollback, onRollback }: {
-  rev: ScenarioRevision;
+  rev: PlanRevision;
   /** The inputs this row is diffed against: the next-newer revision's
    *  snapshot (or the current plan, for the newest row). */
   baseline: RetirementInputs;

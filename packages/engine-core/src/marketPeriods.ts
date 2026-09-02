@@ -14,7 +14,7 @@
 // there is nothing to interpolate (no usable anchors), so callers can write
 // `options.returnSequence ?? buildReturnSequence(...)` and stay on the
 // constant path untouched when the feature is off. That no-op-when-absent is
-// what keeps the golden master byte-identical for every existing scenario.
+// what keeps the golden master byte-identical for every existing plan.
 
 import type { MarketPeriod } from './retirementEngine';
 

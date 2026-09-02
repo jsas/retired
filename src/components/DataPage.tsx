@@ -9,7 +9,7 @@ import {
 } from '../lib/projectionExport';
 import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 import { migrateInputs } from '../data/migrations';
 import type { AppDb } from '../lib/planTransfer';
 import { AppDatabase } from '../data/db';
@@ -38,10 +38,10 @@ function safeJson(raw: string): unknown {
 }
 
 // What the page hands back when the user confirms a full-backup import. The
-// parent applies it (App owns all scenario/config state).
+// parent applies it (App owns all plan/config state).
 export interface FullBackupSelection {
-  scenarios: Scenario[];
-  activeScenarioId: string;
+  plans: Plan[];
+  activePlanId: string;
   config?: AppConfig; // undefined when "also apply engine settings" is off
   /** Opt-in AI data carried in the backup file; applied only when the user
    *  chose to include it. Undefined when the file had none / it was excluded. */
@@ -53,24 +53,24 @@ export interface FullBackupSelection {
   prefs?: Record<string, unknown>;
 }
 
-// A projection JSON (our own export format) re-imported as a new scenario.
+// A projection JSON (our own export format) re-imported as a new plan.
 export interface ProjectionImportRequest {
   name: string;
   inputs: RetirementInputs;
 }
 
 interface DataPageProps {
-  // Projection export (the active scenario's computed plan)
+  // Projection export (the active plan's computed plan)
   exportOptions: ProjectionExportOptions;
   onExportOptionsChange: (opts: ProjectionExportOptions) => void;
   hasSpouse: boolean;
-  scenarioName: string;
+  planName: string;
   inputs: RetirementInputs;
   results: RetirementResults;
   config: AppConfig;
   // Full-backup export + import
-  scenarios: Scenario[];
-  activeScenarioId: string;
+  plans: Plan[];
+  activePlanId: string;
   onExportFull: (scenarioIds: string[], includeConfig: boolean, ai: AiBackupInclude) => void;
   onImportFull: (sel: FullBackupSelection) => void;
   onImportProjection: (req: ProjectionImportRequest) => void;
@@ -85,7 +85,7 @@ export interface AiBackupInclude {
 
 const FORMATS: Array<{ key: ExportFormat; label: string; icon: typeof FileJson; hint: string }> = [
   { key: 'csv', label: 'CSV', icon: FileSpreadsheet, hint: 'Flat spreadsheet — one row per person per year, detail flattened into columns' },
-  { key: 'json', label: 'JSON', icon: FileJson, hint: 'Nested rows with full per-year detail objects; re-importable as a scenario' },
+  { key: 'json', label: 'JSON', icon: FileJson, hint: 'Nested rows with full per-year detail objects; re-importable as a plan' },
   { key: 'yaml', label: 'YAML', icon: FileText, hint: 'Same as JSON, human-readable YAML' },
 ];
 
@@ -115,7 +115,7 @@ export function DataPage(props: DataPageProps) {
 // ---------------------------------------------------------------------------
 function ProjectionExportSection({
   exportOptions: options, onExportOptionsChange: onChange, hasSpouse,
-  scenarioName, inputs, results, config,
+  planName, inputs, results, config,
 }: DataPageProps) {
   const set = (patch: Partial<ProjectionExportOptions>) => onChange({ ...options, ...patch });
   const toggleGroup = (g: ColumnGroup) =>
@@ -128,12 +128,12 @@ function ProjectionExportSection({
 
   // The exact payload the buttons act on.
   const payload = useMemo(
-    () => buildExport(scenarioName, inputs, results, config, options),
-    [scenarioName, inputs, results, config, options],
+    () => buildExport(planName, inputs, results, config, options),
+    [planName, inputs, results, config, options],
   );
 
-  // Editable filename (without extension); a default derived from the scenario.
-  const defaultBase = `retirement-projection-${scenarioName.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}`;
+  // Editable filename (without extension); a default derived from the plan.
+  const defaultBase = `retirement-projection-${planName.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}`;
   const [baseName, setBaseName] = useState(defaultBase);
   const [nameTouched, setNameTouched] = useState(false);
   const fileBase = (nameTouched ? baseName : defaultBase) || defaultBase;
@@ -162,8 +162,8 @@ function ProjectionExportSection({
     <section>
       <div className={SECTION}>Export projection</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
-        The computed year-by-year numbers for <span className="font-medium text-slate-700">{scenarioName}</span>,
-        in the shape you choose below. JSON can be re-imported as a scenario further down this page.
+        The computed year-by-year numbers for <span className="font-medium text-slate-700">{planName}</span>,
+        in the shape you choose below. JSON can be re-imported as a plan further down this page.
       </p>
 
       <div className="space-y-4">
@@ -232,7 +232,7 @@ function ProjectionExportSection({
               <input type="checkbox" checked={options.includeMetadata} onChange={e => set({ includeMetadata: e.target.checked })} className="mt-0.5" />
               <span>
                 <span className="font-medium">Include metadata envelope</span>
-                <span className="block text-[11px] text-slate-500 mt-0.5">Scenario name, generation date and the sections below, next to the projection.</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">Plan name, generation date and the sections below, next to the projection.</span>
               </span>
             </label>
             {options.includeMetadata && (
@@ -314,10 +314,10 @@ function ProjectionExportSection({
 }
 
 // ---------------------------------------------------------------------------
-// 2 · Full backup — every scenario (choose which) + engine settings, as JSON.
+// 2 · Full backup — every plan (choose which) + engine settings, as JSON.
 // ---------------------------------------------------------------------------
-function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPageProps) {
-  const [checked, setChecked] = useState<Set<string>>(() => new Set(scenarios.map(s => s.id)));
+function FullBackupSection({ plans, activePlanId, onExportFull }: DataPageProps) {
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(plans.map(s => s.id)));
   const [includeConfig, setIncludeConfig] = useState(true);
   const [includeChats, setIncludeChats] = useState(false);
   const [includeAiSettings, setIncludeAiSettings] = useState(false);
@@ -332,17 +332,17 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
     <section>
       <div className={SECTION}>Export full backup</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
-        The raw scenario inputs (not computed numbers) — for moving your plans to another machine or
+        The raw plan inputs (not computed numbers) — for moving your plans to another machine or
         keeping a snapshot. Downloads a real <span className="font-medium text-slate-700">SQLite database
         file</span> (.sqlite): the same format the app stores locally, openable by any SQLite tool. Choose
-        which scenarios to include; the active one is pre-selected.
+        which plans to include; the active one is pre-selected.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 max-w-3xl mb-3">
-        {scenarios.map(s => (
+        {plans.map(s => (
           <label key={s.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
             <input type="checkbox" checked={checked.has(s.id)} onChange={() => toggle(s.id)} />
             <span className="font-medium truncate">{s.name}</span>
-            {s.id === activeScenarioId && <span className="text-[10px] text-blue-600">active</span>}
+            {s.id === activePlanId && <span className="text-[10px] text-blue-600">active</span>}
           </label>
         ))}
         <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2 mt-1 pt-2 border-t border-slate-100">
@@ -430,7 +430,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           const aiSettingsRaw = db.getKv(AI_SETTINGS_STORAGE_KEY);
           const prefs = readPrefPayloads(db);
           if (!doc) {
-            // No scenarios — but a backup that lost its scenarios (e.g. saved
+            // No plans — but a backup that lost its plans (e.g. saved
             // after the store was wiped by a crash/quota eviction) can still
             // carry engine settings and AI data worth recovering.
             const salvage = db.salvageableContents();
@@ -468,22 +468,22 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           const aiChats = aiChatsRaw ? safeJson(aiChatsRaw) : undefined;
           const aiSettings = aiSettingsRaw ? safeJson(aiSettingsRaw) : undefined;
           // A backup whose config blob is absent/unreadable still imports its
-          // scenarios — the doc carries defaults + a warning (issue D-07).
+          // plans — the doc carries defaults + a warning (issue D-07).
           if (doc.configWarning) setError(doc.configWarning);
           setParsed({
             kind: 'backup',
             db: {
               version: doc.version,
               exportedAt: '',
-              scenarios: doc.scenarios,
-              activeScenarioId: doc.activeScenarioId,
+              plans: doc.plans,
+              activePlanId: doc.activePlanId,
               config: doc.config,
             },
             aiChats,
             aiSettings,
             prefs,
           });
-          setChecked(new Set(doc.scenarios.map(s => s.id)));
+          setChecked(new Set(doc.plans.map(s => s.id)));
           setIncludeConfig(true);
           setApplyChats(aiChats !== undefined);
           setApplyAiSettings(aiSettings !== undefined);
@@ -501,18 +501,18 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       if (!obj || typeof obj !== 'object') { setError('That JSON is not a RE: tired file.'); setParsed(null); return; }
       const rec = obj as Record<string, unknown>;
 
-      // Full backup: has a scenarios array. Migrate each scenario's inputs so
+      // Full backup: has a plans array. Migrate each plan's inputs so
       // older backups (legacy pensions[]/employment[]) fold into the income[]
       // register rather than reaching the engine in a stale shape.
-      if (Array.isArray(rec.scenarios)) {
-        const scenarios = (rec.scenarios as Scenario[])
+      if (Array.isArray(rec.plans)) {
+        const plans = (rec.plans as Plan[])
           .filter(s => s && typeof s.id === 'string' && typeof s.name === 'string' && s.inputs)
           .map(s => ({ ...s, inputs: migrateInputs(s.inputs as unknown as Record<string, unknown>) }));
-        if (scenarios.length === 0) { setError('That backup has no usable scenarios.'); setParsed(null); return; }
+        if (plans.length === 0) { setError('That backup has no usable plans.'); setParsed(null); return; }
         const db = rec as unknown as AppDb;
-        const activeId = scenarios.some(s => s.id === db.activeScenarioId) ? db.activeScenarioId : scenarios[0].id;
-        setParsed({ kind: 'backup', db: { ...db, scenarios, activeScenarioId: activeId } });
-        setChecked(new Set(scenarios.map(s => s.id)));
+        const activeId = plans.some(s => s.id === db.activePlanId) ? db.activePlanId : plans[0].id;
+        setParsed({ kind: 'backup', db: { ...db, plans, activePlanId: activeId } });
+        setChecked(new Set(plans.map(s => s.id)));
         setIncludeConfig(!!rec.config);
         return;
       }
@@ -526,7 +526,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       if (profile && typeof profile.currentAge === 'number') {
         const opts = (meta?.options ?? {}) as Record<string, unknown>;
         const inputs = migrateInputs(profileToInputs(profile, opts) as unknown as Record<string, unknown>);
-        const name = typeof meta?.scenario === 'string' && meta.scenario.trim() ? meta.scenario.trim() : 'Imported projection';
+        const name = typeof meta?.plan === 'string' && meta.plan.trim() ? meta.plan.trim() : 'Imported projection';
         setParsed({ kind: 'projection', name, inputs });
         setProjName(name);
         return;
@@ -540,7 +540,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
   // Rebuild a RetirementInputs from a projection export's metadata.profile +
   // metadata.options. Balances/benefits come from profile; strategy options
   // (withdrawal order, spending bands, pensions, events, reverse mortgage)
-  // come from options so the imported scenario behaves like the exported one.
+  // come from options so the imported plan behaves like the exported one.
   const profileToInputs = (p: Record<string, unknown>, opts: Record<string, unknown>): RetirementInputs => {
     const bal = (p.balances ?? {}) as Record<string, number>;
     const cpp = (p.cpp ?? {}) as Record<string, number>;
@@ -594,12 +594,12 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
 
   const confirmBackup = () => {
     if (parsed?.kind !== 'backup') return;
-    const chosen = parsed.db.scenarios.filter(s => checked.has(s.id));
+    const chosen = parsed.db.plans.filter(s => checked.has(s.id));
     if (chosen.length === 0 && !includeConfig) return;
-    const activeId = chosen.some(s => s.id === parsed.db.activeScenarioId) ? parsed.db.activeScenarioId : (chosen[0]?.id ?? parsed.db.activeScenarioId);
+    const activeId = chosen.some(s => s.id === parsed.db.activePlanId) ? parsed.db.activePlanId : (chosen[0]?.id ?? parsed.db.activePlanId);
     onImportFull({
-      scenarios: chosen,
-      activeScenarioId: activeId,
+      plans: chosen,
+      activePlanId: activeId,
       config: includeConfig ? parsed.db.config : undefined,
       aiChats: applyChats ? parsed.aiChats : undefined,
       aiSettings: applyAiSettings ? parsed.aiSettings : undefined,
@@ -614,17 +614,17 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
     reset();
   };
 
-  // Partial backup: no scenarios survived in the file, so the current scenario
+  // Partial backup: no plans survived in the file, so the current plan
   // list must not be touched — only the config and/or AI payloads the user
-  // ticks get applied. handleImportFull already treats an empty scenarios
+  // ticks get applied. handleImportFull already treats an empty plans
   // array as "keep the current list", so reuse the same import channel rather
   // than a special-case apply. The user-facing copy below is what promises the
   // no-touch; that contract lives on the applier.
   const confirmPartial = () => {
     if (parsed?.kind !== 'partial') return;
     onImportFull({
-      scenarios: [],
-      activeScenarioId: '',
+      plans: [],
+      activePlanId: '',
       config: includeConfig && parsed.config ? parsed.config : undefined,
       aiChats: applyChats ? parsed.aiChats : undefined,
       aiSettings: applyAiSettings ? parsed.aiSettings : undefined,
@@ -638,8 +638,8 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       <div className={SECTION}>Import</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
         Load a file from this app — a <span className="font-medium text-slate-700">SQLite backup</span> (.sqlite, or a
-        legacy JSON backup) with scenarios + settings, or a <span className="font-medium text-slate-700">projection
-        JSON</span> (re-imported as a scenario). You choose what gets applied before anything changes.
+        legacy JSON backup) with plans + settings, or a <span className="font-medium text-slate-700">projection
+        JSON</span> (re-imported as a plan). You choose what gets applied before anything changes.
       </p>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
         Bringing numbers in from a spreadsheet? Download the{' '}
@@ -658,7 +658,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           CSV import template
         </button>
         , fill in the value column (blank = default; leave all <code className="text-[10px]">spouse.*</code> rows
-        blank for a single plan), then choose the file below — it imports as a new scenario.
+        blank for a single plan), then choose the file below — it imports as a new plan.
       </p>
 
       <div className="flex items-center gap-2 mb-3">
@@ -684,15 +684,15 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       {parsed?.kind === 'backup' && (
         <div className="rounded border border-slate-200 bg-white p-3 max-w-3xl">
           <div className="text-xs font-semibold text-slate-800 mb-2">
-            Full backup — {parsed.db.scenarios.length} scenario{parsed.db.scenarios.length === 1 ? '' : 's'}
+            Full backup — {parsed.db.plans.length} plan{parsed.db.plans.length === 1 ? '' : 's'}
             {parsed.db.exportedAt ? ` · exported ${parsed.db.exportedAt.split('T')[0]}` : ''}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 mb-3">
-            {parsed.db.scenarios.map(s => (
+            {parsed.db.plans.map(s => (
               <label key={s.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
                 <input type="checkbox" checked={checked.has(s.id)} onChange={() => toggle(s.id)} />
                 <span className="truncate">{s.name}</span>
-                {s.id === parsed.db.activeScenarioId && <span className="text-[10px] text-blue-600">active</span>}
+                {s.id === parsed.db.activePlanId && <span className="text-[10px] text-blue-600">active</span>}
               </label>
             ))}
             <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2 mt-1 pt-2 border-t border-slate-100">
@@ -725,7 +725,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
             )}
           </div>
           <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 mb-3">
-            Importing <span className="font-medium">replaces</span> your current scenarios{includeConfig ? ' and settings' : ''} with the ones selected above.
+            Importing <span className="font-medium">replaces</span> your current plans{includeConfig ? ' and settings' : ''} with the ones selected above.
           </p>
           <div className="flex gap-2">
             <button
@@ -740,12 +740,12 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
         </div>
       )}
 
-      {/* Partial backup — no scenarios survived, settings/AI data did */}
+      {/* Partial backup — no plans survived, settings/AI data did */}
       {parsed?.kind === 'partial' && (
         <div className="rounded border border-slate-200 bg-white p-3 max-w-3xl">
-          <div className="text-xs font-semibold text-slate-800 mb-2">Partial backup — no scenarios inside</div>
+          <div className="text-xs font-semibold text-slate-800 mb-2">Partial backup — no plans inside</div>
           <p className="text-[11px] text-slate-500 leading-snug mb-3">
-            This backup's scenario list is empty (it was likely saved after the browser cleared the app's stored
+            This backup's plan list is empty (it was likely saved after the browser cleared the app's stored
             plans — recovery tip: if an AI chat in this file discussed your numbers, its plan checkpoints may still
             hold them). What's left can still be restored:
           </p>
@@ -773,7 +773,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
             )}
           </div>
           <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 mb-3">
-            Your current scenarios are <span className="font-medium">not touched</span> — only what you tick above is applied.
+            Your current plans are <span className="font-medium">not touched</span> — only what you tick above is applied.
           </p>
           <div className="flex gap-2">
             <button
@@ -791,7 +791,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       {/* Projection preview + name */}
       {parsed?.kind === 'projection' && (
         <div className="rounded border border-slate-200 bg-white p-3 max-w-3xl">
-          <div className="text-xs font-semibold text-slate-800 mb-1">Projection export — imports as a new scenario</div>
+          <div className="text-xs font-semibold text-slate-800 mb-1">Projection export — imports as a new plan</div>
           <p className="text-[11px] text-slate-500 mb-3">
             Age {parsed.inputs.currentAge} → retire {parsed.inputs.retirementAge} · {parsed.inputs.provinceCode} ·
             spending ${parsed.inputs.desiredSpending?.toLocaleString() ?? '—'}/yr{parsed.inputs.spouse?.enabled ? ' · with spouse' : ''}
@@ -800,14 +800,14 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
             <input
               value={projName}
               onChange={e => setProjName(e.target.value)}
-              placeholder="Name for the new scenario"
+              placeholder="Name for the new plan"
               className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-700 focus:outline-none focus:border-blue-500"
             />
             <button
               onClick={confirmProjection}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 shrink-0"
             >
-              <Check size={13} /> Import scenario
+              <Check size={13} /> Import plan
             </button>
             <button onClick={reset} className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded">Cancel</button>
           </div>

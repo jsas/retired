@@ -110,7 +110,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'CPP Start Age / Monthly at 65 ($)',
-        body: <P>Your expected CPP pension at the standard age of 65. The engine applies the early/deferral adjustment itself: −0.6% per month before 65 (−36% at 60), +0.7% per month after 65 (+42% at 70), shown live next to the field. If the checkbox is ticked, the amount you entered is used verbatim (already adjusted — e.g. from a Service Canada estimate). CPP is taxable income. Scenarios saved before this calculator existed keep the "already adjusted" behaviour.</P>
+        body: <P>Your expected CPP pension at the standard age of 65. The engine applies the early/deferral adjustment itself: −0.6% per month before 65 (−36% at 60), +0.7% per month after 65 (+42% at 70), shown live next to the field. If the checkbox is ticked, the amount you entered is used verbatim (already adjusted — e.g. from a Service Canada estimate). CPP is taxable income. Plans saved before this calculator existed keep the "already adjusted" behaviour.</P>
       },
       {
         term: 'OAS Start Age',
@@ -179,8 +179,8 @@ const SECTIONS: HelpSection[] = [
           <>
             <P>The spouse can live two places, switched by the <strong>Built-in / Link a plan</strong> toggle at the top of the Spouse section:</P>
             {ul([
-              <><strong>Built-in</strong> — the spouse's numbers are stored inside this scenario and edited inline. <em>Save spouse as its own plan…</em> (bottom of the section) promotes them to a standalone scenario named "this plan - Spouse".</>,
-              <><strong>Link a plan</strong> — the spouse <em>is</em> another saved scenario. Their basic numbers show in the sidebar fetched live from that plan; edits stay a local draft until <em>Save to "plan name"</em> writes them back. One source of truth — editing the linked plan updates every household that links to it.</>,
+              <><strong>Built-in</strong> — the spouse's numbers are stored inside this plan and edited inline. <em>Save spouse as its own plan…</em> (bottom of the section) promotes them to a standalone plan named "this plan - Spouse".</>,
+              <><strong>Link a plan</strong> — the spouse <em>is</em> another saved plan. Their basic numbers show in the sidebar fetched live from that plan; edits stay a local draft until <em>Save to "plan name"</em> writes them back. One source of truth — editing the linked plan updates every household that links to it.</>,
             ])}
             <P>A household shares one province, one market assumption and one planning horizon, so a linked spouse's own values for those are overridden by this plan (each override is listed in the amber warning box).</P>
           </>
@@ -456,7 +456,7 @@ const SECTIONS: HelpSection[] = [
         term: 'What it can see and do',
         body: (
           <>
-            <P>Every reply is grounded in your active scenario: the assistant is handed your inputs and the computed projection, and it can re-run the engine with what-if changes before answering.</P>
+            <P>Every reply is grounded in your active plan: the assistant is handed your inputs and the computed projection, and it can re-run the engine with what-if changes before answering.</P>
             {ul([
               <><strong>Read</strong> — ages, balances, benefits, spending, and the year-by-year projection. You never need to type your numbers into the chat.</>,
               <><strong>What-if</strong> — it can run the projection with changed inputs ("spend $5k more", "retire two years later") and quote the result.</>,
@@ -528,9 +528,9 @@ const SECTIONS: HelpSection[] = [
         term: null,
         body: (
           <P>
-            The <strong>Compare</strong> page puts 2–3 saved scenarios side by side — verdict, money-lasts-to,
+            The <strong>Compare</strong> page puts 2–3 saved plans side by side — verdict, money-lasts-to,
             spending, tax and ending wealth — so you can see which version of a plan holds up best. Each
-            scenario is scored with its own resolved spouse: a plan whose spouse is a linked scenario is
+            plan is scored with its own resolved spouse: a plan whose spouse is a linked plan is
             compared as the full household, not the primary alone.
           </P>
         )
@@ -539,15 +539,15 @@ const SECTIONS: HelpSection[] = [
   },
   {
     id: 'help-data',
-    title: 'Scenarios & Data',
+    title: 'Plans & Data',
     entries: [
       {
-        term: 'Scenarios',
-        body: <P>A scenario is one complete set of inputs. The top bar switches between them; Save writes your edits into the active scenario; Scenarios opens the manager to create, rename, duplicate and delete. Reset discards your unsaved edits and reverts the sidebar to the active scenario's last-saved inputs. Switching away with unsaved edits asks whether to save first — the prompt's "don't ask again" box (or Settings → General) turns that check off.</P>
+        term: 'Plans',
+        body: <P>A plan is one complete set of inputs. The top bar switches between them; Save writes your edits into the active plan; Plans opens the manager to create, rename, duplicate and delete. Reset discards your unsaved edits and reverts the sidebar to the active plan's last-saved inputs. Switching away with unsaved edits asks whether to save first — the prompt's "don't ask again" box (or Settings → General) turns that check off.</P>
       },
       {
-        term: 'New Scenario wizard',
-        body: <P>Creating a scenario opens the guided setup: ages, savings, contributions, CPP/OAS and a spending goal, then a review step where you name the plan, answer the own-your-home question (saved into the Reverse Mortgage section so Optimize can weigh the equity), and optionally tick <strong>Add a spouse or partner</strong> — which runs a short second wizard for the partner's own numbers.</P>
+        term: 'New Plan wizard',
+        body: <P>Creating a plan opens the guided setup: ages, savings, contributions, CPP/OAS and a spending goal, then a review step where you name the plan, answer the own-your-home question (saved into the Reverse Mortgage section so Optimize can weigh the equity), and optionally tick <strong>Add a spouse or partner</strong> — which runs a short second wizard for the partner's own numbers.</P>
       },
       {
         term: 'Where data lives',
@@ -559,21 +559,21 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'The Data page (export / import)',
-        body: <P>Everything that moves plan data in or out lives on the <strong>Data</strong> page (the database icon in the header menu). Export downloads the chosen scenarios (+ optionally the engine settings) as a <strong>.sqlite file</strong> — the very same database format the app stores locally, openable by any SQLite tool (DB Browser, the sqlite3 CLI). Import reads that file back (and still accepts the older JSON backups), letting you pick which scenarios to apply. Older payloads are migrated automatically (e.g. a legacy single "annual contribution" becomes a TFSA contribution).</P>
+        body: <P>Everything that moves plan data in or out lives on the <strong>Data</strong> page (the database icon in the header menu). Export downloads the chosen plans (+ optionally the engine settings) as a <strong>.sqlite file</strong> — the very same database format the app stores locally, openable by any SQLite tool (DB Browser, the sqlite3 CLI). Import reads that file back (and still accepts the older JSON backups), letting you pick which plans to apply. Older payloads are migrated automatically (e.g. a legacy single "annual contribution" becomes a TFSA contribution).</P>
       },
       {
         term: 'Import from a spreadsheet (CSV template)',
-        body: <P>The Data page's Import section offers a downloadable <strong>CSV import template</strong>: one row per plan field (ages, balances, contributions, CPP/OAS, spending goal), with <code>spouse.*</code> rows for a partner. Fill in the value column in Excel or Google Sheets — leave a value blank to use the default, leave every spouse row blank for a single plan — save as CSV, and choose the file. It becomes a new scenario. Strategy structures (spending bands, one-time events, pensions, reverse mortgage) aren't part of the flat template; set those in the app afterward.</P>
+        body: <P>The Data page's Import section offers a downloadable <strong>CSV import template</strong>: one row per plan field (ages, balances, contributions, CPP/OAS, spending goal), with <code>spouse.*</code> rows for a partner. Fill in the value column in Excel or Google Sheets — leave a value blank to use the default, leave every spouse row blank for a single plan — save as CSV, and choose the file. It becomes a new plan. Strategy structures (spending bands, one-time events, pensions, reverse mortgage) aren't part of the flat template; set those in the app afterward.</P>
       },
       {
         term: 'Export CSV',
-        body: <P>The link in the breadcrumb row downloads the year-by-year projection table (balances, contributions, gains, withdrawals, tax, benefits) for the active scenario.</P>
+        body: <P>The link in the breadcrumb row downloads the year-by-year projection table (balances, contributions, gains, withdrawals, tax, benefits) for the active plan.</P>
       },
       {
         term: 'Share link',
         body: (
           <>
-            <P>Opens a card with a link that encodes the active plan's inputs in the URL itself (base64 in the fragment, after the #). Copy it and send it to someone — opening it imports a copy as a new "Shared plan" scenario. Nothing is uploaded to a server, and the fragment never travels with the HTTP request.</P>
+            <P>Opens a card with a link that encodes the active plan's inputs in the URL itself (base64 in the fragment, after the #). Copy it and send it to someone — opening it imports a copy as a new "Shared plan" plan. Nothing is uploaded to a server, and the fragment never travels with the HTTP request.</P>
             <P>The link is built from the current host, port and path, so it works for anyone who can reach the same address — a hosted deployment, a LAN IP, or this machine if you're both on it.</P>
           </>
         )
@@ -594,7 +594,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Database',
-        body: <P>An organized place to keep data so it can be found and updated later — here, the list of your saved scenarios and settings. Not a website, not "the cloud": yours sits inside your browser on your own machine.</P>
+        body: <P>An organized place to keep data so it can be found and updated later — here, the list of your saved plans and settings. Not a website, not "the cloud": yours sits inside your browser on your own machine.</P>
       },
       {
         term: 'OPFS / "origin-private file system"',
@@ -610,7 +610,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Import',
-        body: <P>The reverse of a backup: loading a file back in. On the Data page you can load a backup file (yours, or one from another computer), a projection JSON, or the fill-in spreadsheet template — each becomes scenarios in the app.</P>
+        body: <P>The reverse of a backup: loading a file back in. On the Data page you can load a backup file (yours, or one from another computer), a projection JSON, or the fill-in spreadsheet template — each becomes plans in the app.</P>
       },
       {
         term: 'CSV',
@@ -629,7 +629,7 @@ const SECTIONS: HelpSection[] = [
         body: <P>Each tab you open this app in keeps its own working copy, and saving in one doesn't update the other — the last Save wins, silently. Use one tab at a time; if a second opens by accident, close it without saving.</P>
       },
       {
-        term: 'Scenario',
+        term: 'Plan',
         body: <P>One complete "what-if" plan: your ages, balances, benefits, spending goal, and strategy choices, saved under a name. Make several — "retire at 60" vs "65", "with the cottage sale" vs without — and flip between them from the dropdown up top or compare them side by side on the Compare page.</P>
       },
       {
@@ -642,7 +642,7 @@ const SECTIONS: HelpSection[] = [
       },
       {
         term: 'Assistant (the chat)',
-        body: <P>The built-in chat that answers questions about your plan. It can read your scenario inputs and run the projection itself, so it answers with your real numbers — and it can suggest changes, which you always review and approve before anything is applied. It never changes your plan on its own.</P>
+        body: <P>The built-in chat that answers questions about your plan. It can read your plan inputs and run the projection itself, so it answers with your real numbers — and it can suggest changes, which you always review and approve before anything is applied. It never changes your plan on its own.</P>
       },
       {
         term: 'Model',
@@ -701,7 +701,7 @@ const SECTIONS: HelpSection[] = [
               Your plans live only in this browser's local storage — there is no server-side copy,
               no account, and no way for anyone to recover them for you. Clearing the browser's site
               data, uninstalling the browser, switching devices, or a disk or profile failure can
-              permanently erase every scenario.
+              permanently erase every plan.
             </P>
             <P>
               Keeping a backup is entirely your responsibility: use the Data page's <strong>Export</strong>{' '}
@@ -853,14 +853,14 @@ export function HelpModal() {
 
   return (
     <div>
-      {/* Re-run the guided first-scenario setup (the welcome wizard). */}
+      {/* Re-run the guided first-plan setup (the welcome wizard). */}
       <a
         href="#/welcome"
         className="mb-3 flex items-center gap-3 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 group"
       >
         <Sparkles size={16} className="shrink-0 text-blue-600" />
         <span className="flex-1 text-xs text-slate-700">
-          <span className="font-semibold text-slate-900">Walk through your first scenario</span>
+          <span className="font-semibold text-slate-900">Walk through your first plan</span>
           {' '}— a 5-step guided setup (ages, savings, benefits, spending).
         </span>
         <span className="text-[11px] font-medium text-blue-600 group-hover:underline">Open →</span>

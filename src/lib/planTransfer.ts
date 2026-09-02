@@ -1,4 +1,4 @@
-// Common low-level import/export backend for moving a PLAN (a scenario's
+// Common low-level import/export backend for moving a PLAN (a plan's
 // inputs, plus a display name) between users and machines, with no server.
 //
 // One envelope format, two wire shapes:
@@ -16,13 +16,13 @@
 
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 import { migrateInputs } from '../data/migrations';
 
 export const PLAN_TRANSFER_VERSION = 1;
 
 /**
- * Whole-app database document: scenarios + active scenario + engine config in a
+ * Whole-app database document: plans + active plan + engine config in a
  * single JSON object. This is the shape a legacy whole-app JSON backup parses
  * into on the Data page (issue #21: legacy *reads* stay supported even though
  * nothing writes this format anymore — the SQL store is the source of truth).
@@ -32,8 +32,8 @@ export const PLAN_TRANSFER_VERSION = 1;
 export interface AppDb {
   version: number;
   exportedAt: string;
-  scenarios: Scenario[];
-  activeScenarioId: string;
+  plans: Plan[];
+  activePlanId: string;
   config: AppConfig;
 }
 

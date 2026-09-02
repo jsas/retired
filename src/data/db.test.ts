@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { AppDatabase, DB_STORAGE_KEY } from './db';
 import { baseInputs } from '@retired/engine-core/test/helpers';
 import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 
 // Tests run in Node — give the mirror a localStorage to write to.
 const storage = new Map<string, string>();
@@ -20,7 +20,7 @@ const storage = new Map<string, string>();
  * legacy split-key import.
  */
 
-const scenarios = (): Scenario[] => [
+const plans = (): Plan[] => [
   { id: 'a', name: 'Plan A', inputs: baseInputs({ currentAge: 50, desiredSpending: 48000 }) },
   {
     id: 'b', name: 'Plan B', inputs: baseInputs({
@@ -41,9 +41,9 @@ beforeEach(() => {
 });
 
 describe('AppDatabase', () => {
-  it('round-trips scenarios, the active id and the config through export bytes', async () => {
+  it('round-trips plans, the active id and the config through export bytes', async () => {
     const db = await AppDatabase.open();
-    const list = scenarios();
+    const list = plans();
     db.saveScenarios(list);
     db.saveActiveScenarioId('b');
     db.saveConfig(DEFAULT_APP_CONFIG);
@@ -62,7 +62,7 @@ describe('AppDatabase', () => {
 
   it('mirrors to localStorage on save and re-opens from it', async () => {
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.saveActiveScenarioId('a');
     db.save();
     db.close();
@@ -75,10 +75,10 @@ describe('AppDatabase', () => {
 
   it('keeps row order stable (insertion order) across saves', async () => {
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     // Re-save in a different order — the store must reflect the new order,
-    // since the UI writes the scenario list as a set.
-    const reversed = scenarios().reverse();
+    // since the UI writes the plan list as a set.
+    const reversed = plans().reverse();
     db.saveScenarios(reversed);
     expect(db.loadScenarios().map(s => s.id)).toEqual(['b', 'a']);
     db.close();
@@ -86,34 +86,34 @@ describe('AppDatabase', () => {
 
   it('toDoc validates the whole store; loadDoc replaces it', async () => {
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.saveActiveScenarioId('a');
     db.saveConfig(DEFAULT_APP_CONFIG);
     const doc = db.toDoc();
     expect(doc).not.toBeNull();
-    expect(doc!.scenarios).toHaveLength(2);
+    expect(doc!.plans).toHaveLength(2);
     expect(doc!.configWarning).toBeUndefined(); // healthy config: no warning
 
     // Write the doc into a fresh store.
     const other = await AppDatabase.open();
     other.loadDoc(doc!);
     expect(other.loadScenarios().map(s => s.id)).toEqual(['a', 'b']);
-    expect(other.toDoc()!.activeScenarioId).toBe('a');
+    expect(other.toDoc()!.activePlanId).toBe('a');
     other.close();
     db.close();
   });
 
-  it('toDoc keeps the scenarios when the config is unreadable and flags it (D-07)', async () => {
+  it('toDoc keeps the plans when the config is unreadable and flags it (D-07)', async () => {
     // A backup exported without engine settings (or from a store whose config
     // was corrupt) used to null the whole doc — the importer then told the
-    // user "not a RE: tired backup" and threw away every valid scenario.
+    // user "not a RE: tired backup" and threw away every valid plan.
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.saveActiveScenarioId('a');
     db.saveConfig({ broken: true } as unknown); // wholesale-invalid blob
     const doc = db.toDoc();
     expect(doc).not.toBeNull();
-    expect(doc!.scenarios.map(s => s.id)).toEqual(['a', 'b']);
+    expect(doc!.plans.map(s => s.id)).toEqual(['a', 'b']);
     expect(doc!.configWarning).toMatch(/could not be read/);
     expect(doc!.configWarning).toMatch(/Custom tax tables/);
     // The doc still validates as a loadable document — with defaults in place
@@ -122,7 +122,7 @@ describe('AppDatabase', () => {
 
     // A store with NO config row at all behaves the same.
     const db2 = await AppDatabase.open();
-    db2.saveScenarios(scenarios());
+    db2.saveScenarios(plans());
     const doc2 = db2.toDoc();
     expect(doc2).not.toBeNull();
     expect(doc2!.configWarning).toMatch(/could not be read/);
@@ -131,9 +131,9 @@ describe('AppDatabase', () => {
     db2.close();
   });
 
-  it('migrates stale scenario inputs on read (fields added later appear)', async () => {
+  it('migrates stale plan inputs on read (fields added later appear)', async () => {
     const db = await AppDatabase.open();
-    const stale = scenarios();
+    const stale = plans();
     // Simulate a row written before spouseSource existed.
     delete (stale[0].inputs as Partial<typeof stale[0]['inputs']>).spouseSource;
     db.saveScenarios(stale);
@@ -144,7 +144,7 @@ describe('AppDatabase', () => {
 
   it('carries raw kv values (AI chats/settings) in the backup bytes', async () => {
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.saveConfig(DEFAULT_APP_CONFIG);
     db.setKv('retirement_ai_chats', JSON.stringify({ threads: [{ id: 't1' }], activeThreadId: 't1' }));
     db.setKv('retirement_ai_settings', JSON.stringify({ connections: [], activeConnectionId: null, prompts: [] }));
@@ -161,7 +161,7 @@ describe('AppDatabase', () => {
 
   it('deleteKv strips an AI payload from a backup that excludes it', async () => {
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.saveConfig(DEFAULT_APP_CONFIG);
     db.setKv('retirement_ai_settings', JSON.stringify({ connections: [{ apiKey: 'secret' }] }));
     db.deleteKv('retirement_ai_settings');
@@ -179,16 +179,16 @@ describe('AppDatabase', () => {
     db.close();
   });
 
-  it('salvageableContents reports config when a scenario-less store still has one', async () => {
-    // The truncated-backup shape: meta + kv survived, scenarios did not.
+  it('salvageableContents reports config when a plan-less store still has one', async () => {
+    // The truncated-backup shape: meta + kv survived, plans did not.
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.saveConfig(DEFAULT_APP_CONFIG);
     const bytes = db.exportBytes();
     db.close();
 
     const reopened = await AppDatabase.open(bytes);
-    reopened.saveScenarios([]); // scenarios wiped, config left behind
+    reopened.saveScenarios([]); // plans wiped, config left behind
     const salvage = reopened.salvageableContents();
     expect(salvage?.kind).toBe('config');
     if (salvage?.kind === 'config') expect(salvage.config).toEqual(DEFAULT_APP_CONFIG);
@@ -205,7 +205,7 @@ describe('AppDatabase', () => {
 
   it('salvageableContents returns null for a full store and for a foreign database', async () => {
     const full = await AppDatabase.open();
-    full.saveScenarios(scenarios());
+    full.saveScenarios(plans());
     full.saveConfig(DEFAULT_APP_CONFIG);
     expect(full.salvageableContents()).toBeNull(); // toDoc handles full stores
     full.close();
@@ -229,7 +229,7 @@ describe('AppDatabase', () => {
       clear: () => Promise.resolve(),
     };
     (db as unknown as { backend: typeof fakeBackend | null }).backend = fakeBackend;
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.save(); // OPFS rejects → localStorage must NOT receive a newer mirror
     // Flush the microtask queue so the .then() chain has a chance to run.
     await new Promise(r => setTimeout(r, 0));
@@ -246,7 +246,7 @@ describe('AppDatabase', () => {
       clear: () => Promise.resolve(),
     };
     (db as unknown as { backend: typeof fakeBackend | null }).backend = fakeBackend;
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.save();
     await new Promise(r => setTimeout(r, 0));
     expect(localStorage.getItem(DB_STORAGE_KEY)).not.toBeNull();

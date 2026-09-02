@@ -32,7 +32,7 @@ npx tsx training/generate.ts
 ```
 
 Mints the full corpus by running the **real tool executor against the real
-deterministic engine** across the scenario sweep, and writes:
+deterministic engine** across the plan sweep, and writes:
 
 ```
 training/data/corpus.train.jsonl     # train split
@@ -43,7 +43,7 @@ training/data/corpus.eval.sha256     # 16-char hash of the eval split (golden)
 Console output reports record count, the eval hash, and the per-kind /
 per-tool breakdown. `training/data/` is gitignored (regenerable artifacts).
 
-**When to regenerate:** after changing `mint.ts`, `scenarios.ts`, or the app's
+**When to regenerate:** after changing `mint.ts`, `plans.ts`, or the app's
 tool catalog. The eval hash *will* change — that's expected. See §7.
 
 ---
@@ -58,7 +58,7 @@ Runs the training-side suites (protocol contract, minter scale + behavior
 invariants, eval-gate grading, corpus determinism). The shipped `tsconfig`/
 `vitest` configs only cover `src/**`, so the training config is separate.
 
-> **Note:** engine-running tests are slow (Monte Carlo × scenarios) — the full
+> **Note:** engine-running tests are slow (Monte Carlo × plans) — the full
 > suite takes ~2 minutes. The app suite (`npx vitest run`) is unaffected.
 
 ---
@@ -140,7 +140,7 @@ diversity). The failure triage tells you *which* lever to pull.
 
 1. **Never let it drift silently.** `generate.test.ts` proves the mint is
    deterministic (byte-identical re-mint). If a legitimate change (new
-   scenarios, new kinds, a changed tool catalog) alters the eval split, the
+   plans, new kinds, a changed tool catalog) alters the eval split, the
    hash changes — that's fine, but it must be a **deliberate** event.
 2. **Regenerate + re-baseline intentionally.** When the hash changes, say so in
    the commit, and treat any previously-scored model numbers as
@@ -154,7 +154,7 @@ diversity). The failure triage tells you *which* lever to pull.
 training/
   protocol.ts        protocol contract — imports the LIVE catalog + parser (can't drift)
   buildCorpus.ts     record shapes + kind taxonomy + tool coverage matrix
-  scenarios.ts       the 24-household scenario sweep (all 13 provinces + couples/RM/RDSP/bands)
+  plans.ts       the 24-household plan sweep (all 13 provinces + couples/RM/RDSP/bands)
   domain.ts          domain-knowledge facts (CPP/OAS/GIS/tax/history) read live from config
   mint.ts            the generator (reads, mutations, guardrails, option-framing, domain)
   generate.ts        CLI: mint → training/data/*.jsonl (+ eval sha256)

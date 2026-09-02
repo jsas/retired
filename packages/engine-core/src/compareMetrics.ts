@@ -1,14 +1,14 @@
-// Pure scenario-comparison metrics: run a set of saved scenarios through the
+// Pure plan-comparison metrics: run a set of saved plans through the
 // engine (with the current config) and extract the four verdict-card numbers,
 // plus a signed diff of each against a chosen baseline. Kept separate from the
 // UI so the verdict-derivation and diff logic is unit-testable.
 import { calculateHousehold, householdOutcome, type RetirementResults, type RetirementInputs } from './retirementEngine';
 import { resolveSpouseSource, toHousehold } from './householdTypes';
-import type { Scenario } from './types';
+import type { Plan } from './types';
 import type { AppConfig } from './appConfig';
 
-/** The verdict metrics for one scenario, flattened across spouses like MetricCards. */
-export interface ScenarioMetrics {
+/** The verdict metrics for one plan, flattened across spouses like MetricCards. */
+export interface PlanMetrics {
   id: string;
   name: string;
   isCouple: boolean;
@@ -21,9 +21,9 @@ export interface ScenarioMetrics {
   status: 'ON_TRACK' | 'SHORTFALL';
 }
 
-/** A signed difference between a scenario's metric and the baseline's. */
+/** A signed difference between a plan's metric and the baseline's. */
 export interface MetricDiff {
-  /** scenario value − baseline value, in the metric's native unit ($ / years / 0..1). */
+  /** plan value − baseline value, in the metric's native unit ($ / years / 0..1). */
   delta: number;
   /** true when the diff direction is an improvement (or there is no change). */
   better: boolean;
@@ -31,9 +31,9 @@ export interface MetricDiff {
   neutral: boolean;
 }
 
-export interface ScenarioComparison {
-  metrics: ScenarioMetrics;
-  /** Diff vs the baseline scenario; undefined for the baseline itself. */
+export interface PlanComparison {
+  metrics: PlanMetrics;
+  /** Diff vs the baseline plan; undefined for the baseline itself. */
   diff?: {
     householdWorth: MetricDiff;
     depletionAge: MetricDiff;
@@ -44,7 +44,7 @@ export interface ScenarioComparison {
 /** Extract the flattened verdict metrics from a computed result. The verdict
  *  (depletion age + status) is household-first: when the COMBINED money runs
  *  out, not when either partner's silo does. */
-export function metricsFromResults(id: string, name: string, results: RetirementResults, inputs?: RetirementInputs): ScenarioMetrics {
+export function metricsFromResults(id: string, name: string, results: RetirementResults, inputs?: RetirementInputs): PlanMetrics {
   const spouse = results.spouse;
   const ho = inputs ? householdOutcome(results, toHousehold(inputs)) : undefined;
   return {
@@ -58,22 +58,22 @@ export function metricsFromResults(id: string, name: string, results: Retirement
   };
 }
 
-/** Run one scenario's inputs through the engine and extract its metrics. A
- *  scenario that LINKS its spouse to another saved plan is resolved against the
- *  same scenario list first, so the comparison uses the linked plan's person —
+/** Run one plan's inputs through the engine and extract its metrics. A
+ *  plan that LINKS its spouse to another saved plan is resolved against the
+ *  same plan list first, so the comparison uses the linked plan's person —
  *  not the stale embedded spouse the link replaced. */
-export function computeScenarioMetrics(
-  scenario: Scenario,
+export function computePlanMetrics(
+  plan: Plan,
   config: AppConfig,
-  scenarios?: Array<{ id: string; inputs: RetirementInputs }>,
-): ScenarioMetrics {
-  let inputs = scenario.inputs;
-  if (scenarios && inputs.spouseSource?.kind === 'scenario' && inputs.spouse?.enabled) {
-    const res = resolveSpouseSource(inputs, scenarios, scenario.id);
+  plans?: Array<{ id: string; inputs: RetirementInputs }>,
+): PlanMetrics {
+  let inputs = plan.inputs;
+  if (plans && inputs.spouseSource?.kind === 'plan' && inputs.spouse?.enabled) {
+    const res = resolveSpouseSource(inputs, plans, plan.id);
     if (res.spouse) inputs = { ...inputs, spouse: res.spouse };
   }
   const results = calculateHousehold(inputs, config);
-  return metricsFromResults(scenario.id, scenario.name, results, inputs);
+  return metricsFromResults(plan.id, plan.name, results, inputs);
 }
 
 // Display tolerances: below these a diff reads as "no change".
@@ -99,19 +99,19 @@ function rateDiff(delta: number): MetricDiff {
 }
 
 /**
- * Compare a set of scenarios against a baseline. `scenarios` and `baselineId`
+ * Compare a set of plans against a baseline. `plans` and `baselineId`
  * are assumed already validated by the caller (the UI offers checkboxes and a
- * baseline picker, so by construction the baseline is one of the scenarios).
- * Returns one entry per scenario, in input order; the baseline has no `diff`.
+ * baseline picker, so by construction the baseline is one of the plans).
+ * Returns one entry per plan, in input order; the baseline has no `diff`.
  */
-export function compareScenarios(
-  scenarios: Scenario[],
+export function comparePlans(
+  plans: Plan[],
   baselineId: string,
   config: AppConfig,
-): ScenarioComparison[] {
-  // Pass the full list so a scenario whose spouse is linked to another saved
+): PlanComparison[] {
+  // Pass the full list so a plan whose spouse is linked to another saved
   // plan resolves that link before computing (same as the projection does).
-  const all = scenarios.map(s => computeScenarioMetrics(s, config, scenarios));
+  const all = plans.map(s => computePlanMetrics(s, config, plans));
   const baseline = all.find(m => m.id === baselineId);
 
   return all.map(metrics => {

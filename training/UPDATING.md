@@ -23,11 +23,11 @@ main lands a feature
         │
         ▼
   2. MAP the delta — new tools? new config?      (the only hand-work)
-     new behavior? new scenarios?
+     new behavior? new plans?
         │
         ▼
   3. REJIG — catalog lock, mint exemplars,       (tests catch what you miss)
-     domain facts, scenario sweep
+     domain facts, plan sweep
         │
         ▼
   4. REGENERATE + re-gate → new eval hash        (hash change is intentional)
@@ -79,7 +79,7 @@ The five questions to answer (and where the answer lives):
 | **Tool args changed** | the tool's Zod schema in `tools.ts` / `schemas.ts` | fix the mint spec's `args()` (the self-check gate catches stale args) |
 | **New config numbers** | `DEFAULT_APP_CONFIG` in `src/lib/appConfig.ts` | a citable domain fact (3c) |
 | **New behavior** (not just a field) | a `*.test.ts` for the feature | a domain fact + maybe an applied variant (3c) |
-| **New household shape** | `src/lib/householdTypes.ts` / scenarios | a scenario in the sweep (3d) |
+| **New household shape** | `src/lib/householdTypes.ts` / plans | a plan in the sweep (3d) |
 
 If the diff shows **no new tool and no new config**, the rebase alone may be all
 you need — skip to step 4 and confirm the gate is still 100%.
@@ -138,7 +138,7 @@ hardcoded figure, so the fact can't drift when the tables are edited:
   id: 'debt-payoff',
   ask: 'How does carrying debt change my retirement plan?',
   phrasings: ['Should I pay off debt before I retire?', '...'],
-  appliedTo: ['debt-carrying'],                      // if you add such a scenario
+  appliedTo: ['debt-carrying'],                      // if you add such a plan
   appliedAsk: () => 'I still have a mortgage — what does it do to my plan?',
   answer: () => `... ${money0(cfg.debt.someRate)} ... ${OFFER}`,
   appliedAnswer: (inputs) => `Your ${money0(inputs.debt?.balance ?? 0)} balance ...`,
@@ -148,11 +148,11 @@ hardcoded figure, so the fact can't drift when the tables are edited:
 
 Three shapes keep the model from parroting (see METHODOLOGY §2d): **recall**
 (canonical ask), **paraphrase** (same answer, different wording), **applied** (the
-rule stated against a scenario's real numbers). Register rotation is automatic via
+rule stated against a plan's real numbers). Register rotation is automatic via
 `CLOSERS`. The structural tests already enforce cite-a-figure + no-advice-verbs +
 offer-to-ground, so a new fact passes if it's honest.
 
-### 3d. Scenario sweep — `training/scenarios.ts` (only if the household shape changed)
+### 3d. Plan sweep — `training/plans.ts` (only if the household shape changed)
 
 If the feature introduces a new *kind* of household (debt-carrying, FHSA-saving,
 multi-property), add one or two to `SCENARIOS` so the applied facts and the
@@ -200,11 +200,11 @@ hash:
 
 ```
 - [ ] rebased onto origin/main
-- [ ] delta mapped (new tools / config / behavior / scenarios)
+- [ ] delta mapped (new tools / config / behavior / plans)
 - [ ] catalog-lock bumped + new-tool assertion (protocol.test.ts)
 - [ ] mint exemplars for each new tool (READ_SPECS / MUTATION_SPECS)
 - [ ] domain facts for new config/behavior (live-grounded, 3 shapes)
-- [ ] scenario added if household shape changed
+- [ ] plan added if household shape changed
 - [ ] generate.ts re-run; eval hash change noted in commit msg
 - [ ] training suite green (vitest -c training/vitest.config.ts)
 - [ ] self-check gate 100% (runGate.ts)

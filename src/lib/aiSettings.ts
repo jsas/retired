@@ -109,19 +109,19 @@ const STORAGE_KEY = 'retirement_ai_settings';
 export const AI_SETTINGS_STORAGE_KEY = STORAGE_KEY;
 
 /** Starter prompt library. The first is the headline onboarding flow: the
- *  agent interviews the user and drafts a scenario instead of the user facing
+ *  agent interviews the user and drafts a plan instead of the user facing
  *  an empty form. */
 export const SEED_PROMPTS: AiPromptPreset[] = [
   {
     id: 'onboard',
-    title: 'Get me started on a scenario',
+    title: 'Get me started on a plan',
     builtin: true,
     text:
-      'Help me build my retirement scenario from scratch. Interview me one question at a time about ' +
+      'Help me build my retirement plan from scratch. Interview me one question at a time about ' +
       'my age, province, account balances (RRSP, TFSA, taxable, cash), annual contributions, pensions, ' +
       'when I want to retire, and what I expect to spend. Ask about my spouse/partner too if I have one. ' +
-      'Use the get_scenario tool to see what is already filled in, and propose changes with ' +
-      'set_scenario_value as we go — never set anything without my agreement. When the basics are in ' +
+      'Use the get_plan tool to see what is already filled in, and propose changes with ' +
+      'set_plan_value as we go — never set anything without my agreement. When the basics are in ' +
       'place, run the projection with run_projection and walk me through what it says.',
   },
   {
@@ -129,7 +129,7 @@ export const SEED_PROMPTS: AiPromptPreset[] = [
     title: 'Am I on track? Top 3 levers',
     builtin: true,
     text:
-      'Use run_projection on my current scenario and tell me whether I am on track to fund my ' +
+      'Use run_projection on my current plan and tell me whether I am on track to fund my ' +
       'retirement to my max age. Identify the three highest-impact levers to improve the outcome ' +
       '(spending level, retirement age, CPP/OAS start ages, withdrawal order, savings rate), ranked by ' +
       'expected effect, and explain each in a sentence or two. Do not change anything without asking.',
@@ -150,7 +150,7 @@ export const SEED_PROMPTS: AiPromptPreset[] = [
     builtin: true,
     text:
       'I want to see how one change would affect my plan. Ask me which lever and value to try, then use ' +
-      'compare_scenarios to run my current inputs against that variant. Report the difference in ' +
+      'compare_plans to run my current inputs against that variant. Report the difference in ' +
       'sustainable outcome — depletion age, lifetime tax, ending balance — and whether the change is ' +
       'worth applying. Do not apply it without my say-so.',
   },
@@ -190,7 +190,7 @@ function defaultKV(): KV {
 
 /** Parse whatever is in storage into valid settings. Corrupt or legacy
  *  payloads fall back to defaults (with the seed prompt library) rather than
- *  breaking the page — AI settings are disposable; scenarios are not. */
+ *  breaking the page — AI settings are disposable; plans are not. */
 export function loadAiSettings(kv: KV = defaultKV()): AiSettings {
   try {
     const raw = kv.getItem(STORAGE_KEY);

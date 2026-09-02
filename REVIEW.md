@@ -105,7 +105,7 @@ this doc per the brief; findings became branches/PRs directly.
   confirmed (#33); E-MC-01 test gap remains
 - **Backtest** `historicalReturns.ts`, `runBacktest` → H-01, H-02
 - **Data** `db.ts`, `store.ts`, `opfs.ts`, `schemas.ts`, `scenarioStorage.ts`,
-  `scenarioRevisions.ts`, `planTransfer.ts`, `shareLink.ts`, `appConfig.ts` → D-01…D-07
+  `planRevisions.ts`, `planTransfer.ts`, `shareLink.ts`, `appConfig.ts` → D-01…D-07
 - **AI** `ai/tools.ts` (1205), `agentIngest.ts`, `agentQA.ts`, `memory/store.ts`,
   `eqConstraints.ts` → A-01…A-05
 - **UI** `App.tsx` (1049), `MetricCards`, `ScheduleTable`, `TimelineChart`,
@@ -118,7 +118,7 @@ this doc per the brief; findings became branches/PRs directly.
 no money-path runs through them): the rest of `SidebarForm.tsx` (1645 lines — only
 the withdrawal-order section read closely), `AgentPage.tsx` (2045 lines — chat UI;
 its tool surface was reviewed via `tools.ts`), `ConnectionsPage`, `DataPage`,
-`SettingsModal`, `HelpModal`, `ScenarioManager`, `SetupWizard`, `SharingPage`,
+`SettingsModal`, `HelpModal`, `PlanManager`, `SetupWizard`, `SharingPage`,
 the small presentational components, and the AI provider/transport files
 (`providers.ts`, `webLlm*.ts`, `agentLoop.ts`, `chatStore.ts`, `checkpoints.ts`,
 `context.ts` — reviewed at the tool/memory boundary only).

@@ -11,16 +11,16 @@ interface SidebarFormProps {
   provinceCodes: string[];
   config: AppConfig;
   onClose?: () => void; // mobile drawer close (hidden on md+)
-  // For the spouse adapter: the saved scenarios a spouse can be linked to, the
+  // For the spouse adapter: the saved plans a spouse can be linked to, the
   // active plan's own id (to exclude self-references), and any host-wins /
   // resolution warnings from materializing a linked spouse.
-  scenarios?: Array<{ id: string; name: string; inputs: RetirementInputs }>;
-  activeScenarioId?: string;
+  plans?: Array<{ id: string; name: string; inputs: RetirementInputs }>;
+  activePlanId?: string;
   spouseWarnings?: string[];
-  /** Persist edited person fields back into another saved scenario (the linked
+  /** Persist edited person fields back into another saved plan (the linked
    *  spouse plan) without switching to it. */
-  onUpdateScenarioInputs?: (scenarioId: string, patch: Partial<RetirementInputs>) => void;
-  /** Save the embedded spouse as its own standalone scenario. */
+  onUpdateScenarioInputs?: (planId: string, patch: Partial<RetirementInputs>) => void;
+  /** Save the embedded spouse as its own standalone plan. */
   onSaveSpouseAsScenario?: (name: string) => void;
 }
 
@@ -498,7 +498,7 @@ function CollapsibleSection({ id, icon, title, open, onToggle, children }: {
   );
 }
 
-export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, scenarios, activeScenarioId, spouseWarnings, onUpdateScenarioInputs, onSaveSpouseAsScenario }: SidebarFormProps) {
+export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, plans, activePlanId, spouseWarnings, onUpdateScenarioInputs, onSaveSpouseAsScenario }: SidebarFormProps) {
   const updateField = <K extends keyof RetirementInputs>(field: K, value: RetirementInputs[K]) => {
     onChange({ ...inputs, [field]: value });
   };
@@ -879,17 +879,17 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
     );
   };
 
-  // ---- spouse adapter (built-in vs linked scenario) ----
-  // The spouse's source: 'builtin' = edited inline here (default); 'scenario'
+  // ---- spouse adapter (built-in vs linked plan) ----
+  // The spouse's source: 'builtin' = edited inline here (default); 'plan'
   // = the spouse IS another saved plan, referenced by id and materialized into
   // `spouse` by the app (host wins on shared fields). Choosing a source writes
-  // spouseSource; the actual spouse values for a linked scenario come from the
+  // spouseSource; the actual spouse values for a linked plan come from the
   // referenced plan, so the inline editors are hidden in that mode.
   const spouseSource = inputs.spouseSource ?? { kind: 'builtin' as const };
-  const isLinkedSpouse = spouseSource.kind === 'scenario';
-  // Scenarios this spouse can link to: all saved plans except the active one
+  const isLinkedSpouse = spouseSource.kind === 'plan';
+  // Plans this spouse can link to: all saved plans except the active one
   // (a plan can't be its own spouse).
-  const linkableScenarios = (scenarios ?? []).filter(s => s.id !== activeScenarioId);
+  const linkableScenarios = (plans ?? []).filter(s => s.id !== activePlanId);
 
   // Stash the last-used spouse / reverse-mortgage values so toggling the
   // section off and back on restores them instead of resetting to defaults.
@@ -906,13 +906,13 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
 
   // The spouse is governed by TWO fields that must stay in sync:
   //   spouse.enabled — whether a spouse is part of the household at all
-  //   spouseSource   — builtin (embedded) vs scenario (a link to another plan)
+  //   spouseSource   — builtin (embedded) vs plan (a link to another plan)
   // If they disagree the resolver can re-inject a spouse the user just turned
   // off, or the unlink can leave the projection stale. Every transition writes
   // both together via a single onChange so the memo chain sees one update.
 
   const setSpouseSourceBuiltin = () => {
-    // Unlink: drop the scenario reference and restore the stashed embedded
+    // Unlink: drop the plan reference and restore the stashed embedded
     // spouse (kept when the link was made), or a fresh default if none. The
     // household keeps an enabled spouse — unlinking changes WHERE the spouse
     // comes from, not WHETHER there is one.
@@ -923,14 +923,14 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
       spouse: { ...restored, enabled: true },
     });
   };
-  const setSpouseSourceScenario = (scenarioId: string) => {
+  const setSpouseSourceScenario = (planId: string) => {
     // Link: the referenced plan becomes the spouse. Stash the embedded spouse so
     // unlinking can restore it. The materialized spouse is supplied by the app
     // via resolveSpouseSource; here we record the link and keep the toggle on.
     if (inputs.spouse) spouseStash.current = inputs.spouse;
     onChange({
       ...inputs,
-      spouseSource: { kind: 'scenario', scenarioId },
+      spouseSource: { kind: 'plan', planId },
       spouse: { ...(inputs.spouse ?? spouseStash.current ?? defaultSpouse()), enabled: true },
     });
   };
@@ -940,7 +940,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
       const base = spouseStash.current ?? defaultSpouse();
       onChange({ ...inputs, spouse: { ...base, enabled: true } });
     } else {
-      // Uncheck: stash for restore, drop the spouse AND detach any scenario
+      // Uncheck: stash for restore, drop the spouse AND detach any plan
       // link. Detaching the link is essential — otherwise resolveSpouseSource
       // keeps materializing the linked plan and the spouse never goes away.
       if (inputs.spouse) spouseStash.current = inputs.spouse;
@@ -950,16 +950,16 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
 
   // ---- linked-spouse basic-number editor ----
   // When the spouse is a linked plan, show the same basic numbers the built-in
-  // view edits, but fetched from the linked scenario. Edits are LOCAL (a draft)
+  // view edits, but fetched from the linked plan. Edits are LOCAL (a draft)
   // until "Save to linked plan" writes them back via onUpdateScenarioInputs —
   // changing another saved plan silently on every keystroke would be surprising.
-  const linkedScenarioId = spouseSource.kind === 'scenario' ? spouseSource.scenarioId : null;
+  const linkedScenarioId = spouseSource.kind === 'plan' ? spouseSource.planId : null;
   const linkedScenario = linkedScenarioId != null
-    ? (scenarios ?? []).find(s => s.id === linkedScenarioId)
+    ? (plans ?? []).find(s => s.id === linkedScenarioId)
     : undefined;
   const [linkedDraft, setLinkedDraft] = useState<Partial<RetirementInputs> | null>(null);
   // The draft re-seeds whenever the link target or the target's saved inputs
-  // change (a save round-trips through scenarios and lands back here clean).
+  // change (a save round-trips through plans and lands back here clean).
   const linkedSeedJson = JSON.stringify(
     linkedScenario
       ? {
@@ -997,7 +997,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
   // ---- save the built-in spouse as its own plan ----
   const [spouseSaveAsOpen, setSpouseSaveAsOpen] = useState(false);
   const [spouseSaveAsName, setSpouseSaveAsName] = useState('');
-  const activeScenarioName = (scenarios ?? []).find(s => s.id === activeScenarioId)?.name;
+  const activeScenarioName = (plans ?? []).find(s => s.id === activePlanId)?.name;
   const openSpouseSaveAs = () => {
     setSpouseSaveAsName(`${activeScenarioName ?? 'Plan'} - Spouse`);
     setSpouseSaveAsOpen(true);
@@ -1605,7 +1605,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                   <div>
                     <label className={LABEL_CLS}>Spouse is this saved plan</label>
                     <select
-                      value={spouseSource.kind === 'scenario' ? spouseSource.scenarioId : ''}
+                      value={spouseSource.kind === 'plan' ? spouseSource.planId : ''}
                       onChange={(e) => setSpouseSourceScenario(e.target.value)}
                       className={INPUT_CLS}
                     >
@@ -1616,7 +1616,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                   </div>
 
                   {/* The linked plan's basic numbers, fetched live from the saved
-                      scenario — same fields the built-in view edits. Edits stay
+                      plan — same fields the built-in view edits. Edits stay
                       local until "Save to linked plan" writes them back. */}
                   {linkedDraft && (
                     <>
@@ -1921,7 +1921,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                 household tax — see Settings → Engine.
               </p>
 
-              {/* Save the embedded spouse as its own standalone scenario — the
+              {/* Save the embedded spouse as its own standalone plan — the
                   first step toward linking instead of embedding (the spouse's
                   numbers then live in one place, editable from either plan). */}
               {onSaveSpouseAsScenario && (
@@ -1955,7 +1955,7 @@ export function SidebarForm({ inputs, onChange, provinceCodes, config, onClose, 
                   <button
                     onClick={openSpouseSaveAs}
                     className="w-full px-2 py-1.5 rounded text-[11px] font-medium border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-500"
-                    title="Create a standalone scenario from this spouse's numbers"
+                    title="Create a standalone plan from this spouse's numbers"
                   >
                     Save spouse as its own plan…
                   </button>

@@ -6,11 +6,11 @@ const formatMoney = (v: number) =>
   new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
 
 /**
- * First-scenario setup wizard. A focused, step-by-step overlay that collects
+ * First-plan setup wizard. A focused, step-by-step overlay that collects
  * the handful of inputs a projection can't run without — ages, balances,
  * contributions, CPP/OAS and a spending goal — each with a line of guidance,
  * then hands a complete RetirementInputs back to the caller to save as the
- * first scenario. Deliberately sparse: it gets a working plan on screen fast;
+ * first plan. Deliberately sparse: it gets a working plan on screen fast;
  * everything else (events, spending phases, spouse, reverse mortgage) stays in
  * the sidebar for later.
  */
@@ -20,12 +20,12 @@ const formatMoney = (v: number) =>
 // withdrawal order, etc.) so the engine keeps its defaults.
 export interface WizardData {
   /** Which person this pass of the wizard is collecting. The primary pass
-   *  ('primary') names the scenario and asks about the home; the spouse pass
+   *  ('primary') names the plan and asks about the home; the spouse pass
    *  ('spouse') is a limited version that fills the spouse's plan. */
   person: 'primary' | 'spouse';
-  /** Scenario name — user-editable on the review step; we suggest one.
+  /** Plan name — user-editable on the review step; we suggest one.
    *  (Primary pass only; a spouse pass leaves it untouched.) */
-  scenarioName: string;
+  planName: string;
   currentAge: number;
   retirementAge: number;
   maxAge: number;
@@ -50,7 +50,7 @@ export interface WizardData {
 export function wizardDataFrom(inputs: RetirementInputs, suggestedName = 'My Plan'): WizardData {
   return {
     person: 'primary',
-    scenarioName: suggestedName,
+    planName: suggestedName,
     currentAge: inputs.currentAge,
     retirementAge: inputs.retirementAge,
     maxAge: inputs.maxAge,
@@ -73,11 +73,11 @@ export function wizardDataFrom(inputs: RetirementInputs, suggestedName = 'My Pla
 
 /** Overlay the wizard's collected values onto a base plan, leaving every other
  *  field (market assumptions, province, events, spouse, …) untouched. The
- *  scenario name and the own-home answer are handled by the caller, not here:
- *  the name labels the scenario, and the home answer becomes a (disabled)
+ *  plan name and the own-home answer are handled by the caller, not here:
+ *  the name labels the plan, and the home answer becomes a (disabled)
  *  reverse-mortgage section so the question is never a dead end. */
 export function applyWizardData(base: RetirementInputs, data: WizardData): RetirementInputs {
-  const { scenarioName: _name, ownsHome, homeValue, ...numbers } = data;
+  const { planName: _name, ownsHome, homeValue, ...numbers } = data;
   const next: RetirementInputs = { ...base, ...numbers };
   if (ownsHome === true) {
     // Record/update the equity so the RM section and the Optimize tab have
@@ -110,7 +110,7 @@ export function spouseWizardDataFrom(host: RetirementInputs): WizardData {
   const sp = host.spouse;
   return {
     person: 'spouse',
-    scenarioName: '',
+    planName: '',
     currentAge: sp?.currentAge ?? host.currentAge,
     retirementAge: sp?.retirementAge ?? host.retirementAge,
     maxAge: host.maxAge, // shared horizon — not asked in the spouse pass
@@ -321,16 +321,16 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
               : "Here's what you're starting with. Anything look off? Use Back to change it."}
           </p>
 
-          {/* Give the scenario a name — we suggest one, they can keep or change it.
-              (Primary pass only; the spouse shares the household's scenario.) */}
+          {/* Give the plan a name — we suggest one, they can keep or change it.
+              (Primary pass only; the spouse shares the household's plan.) */}
           {!isSpousePass && (
             <div className="mb-4">
               <label className={LABEL_CLS}>Name this plan</label>
               <input
                 type="text"
                 className={NUM_CLS}
-                value={data.scenarioName}
-                onChange={(e) => set('scenarioName', e.target.value)}
+                value={data.planName}
+                onChange={(e) => set('planName', e.target.value)}
                 placeholder="My Plan"
               />
             </div>
@@ -416,7 +416,7 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Once your plan is in</p>
               <p className="flex items-center gap-2 text-[12px] text-slate-600"><SlidersHorizontal size={13} className="text-amber-600 shrink-0" /> <span><strong>Steering</strong> — drag the plan and watch the success rate move.</span></p>
               <p className="flex items-center gap-2 text-[12px] text-slate-600"><Sparkles size={13} className="text-blue-600 shrink-0" /> <span><strong>Optimize</strong> — ranks CPP/OAS timing, withdrawal order and reverse-mortgage timing for you.</span></p>
-              <p className="flex items-center gap-2 text-[12px] text-slate-600"><GitCompareArrows size={13} className="text-blue-600 shrink-0" /> <span><strong>Compare</strong> — put 2–3 saved scenarios side by side to see which holds up best.</span></p>
+              <p className="flex items-center gap-2 text-[12px] text-slate-600"><GitCompareArrows size={13} className="text-blue-600 shrink-0" /> <span><strong>Compare</strong> — put 2–3 saved plans side by side to see which holds up best.</span></p>
             </div>
           </div>
           )}
@@ -466,8 +466,8 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
         </button>
         <button
           onClick={next}
-          disabled={isLast && !isSpousePass && !data.scenarioName.trim()}
-          title={isLast && !isSpousePass && !data.scenarioName.trim() ? 'Give the plan a name first' : undefined}
+          disabled={isLast && !isSpousePass && !data.planName.trim()}
+          title={isLast && !isSpousePass && !data.planName.trim() ? 'Give the plan a name first' : undefined}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLast

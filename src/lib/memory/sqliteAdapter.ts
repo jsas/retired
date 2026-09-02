@@ -1,6 +1,6 @@
 // The app-facing memory adapter: persists memories in the project's existing
 // SQLite database (AppDatabase, sql.js/WASM) so they ride the same backup /
-// OPFS / localStorage mirroring as scenarios and AI settings.
+// OPFS / localStorage mirroring as plans and AI settings.
 //
 // The bundled sql.js has NO FTS5 (verified), so search is done in the store:
 // the adapter hands over every row (memory sets are small, ≤ 50 per scope)
@@ -54,7 +54,7 @@ export class SqliteMemoryAdapter implements MemoryAdapter {
     if (res.length === 0) return [];
     return res[0].values.map(([id, scope, scopeKey, text, keywords, createdAt, lastAccessedAt, importance, accessCount]) => ({
       id: id as string,
-      scope: scope as 'scenario' | 'global',
+      scope: scope as 'plan' | 'global',
       scopeKey: scopeKey as string,
       text: text as string,
       keywords: (keywords as string).split(' ').filter(Boolean),

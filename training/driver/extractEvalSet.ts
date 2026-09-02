@@ -13,7 +13,7 @@ const records = mintReadRecords()
   .filter((r) => r.split === 'eval' && r.kind === 'tool-call')
   .map((r) => ({
     id: r.id,
-    scenarioId: r.scenarioId,
+    planId: r.planId,
     question: r.messages.find((m) => m.role === 'user')?.content ?? '',
   }));
 

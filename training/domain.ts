@@ -13,7 +13,7 @@
 // Two record shapes:
 //   - fact recall:      a concept question → a plain-words answer that CITES the
 //                       real figure, then offers to ground it in the user's plan
-//   - applied reading:  a program rule stated against a scenario's real numbers
+//   - applied reading:  a program rule stated against a plan's real numbers
 // The register is the same as every other kind: consequence-explaining, never
 // advice ("here's how it works / here's what it does to YOUR numbers — your call").
 
@@ -21,7 +21,7 @@ import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
 import { HISTORICAL_REAL_RETURNS } from '../src/lib/historicalReturns';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { CorpusRecord } from './buildCorpus';
-import { SCENARIOS, type NamedScenario } from './scenarios';
+import { SCENARIOS, type NamedScenario } from './plans';
 
 const cfg = DEFAULT_APP_CONFIG;
 
@@ -37,11 +37,11 @@ interface FactSpec {
   ask: string;
   /** Extra natural phrasings of the same question — teaches recall, not echo. */
   phrasings?: string[];
-  /** Scenario ids this fact has an "applied" variant for (real household numbers). */
+  /** Plan ids this fact has an "applied" variant for (real household numbers). */
   appliedTo?: string[];
   /** Build the general answer from live config — never a hardcoded number. */
   answer: () => string;
-  /** Build the applied answer against a specific scenario's real numbers. */
+  /** Build the applied answer against a specific plan's real numbers. */
   appliedAnswer?: (inputs: RetirementInputs, s: NamedScenario) => string;
   /** Optional applied-variant question (defaults to the canonical ask). */
   appliedAsk?: (s: NamedScenario) => string;
@@ -448,13 +448,174 @@ const FACTS: FactSpec[] = [
     },
     mustContain: ['reverse mortgage', 'home', 'equity'],
   },
+  // ---- CPP survivor benefit ---------------------------------------------------
+  {
+    id: 'cpp-survivor',
+    ask: 'What happens to CPP when a spouse dies?',
+    phrasings: [
+      'Will my spouse get my CPP if I die?',
+      'How does the CPP survivor benefit work?',
+    ],
+    appliedTo: ['couple-ont'],
+    appliedAsk: () => 'If my partner passes first, what CPP do I keep?',
+    answer: () =>
+      `If a CPP contributor dies, their surviving spouse/common-law partner can receive a survivor's pension — up to 60% of the deceased's CPP, subject to a combined maximum with the survivor's own CPP. The formula is complex, so actual amounts depend on both CPP histories. It's one of the ways the plan protects household income after a death — and it doesn't reduce the survivor's own retirement benefit below the combined cap. I can show how the engine treats CPP in a couple plan.`,
+    appliedAnswer: (inputs) => {
+      const sp = inputs.spouse;
+      const ownCpp = (inputs.cppMonthlyAmount ?? 0) * 12;
+      const spCpp = (sp?.cppMonthlyAmount ?? 0) * 12;
+      return `CPP pays a survivor benefit — up to 60% of the deceased contributor's CPP, capped together with the survivor's own CPP. For your household: your CPP (${money0(ownCpp)}/yr) and your spouse's CPP (${money0(spCpp)}/yr) are both modeled — if one of you dies first, the survivor can draw the higher household amount under the cap, not necessarily the sum of both. The engine treats the two CPP careers side by side so you can see the household benefit. ${OFFER}`;
+    },
+    mustContain: ['CPP', 'survivor', 'spouse'],
+  },
+  // ---- Working past 65 / benefit starting while employed --------------------
+  {
+    id: 'working-past-65',
+    ask: 'Can I start CPP or OAS while still working?',
+    phrasings: [
+      'Do I have to fully retire to take CPP?',
+      'Can I collect OAS if I still work part-time?',
+    ],
+    answer: () =>
+      `You can start CPP as early as 60 (or OAS from 65) while still working, but working hours reduce (or more precisely, let you continue) CPP contributions until 65 if you choose. For OAS there's no contribution requirement at all — only residency. Continuing earned income keeps adding RRSP room and can defer CPP/OAS to when they actually help. Whether to start now or delay depends on cash flow needs.`,
+    mustContain: ['CPP', 'work', 'OAS'],
+  },
+  // ---- OAS at 65 vs 66: who's eligible? -------------------------------------
+  {
+    id: 'oas-eligibility',
+    ask: 'Who can actually get OAS?',
+    phrasings: [
+      'Am I eligible for OAS?',
+      'What residency is needed for OAS?',
+    ],
+    answer: () => {
+      const o = cfg.oas;
+      return `OAS eligibility requires at least ${o.minResidencyYears} years of residency in Canada after age 18, with ${o.fullPensionResidencyYears} years needed for the full pension. Legal residency can come via citizenship, permanent residence, or qualifying treaties. Income from other sources (like CPP) doesn't reduce the base OAS unless the clawback kicks in at very high income. ${OFFER}`;
+    },
+    mustContain: ['OAS', 'residency'],
+  },
+  // ---- Tax brackets and "bracket creep" (settings toggle) -------------------
+  {
+    id: 'bracket-creep',
+    ask: 'Why does the engine let me turn indexation of tax brackets on/off?',
+    answer: () =>
+      `If provincial and federal tax tables don't rise with inflation (~${pct(cfg.engine.inflationRate)}/yr here), each wage/pension dollar slowly climbs into higher brackets — that's bracket creep. The engine has a setting to let tax tables rise with CPI (indexed) or hold them fixed. Holding fixed overstates future tax if tables actually rise with CPI in real life — the setting lets you choose which to model. ${OFFER}`,
+    mustContain: ['tax', 'bracket', 'inflation'],
+  },
+  // ---- TFSA vs RRSP contribution priority in accumulation years -------------
+  {
+    id: 'tfsa-vs-rrsp-accumulation',
+    ask: 'When building retirement savings, should I fill TFSA or RRSP first?',
+    phrasings: [
+      'Which should I contribute to first — RRSP or TFSA?',
+      'Does TFSA beat RRSP for early savings?',
+    ],
+    answer: () =>
+      `It depends on your current vs expected retirement marginal tax rate. RRSP contributions deduct from taxable income now (${pct(cfg.federal.rates[0])}% at the lowest bracket on the first ${money0(cfg.federal.brackets[0])}), so they're best when you're in a high bracket today. TFSA grows tax-free forever, so it's best when you expect a similar or higher bracket in retirement. For a typical working-age saver, RRSP often wins while working years continue; TFSA fills the space once RRSP yearly room is used or when future income is expected to be much lower. ${OFFER}`,
+    mustContain: ['TFSA', 'RRSP', 'tax'],
+  },
+  // ---- CPP earned-income credits (why some choose 70+) ---------------------
+  {
+    id: 'cpp-earning-credit',
+    ask: 'Does my CPP use all my working years or just some?',
+    answer: () =>
+      `Your CPP retirement pension uses your best-earnings years: the standard calculation uses up to 40 best years of pensionable earnings. Some years you earned little (e.g., stayed home raising kids) can be dropped under the child-rearing provision, and low-earnings years under the general dropout (but only if you apply — it's not automatic). Low-earnings years can also be dropped under the 15% earnings-related dropout — you only keep the best 40 (or 39 minus dropouts).`,
+    mustContain: ['CPP', 'earnings', 'years'],
+  },
+  // ---- Deferred annuities / GIS-friendly income timing ----------------------
+  {
+    id: 'annuity-timing',
+    ask: 'Does it matter when in the year I start OAS/CPP?',
+    answer: () =>
+      `Very little. Both OAS and CPP start with the month you request them (not on your birthday), so an early-month start just moves the first payment. The bigger lever is age: starting at 65 vs 70 changes the amount materially. The timing decision mostly matters for matching your drawdown start. ${OFFER}`,
+    mustContain: ['month', 'age', 'OAS'],
+  },
+  // ---- When OAS clawback might be worth avoiding with GIS interplay ---------
+  {
+    id: 'oas-clawback-gis',
+    ask: 'If my income is low enough for GIS, does OAS clawback still matter?',
+    answer: () => {
+      const o = cfg.oas;
+      return `Only if your income is high enough to trigger OAS clawback (${money0(o.clawbackThreshold)}+ net income at ${pct(o.clawbackRate)}/$ excess). GIS offers low-income OAS pensioners a top-up, but clawing OAS means clawback didn't trigger in the first place. The two scales interact — but only through your non-OAS income for GIS, versus net income for clawback. If you're low-income, GIS is the lever that matters; if high-income, OAS clawback. Both come from net income figure — so a TFSA draw doesn't trigger either, but a RRIF minimum does. ${OFFER}`;
+    },
+    mustContain: ['GIS', 'clawback', 'OAS'],
+  },
+  // ---- Marital status effect on GIS (couple vs single) ----------------------
+  {
+    id: 'gis-marital-status',
+    ask: 'Does being married change my GIS?',
+    phrasings: [
+      'Does my spouse\'s income affect my GIS?',
+      'Does my GIS depend on my partner?',
+    ],
+    appliedTo: ['couple-ont'],
+    appliedAsk: () => 'My partner and I split finances — how does that affect GIS?',
+    answer: () =>
+      `Yes. For singles, GIS tops up to about ${money0(cfg.oas.gisMaxAnnualSingle)}/yr; for a couple where both get OAS, each can top up to about ${money0(cfg.oas.gisMaxAnnualCouple)}/yr each, with combined non-OAS income tested. Because it's the *household* income that counts, a high-earner spouse reduces the other's GIS. The engine needs both people modelled together to handle this correctly.`,
+    appliedAnswer: (inputs) => {
+      const sp = inputs.spouse;
+      return `For your household, GIS eligibility depends on combined non-OAS income. That means your ${money0((inputs.rrspBalance ?? 0) + (inputs.tfsaBalance ?? 0) + (inputs.taxableBalance ?? 0))} of savings counts toward the household test together with your spouse's ${money0(sp?.rrspBalance ?? 0 + sp?.tfsaBalance ?? 0 + sp?.taxableBalance ?? 0)} — so a large withdrawal by either spouse affects both partners' GIS. The combined test is why the engine models two people's finances as one, not separately. ${OFFER}`;
+    },
+    mustContain: ['GIS', 'spouse', 'household'],
+  },
+  // ---- Optimal drawdown-order primer (not just tax effect) -------------------
+  {
+    id: 'drawdown-order-advanced',
+    ask: 'What order should I draw down my accounts to minimize lifetime tax?',
+    phrasings: [
+      'Optimal withdrawal order?',
+      'Which account to tap first for tax efficiency?',
+    ],
+    answer: () => {
+      const age = cfg.engine.rrifConversionAge;
+      const r71 = cfg.rrifRates['71'] ?? 0;
+      return `A common helpful heuristic is: delay CPP/OAS as long as comfortable (they index), withdraw taxable first when near the ${money0(cfg.oas.clawbackThreshold)} clawback threshold, then RRSP/RRIF (because you must convert at ${age}, with minimums rising to ${pct(r71)} at 71), saving TFSA for flexibility against marginal-rate fluctuations. But the right withdrawal order depends on your mix — running it as plans lets you see the final balance differences rather than picking one "right" answer. ${OFFER}`;
+    },
+    mustContain: ['withdraw', 'TFSA', 'RRSP'],
+  },
+  // ---- When pension income splitting does / doesn't help --------------------
+  {
+    id: 'pension-split-tiebreaks',
+    ask: 'When does pension income splitting make the biggest difference?',
+    appliedTo: ['couple-age-gap'],
+    appliedAsk: () => 'My spouse is much younger — is split still worth it?',
+    answer: () =>
+      `Splitting pension income helps the most when the two spouses' marginal tax brackets differ. If both are at the same rate, the household tax doesn't change. Because the higher earner's RRIF minimums scale with their account balance, splitting the RRIF pension component up to the ${pct(cfg.engine.pensionSplitMaxRate)} limit is often the natural lever. For couples where ages differ a lot this becomes a bigger issue because one partner will start RRIF pension minimums earlier.`,
+    appliedAnswer: (inputs) => {
+      const sp = inputs.spouse;
+      return `Your age gap (${inputs.currentAge} vs ${sp?.currentAge}) changes splitting for you and your spouse: the older partner hits RRIF pension minimums first, so there's more pension income available to split earlier. Splitting is allowed only on *eligible* pension income — RRIF withdrawals, RRSP annuities, and employer pension. In a year where either of you doesn't draw from the pensions above, there's often little to split. ${OFFER}`;
+    },
+    mustContain: ['split', 'spouse', 'pension'],
+  },
+  // ---- Estate planning: taxes at death (TFSA clean) --------------------------
+  {
+    id: 'estate-tax',
+    ask: 'How is my retirement account taxed when I die?',
+    phrasings: [
+      'What happens to my RRSP when I pass away?',
+      'Are TFSAs taxed at death?',
+    ],
+    answer: () =>
+      `RRSP/RRIF balances are fully taxable income in the year of death (unless rolled to a surviving spouse/partner). TFSAs pass tax-free to beneficiaries. Taxable accounts trigger capital gains — only ${pct(cfg.engine.capitalGainsInclusion)} counts as income — though principal residence and life-insurance proceeds are exempt. So which account has a balance at death changes the estate tax outcome — a real factor in the inheritance-vs-spending trade-off. ${OFFER}`,
+    mustContain: ['death', 'tax', 'TFSA'],
+  },
+  // ---- The roles of bonds vs stocks in decumulation -------------------------
+  {
+    id: 'asset-class',
+    ask: 'Why does the engine assume a 60/40 portfolio?',
+    answer: () => {
+      const start = HISTORICAL_REAL_RETURNS.startYear;
+      return `The backtest uses a Canadian 60% stock / 40% bond portfolio as the reference returns source — it's a balanced, middle-of-the-road mix used since ${start} in the historical series. The 60/40 split blends growth (stocks) with stability (bonds) while avoiding the all-equity wild swings; it's not a recommendation, just the reference portfolio the engine uses for the backtest data. ${OFFER}`;
+    },
+    mustContain: ['60/40', 'stocks', 'bonds'],
+  },
 ];
 
 /** Mint domain-knowledge records in THREE shapes so the model learns the
  *  *concept*, not one phrasing:
  *    - fact recall:    the canonical question → grounded general answer
  *    - paraphrase:     the same fact asked differently (teaches recall, not echo)
- *    - applied:        the fact stated against a scenario's REAL numbers (teaches
+ *    - applied:        the fact stated against a plan's REAL numbers (teaches
  *                      the model to read a person, not just recite a rule)
  *  All close by offering to ground the rule in the user's own numbers — the
  *  offer is rotated across CLOSERS so the model doesn't parrot one sentence. */
@@ -462,12 +623,12 @@ export function mintDomainKnowledgeRecords(): CorpusRecord[] {
   const records: CorpusRecord[] = [];
   let i = 0;
 
-  const push = (fact: FactSpec, variant: string, ask: string, answer: string, scenarioId: string) => {
+  const push = (fact: FactSpec, variant: string, ask: string, answer: string, planId: string) => {
     records.push({
       id: `domain-knowledge:${fact.id}:${variant}:${i}`,
       split: (i % 5 === 4 ? 'eval' : 'train') as 'eval' | 'train',
       kind: 'domain-knowledge' as const,
-      scenarioId,
+      planId,
       messages: [
         { role: 'user' as const, content: ask },
         { role: 'assistant' as const, content: answer },
@@ -493,12 +654,12 @@ export function mintDomainKnowledgeRecords(): CorpusRecord[] {
       const base = fact.answer().replace(OFFER, rotated);
       push(fact, 'paraphrase', phrasing, base.includes(rotated) ? base : `${base} ${rotated}`, 'any');
     }
-    // 3. Applied — the fact against a scenario's real numbers.
-    for (const scenarioId of fact.appliedTo ?? []) {
-      const scenario = scenarioById.get(scenarioId);
-      if (!scenario || !fact.appliedAnswer) continue;
+    // 3. Applied — the fact against a plan's real numbers.
+    for (const planId of fact.appliedTo ?? []) {
+      const plan = scenarioById.get(planId);
+      if (!plan || !fact.appliedAnswer) continue;
       const appliedCloser = CLOSERS[i % CLOSERS.length];
-      push(fact, 'applied', fact.appliedAsk?.(scenario) ?? fact.ask, fact.appliedAnswer(scenario.inputs, scenario), scenario.id);
+      push(fact, 'applied', fact.appliedAsk?.(plan) ?? fact.ask, fact.appliedAnswer(plan.inputs, plan), plan.id);
       void appliedCloser;
     }
   }

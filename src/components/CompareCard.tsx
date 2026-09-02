@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { GitCompareArrows, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import type { AppConfig } from '@retired/engine-core/appConfig';
-import type { Scenario } from '@retired/engine-core/types';
-import { compareScenarios, type MetricDiff, type ScenarioComparison } from '@retired/engine-core/compareMetrics';
+import type { Plan } from '@retired/engine-core/types';
+import { comparePlans, type MetricDiff, type PlanComparison } from '@retired/engine-core/compareMetrics';
 
 const MAX_COMPARE = 3;
 
@@ -14,8 +14,8 @@ function fmtPct(v: number): string {
 }
 
 interface CompareCardProps {
-  scenarios: Scenario[];
-  activeScenarioId: string;
+  plans: Plan[];
+  activePlanId: string;
   config: AppConfig;
 }
 
@@ -53,7 +53,7 @@ function rateDelta(delta: number): string {
   return `${sign}${(Math.abs(delta) * 100).toFixed(1)} pts`;
 }
 
-function VerdictColumn({ comparison, isBaseline }: { comparison: ScenarioComparison; isBaseline: boolean }) {
+function VerdictColumn({ comparison, isBaseline }: { comparison: PlanComparison; isBaseline: boolean }) {
   const m = comparison.metrics;
   const d = comparison.diff;
   const statusColor = m.status === 'ON_TRACK' ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50';
@@ -92,10 +92,10 @@ function VerdictColumn({ comparison, isBaseline }: { comparison: ScenarioCompari
   );
 }
 
-export function CompareCard({ scenarios, activeScenarioId, config }: CompareCardProps) {
-  // Default to the active scenario, pre-checked as the baseline.
-  const [selectedIds, setSelectedIds] = useState<string[]>([activeScenarioId]);
-  const [baselineId, setBaselineId] = useState<string>(activeScenarioId);
+export function CompareCard({ plans, activePlanId, config }: CompareCardProps) {
+  // Default to the active plan, pre-checked as the baseline.
+  const [selectedIds, setSelectedIds] = useState<string[]>([activePlanId]);
+  const [baselineId, setBaselineId] = useState<string>(activePlanId);
 
   const toggle = (id: string) => {
     setSelectedIds(prev => {
@@ -113,13 +113,13 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
   };
 
   const selected = useMemo(
-    () => scenarios.filter(s => selectedIds.includes(s.id)),
-    [scenarios, selectedIds],
+    () => plans.filter(s => selectedIds.includes(s.id)),
+    [plans, selectedIds],
   );
 
   const comparisons = useMemo(() => {
     if (selected.length < 2 || !baselineId) return [];
-    return compareScenarios(selected, baselineId, config);
+    return comparePlans(selected, baselineId, config);
   }, [selected, baselineId, config]);
 
   const atCap = selectedIds.length >= MAX_COMPARE;
@@ -128,20 +128,20 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
     <div>
       <div className="flex items-center gap-2 mb-3">
         <GitCompareArrows size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Compare scenarios</h2>
+        <h2 className="text-lg font-bold text-slate-900">Compare plans</h2>
         <span className="text-[11px] text-slate-400">
           verdict cards computed with the current engine settings
         </span>
       </div>
 
       <div>
-        {/* Scenario picker */}
+        {/* Plan picker */}
         <div className="mb-3">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
-            Pick {selectedIds.length < 2 ? '2–3' : `${selectedIds.length} of ${MAX_COMPARE}`} scenarios · click the dot to set the baseline
+            Pick {selectedIds.length < 2 ? '2–3' : `${selectedIds.length} of ${MAX_COMPARE}`} plans · click the dot to set the baseline
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {scenarios.map(s => {
+            {plans.map(s => {
               const checked = selectedIds.includes(s.id);
               const isBaseline = s.id === baselineId;
               const disabled = !checked && atCap;
@@ -150,7 +150,7 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
                   key={s.id}
                   onClick={() => toggle(s.id)}
                   disabled={disabled}
-                  title={disabled ? `Compare at most ${MAX_COMPARE} scenarios` : (checked ? 'Remove from comparison' : 'Add to comparison')}
+                  title={disabled ? `Compare at most ${MAX_COMPARE} plans` : (checked ? 'Remove from comparison' : 'Add to comparison')}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs transition-colors ${
                     isBaseline
                       ? 'border-blue-500 bg-blue-50 text-blue-800'
@@ -166,7 +166,7 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
                     role="radio"
                     aria-checked={isBaseline}
                     onClick={(e) => {
-                      if (!checked) return; // can't baseline an unchecked scenario
+                      if (!checked) return; // can't baseline an unchecked plan
                       e.stopPropagation();
                       setBaselineId(s.id);
                     }}
@@ -183,7 +183,7 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
         {/* Verdict columns */}
         {selected.length < 2 ? (
           <p className="text-xs text-slate-500 py-2">
-            Select at least two scenarios to see their verdict cards side by side.
+            Select at least two plans to see their verdict cards side by side.
           </p>
         ) : (
           <div className="flex flex-col sm:flex-row gap-3 items-stretch">

@@ -10,16 +10,20 @@ import {
 } from './protocol';
 
 describe('protocol corpus contract', () => {
-  it('mirrors the live 26-tool catalog', () => {
+  it('mirrors the live 29-tool catalog', () => {
     // Locks the corpus to the shipped catalog; if a tool is added/renamed this
-    // forces a conscious regen rather than a silent drift.
-    expect(SPECS.length).toBe(26);
+    // forces a conscious regen rather than a silent drift. Bumped 26 → 29 for
+    // #141: the model now has to know find_page / get_sitemap / propose_navigate.
+    expect(SPECS.length).toBe(29);
     expect(TOOL_NAMES.has('run_projection')).toBe(true);
     expect(TOOL_NAMES.has('propose_reverse_mortgage')).toBe(true);
-    expect(TOOL_NAMES.has('set_scenario_value')).toBe(true);
+    expect(TOOL_NAMES.has('set_plan_value')).toBe(true);
     expect(TOOL_NAMES.has('propose_fhsa')).toBe(true);
     expect(TOOL_NAMES.has('propose_debt')).toBe(true);
     expect(TOOL_NAMES.has('manage_debt')).toBe(true);
+    expect(TOOL_NAMES.has('find_page')).toBe(true);
+    expect(TOOL_NAMES.has('get_sitemap')).toBe(true);
+    expect(TOOL_NAMES.has('propose_navigate')).toBe(true);
   });
 
   it('renders the taught TOOL_CALL format into the instructions', () => {
@@ -28,7 +32,7 @@ describe('protocol corpus contract', () => {
   });
 
   it('a canonical emitted call parses back as valid via the app parser', () => {
-    const reply = emitToolCall('compare_scenarios', {
+    const reply = emitToolCall('compare_plans', {
       variants: [
         { label: 'Retire 60', overrides: { retirementAge: 60 } },
         { label: 'Retire 65', overrides: { retirementAge: 65 } },
@@ -36,7 +40,7 @@ describe('protocol corpus contract', () => {
     });
     const v = scoreToolReply(reply);
     expect(v.kind).toBe('valid');
-    if (v.kind === 'valid') expect(v.name).toBe('compare_scenarios');
+    if (v.kind === 'valid') expect(v.name).toBe('compare_plans');
   });
 
   it('tolerates prose before the call but still scores it valid', () => {

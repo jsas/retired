@@ -133,7 +133,7 @@ describe('projection JSON/YAML export', () => {
     const { results, inputs } = rich();
     const full = buildProjectionObject('My plan', inputs, results, config, { ...opts, format: 'json' });
     const meta = full.metadata as Record<string, unknown>;
-    expect(meta.scenario).toBe('My plan');
+    expect(meta.plan).toBe('My plan');
     expect(typeof meta.generated).toBe('string');
     expect(meta.profile).toBeDefined();
     expect(meta.options).toBeDefined();

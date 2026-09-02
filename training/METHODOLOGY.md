@@ -3,7 +3,7 @@
 This is the design doc for the fine-tune's **input data and training method**.
 It answers one question: how do we shape the corpus and the SFT run so the
 resulting model is *good* — where "good" specifically means it **understands a
-person's scenario, lays out their options, shows what moves the needle, and
+person's plan, lays out their options, shows what moves the needle, and
 explains consequences — without ever telling them what to do.**
 
 The whole approach rests on one product axiom that overrides everything else:
@@ -26,8 +26,8 @@ corpus, and each has a failure mode the data is built to prevent.
 | # | Target behavior | Corpus kind that teaches it | Failure it prevents |
 |---|---|---|---|
 | 1 | **Drive the tools** — emit ONE clean `TOOL_CALL:` line with valid args | `tool-call` | malformed/hallucinated calls, multi-call spam |
-| 2 | **Read the person** — ground every answer in *their* numbers, not generic rules | `tool-followup`, scenario sweep | vague "it depends" non-answers |
-| 3 | **Lay out options** — survey the levers and show what each is worth | `option-framing`, `compare_scenarios` follow-ups | "I can't help" shrugs, or a single pushy recommendation |
+| 2 | **Read the person** — ground every answer in *their* numbers, not generic rules | `tool-followup`, plan sweep | vague "it depends" non-answers |
+| 3 | **Lay out options** — survey the levers and show what each is worth | `option-framing`, `compare_plans` follow-ups | "I can't help" shrugs, or a single pushy recommendation |
 | 4 | **Know the domain** — explain CPP/OAS/GIS/tax/market-history correctly | `domain-knowledge` | confidently-wrong figures, generic non-answers |
 | 5 | **Stay in the lane** — never prescribe; hand the choice back | `refusal`, the close of every `option-framing` reply | "you should retire at 65" |
 
@@ -67,11 +67,11 @@ figure from that exact result*.
 The supervision is **free and correct** because the engine is deterministic
 (`retirementEngine.ts` has no `Date.now`/`Math.random`/`new Date`; Monte Carlo
 is seeded `mulberry32`). The minter runs the real executor once per
-(spec × scenario) and records the genuine `[OK]` output. The model therefore
+(spec × plan) and records the genuine `[OK]` output. The model therefore
 learns to ground its prose in *the number that was actually returned* — a $ or
 % lifted from the result — not a number it made up.
 
-**The scenario sweep is what makes it a *person*, not a balance.** 24 named
+**The plan sweep is what makes it a *person*, not a balance.** 24 named
 households span all 13 provinces/territories plus the structural situations
 that change the advice shape:
 
@@ -85,7 +85,7 @@ that change the advice shape:
   delayed OAS — so timing is a real, varied dimension.
 
 Without these, the model would overfit to "single person, one RRSP." With them,
-"understanding the scenario" means recognizing *which* situation it's in.
+"understanding the plan" means recognizing *which* situation it's in.
 
 ### 2c. Laying out options is the behavior the user explicitly asked for
 
@@ -266,7 +266,7 @@ on-ramp to a true RLVR pass later, where "protocol-valid + numerically-faithful"
 What that demands of the training:
 
 1. **The signal for interactions is a comparison, not a point.** Grading can
-   still be deterministic — the model proposes `compare_scenarios` /
+   still be deterministic — the model proposes `compare_plans` /
    `run_strategies` across two benefit timings, the engine computes both
    branches, and "right" = it chose the comparison tool *and* its explanation
    matches the **sign and rough magnitude of the real computed delta** (not just

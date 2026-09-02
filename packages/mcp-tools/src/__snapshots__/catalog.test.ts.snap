@@ -26,7 +26,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       ],
       "type": "object",
     },
-    "name": "get_scenario",
+    "name": "get_plan",
   },
   {
     "inputSchema": {
@@ -35,7 +35,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       "properties": {
         "overrides": {
           "additionalProperties": {},
-          "description": "Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the scenario schema; invalid entries are reported, not applied.",
+          "description": "Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the plan schema; invalid entries are reported, not applied.",
           "propertyNames": {
             "type": "string",
           },
@@ -88,7 +88,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       },
       "type": "object",
     },
-    "name": "compare_scenarios",
+    "name": "compare_plans",
   },
   {
     "inputSchema": {
@@ -237,7 +237,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
           "type": "string",
         },
         "value": {
-          "description": "The proposed new value. Must satisfy the scenario schema (numbers as numbers; nullable ages may be null).",
+          "description": "The proposed new value. Must satisfy the plan schema (numbers as numbers; nullable ages may be null).",
         },
       },
       "required": [
@@ -246,7 +246,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       ],
       "type": "object",
     },
-    "name": "set_scenario_value",
+    "name": "set_plan_value",
   },
   {
     "inputSchema": {
@@ -408,49 +408,6 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       "type": "object",
     },
     "name": "propose_spending_bands",
-  },
-  {
-    "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "additionalProperties": false,
-      "properties": {
-        "periods": {
-          "description": "Market-hypothesis anchors, any order. The engine sorts by age and interpolates linearly between them; outside the outermost anchors the flat investmentReturn/returnVolatility hold. The projection follows the return curve; volatility shapes Monte Carlo only. Empty array clears the hypothesis (back to flat constants). Replaces the whole set.",
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "age": {
-                "description": "The age this anchor applies at.",
-                "type": "number",
-              },
-              "return": {
-                "description": "Expected annual return (decimal, e.g. -0.30 for a 30% crash, 0.07 for 7% growth). May be negative.",
-                "type": "number",
-              },
-              "volatility": {
-                "description": "Annual return standard deviation at this age (decimal, e.g. 0.25). Omit to keep the plan's flat volatility.",
-                "minimum": 0,
-                "type": "number",
-              },
-            },
-            "required": [
-              "age",
-              "return",
-            ],
-            "type": "object",
-          },
-          "type": "array",
-        },
-        "rationale": {
-          "type": "string",
-        },
-      },
-      "required": [
-        "periods",
-      ],
-      "type": "object",
-    },
-    "name": "propose_market_periods",
   },
   {
     "inputSchema": {
@@ -948,10 +905,10 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
           "type": "string",
         },
         "scope": {
-          "default": "scenario",
-          "description": "scenario = about this plan (shown in chats on this scenario). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").",
+          "default": "plan",
+          "description": "plan = about this plan (shown in chats on this plan). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").",
           "enum": [
-            "scenario",
+            "plan",
             "global",
           ],
           "type": "string",
@@ -1001,19 +958,19 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       "additionalProperties": false,
       "properties": {
         "name": {
-          "description": "Alternatively, the scenario NAME — matched case-insensitively; must be unambiguous.",
+          "description": "Alternatively, the plan NAME — matched case-insensitively; must be unambiguous.",
           "minLength": 1,
           "type": "string",
         },
-        "scenarioId": {
-          "description": "Id of the saved scenario to open (from the ids given in your context).",
+        "planId": {
+          "description": "Id of the saved plan to open (from the ids given in your context).",
           "minLength": 1,
           "type": "string",
         },
       },
       "type": "object",
     },
-    "name": "open_scenario",
+    "name": "open_plan",
   },
   {
     "inputSchema": {
@@ -1021,7 +978,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       "additionalProperties": false,
       "properties": {
         "name": {
-          "description": "Name for the new scenario (e.g. "Downsized at 65"). Duplicates are allowed.",
+          "description": "Name for the new plan (e.g. "Downsized at 65"). Duplicates are allowed.",
           "maxLength": 80,
           "minLength": 1,
           "type": "string",
@@ -1032,7 +989,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       ],
       "type": "object",
     },
-    "name": "save_scenario_as",
+    "name": "save_plan_as",
   },
   {
     "inputSchema": {
@@ -1050,7 +1007,61 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       ],
       "type": "object",
     },
-    "name": "list_scenarios",
+    "name": "list_plans",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Match is deterministic; the catalog has the right keywords in it — re-case freely.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "find_page",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "get_sitemap",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "description": "Confirm-card label, e.g. "Open the Monte Carlo page".",
+          "minLength": 1,
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "view": {
+          "description": "View id, from find_page or get_sitemap (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "view",
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "propose_navigate",
   },
 ]
 `;
@@ -1058,7 +1069,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
 exports[`tool catalog surface > exposes every catalog tool to LLM providers (names, descriptions, JSON Schema) 1`] = `
 [
   {
-    "description": "Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).",
+    "description": "Read the current retirement plan (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -1082,7 +1093,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       ],
       "type": "object",
     },
-    "name": "get_scenario",
+    "name": "get_plan",
   },
   {
     "description": "Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.",
@@ -1092,7 +1103,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       "properties": {
         "overrides": {
           "additionalProperties": {},
-          "description": "Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the scenario schema; invalid entries are reported, not applied.",
+          "description": "Optional flat patch of top-level RetirementInputs fields to apply to a COPY of the plan before running (what-if). Validated against the plan schema; invalid entries are reported, not applied.",
           "propertyNames": {
             "type": "string",
           },
@@ -1146,7 +1157,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       },
       "type": "object",
     },
-    "name": "compare_scenarios",
+    "name": "compare_plans",
   },
   {
     "description": "Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.",
@@ -1300,7 +1311,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
           "type": "string",
         },
         "value": {
-          "description": "The proposed new value. Must satisfy the scenario schema (numbers as numbers; nullable ages may be null).",
+          "description": "The proposed new value. Must satisfy the plan schema (numbers as numbers; nullable ages may be null).",
         },
       },
       "required": [
@@ -1309,7 +1320,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       ],
       "type": "object",
     },
-    "name": "set_scenario_value",
+    "name": "set_plan_value",
   },
   {
     "description": "PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.",
@@ -1475,50 +1486,6 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       "type": "object",
     },
     "name": "propose_spending_bands",
-  },
-  {
-    "description": "PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.",
-    "jsonSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "additionalProperties": false,
-      "properties": {
-        "periods": {
-          "description": "Market-hypothesis anchors, any order. The engine sorts by age and interpolates linearly between them; outside the outermost anchors the flat investmentReturn/returnVolatility hold. The projection follows the return curve; volatility shapes Monte Carlo only. Empty array clears the hypothesis (back to flat constants). Replaces the whole set.",
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "age": {
-                "description": "The age this anchor applies at.",
-                "type": "number",
-              },
-              "return": {
-                "description": "Expected annual return (decimal, e.g. -0.30 for a 30% crash, 0.07 for 7% growth). May be negative.",
-                "type": "number",
-              },
-              "volatility": {
-                "description": "Annual return standard deviation at this age (decimal, e.g. 0.25). Omit to keep the plan's flat volatility.",
-                "minimum": 0,
-                "type": "number",
-              },
-            },
-            "required": [
-              "age",
-              "return",
-            ],
-            "type": "object",
-          },
-          "type": "array",
-        },
-        "rationale": {
-          "type": "string",
-        },
-      },
-      "required": [
-        "periods",
-      ],
-      "type": "object",
-    },
-    "name": "propose_market_periods",
   },
   {
     "description": "PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.",
@@ -2001,7 +1968,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "manage_debt",
   },
   {
-    "description": "Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.",
+    "description": "Save a durable fact to memory for later conversations — about THIS plan (scope "plan": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -2026,10 +1993,10 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
           "type": "string",
         },
         "scope": {
-          "default": "scenario",
-          "description": "scenario = about this plan (shown in chats on this scenario). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").",
+          "default": "plan",
+          "description": "plan = about this plan (shown in chats on this plan). global = about the USER, travels across plans (e.g. "wants to retire to Nova Scotia").",
           "enum": [
-            "scenario",
+            "plan",
             "global",
           ],
           "type": "string",
@@ -2075,34 +2042,34 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "recall",
   },
   {
-    "description": "Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.",
+    "description": "Switch to another SAVED plan (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "name": {
-          "description": "Alternatively, the scenario NAME — matched case-insensitively; must be unambiguous.",
+          "description": "Alternatively, the plan NAME — matched case-insensitively; must be unambiguous.",
           "minLength": 1,
           "type": "string",
         },
-        "scenarioId": {
-          "description": "Id of the saved scenario to open (from the ids given in your context).",
+        "planId": {
+          "description": "Id of the saved plan to open (from the ids given in your context).",
           "minLength": 1,
           "type": "string",
         },
       },
       "type": "object",
     },
-    "name": "open_scenario",
+    "name": "open_plan",
   },
   {
-    "description": "Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.",
+    "description": "Snapshot the CURRENT plan as a new saved plan with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "name": {
-          "description": "Name for the new scenario (e.g. "Downsized at 65"). Duplicates are allowed.",
+          "description": "Name for the new plan (e.g. "Downsized at 65"). Duplicates are allowed.",
           "maxLength": 80,
           "minLength": 1,
           "type": "string",
@@ -2113,10 +2080,10 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       ],
       "type": "object",
     },
-    "name": "save_scenario_as",
+    "name": "save_plan_as",
   },
   {
-    "description": "List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan's key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.",
+    "description": "List every SAVED plan: names, ids, and which one is active. With withDetails, also return each plan's key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -2132,7 +2099,64 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       ],
       "type": "object",
     },
-    "name": "list_scenarios",
+    "name": "list_plans",
+  },
+  {
+    "description": "Search the site's page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Use whenever the user asks WHERE something lives.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Match is deterministic; the catalog has the right keywords in it — re-case freely.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "find_page",
+  },
+  {
+    "description": "The full site map: every page (view), its route (#/hash), and one-line purpose. Use for "what can this app do?", "what pages exist?", or before guessing where something lives.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "get_sitemap",
+  },
+  {
+    "description": "PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → the Insights page that now hosts it — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "description": "Confirm-card label, e.g. "Open the Monte Carlo page".",
+          "minLength": 1,
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "view": {
+          "description": "View id, from find_page or get_sitemap (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "view",
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "propose_navigate",
   },
 ]
 `;

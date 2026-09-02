@@ -2,21 +2,21 @@ import { useState } from 'react';
 import { Save, AlertTriangle } from 'lucide-react';
 
 interface SavePromptModalProps {
-  scenarioName: string;
+  planName: string;
   /** Save the edits, then switch. */
   onSave: (dontAskAgain: boolean) => void;
   /** Discard the edits and switch. */
   onDiscard: (dontAskAgain: boolean) => void;
-  /** Stay on the current scenario (no switch). */
+  /** Stay on the current plan (no switch). */
   onCancel: () => void;
 }
 
 /**
- * Shown when the user tries to switch scenarios with unsaved edits. Offers
+ * Shown when the user tries to switch plans with unsaved edits. Offers
  * save-and-switch / discard-and-switch / stay, plus a "don't ask again" box
  * that flips the General setting off (the opt-out the setting controls).
  */
-export function SavePromptModal({ scenarioName, onSave, onDiscard, onCancel }: SavePromptModalProps) {
+export function SavePromptModal({ planName, onSave, onDiscard, onCancel }: SavePromptModalProps) {
   const [dontAskAgain, setDontAskAgain] = useState(false);
 
   return (
@@ -27,7 +27,7 @@ export function SavePromptModal({ scenarioName, onSave, onDiscard, onCancel }: S
           <div>
             <h2 id="save-prompt-title" className="text-sm font-bold text-slate-900">Unsaved changes</h2>
             <p className="text-[13px] text-slate-600 mt-1 leading-snug">
-              <span className="font-medium text-slate-800">{scenarioName}</span> has edits you haven't saved. Save them before switching?
+              <span className="font-medium text-slate-800">{planName}</span> has edits you haven't saved. Save them before switching?
             </p>
           </div>
         </div>

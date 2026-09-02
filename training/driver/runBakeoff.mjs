@@ -11,6 +11,8 @@
 //   node training/driver/runBakeoff.mjs                      # all candidates, smallest first
 //   node training/driver/runBakeoff.mjs --only Qwen3-0.6B    # one base
 //   node training/driver/runBakeoff.mjs --limit 20           # first N eval records (smoke test)
+//   node training/driver/runBakeoff.mjs --visible            # headed Chrome: watch the page
+//   node training/driver/runBakeoff.mjs --verbose            # print each Q + A as it lands
 //   node training/driver/runBakeoff.mjs --serve-port 8788 --cdp-port 9222
 //
 // Output: training/data/bakeoff/<modelId>.replies.json  (aligned to the eval
@@ -33,6 +35,8 @@ function arg(flag) {
 }
 const ONLY = arg('--only');
 const LIMIT = arg('--limit') ? Number(arg('--limit')) : undefined;
+const VISIBLE = process.argv.includes('--visible');   // headed Chrome so you can watch
+const VERBOSE = process.argv.includes('--verbose');   // print each reply as it lands
 const SERVE_PORT = Number(arg('--serve-port') ?? 8788);
 const CDP_PORT = Number(arg('--cdp-port') ?? 9222);
 
@@ -105,11 +109,12 @@ async function main() {
   if (bases.length === 0) { console.error(`no base matched --only ${ONLY}`); process.exit(2); }
 
   const server = await serve();
-  const chrome = await launchChrome({ port: CDP_PORT, gpu: true });
+  const chrome = await launchChrome({ port: CDP_PORT, gpu: true, headless: !VISIBLE });
 
   try {
-    for (const base of bases) {
-      console.error(`\n=== ${base.label} (${base.modelId}, ~${base.sizeGB}GB) ===`);
+    for (let b = 0; b < bases.length; b++) {
+      const base = bases[b];
+      console.error(`\n=== [base ${b + 1}/${bases.length}] ${base.label} (${base.modelId}, ~${base.sizeGB}GB) ===`);
       const target = await openTab(`http://127.0.0.1:${SERVE_PORT}/harness.html`, CDP_PORT);
       const tab = new TabSession(target.webSocketDebuggerUrl);
       await tab.connect();
@@ -127,6 +132,7 @@ async function main() {
       console.error('model loaded; running eval…');
 
       const replies = [];
+      const t0 = Date.now();
       for (let i = 0; i < evalRecords.length; i++) {
         const q = evalRecords[i].question;
         const text = await tab.callFn(
@@ -135,8 +141,21 @@ async function main() {
           { timeoutMs: 120000 },
         );
         replies.push(text);
-        if ((i + 1) % 10 === 0 || i === evalRecords.length - 1) {
-          console.error(`  ${i + 1}/${evalRecords.length}`);
+        const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+        if (VERBOSE) {
+          console.error(`  [${i + 1}/${evalRecords.length}] Q: ${oneLine(q).slice(0, 90)}`);
+          console.error(`       A: ${oneLine(text).slice(0, 140)}`);
+        } else {
+          // Live progress line: per-base %, overall run %, ETA. Pad to a fixed
+          // width and clear to end-of-line so a shorter update doesn't leave
+          // residue from the previous (longer) one.
+          const done = i + 1;
+          const basePct = Math.floor((done / evalRecords.length) * 100);
+          const overallPct = Math.floor((((b * evalRecords.length) + done) / (bases.length * evalRecords.length)) * 100);
+          const per = (Date.now() - t0) / done, eta = Math.round((per * (evalRecords.length - done)) / 1000);
+          const line = `  base ${basePct}%  (${done}/${evalRecords.length})  overall ${overallPct}%  eta ${eta}s  last: ${oneLine(text).slice(0, 50)}`;
+          process.stderr.write(`\r${line.padEnd(110, ' ')}\x1b[K`);
+          if (done === evalRecords.length) process.stderr.write('\n');
         }
       }
 

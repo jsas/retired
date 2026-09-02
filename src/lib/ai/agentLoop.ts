@@ -3,13 +3,15 @@
 //
 // This module is provider-neutral — it takes a `chat` function (usually
 // streamChat bound to a connection) so tests drive it with scripted fakes.
-// Mutating tools (set_scenario_value) pause the loop: the proposal is handed
+// Mutating tools (set_plan_value) pause the loop: the proposal is handed
 // to `onMutation`, and the loop only continues once the UI reports the user's
 // decision. That's the confirm-before-apply guarantee — no path from model
 // output to plan state bypasses it.
 
 import type { AgentToolCall, ChatMessage, StreamEvent, ToolSpec } from './providers';
 import { executeToolCall, toolSpecs, type ToolContext, type ToolOutcome } from '@retired/mcp-tools/tools';
+import { pageTitleLine } from '@retired/mcp-tools/navigation';
+import type { View } from '../viewRoutes';
 import { extractPromptToolCalls, formatPromptToolResults } from './promptTools';
 import { buildProgramRules } from './programRules';
 import type { AppConfig } from '@retired/engine-core/appConfig';
@@ -35,6 +37,10 @@ export interface MutationProposal {
   preview: Record<string, unknown>;
   /** True when this proposal rolls the plan back to a checkpoint. */
   revert?: boolean;
+  /** Set on page-navigation proposals (propose_navigate): the view to open on
+   *  approval. The UI routes instead of merging a plan patch, and records no
+   *  checkpoint — the plan never changed. */
+  navigate?: View;
 }
 
 export interface MutationDecision {
@@ -44,7 +50,7 @@ export interface MutationDecision {
 }
 
 export interface AgentLoopOptions {
-  /** The scenario/engine surface the tools run against. */
+  /** The plan/engine surface the tools run against. */
   context: ToolContext;
   /** Prior conversation (oldest first). */
   history: ChatMessage[];
@@ -83,7 +89,7 @@ export interface AgentLoopOptions {
  * The planner persona at the heart of the assistant's system prompt. Exported
  * as a constant so the user can read it, and so Settings can offer it as the
  * default they adjust (a per-chat note is appended separately). Tool usage and
- * the scenario name are appended by buildSystemPrompt — this is the voice and
+ * the plan name are appended by buildSystemPrompt — this is the voice and
  * the rules, not the mechanics.
  *
  * The assistant IS a planning assistant: it explains consequences, runs the
@@ -102,7 +108,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   '',
   'How you work:',
   '- Ground every claim in the real numbers. Use the tools (or the plan summary',
-  '  provided) to read the scenario and run projections; never invent balances,',
+  '  provided) to read the plan and run projections; never invent balances,',
   '  returns, or results.',
   '- When the user asks for a change — or one is clearly wanted — propose it with',
   '  a tool. Every change is confirmed by the user before it is applied; never',
@@ -121,9 +127,12 @@ export const DEFAULT_SYSTEM_PROMPT = [
 /** Build the system prompt the agent runs under. The persona comes from
  *  `basePrompt` (DEFAULT_SYSTEM_PROMPT unless the user has overridden it in
  *  Settings); this appends the tool-usage mechanics, the live program rules
- *  (from `config`, when given), and the scenario name. */
+ *  (from `config`, when given), and the plan name. `currentView` (the
+ *  page the user is on) rides in so the model knows WHERE the user is before
+ *  any tool call — find_page's "already here" tag follows it, and
+ *  propose_navigate never surprises a modal in front of the chat. */
 export function buildSystemPrompt(
-  scenarioName: string,
+  planName: string,
   opts?: {
     toolsEnabled?: boolean;
     toolMode?: 'native' | 'prompt' | 'off';
@@ -131,13 +140,21 @@ export function buildSystemPrompt(
     /** Live engine config; when supplied, the CPP/OAS/GIS/RRIF/limit rules are
      *  rendered from it so the model quotes the program's real numbers. */
     config?: AppConfig;
+    /** The view the host page is on. Ambient (one line); when the prop is
+     *  absent (tests / MCP server), the line falls out. */
+    currentView?: View;
   },
 ): string {
   const mode = opts?.toolMode ?? (opts?.toolsEnabled === false ? 'off' : 'native');
   const persona = (opts?.basePrompt?.trim()) || DEFAULT_SYSTEM_PROMPT;
   const rules = opts?.config ? buildProgramRules(opts.config) : '';
+  const pageLine = opts?.currentView
+    ? `The user is currently on the ${pageTitleLine(opts.currentView)} page.`
+    : null;
   return [
     persona,
+    ...(pageLine ? [pageLine] : []),
+    '',
     '',
     mode === 'off'
       ? 'Answer questions from the plan summary below — it has the ages, balances, benefits, ' +
@@ -148,15 +165,15 @@ export function buildSystemPrompt(
         ? [
             'Tools: the plan inputs and computed projection are BELOW in this message. The',
             'user\'s age, balances, benefits, and account values are ALREADY there — never',
-            'ask the user for them. Read them from the summary, and call get_scenario or',
+            'ask the user for them. Read them from the summary, and call get_plan or',
             'run_projection (with overrides) for any number you don\'t have. Answer with the',
-            'real figures; only use run_projection/compare_scenarios for what-ifs.',
+            'real figures; only use run_projection/compare_plans for what-ifs.',
           ].join('\n')
         : [
-            'Tools: use get_scenario to read the plan and run_projection / compare_scenarios /',
+            'Tools: use get_plan to read the plan and run_projection / compare_plans /',
             'run_monte_carlo for numbers (all accept overrides for what-ifs). Use',
             'run_strategies to compare levers and solve_spending for "how much can I safely',
-            'spend?". Change the plan only through the propose_* / set_scenario_value tools —',
+            'spend?". Change the plan only through the propose_* / set_plan_value tools —',
             'the user confirms every one. For a batch of related scalar edits prefer',
             'propose_patch; for a spouse, an income source (pension or work), spending phases,',
             'a cash event, or a reverse mortgage use its dedicated propose_* tool. To change',
@@ -166,19 +183,19 @@ export function buildSystemPrompt(
             'Memory: at the START of a conversation, recall your memories so you know what',
             'the user told you before. When the user shares something durable and important',
             '(a decision, a constraint, a preference, a life plan), remember it — scope',
-            '"scenario" for plan facts, "global" for facts about the user. When you remember',
+            '"plan" for plan facts, "global" for facts about the user. When you remember',
             'something, also pass keywords: the category words a later question might use',
             '(a note about oranges needs "fruit", "food") — recall matches by keyword. If a',
             'recall query returns only "closest memories", those did NOT match; use them as',
             'a hint, and say honestly when nothing recorded covers the question. Never',
             'memorize numbers that are already in the plan.',
-            'Scenarios: open_scenario switches to another saved plan; save_scenario_as',
+            'Plans: open_plan switches to another saved plan; save_plan_as',
             'keeps the current plan under a new name and opens the copy — use it when the',
             'user wants to keep a variant ("save this as its own plan") before editing.',
           ].join('\n'),
     ...(rules ? ['', rules] : []),
     '',
-    `The active scenario is "${scenarioName}".`,
+    `The active plan is "${planName}".`,
   ].join('\n');
 }
 
@@ -197,7 +214,7 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
   const knownTools = new Set(toolSpecs().map(s => s.name));
   // Track the last executed call so we can refuse an immediate identical
   // repeat — the classic small-model failure is ping-ponging the same two
-  // tools (run_projection / compare_scenarios) with unchanged args forever.
+  // tools (run_projection / compare_plans) with unchanged args forever.
   let lastCallKey: string | null = null;
 
   try {
@@ -275,6 +292,7 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
             rationale: outcome.rationale,
             preview: outcome.preview,
             revert: outcome.revert,
+            navigate: outcome.navigate,
           };
           yield { type: 'mutation', proposal };
           const decision = await opts.onMutation(proposal);
@@ -282,7 +300,13 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
             // Say plainly that the change is ALREADY APPLIED so the model doesn't
             // wonder whether "APPROVED" means proposed-vs-live (it was re-running
             // the proposal or questioning the state). Just confirm and report.
-            ? `The user approved this change and it is now APPLIED to the plan: ${outcome.label} ` +
+            // Page-navigation proposals moved the UI, not the plan — the
+            // feedback reflects that so the model doesn't re-project numbers.
+            ? outcome.navigate != null
+              ? `The user approved it and the app OPENED the page: ${outcome.label}. ` +
+                `It is live — do NOT re-propose it. Confirm it to the user.` +
+                (decision.note ? ` User note: ${decision.note}` : '')
+              : `The user approved this change and it is now APPLIED to the plan: ${outcome.label} ` +
               `(${JSON.stringify(outcome.patch)}). It is live — do NOT re-propose it. Confirm it to ` +
               `the user and report the resulting numbers (run a fresh projection if useful).` +
               (decision.note ? ` User note: ${decision.note}` : '')
@@ -341,10 +365,11 @@ async function* finalizeWithoutTools(
   // A fresh system prompt for the final pass: same persona/rules, but the
   // tool catalog is replaced by the instruction to stop and answer. Keeping
   // the full tool instructions would invite yet another tool call.
-  const base = buildSystemPrompt(opts.context.scenarioName, {
+  const base = buildSystemPrompt(opts.context.planName, {
     toolMode: 'off',
     basePrompt: undefined, // default persona — the override lives on the full prompt
     config: opts.config ?? opts.context.config,
+    currentView: opts.context.currentView,
   });
   const finalSystem = [
     base,

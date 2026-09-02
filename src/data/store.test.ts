@@ -3,8 +3,8 @@ import { AppStore } from './store';
 import { AppDatabase } from './db';
 import { baseInputs } from '@retired/engine-core/test/helpers';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
-import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
-import type { Scenario } from '@retired/engine-core/types';
+import { buildDefaultPlans } from '@retired/engine-core/examplePlans';
+import type { Plan } from '@retired/engine-core/types';
 
 // Tests run in Node — give the mirror a localStorage to write to.
 const storage = new Map<string, string>();
@@ -21,20 +21,20 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-const customDefaults = (): Scenario[] => [
+const customDefaults = (): Plan[] => [
   { id: 'seed-1', name: 'Seeded plan', inputs: baseInputs() },
 ];
 
 describe('AppStore', () => {
   it('seeds first-run examples when the store and legacy keys are empty', async () => {
-    const { state } = await AppStore.open(buildDefaultScenarios);
-    expect(state.scenarios.map(s => s.name)).toEqual([
+    const { state } = await AppStore.open(buildDefaultPlans);
+    expect(state.plans.map(s => s.name)).toEqual([
       'Example - Early Couple',
       'Example - Single at 60',
       'Example - Semi-retirement',
       'Example - RDSP Starting Out',
     ]);
-    expect(state.activeScenarioId).toBe(state.scenarios[0].id);
+    expect(state.activePlanId).toBe(state.plans[0].id);
     expect(state.config).toBeNull(); // no config until the app writes one
     expect(state.configLoadWarning).toBeUndefined();
   });
@@ -45,7 +45,7 @@ describe('AppStore', () => {
     // the user's custom tax tables would silently vanish (issue #19).
     const { store } = await AppStore.open(customDefaults);
     store.persist({
-      scenarios: customDefaults(), activeScenarioId: 'seed-1',
+      plans: customDefaults(), activePlanId: 'seed-1',
       config: { completely: { wrong: { shape: true } } } as unknown as AppConfig,
     });
 
@@ -71,7 +71,7 @@ describe('AppStore', () => {
     // back-fill — must load without the #19 warning; only wholesale-invalid
     // blobs are the bug.
     const { store } = await AppStore.open(customDefaults);
-    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1', config: DEFAULT_APP_CONFIG });
+    store.persist({ plans: customDefaults(), activePlanId: 'seed-1', config: DEFAULT_APP_CONFIG });
 
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
@@ -87,37 +87,37 @@ describe('AppStore', () => {
   it('ignores legacy keys once the SQL store has data', async () => {
     // First open seeds the SQL store…
     const first = await AppStore.open(customDefaults);
-    first.store.persist({ scenarios: first.state.scenarios, activeScenarioId: 'seed-1' });
+    first.store.persist({ plans: first.state.plans, activePlanId: 'seed-1' });
 
     // …then a legacy key appears (an older tab, a restored backup of keys).
     // The SQL store must still win.
     localStorage.setItem('wealthconsole_scenarios', JSON.stringify({
-      version: 2, scenarios: [{ id: 'x', name: 'X', inputs: baseInputs() }], activeScenarioId: 'x',
+      version: 2, plans: [{ id: 'x', name: 'X', inputs: baseInputs() }], activePlanId: 'x',
     }));
 
     const second = await AppStore.open(customDefaults);
-    expect(second.state.scenarios.map(s => s.id)).toEqual(['seed-1']);
+    expect(second.state.plans.map(s => s.id)).toEqual(['seed-1']);
   });
 
   it('persist then reopen returns the same state', async () => {
     const { store } = await AppStore.open(customDefaults);
-    const updated: Scenario[] = [
+    const updated: Plan[] = [
       { id: 'seed-1', name: 'Renamed', inputs: baseInputs({ currentAge: 60 }) },
       { id: 'new-2', name: 'Second', inputs: baseInputs() },
     ];
-    store.persist({ scenarios: updated, activeScenarioId: 'new-2', config: DEFAULT_APP_CONFIG });
+    store.persist({ plans: updated, activePlanId: 'new-2', config: DEFAULT_APP_CONFIG });
 
     const again = await AppStore.open(customDefaults);
-    expect(again.state.scenarios.map(s => s.name)).toEqual(['Renamed', 'Second']);
-    expect(again.state.activeScenarioId).toBe('new-2');
+    expect(again.state.plans.map(s => s.name)).toEqual(['Renamed', 'Second']);
+    expect(again.state.activePlanId).toBe('new-2');
     expect(again.state.config?.oas.clawbackThreshold).toBe(DEFAULT_APP_CONFIG.oas.clawbackThreshold);
   });
 
-  it('a dead stored active id falls back to the first scenario', async () => {
+  it('a dead stored active id falls back to the first plan', async () => {
     const { store } = await AppStore.open(customDefaults);
-    store.persist({ scenarios: customDefaults(), activeScenarioId: 'gone' });
+    store.persist({ plans: customDefaults(), activePlanId: 'gone' });
     const again = await AppStore.open(customDefaults);
-    expect(again.state.activeScenarioId).toBe('seed-1');
+    expect(again.state.activePlanId).toBe('seed-1');
   });
 
   it('migrates pre-#20 localStorage preference keys into the store kv on open', async () => {
@@ -138,7 +138,7 @@ describe('AppStore', () => {
     // The acceptance criterion: a .sqlite backup carries the pref blobs, and
     // an import surfaces them to the mirror the synchronous readers use.
     const { store } = await AppStore.open(customDefaults);
-    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1', config: DEFAULT_APP_CONFIG });
+    store.persist({ plans: customDefaults(), activePlanId: 'seed-1', config: DEFAULT_APP_CONFIG });
     // Write prefs through the facade (the path the UI modules use).
     const { prefKV, attachPrefKv } = await import('../lib/prefKv');
     attachPrefKv((store as unknown as { db: AppDatabase }).db);
@@ -154,7 +154,7 @@ describe('AppStore', () => {
 
   it('exportBytes produces a file a fresh database can open (the backup loop)', async () => {
     const { store } = await AppStore.open(customDefaults);
-    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1', config: DEFAULT_APP_CONFIG });
+    store.persist({ plans: customDefaults(), activePlanId: 'seed-1', config: DEFAULT_APP_CONFIG });
     const bytes = store.exportBytes();
     expect(bytes.length).toBeGreaterThan(1000);
     // The SQLite magic header: "SQLite format 3\0".
@@ -162,7 +162,7 @@ describe('AppStore', () => {
 
     const { AppDatabase } = await import('./db');
     const db = await AppDatabase.open(bytes);
-    expect(db.toDoc()?.scenarios[0].name).toBe('Seeded plan');
+    expect(db.toDoc()?.plans[0].name).toBe('Seeded plan');
     db.close();
   });
 
@@ -172,11 +172,11 @@ describe('AppStore', () => {
     // bytes are current: persist a change, export immediately, and the fresh
     // database must contain the edit (not the pre-persist state).
     const { store } = await AppStore.open(customDefaults);
-    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1', config: DEFAULT_APP_CONFIG });
+    store.persist({ plans: customDefaults(), activePlanId: 'seed-1', config: DEFAULT_APP_CONFIG });
 
     // Make a change and persist it synchronously (as the persist effect does).
     const edited = [{ id: 'seed-1', name: 'Edited just now', inputs: baseInputs({ desiredSpending: 99999 }) }];
-    store.persist({ scenarios: edited, activeScenarioId: 'seed-1' });
+    store.persist({ plans: edited, activePlanId: 'seed-1' });
 
     // Export immediately — no waiting for OPFS to flush.
     const bytes = store.exportBytes();
@@ -199,7 +199,7 @@ describe('AppStore', () => {
     const failingBackend = { read: () => Promise.resolve(null), write: () => Promise.reject(new Error('OPFS down')) };
     (store as unknown as { db: { backend: unknown } }).db.backend = failingBackend;
 
-    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1' });
+    store.persist({ plans: customDefaults(), activePlanId: 'seed-1' });
     await new Promise(r => setTimeout(r, 0)); // let the rejected write land
 
     expect(outcomes).toHaveLength(1);
@@ -218,13 +218,13 @@ describe('AppStore', () => {
       write: () => Promise.reject(new Error('OPFS down')),
     };
     (store as unknown as { db: { backend: unknown } }).db.backend = backend;
-    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1' });
+    store.persist({ plans: customDefaults(), activePlanId: 'seed-1' });
     await new Promise(r => setTimeout(r, 0));
 
     // ...then recover: the next persist's durable write reports success (null),
     // which the UI uses to clear its "changes may not be saved" banner.
     backend.write = () => Promise.resolve();
-    store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1' });
+    store.persist({ plans: customDefaults(), activePlanId: 'seed-1' });
     await new Promise(r => setTimeout(r, 0));
 
     expect(outcomes).toHaveLength(2);
@@ -242,7 +242,7 @@ describe('AppStore', () => {
     const original = localStorage.setItem;
     localStorage.setItem = () => { throw new Error('quota exceeded'); };
     try {
-      store.persist({ scenarios: customDefaults(), activeScenarioId: 'seed-1' });
+      store.persist({ plans: customDefaults(), activePlanId: 'seed-1' });
     } finally {
       localStorage.setItem = original;
     }
@@ -255,10 +255,10 @@ describe('AppStore', () => {
 describe('AppStore revisions', () => {
   it('seeding records the first revision', async () => {
     const { store, state } = await AppStore.open(customDefaults);
-    const revs = store.allRevisions().filter(r => r.scenarioId === state.activeScenarioId);
+    const revs = store.allRevisions().filter(r => r.planId === state.activePlanId);
     expect(revs).toHaveLength(1);
     expect(revs[0].source).toBe('save');
-    expect(revs[0].inputs).toEqual(state.scenarios[0].inputs);
+    expect(revs[0].inputs).toEqual(state.plans[0].inputs);
   });
 
   it('a fresh session never re-mints a revision id the history already used (D-05)', async () => {
@@ -276,11 +276,11 @@ describe('AppStore revisions', () => {
       vi.resetModules();
       const { AppStore: FreshAppStore } = await import('./store');
       const { store, state } = await FreshAppStore.open(customDefaults);
-      const sid = state.activeScenarioId;
+      const sid = state.activePlanId;
       for (const spend of [11111, 22222]) {
         store.persist({
-          scenarios: [{ id: sid, name: 'S', inputs: baseInputs({ desiredSpending: spend }) }],
-          activeScenarioId: sid,
+          plans: [{ id: sid, name: 'S', inputs: baseInputs({ desiredSpending: spend }) }],
+          activePlanId: sid,
         });
       }
       const firstSessionIds = store.allRevisions().map(r => r.id);
@@ -291,8 +291,8 @@ describe('AppStore revisions', () => {
       const { AppStore: FreshAppStore2 } = await import('./store');
       const { store: store2 } = await FreshAppStore2.open(customDefaults);
       store2.persist({
-        scenarios: [{ id: sid, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }],
-        activeScenarioId: sid,
+        plans: [{ id: sid, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }],
+        activePlanId: sid,
       });
       const ids = store2.allRevisions().map(r => r.id);
       // Nothing was overwritten: the history gained exactly one row (a
@@ -312,19 +312,19 @@ describe('AppStore revisions', () => {
 
   it('records a revision only when the inputs actually change', async () => {
     const { store, state } = await AppStore.open(customDefaults);
-    const id = state.activeScenarioId;
+    const id = state.activePlanId;
 
     // Rename only — no inputs change, no revision.
     store.persist({
-      scenarios: [{ id, name: 'Renamed', inputs: state.scenarios[0].inputs }],
-      activeScenarioId: id,
+      plans: [{ id, name: 'Renamed', inputs: state.plans[0].inputs }],
+      activePlanId: id,
     });
     expect(store.allRevisions()).toHaveLength(1);
 
     // Real change → second revision.
     store.persist({
-      scenarios: [{ id, name: 'Renamed', inputs: baseInputs({ desiredSpending: 12345 }) }],
-      activeScenarioId: id,
+      plans: [{ id, name: 'Renamed', inputs: baseInputs({ desiredSpending: 12345 }) }],
+      activePlanId: id,
     });
     expect(store.allRevisions()).toHaveLength(2);
     expect(store.allRevisions()[1].inputs.desiredSpending).toBe(12345);
@@ -332,25 +332,25 @@ describe('AppStore revisions', () => {
 
   it('persists revisions and reloads them on reopen', async () => {
     const first = await AppStore.open(customDefaults);
-    const id = first.state.activeScenarioId;
+    const id = first.state.activePlanId;
     first.store.persist({
-      scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 11111 }) }],
-      activeScenarioId: id,
+      plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 11111 }) }],
+      activePlanId: id,
     });
 
     const again = await AppStore.open(customDefaults);
-    const revs = again.store.allRevisions().filter(r => r.scenarioId === id);
+    const revs = again.store.allRevisions().filter(r => r.planId === id);
     expect(revs.length).toBeGreaterThanOrEqual(2);
     expect(revs.at(-1)?.inputs.desiredSpending).toBe(11111);
   });
 
   it('rollback returns the snapshot and DELETES every newer revision (rewind, not branch)', async () => {
     const { store, state } = await AppStore.open(customDefaults);
-    const id = state.activeScenarioId;
+    const id = state.activePlanId;
     // Three distinct saves: 11111 → 22222 → 33333.
-    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 11111 }) }], activeScenarioId: id });
-    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activeScenarioId: id });
-    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }], activeScenarioId: id });
+    store.persist({ plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 11111 }) }], activePlanId: id });
+    store.persist({ plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activePlanId: id });
+    store.persist({ plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }], activePlanId: id });
     const all = store.allRevisions();
     expect(all).toHaveLength(4); // seed + 3 saves
 
@@ -358,10 +358,10 @@ describe('AppStore revisions', () => {
     // the two newer ones (33333 and its save) are gone.
     const restored = store.rollbackRevision(id, all[2].id);
     expect(restored?.desiredSpending).toBe(22222);
-    const after = store.allRevisions().filter(r => r.scenarioId === id);
+    const after = store.allRevisions().filter(r => r.planId === id);
     expect(after).toHaveLength(3); // seed + 11111 + 22222
     expect(after.at(-1)?.inputs.desiredSpending).toBe(22222);
-    // Other scenarios' history is untouched.
+    // Other plans' history is untouched.
     const bytes = store.exportBytes();
     const { AppDatabase } = await import('./db');
     const db = await AppDatabase.open(bytes);
@@ -371,8 +371,8 @@ describe('AppStore revisions', () => {
 
   it('rollback to the newest revision deletes nothing', async () => {
     const { store, state } = await AppStore.open(customDefaults);
-    const id = state.activeScenarioId;
-    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activeScenarioId: id });
+    const id = state.activePlanId;
+    store.persist({ plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activePlanId: id });
     const before = store.allRevisions();
     const restored = store.rollbackRevision(id, before.at(-1)!.id);
     expect(restored?.desiredSpending).toBe(22222);
@@ -381,24 +381,24 @@ describe('AppStore revisions', () => {
 
   it('the persisted row after a rollback matches the restored plan (no phantom diff on next save)', async () => {
     const { store, state } = await AppStore.open(customDefaults);
-    const id = state.activeScenarioId;
-    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activeScenarioId: id });
+    const id = state.activePlanId;
+    store.persist({ plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }], activePlanId: id });
     const restored = store.rollbackRevision(id, store.allRevisions()[0].id);
 
     // Apply + persist WITHOUT revision recording (the App flow), then make a
     // real change: exactly one new revision (the restore itself is not one).
-    store.persist({ scenarios: [{ id, name: 'S', inputs: restored! }], activeScenarioId: id, skipRevisions: true });
-    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 44444 }) }], activeScenarioId: id });
-    const mine = store.allRevisions().filter(r => r.scenarioId === id);
+    store.persist({ plans: [{ id, name: 'S', inputs: restored! }], activePlanId: id, skipRevisions: true });
+    store.persist({ plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 44444 }) }], activePlanId: id });
+    const mine = store.allRevisions().filter(r => r.planId === id);
     expect(mine.at(-1)?.inputs.desiredSpending).toBe(44444);
   });
 
   it('a save after a rollback records exactly one revision (no duplicate echo)', async () => {
     const { store, state } = await AppStore.open(customDefaults);
-    const id = state.activeScenarioId;
+    const id = state.activePlanId;
     store.persist({
-      scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }],
-      activeScenarioId: id,
+      plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 22222 }) }],
+      activePlanId: id,
     });
     const original = store.rollbackRevision(id, store.allRevisions()[0].id);
     expect(original).not.toBeNull();
@@ -407,30 +407,30 @@ describe('AppStore revisions', () => {
     // against history only if it matches what was last SAVED. It doesn't (the
     // last save was 22222, the rollback restored the original), but the NEXT
     // real save diffs against the last-saved rows, so it records exactly one.
-    store.persist({ scenarios: [{ id, name: 'S', inputs: original! }], activeScenarioId: id, skipRevisions: true });
+    store.persist({ plans: [{ id, name: 'S', inputs: original! }], activePlanId: id, skipRevisions: true });
     const afterRollbackApply = store.allRevisions().length;
 
-    store.persist({ scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }], activeScenarioId: id });
+    store.persist({ plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 33333 }) }], activePlanId: id });
     expect(store.allRevisions().length).toBe(afterRollbackApply + 1);
   });
 
-  it('drops revisions of deleted scenarios and enforces the rolling cap', async () => {
+  it('drops revisions of deleted plans and enforces the rolling cap', async () => {
     const { store, state } = await AppStore.open(customDefaults);
-    const id = state.activeScenarioId;
-    // Many distinct saves → capped at MAX_REVISIONS for this scenario.
+    const id = state.activePlanId;
+    // Many distinct saves → capped at MAX_REVISIONS for this plan.
     for (let i = 0; i < 105; i++) {
       store.persist({
-        scenarios: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 1000 + i }) }],
-        activeScenarioId: id,
+        plans: [{ id, name: 'S', inputs: baseInputs({ desiredSpending: 1000 + i }) }],
+        activePlanId: id,
       });
     }
-    const mine = store.allRevisions().filter(r => r.scenarioId === id);
+    const mine = store.allRevisions().filter(r => r.planId === id);
     expect(mine.length).toBeLessThanOrEqual(100);
     // Newest survives.
     expect(mine.at(-1)?.inputs.desiredSpending).toBe(1104);
 
-    // Deleting the scenario drops its history.
-    store.persist({ scenarios: [] });
+    // Deleting the plan drops its history.
+    store.persist({ plans: [] });
     expect(store.allRevisions()).toHaveLength(0);
   });
 });

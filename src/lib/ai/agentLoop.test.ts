@@ -8,8 +8,8 @@ function ctx(): ToolContext {
   return {
     inputs: baseInputs(),
     config: testConfig(),
-    scenarioName: 'Test plan',
-    scenarioList: [{ id: 'a', name: 'Test plan' }],
+    planName: 'Test plan',
+    planList: [{ id: 'a', name: 'Test plan' }],
   };
 }
 
@@ -99,7 +99,7 @@ describe('runAgentTurn', () => {
   it('pauses on a mutation proposal and reports the user decision to the model', async () => {
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'cppStartAge', value: 70 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'set_plan_value', args: { field: 'cppStartAge', value: 70 } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -134,18 +134,18 @@ describe('runAgentTurn', () => {
     const liveCtx: ToolContext = {
       get inputs() { return live.inputs; },
       config: testConfig(),
-      scenarioName: 'Test plan',
-      scenarioList: [{ id: 'a', name: 'Test plan' }],
+      planName: 'Test plan',
+      planList: [{ id: 'a', name: 'Test plan' }],
     };
     const { chat } = scripted([
       // Round 1: propose lowering spending.
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 42000 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'set_plan_value', args: { field: 'desiredSpending', value: 42000 } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       // Round 2 (after approval): the model re-reads the plan, then answers.
       [
-        { type: 'tool_use', call: { id: 'g1', name: 'get_scenario', args: { section: 'summary' } } },
+        { type: 'tool_use', call: { id: 'g1', name: 'get_plan', args: { section: 'summary' } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -172,7 +172,7 @@ describe('runAgentTurn', () => {
   it('tells the model when the user rejects a change', async () => {
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 90000 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'set_plan_value', args: { field: 'desiredSpending', value: 90000 } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -210,7 +210,7 @@ describe('runAgentTurn', () => {
     // tools on offer so the user still gets a real answer.
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'c', name: 'get_scenario', args: {} } },
+        { type: 'tool_use', call: { id: 'c', name: 'get_plan', args: {} } },
         { type: 'done', stopReason: 'tool_use' },
       ],
     ]);
@@ -232,7 +232,7 @@ describe('runAgentTurn', () => {
   it('the forced final answer surfaces its prose to the user', async () => {
     // Round-limit path where the finalization pass actually answers.
     const { chat } = scripted([
-      [{ type: 'tool_use', call: { id: 'c', name: 'get_scenario', args: {} } }, { type: 'done', stopReason: 'tool_use' }],
+      [{ type: 'tool_use', call: { id: 'c', name: 'get_plan', args: {} } }, { type: 'done', stopReason: 'tool_use' }],
       [{ type: 'text', text: 'Based on the numbers, you are on track.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);
     const events = await collect(runAgentTurn({
@@ -247,22 +247,22 @@ describe('runAgentTurn', () => {
 });
 
 describe('buildSystemPrompt', () => {
-  it('names the scenario, takes a planner stance, and never refuses to plan', () => {
+  it('names the plan, takes a planner stance, and never refuses to plan', () => {
     const s = buildSystemPrompt('My Plan');
     expect(s).toContain('"My Plan"');
     // The persona must engage as a planner — the old "calculator, not a
     // planner" guardrail made small models parrot "I'm not a planner" back.
     expect(s).toContain('planning assistant');
     expect(s).not.toContain('not a planner');
-    expect(s).toContain('set_scenario_value');
+    expect(s).toContain('set_plan_value');
   });
 
   it('uses a user-supplied base prompt in place of the default persona', () => {
     const s = buildSystemPrompt('My Plan', { basePrompt: 'You are a terse actuary.' });
     expect(s).toContain('You are a terse actuary.');
     expect(s).not.toContain('planning assistant');
-    // Tool mechanics + scenario name are still appended after the persona.
-    expect(s).toContain('set_scenario_value');
+    // Tool mechanics + plan name are still appended after the persona.
+    expect(s).toContain('set_plan_value');
     expect(s).toContain('"My Plan"');
   });
 
@@ -271,9 +271,25 @@ describe('buildSystemPrompt', () => {
     expect(s).toContain('planning assistant');
   });
 
+  it('adds the ambient current-page line when the host supplies a view', () => {
+    // The page titles come from the catalog — this is what find_page's
+    // "already here" tag and the ambient line share (issue #141).
+    const s = buildSystemPrompt('My Plan', { currentView: 'details' });
+    expect(s).toContain('The user is currently on the Details page.');
+  });
+
+  it('names the destination page for a folded legacy view, and drops the line when absent', () => {
+    // The beta folds Monte Carlo into Insights — the user is on the Insights
+    // page even at a legacy #/monte-carlo route.
+    const folded = buildSystemPrompt('My Plan', { currentView: 'montecarlo' });
+    expect(folded).toContain('The user is currently on the Insights page.');
+    // No currentView (tests / MCP hosts): the line simply falls out.
+    expect(buildSystemPrompt('My Plan')).not.toContain('currently on the');
+  });
+
   it('drops tool instructions for chat-only providers', () => {
     const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
-    expect(s).not.toContain('set_scenario_value');
+    expect(s).not.toContain('set_plan_value');
     // Grounded in the plan summary, and honest that it can't change the plan.
     expect(s).toContain('plan summary');
     expect(s).toContain('can\'t change the plan');

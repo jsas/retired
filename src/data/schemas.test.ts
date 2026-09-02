@@ -4,7 +4,7 @@ import {
 } from './schemas';
 import { baseInputs } from '@retired/engine-core/test/helpers';
 import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
-import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
+import { buildDefaultPlans } from '@retired/engine-core/examplePlans';
 
 /** The Zod schemas are the gatekeeper for everything persisted or imported —
  *  a good payload must pass, a corrupted one must fail LOUDLY (return null /
@@ -12,7 +12,7 @@ import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
 
 describe('schemas — persisted shapes', () => {
   it('accepts the engine inputs every shipped example produces', () => {
-    for (const s of buildDefaultScenarios()) {
+    for (const s of buildDefaultPlans()) {
       const result = scenarioSchema.safeParse({ ...s, inputs: { ...s.inputs } });
       expect(result.success, `${s.name} failed: ${result.success ? '' : result.error.message}`).toBe(true);
     }
@@ -59,7 +59,7 @@ describe('schemas — persisted shapes', () => {
   });
 
   it('rejects a malformed spouseSource variant', () => {
-    const bad = { ...baseInputs(), spouseSource: { kind: 'scenario' } }; // missing scenarioId
+    const bad = { ...baseInputs(), spouseSource: { kind: 'plan' } }; // missing planId
     expect(retirementInputsSchema.safeParse(bad).success).toBe(false);
   });
 
@@ -91,20 +91,20 @@ describe('schemas — persisted shapes', () => {
     delete (legacyScenario.inputs as Record<string, unknown>).spouseSource;
     const doc = parseAppDbDoc({
       version: 1,
-      scenarios: [legacyScenario],
-      activeScenarioId: 'missing-id',
+      plans: [legacyScenario],
+      activePlanId: 'missing-id',
       config: DEFAULT_APP_CONFIG,
     });
     expect(doc).not.toBeNull();
-    expect(doc!.scenarios[0].inputs.returnVolatility).toBeTypeOf('number');
-    expect(doc!.scenarios[0].inputs.spouseSource).toEqual({ kind: 'builtin' });
-    // A dead active id falls back to the first scenario.
-    expect(doc!.activeScenarioId).toBe('old');
+    expect(doc!.plans[0].inputs.returnVolatility).toBeTypeOf('number');
+    expect(doc!.plans[0].inputs.spouseSource).toEqual({ kind: 'builtin' });
+    // A dead active id falls back to the first plan.
+    expect(doc!.activePlanId).toBe('old');
   });
 
-  it('parseAppDbDoc rejects an empty scenario list and garbage', () => {
+  it('parseAppDbDoc rejects an empty plan list and garbage', () => {
     expect(parseAppDbDoc(null)).toBeNull();
-    expect(parseAppDbDoc({ version: 1, scenarios: [], activeScenarioId: 'x', config: DEFAULT_APP_CONFIG })).toBeNull();
+    expect(parseAppDbDoc({ version: 1, plans: [], activePlanId: 'x', config: DEFAULT_APP_CONFIG })).toBeNull();
     expect(parseAppDbDoc('a string')).toBeNull();
   });
 });

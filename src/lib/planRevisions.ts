@@ -1,5 +1,5 @@
-// Per-scenario revision history: every save of a scenario's inputs snapshots
-// the FULL inputs object into a rolling, per-scenario list (newest last).
+// Per-plan revision history: every save of a plan's inputs snapshots
+// the FULL inputs object into a rolling, per-plan list (newest last).
 //
 // Why full snapshots instead of patches: plans are small (a few KB of JSON),
 // rollback is then a plain restore with no patch-application machinery to get
@@ -8,26 +8,26 @@
 // callers keep mutating their live object — and are only ever compared, never
 // re-edited.
 //
-// Cap: MAX_REVISIONS per scenario, dropped oldest-first. Nothing else prunes;
-// revisions of a deleted scenario are dropped with it (they live inside the
-// scenario's own record, not a global pool).
+// Cap: MAX_REVISIONS per plan, dropped oldest-first. Nothing else prunes;
+// revisions of a deleted plan are dropped with it (they live inside the
+// plan's own record, not a global pool).
 //
 // Storage: a SQLite table via the same AppDatabase every other store uses
-// (scenarios, config, memories) — one more table in the one .sqlite file that
+// (plans, config, memories) — one more table in the one .sqlite file that
 // backs up with everything else.
 
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { migrateInputs } from '../data/migrations';
 import type { AppDatabase } from '../data/db';
 
-/** Revisions kept per scenario. Oldest dropped first (rolling window). */
+/** Revisions kept per plan. Oldest dropped first (rolling window). */
 export const MAX_REVISIONS = 100;
 
-/** The minimum shape of a revision row (a Scenario plus its own id column). */
-export interface ScenarioRevision {
+/** The minimum shape of a revision row (a Plan plus its own id column). */
+export interface PlanRevision {
   /** Revision id — also the row's creation order (monotonic, sortable). */
   id: string;
-  scenarioId: string;
+  planId: string;
   /** ms epoch. */
   at: number;
   /** What wrote this revision ('save' = user Save, 'agent' = agent apply…). */
@@ -70,15 +70,15 @@ export function inputsChanged(a: RetirementInputs, b: RetirementInputs): boolean
 }
 
 /** Pure: insert (or overwrite, when id already exists) and enforce the cap PER
- *  SCENARIO by dropping that scenario's oldest revision. The cap is per
- *  scenario on purpose: one busy plan must never evict another plan's history.
+ *  SCENARIO by dropping that plan's oldest revision. The cap is per
+ *  plan on purpose: one busy plan must never evict another plan's history.
  *  Returns the new list; never mutates the input. */
-export function pushRevision(list: ScenarioRevision[], rev: ScenarioRevision): ScenarioRevision[] {
+export function pushRevision(list: PlanRevision[], rev: PlanRevision): PlanRevision[] {
   const idx = list.findIndex(r => r.id === rev.id);
   const next = idx >= 0
     ? list.map(r => (r.id === rev.id ? rev : r))
     : [...list, rev];
-  const mine = next.filter(r => r.scenarioId === rev.scenarioId);
+  const mine = next.filter(r => r.planId === rev.planId);
   if (mine.length <= MAX_REVISIONS) return next;
   const drop = new Set(mine.slice(0, mine.length - MAX_REVISIONS).map(r => r.id));
   return next.filter(r => !drop.has(r.id));
@@ -86,7 +86,7 @@ export function pushRevision(list: ScenarioRevision[], rev: ScenarioRevision): S
 
 /**
  * SQLite persistence. One row per revision; the inputs JSON is the same
- * scenario-schema JSON the scenarios table stores (migrated on the way out so
+ * plan-schema JSON the plans table stores (migrated on the way out so
  * older rows gain newer fields).
  */
 export class SqliteRevisionStore {
@@ -107,24 +107,24 @@ export class SqliteRevisionStore {
     });
   }
 
-  loadAll(): ScenarioRevision[] {
+  loadAll(): PlanRevision[] {
     const res = this.db.exec(`SELECT id, scenario_id, at, source, inputs
       FROM scenario_revisions ORDER BY at, id`);
     if (res.length === 0) return [];
-    return res[0].values.map(([id, scenarioId, at, source, inputs]) => ({
+    return res[0].values.map(([id, planId, at, source, inputs]) => ({
       id: id as string,
-      scenarioId: scenarioId as string,
+      planId: planId as string,
       at: at as number,
-      source: source as ScenarioRevision['source'],
+      source: source as PlanRevision['source'],
       // Migrated on the way out so older rows gain newer fields (same policy
-      // as the scenarios table).
+      // as the plans table).
       inputs: migrateInputs(JSON.parse(inputs as string)),
     }));
   }
 
   /** Replace the whole revision set (the write path mirrors saveScenarios:
    *  few rows, always written as a set inside one transaction). */
-  saveAll(revisions: ScenarioRevision[]): void {
+  saveAll(revisions: PlanRevision[]): void {
     this.db.run('BEGIN');
     try {
       this.db.run('DELETE FROM scenario_revisions');
@@ -132,7 +132,7 @@ export class SqliteRevisionStore {
         this.db.run(
           `INSERT INTO scenario_revisions (id, scenario_id, at, source, inputs)
            VALUES (?, ?, ?, ?, ?)`,
-          [r.id, r.scenarioId, r.at, r.source, JSON.stringify(r.inputs)],
+          [r.id, r.planId, r.at, r.source, JSON.stringify(r.inputs)],
         );
       }
       this.db.run('COMMIT');
@@ -142,9 +142,9 @@ export class SqliteRevisionStore {
     }
   }
 
-  /** Drop every revision of one scenario (when the scenario is deleted). */
-  deleteForScenario(scenarioId: string): void {
-    this.db.run('DELETE FROM scenario_revisions WHERE scenario_id = ?', [scenarioId]);
+  /** Drop every revision of one plan (when the plan is deleted). */
+  deleteForScenario(planId: string): void {
+    this.db.run('DELETE FROM scenario_revisions WHERE scenario_id = ?', [planId]);
   }
 }
 
@@ -184,8 +184,8 @@ export function revisionChangeCount(diffs: RevisionDiff[]): number {
 }
 
 /** The revision to roll back TO (id match); also carries what would change. */
-export function planRollback(revisions: ScenarioRevision[], revisionId: string, current: RetirementInputs): {
-  revision: ScenarioRevision;
+export function planRollback(revisions: PlanRevision[], revisionId: string, current: RetirementInputs): {
+  revision: PlanRevision;
   diffs: RevisionDiff[];
 } | null {
   const revision = revisions.find(r => r.id === revisionId);

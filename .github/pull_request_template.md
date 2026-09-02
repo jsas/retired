@@ -29,7 +29,7 @@ Link any issues this PR addresses:
 Please describe the testing you've done:
 
 - [ ] Ran `npm test` and all tests pass
-- [ ] Tested with specific scenario(s): _describe_
+- [ ] Tested with specific plan(s): _describe_
 - [ ] Tested in multiple browsers: _list_
 - [ ] Tested in multiple provinces (if tax/benefit related): _list_
 

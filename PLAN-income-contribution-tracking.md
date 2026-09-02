@@ -20,7 +20,7 @@ Fix: process employment+pension in the accumulation loop, mirroring decumulation
 - Deposit **`savingsRate × net`** into `destAccount ?? 'taxable'` (room-capped);
   pension net → taxable. The rest is assumed consumed.
 - New field **`savingsRate?: number`** (0–1) on `IncomeSource`; unset = 100% so
-  existing scenarios keep numbers → **golden master byte-identical**.
+  existing plans keep numbers → **golden master byte-identical**.
 - Report `employmentGross/Tax/Net` + `pensionIncome` on accumulation rows; earnings
   tax into `incomeTax`/`cumulativeTax`. Table renders these phase-agnostically (no
   display change needed). No double-tax with meltdown transfers (year tax =
@@ -56,7 +56,7 @@ room needed), 15-year lifespan. **Never enters withdrawalOrder** — drained by 
 home-purchase event or transferred to RRSP, so no strategies permutation growth.
 ~35 touchpoints using the RDSP checklist (engine, schema, appConfig, sidebar +
 spouse + settings, ScheduleTable/PrintSummary/MathPage, tools `propose_fhsa`,
-agentIngest, projectionExport, Help, example scenario, tests). Opt-in, defaults
+agentIngest, projectionExport, Help, example plan, tests). Opt-in, defaults
 off → golden master unchanged.
 
 ## T5 — Room surfacing (visible UI)

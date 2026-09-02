@@ -68,7 +68,7 @@ describe('chatStore persistence', () => {
     // wrongly read as "still working" and offer no way back.
     const paused: StoredTurn = {
       id: 'a1', role: 'assistant', text: 'I can defer CPP for you.',
-      tools: [{ id: 'm1', name: 'set_scenario_value', state: 'running' }],
+      tools: [{ id: 'm1', name: 'set_plan_value', state: 'running' }],
       changes: [{
         callId: 'm1', patch: { cppStartAge: 70 }, label: 'Set cppStartAge',
         preview: { field: 'cppStartAge', from: null, to: 70 },
@@ -142,9 +142,9 @@ describe('thread helpers', () => {
     expect(titleFromFirstMessage('  multi\n\nline   text ')).toBe('multi line text');
   });
 
-  it('newThread starts empty with the scenario name and timestamps', () => {
+  it('newThread starts empty with the plan name and timestamps', () => {
     const t = newThread('Retirement 2026', 5000);
-    expect(t.scenarioName).toBe('Retirement 2026');
+    expect(t.planName).toBe('Retirement 2026');
     expect(t.createdAt).toBe(5000);
     expect(t.updatedAt).toBe(5000);
     expect(t.turns).toHaveLength(0);

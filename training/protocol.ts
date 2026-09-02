@@ -5,7 +5,7 @@
 //   - the model emits ONE bare line:  TOOL_CALL: {"name": "<tool>", "args": {…}}
 //   - results come back as the next USER message under a "Tool results:" header
 //     with "[OK] …" / "[ERROR] …" blocks (never a TOOL_RESULT: line),
-//   - a mutation (propose_* / set_scenario_value) pauses for a confirm card and
+//   - a mutation (propose_* / set_plan_value) pauses for a confirm card and
 //     is then reported APPROVED (applied — do not re-propose) or REJECTED.
 //
 // Rather than re-implement any of that, we IMPORT the real catalog + parser so
@@ -19,8 +19,9 @@ import {
   formatPromptToolResults,
 } from '../src/lib/ai/promptTools';
 import { toolSpecs } from '@retired/mcp-tools/tools';
+import { pageTitleLine, type View } from '@retired/mcp-tools/navigation';
 
-/** The 23-name tool catalog exactly as the model sees it (name/description/args). */
+/** The tool catalog exactly as the model sees it (name/description/args). */
 export const SPECS = toolSpecs();
 
 /** Every callable tool name — the "in-catalog" half of protocol-validity. */
@@ -30,6 +31,15 @@ export const TOOL_NAMES: ReadonlySet<string> = new Set(SPECS.map((s) => s.name))
  *  eval prompts must use THIS string, byte-for-byte, so the fine-tuned model is
  *  scored against the same instructions it was (or a stock model is) given. */
 export const TOOL_INSTRUCTIONS = buildPromptToolInstructions(SPECS);
+
+/** The current-page line the app's buildSystemPrompt adds when the host passes
+ *  `currentView` (agentLoop.ts). Nav minting varies this across the catalog —
+ *  the fine-tune has to know that find_page's "(you are already here)" tag and
+ *  propose_navigate's "don't yank the user" instinct are keyed to THIS line,
+ *  not to a fixed page. */
+export function ambientPageLine(view: View): string {
+  return `The user is currently on the ${pageTitleLine(view)} page.`;
+}
 
 /** Emit one canonical tool-call line, matching the taught format exactly. */
 export function emitToolCall(name: string, args: Record<string, unknown> = {}): string {
@@ -82,6 +92,20 @@ export function mutationFeedback(approved: boolean, label: string, patchJson: st
     ? `The user approved this change and it is now APPLIED to the plan: ${label} (${patchJson}). ` +
       'It is live — do NOT re-propose it. Confirm it to the user and report the resulting numbers ' +
       '(run a fresh projection if useful).'
+    : `The user REJECTED this change — it was NOT applied. Do not apply or repeat it unprompted; ` +
+      'answer with that in mind.';
+}
+
+/** The exact approve/reject sentences a propose_navigate card is followed by
+ *  (agentLoop.ts keeps them separate from plan-mutation feedback: a page
+ *  switch moved the UI, not the plan, so there are no "resulting numbers" to
+ *  report and re-projecting would be wrong). Minted nav-confirm records must
+ *  use these verbatim or the model learns a feedback string the app never
+ *  sends. */
+export function navigationFeedback(approved: boolean, label: string): string {
+  return approved
+    ? `The user approved it and the app OPENED the page: ${label}. ` +
+      'It is live — do NOT re-propose it. Confirm it to the user.'
     : `The user REJECTED this change — it was NOT applied. Do not apply or repeat it unprompted; ` +
       'answer with that in mind.';
 }

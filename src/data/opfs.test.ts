@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AsyncOpfsBackend } from './opfs';
 import { AppDatabase } from './db';
 import { baseInputs } from '@retired/engine-core/test/helpers';
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 
 /**
  * OPFS integration for the store. The browser API is faked with an in-memory
@@ -77,7 +77,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const scenarios = (): Scenario[] => [
+const plans = (): Plan[] => [
   { id: 'one', name: 'First plan', inputs: baseInputs({ currentAge: 52 }) },
 ];
 
@@ -107,7 +107,7 @@ describe('AsyncOpfsBackend', () => {
 describe('AppDatabase + OPFS', () => {
   it('persists to OPFS on save and re-opens from it (no localStorage needed)', async () => {
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.saveActiveScenarioId('one');
     db.save();
     db.close();
@@ -146,7 +146,7 @@ describe('AppDatabase + OPFS', () => {
   it('falls back to localStorage when OPFS is unavailable', async () => {
     vi.stubGlobal('navigator', { storage: {} }); // no getDirectory
     const db = await AppDatabase.open();
-    db.saveScenarios(scenarios());
+    db.saveScenarios(plans());
     db.save();
     db.close();
 

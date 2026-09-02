@@ -1,6 +1,6 @@
 import initSqlJs, { type Database } from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 import { migrateInputs } from './migrations';
 import { validateAppConfig, DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { appDbDocSchema, type AppDbDoc } from './schemas';
@@ -12,7 +12,7 @@ import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './
  *
  * Schema (SCHEMA_VERSION bump = run the migrations below):
  *   meta(key TEXT PK, value TEXT)      — schema_version, active_scenario_id
- *   scenarios(id TEXT PK, name TEXT,   — one row per saved plan
+ *   plans(id TEXT PK, name TEXT,   — one row per saved plan
  *             inputs TEXT,             — RetirementInputs as JSON
  *             updated_at TEXT)
  *   kv(key TEXT PK, value TEXT)        — engine config ('config') as JSON, plus
@@ -77,7 +77,7 @@ function base64ToBytes(b64: string): Uint8Array {
 }
 
 /**
- * Synchronous first-paint seed: read the scenario rows straight out of the
+ * Synchronous first-paint seed: read the plan rows straight out of the
  * localStorage mirror of the SQL blob, without waiting for the wasm to load.
  * The mirror is the SQL store's own compatibility copy (written on every
  * persist), so this is a cache read of the same source of truth — not a fork.
@@ -86,42 +86,42 @@ function base64ToBytes(b64: string): Uint8Array {
  * open path's job; this seed is swapped for the authoritative store contents
  * the moment it opens.
  */
-export function readSeedScenariosFromMirror(): { scenarios: Scenario[]; activeScenarioId: string } | null {
+export function readSeedScenariosFromMirror(): { plans: Plan[]; activePlanId: string } | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const bytes = base64ToBytes(raw);
     const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 
-    const scenarios: Scenario[] = [];
-    // Scenario inputs are JSON with no NUL bytes; the row layout is
+    const plans: Plan[] = [];
+    // Plan inputs are JSON with no NUL bytes; the row layout is
     //   <id>\x00<name>\x00<inputs-json>\x00<updated_at>
     // so each "…{json}\x00" capture is one row's inputs.
     const rowRe = /(\{[^\x00]*?\})\x00/g;
     let m: RegExpExecArray | null;
     let i = 0;
     while ((m = rowRe.exec(text)) !== null) {
-      const inputs = JSON.parse(m[1]) as Scenario['inputs'];
-      scenarios.push({ id: `seed-${i}`, name: `Scenario ${i + 1}`, inputs });
+      const inputs = JSON.parse(m[1]) as Plan['inputs'];
+      plans.push({ id: `seed-${i}`, name: `Plan ${i + 1}`, inputs });
       i++;
     }
-    if (scenarios.length === 0) return null;
+    if (plans.length === 0) return null;
 
     // The active id is stored under meta key 'active_scenario_id'. We can't
-    // recover real scenario ids from this positional scan (they'd need full
+    // recover real plan ids from this positional scan (they'd need full
     // SQLite page decoding), so match the active row by its position among the
-    // text columns: meta rows precede the scenario rows, and
+    // text columns: meta rows precede the plan rows, and
     // 'active_scenario_id' is the id's column index within the meta block.
-    let activeScenarioId = scenarios[0].id;
+    let activePlanId = plans[0].id;
     const metaIdx = text.indexOf('active_scenario_id');
     if (metaIdx !== -1) {
       const nulBefore = text.slice(0, metaIdx).split('\x00').length - 1;
       const activeIdx = nulBefore - 1; // columns before it: 'schema_version','1', key itself
-      if (activeIdx >= 0 && activeIdx < scenarios.length) {
-        activeScenarioId = scenarios[activeIdx].id;
+      if (activeIdx >= 0 && activeIdx < plans.length) {
+        activePlanId = plans[activeIdx].id;
       }
     }
-    return { scenarios, activeScenarioId };
+    return { plans, activePlanId };
   } catch {
     return null;
   }
@@ -136,7 +136,7 @@ const MIGRATIONS: Array<(db: Database) => void> = [
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     )`);
-    db.run(`CREATE TABLE IF NOT EXISTS scenarios (
+    db.run(`CREATE TABLE IF NOT EXISTS plans (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       inputs TEXT NOT NULL,
@@ -310,10 +310,10 @@ export class AppDatabase {
     this.db.close();
   }
 
-  // ---- scenarios -----------------------------------------------------------
+  // ---- plans -----------------------------------------------------------
 
-  loadScenarios(): Scenario[] {
-    const res = this.db.exec(`SELECT id, name, inputs FROM scenarios ORDER BY rowid`);
+  loadScenarios(): Plan[] {
+    const res = this.db.exec(`SELECT id, name, inputs FROM plans ORDER BY rowid`);
     if (res.length === 0) return [];
     return res[0].values.map(([id, name, inputs]) => ({
       id: id as string,
@@ -323,18 +323,18 @@ export class AppDatabase {
     }));
   }
 
-  /** Full replace — scenarios are few and written as a set, never one row at
+  /** Full replace — plans are few and written as a set, never one row at
    *  a time from the UI, so a transaction around delete+inserts is simplest
    *  and keeps the store consistent on any failure. */
-  saveScenarios(scenarios: Scenario[]): void {
+  saveScenarios(plans: Plan[]): void {
     this.db.run('BEGIN');
     try {
-      this.db.run('DELETE FROM scenarios');
+      this.db.run('DELETE FROM plans');
       const stmt = this.db.prepare(
-        `INSERT INTO scenarios (id, name, inputs, updated_at) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO plans (id, name, inputs, updated_at) VALUES (?, ?, ?, ?)`,
       );
       const now = new Date().toISOString();
-      for (const s of scenarios) {
+      for (const s of plans) {
         stmt.run([s.id, s.name, JSON.stringify(s.inputs), now]);
       }
       stmt.free();
@@ -345,7 +345,7 @@ export class AppDatabase {
     }
   }
 
-  // ---- active scenario id --------------------------------------------------
+  // ---- active plan id --------------------------------------------------
 
   loadActiveScenarioId(): string | null {
     const res = this.db.exec(`SELECT value FROM meta WHERE key = 'active_scenario_id'`);
@@ -402,34 +402,34 @@ export class AppDatabase {
   // ---- whole-document interchange ------------------------------------------
 
   /** Snapshot the store as the validated app-database document, or null when
-   *  the scenarios don't parse (a store the app has never written to). A
-   *  missing or unreadable config does NOT null the doc: valid scenarios are
+   *  the plans don't parse (a store the app has never written to). A
+   *  missing or unreadable config does NOT null the doc: valid plans are
    *  the backup's whole point, so the doc carries DEFAULT_APP_CONFIG instead
    *  and `configWarning` says so — silently rejecting the whole file (the old
-   *  behaviour) threw away every scenario over a settings blob the importer
-   *  could have skipped anyway. The scenarios-or-nothing shape still matches
+   *  behaviour) threw away every plan over a settings blob the importer
+   *  could have skipped anyway. The plans-or-nothing shape still matches
    *  what the rest of the app REPLACES on loadDoc — partial salvage of an
-   *  empty-scenarios store is the importer's call (salvageableContents), not
+   *  empty-plans store is the importer's call (salvageableContents), not
    *  this document's shape. */
   toDoc(): (AppDbDoc & { configWarning?: string }) | null {
-    const scenarios = this.loadScenarios();
-    if (scenarios.length === 0) return null;
+    const plans = this.loadScenarios();
+    if (plans.length === 0) return null;
     const configRaw = this.loadConfig();
     const config = configRaw ? validateAppConfig(configRaw) : null;
     const configWarning = config
       ? undefined
       : 'Engine settings in this backup could not be read; defaults will be used. '
         + 'Custom tax tables or engine settings are not included.';
-    const activeScenarioId = this.loadActiveScenarioId() ?? scenarios[0].id;
+    const activePlanId = this.loadActiveScenarioId() ?? plans[0].id;
     const effectiveConfig = config ?? DEFAULT_APP_CONFIG;
     const parsed = appDbDocSchema.safeParse({
-      version: SCHEMA_VERSION, scenarios, activeScenarioId, config: effectiveConfig,
+      version: SCHEMA_VERSION, plans, activePlanId, config: effectiveConfig,
     });
     if (!parsed.success) return null;
     return configWarning ? { ...parsed.data, configWarning } : parsed.data;
   }
 
-  /** What remains importable in a store whose scenarios table is empty —
+  /** What remains importable in a store whose plans table is empty —
    *  `kind` tells the importer which path to offer:
    *  - 'config': the kv config validates (settings-only backup).
    *  - 'ai-only': no config, but some kv payload (AI chats/settings, or the
@@ -454,8 +454,8 @@ export class AppDatabase {
 
   /** Replace the store's contents with a validated document. */
   loadDoc(doc: AppDbDoc): void {
-    this.saveScenarios(doc.scenarios);
-    this.saveActiveScenarioId(doc.activeScenarioId);
+    this.saveScenarios(doc.plans);
+    this.saveActiveScenarioId(doc.activePlanId);
     this.saveConfig(doc.config);
   }
 }

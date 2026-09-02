@@ -1,9 +1,9 @@
 // Memory store: what the assistant remembers across conversations.
 //
 // Two scopes:
-//   - 'scenario' — facts about ONE plan (spouse's pension details, a decision
+//   - 'plan' — facts about ONE plan (spouse's pension details, a decision
 //     the user made, an important figure they quoted). Shown only in chats on
-//     that scenario.
+//     that plan.
 //   - 'global'   — facts about the USER that travel across plans (they're 62,
 //     they prefer plain language, they want to retire to Nova Scotia).
 //
@@ -19,7 +19,7 @@
 //     only (no FTS5 in the bundled sql.js, no embeddings) — memory sets are
 //     small (hundreds at most), so token overlap is plenty and keeps the
 //     store dependency-free.
-//   - STANDALONE. This module knows nothing about retirement, scenarios-as-
+//   - STANDALONE. This module knows nothing about retirement, plans-as-
 //     storage, or the agent loop. It's a generic weighted-memory store over a
 //     persistence adapter, deliberately cleavable as a library later. The ONLY
 //     imports are types.
@@ -27,10 +27,10 @@
 /** What the assistant should remember. Persisted verbatim as JSON. */
 export interface MemoryRecord {
   id: string;
-  /** 'scenario' memories are scoped to scopeKey (a scenario id); 'global'
+  /** 'plan' memories are scoped to scopeKey (a plan id); 'global'
    *  ones ignore it. */
-  scope: 'scenario' | 'global';
-  /** When scope === 'scenario': which plan it belongs to. '' for global. */
+  scope: 'plan' | 'global';
+  /** When scope === 'plan': which plan it belongs to. '' for global. */
   scopeKey: string;
   /** The fact itself, one or two sentences, self-contained ("Spouse's DB
    *  pension pays $1,200/mo from age 65" — not "it pays that"). */
@@ -66,7 +66,7 @@ export interface MemoryAdapter {
 // Tunables — the "reasonably limited" dials.
 // ---------------------------------------------------------------------------
 
-/** Max memories retained per scope (scenario scopes and the global scope each
+/** Max memories retained per scope (plan scopes and the global scope each
  *  get this budget). Past it, the lowest-ranked memory is evicted on write. */
 export const MAX_PER_SCOPE = 50;
 
@@ -82,8 +82,8 @@ const PRUNE_RANK_FLOOR = 0.04;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface MemoryWrite {
-  scope: 'scenario' | 'global';
-  scopeKey?: string;   // required when scope === 'scenario'
+  scope: 'plan' | 'global';
+  scopeKey?: string;   // required when scope === 'plan'
   text: string;
   importance?: number; // default 0.5
   /** Extra search words beyond the fact's own (hypernyms: "fruit" for
@@ -206,8 +206,8 @@ export class MemoryStore {
     const text = input.text.trim();
     if (!text) return null;
     const now = this.clock();
-    const scopeKey = input.scope === 'scenario' ? (input.scopeKey ?? '') : '';
-    if (input.scope === 'scenario' && !scopeKey) return null;
+    const scopeKey = input.scope === 'plan' ? (input.scopeKey ?? '') : '';
+    if (input.scope === 'plan' && !scopeKey) return null;
 
     const existing = this.adapter.all().find(
       m => m.scope === input.scope && m.scopeKey === scopeKey && m.text === text,
@@ -275,7 +275,7 @@ export class MemoryStore {
 
     const pool = this.adapter.all().filter(m => {
       if (opts.scopeKey !== undefined) {
-        // The asked-for scenario's memories plus the global ones.
+        // The asked-for plan's memories plus the global ones.
         return m.scope === 'global' || m.scopeKey === opts.scopeKey;
       }
       return true;

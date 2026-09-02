@@ -2,17 +2,17 @@
 // src/lib/betaSkin.ts). Built from the design system in src/design/ — every
 // surface composes those primitives (per STYLEGUIDE.md / REQUIREMENTS §8.10)
 // so the vocabulary stays consistent as the skin grows toward f7. It renders
-// the REAL engine's verdict on the REAL active scenario and lets the two
+// the REAL engine's verdict on the REAL active plan and lets the two
 // biggest levers — annual spending and retirement age — steer it.
 import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
 import { AppHeader, VerdictHero, Panel, Fader, Footnote } from '../design/primitives';
 import { cls } from '../design/tokens';
 
 interface BetaAppProps {
-  scenarios: Scenario[];
-  activeScenarioId: string;
+  plans: Plan[];
+  activePlanId: string;
   onScenarioChange: (id: string) => void;
   inputs: RetirementInputs;
   onInputsChange: (next: RetirementInputs) => void;
@@ -31,7 +31,7 @@ function verdict(inputs: RetirementInputs, results: RetirementResults) {
 }
 
 export function BetaApp({
-  scenarios, activeScenarioId, onScenarioChange,
+  plans, activePlanId, onScenarioChange,
   inputs, onInputsChange, results, hasUnsavedChanges, onSave,
 }: BetaAppProps) {
   const v = verdict(inputs, results);
@@ -40,11 +40,11 @@ export function BetaApp({
       <AppHeader>
         <select
           className="min-w-0 max-w-[40vw] cursor-pointer appearance-none border-b border-transparent bg-transparent py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
-          value={activeScenarioId}
+          value={activePlanId}
           onChange={(e) => onScenarioChange(e.target.value)}
-          aria-label="Active scenario"
+          aria-label="Active plan"
         >
-          {scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {plans.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <div className="flex-1" />
         <button

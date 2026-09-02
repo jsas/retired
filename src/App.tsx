@@ -7,10 +7,10 @@ import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
 import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
-import { ScenarioManager } from './components/ScenarioManager';
+import { PlanManager } from './components/PlanManager';
 import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from '@retired/engine-core/retirementEngine';
 import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson, toHousehold } from '@retired/engine-core/householdTypes';
-import type { Scenario } from '@retired/engine-core/types';
+import type { Plan } from '@retired/engine-core/types';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { AppStore } from './data/store';
 import { AppDatabase, readSeedScenariosFromMirror } from './data/db';
@@ -44,7 +44,7 @@ import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
 import { consumePlanFromHash } from './lib/shareLink';
-import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
+import { buildDefaultPlans } from '@retired/engine-core/examplePlans';
 import { PrintSummary } from './components/PrintSummary';
 import { MathPage } from './components/MathPage';
 import { EqPage, type EqSolvedState, type Bands } from './components/EqPage';
@@ -66,10 +66,10 @@ import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
 const getSyncSeed = () => {
   const stored = readSeedScenariosFromMirror();
   if (stored) {
-    return { scenarios: stored.scenarios, activeScenarioId: stored.activeScenarioId };
+    return { plans: stored.plans, activePlanId: stored.activePlanId };
   }
-  const scenarios = buildDefaultScenarios();
-  return { scenarios, activeScenarioId: scenarios[0].id };
+  const plans = buildDefaultPlans();
+  return { plans, activePlanId: plans[0].id };
 };
 
 function App() {
@@ -81,8 +81,8 @@ function App() {
   // unconditional; only the render output branches.
   const [beta] = useState(applyBetaAtBoot);
 
-  const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
-  const [activeScenarioId, setActiveScenarioId] = useState<string>(initialState.activeScenarioId);
+  const [plans, setScenarios] = useState<Plan[]>(initialState.plans);
+  const [activePlanId, setActiveScenarioId] = useState<string>(initialState.activePlanId);
   // Config seed: defaults until the store opens and adopts the stored config
   // (setConfig(state.config) below). No legacy config read — issue #21.
   const [config, setConfig] = useState<AppConfig>(() => structuredClone(DEFAULT_APP_CONFIG));
@@ -127,7 +127,7 @@ function App() {
     setExportOptions(opts);
     saveProjectionExportOptions(opts);
   };
-  const activeScenario = scenarios.find(s => s.id === activeScenarioId)!;
+  const activeScenario = plans.find(s => s.id === activePlanId)!;
 
   const [inputs, setInputs] = useState<RetirementInputs>(
     () => JSON.parse(JSON.stringify(activeScenario.inputs))
@@ -146,22 +146,22 @@ function App() {
   };
 
   // Resolve the spouse adapter: when the spouse is a reference to another
-  // scenario, materialize that scenario's person into `spouse` (host wins on
+  // plan, materialize that plan's person into `spouse` (host wins on
   // the shared fields) and surface any conflicts as warnings. The engine and
   // every display consumer always see a concrete SpouseInputs. Declared early
   // because EVERY engine consumer below (projection, Monte Carlo, backtest, EQ,
   // Optimize) runs against the resolved plan, not the raw inputs.
   const spouseResolution = useMemo(
-    () => resolveSpouseSource(inputs, scenarios, activeScenarioId),
-    [inputs, scenarios, activeScenarioId],
+    () => resolveSpouseSource(inputs, plans, activePlanId),
+    [inputs, plans, activePlanId],
   );
   const resolvedInputs = useMemo<RetirementInputs>(
     () => {
-      // Only materialize a linked scenario spouse when the spouse is actually
+      // Only materialize a linked plan spouse when the spouse is actually
       // ENABLED. The enabled flag is the user's explicit on/off and must win:
       // otherwise unchecking a linked spouse would be silently overridden by
       // the resolver re-injecting the referenced plan.
-      const linked = inputs.spouseSource?.kind === 'scenario';
+      const linked = inputs.spouseSource?.kind === 'plan';
       if (!linked) return inputs;
       if (!inputs.spouse?.enabled) return { ...inputs, spouse: undefined };
       return { ...inputs, spouse: spouseResolution.spouse };
@@ -187,15 +187,15 @@ function App() {
   // store is the authoritative copy.
   useEffect(() => {
     let cancelled = false;
-    AppStore.open(buildDefaultScenarios).then(({ store: opened, state }) => {
+    AppStore.open(buildDefaultPlans).then(({ store: opened, state }) => {
       if (cancelled) return;
       setStore(opened);
       setHasUnsavedChanges(dirty => {
         if (!dirty) {
-          setScenarios(state.scenarios);
-          setActiveScenarioId(state.activeScenarioId);
+          setScenarios(state.plans);
+          setActiveScenarioId(state.activePlanId);
           setInputs(JSON.parse(JSON.stringify(
-            state.scenarios.find(s => s.id === state.activeScenarioId)!.inputs,
+            state.plans.find(s => s.id === state.activePlanId)!.inputs,
           )));
         }
         return dirty;
@@ -210,15 +210,15 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist scenarios + active scenario on every change (once the store is
+  // Persist plans + active plan on every change (once the store is
   // open — before that there's nothing to write through to). persist returns
-  // whether a revision was recorded, which bumps a nonce so the scenarios
+  // whether a revision was recorded, which bumps a nonce so the plans
   // page's history list re-reads it.
   const [revisionNonce, setRevisionNonce] = useState(0);
   useEffect(() => {
-    const wrote = store?.persist({ scenarios, activeScenarioId }) ?? false;
+    const wrote = store?.persist({ plans, activePlanId }) ?? false;
     if (wrote) setRevisionNonce(n => n + 1);
-  }, [store, scenarios, activeScenarioId]);
+  }, [store, plans, activePlanId]);
 
   // Durability feedback (issue U-02): the persist writes are fire-and-forget,
   // so a failed OPFS/localStorage write was previously only a console.warn —
@@ -242,33 +242,33 @@ function App() {
   }, [store, config]);
 
   // If the URL carried a shared plan (#plan=...), import it once as a new
-  // scenario and select it. Runs before the persist effect's first save would
+  // plan and select it. Runs before the persist effect's first save would
   // matter, and the hash is cleared on read so refresh won't re-import.
   useEffect(() => {
     const shared = consumePlanFromHash();
     if (!shared) return;
     const id = `shared-${Date.now().toString(36)}`;
-    const scenario: Scenario = { id, name: shared.name?.trim() || 'Shared plan', inputs: shared.inputs };
-    setScenarios((prev) => [...prev, scenario]);
+    const plan: Plan = { id, name: shared.name?.trim() || 'Shared plan', inputs: shared.inputs };
+    setScenarios((prev) => [...prev, plan]);
     setActiveScenarioId(id);
     setInputs(JSON.parse(JSON.stringify(shared.inputs)));
     setHasUnsavedChanges(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Add a scenario from elsewhere (a share link's plan, a pasted plan code, or
+  // Add a plan from elsewhere (a share link's plan, a pasted plan code, or
   // an imported projection export) and make it active.
   const importScenario = (name: string, scenarioInputs: RetirementInputs) => {
     const id = `imported-${Date.now().toString(36)}`;
-    const scenario: Scenario = { id, name: name.trim() || 'Imported plan', inputs: scenarioInputs };
-    setScenarios((prev) => [...prev, scenario]);
+    const plan: Plan = { id, name: name.trim() || 'Imported plan', inputs: scenarioInputs };
+    setScenarios((prev) => [...prev, plan]);
     setActiveScenarioId(id);
     setInputs(JSON.parse(JSON.stringify(scenarioInputs)));
     setHasUnsavedChanges(false);
   };
 
   // Full backup: download a REAL SQLite database file holding the chosen
-  // scenarios (+ optionally the engine config). Openable by any SQLite tool
+  // plans (+ optionally the engine config). Openable by any SQLite tool
   // and re-importable here; the same file format a self-contained Node
   // package would use.
   // Copy one AI localStorage payload into the backup's kv table under the same
@@ -282,8 +282,8 @@ function App() {
   };
 
   const handleExportFull = async (scenarioIds: string[], includeConfig: boolean, ai: AiBackupInclude) => {
-    const chosen = scenarios.filter(s => scenarioIds.includes(s.id));
-    const activeId = chosen.some(s => s.id === activeScenarioId) ? activeScenarioId : (chosen[0]?.id ?? activeScenarioId);
+    const chosen = plans.filter(s => scenarioIds.includes(s.id));
+    const activeId = chosen.some(s => s.id === activePlanId) ? activePlanId : (chosen[0]?.id ?? activePlanId);
     // Seed the throwaway DB from the LIVE store's in-memory bytes — not from
     // OPFS/localStorage, which can lag behind the persist effect's latest write
     // (issue U-01). The chosen-subset overwrite below still filters the backup
@@ -329,8 +329,8 @@ function App() {
         prefKV().setItem(key, JSON.stringify(value));
       }
     }
-    const list = sel.scenarios.length > 0 ? sel.scenarios : scenarios;
-    const activeId = list.some(s => s.id === sel.activeScenarioId) ? sel.activeScenarioId : list[0].id;
+    const list = sel.plans.length > 0 ? sel.plans : plans;
+    const activeId = list.some(s => s.id === sel.activePlanId) ? sel.activePlanId : list[0].id;
     setScenarios(list);
     setActiveScenarioId(activeId);
     const active = list.find(s => s.id === activeId) ?? list[0];
@@ -346,34 +346,34 @@ function App() {
     setView('projection');
   };
 
-  // Sharing page: a plan received as a link or pasted code becomes a scenario.
+  // Sharing page: a plan received as a link or pasted code becomes a plan.
   const handleSharingImport = (req: SharingImportRequest) => {
     importScenario(req.name, req.inputs);
     setView('projection');
   };
 
-  // Data page: a projection JSON re-imported as a scenario.
+  // Data page: a projection JSON re-imported as a plan.
   const handleProjectionImport = (req: ProjectionImportRequest) => {
     importScenario(req.name, req.inputs);
     setView('projection');
   };
 
-  // Pending scenario switch, held while the "save your edits first?" prompt is
+  // Pending plan switch, held while the "save your edits first?" prompt is
   // up. Null = no prompt showing.
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
 
   const applyScenarioSwitch = (id: string) => {
-    const scenario = scenarios.find(s => s.id === id);
-    if (!scenario) return;
+    const plan = plans.find(s => s.id === id);
+    if (!plan) return;
     setActiveScenarioId(id);
-    setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
+    setInputs(JSON.parse(JSON.stringify(plan.inputs)));
     setHasUnsavedChanges(false);
   };
 
-  // Update inputs when scenario changes. If the current scenario has unsaved
+  // Update inputs when plan changes. If the current plan has unsaved
   // edits and the user hasn't opted out, ask whether to save before switching.
   const handleScenarioChange = (id: string) => {
-    if (id === activeScenarioId) return;
+    if (id === activePlanId) return;
     if (hasUnsavedChanges && config.general.promptToSaveOnSwitch) {
       setPendingSwitch(id);
       return;
@@ -381,7 +381,7 @@ function App() {
     applyScenarioSwitch(id);
   };
 
-  // Update scenario when inputs change - with save button
+  // Update plan when inputs change - with save button
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const handleInputsChange = (newInputs: RetirementInputs) => {
@@ -393,30 +393,30 @@ function App() {
 
   const handleSaveScenario = () => {
     setScenarios(prev => prev.map(s =>
-      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(inputs)) } : s
+      s.id === activePlanId ? { ...s, inputs: JSON.parse(JSON.stringify(inputs)) } : s
     ));
     setHasUnsavedChanges(false);
   };
 
-  // Agent scenario tools (open_scenario / save_scenario_as). Both mirror the
+  // Agent plan tools (open_plan / save_plan_as). Both mirror the
   // sidebar paths: open saves the current plan first (nothing the user typed
-  // is lost), save-as snapshots the live inputs into a NEW scenario and
+  // is lost), save-as snapshots the live inputs into a NEW plan and
   // switches to it, leaving the original untouched.
   const agentOpenScenario = (id: string) => {
-    if (id === activeScenarioId) return;
+    if (id === activePlanId) return;
     if (hasUnsavedChanges) handleSaveScenario();
     applyScenarioSwitch(id);
   };
 
   const agentSaveScenarioAs = (name: string) => {
-    const id = `scenario-${Date.now().toString(36)}`;
+    const id = `plan-${Date.now().toString(36)}`;
     setScenarios(prev => [...prev, { id, name, inputs: JSON.parse(JSON.stringify(inputs)) }]);
     setActiveScenarioId(id);
     setHasUnsavedChanges(false);
     return id;
   };
 
-  // Scenario revision history (scenarios page). The store owns the snapshots;
+  // Plan revision history (plans page). The store owns the snapshots;
   // the UI reads them through this memo, refreshed by revisionNonce (bumped by
   // the persist effect whenever a new revision landed).
   const revisions = useMemo(
@@ -425,24 +425,24 @@ function App() {
     [store, revisionNonce],
   );
 
-  // Roll back the active scenario to a revision: restore the snapshot into the
-  // live working set AND the saved scenario row, and persist WITHOUT recording
+  // Roll back the active plan to a revision: restore the snapshot into the
+  // live working set AND the saved plan row, and persist WITHOUT recording
   // a revision — a rollback is a move through history, not a change to it.
   // (The pre-rollback state is already in history as the newest revision; the
   // restored revision stays put too, so history is untouched.) Unsaved edits
   // are discarded — rolling back IS the explicit choice.
   const handleRollback = (revisionId: string) => {
     if (!store) return;
-    const restored = store.rollbackRevision(activeScenarioId, revisionId);
+    const restored = store.rollbackRevision(activePlanId, revisionId);
     if (!restored) return;
     setInputs(restored);
     setScenarios(prev => prev.map(s =>
-      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(restored)) } : s
+      s.id === activePlanId ? { ...s, inputs: JSON.parse(JSON.stringify(restored)) } : s
     ));
     setHasUnsavedChanges(false);
-    store.persist({ scenarios: scenarios.map(s =>
-      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(restored)) } : s
-    ), activeScenarioId, skipRevisions: true });
+    store.persist({ plans: plans.map(s =>
+      s.id === activePlanId ? { ...s, inputs: JSON.parse(JSON.stringify(restored)) } : s
+    ), activePlanId, skipRevisions: true });
     // Rollback rewrites history (deletes newer revisions) but persists with
     // skipRevisions, so the persist effect above never reports a write. Bump
     // the nonce here or the history list keeps showing the deleted rows.
@@ -462,9 +462,9 @@ function App() {
     applyScenarioSwitch(target);
   };
 
-  // First-scenario setup wizard. Launched from the Welcome page ("Get started"),
-  // re-opened from Help, or run after New Scenario. On completion the collected
-  // values overlay the current inputs (keeping engine defaults), the scenario is
+  // First-plan setup wizard. Launched from the Welcome page ("Get started"),
+  // re-opened from Help, or run after New Plan. On completion the collected
+  // values overlay the current inputs (keeping engine defaults), the plan is
   // renamed to what the user typed, and the whole thing is persisted.
   const [wizardOpen, setWizardOpen] = useState(false);
   // Set when the primary wizard finished with "add a spouse" checked: the plan
@@ -485,13 +485,13 @@ function App() {
     }
     const finalInputs = consistentAges(JSON.parse(JSON.stringify(next)));
     setInputs(finalInputs);
-    // Persist inputs AND the chosen name straight into the active scenario so
+    // Persist inputs AND the chosen name straight into the active plan so
     // the new plan survives a reload without a separate "save" click. The name
     // must be included here — setScenarios and setInputs flush together, so
     // renaming in the same functional update keeps name and inputs in sync.
-    const name = data.scenarioName.trim() || 'My Plan';
+    const name = data.planName.trim() || 'My Plan';
     setScenarios(prev => prev.map(s =>
-      s.id === activeScenarioId ? { ...s, name, inputs: JSON.parse(JSON.stringify(finalInputs)) } : s
+      s.id === activePlanId ? { ...s, name, inputs: JSON.parse(JSON.stringify(finalInputs)) } : s
     ));
     setHasUnsavedChanges(false);
     setWizardOpen(false);
@@ -505,12 +505,12 @@ function App() {
   };
 
   // Spouse pass done: write the partner's numbers into the (already saved)
-  // scenario's spouse block and persist again.
+  // plan's spouse block and persist again.
   const handleSpouseWizardComplete = (data: WizardData) => {
     const next = consistentAges(applySpouseWizardData(inputs, data));
     setInputs(next);
     setScenarios(prev => prev.map(s =>
-      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(next)) } : s
+      s.id === activePlanId ? { ...s, inputs: JSON.parse(JSON.stringify(next)) } : s
     ));
     setHasUnsavedChanges(false);
     setSpouseWizardOpen(false);
@@ -518,16 +518,16 @@ function App() {
   };
 
   // Sidebar "Save to linked plan": patch person fields on another saved
-  // scenario (the linked spouse) without switching to it. The resolution memo
+  // plan (the linked spouse) without switching to it. The resolution memo
   // picks the change up on the next render, so the household updates in place.
-  const handleUpdateScenarioInputs = (scenarioId: string, patch: Partial<RetirementInputs>) => {
+  const handleUpdateScenarioInputs = (planId: string, patch: Partial<RetirementInputs>) => {
     setScenarios(prev => prev.map(s =>
-      s.id === scenarioId ? { ...s, inputs: { ...s.inputs, ...patch } } : s
+      s.id === planId ? { ...s, inputs: { ...s.inputs, ...patch } } : s
     ));
   };
 
   // Sidebar "Save spouse as its own plan": promote the embedded spouse to a
-  // standalone scenario. Person fields come from the spouse block; the shared
+  // standalone plan. Person fields come from the spouse block; the shared
   // household fields (horizon, market, province) are inherited from the host —
   // the same split legacyToShared/legacySpouseToPerson make for the engine.
   // The new plan gets engine-typical defaults for fields a spouse block
@@ -548,7 +548,7 @@ function App() {
       spouseSource: undefined,
     };
     setScenarios(prev => [...prev, {
-      id: `scenario-${Date.now()}`,
+      id: `plan-${Date.now()}`,
       name,
       inputs: spouseInputs,
     }]);
@@ -735,8 +735,8 @@ function App() {
     }
     return (
       <BetaApp
-        scenarios={scenarios}
-        activeScenarioId={activeScenarioId}
+        plans={plans}
+        activePlanId={activePlanId}
         onScenarioChange={handleScenarioChange}
         inputs={inputs}
         onInputsChange={handleInputsChange}
@@ -751,7 +751,7 @@ function App() {
     <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
       {/* Print-only one-page summary (hidden on screen; see index.css) */}
       <PrintSummary
-        scenarioName={activeScenario.name}
+        planName={activeScenario.name}
         inputs={resolvedInputs}
         results={results}
         householdBreakdown={householdBreakdown}
@@ -763,14 +763,14 @@ function App() {
       <div className="no-print flex flex-col flex-1 min-h-0">
       <TopHeader
         onToggleSidebar={() => setSidebarOpen((s) => !s)}
-        scenarios={scenarios}
-        activeScenarioId={activeScenarioId}
+        plans={plans}
+        activePlanId={activePlanId}
         onScenarioChange={handleScenarioChange}
         onSave={handleSaveScenario}
         hasUnsavedChanges={hasUnsavedChanges}
-        onManageScenarios={() => setView('scenarios')}
+        onManageScenarios={() => setView('plans')}
         onResetScenario={() => {
-          // Revert the sidebar to the current scenario's last-saved inputs
+          // Revert the sidebar to the current plan's last-saved inputs
           // (not the built-in program defaults).
           setInputs(JSON.parse(JSON.stringify(activeScenario.inputs)));
           setHasUnsavedChanges(false);
@@ -855,8 +855,8 @@ function App() {
             provinceCodes={Object.keys(config.provinces).sort()}
             config={config}
             onClose={() => setSidebarOpen(false)}
-            scenarios={scenarios}
-            activeScenarioId={activeScenarioId}
+            plans={plans}
+            activePlanId={activePlanId}
             spouseWarnings={spouseResolution.warnings}
             onUpdateScenarioInputs={handleUpdateScenarioInputs}
             onSaveSpouseAsScenario={handleSaveSpouseAsScenario}
@@ -893,12 +893,12 @@ function App() {
                 {view === 'math' && <span className="text-slate-900">Year Math</span>}
                 {view === 'eq' && <span className="text-slate-900">Steering</span>}
                 {view === 'optimize' && <span className="text-slate-900">Optimize</span>}
-                {view === 'compare' && <span className="text-slate-900">Compare Scenarios</span>}
+                {view === 'compare' && <span className="text-slate-900">Compare Plans</span>}
                 {view === 'montecarlo' && <span className="text-slate-900">Monte Carlo</span>}
                 {view === 'backtest' && <span className="text-slate-900">Historical Backtest</span>}
                 {view === 'print' && <span className="text-slate-900">Print Summary</span>}
                 {view === 'export' && <span className="text-slate-900">Data</span>}
-                {view === 'scenarios' && <span className="text-slate-900">Manage Scenarios</span>}
+                {view === 'plans' && <span className="text-slate-900">Manage Plans</span>}
                 {view === 'sharing' && <span className="text-slate-900">Sharing</span>}
                 {view === 'agent' && <span className="text-slate-900">AI Assistant</span>}
                 {view === 'connections' && <span className="text-slate-900">AI Connections</span>}
@@ -947,14 +947,14 @@ function App() {
                 <button
                   onClick={() => setView('compare')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                  title="Diff 2–3 saved scenarios' verdict cards side by side"
+                  title="Diff 2–3 saved plans' verdict cards side by side"
                 >
                   <GitCompareArrows size={13} /> Compare
                 </button>
                 <button
                   onClick={() => setView('sharing')}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                  title="Send this plan as a link or code, or receive one into a new scenario"
+                  title="Send this plan as a link or code, or receive one into a new plan"
                 >
                   <Share2 size={13} /> Sharing
                 </button>
@@ -1008,14 +1008,14 @@ function App() {
               <AgentPage
                 inputs={resolvedInputs}
                 config={config}
-                scenarioName={activeScenario.name}
-                scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
-                activeScenarioId={activeScenarioId}
-                scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
+                planName={activeScenario.name}
+                planList={plans.map(s => ({ id: s.id, name: s.name }))}
+                activePlanId={activePlanId}
+                planInputsById={(id) => plans.find(s => s.id === id)?.inputs}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
                 onOpenConnections={() => setView('connections')}
                 memory={store?.memory}
-                memoryScenarioId={activeScenarioId}
+                memoryScenarioId={activePlanId}
                 onOpenScenario={agentOpenScenario}
                 onSaveScenarioAs={agentSaveScenarioAs}
               />
@@ -1025,8 +1025,8 @@ function App() {
 
             {view === 'compare' && (
               <CompareCard
-                scenarios={scenarios}
-                activeScenarioId={activeScenarioId}
+                plans={plans}
+                activePlanId={activePlanId}
                 config={config}
               />
             )}
@@ -1060,37 +1060,37 @@ function App() {
                 exportOptions={exportOptions}
                 onExportOptionsChange={updateExportOptions}
                 hasSpouse={!!exportResults.spouse}
-                scenarioName={activeScenario.name}
+                planName={activeScenario.name}
                 inputs={inputs}
                 results={exportResults}
                 config={config}
-                scenarios={scenarios}
-                activeScenarioId={activeScenarioId}
+                plans={plans}
+                activePlanId={activePlanId}
                 onExportFull={handleExportFull}
                 onImportFull={handleImportFull}
                 onImportProjection={handleProjectionImport}
               />
             )}
 
-            {view === 'scenarios' && (
-              <ScenarioManager
-                scenarios={scenarios}
-                activeScenarioId={activeScenarioId}
+            {view === 'plans' && (
+              <PlanManager
+                plans={plans}
+                activePlanId={activePlanId}
                 onScenariosChange={setScenarios}
                 revisions={revisions}
                 onRollback={handleRollback}
                 onSelectScenario={(id) => { handleScenarioChange(id); setView('projection'); }}
-                onCreateScenario={(scenario) => {
+                onCreateScenario={(plan) => {
                   // Add AND activate in one shot. Setting inputs directly from the
-                  // new scenario (rather than re-finding it in the list) avoids
+                  // new plan (rather than re-finding it in the list) avoids
                   // the stale-state race where the select ran before the add.
-                  setScenarios(prev => [...prev, scenario]);
-                  setActiveScenarioId(scenario.id);
-                  setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
+                  setScenarios(prev => [...prev, plan]);
+                  setActiveScenarioId(plan.id);
+                  setInputs(JSON.parse(JSON.stringify(plan.inputs)));
                   setHasUnsavedChanges(false);
                   // A brand-new baseline gets the guided setup; a Duplicate
                   // (already-filled inputs) goes straight to the projection.
-                  if (scenario.isFresh) {
+                  if (plan.isFresh) {
                     setWizardOpen(true);
                     setView('welcome');
                   } else {
@@ -1103,7 +1103,7 @@ function App() {
             {view === 'sharing' && (
               <SharingPage
                 inputs={inputs}
-                scenarioName={activeScenario.name}
+                planName={activeScenario.name}
                 onImport={handleSharingImport}
               />
             )}
@@ -1165,7 +1165,7 @@ function App() {
 
       {pendingSwitch != null && (
         <SavePromptModal
-          scenarioName={activeScenario.name}
+          planName={activeScenario.name}
           onSave={(dontAsk) => resolvePendingSwitch('save', dontAsk)}
           onDiscard={(dontAsk) => resolvePendingSwitch('discard', dontAsk)}
           onCancel={() => resolvePendingSwitch('cancel', false)}

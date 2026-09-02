@@ -35,7 +35,7 @@ export type WithdrawalAccount = 'rrsp' | 'tfsa' | 'taxable' | 'rdsp';
  * anchors the plan's flat `investmentReturn` / `returnVolatility` hold, so a
  * hypothesis that doesn't cover the whole horizon degrades gracefully to the
  * constants. Absent/empty `marketPeriods` = the constants apply everywhere
- * (the pre-#138 behaviour), so existing scenarios are unchanged.
+ * (the pre-#138 behaviour), so existing plans are unchanged.
  *
  * Both values are decimals (0.05 = 5%); `return` may be negative (a crash),
  * `volatility` is clamped ≥ 0 (a standard deviation can't be negative).
@@ -87,7 +87,7 @@ export interface IncomeSource {
   topUpSpending?: boolean;
   // Earned kinds only: the share of the after-tax net that is SAVED each year
   // (0–1); the rest is assumed consumed by working-year living costs, which the
-  // model doesn't track. Unset = 1 (save the whole net) so existing scenarios
+  // model doesn't track. Unset = 1 (save the whole net) so existing plans
   // are unchanged. Applies in BOTH phases: before retirement it is the only way
   // earned income enters the plan at all (issue #119).
   savingsRate?: number;
@@ -110,7 +110,7 @@ export interface RetirementInputs {
   taxableContribution: number;
   // Contribution room (issue #24 Phase 2): the CRA notice-of-assessment dollars
   // available to contribute TODAY. `null`/absent = unlimited (enforcement off —
-  // the pre-#24 behaviour, so existing scenarios are unchanged); a number turns
+  // the pre-#24 behaviour, so existing plans are unchanged); a number turns
   // enforcement on: registered deposits are capped at remaining room and the
   // excess spills to taxable. Room accrues each year (TFSA: +annual limit;
   // RRSP: +18% of earned income, capped) and TFSA withdrawals re-add room the
@@ -133,7 +133,7 @@ export interface RetirementInputs {
   oasYearsInCanada: number;
   desiredSpending: number;
   // Legacy, no longer used by the verdict (which is depletion-only). Kept
-  // optional so scenarios saved before its removal still parse.
+  // optional so plans saved before its removal still parse.
   successFactor?: number;
   // Order in which taxable/tfsa/rrsp are drawn down. Cash cushion is always
   // the last resort. After the RRIF conversion age the 'rrsp' slot draws the RRIF.
@@ -148,9 +148,9 @@ export interface RetirementInputs {
   // with the primary's for household totals.
   spouse?: SpouseInputs;
   // How the spouse plan is supplied. Absent (or kind 'builtin') = the spouse
-  // is embedded directly in `spouse` (today's behaviour). kind 'scenario' =
-  // the spouse IS another saved scenario, referenced by id: the app resolves
-  // that scenario's person into `spouse` (host wins on the shared household
+  // is embedded directly in `spouse` (today's behaviour). kind 'plan' =
+  // the spouse IS another saved plan, referenced by id: the app resolves
+  // that plan's person into `spouse` (host wins on the shared household
   // fields, with the conflicts surfaced as warnings), so the engine always
   // sees a concrete SpouseInputs. The reference is the source of truth;
   // `spouse` is its materialized view.
@@ -181,7 +181,7 @@ export interface RetirementInputs {
 /** Where the spouse's plan comes from (see RetirementInputs.spouseSource). */
 export type SpouseSource =
   | { kind: 'builtin' }
-  | { kind: 'scenario'; scenarioId: string };
+  | { kind: 'plan'; planId: string };
 
 export interface SpouseInputs {
   enabled: boolean;
@@ -205,7 +205,7 @@ export interface SpouseInputs {
   desiredSpending: number; // the spouse's own after-tax income goal (today's $)
   withdrawalOrder?: WithdrawalAccount[];
   income?: IncomeSource[]; // the spouse's own income register (pensions + work)
-  // Full-person parity fields. Optional so scenarios saved before the spouse
+  // Full-person parity fields. Optional so plans saved before the spouse
   // carried them still parse; absent = none (an empty list / no reverse
   // mortgage). These make the spouse a first-class person: their own one-time
   // cash events (incl. transfers), go-go/slow-go/no-go spending phases, and a
@@ -822,7 +822,7 @@ export function calculatePerson(
   // Cash events: one-time (age only) or recurring (age..endAge inclusive).
   // Events before the current age are in the model's past — they can't fire,
   // so drop them defensively (the UI clamps them too, but a saved/imported
-  // scenario may carry one).
+  // plan may carry one).
   const events = (Array.isArray(person.events) ? person.events : []).filter(e => e.age >= currentAge);
   const eventsAt = (age: number) => events.filter(e =>
     e.age === age || (e.endAge != null && age >= e.age && age <= e.endAge));

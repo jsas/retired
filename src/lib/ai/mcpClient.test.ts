@@ -17,8 +17,8 @@ function ctx(): ToolContext {
   return {
     inputs: baseInputs(),
     config: testConfig(),
-    scenarioName: 'Test plan',
-    scenarioList: [{ id: 'a', name: 'Test plan' }],
+    planName: 'Test plan',
+    planList: [{ id: 'a', name: 'Test plan' }],
   };
 }
 
@@ -45,7 +45,7 @@ function executor() {
 describe('agent loop over the in-page MCP server', () => {
   it('runs a read tool through tools/call and feeds the text back to the model', async () => {
     const chat = scripted([
-      [{ type: 'tool_use', call: { id: 'c1', name: 'get_scenario', args: { section: 'summary' } } },
+      [{ type: 'tool_use', call: { id: 'c1', name: 'get_plan', args: { section: 'summary' } } },
        { type: 'done', stopReason: 'tool_use' }],
       [{ type: 'text', text: 'All read.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);
@@ -66,7 +66,7 @@ describe('agent loop over the in-page MCP server', () => {
   it('surfaces a mutation proposal from structuredContent and pauses for the decision', async () => {
     const proposals: MutationProposal[] = [];
     const chat = scripted([
-      [{ type: 'tool_use', call: { id: 'c2', name: 'set_scenario_value', args: { field: 'cppStartAge', value: 65 } } },
+      [{ type: 'tool_use', call: { id: 'c2', name: 'set_plan_value', args: { field: 'cppStartAge', value: 65 } } },
        { type: 'done', stopReason: 'tool_use' }],
       [{ type: 'text', text: 'Done.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);
@@ -89,7 +89,7 @@ describe('agent loop over the in-page MCP server', () => {
 
   it('maps a tool-level error (isError) into an error tool_result', async () => {
     const chat = scripted([
-      [{ type: 'tool_use', call: { id: 'c3', name: 'set_scenario_value', args: { field: 'events', value: [] } } },
+      [{ type: 'tool_use', call: { id: 'c3', name: 'set_plan_value', args: { field: 'events', value: [] } } },
        { type: 'done', stopReason: 'tool_use' }],
       [{ type: 'text', text: 'Understood.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);

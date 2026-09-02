@@ -20,8 +20,8 @@ function ctx(over: Partial<ToolContext> = {}): ToolContext {
   return {
     inputs: baseInputs(),
     config: testConfig(),
-    scenarioName: 'Test plan',
-    scenarioList: [{ id: 'a', name: 'Test plan' }],
+    planName: 'Test plan',
+    planList: [{ id: 'a', name: 'Test plan' }],
     ...over,
   };
 }
@@ -30,15 +30,15 @@ describe('toolSpecs', () => {
   it('advertises the full tool surface with JSON schemas', () => {
     const specs = toolSpecs();
     expect(specs.map(s => s.name).sort()).toEqual([
-      'compare_scenarios', 'get_schedule', 'get_scenario',
-      'list_scenarios',
+      'compare_plans', 'find_page', 'get_schedule', 'get_plan', 'get_sitemap',
+      'list_plans',
       'manage_cash_event', 'manage_debt', 'manage_income',
-      'propose_cash_event', 'propose_debt', 'propose_fhsa', 'propose_income', 'propose_market_periods', 'propose_patch',
+      'propose_cash_event', 'propose_debt', 'propose_fhsa', 'propose_income', 'propose_navigate', 'propose_patch',
       'propose_rdsp', 'propose_revert', 'propose_reverse_mortgage', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
-      'open_scenario', 'save_scenario_as',
+      'open_plan', 'save_plan_as',
       'run_monte_carlo', 'run_projection', 'run_strategies',
-      'set_scenario_value', 'solve_spending',
+      'set_plan_value', 'solve_spending',
     ].sort());
     for (const s of specs) {
       expect(s.jsonSchema).toHaveProperty('type', 'object');
@@ -47,9 +47,9 @@ describe('toolSpecs', () => {
   });
 });
 
-describe('get_scenario', () => {
+describe('get_plan', () => {
   it('returns the full plan by default', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: {} });
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_plan', args: {} });
     expect(out.kind).toBe('result');
     if (out.kind !== 'result') return;
     expect(out.content).toContain('Test plan');
@@ -59,14 +59,14 @@ describe('get_scenario', () => {
   });
 
   it('returns just the requested section', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_plan', args: { section: 'accounts' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('ACCOUNTS');
     expect(out.content).not.toContain('FULL INPUTS JSON');
   });
 
   it('rejects an unknown section', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'everything' } });
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_plan', args: { section: 'everything' } });
     expect(out.kind).toBe('error');
   });
 });
@@ -139,10 +139,10 @@ describe('run_projection', () => {
   });
 });
 
-describe('compare_scenarios', () => {
+describe('compare_plans', () => {
   it('runs both plans and reports deltas (singular overrides form)', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'compare_scenarios',
+      id: '1', name: 'compare_plans',
       args: { overrides: { desiredSpending: 30000 } },
     });
     if (out.kind !== 'result') throw new Error('expected result');
@@ -154,7 +154,7 @@ describe('compare_scenarios', () => {
 
   it('compares several variants in one call (variants form)', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'compare_scenarios',
+      id: '1', name: 'compare_plans',
       args: {
         variants: [
           { label: 'Retire at 60', overrides: { retirementAge: 60 } },
@@ -172,7 +172,7 @@ describe('compare_scenarios', () => {
 
   it('caps variants at 4 and skips an invalid variant without killing the batch', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'compare_scenarios',
+      id: '1', name: 'compare_plans',
       args: {
         variants: [
           { label: 'Good', overrides: { desiredSpending: 25000 } },
@@ -187,7 +187,7 @@ describe('compare_scenarios', () => {
 
   it('variants take precedence when both forms are passed', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'compare_scenarios',
+      id: '1', name: 'compare_plans',
       args: {
         overrides: { desiredSpending: 30000 },
         variants: [{ label: 'List form', overrides: { desiredSpending: 28000 } }],
@@ -200,7 +200,7 @@ describe('compare_scenarios', () => {
 
   it('errors when no override survives validation in ANY variant', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'compare_scenarios',
+      id: '1', name: 'compare_plans',
       args: { variants: [{ overrides: { bogus: 1 } }] },
     });
     expect(out.kind).toBe('error');
@@ -208,15 +208,15 @@ describe('compare_scenarios', () => {
   });
 
   it('errors when neither form is provided', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'compare_scenarios', args: {} });
+    const out = executeToolCall(ctx(), { id: '1', name: 'compare_plans', args: {} });
     expect(out.kind).toBe('error');
   });
 });
 
-describe('set_scenario_value', () => {
+describe('set_plan_value', () => {
   it('proposes a mutation with a from→to preview for a valid change', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'set_scenario_value',
+      id: '1', name: 'set_plan_value',
       args: { field: 'cppStartAge', value: 70, rationale: 'deferral bonus' },
     });
     expect(out.kind).toBe('mutation');
@@ -228,16 +228,16 @@ describe('set_scenario_value', () => {
 
   it('rejects fields outside the editable allow-list', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'set_scenario_value',
+      id: '1', name: 'set_plan_value',
       args: { field: 'annualWithdrawal', value: 5 },
     });
     expect(out.kind).toBe('error');
     expect(EDITABLE_FIELDS.has('annualWithdrawal')).toBe(false);
   });
 
-  it('rejects a value that fails the scenario schema', () => {
+  it('rejects a value that fails the plan schema', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'set_scenario_value',
+      id: '1', name: 'set_plan_value',
       args: { field: 'desiredSpending', value: 'lots' },
     });
     expect(out.kind).toBe('error');
@@ -245,7 +245,7 @@ describe('set_scenario_value', () => {
 
   it('coerces a stringified number ("65") instead of rejecting it', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'set_scenario_value',
+      id: '1', name: 'set_plan_value',
       args: { field: 'oasStartAge', value: '65' },
     });
     expect(out.kind).toBe('mutation');
@@ -256,7 +256,7 @@ describe('set_scenario_value', () => {
 
   it('coerces "null" for a nullable age field', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'set_scenario_value',
+      id: '1', name: 'set_plan_value',
       args: { field: 'cppStartAge', value: 'null' },
     });
     expect(out.kind).toBe('mutation');
@@ -269,14 +269,14 @@ describe('set_scenario_value', () => {
     expect(EDITABLE_FIELDS.has('tfsaRoom')).toBe(true);
     expect(EDITABLE_FIELDS.has('rrspRoom')).toBe(true);
     const on = executeToolCall(ctx(), {
-      id: '1', name: 'set_scenario_value',
+      id: '1', name: 'set_plan_value',
       args: { field: 'tfsaRoom', value: 40000 },
     });
     expect(on.kind).toBe('mutation');
     if (on.kind !== 'mutation') return;
     expect(on.patch).toEqual({ tfsaRoom: 40000 });
     const off = executeToolCall(ctx(), {
-      id: '2', name: 'set_scenario_value',
+      id: '2', name: 'set_plan_value',
       args: { field: 'tfsaRoom', value: 'null' },
     });
     expect(off.kind).toBe('mutation');
@@ -286,7 +286,7 @@ describe('set_scenario_value', () => {
 
   it('leaves a real string field untouched (no coercion needed)', () => {
     const out = executeToolCall(ctx(), {
-      id: '1', name: 'set_scenario_value',
+      id: '1', name: 'set_plan_value',
       args: { field: 'provinceCode', value: 'BC' },
     });
     expect(out.kind).toBe('mutation');
@@ -297,7 +297,7 @@ describe('set_scenario_value', () => {
   it('rejects unknown tool names with the available list', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'delete_everything', args: {} });
     expect(out.kind).toBe('error');
-    if (out.kind === 'error') expect(out.content).toContain('get_scenario');
+    if (out.kind === 'error') expect(out.content).toContain('get_plan');
   });
 });
 
@@ -501,9 +501,9 @@ describe('propose_debt / manage_debt', () => {
     expect(out.kind === 'error' || (out.kind === 'result' && /rejected|debts/i.test(out.content))).toBe(true);
   });
 
-  it('surfaces debts in the get_scenario spending section', () => {
+  it('surfaces debts in the get_plan spending section', () => {
     const c = ctx({ inputs: baseInputs({ debts: [mortgage] }) });
-    const out = executeToolCall(c, { id: '1', name: 'get_scenario', args: { section: 'spending' } });
+    const out = executeToolCall(c, { id: '1', name: 'get_plan', args: { section: 'spending' } });
     expect(out.kind).toBe('result');
     if (out.kind === 'result') {
       expect(out.content).toContain('Mortgage');
@@ -619,14 +619,14 @@ describe('propose_rdsp', () => {
         rdsp: { enabled: true, balance: 25000, contribution: 500, familyIncome: 30000, dtcEligible: true },
       }),
     });
-    const out = executeToolCall(c, { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    const out = executeToolCall(c, { id: '1', name: 'get_plan', args: { section: 'accounts' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('rdsp');
     expect(out.content).toContain('25000');
   });
 
   it('omits rdsp from the accounts section when not configured', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'get_scenario', args: { section: 'accounts' } });
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_plan', args: { section: 'accounts' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).not.toContain('"rdsp"');
   });
@@ -903,14 +903,14 @@ describe('remember / recall', () => {
     const c = ctx({ memory, memoryScenarioId: 'sc-1' });
     const put = executeToolCall(c, {
       id: '1', name: 'remember',
-      args: { text: 'Spouse retires at 63, not 65.', scope: 'scenario', importance: 0.8 },
+      args: { text: 'Spouse retires at 63, not 65.', scope: 'plan', importance: 0.8 },
     });
     if (put.kind !== 'result') throw new Error('expected result');
     expect(put.content).toContain('Remembered');
 
     const got = executeToolCall(c, { id: '2', name: 'recall', args: { query: 'spouse' } });
     if (got.kind !== 'result') throw new Error('expected result');
-    expect(got.content).toContain('[scenario]');
+    expect(got.content).toContain('[plan]');
     expect(got.content).toContain('Spouse retires at 63');
     expect(got.content).toContain('importance 0.80');
   });
@@ -926,7 +926,7 @@ describe('remember / recall', () => {
     expect(out.content).toContain('Second fact.');
   });
 
-  it('global memories are visible from any scenario, scenario ones are not', () => {
+  it('global memories are visible from any plan, plan ones are not', () => {
     const memory = new MemoryStore(new InMemoryAdapter());
     const here = ctx({ memory, memoryScenarioId: 'sc-1' });
     const elsewhere = ctx({ memory, memoryScenarioId: 'sc-2' });
@@ -986,14 +986,14 @@ describe('remember / recall', () => {
   });
 });
 
-describe('open_scenario / save_scenario_as', () => {
+describe('open_plan / save_plan_as', () => {
   it('opens by id and announces the switch', () => {
     const opened: string[] = [];
     const c = ctx({
-      scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
+      planList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
       onOpenScenario: (id) => opened.push(id),
     });
-    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { scenarioId: 'sc-2' } });
+    const out = executeToolCall(c, { id: '1', name: 'open_plan', args: { planId: 'sc-2' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(opened).toEqual(['sc-2']);
     expect(out.content).toContain('Downsized');
@@ -1002,10 +1002,10 @@ describe('open_scenario / save_scenario_as', () => {
   it('opens by unique case-insensitive name', () => {
     const opened: string[] = [];
     const c = ctx({
-      scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
+      planList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
       onOpenScenario: (id) => opened.push(id),
     });
-    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { name: '  downsized ' } });
+    const out = executeToolCall(c, { id: '1', name: 'open_plan', args: { name: '  downsized ' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(opened).toEqual(['sc-2']);
   });
@@ -1013,57 +1013,57 @@ describe('open_scenario / save_scenario_as', () => {
   it('refuses an ambiguous name, listing the matches', () => {
     const opened: string[] = [];
     const c = ctx({
-      scenarioList: [{ id: 'a', name: 'Plan' }, { id: 'b', name: 'plan' }, { id: 'c', name: 'Other' }],
+      planList: [{ id: 'a', name: 'Plan' }, { id: 'b', name: 'plan' }, { id: 'c', name: 'Other' }],
       onOpenScenario: (id) => opened.push(id),
     });
-    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { name: 'plan' } });
+    const out = executeToolCall(c, { id: '1', name: 'open_plan', args: { name: 'plan' } });
     expect(out.kind).toBe('error');
     if (out.kind !== 'error') return;
-    expect(out.content).toContain('matches 2 scenarios');
+    expect(out.content).toContain('matches 2 plans');
     expect(opened).toEqual([]);
   });
 
   it('errors on an unknown id and lists what exists', () => {
     const c = ctx({
-      scenarioList: [{ id: 'sc-1', name: 'Base' }],
+      planList: [{ id: 'sc-1', name: 'Base' }],
       onOpenScenario: () => {},
     });
-    const out = executeToolCall(c, { id: '1', name: 'open_scenario', args: { scenarioId: 'nope' } });
+    const out = executeToolCall(c, { id: '1', name: 'open_plan', args: { planId: 'nope' } });
     expect(out.kind).toBe('error');
     if (out.kind !== 'error') return;
-    expect(out.content).toContain('No saved scenario matches');
+    expect(out.content).toContain('No saved plan matches');
     expect(out.content).toContain('"Base" (sc-1)');
   });
 
-  it('errors when scenario switching is unavailable', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'open_scenario', args: { scenarioId: 'sc-1' } });
+  it('errors when plan switching is unavailable', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'open_plan', args: { planId: 'sc-1' } });
     expect(out.kind).toBe('error');
   });
 
-  it('save_scenario_as hands the name to the callback and reports success', () => {
+  it('save_plan_as hands the name to the callback and reports success', () => {
     const names: string[] = [];
     const c = ctx({ onSaveScenarioAs: (name) => { names.push(name); return 'sc-new'; } });
-    const out = executeToolCall(c, { id: '1', name: 'save_scenario_as', args: { name: ' Downsize at 65 ' } });
+    const out = executeToolCall(c, { id: '1', name: 'save_plan_as', args: { name: ' Downsize at 65 ' } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(names).toEqual(['Downsize at 65']);
     expect(out.content).toContain('Downsize at 65');
   });
 
-  it('save_scenario_as errors when unavailable', () => {
-    const out = executeToolCall(ctx(), { id: '1', name: 'save_scenario_as', args: { name: 'x' } });
+  it('save_plan_as errors when unavailable', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'save_plan_as', args: { name: 'x' } });
     expect(out.kind).toBe('error');
   });
 });
 
-describe('list_scenarios', () => {
-  it('lists every scenario and marks the active one', () => {
+describe('list_plans', () => {
+  it('lists every plan and marks the active one', () => {
     const c = ctx({
-      scenarioList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
-      activeScenarioId: 'sc-2',
+      planList: [{ id: 'sc-1', name: 'Base' }, { id: 'sc-2', name: 'Downsized' }],
+      activePlanId: 'sc-2',
     });
-    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: {} });
+    const out = executeToolCall(c, { id: '1', name: 'list_plans', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('2 saved scenarios');
+    expect(out.content).toContain('2 saved plans');
     expect(out.content).toContain('Base');
     expect(out.content).toContain('Downsized (ACTIVE — currently open)');
     expect(out.content).toContain('[id: sc-1]');
@@ -1073,24 +1073,24 @@ describe('list_scenarios', () => {
 
   it('withDetails adds the active plan\'s numbers without opening anything', () => {
     const c = ctx({
-      scenarioList: [{ id: 'a', name: 'Test plan' }],
-      activeScenarioId: 'a',
+      planList: [{ id: 'a', name: 'Test plan' }],
+      activePlanId: 'a',
     });
-    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    const out = executeToolCall(c, { id: '1', name: 'list_plans', args: { withDetails: true } });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('spending');
     expect(out.content).toContain('RRSP');
     expect(out.content).toContain('single');
   });
 
-  it('withDetails uses scenarioInputsById for non-active plans', () => {
+  it('withDetails uses planInputsById for non-active plans', () => {
     const c = ctx({
       inputs: baseInputs({ desiredSpending: 99999 }),
-      scenarioList: [{ id: 'a', name: 'Test plan' }, { id: 'b', name: 'Other' }],
-      activeScenarioId: 'a',
-      scenarioInputsById: (id) => (id === 'b' ? baseInputs({ desiredSpending: 12345, currentAge: 71 }) : undefined),
+      planList: [{ id: 'a', name: 'Test plan' }, { id: 'b', name: 'Other' }],
+      activePlanId: 'a',
+      planInputsById: (id) => (id === 'b' ? baseInputs({ desiredSpending: 12345, currentAge: 71 }) : undefined),
     });
-    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    const out = executeToolCall(c, { id: '1', name: 'list_plans', args: { withDetails: true } });
     if (out.kind !== 'result') throw new Error('expected result');
     // Currency-formatted: the OTHER plan's number appears, and both plans show.
     expect(out.content).toContain('$12,345/yr');
@@ -1101,20 +1101,101 @@ describe('list_scenarios', () => {
   it('falls back to a compact line when details are unavailable for a plan', () => {
     const c = ctx({
       inputs: baseInputs({ desiredSpending: 50000 }),
-      scenarioList: [{ id: 'a', name: 'Test plan' }, { id: 'b', name: 'Other' }],
-      activeScenarioId: 'a',
-      // no scenarioInputsById
+      planList: [{ id: 'a', name: 'Test plan' }, { id: 'b', name: 'Other' }],
+      activePlanId: 'a',
+      // no planInputsById
     });
-    const out = executeToolCall(c, { id: '1', name: 'list_scenarios', args: { withDetails: true } });
+    const out = executeToolCall(c, { id: '1', name: 'list_plans', args: { withDetails: true } });
     if (out.kind !== 'result') throw new Error('expected result');
     // 'a' detailed, 'b' compact (id line only, no numbers).
     expect(out.content).toContain('spending');
     expect(out.content).toContain('- Other [id: b]');
   });
 
-  it('handles an empty scenario list', () => {
-    const out = executeToolCall(ctx({ scenarioList: [] }), { id: '1', name: 'list_scenarios', args: {} });
+  it('handles an empty plan list', () => {
+    const out = executeToolCall(ctx({ planList: [] }), { id: '1', name: 'list_plans', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('no saved scenarios');
+    expect(out.content).toContain('no saved plans');
+  });
+});
+
+describe('find_page / get_sitemap / propose_navigate', () => {
+  it('find_page resolves plain words to the page that holds them', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'tfsa room' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    // Contribution room lives in the details page's account section.
+    expect(out.content).toMatch(/\n1\. Details — #\/details/);
+  });
+
+  it('find_page routes a folded feature name to its destination page', () => {
+    // "monte carlo" is a keyword on the (folded) legacy view and on eq.
+    const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'monte carlo' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('Insights');
+    expect(out.content).toContain('#/steering');
+    // The folded page must not surface as its own destination.
+    expect(out.content).not.toContain('#/monte-carlo');
+  });
+
+  it('find_page tags the page the user is on as "already here"', () => {
+    const out = executeToolCall(ctx({ currentView: 'details' }), { id: '1', name: 'find_page', args: { query: 'balances' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('(you are already here)');
+  });
+
+  it('find_page with an unmatched query points at get_sitemap', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'zzz nonexistent' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('No page matches');
+    expect(out.content).toContain('get_sitemap');
+  });
+
+  it('get_sitemap lists the reachable pages, not the folded legacy names', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'get_sitemap', args: {} });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('(view details)');
+    expect(out.content).toContain('(view eq)');
+    expect(out.content).toContain('(view plans)');
+    expect(out.content).toContain('(view data)');
+    expect(out.content).not.toContain('(view montecarlo)');
+    expect(out.content).not.toContain('(view sharing)');
+  });
+
+  it('propose_navigate returns a confirm card with the destination, empty patch', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'steering', label: 'Open Insights' },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.patch).toEqual({});
+    expect(out.navigate).toBe('eq');
+    expect(out.label).toBe('Open Insights');
+    expect(out.preview).toMatchObject({ Page: 'Insights', Route: '#/steering' });
+  });
+
+  it('propose_navigate redirects a folded view to the page that hosts it', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'montecarlo', label: 'Open Monte Carlo' },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.navigate).toBe('eq');
+    expect(out.preview).toMatchObject({ Page: 'Insights' });
+  });
+
+  it('propose_navigate without a UI returns the shareable hash instead', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'propose_navigate', args: { view: 'print', label: 'Open Print' },
+    });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('#/print');
+  });
+
+  it('propose_navigate rejects an unknown view with the real view ids', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'bogus-page', label: 'X' },
+    });
+    if (out.kind !== 'error') throw new Error('expected error');
+    expect(out.content).toContain('Unknown view');
+    expect(out.content).toContain('projection');
+    expect(out.content).not.toContain('montecarlo');
   });
 });
