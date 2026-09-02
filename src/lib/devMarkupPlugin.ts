@@ -162,7 +162,7 @@ function render(h){
   for(const e of h){
     const d=document.createElement('div');d.className='entry';
     d.innerHTML='<div class="row"><span class="tag">'+e.interactionId+'</span>'
-      +'<span class="tag '+(e.terminal==='applied'?'ok':e.terminal?'fail':'pend')+'">'+(e.terminal??e.lastStatus??'received')+'</span>'
+      +'<span class="tag '+(e.terminal==='applied'||e.terminal==='answered'?'ok':e.terminal?'fail':'pend')+'">'+(e.terminal??e.lastStatus??'received')+'</span>'
       +(e.gesture?'<span class="tag">'+e.gesture.kind+'</span>':'')+'</div>'
       +(e.detail?'<div>'+e.detail+'</div>':'');
     if(e.gesture&&e.gesture.summary){const s=document.createElement('div');s.textContent='gesture: '+e.gesture.summary;d.appendChild(s)}

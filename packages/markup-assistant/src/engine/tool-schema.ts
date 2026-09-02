@@ -8,14 +8,21 @@ export const APPLY_EDITS_TOOL = {
   function: {
     name: 'apply_edits',
     description:
-      'Apply concrete edits to the page/app to realize the user markup. ' +
-      'Return an empty edits array when the markup cannot be interpreted.',
+      'Respond to the user markup. When the user asks a question or there is ' +
+      'nothing to change, fill "answer" and leave "edits" empty. When the user ' +
+      'wants a change, fill "edits" and leave "answer" empty.',
     parameters: {
       type: 'object',
       properties: {
         note: {
           type: 'string',
           description: 'One-line explanation of the interpretation.',
+        },
+        answer: {
+          type: 'string',
+          description:
+            'A direct reply to the user when they asked a question or there is ' +
+            'nothing to edit. Use instead of edits.',
         },
         edits: {
           type: 'array',

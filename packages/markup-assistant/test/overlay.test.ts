@@ -74,10 +74,20 @@ function pointer(layer: HTMLElement, type: string, x: number, y: number) {
   )
 }
 
+/** Find the input of the currently-open (visible) markup panel. */
+function activeComposerInput(): HTMLInputElement {
+  const panels = [...document.querySelectorAll('div[data-ma-overlay]')] as HTMLElement[]
+  for (const p of panels) {
+    if (p.style.display === 'none') continue
+    const input = p.querySelector('input') as HTMLInputElement | null
+    if (input) return input
+  }
+  throw new Error('composer not open')
+}
+
 /** After a gesture is drawn, type a note in the composer and press Enter. */
 function commitComposer(text: string) {
-  const input = document.querySelector('div[data-ma-overlay] input') as HTMLInputElement
-  if (!input) throw new Error('composer not open')
+  const input = activeComposerInput()
   input.value = text
   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
 }
@@ -113,18 +123,38 @@ describe('overlay', () => {
     handle.detach()
   })
 
-  it('arms + disarms via the corner toggle button', () => {
+  it('arms + disarms via the corner orb button', () => {
     const { handle } = makeOverlay()
     const toggle = [...document.querySelectorAll('button[data-ma-overlay]')].find(
-      (b) => (b as HTMLButtonElement).textContent === 'markup',
+      (b) => (b as HTMLButtonElement).title === 'markup',
     ) as HTMLButtonElement
     expect(toggle).toBeTruthy()
     expect(handle.isArmed()).toBe(false)
     toggle.click()
     expect(handle.isArmed()).toBe(true)
-    expect(toggle.textContent).toBe('markup ✕')
     toggle.click()
     expect(handle.isArmed()).toBe(false)
+    handle.detach()
+  })
+
+  it('orb expands to a panel with toolbar, chat thread, and composer', () => {
+    const { handle } = makeOverlay()
+    const toggle = [...document.querySelectorAll('button[data-ma-overlay]')].find(
+      (b) => (b as HTMLButtonElement).title === 'markup',
+    ) as HTMLButtonElement
+    toggle.click()
+    const panels = [...document.querySelectorAll('div[data-ma-overlay]')] as HTMLElement[]
+    const panel = panels.find((p) => p.style.display !== 'none' && p.querySelector('input'))
+    expect(panel).toBeTruthy()
+    // Toolbar buttons live inside the panel.
+    expect(panel!.querySelector('button[data-mode="stroke"]')).toBeTruthy()
+    expect(panel!.querySelector('button[data-mode="ask"]')).toBeTruthy()
+    // Chat thread with the empty-state hint.
+    expect(panel!.textContent).toContain('mark up the page, or ask anything')
+    // Composer input.
+    expect(panel!.querySelector('input')).toBeTruthy()
+    // Header is the drag handle.
+    expect(panel!.textContent).toContain('markup')
     handle.detach()
   })
 
@@ -132,7 +162,7 @@ describe('overlay', () => {
     const bus = createBus()
     const handle = attachOverlay({ bus, source: 'test', showToggle: false })
     const toggle = [...document.querySelectorAll('button[data-ma-overlay]')].find(
-      (b) => (b as HTMLButtonElement).textContent === 'markup',
+      (b) => (b as HTMLButtonElement).title === 'markup',
     )
     expect(toggle).toBeUndefined()
     handle.detach()
@@ -222,7 +252,7 @@ describe('overlay', () => {
     pointer(layer, 'pointermove', cx + 100, cy + 100)
     pointer(layer, 'pointerup', cx + 100, cy + 100)
     // Composer opens with the default text already selected; Enter keeps it.
-    const input = document.querySelector('div[data-ma-overlay] input') as HTMLInputElement
+    const input = activeComposerInput()
     expect(input.value).toBe('move this here')
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
     const move = captured.find((e) => (e.payload as { kind?: string }).kind === 'move')
@@ -325,13 +355,14 @@ describe('overlay', () => {
         edits: [],
       },
     })
-    // HUD is the overlay-owned div at bottom-right with the status pill.
-    const overlays = [...document.querySelectorAll('div[data-ma-overlay]')] as HTMLElement[]
-    const hud = overlays.find((d) => /bottom:\s*56px/.test(d.getAttribute('style') ?? ''))
-    expect(hud).toBeTruthy()
-    expect(hud!.style.display).toBe('block')
-    expect(hud!.textContent).toContain('✖ rejected')
-    expect(hud!.textContent).toContain('what should I change?')
+    // The chat thread inside the panel shows the model's reply on the bubble.
+    const panels = [...document.querySelectorAll('div[data-ma-overlay]')] as HTMLElement[]
+    const panel = panels.find((p) => p.style.display !== 'none' && p.querySelector('input'))
+    expect(panel).toBeTruthy()
+    const chatText = panel!.textContent ?? ''
+    expect(chatText).toContain('why is this here?')
+    expect(chatText).toContain('✖ rejected')
+    expect(chatText).toContain('what should I change?')
     handle.detach()
   })
 

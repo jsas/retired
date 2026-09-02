@@ -27,10 +27,13 @@ const DEFAULT_SYSTEM_PROMPT = [
   'Interpret the markup and emit edits that make the app match what the user drew.',
   'A gesture alone can be ambiguous — pair it with the element named in the prompt and,',
   "when present, the user's note text.",
+  'Some input is a QUESTION, not a change request ("what is this?", "why is this here?").',
+  'For those, fill "answer" with a direct reply and leave "edits" empty — do NOT treat',
+  'a question as a failed edit.',
   'Rules:',
   '- Prefer minimal edits. Do not rewrite files wholesale unless asked.',
   '- For source edits use exact "find" strings that appear exactly once in the file.',
-  '- If the markup is ambiguous, return zero edits and explain in "note".',
+  '- If a change request is ambiguous, return zero edits and explain in "note".',
 ].join('\n')
 
 export class OpenAIEngine implements Engine {
@@ -67,18 +70,46 @@ export class OpenAIEngine implements Engine {
     if (!call?.function || call.function.name !== 'apply_edits') {
       return { edits: [], rejection: 'model did not call apply_edits' }
     }
-    let parsed: { note?: string; edits?: unknown }
+    let parsed: { note?: string; answer?: string; edits?: unknown }
     try {
       parsed = JSON.parse(call.function.arguments ?? '{}')
     } catch {
       return { edits: [], rejection: 'model produced unparseable tool arguments' }
     }
     const edits = normalizeEdits(parsed.edits)
+    // A question / nothing-to-change reply: answer text with no edits.
+    if (typeof parsed.answer === 'string' && parsed.answer.trim()) {
+      return { edits: [], answer: parsed.answer.trim() }
+    }
     if (edits.length === 0) {
-      return { edits: [], rejection: parsed.note ?? 'model produced no edits' }
+      // Small models often ignore the `answer` field and put the reply in
+      // `note`. If the user asked a question, that note IS the answer — don't
+      // dress it up as a rejection.
+      const note = parsed.note ?? ''
+      if (looksLikeQuestion(input) && note.trim()) {
+        return { edits: [], answer: note.trim() }
+      }
+      return { edits: [], rejection: note || 'model produced no edits' }
     }
     return { edits }
   }
+}
+
+/** True when the interaction text reads as a question, not a change request. */
+function looksLikeQuestion(input: EngineInput): boolean {
+  const texts = input.intents
+    .map((i) => {
+      if (i.kind === 'note') return i.text
+      return (i as { note?: string }).note ?? ''
+    })
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  if (!texts) return false
+  if (texts.includes('?')) return true
+  return /^(what|why|how|when|where|which|who|whose|is|are|does|do|did|can|could|should|would|tell me)\b/.test(
+    texts.trim(),
+  )
 }
 
 interface OpenAIResponse {

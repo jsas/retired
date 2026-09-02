@@ -124,18 +124,87 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
   // Annotated const so the non-null type survives into nested closures.
   const ctx: CanvasRenderingContext2D = canvasCtx
 
+  // Interaction capture layer: full-page transparent div with pointer events.
+  const captureLayer = document.createElement('div')
+  captureLayer.dataset.maOverlay = ''
+  captureLayer.style.cssText =
+    `position:fixed;inset:0;z-index:${zIndex + 1};display:none;` +
+    'background:transparent;cursor:crosshair;touch-action:none;user-select:none;' +
+    '-webkit-user-select:none;'
+  captureLayer.addEventListener('dragstart', (e) => e.preventDefault())
+  document.body.appendChild(captureLayer)
+
+  // ---------------------------------------------------------------------------
+  // Floating control + expanded panel: one small orb bottom-right; click opens
+  // the modal with the toolbar on top and a chat thread + composer below.
+  // ---------------------------------------------------------------------------
+
+  let panelOpen = false
+  let panelPos: { x: number; y: number } | null = null
+
+  // Floating orb — the always-visible entry point.
+  let toggle: HTMLButtonElement | null = null
+  if (showToggle) {
+    toggle = document.createElement('button')
+    toggle.dataset.maOverlay = ''
+    toggle.type = 'button'
+    toggle.textContent = '✎'
+    toggle.title = 'markup'
+    toggle.setAttribute('aria-pressed', 'false')
+    toggle.style.cssText =
+      `position:fixed;bottom:16px;right:16px;z-index:${zIndex + 2};` +
+      'width:44px;height:44px;border-radius:50%;border:1px solid #3a3a3c;' +
+      'background:#1c1c1e;color:#fff;font-size:18px;cursor:pointer;' +
+      'display:flex;align-items:center;justify-content:center;' +
+      'box-shadow:0 2px 12px rgba(0,0,0,0.4);'
+    document.body.appendChild(toggle)
+    toggle.addEventListener('click', () => {
+      if (panelOpen) closePanel()
+      else openPanel()
+    })
+  }
+
+  // The panel: header-drag, toolbar row, chat thread, composer.
+  const panel = document.createElement('div')
+  panel.dataset.maOverlay = ''
+  panel.style.cssText =
+    `position:fixed;z-index:${zIndex + 2};display:none;` +
+    'background:#161618;border:1px solid #3a3a3c;border-radius:12px;' +
+    'width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden;' +
+    'font:13px ui-monospace,Menlo,Consolas,monospace;color:#eee;'
+  document.body.appendChild(panel)
+
+  // Header: drag handle + title + close.
+  const panelHeader = document.createElement('div')
+  panelHeader.style.cssText =
+    'display:flex;align-items:center;justify-content:space-between;' +
+    'padding:8px 12px;background:#1c1c1e;border-bottom:1px solid #2c2c2e;' +
+    'cursor:move;user-select:none;'
+  const panelTitle = document.createElement('span')
+  panelTitle.textContent = 'markup'
+  panelTitle.style.cssText = 'font-weight:600;font-size:12px;letter-spacing:0.4px;'
+  const panelClose = document.createElement('button')
+  panelClose.textContent = '✕'
+  panelClose.style.cssText =
+    'background:transparent;border:0;color:#8e8e93;cursor:pointer;font-size:14px;padding:0 4px;'
+  panelClose.addEventListener('click', () => closePanel())
+  panelHeader.appendChild(panelTitle)
+  panelHeader.appendChild(panelClose)
+  panel.appendChild(panelHeader)
+
+  // Toolbar row.
   const toolbar = buildToolbar(mode, {
     onSelect: (m) => api.setMode(m),
-    onUndo: () => {
-      undoLast()
-    },
-    onClear: () => {
-      clearAll()
-    },
+    onUndo: () => undoLast(),
+    onClear: () => clearAll(),
   })
-  toolbar.style.display = 'none'
-  document.body.appendChild(toolbar)
-
+  toolbar.style.position = 'static'
+  toolbar.style.borderRadius = '0'
+  toolbar.style.padding = '6px 10px'
+  toolbar.style.background = 'transparent'
+  toolbar.style.borderBottom = '1px solid #2c2c2e'
+  toolbar.style.flexWrap = 'wrap'
+  panel.appendChild(toolbar)
   for (const c of COLORS) {
     const sw = document.createElement('button')
     sw.style.cssText =
@@ -148,92 +217,140 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     toolbar.appendChild(sw)
   }
 
-  // Interaction capture layer: full-page transparent div with pointer events.
-  // user-select:none + dragstart suppression are what make mouse dragging
-  // work in Chrome — otherwise the browser starts a native text selection
-  // drag, fires pointercancel, and the gesture is lost.
-  const captureLayer = document.createElement('div')
-  captureLayer.dataset.maOverlay = ''
-  captureLayer.style.cssText =
-    `position:fixed;inset:0;z-index:${zIndex + 1};display:none;` +
-    'background:transparent;cursor:crosshair;touch-action:none;user-select:none;' +
-    '-webkit-user-select:none;'
-  captureLayer.addEventListener('dragstart', (e) => e.preventDefault())
-  document.body.appendChild(captureLayer)
+  // Chat thread.
+  const chat = document.createElement('div')
+  chat.style.cssText =
+    'max-height:300px;overflow-y:auto;padding:10px 12px;display:flex;' +
+    'flex-direction:column;gap:8px;'
+  panel.appendChild(chat)
 
-  // Corner toggle: keyboard-free arming surface. Always rendered (hidden
-  // when showToggle=false, or visible all the time so the user can reach it
-  // even before the overlay is armed).
-  let toggle: HTMLButtonElement | null = null
-  if (showToggle) {
-    toggle = document.createElement('button')
-    toggle.dataset.maOverlay = ''
-    toggle.type = 'button'
-    toggle.textContent = 'markup'
-    toggle.setAttribute('aria-pressed', 'false')
-    toggle.style.cssText =
-      `position:fixed;bottom:14px;right:14px;z-index:${zIndex + 1};` +
-      'background:#1c1c1e;color:#fff;border:1px solid #3a3a3c;border-radius:6px;' +
-      'padding:6px 10px;font:12px ui-monospace,Menlo,Consolas,monospace;cursor:pointer;' +
-      'opacity:0.85;'
-    document.body.appendChild(toggle)
-    toggle.addEventListener('click', () => {
-      if (armed) disarm()
-      else arm()
-    })
+  const chatEmpty = document.createElement('div')
+  chatEmpty.textContent = 'mark up the page, or ask anything below.'
+  chatEmpty.style.cssText = 'color:#636366;font-size:12px;padding:8px 0;text-align:center;'
+  chat.appendChild(chatEmpty)
+
+  function chatAdd(role: 'user' | 'model', text: string, status?: string) {
+    if (chatEmpty.parentNode) chatEmpty.remove()
+    const bubble = document.createElement('div')
+    const mine = role === 'user'
+    const statusColor =
+      status === 'applied' ? '#30d158' :
+      status === 'answered' ? '#30d158' :
+      status === 'failed' || status === 'rejected' ? '#ff453a' :
+      status === 'processing' ? '#0a84ff' : '#8e8e93'
+    bubble.style.cssText =
+      `align-self:${mine ? 'flex-end' : 'flex-start'};max-width:85%;` +
+      `background:${mine ? '#0a84ff' : '#2c2c2e'};color:#fff;border-radius:10px;` +
+      'padding:7px 11px;font-size:12px;line-height:1.4;white-space:pre-wrap;' +
+      (status && !mine ? `border-left:2px solid ${statusColor};` : '')
+    bubble.textContent = text
+    chat.appendChild(bubble)
+    chat.scrollTop = chat.scrollHeight
+    return bubble
+  }
+
+  function chatUpdate(bubble: HTMLElement, status: string, detail?: string) {
+    const statusColor =
+      status === 'applied' ? '#30d158' :
+      status === 'answered' ? '#30d158' :
+      status === 'failed' || status === 'rejected' ? '#ff453a' :
+      status === 'processing' ? '#0a84ff' : '#8e8e93'
+    bubble.style.borderLeft = `2px solid ${statusColor}`
+    if (detail && status !== 'processing') {
+      // Append or replace the reply line.
+      const existing = bubble.querySelector('span[data-reply]') as HTMLElement | null
+      const line: HTMLElement = existing ?? document.createElement('span')
+      line.dataset.reply = '1'
+      line.style.cssText = 'display:block;margin-top:4px;color:#c7c7cc;'
+      line.textContent = `${STATUS_TEXT[status] ?? status} — ${detail}`
+      if (!existing) bubble.appendChild(line)
+    }
+  }
+
+  // Composer row at the panel bottom.
+  const composer = document.createElement('div')
+  composer.dataset.maOverlay = ''
+  composer.style.cssText =
+    'display:flex;gap:6px;padding:8px 10px;border-top:1px solid #2c2c2e;' +
+    'background:#1c1c1e;align-items:center;'
+  const composerInput = document.createElement('input')
+  composerInput.placeholder = 'ask anything…'
+  composerInput.style.cssText =
+    'flex:1;background:#0d0d0f;color:#fff;border:0;outline:none;padding:7px 10px;' +
+    'border-radius:6px;font:13px ui-monospace,Menlo,Consolas,monospace;'
+  composer.appendChild(composerInput)
+  panel.appendChild(composer)
+
+  // Panel drag (header only).
+  let panelDrag: { dx: number; dy: number } | null = null
+  panelHeader.addEventListener('pointerdown', (e) => {
+    const r = panel.getBoundingClientRect()
+    panelDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top }
+    panelHeader.setPointerCapture(e.pointerId)
+  })
+  panelHeader.addEventListener('pointermove', (e) => {
+    if (!panelDrag) return
+    panel.style.left = `${e.clientX - panelDrag.dx}px`
+    panel.style.top = `${e.clientY - panelDrag.dy}px`
+    panel.style.right = 'auto'
+    panel.style.bottom = 'auto'
+  })
+  panelHeader.addEventListener('pointerup', () => {
+    panelDrag = null
+  })
+
+  function positionPanel() {
+    if (panelPos) {
+      panel.style.left = `${panelPos.x}px`
+      panel.style.top = `${panelPos.y}px`
+    } else {
+      panel.style.right = '16px'
+      panel.style.bottom = '72px'
+    }
+  }
+
+  function openPanel() {
+    panelOpen = true
+    armed = true
+    positionPanel()
+    panel.style.display = 'block'
+    canvas.style.display = 'block'
+    captureLayer.style.display = 'block'
+    resize()
+    updateToggle()
+    setTimeout(() => composerInput.focus(), 0)
+  }
+  function closePanel() {
+    panelOpen = false
+    armed = false
+    liveStroke = null
+    drag = null
+    panel.style.display = 'none'
+    canvas.style.display = 'none'
+    captureLayer.style.display = 'none'
+    cancelDraft()
+    updateToggle()
   }
 
   function updateToggle() {
     if (!toggle) return
-    toggle.textContent = armed ? 'markup ✕' : 'markup'
-    toggle.setAttribute('aria-pressed', armed ? 'true' : 'false')
-    toggle.style.opacity = armed ? '1' : '0.85'
+    toggle.setAttribute('aria-pressed', panelOpen ? 'true' : 'false')
+    toggle.style.background = panelOpen ? '#0a84ff' : '#1c1c1e'
   }
-
-  // HUD: recolors with the live status chain for the active interaction.
-  // Clickable: opens the loaded /__markup_assistant__/record page when the
-  // prefix is discoverable. Appears when anything lands. Terminal replies
-  // (rejected/failed) expand to show the model's detail text — that's the
-  // actual response, and the plain status pill alone never says it.
-  const hud = document.createElement('div')
-  hud.dataset.maOverlay = ''
-  hud.style.cssText =
-    `position:fixed;bottom:56px;right:14px;z-index:${zIndex + 1};display:none;` +
-    'background:#1c1c1e;color:#fff;border:1px solid #3a3a3c;border-radius:6px;' +
-    'padding:6px 10px;font:12px ui-monospace,Menlo,Consolas,monospace;cursor:pointer;' +
-    'max-width:380px;white-space:pre-wrap;'
-  hud.addEventListener('click', () => {
-    const prefix = '/__markup_console__'
-    window.open(prefix, '_blank')
-  })
-  document.body.appendChild(hud)
 
   const STATUS_TEXT: Record<string, string> = {
     received: 'received',
     accepted: 'accepted',
     processing: '🧠 thinking…',
     applied: '✔ applied',
+    answered: '💬 answered',
     failed: '✖ failed',
     rejected: '✖ rejected',
     cancelled: '✕ cancelled',
   }
 
-  function hudShow(status: string, color: string, detail?: string) {
-    const label = STATUS_TEXT[status] ?? status
-    // Reply case: detail on terminal statuses is the model/user-visible answer.
-    const hasReply = detail && detail !== label
-    hud.style.cssText =
-      `position:fixed;bottom:56px;right:14px;z-index:${zIndex + 1};display:block;` +
-      `background:#1c1c1e;color:#fff;border:1px solid ${color};border-radius:6px;` +
-      `padding:6px 10px;font:12px ui-monospace,Menlo,Consolas,monospace;cursor:pointer;` +
-      (hasReply ? 'max-width:420px;white-space:pre-wrap;line-height:1.4;' : 'max-width:380px;')
-    hud.textContent = hasReply ? `${label}\n${detail}` : label
-  }
-  function hudHide(ms = 0) {
-    window.setTimeout(() => {
-      hud.style.display = 'none'
-    }, ms)
-  }
+  // Per-interaction chat bubble so status updates find their row.
+  const chatByInteraction = new Map<string, HTMLElement>()
 
   const committed = new Map<string, CommittedEntry>()
   /** Undo stack: interactions still retractable (not yet terminal). */
@@ -249,6 +366,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
   function statusColor(entry: CommittedEntry): string | null {
     switch (entry.status) {
       case 'applied':
+      case 'answered':
         return '#30d158'
       case 'accepted':
       case 'processing':
@@ -398,6 +516,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     order.push(interactionId)
     redraw()
     draft = { intent, interactionId }
+    draftInteractionId = interactionId
     openComposer(defaultIntentFor(draft.intent))
     return interactionId
   }
@@ -428,6 +547,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
         ? ({ ...intent, text } as Intent)
         : ({ ...intent, note: text } as Intent)
     draft = null
+    draftInteractionId = null
     commitAndEmit(interactionId, merged)
   }
 
@@ -438,6 +558,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     const at = order.indexOf(interactionId)
     if (at !== -1) order.splice(at, 1)
     draft = null
+    draftInteractionId = null
     redraw()
   }
 
@@ -482,7 +603,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
    * is the sink side's job.
    */
   function clearAll(): number {
-    const terminal = new Set(['applied', 'failed', 'rejected', 'cancelled'])
+    const terminal = new Set(['applied', 'answered', 'failed', 'rejected', 'cancelled'])
     const entries = [...committed.entries()]
     committed.clear()
     order.splice(0, order.length)
@@ -652,47 +773,34 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     )
   }
 
-  // ---- Composer: free-text finalized (draft) or ask raw (no drawing) ----
-  const composer = document.createElement('div')
-  composer.dataset.maOverlay = ''
-  composer.style.cssText =
-    `position:fixed;bottom:14px;left:14px;z-index:${zIndex + 1};display:none;` +
-    'background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;padding:6px;' +
-    'display:flex;gap:6px;align-items:center;'
-
-  const composerInput = document.createElement('input')
-  composerInput.placeholder = 'what should I do? (Enter • Esc)'
-  composerInput.style.cssText =
-    'background:#0d0d0f;color:#fff;border:0;outline:none;padding:6px 8px;width:340px;' +
-    'font:13px ui-monospace,Menlo,Consolas,monospace;'
-  composer.appendChild(composerInput)
-
-  document.body.appendChild(composer)
-
   function openComposer(prefill = '') {
-    composer.style.display = 'flex'
+    if (!panelOpen) openPanel()
     composerInput.placeholder = draft ? 'what should I do? (Enter • Esc)' : 'ask anything…'
     composerInput.value = prefill
-    // Select prefill text so typing replaces it, Enter keeps it.
     setTimeout(() => {
       composerInput.focus()
       if (prefill) composerInput.select()
     }, 0)
   }
   function closeComposer() {
-    composer.style.display = 'none'
     composerInput.value = ''
+    composerInput.placeholder = 'ask anything…'
   }
 
   composerInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       const text = composerInput.value.trim()
-      closeComposer()
       if (draft) {
+        const intentText = text
         finalizeDraft(text)
+        closeComposer()
+        if (intentText) {
+          chatByInteraction.set(draftInteractionId ?? '', chatAdd('user', intentText))
+        }
       } else if (text) {
-        // A pure question: emit as a note with no anchor element.
-        emit({ kind: 'note', text, anchor: { x: 16, y: 16 } } as Intent)
+        closeComposer()
+        const id = emit({ kind: 'note', text, anchor: { x: 16, y: 16 } } as Intent)
+        chatByInteraction.set(id, chatAdd('user', text))
       }
       e.preventDefault()
     } else if (e.key === 'Escape') {
@@ -701,6 +809,9 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       e.preventDefault()
     }
   })
+
+  /** interactionId of the in-flight draft, so chatAdd can key the bubble. */
+  let draftInteractionId: string | null = null
 
   // ---------------------------------------------------------------------------
   // Status feedback: recolor committed markup as the engine works
@@ -713,23 +824,27 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     const entry = committed.get(payload.interactionId)
     if (!entry) return
     entry.status = payload.state
-    // Recolor the canvas entry and show the HUD in step with the chain.
-    hudShow(payload.state, statusColor(entry) ?? '#8e8e93', payload.detail)
+    // Update the chat bubble for this interaction; if the user sent no text
+    // (e.g. gesture with empty note), create a model-side bubble on terminal.
+    let bubble = chatByInteraction.get(payload.interactionId)
+    if (!bubble && ['applied', 'answered', 'failed', 'rejected'].includes(payload.state)) {
+      bubble = chatAdd('model', STATUS_TEXT[payload.state] ?? payload.state, payload.state)
+      chatByInteraction.set(payload.interactionId, bubble)
+    }
+    if (bubble) chatUpdate(bubble, payload.state, payload.detail)
     // Once the engine is done with an interaction, retracting it can't
     // un-apply anything, so drop it from the undo stack.
-    if (['applied', 'failed', 'rejected', 'cancelled'].includes(payload.state)) {
+    if (['applied', 'answered', 'failed', 'rejected', 'cancelled'].includes(payload.state)) {
       const at = order.indexOf(payload.interactionId)
       if (at !== -1) order.splice(at, 1)
     }
-    // On 'applied' the change is real (source written / DOM updated) — flash
-    // green, then remove the snapped layer so the canvas reflects the source,
-    // not a stale drawing. Failures stay visible so you see what didn't land.
-    if (payload.state === 'applied') {
+    // On 'applied' or 'answered' the interaction is complete — flash, then
+    // clear the markup. (answered: nothing changed, but the question is done.)
+    if (payload.state === 'applied' || payload.state === 'answered') {
       const id = payload.interactionId
       window.setTimeout(() => {
         committed.delete(id)
         redraw()
-        hudHide()
       }, APPLIED_FLASH_MS)
     }
     redraw()
@@ -773,22 +888,11 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
   }
 
   function arm() {
-    armed = true
-    canvas.style.display = 'block'
-    captureLayer.style.display = 'block'
-    toolbar.style.display = 'flex'
-    resize()
-    updateToggle()
+    openPanel()
   }
 
   function disarm() {
-    armed = false
-    liveStroke = null
-    drag = null
-    canvas.style.display = 'none'
-    captureLayer.style.display = 'none'
-    toolbar.style.display = 'none'
-    updateToggle()
+    closePanel()
   }
 
   window.addEventListener('keydown', onKeyDown)
@@ -802,10 +906,8 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       window.removeEventListener('resize', resize)
       offBus()
       canvas.remove()
-      toolbar.remove()
       captureLayer.remove()
-      hud.remove()
-      composer.remove()
+      panel.remove()
       toggle?.remove()
     },
     setMode(next) {

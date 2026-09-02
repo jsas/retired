@@ -88,7 +88,13 @@ function record(entries: Map<string, HistoryEntry>, envelope: Envelope): void {
     entry.lastStatus = p.state
     if (p.state === 'applied') entry.edits = p.edits
     entry.detail = p.detail
-    if (p.state === 'applied' || p.state === 'failed' || p.state === 'rejected' || p.state === 'cancelled') {
+    if (
+      p.state === 'applied' ||
+      p.state === 'answered' ||
+      p.state === 'failed' ||
+      p.state === 'rejected' ||
+      p.state === 'cancelled'
+    ) {
       entry.terminal = p.state
     }
     return

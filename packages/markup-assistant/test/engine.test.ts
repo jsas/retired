@@ -40,6 +40,23 @@ describe('session orchestration', () => {
     expect(statuses[2]?.edits).toHaveLength(1)
   })
 
+  it('publishes answered (not rejected) when the engine returns an answer', async () => {
+    const bus = createBus()
+    const states: string[] = []
+    bus.subscribe((e) => {
+      if (e.kind === 'status') states.push((e.payload as { state: string }).state)
+    })
+    const engine = {
+      async decide() {
+        return { edits: [] as Edit[], answer: 'That word is "you".' }
+      },
+    }
+    startSession({ bus, engine, sinks: [] })
+    bus.publish(noteIntent('ia_q'))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(states).toEqual(['accepted', 'processing', 'answered'])
+  })
+
   it('publishes failed when a sink fails', async () => {
     const bus = createBus()
     const states: string[] = []

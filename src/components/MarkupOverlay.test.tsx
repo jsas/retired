@@ -113,8 +113,10 @@ async function commitNote(text: string) {
       new PointerEvent('pointerdown', { clientX: 120, clientY: 120, bubbles: true }),
     )
   })
-  // The drawing is a draft — finalize it through the inline composer.
-  const input = document.querySelector('div[data-ma-overlay] input') as HTMLInputElement
+  // The drawing is a draft — finalize it through the panel's composer input.
+  const panels = [...document.querySelectorAll('div[data-ma-overlay]')] as HTMLElement[]
+  const openPanel = panels.find((p) => p.style.display !== 'none' && p.querySelector('input'))
+  const input = openPanel?.querySelector('input') as HTMLInputElement
   act(() => {
     input.value = text
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))

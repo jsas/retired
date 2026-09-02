@@ -25,5 +25,11 @@ export interface EngineDecision {
   edits: Edit[]
   /** Set instead of edits when the engine cannot proceed. */
   rejection?: string
+  /**
+   * Set when the input was a question (or anything with nothing to change):
+   * the engine answers directly instead of editing. Distinct from rejection —
+   * a rejection means "I can't/won't", an answer means "here's what you asked".
+   */
+  answer?: string
 }
 

@@ -229,6 +229,7 @@ export const StatusState = z.enum([
   'accepted', // engine took the interaction into its queue
   'processing', // model is working
   'applied', // every edit landed on every sink
+  'answered', // the input was a question; the engine replied with text, no edits
   'failed', // engine or sink error, retryable in principle
   'rejected', // engine decided this needs a human, e.g. missing context
   'cancelled', // input side retracted the interaction (undo/clear)
@@ -238,6 +239,7 @@ export type StatusState = z.infer<typeof StatusState>
 export const INTERACTION_STATUSES = StatusState.options
 const TERMINAL: ReadonlySet<StatusState> = new Set([
   'applied',
+  'answered',
   'failed',
   'rejected',
   'cancelled',
@@ -251,8 +253,9 @@ export function isTerminalStatus(state: StatusState): boolean {
 const TRANSITIONS: Record<StatusState, readonly StatusState[]> = {
   received: ['accepted', 'rejected', 'failed', 'cancelled'],
   accepted: ['processing', 'failed', 'rejected', 'cancelled'],
-  processing: ['applied', 'failed', 'rejected', 'cancelled'],
+  processing: ['applied', 'answered', 'failed', 'rejected', 'cancelled'],
   applied: [],
+  answered: [],
   failed: [],
   rejected: [],
   cancelled: [],

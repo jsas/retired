@@ -109,6 +109,12 @@ export function startSession(options: SessionOptions): { stop(): void } {
 
     if (cancelled.has(interactionId)) return
 
+    // A question got a direct reply — surface it as an answer, not a rejection.
+    if (decision.answer) {
+      publish(interactionId, 'answered', decision.answer)
+      return
+    }
+
     if (decision.rejection) {
       publish(interactionId, 'rejected', decision.rejection)
       return
