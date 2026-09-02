@@ -18,6 +18,7 @@ import { startSession, type Engine, type Sink } from '../engine/index.js'
 import { createRecorder, type Recorder } from '../engine/recorder.js'
 import { createRevertLedger, type RevertLedger } from '../engine/revertable.js'
 import { applyTextPatch } from '../output/diff.js'
+import { gatherSourceContext, needlesFromDomSnapshot } from './sourceContext.js'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve, sep, isAbsolute } from 'node:path'
 
@@ -32,6 +33,13 @@ export interface MarkupAssistantOptions {
    * /apply endpoint). Dom edits aren't applied server-side.
    */
   sinks?: Sink[]
+  /**
+   * Override how source excerpts are gathered from the DOM snapshot. The
+   * default searches the project root's source files for text visible in the
+   * snapshot and returns bounded excerpts — pass false to disable, or your
+   * own function to replace the search.
+   */
+  sourceContext?: ((dom: string) => string | undefined) | false
   /**
    * Inject a shared bus so sibling plugins (console, recorder views) can
    * subscribe to the same stream. When unset the plugin creates its own local
@@ -52,11 +60,18 @@ export function markupAssistant(options: MarkupAssistantOptions): Plugin {
   return {
     name: 'markup-assistant',
     configureServer(server: ViteDevServer) {
+      const root = options.root ?? server.config.root
+      const sourceContext =
+        options.sourceContext === false
+          ? undefined
+          : options.sourceContext
+            ?? ((dom: string) => gatherSourceContext(root, needlesFromDomSnapshot(dom)))
       const session = startSession({
         bus,
         engine: options.engine,
         sinks: options.sinks ?? [],
         source: 'vite-plugin',
+        sourceContext,
       })
       server.httpServer?.once('listening', () => {
         server.config.logger.info('markup-assistant: bridge ready')

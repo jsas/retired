@@ -125,6 +125,47 @@ describe('session orchestration', () => {
     expect(seen[0]?.intents).toHaveLength(1)
   })
 
+  it('passes host sourceContext excerpts to the engine', async () => {
+    const bus = createBus()
+    const seen: Array<{ dom?: string; source?: string }> = []
+    const domArgs: string[] = []
+    const engine = {
+      async decide(input: { interactionId: string; intents: unknown[]; dom?: string; source?: string }) {
+        seen.push(input)
+        return { edits: [] as Edit[], rejection: 'ok' }
+      },
+    }
+    startSession({
+      bus,
+      engine,
+      sinks: [],
+      sourceContext: (dom: string) => {
+        domArgs.push(dom)
+        return '--- src/app.css ---\n   1 | .x { color: red }'
+      },
+    })
+    bus.publish(
+      makeEnvelope({
+        interactionId: 'ia_src',
+        source: 'x',
+        kind: 'intent',
+        payload: { kind: 'dom', snapshot: 'div "hi" [0,0 1x1]' },
+      }),
+    )
+    bus.publish(
+      makeEnvelope({
+        interactionId: 'ia_src',
+        source: 'x',
+        kind: 'intent',
+        payload: { kind: 'note', text: 'make it green', anchor: { x: 1, y: 1 } },
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(domArgs).toEqual(['div "hi" [0,0 1x1]'])
+    expect(seen[0]?.source).toContain('.x { color: red }')
+  })
+
   it('reports rejected when every sink skipped the edit (nothing landed)', async () => {
     const bus = createBus()
     const detail: string[] = []

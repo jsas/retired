@@ -31,6 +31,10 @@ const DEFAULT_SYSTEM_PROMPT = [
   'For those, fill "answer" with a direct reply and leave "edits" empty — do NOT treat',
   'a question as a failed edit.',
   'Rules:',
+  '- Edits are applied to the app SOURCE files (text find/replace, file writes) —',
+  '  the change must survive a reload. DOM ops are NOT applied in this loop, so',
+  '  never answer a change request with a dom edit; find the source that renders',
+  '  the marked-up element and edit that instead.',
   '- Prefer minimal edits. Do not rewrite files wholesale unless asked.',
   '- For source edits use exact "find" strings that appear exactly once in the file.',
   '- If a change request is ambiguous, return zero edits and explain in "note".',
@@ -137,6 +141,15 @@ function buildMessages(input: EngineInput, systemPrompt: string): unknown[] {
   }
   if (input.dom) {
     messages.push({ role: 'user', content: `DOM snapshot:\n${input.dom.slice(0, 40000)}` })
+  }
+  if (input.source) {
+    messages.push({
+      role: 'user',
+      content:
+        `Source excerpts from the app's own files, found by searching for text visible ` +
+        `in the DOM snapshot. Base your text edits' \`find\` strings on this real source:\n\n` +
+        input.source.slice(0, 30000),
+    })
   }
   return messages
 }

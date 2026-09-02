@@ -78,4 +78,43 @@ describe('OpenAIEngine question handling', () => {
     expect(d.answer).toBeUndefined()
     expect(d.rejection).toBe('too ambiguous')
   })
+
+  it('includes source excerpts as their own message when provided', async () => {
+    let sent: { messages: Array<{ role: string; content: unknown }> } | undefined
+    const spy = (async (_url: unknown, init: unknown) => {
+      sent = JSON.parse(String((init as { body: string }).body))
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      name: 'apply_edits',
+                      arguments: JSON.stringify({ edits: [] , note: 'done' }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
+    const eng = new OpenAIEngine({ ...OPTS, fetchImpl: spy })
+    await eng.decide({
+      interactionId: 'ia_src',
+      intents: [
+        { kind: 'note', text: 'make it green', anchor: { x: 1, y: 1 } },
+      ] as EngineInput['intents'],
+      source: '--- src/app.css (line 1) ---\n   1 | .welcome { color: navy; }',
+    })
+    expect(sent).toBeDefined()
+    const srcMsg = sent!.messages.find(
+      (m) => typeof m.content === 'string' && m.content.includes('.welcome { color: navy; }'),
+    )
+    expect(srcMsg?.content).toContain('Source excerpts')
+  })
 })

@@ -19,6 +19,14 @@ export interface EngineInput {
   screenshot?: ImagePayload
   /** Serialized DOM at interaction time, if the input side had one. */
   dom?: string
+  /**
+   * Relevant excerpts of the app's source files, when the host can supply
+   * them (the vite plugin searches the project for text visible in the DOM
+   * snapshot). This is what lets a change request become a real find/replace
+   * edit instead of a guess — without it the model has never seen the file
+   * it's being asked to edit.
+   */
+  source?: string
 }
 
 export interface EngineDecision {

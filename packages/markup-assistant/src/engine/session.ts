@@ -31,6 +31,12 @@ export interface SessionOptions {
   sinks: Sink[]
   /** Emitter name for status envelopes. Default 'engine'. */
   source?: string
+  /**
+   * Host hook: given the DOM snapshot for an interaction, return relevant
+   * excerpts of the app's source files. The engine uses them to write
+   * find/replace edits that actually match what's on disk.
+   */
+  sourceContext?: (dom: string) => string | undefined
 }
 
 export function startSession(options: SessionOptions): { stop(): void } {
@@ -99,6 +105,7 @@ export function startSession(options: SessionOptions): { stop(): void } {
         intents: [payload],
         screenshot: ctx?.screenshot,
         dom: ctx?.dom,
+        source: options.sourceContext?.(ctx?.dom ?? ''),
       })
     } catch (err) {
       if (!cancelled.has(interactionId)) {
