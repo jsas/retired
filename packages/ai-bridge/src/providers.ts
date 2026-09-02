@@ -92,7 +92,7 @@ export async function* streamChat(
     case 'webllm': {
       // In-browser inference; imported lazily so web-llm's payload stays out
       // of the main bundle. Chat-only (no tools) — see webLlmProvider.ts.
-      const { streamWebLlm } = await import('./webLlmProvider');
+      const { streamWebLlm } = await import('./webLlmProvider.js');
       yield* streamWebLlm(conn, req);
       return;
     }

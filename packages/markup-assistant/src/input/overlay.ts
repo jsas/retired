@@ -19,19 +19,18 @@ import {
   highlightToolbar,
   intentEnvelope,
   makeInteractionId,
+  serializeDom,
 } from './overlay-parts.js'
 
 const COLORS = ['#ff3b30', '#0a84ff', '#30d158', '#ff9f0a', '#bf5af2']
 const MIN_DRAG_DISTANCE = 4
+/** How long the green 'applied' recolor shows before the markup clears. */
+const APPLIED_FLASH_MS = 900
 
 export type OverlayMode = 'select' | 'note' | 'stroke' | 'arrow' | 'move' | 'cut'
 
-export interface Hotkey {
-  ctrl?: boolean
-  shift?: boolean
-  meta?: boolean
-  key: string
-}
+import type { Hotkey } from '../core/protocol.js'
+export type { Hotkey }
 
 export interface OverlayOptions {
   bus: Bus
@@ -43,6 +42,16 @@ export interface OverlayOptions {
   zIndex?: number
   /** Activation hotkey. Default: Ctrl+Shift+M (Escape dismisses). */
   hotkey?: Hotkey
+  /**
+   * Attach the markup-layer image to every gesture's intent (for
+   * vision-capable models). Default off — only `cut` captures an image.
+   */
+  captureImage?: boolean
+  /**
+   * Attach a serialized DOM snapshot to every gesture's intent, so the model
+   * sees the page structure, not just pixels. Default off.
+   */
+  captureDom?: boolean
 }
 
 export interface OverlayHandle {
@@ -86,6 +95,8 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
   const interactiveSelector = options.interactive ?? 'body *'
   const zIndex = options.zIndex ?? 2147483000
   const hotkey = options.hotkey ?? { ctrl: true, shift: true, key: 'm' }
+  const captureImage = options.captureImage ?? false
+  const captureDom = options.captureDom ?? false
 
   let mode: OverlayMode = 'stroke'
   let armed = false
@@ -267,6 +278,19 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       data: intent as unknown as Record<string, unknown>,
     })
     order.push(interactionId)
+
+    // Context travels as its own screenshot/dom intents under the same
+    // interaction id, published before the gesture so the session has the
+    // full picture by the time the gesture arrives.
+    const bounds = committedEntryBounds(intent)
+    if (captureImage && bounds) {
+      const image = captureMarkupImage(bounds)
+      if (image) intentEnvelope(bus, source, { kind: 'screenshot', image }, interactionId)
+    }
+    if (captureDom) {
+      intentEnvelope(bus, source, { kind: 'dom', snapshot: serializeDom(document) }, interactionId)
+    }
+
     intentEnvelope(bus, source, intent, interactionId)
     redraw()
     return interactionId
@@ -474,11 +498,20 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     if (!entry) return
     entry.status = payload.state
     // Once the engine is done with an interaction, retracting it can't
-    // un-apply anything, so drop it from the undo stack. The drawing stays
-    // on the canvas until clear, so the human still sees what happened.
+    // un-apply anything, so drop it from the undo stack.
     if (['applied', 'failed', 'rejected', 'cancelled'].includes(payload.state)) {
       const at = order.indexOf(payload.interactionId)
       if (at !== -1) order.splice(at, 1)
+    }
+    // On 'applied' the change is real (source written / DOM updated) — flash
+    // green, then remove the snapped layer so the canvas reflects the source,
+    // not a stale drawing. Failures stay visible so you see what didn't land.
+    if (payload.state === 'applied') {
+      const id = payload.interactionId
+      window.setTimeout(() => {
+        committed.delete(id)
+        redraw()
+      }, APPLIED_FLASH_MS)
     }
     redraw()
   })
@@ -567,6 +600,31 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     disarm,
   }
   return api
+}
+
+/** Region to capture for a gesture, so vision models get a bounded image. */
+function committedEntryBounds(intent: Intent): { x: number; y: number; w: number; h: number } | null {
+  switch (intent.kind) {
+    case 'stroke':
+      return pad(intent.bounds)
+    case 'note':
+      return pad({ x: intent.anchor.x, y: intent.anchor.y, w: 1, h: 1 })
+    case 'arrow':
+      return pad(boundsOf([intent.from, intent.to]))
+    case 'move':
+      return pad({ x: intent.target.rect.x, y: intent.target.rect.y, w: intent.target.rect.w, h: intent.target.rect.h })
+    case 'cut':
+      return pad(intent.region)
+    default:
+      return null
+  }
+}
+
+/** Grow a region by a margin so the capture includes surrounding context. */
+function pad(r: { x: number; y: number; w: number; h: number }, margin = 60) {
+  const x = Math.max(0, r.x - margin)
+  const y = Math.max(0, r.y - margin)
+  return { x, y, w: r.w + margin * 2, h: r.h + margin * 2 }
 }
 
 function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {

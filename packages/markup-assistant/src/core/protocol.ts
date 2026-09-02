@@ -7,6 +7,15 @@ import { z } from 'zod'
  * it without knowing what's inside.
  */
 
+// The overlay's activation chord lives here (not input/) so the node-side
+// envConfig can describe it without pulling in the DOM-heavy overlay module.
+export interface Hotkey {
+  ctrl?: boolean
+  shift?: boolean
+  meta?: boolean
+  key: string
+}
+
 // ---------------------------------------------------------------------------
 // Geometry
 // ---------------------------------------------------------------------------

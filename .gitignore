@@ -12,6 +12,9 @@ dist
 dist-single
 dist-ssr
 *.local
+# Local secrets for the dev markup overlay (model endpoint/key) — never commit.
+.env
+.env.local
 
 # Editor directories and files
 .vscode/*

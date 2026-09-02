@@ -70,6 +70,27 @@ export function describeElement(el: Element, maxText = 80) {
   }
 }
 
+/**
+ * Serialize a lightweight DOM snapshot for model context: one line per element
+ * with tag, selector-ish path, and short text — enough for the model to find
+ * real selectors without shipping the full HTML. Bounded to ~maxChars.
+ */
+export function serializeDom(root: Document | Element, maxChars = 20000): string {
+  const lines: string[] = []
+  const base = root instanceof Element ? root : root.documentElement
+  for (const el of Array.from(base.querySelectorAll('*'))) {
+    // Skip the overlay's own chrome — it pollutes the snapshot.
+    if ((el as HTMLElement).dataset?.maOverlay !== undefined) continue
+    const desc = describeElement(el, 60)
+    const cls = desc.classes && desc.classes.length ? `.${desc.classes.join('.')}` : ''
+    const id = desc.id ? `#${desc.id}` : ''
+    const text = desc.textPreview ? ` "${desc.textPreview}"` : ''
+    lines.push(`<${desc.tag}${id}${cls}>${text}`)
+    if (lines.join('\n').length > maxChars) break
+  }
+  return lines.join('\n')
+}
+
 export function elementAt(x: number, y: number, selector: string): Element | null {
   const candidates = document.querySelectorAll(selector)
   let best: Element | null = null

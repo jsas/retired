@@ -168,25 +168,55 @@ describe('overlay', () => {
     handle.detach()
   })
 
-  it('recolors markup when an applied status arrives', () => {
+  it('flashes applied then clears the markup (snapped layer removed)', () => {
+    vi.useFakeTimers()
+    try {
+      const { bus, captured, handle, layer } = makeOverlay()
+      handle.arm()
+      handle.setMode('note')
+      vi.stubGlobal('prompt', () => 'hi')
+      pointer(layer, 'pointerdown', 40, 40)
+      pointer(layer, 'pointerup', 40, 40)
+      const intent = captured.find((e) => (e.payload as { kind?: string }).kind === 'note')
+      expect(intent).toBeTruthy()
+      bus.publish({
+        id: 'ev_test',
+        interactionId: intent!.interactionId,
+        ts: 1,
+        kind: 'status',
+        source: 'engine',
+        payload: { interactionId: intent!.interactionId, state: 'applied', detail: '', edits: [] },
+      })
+      // After the flash window, the committed entry is gone (canvas would've redrawn).
+      vi.advanceTimersByTime(1200)
+      expect(handle.pendingCount()).toBe(0)
+      handle.detach()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a failed interaction on the canvas (clearAll reports it still committed)', () => {
     const { bus, captured, handle, layer } = makeOverlay()
     handle.arm()
     handle.setMode('note')
     vi.stubGlobal('prompt', () => 'hi')
     pointer(layer, 'pointerdown', 40, 40)
     pointer(layer, 'pointerup', 40, 40)
-    const intent = captured.find((e) => (e.payload as { kind?: string }).kind === 'note')
-    expect(intent).toBeTruthy()
-    // engine echoes an applied status for that interaction
+    const intent = captured.find((e) => (e.payload as { kind?: string }).kind === 'note')!
     bus.publish({
-      id: 'ev_test',
-      interactionId: intent!.interactionId,
+      id: 'ev2',
+      interactionId: intent.interactionId,
       ts: 1,
       kind: 'status',
       source: 'engine',
-      payload: { interactionId: intent!.interactionId, state: 'applied', detail: '', edits: [] },
+      payload: { interactionId: intent.interactionId, state: 'rejected', detail: '', edits: [] },
     })
-    // no crash; markup kept with status applied
+    // Out of the undo stack, but still drawn — clearAll still counts it and
+    // does NOT retract a terminal interaction.
+    expect(handle.pendingCount()).toBe(0)
+    expect(handle.clearAll()).toBe(1)
+    expect(captured.filter((e) => e.kind === 'retract')).toHaveLength(0)
     handle.detach()
   })
 

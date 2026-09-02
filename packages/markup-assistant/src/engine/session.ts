@@ -8,8 +8,9 @@
  * interaction that has not reached a terminal state is cancelled, and any
  * in-flight engine run drops its edits without applying them.
  */
-import type { Bus, Edit, Envelope, Intent } from '../core/index.js'
-import { isTerminalStatus, makeEnvelope, makeStatus } from '../core/index.js'
+import type { Bus } from '../core/bus.js'
+import type { Edit, Envelope, ImagePayload, Intent } from '../core/protocol.js'
+import { isTerminalStatus, makeEnvelope, makeStatus } from '../core/protocol.js'
 import type { Engine, EngineDecision } from './engine.js'
 
 export interface Sink {
@@ -42,6 +43,8 @@ export function startSession(options: SessionOptions): { stop(): void } {
   const cancelled = new Set<string>()
   /** Interactions that already reached a terminal status. */
   const done = new Set<string>()
+  /** Context (screenshot/dom) captured per interaction, ahead of the gesture. */
+  const context = new Map<string, { screenshot?: ImagePayload; dom?: string }>()
   let stopped = false
 
   async function handle(envelope: Envelope) {
@@ -67,6 +70,19 @@ export function startSession(options: SessionOptions): { stop(): void } {
     if (!isIntentPayload(envelope.payload)) return
 
     const interactionId = envelope.interactionId
+    const payload = envelope.payload
+
+    // Context intents (a screenshot or DOM snapshot) aren't gestures — they
+    // carry no decision of their own. Stash them so the gesture intent that
+    // follows runs with the full picture.
+    if (payload.kind === 'screenshot' || payload.kind === 'dom') {
+      const slot = context.get(interactionId) ?? {}
+      if (payload.kind === 'screenshot') slot.screenshot = payload.image
+      else slot.dom = payload.snapshot
+      context.set(interactionId, slot)
+      return
+    }
+
     // One engine run per interaction; retracted ones never run.
     if (seen.has(interactionId)) return
     seen.add(interactionId)
@@ -75,11 +91,14 @@ export function startSession(options: SessionOptions): { stop(): void } {
     publish(interactionId, 'accepted', 'engine queued the interaction')
     publish(interactionId, 'processing', 'model is working')
 
+    const ctx = context.get(interactionId)
     let decision: EngineDecision
     try {
       decision = await engine.decide({
         interactionId,
-        intents: [envelope.payload],
+        intents: [payload],
+        screenshot: ctx?.screenshot,
+        dom: ctx?.dom,
       })
     } catch (err) {
       if (!cancelled.has(interactionId)) {

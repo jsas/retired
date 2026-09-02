@@ -58,25 +58,53 @@ describe('session orchestration', () => {
     expect(states).toEqual(['accepted', 'processing', 'failed'])
   })
 
-  it('rejects screenshot intents in the stub engine', async () => {
+  it('treats screenshot/dom intents as context, folded into the gesture run', async () => {
     const bus = createBus()
-    const states: string[] = []
-    bus.subscribe((e) => {
-      if (e.kind === 'status') states.push((e.payload as { state: string }).state)
-    })
-    startSession({ bus, engine: createStubEngine(), sinks: [] })
+    const seen: Array<{ intents: unknown[]; screenshot?: unknown; dom?: string }> = []
+    const engine = {
+      async decide(input: {
+        interactionId: string
+        intents: unknown[]
+        screenshot?: unknown
+        dom?: string
+      }) {
+        seen.push(input)
+        return { edits: [] as Edit[], rejection: 'context noted' }
+      },
+    }
+    startSession({ bus, engine, sinks: [] })
+
+    // A screenshot + DOM snapshot arrive under the interaction id, then the
+    // gesture. The engine should run ONCE on the gesture with both attached.
     bus.publish(
       makeEnvelope({
         interactionId: 'ia_3',
         source: 'x',
         kind: 'intent',
-        payload: {
-          kind: 'screenshot',
-          image: { mime: 'image/png', data: 'AAA', width: 2, height: 2 },
-        },
+        payload: { kind: 'screenshot', image: { mime: 'image/png', data: 'AAA', width: 2, height: 2 } },
+      }),
+    )
+    bus.publish(
+      makeEnvelope({
+        interactionId: 'ia_3',
+        source: 'x',
+        kind: 'intent',
+        payload: { kind: 'dom', snapshot: '<h1>Hi</h1>' },
+      }),
+    )
+    bus.publish(
+      makeEnvelope({
+        interactionId: 'ia_3',
+        source: 'x',
+        kind: 'intent',
+        payload: { kind: 'note', text: 'be bigger', anchor: { x: 1, y: 1 } },
       }),
     )
     await new Promise((r) => setTimeout(r, 20))
-    expect(states[states.length - 1]).toBe('rejected')
+
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.screenshot).toEqual({ mime: 'image/png', data: 'AAA', width: 2, height: 2 })
+    expect(seen[0]?.dom).toBe('<h1>Hi</h1>')
+    expect(seen[0]?.intents).toHaveLength(1)
   })
 })

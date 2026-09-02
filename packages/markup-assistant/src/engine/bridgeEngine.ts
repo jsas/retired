@@ -18,8 +18,8 @@
  */
 import type { Bridge } from '@retired/ai-bridge'
 import { z } from 'zod'
-import type { Edit, Intent } from '../core/index.js'
-import { DomEdit } from '../core/index.js'
+import type { Edit, Intent } from '../core/protocol.js'
+import { DomEdit } from '../core/protocol.js'
 import type { Engine, EngineDecision, EngineInput } from './engine.js'
 
 export interface BridgeEngineOptions {

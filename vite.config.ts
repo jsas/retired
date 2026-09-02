@@ -1,10 +1,11 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { rmSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+import { devMarkupOverlay } from './src/lib/devMarkupPlugin.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -46,6 +47,9 @@ function pruneToSingleHtml(outDir: string): Plugin {
 //    usable from file:// or passed around as an attachment.
 export default defineConfig(({ mode }) => {
   const single = mode === 'singlefile'
+  // Read MARKUP_* (and any other local secrets) from .env without a VITE_
+  // prefix, so the dev markup loop's model endpoint/key stay server-side.
+  const env = { ...process.env, ...loadEnv(mode, here, '') }
   return {
     base: single ? './' : '/retired/',
     resolve: {
@@ -72,6 +76,10 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
+      // Dev markup overlay: mark -> snap -> send -> a real model edits source ->
+      // HMR reloads -> the snapped layer clears. Enabled only when
+      // MARKUP_MODEL_ENDPOINT is set in the local .env; otherwise a no-op.
+      ...(single ? [] : devMarkupOverlay({ env })),
       ...(single ? [viteSingleFile(), pruneToSingleHtml('dist-single')] : []),
     ],
     // public/ holds the standalone favicon.svg (used by the multi-file Pages

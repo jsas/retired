@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "dev": "vite",
+    "build:markup": "npm --workspace @retired/markup-assistant run build",
+    "predev": "npm run build:markup",
     "build": "tsc -b && vite build",
     "build:single": "tsc -b && vite build --mode singlefile",
     "build:all": "npm run build && npm run build:single",

@@ -5,15 +5,17 @@
  *  - POST /__markup_assistant__/intent  browser -> engine (intent submission)
  *  - POST /__markup_assistant__/apply   apply a source edit on disk
  *  - GET  /__markup_assistant__/source?file=...  read a source file (model context)
- *  - injects beacon.js into every HTML page for the on-page status HUD
+ *
+ * The overlay itself is attached by the app (any module calling attachOverlay
+ * against the endpoints); this plugin only serves the bridge.
  */
 import type { Plugin, ViteDevServer } from 'vite'
-import { createBus, type Bus, type Envelope } from '../core/index.js'
-import { startSession, type Engine } from '../engine/index.js'
-import { applyTextPatch } from '../output/index.js'
+import { createBus, type Bus } from '../core/bus.js'
+import type { Envelope } from '../core/protocol.js'
+import { startSession, type Engine, type Sink } from '../engine/index.js'
+import { applyTextPatch } from '../output/diff.js'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve, sep, isAbsolute } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 export interface MarkupAssistantOptions {
   engine: Engine
@@ -21,6 +23,11 @@ export interface MarkupAssistantOptions {
   root?: string
   /** Prefix for all endpoints. */
   endpointPrefix?: string
+  /**
+   * Extra sinks for the session (e.g. a source sink that posts back to the
+   * /apply endpoint). Dom edits aren't applied server-side.
+   */
+  sinks?: Sink[]
 }
 
 export function markupAssistant(options: MarkupAssistantOptions): Plugin {
@@ -33,7 +40,7 @@ export function markupAssistant(options: MarkupAssistantOptions): Plugin {
       const session = startSession({
         bus,
         engine: options.engine,
-        sinks: [], // source edits go straight to the apply endpoint path below
+        sinks: options.sinks ?? [],
         source: 'vite-plugin',
       })
       server.httpServer?.once('listening', () => {
@@ -82,20 +89,6 @@ export function markupAssistant(options: MarkupAssistantOptions): Plugin {
           return
         }
 
-        if (req.method === 'GET' && url === `${prefix}/beacon.js`) {
-          const asset = resolve(
-            fileURLToPath(import.meta.url),
-            '../../assets/beacon.js',
-          )
-          try {
-            res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' })
-            res.end(readFileSync(asset, 'utf8'))
-          } catch {
-            res.writeHead(500).end('beacon asset missing')
-          }
-          return
-        }
-
         if (req.method === 'GET' && url.startsWith(`${prefix}/source`)) {
           const u = new URL(url, 'http://x')
           const file = u.searchParams.get('file') ?? ''
@@ -115,15 +108,6 @@ export function markupAssistant(options: MarkupAssistantOptions): Plugin {
 
         next()
       })
-    },
-    transformIndexHtml() {
-      return [
-        {
-          tag: 'script',
-          attrs: { src: `${prefix}/beacon.js`, type: 'module' },
-          injectTo: 'head',
-        },
-      ]
     },
   }
 }

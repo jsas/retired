@@ -5,7 +5,7 @@
  * page context (screenshot, DOM snapshot) into a decision: either Edits to
  * apply, or a rejection with a human-readable reason.
  */
-import type { Edit, ImagePayload, Intent } from '../core/index.js'
+import type { Edit, ImagePayload, Intent } from '../core/protocol.js'
 
 export interface Engine {
   /** Produce a decision for one interaction. Must not throw. */
