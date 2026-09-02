@@ -18,6 +18,7 @@ export default defineConfig({
       { find: '@retired/engine-core', replacement: join(here, 'packages/engine-core/src') },
       { find: '@retired/mcp-tools', replacement: join(here, 'packages/mcp-tools/src') },
       { find: '@retired/mcp-server', replacement: join(here, 'packages/mcp-server/src') },
+      { find: '@retired/markup-assistant', replacement: join(here, 'packages/markup-assistant/src') },
     ],
   },
   test: {

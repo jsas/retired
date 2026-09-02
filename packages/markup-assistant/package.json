@@ -1,0 +1,14 @@
+{
+  "name": "@retired/markup-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mark up the app with pen/notes/drag gestures and have a model interpret them into edits. Input overlay + intent/status wire protocol + engines + sinks + vite bridge. Consumed as source via the app's vite aliases.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

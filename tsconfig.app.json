@@ -24,7 +24,9 @@
       "@retired/mcp-tools": ["./packages/mcp-tools/src/index.ts"],
       "@retired/mcp-tools/*": ["./packages/mcp-tools/src/*"],
       "@retired/mcp-server": ["./packages/mcp-server/src/index.ts"],
-      "@retired/mcp-server/*": ["./packages/mcp-server/src/*"]
+      "@retired/mcp-server/*": ["./packages/mcp-server/src/*"],
+      "@retired/markup-assistant": ["./packages/markup-assistant/src/index.ts"],
+      "@retired/markup-assistant/*": ["./packages/markup-assistant/src/*"]
     },
 
     /* Linting */
