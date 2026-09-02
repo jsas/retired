@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { viewFromHash, hashForView, VIEW_ROUTES, type View } from './viewRoutes';
+import { viewFromHash, hashForView, foldTarget, VIEW_ROUTES, type View } from './viewRoutes';
 import { NAV_CATALOG } from '@retired/mcp-tools/navigation';
 
 describe('viewFromHash', () => {
@@ -56,14 +56,41 @@ describe('viewFromHash', () => {
 });
 
 describe('hashForView', () => {
-  it('round-trips every view', () => {
+  it('round-trips every unfolded view', () => {
+    // Folded legacy views intentionally resolve to their destination page —
+    // the round-trip for those is covered by the fold tests below.
     const views: View[] = [
-      'projection', 'math', 'eq', 'optimize', 'compare', 'montecarlo',
-      'backtest', 'print', 'export', 'scenarios', 'sharing', 'donate',
-      'welcome', 'help', 'settings', 'styleguide', 'details', 'data',
+      'projection', 'math', 'eq', 'scenarios', 'data', 'print', 'donate',
+      'welcome', 'help', 'settings', 'styleguide', 'details',
     ];
     for (const v of views) {
       expect(viewFromHash(hashForView(v))).toBe(v);
+    }
+  });
+
+  it('folds legacy views to their destination page', () => {
+    expect(foldTarget('optimize')).toBe('eq');
+    expect(foldTarget('montecarlo')).toBe('eq');
+    expect(foldTarget('backtest')).toBe('eq');
+    expect(foldTarget('compare')).toBe('scenarios');
+    expect(foldTarget('export')).toBe('data');
+    expect(foldTarget('sharing')).toBe('data');
+  });
+
+  it('hashForView prints the destination hash for folded views', () => {
+    // A "Go to Monte Carlo" link the assistant prints must land on Insights —
+    // not on a dead folded route.
+    expect(hashForView('montecarlo')).toBe('#/steering');
+    expect(hashForView('optimize')).toBe('#/steering');
+    expect(hashForView('backtest')).toBe('#/steering');
+    expect(hashForView('compare')).toBe('#/scenarios');
+    expect(hashForView('export')).toBe('#/data');
+    expect(hashForView('sharing')).toBe('#/data');
+  });
+
+  it('round-trips folded views through their fold', () => {
+    for (const v of ['optimize', 'montecarlo', 'backtest', 'compare', 'export', 'sharing'] as View[]) {
+      expect(viewFromHash(hashForView(v))).toBe(foldTarget(v));
     }
   });
 
@@ -98,9 +125,10 @@ describe('view/routes ⇔ catalog drift', () => {
     }
   });
 
-  it('hashForView/viewFromHash covers every catalog entry', () => {
+  it('hashForView/viewFromHash covers every catalog entry (fold-aware)', () => {
     for (const entry of NAV_CATALOG) {
-      expect(viewFromHash(hashForView(entry.viewId))).toBe(entry.viewId);
+      const target = entry.foldedInto ?? entry.viewId;
+      expect(viewFromHash(hashForView(entry.viewId))).toBe(target);
     }
   });
 });

@@ -698,14 +698,15 @@ function App() {
     [results.spouse, resolvedInputs],
   );
 
-  // Monte Carlo is its own page now: build the request while the route is
-  // active, refreshing when inputs/config change (debounced so dragging a
-  // slider doesn't fire a 500-run batch per pixel). MonteCarloChart re-runs
-  // whenever request changes. mcRefreshNonce forces an immediate re-run.
+  // Monte Carlo lives on the Insights page (the folded 'montecarlo' route
+  // maps to 'eq' too). Build the request while either route is active,
+  // refreshing when inputs/config change (debounced so dragging a slider
+  // doesn't fire a 500-run batch per pixel). MonteCarloChart re-runs whenever
+  // request changes. mcRefreshNonce forces an immediate re-run.
   const [mcRefreshNonce, setMcRefreshNonce] = useState(0);
   const mcNonceSeen = useRef(0);
   useEffect(() => {
-    if (view !== 'montecarlo') { setMcRequest(null); return; }
+    if (view !== 'montecarlo' && view !== 'eq') { setMcRequest(null); return; }
     const vol = resolvedInputs.returnVolatility ?? 0;
     if (vol <= 0) { setMcRequest(null); return; }
     // Build immediately when there's nothing showing yet (first visit) or a
@@ -726,11 +727,12 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resolvedInputs, config, mcRefreshNonce]);
 
-  // Backtest is its own page too. It's fast and synchronous, so recompute on
-  // the route whenever inputs/config change — no debounce needed. Real-return
-  // series: inflation off so historical multipliers match today's-dollar spending.
+  // Backtest lives on the Insights page too (the folded 'backtest' route maps
+  // to 'eq'). It's fast and synchronous, so recompute whenever either route is
+  // active — no debounce needed. Real-return series: inflation off so
+  // historical multipliers match today's-dollar spending.
   useEffect(() => {
-    if (view !== 'backtest') { setBacktestResult(null); return; }
+    if (view !== 'backtest' && view !== 'eq') { setBacktestResult(null); return; }
     const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
     realConfig.engine.inflationRate = 0;
     // Backtest the RESOLVED plan so a linked spouse's balances/benefits are
@@ -814,6 +816,9 @@ function App() {
           />
         );
       case 'eq':
+      case 'optimize':   // legacy routes — the catalog's foldedInto faces land
+      case 'montecarlo': // on the Insights page (levers + optimize + MC + backtest)
+      case 'backtest':
         return (
           <BetaInsightsPage chip={chip} assistant={assistantDock}
             eqProps={{ inputs: resolvedInputs, config, onChange: handleInputsChange, bands: eqBands, onBandsChange: setEqBands, solved: eqSolved, projection: { results, breakdown: householdBreakdown } }}
@@ -823,7 +828,7 @@ function App() {
           />
         );
       case 'scenarios':
-      case 'compare':
+      case 'compare': // legacy route — compare folds into Profiles (its foldedInto)
         return (
           <BetaPlansPage chip={chip} assistant={assistantDock}
             managerProps={{
