@@ -122,11 +122,15 @@ export function startSession(options: SessionOptions): { stop(): void } {
 
     let applied = 0
     let failures = 0
+    let skipped = 0
     const results: Edit[] = []
     for (const edit of edits) {
       if (cancelled.has(interactionId)) return
       for (const sink of sinks) {
-        if (sink.supports && !sink.supports(edit)) continue
+        if (sink.supports && !sink.supports(edit)) {
+          skipped += 1
+          continue
+        }
         try {
           const result = await sink.apply(edit, { interactionId })
           if (result === 'applied') {
@@ -143,14 +147,26 @@ export function startSession(options: SessionOptions): { stop(): void } {
 
     if (cancelled.has(interactionId)) return
 
+    // "applied" must actually land something: a whole interaction whose edits
+    // every sink skipped (or got none) means nothing changed on disk — the
+    // model returned nothing actionable. That's still informative, not a
+    // zero-edit acceptance.
     if (failures > 0) {
       publish(interactionId, 'failed', `${failures} sink application(s) failed`)
+      return
+    }
+    if (results.length === 0) {
+      publish(
+        interactionId,
+        'rejected',
+        `every sink skipped the engine's edits (${skipped} skipped; nothing landed)`,
+      )
       return
     }
     publish(
       interactionId,
       'applied',
-      `${applied} edit(s) applied via sinks`,
+      `${results.length} edit(s) applied`,
       results,
     )
   }

@@ -25,6 +25,8 @@ const DEFAULT_SYSTEM_PROMPT = [
   'You are a UI editing agent. The user marked up a screenshot of their running app:',
   'drawings, arrows, notes, and element drags. You get the markup image and DOM metadata.',
   'Interpret the markup and emit edits that make the app match what the user drew.',
+  'A gesture alone can be ambiguous — pair it with the element named in the prompt and,',
+  "when present, the user's note text.",
   'Rules:',
   '- Prefer minimal edits. Do not rewrite files wholesale unless asked.',
   '- For source edits use exact "find" strings that appear exactly once in the file.',
@@ -112,27 +114,34 @@ function describeIntents(intents: Intent[]): string {
   const lines: string[] = []
   for (const i of intents) {
     switch (i.kind) {
-      case 'note':
-        lines.push(`note: "${i.text}" at (${i.anchor.x},${i.anchor.y})`)
+      case 'note': {
+        lines.push(`note: "${i.text}" at (${i.anchor.x},${i.anchor.y})${elRef(i.element)}`)
         break
-      case 'stroke':
-        lines.push(`freehand strokes (${i.strokes.length}) in bounds (${i.bounds.x},${i.bounds.y} ${i.bounds.w}x${i.bounds.h})${i.note ? ` with note "${i.note}"` : ''}`)
+      }
+      case 'stroke': {
+        lines.push(`freehand strokes (${i.strokes.length}) in bounds (${i.bounds.x},${i.bounds.y} ${i.bounds.w}x${i.bounds.h})${i.note ? ` with note "${i.note}"` : ''}${elRef(i.element)}`)
         break
-      case 'arrow':
+      }
+      case 'arrow': {
         lines.push(`arrow from (${i.from.x},${i.from.y}) to (${i.to.x},${i.to.y})${i.note ? ` with note "${i.note}"` : ''}`)
         break
-      case 'move':
+      }
+      case 'move': {
         lines.push(`drag of <${i.target.tag}> (${i.target.selector}) to (${i.to.x},${i.to.y})`)
         break
-      case 'cut':
+      }
+      case 'cut': {
         lines.push(`cut of region (${i.region.x},${i.region.y} ${i.region.w}x${i.region.h}) to (${i.to.x},${i.to.y})`)
         break
-      case 'screenshot':
+      }
+      case 'screenshot': {
         lines.push('screenshot attached')
         break
-      case 'dom':
+      }
+      case 'dom': {
         lines.push('dom snapshot attached')
         break
+      }
     }
   }
   return lines.join('\n')
@@ -168,4 +177,11 @@ function normalizeEdits(raw: unknown): Edit[] {
     }
   }
   return edits
+}
+
+/** One-line, plain-text element description placed on the intent line. */
+function elRef(element: { tag?: string; selector?: string; textPreview?: string } | undefined): string {
+  if (!element) return ''
+  const preview = element.textPreview ? ` "${element.textPreview}"` : ''
+  return ` on <${element.tag ?? 'el'}>${preview} (${element.selector})`
 }

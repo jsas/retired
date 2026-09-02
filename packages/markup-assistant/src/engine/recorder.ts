@@ -12,9 +12,14 @@ export interface HistoryEntry {
   /** First-seen timestamp for the entry (ms). */
   ts: number
   /** Gesture intent summary (kind + small preview). */
-  gesture?: { kind: string; summary: string }
+  gesture?: { kind: string; summary: string; text?: string }
   /** Context (screenshot/dom) summaries before the gesture. */
   context: Array<{ kind: 'screenshot' | 'dom'; summary: string }>
+  /**
+   * Base64 data-URL of the captured image, when vision is on. Included so the
+   * console can render it for debugging (send the model sees the same bytes).
+   */
+  image?: string
   /** Latest non-terminal status seen. */
   lastStatus?: StatusState
   /** Applied edits snapshot (full Edit objects). */
@@ -58,10 +63,19 @@ function record(entries: Map<string, HistoryEntry>, envelope: Envelope): void {
     | { surface: string; role: string }
   if (envelope.kind === 'intent') {
     const p = payload as { kind: string; [k: string]: unknown }
-    if (p.kind === 'screenshot' || p.kind === 'dom') {
-      entry.context.push({ kind: p.kind as 'screenshot' | 'dom', summary: summarizeIntent(p) })
+    if (p.kind === 'screenshot') {
+      entry.context.push({ kind: 'screenshot', summary: summarizeIntent(p) })
+      // The captured image is a small data-URL (vision intent, bounded by the
+      // adapter); keep one per interaction so the console can render it.
+      const img = p.image as { mime?: string; data?: string } | undefined
+      if (img?.data && img.mime) {
+        entry.image = `data:${img.mime};base64,${img.data}`
+      }
+    } else if (p.kind === 'dom') {
+      entry.context.push({ kind: 'dom', summary: summarizeIntent(p) })
     } else {
-      entry.gesture = { kind: p.kind, summary: summarizeIntent(p) }
+      const text = (p.note ?? p.text ?? payloadText(p)) as string | undefined
+      entry.gesture = { kind: p.kind, summary: summarizeIntent(p), text: typeof text === 'string' ? text : undefined }
     }
     return
   }
@@ -90,21 +104,33 @@ function upsert(entries: Map<string, HistoryEntry>, interactionId: string, ts: n
   return e
 }
 
-/** Tiny one-line summary per intent; serialized to the console. */
+function payloadText(payload: { kind: string; [k: string]: unknown }): unknown {
+  return (payload as { note?: unknown }).note ?? (payload as { text?: unknown }).text
+}
+
+/** Tiny one-line summary per gesture; surfaced on the console verbatim. */
 function summarizeIntent(payload: { kind: string; [k: string]: unknown }): string {
+  // User-supplied words are the most debuggable part — always lead with them.
+  const noteText = (payload as { note?: string }).note
+  const rawText = (payload as { text?: string }).text
+  const text = noteText ?? rawText
   switch (payload.kind) {
     case 'note':
-      return `note: ${String(payload.text ?? '')}`
+      return `note: ${String(rawText ?? '')}`
     case 'stroke': {
       const strokes = (payload as { strokes?: unknown[] }).strokes ?? []
-      return `strokes(${strokes.length})`
+      const el = payload.element as { tag?: string; selector?: string; textPreview?: string } | undefined
+      const elDesc = el?.selector
+        ? ` on <${el.tag ?? 'el'}>${el.textPreview ? ` "${el.textPreview}"` : ''} (${el.selector})`
+        : ''
+      return `strokes(${strokes.length})${elDesc}${text ? ` note: "${text}"` : ''}`
     }
     case 'arrow':
-      return 'arrow'
+      return `arrow${text ? ` note: "${text}"` : ''}`
     case 'move':
-      return 'move'
+      return `move${text ? ` note: "${text}"` : ''}`
     case 'cut':
-      return 'cut'
+      return `cut${text ? ` note: "${text}"` : ''}`
     case 'screenshot':
       return `image(${(payload as { image?: { width?: number; height?: number } }).image?.width ?? '?'}x${(payload as { image?: { height?: number } }).image?.height ?? '?'})`
     case 'dom':

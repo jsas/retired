@@ -74,6 +74,14 @@ function pointer(layer: HTMLElement, type: string, x: number, y: number) {
   )
 }
 
+/** After a gesture is drawn, type a note in the composer and press Enter. */
+function commitComposer(text: string) {
+  const input = document.querySelector('div[data-ma-overlay] input') as HTMLInputElement
+  if (!input) throw new Error('composer not open')
+  input.value = text
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+}
+
 describe('overlay', () => {
   it('starts disarmed, arms on Ctrl+Shift+M, dismisses on Escape', () => {
     const { handle } = makeOverlay()
@@ -87,13 +95,83 @@ describe('overlay', () => {
     handle.detach()
   })
 
+  it('ctrl spec on mac matches the Cmd modifier (primary modifier union)', () => {
+    const { handle } = makeOverlay()
+    expect(handle.isArmed()).toBe(false)
+    // 'ctrl+shift+m' set; mac user presses Cmd+Shift+M — treated as the same.
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'M', metaKey: true, shiftKey: true }),
+    )
+    expect(handle.isArmed()).toBe(true)
+    handle.detach()
+  })
+
+  it('a bare letter (no modifier) does not arm', () => {
+    const { handle } = makeOverlay()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'M' }))
+    expect(handle.isArmed()).toBe(false)
+    handle.detach()
+  })
+
+  it('arms + disarms via the corner toggle button', () => {
+    const { handle } = makeOverlay()
+    const toggle = [...document.querySelectorAll('button[data-ma-overlay]')].find(
+      (b) => (b as HTMLButtonElement).textContent === 'markup',
+    ) as HTMLButtonElement
+    expect(toggle).toBeTruthy()
+    expect(handle.isArmed()).toBe(false)
+    toggle.click()
+    expect(handle.isArmed()).toBe(true)
+    expect(toggle.textContent).toBe('markup ✕')
+    toggle.click()
+    expect(handle.isArmed()).toBe(false)
+    handle.detach()
+  })
+
+  it('showToggle:false makes no corner button', () => {
+    const bus = createBus()
+    const handle = attachOverlay({ bus, source: 'test', showToggle: false })
+    const toggle = [...document.querySelectorAll('button[data-ma-overlay]')].find(
+      (b) => (b as HTMLButtonElement).textContent === 'markup',
+    )
+    expect(toggle).toBeUndefined()
+    handle.detach()
+  })
+
+  it('ask mode opens the composer and Enter emits the note', () => {
+    const { captured, handle, layer } = makeOverlay()
+    handle.arm()
+    handle.setMode('ask')
+    pointer(layer, 'pointerdown', 50, 50)
+    const input = document.querySelector('div[data-ma-overlay] input') as HTMLInputElement
+    expect(input).toBeTruthy()
+    input.value = 'what does headcount mean?'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    const note = captured.find((e) => (e.payload as { kind?: string }).kind === 'note')
+    expect(note).toBeTruthy()
+    handle.detach()
+  })
+
+  it('Esc in the composer closes without emitting', () => {
+    const { captured, handle, layer } = makeOverlay()
+    handle.arm()
+    handle.setMode('ask')
+    pointer(layer, 'pointerdown', 50, 50)
+    const input = document.querySelector('div[data-ma-overlay] input') as HTMLInputElement
+    input.value = 'dropped'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(captured.filter((e) => e.kind === 'intent')).toHaveLength(0)
+    handle.detach()
+  })
+
   it('emits a note intent when a note is typed in note mode', () => {
     const { captured, handle, layer } = makeOverlay()
-    vi.stubGlobal('prompt', () => 'make it bigger')
+
     handle.arm()
     handle.setMode('note')
     pointer(layer, 'pointerdown', 50, 50)
     pointer(layer, 'pointerup', 50, 50)
+    commitComposer('make it bigger')
     const note = captured.find((e) => (e.payload as { kind?: string }).kind === 'note')
     expect(note).toBeTruthy()
     handle.detach()
@@ -106,6 +184,7 @@ describe('overlay', () => {
     pointer(layer, 'pointerdown', 10, 10)
     pointer(layer, 'pointermove', 60, 60)
     pointer(layer, 'pointerup', 60, 60)
+    commitComposer('add margin here')
     expect(
       captured.some((e) => (e.payload as { kind?: string }).kind === 'stroke'),
     ).toBe(true)
@@ -119,6 +198,7 @@ describe('overlay', () => {
     pointer(layer, 'pointerdown', 5, 5)
     pointer(layer, 'pointermove', 120, 120)
     pointer(layer, 'pointerup', 120, 120)
+    commitComposer('route there')
     const arrow = captured.find((e) => (e.payload as { kind?: string }).kind === 'arrow')
     expect(arrow).toBeTruthy()
     const intent = arrow?.payload as { from: unknown; to: unknown; fromElement?: unknown }
@@ -127,7 +207,7 @@ describe('overlay', () => {
     handle.detach()
   })
 
-  it('emits a move intent when an element is dragged', () => {
+  it('prefills "move this here" in the composer for a move gesture', () => {
     const box = document.createElement('div')
     box.id = 'box'
     box.textContent = 'Drag me'
@@ -141,6 +221,31 @@ describe('overlay', () => {
     pointer(layer, 'pointerdown', cx, cy)
     pointer(layer, 'pointermove', cx + 100, cy + 100)
     pointer(layer, 'pointerup', cx + 100, cy + 100)
+    // Composer opens with the default text already selected; Enter keeps it.
+    const input = document.querySelector('div[data-ma-overlay] input') as HTMLInputElement
+    expect(input.value).toBe('move this here')
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    const move = captured.find((e) => (e.payload as { kind?: string }).kind === 'move')
+    expect((move?.payload as { note?: string }).note).toBe('move this here')
+    handle.detach()
+    box.remove()
+  })
+
+  it('emits a move intent when an element is dragged + the note is set', () => {
+    const box = document.createElement('div')
+    box.id = 'box'
+    box.textContent = 'Drag me'
+    document.body.appendChild(box)
+    const { captured, handle, layer } = makeOverlay()
+    handle.arm()
+    handle.setMode('move')
+    const r = box.getBoundingClientRect()
+    const cx = r.left + r.width / 2
+    const cy = r.top + r.height / 2
+    pointer(layer, 'pointerdown', cx, cy)
+    pointer(layer, 'pointermove', cx + 100, cy + 100)
+    pointer(layer, 'pointerup', cx + 100, cy + 100)
+    commitComposer('move it down')
     expect(
       captured.some((e) => (e.payload as { kind?: string }).kind === 'move'),
     ).toBe(true)
@@ -155,6 +260,7 @@ describe('overlay', () => {
     pointer(layer, 'pointerdown', 20, 20)
     pointer(layer, 'pointermove', 80, 90)
     pointer(layer, 'pointerup', 80, 90)
+    commitComposer('crop to this')
     const cut = captured.find((e) => (e.payload as { kind?: string }).kind === 'cut')
     expect(cut).toBeTruthy()
     handle.detach()
@@ -174,9 +280,9 @@ describe('overlay', () => {
       const { bus, captured, handle, layer } = makeOverlay()
       handle.arm()
       handle.setMode('note')
-      vi.stubGlobal('prompt', () => 'hi')
       pointer(layer, 'pointerdown', 40, 40)
       pointer(layer, 'pointerup', 40, 40)
+      commitComposer('hi')
       const intent = captured.find((e) => (e.payload as { kind?: string }).kind === 'note')
       expect(intent).toBeTruthy()
       bus.publish({
@@ -196,13 +302,46 @@ describe('overlay', () => {
     }
   })
 
+  it("surfaces terminal detail in the HUD (the model's reply text)", () => {
+    const { bus, captured, handle, layer } = makeOverlay()
+    handle.arm()
+    handle.setMode('note')
+    pointer(layer, 'pointerdown', 40, 40)
+    pointer(layer, 'pointerup', 40, 40)
+    commitComposer('why is this here?')
+    const intent = captured.find(
+      (e) => (e.payload as { kind?: string }).kind === 'note',
+    )!
+    bus.publish({
+      id: 'ev_reject',
+      interactionId: intent.interactionId,
+      ts: 1,
+      kind: 'status',
+      source: 'engine',
+      payload: {
+        interactionId: intent.interactionId,
+        state: 'rejected',
+        detail: 'the underline points at <h2> but nothing actionable — what should I change?',
+        edits: [],
+      },
+    })
+    // HUD is the overlay-owned div at bottom-right with the status pill.
+    const overlays = [...document.querySelectorAll('div[data-ma-overlay]')] as HTMLElement[]
+    const hud = overlays.find((d) => /bottom:\s*56px/.test(d.getAttribute('style') ?? ''))
+    expect(hud).toBeTruthy()
+    expect(hud!.style.display).toBe('block')
+    expect(hud!.textContent).toContain('✖ rejected')
+    expect(hud!.textContent).toContain('what should I change?')
+    handle.detach()
+  })
+
   it('keeps a failed interaction on the canvas (clearAll reports it still committed)', () => {
     const { bus, captured, handle, layer } = makeOverlay()
     handle.arm()
     handle.setMode('note')
-    vi.stubGlobal('prompt', () => 'hi')
     pointer(layer, 'pointerdown', 40, 40)
     pointer(layer, 'pointerup', 40, 40)
+    commitComposer('hi')
     const intent = captured.find((e) => (e.payload as { kind?: string }).kind === 'note')!
     bus.publish({
       id: 'ev2',
@@ -222,13 +361,14 @@ describe('overlay', () => {
 
   it('undoLast retracts the most recent intent and shrinks pendingCount', () => {
     const { captured, handle, layer } = makeOverlay()
-    vi.stubGlobal('prompt', () => 'note text')
     handle.arm()
     handle.setMode('note')
     pointer(layer, 'pointerdown', 40, 40)
     pointer(layer, 'pointerup', 40, 40)
+    commitComposer('one')
     pointer(layer, 'pointerdown', 60, 60)
     pointer(layer, 'pointerup', 60, 60)
+    commitComposer('two')
     expect(handle.pendingCount()).toBe(2)
 
     const undone = handle.undoLast()
@@ -251,13 +391,14 @@ describe('overlay', () => {
 
   it('clearAll wipes all markup and retracts active interactions', () => {
     const { captured, handle, layer } = makeOverlay()
-    vi.stubGlobal('prompt', () => 'note text')
     handle.arm()
     handle.setMode('note')
     pointer(layer, 'pointerdown', 40, 40)
     pointer(layer, 'pointerup', 40, 40)
+    commitComposer('one')
     pointer(layer, 'pointerdown', 60, 60)
     pointer(layer, 'pointerup', 60, 60)
+    commitComposer('two')
     expect(handle.pendingCount()).toBe(2)
 
     const cleared = handle.clearAll()
@@ -273,11 +414,11 @@ describe('overlay', () => {
 
   it('clearAll does not retract interactions that already reached a terminal status', () => {
     const { bus, captured, handle, layer } = makeOverlay()
-    vi.stubGlobal('prompt', () => 'note text')
     handle.arm()
     handle.setMode('note')
     pointer(layer, 'pointerdown', 40, 40)
     pointer(layer, 'pointerup', 40, 40)
+    commitComposer('hi')
     const intent = captured.find((e) => (e.payload as { kind?: string }).kind === 'note')!
     // engine applies it
     bus.publish({
@@ -298,11 +439,11 @@ describe('overlay', () => {
 
   it('Ctrl+Z undoes the last markup while armed', () => {
     const { captured, handle, layer } = makeOverlay()
-    vi.stubGlobal('prompt', () => 'note text')
     handle.arm()
     handle.setMode('note')
     pointer(layer, 'pointerdown', 40, 40)
     pointer(layer, 'pointerup', 40, 40)
+    commitComposer('hi')
     expect(handle.pendingCount()).toBe(1)
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))
     expect(handle.pendingCount()).toBe(0)

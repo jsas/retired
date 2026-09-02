@@ -27,7 +27,7 @@ const MIN_DRAG_DISTANCE = 4
 /** How long the green 'applied' recolor shows before the markup clears. */
 const APPLIED_FLASH_MS = 900
 
-export type OverlayMode = 'select' | 'note' | 'stroke' | 'arrow' | 'move' | 'cut'
+export type OverlayMode = 'select' | 'note' | 'stroke' | 'arrow' | 'move' | 'cut' | 'ask'
 
 import type { Hotkey } from '../core/protocol.js'
 export type { Hotkey }
@@ -52,6 +52,13 @@ export interface OverlayOptions {
    * sees the page structure, not just pixels. Default off.
    */
   captureDom?: boolean
+  /**
+   * Show a small floating toggle button (bottom-right corner) that arms or
+   * disarms the overlay with no keyboard. Default on. When the gesture-driven
+   * hotkey isn't feasible (e.g. mobile, embedded viewer), this is the primary
+   * arming surface.
+   */
+  showToggle?: boolean
 }
 
 export interface OverlayHandle {
@@ -97,6 +104,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
   const hotkey = options.hotkey ?? { ctrl: true, shift: true, key: 'm' }
   const captureImage = options.captureImage ?? false
   const captureDom = options.captureDom ?? false
+  const showToggle = options.showToggle ?? true
 
   let mode: OverlayMode = 'stroke'
   let armed = false
@@ -152,6 +160,80 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     '-webkit-user-select:none;'
   captureLayer.addEventListener('dragstart', (e) => e.preventDefault())
   document.body.appendChild(captureLayer)
+
+  // Corner toggle: keyboard-free arming surface. Always rendered (hidden
+  // when showToggle=false, or visible all the time so the user can reach it
+  // even before the overlay is armed).
+  let toggle: HTMLButtonElement | null = null
+  if (showToggle) {
+    toggle = document.createElement('button')
+    toggle.dataset.maOverlay = ''
+    toggle.type = 'button'
+    toggle.textContent = 'markup'
+    toggle.setAttribute('aria-pressed', 'false')
+    toggle.style.cssText =
+      `position:fixed;bottom:14px;right:14px;z-index:${zIndex + 1};` +
+      'background:#1c1c1e;color:#fff;border:1px solid #3a3a3c;border-radius:6px;' +
+      'padding:6px 10px;font:12px ui-monospace,Menlo,Consolas,monospace;cursor:pointer;' +
+      'opacity:0.85;'
+    document.body.appendChild(toggle)
+    toggle.addEventListener('click', () => {
+      if (armed) disarm()
+      else arm()
+    })
+  }
+
+  function updateToggle() {
+    if (!toggle) return
+    toggle.textContent = armed ? 'markup ✕' : 'markup'
+    toggle.setAttribute('aria-pressed', armed ? 'true' : 'false')
+    toggle.style.opacity = armed ? '1' : '0.85'
+  }
+
+  // HUD: recolors with the live status chain for the active interaction.
+  // Clickable: opens the loaded /__markup_assistant__/record page when the
+  // prefix is discoverable. Appears when anything lands. Terminal replies
+  // (rejected/failed) expand to show the model's detail text — that's the
+  // actual response, and the plain status pill alone never says it.
+  const hud = document.createElement('div')
+  hud.dataset.maOverlay = ''
+  hud.style.cssText =
+    `position:fixed;bottom:56px;right:14px;z-index:${zIndex + 1};display:none;` +
+    'background:#1c1c1e;color:#fff;border:1px solid #3a3a3c;border-radius:6px;' +
+    'padding:6px 10px;font:12px ui-monospace,Menlo,Consolas,monospace;cursor:pointer;' +
+    'max-width:380px;white-space:pre-wrap;'
+  hud.addEventListener('click', () => {
+    const prefix = '/__markup_console__'
+    window.open(prefix, '_blank')
+  })
+  document.body.appendChild(hud)
+
+  const STATUS_TEXT: Record<string, string> = {
+    received: 'received',
+    accepted: 'accepted',
+    processing: '🧠 thinking…',
+    applied: '✔ applied',
+    failed: '✖ failed',
+    rejected: '✖ rejected',
+    cancelled: '✕ cancelled',
+  }
+
+  function hudShow(status: string, color: string, detail?: string) {
+    const label = STATUS_TEXT[status] ?? status
+    // Reply case: detail on terminal statuses is the model/user-visible answer.
+    const hasReply = detail && detail !== label
+    hud.style.cssText =
+      `position:fixed;bottom:56px;right:14px;z-index:${zIndex + 1};display:block;` +
+      `background:#1c1c1e;color:#fff;border:1px solid ${color};border-radius:6px;` +
+      `padding:6px 10px;font:12px ui-monospace,Menlo,Consolas,monospace;cursor:pointer;` +
+      (hasReply ? 'max-width:420px;white-space:pre-wrap;line-height:1.4;' : 'max-width:380px;')
+    hud.textContent = hasReply ? `${label}\n${detail}` : label
+  }
+  function hudHide(ms = 0) {
+    window.setTimeout(() => {
+      hud.style.display = 'none'
+    }, ms)
+  }
 
   const committed = new Map<string, CommittedEntry>()
   /** Undo stack: interactions still retractable (not yet terminal). */
@@ -296,6 +378,83 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     return interactionId
   }
 
+  // ---------------------------------------------------------------------------
+  // Draft: drawn gesture awaiting text. The canvas layer already shows the
+  // drawing; we keep the intent cached until Enter, then call emit with it.
+  // ---------------------------------------------------------------------------
+
+  interface DraftState {
+    intent: Intent
+    interactionId: string
+  }
+  let draft: DraftState | null = null
+
+  function beginDraft(intent: Intent): string {
+    const interactionId = makeInteractionId()
+    committed.set(interactionId, {
+      kind: intent.kind as OverlayMode,
+      data: intent as unknown as Record<string, unknown>,
+    })
+    order.push(interactionId)
+    redraw()
+    draft = { intent, interactionId }
+    openComposer(defaultIntentFor(draft.intent))
+    return interactionId
+  }
+
+  /**
+   * First-guess text for gestures whose meaning is usually obvious: the user
+   * can hit Enter to take the default or type something else. Strokes/notes
+   * stay blank — their intent is rarely the same twice.
+   */
+  function defaultIntentFor(intent: Intent): string {
+    switch (intent.kind) {
+      case 'move':
+        return 'move this here'
+      case 'cut':
+        return 'move this region to the new spot'
+      case 'arrow':
+        return 'take what is at the start and put it at the end'
+      default:
+        return ''
+    }
+  }
+
+  function finalizeDraft(text: string) {
+    if (!draft) return
+    const { intent, interactionId } = draft
+    const merged: Intent =
+      intent.kind === 'note'
+        ? ({ ...intent, text } as Intent)
+        : ({ ...intent, note: text } as Intent)
+    draft = null
+    commitAndEmit(interactionId, merged)
+  }
+
+  function cancelDraft() {
+    if (!draft) return
+    const { interactionId } = draft
+    committed.delete(interactionId)
+    const at = order.indexOf(interactionId)
+    if (at !== -1) order.splice(at, 1)
+    draft = null
+    redraw()
+  }
+
+  function commitAndEmit(interactionId: string, merged: Intent): void {
+    if (captureDom) {
+      intentEnvelope(bus, source, { kind: 'dom', snapshot: serializeDom(document) }, interactionId)
+    }
+    if (captureImage) {
+      const bounds = committedEntryBounds(merged)
+      if (bounds) {
+        const image = captureMarkupImage(bounds)
+        if (image) intentEnvelope(bus, source, { kind: 'screenshot', image }, interactionId)
+      }
+    }
+    intentEnvelope(bus, source, merged, interactionId)
+  }
+
   function retract(id: string, reason: 'undo' | 'clear') {
     bus.publish(
       makeEnvelope({
@@ -380,6 +539,8 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       captureLayer.setPointerCapture(e.pointerId)
     } else if (mode === 'note') {
       openNotePrompt(e.clientX, e.clientY)
+    } else if (mode === 'ask') {
+      openComposer()
     } else if (mode === 'move') {
       drag = {
         kind: 'move',
@@ -437,20 +598,20 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       const points = liveStroke.points
       const first = points[0]
       if (mode === 'stroke' && first && points.length > 1) {
-        emit({
+        beginDraft({
           kind: 'stroke',
           strokes: [{ points, color: liveStroke.color, width: 3 }],
           bounds: boundsOf(points),
           element: refAt(first.x, first.y),
-        })
+        } as Intent)
       } else if (mode === 'arrow' && first && points[1] && dist(first, points[1]) > MIN_DRAG_DISTANCE) {
-        emit({
+        beginDraft({
           kind: 'arrow',
           from: first,
           to: points[1],
           fromElement: refAt(first.x, first.y),
           toElement: refAt(points[1].x, points[1].y),
-        })
+        } as Intent)
       }
       liveStroke = null
     } else if (drag) {
@@ -459,20 +620,20 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
         { x: drag.currentX, y: drag.currentY },
       )
       if (drag.kind === 'move' && drag.target && traveled > MIN_DRAG_DISTANCE) {
-        emit({
+        beginDraft({
           kind: 'move',
           target: describeElement(drag.target) as unknown as ElementRef,
           to: { x: drag.currentX, y: drag.currentY },
-        })
+        } as Intent)
       } else if (drag.kind === 'cut') {
         const region = rectFromPoints(drag)
         if (region.w > MIN_DRAG_DISTANCE && region.h > MIN_DRAG_DISTANCE) {
-          emit({
+          beginDraft({
             kind: 'cut',
             region,
             to: { x: drag.currentX, y: drag.currentY },
             image: captureMarkupImage(region),
-          })
+          } as Intent)
         }
       }
       drag = null
@@ -481,10 +642,65 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
   })
 
   function openNotePrompt(x: number, y: number) {
-    const text = window.prompt('Note for the assistant:')
-    if (!text) return
-    emit({ kind: 'note', text, anchor: { x, y }, element: refAt(x, y) })
+    beginDraft(
+      {
+        kind: 'note',
+        text: '',
+        anchor: { x, y },
+        element: refAt(x, y),
+      } as Intent,
+    )
   }
+
+  // ---- Composer: free-text finalized (draft) or ask raw (no drawing) ----
+  const composer = document.createElement('div')
+  composer.dataset.maOverlay = ''
+  composer.style.cssText =
+    `position:fixed;bottom:14px;left:14px;z-index:${zIndex + 1};display:none;` +
+    'background:#1c1c1e;border:1px solid #3a3a3c;border-radius:6px;padding:6px;' +
+    'display:flex;gap:6px;align-items:center;'
+
+  const composerInput = document.createElement('input')
+  composerInput.placeholder = 'what should I do? (Enter • Esc)'
+  composerInput.style.cssText =
+    'background:#0d0d0f;color:#fff;border:0;outline:none;padding:6px 8px;width:340px;' +
+    'font:13px ui-monospace,Menlo,Consolas,monospace;'
+  composer.appendChild(composerInput)
+
+  document.body.appendChild(composer)
+
+  function openComposer(prefill = '') {
+    composer.style.display = 'flex'
+    composerInput.placeholder = draft ? 'what should I do? (Enter • Esc)' : 'ask anything…'
+    composerInput.value = prefill
+    // Select prefill text so typing replaces it, Enter keeps it.
+    setTimeout(() => {
+      composerInput.focus()
+      if (prefill) composerInput.select()
+    }, 0)
+  }
+  function closeComposer() {
+    composer.style.display = 'none'
+    composerInput.value = ''
+  }
+
+  composerInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const text = composerInput.value.trim()
+      closeComposer()
+      if (draft) {
+        finalizeDraft(text)
+      } else if (text) {
+        // A pure question: emit as a note with no anchor element.
+        emit({ kind: 'note', text, anchor: { x: 16, y: 16 } } as Intent)
+      }
+      e.preventDefault()
+    } else if (e.key === 'Escape') {
+      closeComposer()
+      cancelDraft()
+      e.preventDefault()
+    }
+  })
 
   // ---------------------------------------------------------------------------
   // Status feedback: recolor committed markup as the engine works
@@ -492,11 +708,13 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
 
   const offBus = bus.subscribe((envelope) => {
     if (envelope.kind !== 'status') return
-    const payload = envelope.payload as { interactionId?: string; state?: string }
+    const payload = envelope.payload as { interactionId?: string; state?: string; detail?: string }
     if (!payload.interactionId || typeof payload.state !== 'string') return
     const entry = committed.get(payload.interactionId)
     if (!entry) return
     entry.status = payload.state
+    // Recolor the canvas entry and show the HUD in step with the chain.
+    hudShow(payload.state, statusColor(entry) ?? '#8e8e93', payload.detail)
     // Once the engine is done with an interaction, retracting it can't
     // un-apply anything, so drop it from the undo stack.
     if (['applied', 'failed', 'rejected', 'cancelled'].includes(payload.state)) {
@@ -511,6 +729,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       window.setTimeout(() => {
         committed.delete(id)
         redraw()
+        hudHide()
       }, APPLIED_FLASH_MS)
     }
     redraw()
@@ -521,11 +740,14 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
   // ---------------------------------------------------------------------------
 
   function matchesHotkey(e: KeyboardEvent): boolean {
+    // A 'ctrl' spec is the "primary modifier": matches Ctrl on Windows/Linux
+    // or Cmd on mac. An explicit 'meta/cmd' spec restricts to Cmd.
+    const primary = e.ctrlKey || e.metaKey
+    const wantsPrimary = !!hotkey.ctrl || !!hotkey.meta
     return (
       e.key.toLowerCase() === hotkey.key.toLowerCase() &&
-      !!e.ctrlKey === !!hotkey.ctrl &&
-      !!e.shiftKey === !!hotkey.shift &&
-      !!e.metaKey === !!hotkey.meta
+      primary === wantsPrimary &&
+      !!e.shiftKey === !!hotkey.shift
     )
   }
 
@@ -556,6 +778,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     captureLayer.style.display = 'block'
     toolbar.style.display = 'flex'
     resize()
+    updateToggle()
   }
 
   function disarm() {
@@ -565,6 +788,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     canvas.style.display = 'none'
     captureLayer.style.display = 'none'
     toolbar.style.display = 'none'
+    updateToggle()
   }
 
   window.addEventListener('keydown', onKeyDown)
@@ -580,6 +804,9 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
       canvas.remove()
       toolbar.remove()
       captureLayer.remove()
+      hud.remove()
+      composer.remove()
+      toggle?.remove()
     },
     setMode(next) {
       mode = next

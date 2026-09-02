@@ -93,7 +93,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-/** Arm the overlay, then commit a note intent by faking the prompt dialog. */
+/** Arm the overlay, then commit a note via the inline composer. */
 async function commitNote(text: string) {
   act(() => {
     // Ctrl+Shift+M arms the overlay.
@@ -101,11 +101,10 @@ async function commitNote(text: string) {
       new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }),
     )
   })
-  vi.stubGlobal('prompt', vi.fn(() => text))
-  // Toolbar note-mode button (mode buttons carry data-mode).
   const noteBtn = document.querySelector('button[data-mode="note"]')
-  // The capture layer is the last [data-ma-overlay] node (canvas, toolbar, capture).
-  const capture = [...document.querySelectorAll('[data-ma-overlay]')].at(-1)
+  const capture = [...document.querySelectorAll('div[data-ma-overlay]')].find(
+    (d) => (d.getAttribute('style') ?? '').includes('crosshair'),
+  ) as HTMLElement
   act(() => {
     noteBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -113,6 +112,12 @@ async function commitNote(text: string) {
     capture?.dispatchEvent(
       new PointerEvent('pointerdown', { clientX: 120, clientY: 120, bubbles: true }),
     )
+  })
+  // The drawing is a draft — finalize it through the inline composer.
+  const input = document.querySelector('div[data-ma-overlay] input') as HTMLInputElement
+  act(() => {
+    input.value = text
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
   })
 }
 

@@ -107,4 +107,30 @@ describe('session orchestration', () => {
     expect(seen[0]?.dom).toBe('<h1>Hi</h1>')
     expect(seen[0]?.intents).toHaveLength(1)
   })
+
+  it('reports rejected when every sink skipped the edit (nothing landed)', async () => {
+    const bus = createBus()
+    const detail: string[] = []
+    bus.subscribe((e) => {
+      if (e.kind === 'status') detail.push((e.payload as { detail?: string }).detail ?? '')
+    })
+    const engine = {
+      async decide() {
+        return { edits: [{ kind: 'write', file: 'x.ts', content: 'c', description: '' } as Edit] }
+      },
+    }
+    // Sink advertises text edits only — a write edit never reaches it, so
+    // nothing lands. Without a status.diag the user sees '0 applied'.
+    const sink = {
+      name: 'source',
+      supports: (edit: Edit) => edit.kind === 'text' && false,
+      async apply() {
+        return 'applied' as const
+      },
+    }
+    startSession({ bus, engine, sinks: [sink] })
+    bus.publish(noteIntent('ia_4'))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(detail.some((d) => d.includes('skipped'))).toBe(true)
+  })
 })

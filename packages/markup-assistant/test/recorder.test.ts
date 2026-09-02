@@ -36,6 +36,22 @@ describe('recorder', () => {
     rec.close()
   })
 
+  it('keeps the screenshot image base64 for the console\'s thumbnail', () => {
+    const bus = createBus()
+    const rec = createRecorder(bus)
+    bus.publish(
+      makeEnvelope({
+        interactionId: 'i3',
+        source: 'probe',
+        kind: 'intent',
+        payload: { kind: 'screenshot', image: { mime: 'image/png', data: 'AAABBB', width: 2, height: 2 } },
+      } as unknown as Parameters<typeof bus.publish>[0]),
+    )
+    const entry = rec.get('i3')
+    expect(entry?.image).toBe('data:image/png;base64,AAABBB')
+    rec.close()
+  })
+
   it('stays safe on missing/unexpected payloads', () => {
     const bus = createBus()
     const rec = createRecorder(bus)
@@ -43,6 +59,37 @@ describe('recorder', () => {
       makeEnvelope({ interactionId: 'i2', source: 'engine', kind: 'status', payload: makeStatus('i2', 'processing', '…') }),
     )
     expect(rec.get('i2')?.lastStatus).toBe('processing')
+    rec.close()
+  })
+
+  it('folds user note text into the gesture summary + text', () => {
+    const bus = createBus()
+    const rec = createRecorder(bus)
+    bus.publish(
+      makeEnvelope({
+        interactionId: 'i9',
+        source: 'probe',
+        kind: 'intent',
+        payload: {
+          kind: 'stroke',
+          strokes: [{ points: [{ x: 1, y: 1 }], color: '#f00', width: 3 }],
+          bounds: { x: 1, y: 1, w: 10, h: 10 },
+          note: 'make this bigger',
+          element: {
+            tag: 'h2',
+            selector: 'h2.hero',
+            textPreview: 'The verdict',
+            rect: { x: 0, y: 0, w: 1, h: 1 },
+            classes: ['hero'],
+          },
+        } as unknown as Parameters<typeof bus.publish>[0]['payload'],
+      } as unknown as Parameters<typeof bus.publish>[0]),
+    )
+    const entry = rec.get('i9')
+    expect(entry?.gesture?.summary).toContain('note: "make this bigger"')
+    expect(entry?.gesture?.summary).toContain('h2.hero')
+    expect(entry?.gesture?.summary).toContain('"The verdict"')
+    expect(entry?.gesture?.text).toBe('make this bigger')
     rec.close()
   })
 })

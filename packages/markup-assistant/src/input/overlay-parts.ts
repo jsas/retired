@@ -6,7 +6,7 @@ import type { Bus } from '../core/index.js'
 import { makeEnvelope, type Intent } from '../core/index.js'
 import type { OverlayMode } from './overlay.js'
 
-export const MODES: OverlayMode[] = ['select', 'note', 'stroke', 'arrow', 'move', 'cut']
+export const MODES: OverlayMode[] = ['select', 'note', 'stroke', 'arrow', 'move', 'cut', 'ask']
 
 export interface ToolbarActions {
   onSelect: (m: OverlayMode) => void
@@ -85,13 +85,32 @@ export function serializeDom(root: Document | Element, maxChars = 20000): string
     const cls = desc.classes && desc.classes.length ? `.${desc.classes.join('.')}` : ''
     const id = desc.id ? `#${desc.id}` : ''
     const text = desc.textPreview ? ` "${desc.textPreview}"` : ''
-    lines.push(`<${desc.tag}${id}${cls}>${text}`)
+    // Geometry the model can compare gesture bounds against (x,y w×h viewport px).
+    const geo = ` [${Math.round(desc.rect.x)},${Math.round(desc.rect.y)} ${Math.round(desc.rect.w)}x${Math.round(desc.rect.h)}]`
+    lines.push(`<${desc.tag}${id}${cls}>${geo}${text}`)
     if (lines.join('\n').length > maxChars) break
   }
   return lines.join('\n')
 }
 
 export function elementAt(x: number, y: number, selector: string): Element | null {
+  // Prefer native hit-testing: elementsFromPoint is one DOM walk and skips
+  // the selector-filtered-loop pitfalls (rect corners, zero-hits, etc.).
+  if (typeof document.elementsFromPoint === 'function') {
+    const stack = document.elementsFromPoint(x, y)
+    // Walk the hit-test stack top-down; skip overlay-owned chrome.
+    for (const el of stack) {
+      if (el.closest('[data-ma-overlay]')) continue
+      if (selector !== 'body *' && !(el as Element).matches(selector)) continue
+      const style = window.getComputedStyle(el)
+      if (style.visibility === 'hidden') continue
+      if (el instanceof Element && el.tagName !== 'HTML' && el.tagName !== 'BODY') {
+        return el
+      }
+    }
+    return null
+  }
+  // Fallback: hand-rolled rect-hit-test over the selector.
   const candidates = document.querySelectorAll(selector)
   let best: Element | null = null
   for (const el of candidates) {
@@ -100,7 +119,6 @@ export function elementAt(x: number, y: number, selector: string): Element | nul
     const style = window.getComputedStyle(el)
     if (style.pointerEvents === 'none' || style.visibility === 'hidden') continue
     const r = el.getBoundingClientRect()
-    if (r.width === 0 || r.height === 0) continue
     if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
       // prefer the smallest (deepest) matching element
       if (!best || area(r) < area(best.getBoundingClientRect())) best = el

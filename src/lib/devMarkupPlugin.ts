@@ -14,7 +14,7 @@
  * endpoints are unauthenticated same-origin dev routes — fine on localhost,
  * never expose the dev server beyond it.
  */
-import type { Plugin } from 'vite'
+import type { Plugin, ResolvedConfig } from 'vite'
 // The node-dist of markup-assistant (built by packages/markup-assistant/npm run
 // build). The vite config runs in node, so it must import real .js — the
 // package's /node subpath points at dist/ rather than the source the client
@@ -96,8 +96,16 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
   // to source and vite import-analysis rewrites it). The non-secret overlay
   // config is serialized into a window binding so the page stays in step
   // without re-publishing a static script.
+  //
+  // The injected `src` must include the configured base (e.g. '/retired/').
+  // Vite won't rewrite attrs we add through transformIndexHtml, so we read the
+  // base once config resolves and prefix it ourselves.
+  let base = '/'
   const bootstrap: Plugin = {
     name: 'dev-markup-overlay-bootstrap',
+    configResolved(config: ResolvedConfig) {
+      base = config.base ?? '/'
+    },
     transformIndexHtml() {
       return [
         {
@@ -111,7 +119,7 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
         },
         {
           tag: 'script',
-          attrs: { src: '/src/lib/markupBootstrap.ts', type: 'module' },
+          attrs: { src: `${base.replace(/\/+$/, '')}/src/lib/markupBootstrap.ts`, type: 'module' },
           injectTo: 'head',
         },
       ]
@@ -159,6 +167,13 @@ function render(h){
       +(e.detail?'<div>'+e.detail+'</div>':'');
     if(e.gesture&&e.gesture.summary){const s=document.createElement('div');s.textContent='gesture: '+e.gesture.summary;d.appendChild(s)}
     for(const c of (e.context||[])){const s=document.createElement('div');s.textContent='ctx['+c.kind+']: '+c.summary;d.appendChild(s)}
+    if(e.gesture&&e.gesture.text){const s=document.createElement('div');s.textContent='text: "'+e.gesture.text+'"';d.appendChild(s)}
+    if(e.image){
+      const img=document.createElement('img');
+      img.src=e.image;
+      img.style.cssText='max-width:220px;max-height:120px;border:1px solid #333;margin:4px 0;display:block;'
+      d.appendChild(img)
+    }
     for(const ed of e.edits||[]){
       const row=document.createElement('div');row.className='edit';
       row.textContent=ed.kind+' '+ (ed.file||'');
