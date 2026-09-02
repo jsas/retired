@@ -7,6 +7,8 @@ export interface DetailsSection {
   id: string;
   label: string;
   group: string;
+  // Kept for reference — RDSP/FHSA/Home used to gate on existing data. Their
+  // enable toggles now live inside the section body, so nothing is hidden.
   conditional?: 'rdsp' | 'fhsa' | 'home';
 }
 
