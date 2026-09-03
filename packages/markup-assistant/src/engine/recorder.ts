@@ -20,6 +20,12 @@ export interface HistoryEntry {
    * console can render it for debugging (send the model sees the same bytes).
    */
   image?: string
+  /**
+   * The raw DOM snapshot the overlay sent (when dom-capture is on). Kept so the
+   * console / debugging can see EXACTLY what the source-search parsed — the
+   * needle extractor's behaviour is only reproducible against the real text.
+   */
+  dom?: string
   /** Latest non-terminal status seen. */
   lastStatus?: StatusState
   /** Applied edits snapshot (full Edit objects). */
@@ -73,6 +79,9 @@ function record(entries: Map<string, HistoryEntry>, envelope: Envelope): void {
       }
     } else if (p.kind === 'dom') {
       entry.context.push({ kind: 'dom', summary: summarizeIntent(p) })
+      // Keep the raw snapshot so debugging sees exactly what the search parsed.
+      const snap = (p as { snapshot?: unknown }).snapshot
+      if (typeof snap === 'string') entry.dom = snap
     } else {
       const text = (p.note ?? p.text ?? payloadText(p)) as string | undefined
       entry.gesture = { kind: p.kind, summary: summarizeIntent(p), text: typeof text === 'string' ? text : undefined }

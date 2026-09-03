@@ -99,6 +99,17 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
         return undefined
       }
     }
+    // Dev-only: capture the exact request payload sent to the model so we can
+    // diagnose why the model misbehaves (source excerpt present? transcript?)
+    if (env.MARKUP_DEBUG_LOG) {
+      engine.requestLogger = ({ messages }) => {
+        const path = String(env.MARKUP_DEBUG_LOG)
+        const line = JSON.stringify({ ts: Date.now(), messages }) + '\n'
+        void import('node:fs').then((fs) => {
+          try { fs.appendFileSync(path, line) } catch { /* ignore */ }
+        }).catch(() => {})
+      }
+    }
   }
 
   const bridge = markupAssistant({

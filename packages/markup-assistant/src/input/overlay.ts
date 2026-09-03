@@ -249,7 +249,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     return bubble
   }
 
-  function chatUpdate(bubble: HTMLElement, status: string, detail?: string) {
+  function chatUpdate(bubble: HTMLElement, status: string, detail?: string, edits?: unknown[]) {
     const statusColor =
       status === 'applied' ? '#30d158' :
       status === 'answered' ? '#30d158' :
@@ -265,6 +265,43 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
         ? detail
         : `${STATUS_TEXT[status] ?? status}${detail ? ` — ${detail}` : ''}`
     bubble.textContent = reply
+    // An applied interaction must show WHAT changed and WHERE: "2 edit(s)
+    // applied" with no per-file detail is a black box — the user cannot tell
+    // whether their card turned blue or some other file silently changed.
+    if (edits?.length) {
+      const block = document.createElement('div')
+      block.style.cssText =
+        'margin-top:6px;padding:6px 8px;background:#111;border:1px solid #3a3a3c;' +
+        'border-radius:6px;font-family:ui-monospace,Menlo,Consolas,monospace;' +
+        'font-size:10px;line-height:1.5;color:#c7c7cc;white-space:pre-wrap;word-break:break-all;'
+      for (const e of edits as Array<{ kind?: string; file?: string; find?: string; replace?: string; description?: string }>) {
+        const row = document.createElement('div')
+        const file = document.createElement('div')
+        file.style.cssText = 'color:#30d158;font-weight:600;margin-bottom:2px;'
+        file.textContent = `✎ ${e.file ?? '(unknown file)'}`
+        row.appendChild(file)
+        if (e.description) {
+          const d = document.createElement('div')
+          d.style.cssText = 'color:#8e8e93;margin-bottom:2px;'
+          d.textContent = e.description
+          row.appendChild(d)
+        }
+        if (e.find != null || e.replace != null) {
+          const diff = document.createElement('div')
+          const f = document.createElement('div')
+          f.style.cssText = 'color:#ff6961;'
+          f.textContent = `- ${(e.find ?? '').replace(/\s+/g, ' ').slice(0, 120)}`
+          const r = document.createElement('div')
+          r.style.cssText = 'color:#7dffb0;'
+          r.textContent = `+ ${(e.replace ?? '').replace(/\s+/g, ' ').slice(0, 120)}`
+          diff.appendChild(f)
+          diff.appendChild(r)
+          row.appendChild(diff)
+        }
+        block.appendChild(row)
+      }
+      bubble.appendChild(block)
+    }
   }
 
   // Composer row at the panel bottom.
@@ -824,7 +861,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
 
   const offBus = bus.subscribe((envelope) => {
     if (envelope.kind !== 'status') return
-    const payload = envelope.payload as { interactionId?: string; state?: string; detail?: string }
+    const payload = envelope.payload as { interactionId?: string; state?: string; detail?: string; edits?: unknown[] }
     if (!payload.interactionId || typeof payload.state !== 'string') return
     const entry = committed.get(payload.interactionId)
     if (!entry) return
@@ -843,7 +880,7 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
         bubble = chatAdd('model', STATUS_TEXT[payload.state] ?? payload.state, payload.state)
         chatByInteraction.set(payload.interactionId, bubble)
       }
-      chatUpdate(bubble, payload.state, payload.detail)
+      chatUpdate(bubble, payload.state, payload.detail, payload.edits)
     }
     // Once the engine is done with an interaction, retracting it can't
     // un-apply anything, so drop it from the undo stack.

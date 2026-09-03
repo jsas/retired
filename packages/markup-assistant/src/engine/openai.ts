@@ -25,6 +25,8 @@ export interface OpenAIEngineOptions {
    * and the retry is told it arrived. In the vite bridge this hits /source.
    */
   fetchSource?: (file: string) => Promise<string | undefined>
+  /** Dev-only: observe the exact request payload sent to the model. */
+  requestLogger?: (payload: { messages: unknown[] }) => void
 }
 
 const DEFAULT_SYSTEM_PROMPT = [
@@ -132,10 +134,19 @@ export class OpenAIEngine implements Engine {
   /** Record the outcome of a decided interaction for later turns. */
   private remember(input: EngineInput, decision: EngineDecision): void {
     const userText = describeIntents(input.intents)
-    const outcome =
-      decision.answer ??
-      decision.rejection ??
-      (decision.edits.length ? `applied ${decision.edits.length} edit(s)` : '')
+    // A rejection must NOT be remembered in the model's own words. When a
+    // source-search bug makes it say "the excerpt only covers the first card",
+    // that false claim sits in the transcript and every later turn
+    // pattern-matches it — even after the bug is fixed. Remember the FACT
+    // (this request was rejected and why, roughly) without the model's
+    // possibly-wrong narrative.
+    const outcome = decision.answer
+      ? `answered: ${decision.answer}`
+      : decision.rejection
+        ? 'rejected — the change could not be made on that attempt'
+        : decision.edits.length
+          ? `applied ${decision.edits.length} edit(s)`
+          : ''
     if (!userText.trim() && !outcome) return
     this.transcript.push({ role: 'user', content: userText })
     this.transcript.push({ role: 'assistant', content: outcome })
@@ -152,6 +163,7 @@ export class OpenAIEngine implements Engine {
 
   /** One chat-completions round trip; returns the assistant message. */
   private async callModel(messages: unknown[]): Promise<AssistantMessage> {
+    this.opts.requestLogger?.({ messages })
     const doFetch = this.opts.fetchImpl ?? fetch
     const res = await doFetch(this.opts.endpoint, {
       method: 'POST',

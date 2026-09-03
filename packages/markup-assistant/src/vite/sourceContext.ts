@@ -53,15 +53,19 @@ export function gatherSourceContext(
   const rootAbs = resolve(root)
   interface Candidate {
     rel: string
-    firstLine: number
-    /** Last line containing a needle — the excerpt must span the whole hit range. */
-    lastLine: number
+    /** Every line containing at least one needle (ascending). */
+    hitLines: number[]
     /** Distinct needles found in the file — breadth beats raw line count. */
     matches: number
     tier: number
   }
   const candidates: Candidate[] = []
   const lowerNeedles = clean.map((n) => n.toLowerCase())
+  // Needle weight decays with gesture-proximity rank: the first needle (the
+  // circled element's own class chain) is worth far more than the 20th (some
+  // toolbar button three screens away). Without decay, a file can outscore
+  // the circled component purely by matching many far-away junk needles.
+  const weight = (n: number): number => 1 / (1 + n * 0.2)
   for (const file of files) {
     const sepIdx = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'))
     const name = sepIdx === -1 ? file : file.slice(sepIdx + 1)
@@ -75,6 +79,7 @@ export function gatherSourceContext(
     }
     const lines = content.split('\n')
     const matched = new Set<number>()
+    let score = 0
     const hitLines: number[] = []
     for (let i = 0; i < lines.length; i++) {
       const line = (lines[i] ?? '').toLowerCase()
@@ -83,6 +88,7 @@ export function gatherSourceContext(
         if (matched.has(n)) continue
         if (line.includes(lowerNeedles[n]!)) {
           matched.add(n)
+          score += weight(n)
           hit = true
         }
       }
@@ -91,18 +97,18 @@ export function gatherSourceContext(
     if (hitLines.length === 0) continue
     candidates.push({
       rel: file.slice(rootAbs.length + 1).replace(/\\/g, '/'),
-      firstLine: hitLines[0]!,
-      lastLine: hitLines[hitLines.length - 1]!,
-      matches: matched.size,
+      hitLines,
+      matches: score,
       tier,
     })
   }
   if (!candidates.length) return undefined
 
   // UI components before stylesheets before logic; within a tier, the file
-  // matching the most DISTINCT needles wins — a component carrying both the
-  // element's classes and its exact on-screen text is the one the user
-  // circled, not some other file that shares a common Tailwind class.
+  // scoring highest wins — score weights each matched needle by its
+  // gesture-proximity rank, so a component carrying the circled element's
+  // own class chain and on-screen text outranks a file that merely matches
+  // many far-away toolbar needles.
   candidates.sort((a, b) => a.tier - b.tier || b.matches - a.matches)
 
   const sections: string[] = []
@@ -115,11 +121,7 @@ export function gatherSourceContext(
       continue
     }
     const lines = content.split('\n')
-    // The excerpt must span the whole hit range: a card grid's four cards can
-    // sit 20+ lines apart, so centering on the first hit would cut off the
-    // card the user actually circled. Pad a little on each side.
-    const from = Math.max(0, cand.firstLine - CONTEXT_LINES)
-    const to = Math.min(lines.length, cand.lastLine + CONTEXT_LINES + 1)
+    const [from, to] = excerptWindow(cand.hitLines, lines.length)
     // Show the lines VERBATIM (no line-number gutter): the model copies this
     // text into a `find` string, and any prefix we add would never match the
     // file on disk. The header carries the starting line for orientation.
@@ -129,11 +131,51 @@ export function gatherSourceContext(
     // lives in MetricCards.tsx), and a guessed path fails with file
     // unreadable.
     const section = `file: ${cand.rel} (lines ${from + 1}-${to})\n${body}`
-    if (total + section.length > maxChars) break
+    // `continue`, not `break`: one candidate whose window overflows the
+    // budget must not starve every smaller candidate behind it.
+    if (total + section.length > maxChars) continue
     sections.push(section)
     total += section.length + 2
   }
   return sections.length ? sections.join('\n\n') : undefined
+}
+
+/** Max lines one file's excerpt may span; windows beyond this get truncated. */
+const MAX_WINDOW_LINES = 90
+
+/**
+ * Pick the excerpt window for a file's hit lines. When the hits cluster (the
+ * normal case — the circled component's classes+text hit within a few lines),
+ * the window spans them all, padded. When junk needles scatter hits across a
+ * huge file, a first→last span would be the whole file; fall back to the
+ * densest window — the region with the most distinct hits per line.
+ */
+function excerptWindow(hitLines: number[], lineCount: number): [number, number] {
+  const pad = CONTEXT_LINES
+  const first = hitLines[0]!
+  const last = hitLines[hitLines.length - 1]!
+  if (last - first + 1 + 2 * pad <= MAX_WINDOW_LINES) {
+    return [Math.max(0, first - pad), Math.min(lineCount, last + pad + 1)]
+  }
+  // Densest window: slide a MAX_WINDOW_LINES-wide frame, maximize hit count
+  // inside it (ties → earlier window, stable for tests and retries).
+  const width = MAX_WINDOW_LINES
+  let bestStart = first
+  let bestCount = -1
+  for (const startHit of hitLines) {
+    const start = startHit
+    const end = start + width
+    let count = 0
+    for (const h of hitLines) {
+      if (h >= start && h < end) count += 1
+      else if (h >= end) break
+    }
+    if (count > bestCount) {
+      bestCount = count
+      bestStart = start
+    }
+  }
+  return [Math.max(0, bestStart - pad), Math.min(lineCount, bestStart + width)]
 }
 
 /**
@@ -153,24 +195,44 @@ export function gatherSourceContext(
  *     sentence pins the exact component; a four-letter word matches half
  *     the repo.
  */
-export function needlesFromDomSnapshot(dom: string, max = 12): string[] {
+export function needlesFromDomSnapshot(dom: string, max = 24): string[] {
+  // serializeDom emits the snapshot FOCUS-SORTED — the element nearest the
+  // gesture comes first. That ordering is the single most reliable signal we
+  // have for which element the user means, so preserve it: a needle's rank is
+  // its distance from the gesture. (Re-sorting by text length or rarity would
+  // throw the proximity signal away and let a dense form's many junk labels
+  // flood out the one label that identifies the circled element.)
   const classNeedles: string[] = []
   const textNeedles: string[] = []
-  const seen = new Set<string>()
+  const seenClasses = new Set<string>()
+  const seenText = new Set<string>()
   for (const line of dom.split('\n')) {
-    // Selector token inside the angle brackets: `tag.cls.cls` or `tag#id`.
-    const sel = line.match(/<\s*([a-zA-Z][\w.#-]*)\s*>/)?.[1]
+    // Selector token inside the angle brackets: `tag.cls.cls`, `tag#id`, or
+    // Tailwind arbitrary values like `text-[10px]`. Capture up to whitespace
+    // or `>` — the old `[\w.#-]*` regex stopped dead at `[`, dropping the
+    // class chain of EVERY element carrying an arbitrary-value class.
+    const sel = line.match(/<\s*([^\s>]+)/)?.[1]
     if (sel && sel.includes('.')) {
-      const classes = sel
+      const raw = sel
         .split('.')
         .slice(1) // drop the tag name
         .filter((c) => c && !c.startsWith('#'))
+      // Tailwind decimals (`gap-1.5`, `mt-0.5`) split on the '.' separator —
+      // `gap-1` + `5`. A purely-numeric fragment is the decimal tail of the
+      // previous class, never a standalone class; merge it back so the needle
+      // matches the className attribute verbatim.
+      const classes: string[] = []
+      for (const c of raw) {
+        const prev = classes[classes.length - 1]
+        if (prev && /^\d{1,2}$/.test(c)) classes[classes.length - 1] = `${prev}.${c}`
+        else classes.push(c)
+      }
       // Two or more classes joined with spaces match a real className
       // attribute; one class alone matches half the app.
       if (classes.length >= 2) {
         const needle = classes.join(' ')
-        if (!seen.has(needle)) {
-          seen.add(needle)
+        if (!seenClasses.has(needle)) {
+          seenClasses.add(needle)
           classNeedles.push(needle)
         }
       }
@@ -178,12 +240,41 @@ export function needlesFromDomSnapshot(dom: string, max = 12): string[] {
     const m = line.match(/"([^"]{4,120})"/)
     if (!m?.[1]) continue
     const text = m[1].trim().replace(/(?:…|\.\.\.)+$/, '').trim()
-    if (text.length < 4 || seen.has(text)) continue
-    seen.add(text)
+    if (text.length < 4 || seenText.has(text)) continue
+    // serializeDom truncates previews at 60 chars; a LEAF element (a label, a
+    // value) stays under that. A PARENT element concatenates its whole
+    // subtree's text ("Withdrawal Rate5.3%spouse 3.1%") — that blob can never
+    // match a source line and only burns search slots (and, at the hard cap,
+    // crowds out the leaf label that would have). Skip previews that read like
+    // a concatenation: multiple run-together words with no separator.
+    if (isGluedBlob(text)) continue
+    seenText.add(text)
     textNeedles.push(text)
   }
-  textNeedles.sort((a, b) => b.length - a.length)
-  return [...classNeedles, ...textNeedles].slice(0, max)
+  // Class needles first (they pin the component even when its text is dynamic
+  // like "$2,824,194") — but only the closest-to-gesture ones. A busy page
+  // yields dozens of neighbor class chains (icon kits, toolbars) that would
+  // crowd out the element's OWN on-screen text — the needle that actually
+  // discriminates between components. So: lead with the nearest class chains,
+  // reserve slots for text previews, then let remaining chains fill any room.
+  const CLASS_LEAD = 10
+  return [
+    ...classNeedles.slice(0, CLASS_LEAD),
+    ...textNeedles,
+    ...classNeedles.slice(CLASS_LEAD),
+  ].slice(0, max)
+}
+
+/**
+ * True when a text preview reads like a parent element's concatenated subtree
+ * ("Projection SummaryHousehold Wealth…", "$2,824,194you $1,596,455",
+ * "Withdrawal Rate5.3%spouse 3.1%"): fingerprints of run-together subtree
+ * text — lowercase→uppercase inside a word, a digit glued to a lowercase
+ * word, or a lowercase word glued to a digit. Leaf text ("Withdrawal Rate",
+ * "5.3%", "spouse 3.1%") never has any of these.
+ */
+function isGluedBlob(text: string): boolean {
+  return /[a-z][A-Z]/.test(text) || /\d[a-z]/.test(text) || /[a-z]\d/.test(text)
 }
 
 function listSourceFiles(root: string): string[] {

@@ -28,8 +28,11 @@ afterAll(() => {
 })
 
 describe('needlesFromDomSnapshot', () => {
-  it('extracts quoted text previews, longest first, deduped', () => {
-    // REAL serializeDom output: <tag.cls> [x,y wxh] "text"
+  it('extracts quoted text previews in gesture-proximity (DOM) order, deduped', () => {
+    // REAL serializeDom output: <tag.cls> [x,y wxh] "text", focus-sorted so the
+    // circled element comes FIRST. Needle order must preserve that proximity —
+    // it is the strongest signal for which element the user means. (This test
+    // lists the circled "Plan" first; longest-first ordering would bury it.)
     const dom = [
       '<div> [0,0 10x10] "Plan"',
       '<h1.title> [0,20 300x40] "Welcome to your retirement plan"',
@@ -38,9 +41,9 @@ describe('needlesFromDomSnapshot', () => {
     ].join('\n')
     const needles = needlesFromDomSnapshot(dom)
     expect(needles).toEqual([
+      'Plan',
       'Welcome to your retirement plan',
       'Track your savings here.',
-      'Plan',
     ])
   })
 
