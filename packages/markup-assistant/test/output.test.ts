@@ -21,6 +21,35 @@ describe('applyTextPatch', () => {
     expect(r.ok).toBe(false)
     expect(r.reason).toBe('ambiguous')
   })
+
+  it('matches a multi-line LF find against a CRLF file', () => {
+    const file = '<div\r\n  className="bg-white"\r\n>\r\n'
+    const find = '<div\n  className="bg-white"\n>'
+    const r = applyTextPatch(file, find, '<div\n  className="bg-green"\n>')
+    expect(r.ok).toBe(true)
+    // The replacement adopts the file's CRLF style — no mixed endings.
+    expect(r.content).toBe('<div\r\n  className="bg-green"\r\n>\r\n')
+  })
+
+  it('still applies a byte-exact multi-line find', () => {
+    const file = 'a\r\nb\r\nc'
+    const r = applyTextPatch(file, 'a\r\nb', 'x')
+    expect(r.ok).toBe(true)
+    expect(r.content).toBe('x\r\nc')
+  })
+
+  it('reports ambiguity across line-ending-tolerant matches', () => {
+    const file = 'x\ny\nx\ny\n'
+    const r = applyTextPatch(file, 'x\ny', 'z')
+    expect(r.ok).toBe(false)
+    expect(r.reason).toBe('ambiguous')
+  })
+
+  it('single-line finds do not get newline tolerance (still not-found)', () => {
+    const r = applyTextPatch('hello\r\nworld', 'nope', 'x')
+    expect(r.ok).toBe(false)
+    expect(r.reason).toBe('not-found')
+  })
 })
 
 describe('dom sink', () => {

@@ -236,7 +236,9 @@ export function startSession(options: SessionOptions): { stop(): void } {
 function describeEdit(edit: Edit): string {
   const e = edit as { kind?: string; file?: string; find?: string }
   if (e.file) {
-    const preview = e.find ? ` "${e.find.slice(0, 40).replace(/\s+/g, ' ')}"` : ''
+    // ↵ keeps multi-line finds honest in the preview; collapsing them to
+    // spaces reads like a one-line string that "should" have matched.
+    const preview = e.find ? ` "${e.find.slice(0, 40).replace(/\r?\n/g, '↵')}"` : ''
     return `${e.kind ?? 'edit'}@${e.file}${preview}`
   }
   return e.kind ?? 'edit'
