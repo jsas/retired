@@ -470,6 +470,19 @@ const SECTIONS: HelpSection[] = [
         body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download it once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter answers, but your plan details travel to that provider — see the privacy note in the Glossary). Local models are smaller, so keep questions focused; online models handle long, nuanced conversations better. Pick and download on <strong>Connections</strong>, which opens from the assistant's header.</P>
       },
       {
+        term: 'Drawing on the page (markup overlay)',
+        body: (
+          <>
+            <P>Turn on <strong>Markup overlay</strong> on the Connections page, then press <strong>Ctrl+Shift+M</strong> to mark up the app itself: draw a pen stroke around something, drop a typed note, drag an element to a new spot, draw an arrow ("put this there"), or lasso a region to move it. Your markup goes to the selected model, which proposes the page change as a review card — nothing is applied until you click <strong>Apply</strong>, exactly like a chat proposal.</P>
+            {ul([
+              <><strong>Ctrl+Shift+M</strong> — show / hide the markup toolbar (or press Escape).</>,
+              <><strong>Ctrl+Z</strong> — undo the last markup; <strong>Ctrl+Backspace</strong> — clear everything.</>,
+              <>Markup recolors as the model works: blue while it's thinking, green when applied, red if it couldn't or you discarded it.</>,
+            ])}
+          </>
+        )
+      },
+      {
         term: 'The engine as an MCP server',
         body: <P>Under the hood the assistant's tools — reading your plan, running projections, proposing changes — are served by a real <strong>Model Context Protocol (MCP) server</strong> that owns the engine. The page talks to it over an in-page connection (nothing is sent anywhere), so the chat and the engine go through one well-defined protocol boundary rather than touching your plan directly. That same server can be hosted elsewhere in the future; every proposed change still appears as a confirm card and is never applied without your say-so.</P>
       },

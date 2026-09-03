@@ -1,0 +1,14 @@
+{
+  "name": "@retired/ai-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared model-selection proxy: one configured surface (webgpu-local + remote providers, built-in model registry + options) that the web assistant and the markup assistant both consume. Provider-neutral; the streaming chat function is injected by the host.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}
