@@ -50,6 +50,36 @@ export class OpenAIEngine implements Engine {
   }
 
   async decide(input: EngineInput): Promise<EngineDecision> {
+    const messages = buildMessages(input, this.opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT)
+    const first = await this.callModel(messages)
+    const decision = this.interpret(first, input)
+
+    // A change request that came back with no edits — the model described
+    // what it would do ("set their container background to green") instead
+    // of doing it — gets ONE nudge: its own words are appended to the
+    // conversation and it's told to make the actual tool call. Small models
+    // do this constantly and usually comply on the second ask. The prose can
+    // arrive as plain content or as an apply_edits `note` with zero edits.
+    const said = (first.content ?? '').trim() || (decision.rejection ?? '').trim()
+    const needsNudge = Boolean(decision.rejection) && !looksLikeQuestion(input) && said.length > 0
+    if (!needsNudge) return decision
+
+    messages.push({ role: 'assistant', content: said })
+    messages.push({
+      role: 'user',
+      content:
+        'You just described the change in prose instead of making it. Do it now: ' +
+        'call apply_edits with the real edits (exact find/replace against the ' +
+        'source excerpts). Do not explain — only make the tool call.',
+    })
+    const second = await this.callModel(messages)
+    const retry = this.interpret(second, input)
+    // Keep the more informative reply if the nudge also produced nothing.
+    return retry.edits.length > 0 || retry.answer ? retry : decision
+  }
+
+  /** One chat-completions round trip; returns the assistant message. */
+  private async callModel(messages: unknown[]): Promise<AssistantMessage> {
     const doFetch = this.opts.fetchImpl ?? fetch
     const res = await doFetch(this.opts.endpoint, {
       method: 'POST',
@@ -60,7 +90,7 @@ export class OpenAIEngine implements Engine {
       body: JSON.stringify({
         model: this.opts.model,
         temperature: this.opts.temperature,
-        messages: buildMessages(input, this.opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT),
+        messages,
         tools: [APPLY_EDITS_TOOL],
         tool_choice: { type: 'function', function: { name: 'apply_edits' } },
       }),
@@ -70,8 +100,12 @@ export class OpenAIEngine implements Engine {
       throw new Error(`OpenAIEngine: HTTP ${res.status} ${body.slice(0, 300)}`)
     }
     const json = (await res.json()) as OpenAIResponse
-    const message = json.choices?.[0]?.message
-    const call = message?.tool_calls?.[0]
+    return json.choices?.[0]?.message ?? {}
+  }
+
+  /** Turn one assistant message (tool call or prose) into a decision. */
+  private interpret(message: AssistantMessage, input: EngineInput): EngineDecision {
+    const call = message.tool_calls?.[0]
 
     // The happy path is the forced apply_edits tool call. Some models/endpoints
     // ignore tool_choice and print the arguments as plain text instead —
@@ -80,19 +114,24 @@ export class OpenAIEngine implements Engine {
     if (call?.function && call.function.name === 'apply_edits') {
       rawArgs = call.function.arguments
     } else {
-      rawArgs = extractJsonFromText(message?.content ?? '')
+      rawArgs = extractJsonFromText(message.content ?? '')
     }
     if (rawArgs === undefined) {
-      return replyWithText(message?.content ?? '', input)
+      return replyWithText(message.content ?? '', input)
     }
     let parsed: { note?: string; answer?: string; edits?: unknown }
     try {
       parsed = JSON.parse(rawArgs)
     } catch {
-      return replyWithText(message?.content ?? '', input)
+      return replyWithText(message.content ?? '', input)
     }
     return finish(parsed, input)
   }
+}
+
+interface AssistantMessage {
+  content?: string
+  tool_calls?: Array<{ function?: { name?: string; arguments?: string } }>
 }
 
 /** Turn a parsed apply_edits payload (tool call or salvaged text) into a decision. */

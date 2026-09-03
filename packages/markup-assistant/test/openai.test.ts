@@ -39,6 +39,27 @@ function textWith(content: string): typeof fetch {
     )) as typeof fetch
 }
 
+/** Stub fetch returning one message per call, plus a record of what was sent. */
+function scripted(
+  messages: Array<{ content?: string; tool_calls?: unknown[] }>,
+  sent?: Array<{ body: string }>,
+): typeof fetch {
+  let i = 0
+  return (async (_url: unknown, init: unknown) => {
+    sent?.push({ body: String((init as { body: string }).body) })
+    const message = messages[Math.min(i, messages.length - 1)] ?? {}
+    i += 1
+    return new Response(
+      JSON.stringify({ choices: [{ message }] }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
+  }) as typeof fetch
+}
+
+function toolCall(args: object): { tool_calls: unknown[] } {
+  return { tool_calls: [{ function: { name: 'apply_edits', arguments: JSON.stringify(args) } }] }
+}
+
 describe('OpenAIEngine question handling', () => {
   it('returns answer when the model fills the answer field', async () => {
     const eng = new OpenAIEngine({ ...OPTS, fetchImpl: fetchWith({ answer: 'It is "you".', edits: [] }) })
@@ -162,5 +183,82 @@ describe('OpenAIEngine prose salvage (no tool call)', () => {
     const eng = new OpenAIEngine({ ...OPTS, fetchImpl: textWith('   ') })
     const d = await eng.decide(questionInput('make it green'))
     expect(d.rejection).toContain('apply_edits')
+  })
+})
+
+describe('OpenAIEngine nudge (described the change instead of making it)', () => {
+  it('retries once and returns the edits the nudge produced', async () => {
+    const sent: Array<{ body: string }> = []
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: scripted(
+        [
+          { content: 'Circled the Projection Summary stat cards; set their container background to green.' },
+          toolCall({
+            edits: [
+              { kind: 'text', file: 'src/components/MetricCards.tsx', find: 'bg-white', replace: 'bg-green-50', description: 'green' },
+            ],
+          }),
+        ],
+        sent,
+      ),
+    })
+    const d = await eng.decide(questionInput('change bkg to green'))
+    expect(sent).toHaveLength(2)
+    expect(d.edits).toHaveLength(1)
+    expect(d.edits[0]).toMatchObject({ kind: 'text', replace: 'bg-green-50' })
+    expect(d.rejection).toBeUndefined()
+    // the nudge carries the model's own words back to it
+    const second = JSON.parse(sent[1]!.body) as {
+      messages: Array<{ role: string; content?: string }>
+    }
+    const echoed = second.messages.find(
+      (m) => m.role === 'assistant' && m.content?.includes('set their container background'),
+    )
+    expect(echoed).toBeDefined()
+  })
+
+  it('nudges a zero-edit tool call whose note describes the change', async () => {
+    const sent: Array<{ body: string }> = []
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: scripted(
+        [
+          toolCall({ note: 'I will set the container background to green.', edits: [] }),
+          toolCall({
+            edits: [
+              { kind: 'text', file: 'src/a.tsx', find: 'bg-white', replace: 'bg-green', description: '' },
+            ],
+          }),
+        ],
+        sent,
+      ),
+    })
+    const d = await eng.decide(questionInput('make it green'))
+    expect(sent).toHaveLength(2)
+    expect(d.edits).toHaveLength(1)
+  })
+
+  it('does not nudge a question that was answered in prose', async () => {
+    const sent: Array<{ body: string }> = []
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: scripted([{ content: 'That card shows the age your money runs out.' }], sent),
+    })
+    const d = await eng.decide(questionInput('what does this card mean?'))
+    expect(sent).toHaveLength(1) // one round trip — no nudge
+    expect(d.answer).toContain('age your money runs out')
+  })
+
+  it('keeps the original rejection when the nudge also produces nothing', async () => {
+    const sent: Array<{ body: string }> = []
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: scripted([{ content: 'I am not sure which element you mean.' }], sent),
+    })
+    const d = await eng.decide(questionInput('make it green'))
+    expect(sent).toHaveLength(2) // it did try once more
+    expect(d.rejection).toContain('not sure')
+    expect(d.edits).toHaveLength(0)
   })
 })
