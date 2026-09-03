@@ -116,7 +116,11 @@ export function gatherSourceContext(
     // text into a `find` string, and any prefix we add would never match the
     // file on disk. The header carries the starting line for orientation.
     const body = lines.slice(from, to).join('\n')
-    const section = `--- ${cand.rel} (lines ${from + 1}-${to}) ---\n${body}`
+    // "file: <path>" header — a component name alone invites the model to
+    // guess ("ProjectionSummary.tsx" for a circled summary card that really
+    // lives in MetricCards.tsx), and a guessed path fails with file
+    // unreadable.
+    const section = `file: ${cand.rel} (lines ${from + 1}-${to})\n${body}`
     if (total + section.length > maxChars) break
     sections.push(section)
     total += section.length + 2

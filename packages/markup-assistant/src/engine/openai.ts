@@ -38,6 +38,10 @@ const DEFAULT_SYSTEM_PROMPT = [
   '- Prefer minimal edits. Do not rewrite files wholesale unless asked.',
   '- For source edits use exact "find" strings that appear exactly once in the file.',
   '- If a change request is ambiguous, return zero edits and explain in "note".',
+  '- Use the `file:` header line from each source excerpt as your `edit.file` value EXACTLY.',
+  '  Never name a file the excerpt did not label — a guessed path fails application',
+  '  with "file unreadable". If no excerpt shows the element, reject with a note saying',
+  '  which file is missing.',
 ].join('\n')
 
 export class OpenAIEngine implements Engine {
