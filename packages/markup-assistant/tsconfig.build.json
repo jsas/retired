@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": false,
+    "erasableSyntaxOnly": true,
+    // Node-side surfaces only: the vite bridge + engines + core. The overlay
+    // and DOM sinks are browser modules (they'd need the DOM lib and aren't
+    // imported by the vite config), so they stay source-only.
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "sourceMap": false,
+    "noEmit": false
+  },
+  "include": [
+    "src/core/protocol.ts",
+    "src/core/bus.ts",
+    "src/engine/engine.ts",
+    "src/engine/session.ts",
+    "src/engine/stub.ts",
+    "src/engine/openai.ts",
+    "src/engine/tool-schema.ts",
+    "src/engine/bridgeEngine.ts",
+    "src/engine/envConfig.ts",
+    "src/engine/recorder.ts",
+    "src/engine/revertable.ts",
+    "src/output/diff.ts",
+    "src/vite/plugin.ts",
+    "src/vite/index.ts",
+    "src/vite/sourceContext.ts"
+  ]
+}

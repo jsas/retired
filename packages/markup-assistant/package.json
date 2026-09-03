@@ -1,0 +1,26 @@
+{
+  "name": "@retired/markup-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mark up the app with pen/notes/drag gestures and have a model interpret them into edits. Input overlay + intent/status wire protocol + engines + sinks + vite bridge. Consumed as source via the app's vite aliases; a node dist is built for the dev vite config.",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./engine": "./src/engine/index.ts",
+    "./core": "./src/core/index.ts",
+    "./input": "./src/input/index.ts",
+    "./output": "./src/output/index.ts",
+    "./vite": "./src/vite/index.ts",
+    "./node": "./dist/vite/index.js",
+    "./node/engine": "./dist/engine/index.js",
+    "./*": "./src/*.ts",
+    "./*/*": "./src/*/*.ts"
+  },
+  "dependencies": {
+    "@retired/ai-bridge": "*",
+    "zod": "^4.4.3"
+  }
+}

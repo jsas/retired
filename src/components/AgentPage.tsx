@@ -30,7 +30,7 @@ import {
 } from '../lib/aiSettings';
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
-import { streamChat, type ChatMessage } from '../lib/ai/providers';
+import { createBridge, type Bridge, type ChatMessage } from '@retired/ai-bridge';
 import { Progress } from '../design/primitives';
 import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
@@ -187,12 +187,12 @@ function toHistory(turns: Turn[]): ChatMessage[] {
  *  Uses a minimal one-off request (no tools, small max_tokens) so it stays
  *  cheap. Returns '' when nothing usable came back. */
 async function digestHistory(
-  connection: AiConnection,
-  isLocal: boolean,
+  bridge: Bridge,
   excerpt: string,
   abort: AbortController,
 ): Promise<string> {
-  const req = {
+  let text = '';
+  const stream = bridge.streamChat({
     system:
       'You condense a retirement-planning conversation into a running digest for the model ' +
       'that continues it. Preserve every concrete fact (ages, balances, benefit amounts, ' +
@@ -202,11 +202,7 @@ async function digestHistory(
     tools: [],
     maxTokens: 400,
     signal: abort.signal,
-  };
-  let text = '';
-  const stream = isLocal
-    ? (await import('../lib/ai/webLlmProvider')).streamWebLlm(connection, req)
-    : streamChat(connection, req);
+  });
   for await (const evt of stream) {
     if (evt.type === 'text') text += evt.text;
   }
@@ -341,6 +337,21 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   useEffect(() => { saveChats(chatState); }, [chatState]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
+
+  // The shared model-selection surface: the bridge holds the saved connections
+  // + the built-in model registry, and owns the provider stack (remote +
+  // local). The agent loop streams through it rather than calling a provider
+  // adapter directly, so selection/config live in one place. Rebuilt whenever
+  // the settings change (a new connection, a key edit, a model switch).
+  const bridge: Bridge = useMemo(() => {
+    const b = createBridge({ connections: settings.connections });
+    // Selection follows the active connection (set at construction, not as a
+    // render side effect). Falls back to a ready connection / recommended
+    // built-in when the active id is missing.
+    if (settings.activeConnectionId) b.selectConnection(settings.activeConnectionId);
+    return b;
+  }, [settings.connections, settings.activeConnectionId]);
+
   const ready = connection != null && connectionReady(connection);
   const isLocal = connection?.provider === 'webllm';
   // A local model flagged too weak for the tool protocol drops to 'off': it
@@ -602,6 +613,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               ready={ready}
               isLocal={isLocal}
               toolMode={toolMode}
+              bridge={bridge}
               settings={settings}
               onSettingsChange={setSettings}
               inputs={inputs}
@@ -715,11 +727,12 @@ function planContextMessage(
   };
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
+function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
   toolMode: 'native' | 'prompt' | 'off';
+  bridge: Bridge;
   settings: AiSettings;
   onSettingsChange: (mutate: (prev: AiSettings) => AiSettings) => void;
   inputs: RetirementInputs;
@@ -976,12 +989,10 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
         userMessage: content,
         system,
         chat: async function* (req) {
-          if (isLocal) {
-            const { streamWebLlm } = await import('../lib/ai/webLlmProvider');
-            yield* streamWebLlm(connection, { ...req, signal: abort.signal }, reportLoad);
-          } else {
-            yield* streamChat(connection, { ...req, signal: abort.signal });
-          }
+          // The bridge routes to the selected model's provider — remote or
+          // local — and forwards web-llm load progress. Selection is set from
+          // the active connection when the bridge is built (see above).
+          yield* bridge.streamChat({ ...req, signal: abort.signal }, reportLoad);
         },
         signal: abort.signal,
         toolMode,
@@ -1072,7 +1083,7 @@ function Conversation({ thread, ready, isLocal, toolMode, settings, onSettingsCh
     // forget: it must not block the reply, and a failure just means the next
     // compaction reuses the prior digest.
     if (compaction.compacted && compaction.excerptToDigest) {
-      void digestHistory(connection, isLocal, compaction.excerptToDigest, abort)
+      void digestHistory(bridge, compaction.excerptToDigest, abort)
         .then(digest => { if (digest) patchThread({ contextSummary: digest }); })
         .catch(() => { /* keep the prior digest */ });
     }

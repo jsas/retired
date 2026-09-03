@@ -516,6 +516,22 @@ export const HELP_TOPICS: HelpTopic[] = [
     body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter, but your plan details travel to that provider). Local models are smaller, so keep questions focused. Pick a model in the dock's model dropdown (or Connections, which the dropdown's "Load a model…" opens).</P>,
   },
   {
+    id: 'markup-overlay',
+    title: 'Drawing on the page (markup overlay)',
+    section: 'Assistant',
+    keywords: ['markup', 'overlay', 'draw', 'annotate', 'pen', 'arrow', 'lasso', 'note', 'ctrl+shift+m', 'markup assistant'],
+    body: (
+      <>
+        <P>Turn on <strong>Markup overlay</strong> on the Connections page, then press <strong>Ctrl+Shift+M</strong> to mark up the app itself: draw a pen stroke around something, drop a typed note, drag an element to a new spot, draw an arrow ("put this there"), or lasso a region to move it. Your markup goes to the selected model, which proposes the page change as a review card — nothing is applied until you click <strong>Apply</strong>, exactly like a chat proposal.</P>
+        {ul([
+          <><strong>Ctrl+Shift+M</strong> — show / hide the markup toolbar (or press Escape).</>,
+          <><strong>Ctrl+Z</strong> — undo the last markup; <strong>Ctrl+Backspace</strong> — clear everything.</>,
+          <>Markup recolors as the model works: blue while it's thinking, green when applied, red if it couldn't or you discarded it.</>,
+        ])}
+      </>
+    ),
+  },
+  {
     id: 'assistant-privacy',
     title: 'AI privacy',
     section: 'Assistant',
