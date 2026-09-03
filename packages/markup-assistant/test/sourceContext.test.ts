@@ -47,6 +47,24 @@ describe('needlesFromDomSnapshot', () => {
     const dom = 'span "A" [0,0 1x1]\np "Some longer sentence tha…" [0,0 9x9]'
     expect(needlesFromDomSnapshot(dom)).toEqual(['Some longer sentence tha'])
   })
+
+  it('turns selector class chains into verbatim className needles, first', () => {
+    // The snapshot's `div.bg-white.border.p-3` mirrors the JSX attribute
+    // `className="bg-white border p-3"` — the needle that finds the component
+    // when the visible text is dynamic.
+    const dom = [
+      'div.bg-white.border.p-3 "Never" [16,120 60x36]',
+      'div "combined accounts · you 84 · spouse never" [16,160 220x16]',
+    ].join('\n')
+    const needles = needlesFromDomSnapshot(dom)
+    expect(needles[0]).toBe('bg-white border p-3')
+    expect(needles).toContain('combined accounts · you 84 · spouse never')
+  })
+
+  it('ignores single-class selectors (too common to discriminate)', () => {
+    const dom = 'div.card "Some visible text here" [0,0 9x9]'
+    expect(needlesFromDomSnapshot(dom)).toEqual(['Some visible text here'])
+  })
 })
 
 describe('gatherSourceContext', () => {
@@ -72,6 +90,18 @@ describe('gatherSourceContext', () => {
     expect(ctx).toContain('src/app.css')
     const tiny = gatherSourceContext(root, ['Welcome to your retirement plan'], 40)
     expect(tiny).toBeUndefined() // excerpt header alone exceeds the budget
+  })
+
+  it('skips test/spec files so fixtures never outrank real components', () => {
+    writeFileSync(
+      join(root, 'src', 'Welcome.test.tsx'),
+      'const fixture = "Welcome to your retirement plan" // test fixture\n',
+    )
+    const ctx = gatherSourceContext(root, ['Welcome to your retirement plan'])
+    expect(ctx).toBeDefined()
+    expect(ctx).toContain('src/components/Welcome.tsx')
+    expect(ctx).not.toContain('Welcome.test.tsx')
+    rmSync(join(root, 'src', 'Welcome.test.tsx'), { force: true })
   })
 
   it('never reaches into node_modules and returns undefined on no hits', () => {

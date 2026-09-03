@@ -5,9 +5,9 @@
  * find/replace edit with a `find` string that actually exists on disk —
  * the model sees the real source instead of guessing.
  *
- * Deliberately dumb and bounded: substring search over text previews, a
- * fixed set of source extensions, a file-count cap, and a char budget.
- * Never follows symlinks, never leaves the root.
+ * Deliberately dumb and bounded: substring search over text previews and
+ * element class strings, a fixed set of source extensions, a file-count
+ * cap, and a char budget. Never follows symlinks, never leaves the root.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -20,9 +20,25 @@ const CONTEXT_LINES = 6
 const DEFAULT_BUDGET = 14_000
 
 /**
+ * Relevance tier for a file name: components that render UI come first.
+ * Without this, a *.test.ts fixture full of on-screen strings ("Never",
+ * "5.3%") outranks the component that actually renders them and eats the
+ * char budget — the model then complains the real file wasn't included.
+ */
+function tierOf(name: string): number {
+  if (/\.test\.|\.spec\.|\.stories\./.test(name)) return 99
+  const dot = name.lastIndexOf('.')
+  const ext = dot === -1 ? '' : name.slice(dot).toLowerCase()
+  if (ext === '.tsx' || ext === '.jsx') return 0
+  if (ext === '.css' || ext === '.html') return 1
+  return 2
+}
+
+/**
  * Walk `root`'s source files, find lines containing any of `needles`
- * (case-insensitive), and return per-file excerpts around the first hit,
- * most-needle-matching files first. Returns undefined when nothing matches.
+ * (case-insensitive), and return per-file excerpts around the first hit —
+ * UI source first, then by match count. Returns undefined when nothing
+ * matches.
  */
 export function gatherSourceContext(
   root: string,
@@ -38,10 +54,17 @@ export function gatherSourceContext(
   interface Candidate {
     rel: string
     firstLine: number
+    /** Distinct needles found in the file — breadth beats raw line count. */
     matches: number
+    tier: number
   }
   const candidates: Candidate[] = []
+  const lowerNeedles = clean.map((n) => n.toLowerCase())
   for (const file of files) {
+    const sepIdx = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'))
+    const name = sepIdx === -1 ? file : file.slice(sepIdx + 1)
+    const tier = tierOf(name)
+    if (tier === 99) continue
     let content: string
     try {
       content = readFileSync(file, 'utf8')
@@ -50,26 +73,32 @@ export function gatherSourceContext(
     }
     const lines = content.split('\n')
     let firstLine = -1
-    let matches = 0
+    const matched = new Set<number>()
     for (let i = 0; i < lines.length; i++) {
       const line = (lines[i] ?? '').toLowerCase()
-      const hit = clean.some((needle) => line.includes(needle.toLowerCase()))
-      if (hit) {
-        matches += 1
-        if (firstLine === -1) firstLine = i
+      for (let n = 0; n < lowerNeedles.length; n++) {
+        if (matched.has(n)) continue
+        if (line.includes(lowerNeedles[n]!)) {
+          matched.add(n)
+          if (firstLine === -1) firstLine = i
+        }
       }
     }
     if (firstLine === -1) continue
     candidates.push({
       rel: file.slice(rootAbs.length + 1).replace(/\\/g, '/'),
       firstLine,
-      matches,
+      matches: matched.size,
+      tier,
     })
   }
   if (!candidates.length) return undefined
 
-  // Most matches first; ties keep walk order (shallower dirs already earlier).
-  candidates.sort((a, b) => b.matches - a.matches)
+  // UI components before stylesheets before logic; within a tier, the file
+  // matching the most DISTINCT needles wins — a component carrying both the
+  // element's classes and its exact on-screen text is the one the user
+  // circled, not some other file that shares a common Tailwind class.
+  candidates.sort((a, b) => a.tier - b.tier || b.matches - a.matches)
 
   const sections: string[] = []
   let total = 0
@@ -96,25 +125,50 @@ export function gatherSourceContext(
 }
 
 /**
- * Text previews from serializeDom snapshot lines as search needles. Lines
- * look like: `div "Some visible text" [12,34 100x40]`. Prefers longer
- * previews — they discriminate better — and strips truncation ellipses.
+ * Search needles from serializeDom snapshot lines. Two kinds, most
+ * discriminating first:
+ *
+ *  1. Class strings. A line's selector token `div.bg-white.border.p-3`
+ *     becomes `bg-white border p-3` — which appears VERBATIM inside the
+ *     JSX `className="..."` attribute that renders the element. This is the
+ *     needle that finds the component when the on-screen text is dynamic
+ *     ("Never", "$2,824,194") and lives in engine code, not markup.
+ *  2. Text previews (`... "some visible text"`), longest first — a full
+ *     sentence pins the exact component; a four-letter word matches half
+ *     the repo.
  */
 export function needlesFromDomSnapshot(dom: string, max = 12): string[] {
-  const found: string[] = []
+  const classNeedles: string[] = []
+  const textNeedles: string[] = []
   const seen = new Set<string>()
   for (const line of dom.split('\n')) {
+    // Selector token: first non-space run, e.g. `div.bg-white.border.p-3`
+    // or `#metric-card`. Only the leading token of a snapshot line.
+    const sel = line.match(/^\s*([a-zA-Z][\w.#-]*)/)?.[1]
+    if (sel && sel.includes('.')) {
+      const classes = sel
+        .split('.')
+        .slice(1) // drop the tag name
+        .filter((c) => c && !c.startsWith('#'))
+      // Two or more classes joined with spaces match a real className
+      // attribute; one class alone matches half the app.
+      if (classes.length >= 2) {
+        const needle = classes.join(' ')
+        if (!seen.has(needle)) {
+          seen.add(needle)
+          classNeedles.push(needle)
+        }
+      }
+    }
     const m = line.match(/"([^"]{4,120})"/)
     if (!m?.[1]) continue
     const text = m[1].trim().replace(/(?:…|\.\.\.)+$/, '').trim()
     if (text.length < 4 || seen.has(text)) continue
     seen.add(text)
-    found.push(text)
+    textNeedles.push(text)
   }
-  // Longest first: a full sentence pins the exact component, a four-letter
-  // word matches half the repo.
-  found.sort((a, b) => b.length - a.length)
-  return found.slice(0, max)
+  textNeedles.sort((a, b) => b.length - a.length)
+  return [...classNeedles, ...textNeedles].slice(0, max)
 }
 
 function listSourceFiles(root: string): string[] {

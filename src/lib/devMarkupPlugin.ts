@@ -48,8 +48,15 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
 
   const cfg = readMarkupEnv(env)
   const engine = openaiEngineFromEnv(env) ?? createStubEngine()
-  const origin = options.origin ?? ''
   const autoApply = cfg.autoApply
+
+  // The sink runs in NODE, where fetch() rejects relative URLs outright. The
+  // origin must be absolute; we learn the real port when vite's config
+  // resolves (below) and read it lazily at apply time.
+  let resolvedOrigin = options.origin ?? ''
+  const sinkOrigin = () =>
+    resolvedOrigin || `http://127.0.0.1:${lastKnownPort ?? 5173}`
+  let lastKnownPort: number | undefined
 
   // Source sink: forwards edits to the bridge's own /apply endpoint so they
   // land on disk. Held (reported failed) when MARKUP_AUTO_APPLY=0.
@@ -62,7 +69,7 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
         return { state: 'failed' as const, reason: 'unsupported edit kind' }
       }
       try {
-        const res = await fetch(`${origin}/__markup_assistant__/apply`, {
+        const res = await fetch(`${sinkOrigin()}/__markup_assistant__/apply`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ edit }),
@@ -90,6 +97,17 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
   const consolePlugin: Plugin = {
     name: 'dev-markup-console',
     configureServer(server) {
+      // The sink posts edits back over HTTP; capture the port vite actually
+      // bound (strictPort keeps config.port, but 'listening' is authoritative
+      // and covers the auto-increment case too).
+      const port = server.config.server?.port
+      if (typeof port === 'number' && port > 0) lastKnownPort = port
+      server.httpServer?.once('listening', () => {
+        const addr = server.httpServer?.address()
+        if (addr && typeof addr === 'object' && typeof addr.port === 'number') {
+          lastKnownPort = addr.port
+        }
+      })
       server.middlewares.use((req, res, next) => {
         if (req.url !== '/__markup_console__') return next()
         if (req.method !== 'GET') return next()
