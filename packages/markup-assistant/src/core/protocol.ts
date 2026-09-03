@@ -214,7 +214,7 @@ export function isSourceEdit(edit: Edit): edit is SourceEdit {
 // Envelope + statuses
 // ---------------------------------------------------------------------------
 
-export const EnvelopeKind = z.enum(['intent', 'status', 'hello', 'retract'])
+export const EnvelopeKind = z.enum(['intent', 'status', 'hello', 'retract', 'reset'])
 export type EnvelopeKind = z.infer<typeof EnvelopeKind>
 
 /** Input-side undo: the human withdrew this interaction before it landed. */
@@ -223,6 +223,14 @@ export const Retract = z.object({
   reason: z.enum(['undo', 'clear']).default('undo'),
 })
 export type Retract = z.infer<typeof Retract>
+
+/**
+ * Input-side "new sheet": the user wiped every markup. Any conversation the
+ * engine was carrying across interactions should be dropped — a clean canvas
+ * starts a fresh thread.
+ */
+export const ResetConversation = z.object({})
+export type ResetConversation = z.infer<typeof ResetConversation>
 
 export const StatusState = z.enum([
   'received', // input side emitted, nothing has decided yet
@@ -290,7 +298,7 @@ export const Envelope = z.object({
   kind: EnvelopeKind,
   /** Which surface sent it ('overlay', 'extension', 'engine', ...). */
   source: z.string(),
-  payload: z.union([Intent, Status, Hello, Retract]),
+  payload: z.union([Intent, Status, Hello, Retract, ResetConversation]),
 })
 export type Envelope = z.infer<typeof Envelope>
 
@@ -304,7 +312,7 @@ export function makeEnvelope(args: {
   interactionId: string
   source: string
   kind: EnvelopeKind
-  payload: Intent | Status | Hello | Retract
+  payload: Intent | Status | Hello | Retract | ResetConversation
 }): Envelope {
   return {
     id: makeId(),

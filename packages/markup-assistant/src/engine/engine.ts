@@ -10,6 +10,12 @@ import type { Edit, ImagePayload, Intent } from '../core/protocol.js'
 export interface Engine {
   /** Produce a decision for one interaction. Must not throw. */
   decide(input: EngineInput): Promise<EngineDecision>
+  /**
+   * Drop any conversation carried across interactions. Called when the user
+   * wipes their markup — a fresh sheet starts a fresh thread. Optional: stateless
+   * engines leave it undefined.
+   */
+  clearConversation?(): void
 }
 
 export interface EngineInput {

@@ -64,6 +64,13 @@ export function startSession(options: SessionOptions): { stop(): void } {
   async function handle(envelope: Envelope) {
     if (stopped) return
 
+    // A wiped canvas means a fresh conversation — the model's memory of prior
+    // questions/edits shouldn't bleed into the next interaction.
+    if (envelope.kind === 'reset') {
+      engine.clearConversation?.()
+      return
+    }
+
     if (envelope.kind === 'retract') {
       const id = envelope.interactionId
       if (cancelled.has(id)) return

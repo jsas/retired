@@ -290,3 +290,44 @@ describe('OpenAIEngine nudge (described the change instead of making it)', () =>
     expect(fed?.content).toContain('bg-white')
   })
 })
+
+describe('OpenAIEngine conversation continuity', () => {
+  it('carries prior turns into the next interaction', async () => {
+    const sent: Array<{ body: string }> = []
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: scripted(
+        [
+          toolCall({ answer: 'It shows when your money runs out.', edits: [] }),
+          toolCall({ edits: [{ kind: 'text', file: 'src/a.tsx', find: 'a', replace: 'b', description: '' }] }),
+        ],
+        sent,
+      ),
+    })
+    await eng.decide(questionInput('what does the Never card mean?'))
+    await eng.decide(questionInput('make it green'))
+    expect(sent).toHaveLength(2)
+    const second = JSON.parse(sent[1]!.body) as { messages: Array<{ role: string; content?: string }> }
+    // the prior Q&A is present in the second request's message list
+    const carried = second.messages.some(
+      (m) => typeof m.content === 'string' && m.content.includes('money runs out'),
+    )
+    expect(carried).toBe(true)
+  })
+
+  it('clearConversation drops the carried turns', async () => {
+    const sent: Array<{ body: string }> = []
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: scripted([toolCall({ answer: 'It is the depletion age.', edits: [] })], sent),
+    })
+    await eng.decide(questionInput('what is Never?'))
+    eng.clearConversation()
+    await eng.decide(questionInput('make it green'))
+    const second = JSON.parse(sent[1]!.body) as { messages: Array<{ role: string; content?: string }> }
+    const carried = second.messages.some(
+      (m) => typeof m.content === 'string' && m.content.includes('depletion age'),
+    )
+    expect(carried).toBe(false)
+  })
+})

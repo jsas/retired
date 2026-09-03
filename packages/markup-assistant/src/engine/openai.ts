@@ -63,8 +63,22 @@ export class OpenAIEngine implements Engine {
   /** Also settable post-construction so the app plugin can wire /source in. */
   fetchSource: OpenAIEngineOptions['fetchSource']
 
+  /**
+   * Rolling transcript of what the user asked and what the model concluded,
+   * kept across interactions so a follow-up ("yes, that one", "now make it
+   * sparklier") lands with the thread intact. Cleared by clearConversation();
+   * the overlay calls that when the user wipes the markup.
+   */
+  private transcript: Array<{ role: string; content: string }> = []
+  /** Conversation turns kept; oldest drop off so the context window stays bounded. */
+  private readonly maxTurns = 20
+
+  clearConversation(): void {
+    this.transcript = []
+  }
+
   async decide(input: EngineInput): Promise<EngineDecision> {
-    const messages = buildMessages(input, this.opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT)
+    const messages = this.buildConversation(input)
     const first = await this.callModel(messages)
     const decision = this.interpret(first, input)
 
@@ -77,7 +91,10 @@ export class OpenAIEngine implements Engine {
     //    own words are echoed and it's told to make the actual tool call.
     const said = (first.content ?? '').trim() || (decision.rejection ?? '').trim()
     const needsNudge = Boolean(decision.rejection) && !looksLikeQuestion(input) && said.length > 0
-    if (!needsNudge) return decision
+    if (!needsNudge) {
+      this.remember(input, decision)
+      return decision
+    }
 
     messages.push({ role: 'assistant', content: said })
 
@@ -103,7 +120,30 @@ export class OpenAIEngine implements Engine {
     const second = await this.callModel(messages)
     const retry = this.interpret(second, input)
     // Keep the more informative reply if the nudge also produced nothing.
-    return retry.edits.length > 0 || retry.answer ? retry : decision
+    const out = retry.edits.length > 0 || retry.answer ? retry : decision
+    this.remember(input, out)
+    return out
+  }
+
+  /** Record the outcome of a decided interaction for later turns. */
+  private remember(input: EngineInput, decision: EngineDecision): void {
+    const userText = describeIntents(input.intents)
+    const outcome =
+      decision.answer ??
+      decision.rejection ??
+      (decision.edits.length ? `applied ${decision.edits.length} edit(s)` : '')
+    if (!userText.trim() && !outcome) return
+    this.transcript.push({ role: 'user', content: userText })
+    this.transcript.push({ role: 'assistant', content: outcome })
+    // Keep the tail within bounds — drop whole turns (pairs) from the front.
+    while (this.transcript.length > this.maxTurns * 2) this.transcript.splice(0, 2)
+  }
+
+  /** Build the message list for a fresh interaction, seeded with prior turns. */
+  private buildConversation(input: EngineInput): unknown[] {
+    const messages = buildMessages(input, this.opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT)
+    // Insert the rolling transcript between the system prompt and this turn.
+    return [messages[0], ...this.transcript, ...messages.slice(1)]
   }
 
   /** One chat-completions round trip; returns the assistant message. */

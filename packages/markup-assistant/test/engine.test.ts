@@ -11,6 +11,27 @@ function noteIntent(interactionId: string) {
   })
 }
 
+describe('session conversation reset', () => {
+  it('clears the engine conversation on a reset envelope', async () => {
+    const bus = createBus()
+    let cleared = 0
+    const engine = {
+      async decide() {
+        return { edits: [] as Edit[], rejection: 'nope' }
+      },
+      clearConversation() {
+        cleared += 1
+      },
+    }
+    startSession({ bus, engine, sinks: [] })
+    bus.publish(
+      makeEnvelope({ interactionId: 'conversation', source: 'overlay', kind: 'reset', payload: {} }),
+    )
+    await new Promise((r) => setTimeout(r, 20))
+    expect(cleared).toBe(1)
+  })
+})
+
 describe('session orchestration', () => {
   it('drives received -> accepted -> processing -> applied with stub engine', async () => {
     const bus = createBus()

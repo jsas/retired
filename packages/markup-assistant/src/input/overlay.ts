@@ -608,6 +608,16 @@ export function attachOverlay(options: OverlayOptions): OverlayHandle {
     for (const [id, entry] of entries) {
       if (!entry.status || !terminal.has(entry.status)) retract(id, 'clear')
     }
+    // A wiped canvas is a new sheet: drop the engine's carried-over
+    // conversation so the next question starts fresh.
+    bus.publish(
+      makeEnvelope({
+        interactionId: 'conversation',
+        source,
+        kind: 'reset',
+        payload: {},
+      }),
+    )
     redraw()
     return entries.length
   }
