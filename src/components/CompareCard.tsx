@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
-import { GitCompareArrows, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import type { Scenario } from '@retired/engine-core/types';
-import { compareScenarios, type MetricDiff, type ScenarioComparison } from '@retired/engine-core/compareMetrics';
-
-const MAX_COMPARE = 3;
+import { computeScenarioMetrics, type ScenarioMetrics } from '@retired/engine-core/compareMetrics';
+import { calculateHousehold } from '@retired/engine-core/retirementEngine';
+import { ProjectionTimeline, type TimelineSeries } from '../design/ProjectionTimeline';
 
 function fmtMoney(v: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
@@ -19,178 +18,100 @@ interface CompareCardProps {
   config: AppConfig;
 }
 
-// A signed delta chip under a metric value: green when the move is an
-// improvement, red when worse, grey when it rounds to no change.
-function DiffChip({ diff, format }: { diff: MetricDiff; format: (delta: number) => string }) {
-  if (diff.neutral) {
-    return (
-      <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400">
-        <Minus size={10} /> same
-      </span>
-    );
-  }
-  const Icon = diff.delta > 0 ? ArrowUpRight : ArrowDownRight;
-  const color = diff.better ? 'text-emerald-600' : 'text-red-600';
-  return (
-    <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${color}`}>
-      <Icon size={10} /> {format(diff.delta)}
-    </span>
-  );
+interface Row extends ScenarioMetrics {
+  lifetimeTax: number;
+  endingBalance: number;
 }
 
-function moneyDelta(delta: number): string {
-  const sign = delta > 0 ? '+' : '−';
-  return `${sign}${fmtMoney(Math.abs(delta))}`;
-}
-function ageDelta(delta: number): string {
-  if (delta === Number.POSITIVE_INFINITY) return 'never runs out';
-  if (delta === Number.NEGATIVE_INFINITY) return 'runs out';
-  const sign = delta > 0 ? '+' : '−';
-  return `${sign}${Math.abs(Math.round(delta))} yr`;
-}
-function rateDelta(delta: number): string {
-  const sign = delta > 0 ? '+' : '−';
-  return `${sign}${(Math.abs(delta) * 100).toFixed(1)} pts`;
-}
-
-function VerdictColumn({ comparison, isBaseline }: { comparison: ScenarioComparison; isBaseline: boolean }) {
-  const m = comparison.metrics;
-  const d = comparison.diff;
-  const statusColor = m.status === 'ON_TRACK' ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50';
-  return (
-    <div className={`flex-1 min-w-0 rounded border ${isBaseline ? 'border-blue-300 bg-blue-50/40' : 'border-slate-200 bg-white'} p-3`}>
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold text-slate-800 truncate" title={m.name}>{m.name}</div>
-          <div className="text-[10px] text-slate-400">
-            {isBaseline ? 'baseline' : (m.isCouple ? 'couple' : 'single')}
-          </div>
-        </div>
-        <span className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusColor}`}>
-          {m.status.replace('_', ' ')}
-        </span>
-      </div>
-
-      <dl className="space-y-2">
-        <div>
-          <dt className="text-[10px] uppercase tracking-wider text-slate-500">Wealth at retirement</dt>
-          <dd className="text-sm font-semibold text-slate-900">{fmtMoney(m.householdWorth)}</dd>
-          {d && <DiffChip diff={d.householdWorth} format={moneyDelta} />}
-        </div>
-        <div>
-          <dt className="text-[10px] uppercase tracking-wider text-slate-500">Age of depletion</dt>
-          <dd className="text-sm font-semibold text-slate-900">{m.depletionAge ?? 'Never'}</dd>
-          {d && <DiffChip diff={d.depletionAge} format={ageDelta} />}
-        </div>
-        <div>
-          <dt className="text-[10px] uppercase tracking-wider text-slate-500">Withdrawal rate</dt>
-          <dd className="text-sm font-semibold text-slate-900">{fmtPct(m.withdrawalRate)}</dd>
-          {d && <DiffChip diff={d.withdrawalRate} format={rateDelta} />}
-        </div>
-      </dl>
-    </div>
-  );
-}
-
+/**
+ * Compare scenarios: every selected scenario as a line on one projection
+ * timeline (toggle lines in the legend), with a plain table of the numbers
+ * underneath. No scenario cap, no "baseline" ritual — the numbers stand alone.
+ */
 export function CompareCard({ scenarios, activeScenarioId, config }: CompareCardProps) {
-  // Default to the active scenario, pre-checked as the baseline.
-  const [selectedIds, setSelectedIds] = useState<string[]>([activeScenarioId]);
-  const [baselineId, setBaselineId] = useState<string>(activeScenarioId);
+  // All scenarios on by default; the legend toggles lines, the table follows.
+  const [onIds, setOnIds] = useState<Set<string>>(() => new Set(scenarios.map(s => s.id)));
 
-  const toggle = (id: string) => {
-    setSelectedIds(prev => {
-      if (prev.includes(id)) {
-        const next = prev.filter(x => x !== id);
-        // If the baseline was just unchecked, move it to the first remaining.
-        if (id === baselineId) setBaselineId(next[0] ?? '');
-        return next;
-      }
-      if (prev.length >= MAX_COMPARE) return prev; // cap reached
-      const next = [...prev, id];
-      if (!next.includes(baselineId)) setBaselineId(id);
+  // Run each scenario ONCE: pull the balance series (for the timeline) and the
+  // metrics + lifetime tax (for the table) off the same engine pass.
+  const { rows, seriesById } = useMemo(() => {
+    const rows: Row[] = [];
+    const seriesById = new Map<string, TimelineSeries>();
+    for (const s of scenarios) {
+      const results = calculateHousehold(s.inputs, config);
+      const m = computeScenarioMetrics(s, config, scenarios);
+      const last = results.yearlyBreakdown[results.yearlyBreakdown.length - 1];
+      const lifetimeTax = results.yearlyBreakdown.reduce((sum, r) => sum + (r.totalTaxPaid ?? r.incomeTax ?? 0), 0);
+      rows.push({ ...m, lifetimeTax, endingBalance: last?.endingBalance ?? 0 });
+      seriesById.set(s.id, {
+        id: s.id,
+        label: s.name,
+        points: results.yearlyBreakdown.map(r => ({ age: r.age, value: r.endingBalance })),
+      });
+    }
+    return { rows, seriesById };
+  }, [scenarios, config]);
+
+  const activeSeries = scenarios.map(s => seriesById.get(s.id)!).filter(s => onIds.has(s.id));
+  const activeRows = rows.filter(r => onIds.has(r.id));
+
+  const toggleLine = (id: string) => {
+    setOnIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
-  const selected = useMemo(
-    () => scenarios.filter(s => selectedIds.includes(s.id)),
-    [scenarios, selectedIds],
-  );
-
-  const comparisons = useMemo(() => {
-    if (selected.length < 2 || !baselineId) return [];
-    return compareScenarios(selected, baselineId, config);
-  }, [selected, baselineId, config]);
-
-  const atCap = selectedIds.length >= MAX_COMPARE;
+  if (scenarios.length === 0) {
+    return <p className="text-xs text-slate-500">Save a couple of scenarios first, then compare them here.</p>;
+  }
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3">
-        <GitCompareArrows size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Compare scenarios</h2>
-        <span className="text-[11px] text-slate-400">
-          verdict cards computed with the current engine settings
-        </span>
+      <div className="mb-3">
+        <span className="text-[11px] text-slate-400">toggle lines in the legend · numbers below</span>
       </div>
 
-      <div>
-        {/* Scenario picker */}
-        <div className="mb-3">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
-            Pick {selectedIds.length < 2 ? '2–3' : `${selectedIds.length} of ${MAX_COMPARE}`} scenarios · click the dot to set the baseline
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {scenarios.map(s => {
-              const checked = selectedIds.includes(s.id);
-              const isBaseline = s.id === baselineId;
-              const disabled = !checked && atCap;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => toggle(s.id)}
-                  disabled={disabled}
-                  title={disabled ? `Compare at most ${MAX_COMPARE} scenarios` : (checked ? 'Remove from comparison' : 'Add to comparison')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs transition-colors ${
-                    isBaseline
-                      ? 'border-blue-500 bg-blue-50 text-blue-800'
-                      : checked
-                        ? 'border-slate-400 bg-slate-100 text-slate-800'
-                        : disabled
-                          ? 'border-slate-200 text-slate-300 cursor-not-allowed'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {/* baseline selector dot */}
-                  <span
-                    role="radio"
-                    aria-checked={isBaseline}
-                    onClick={(e) => {
-                      if (!checked) return; // can't baseline an unchecked scenario
-                      e.stopPropagation();
-                      setBaselineId(s.id);
-                    }}
-                    title={checked ? (isBaseline ? 'Baseline' : 'Set as baseline') : undefined}
-                    className={`w-2.5 h-2.5 rounded-full border ${isBaseline ? 'bg-blue-600 border-blue-600' : checked ? 'border-slate-400 hover:border-blue-500 cursor-pointer' : 'border-slate-300'}`}
-                  />
-                  {s.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {activeSeries.length === 0 ? (
+        <p className="py-2 text-xs text-slate-500">All lines are off — toggle one back on in the legend above.</p>
+      ) : (
+        <ProjectionTimeline series={activeSeries} onToggleSeries={toggleLine} />
+      )}
 
-        {/* Verdict columns */}
-        {selected.length < 2 ? (
-          <p className="text-xs text-slate-500 py-2">
-            Select at least two scenarios to see their verdict cards side by side.
-          </p>
-        ) : (
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch">
-            {comparisons.map(c => (
-              <VerdictColumn key={c.metrics.id} comparison={c} isBaseline={c.metrics.id === baselineId} />
+      {/* The numbers underneath — one row per scenario that's on. */}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-[0.16em] text-slate-400">
+              <th className="py-1.5 pr-3 font-semibold">Scenario</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">Wealth at retirement</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">Depletion age</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">Withdrawal rate</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">Lifetime tax</th>
+              <th className="py-1.5 font-semibold text-right">Ending balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activeRows.map(r => (
+              <tr key={r.id} className={`border-b border-slate-100 ${r.id === activeScenarioId ? 'bg-slate-50' : ''}`}>
+                <td className="py-1.5 pr-3">
+                  <span className="font-medium text-slate-900">{r.name}</span>
+                  <span className="ml-1.5 text-[10px] text-slate-400">{r.isCouple ? 'couple' : 'single'}</span>
+                </td>
+                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtMoney(r.householdWorth)}</td>
+                <td className={`num py-1.5 pr-3 text-right ${r.depletionAge ? 'font-medium text-rose-700' : 'text-slate-800'}`}>
+                  {r.depletionAge ?? 'Never'}
+                </td>
+                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtPct(r.withdrawalRate)}</td>
+                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtMoney(r.lifetimeTax)}</td>
+                <td className="num py-1.5 text-right text-slate-800">{fmtMoney(r.endingBalance)}</td>
+              </tr>
             ))}
-          </div>
+          </tbody>
+        </table>
+        {activeRows.length === 0 && (
+          <p className="text-xs text-slate-500 py-2">Nothing to show — all lines are toggled off.</p>
         )}
       </div>
     </div>

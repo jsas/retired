@@ -4,14 +4,15 @@
  * these rather than restyle raw elements, so the vocabulary stays consistent.
  * The living reference is StyleGuide.tsx; the prose is STYLEGUIDE.md.
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from './tokens';
+import { helpTopic } from '../help/topics';
 
 /* ── VerdictHero ──────────────────────────────────────────────────────────
    The answer, first, in plain English. One uppercase eyebrow, one sentence,
    one supporting line. Nothing else competes with it on the page. */
 export function VerdictHero({ eyebrow = 'The verdict', verdict, sub }: {
-  eyebrow?: string;
+  eyebrow?: ReactNode;
   verdict: ReactNode;
   sub?: ReactNode;
 }) {
@@ -26,11 +27,89 @@ export function VerdictHero({ eyebrow = 'The verdict', verdict, sub }: {
   );
 }
 
+/* ── HelpHint ─────────────────────────────────────────────────────────────
+   The small ? at the end of a label. Click/tap opens a flat hairline box
+   (w-72) with the topic's title, the SAME body the Help page renders (never
+   re-typed here — one source of truth in src/help/topics.tsx), and a link
+   that deep-links into Help. Opens on click not hover (touch is first-class),
+   closes on outside-tap / Esc / re-tap. `place="top"` flips it above. */
+/* The popup half of HelpHint, exported so tests (and the style guide) can
+   render it directly. The typography resets here matter: the hint usually
+   mounts inside an uppercase section label, and without normal-case /
+   tracking-normal the label's transform leaks into the topic body. */
+export function HelpHintPopup({ topic, place = 'bottom' }: {
+  topic: { id: string; title: string; body: ReactNode };
+  place?: 'bottom' | 'top';
+}) {
+  return (
+    <span
+      role="dialog"
+      aria-label={topic.title}
+      className={`absolute left-0 z-50 block w-72 border border-slate-200 bg-white p-3 text-left text-[12px] font-normal normal-case leading-relaxed tracking-normal text-slate-600 ${
+        place === 'top' ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
+      }`}
+    >
+      <span className="mb-1.5 block text-[12px] font-semibold text-slate-900">{topic.title}</span>
+      <span className="block">{topic.body}</span>
+      <a
+        href={`#/help?topic=${topic.id}`}
+        className="mt-2 inline-block text-[11px] font-medium text-blue-700 hover:underline"
+      >
+        More in Help →
+      </a>
+    </span>
+  );
+}
+
+export function HelpHint({ topic: topicId, place = 'bottom', className = '' }: {
+  /** Unique topic id from src/help/topics.tsx — also the Help-page anchor. */
+  topic: string;
+  place?: 'bottom' | 'top';
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const topic = helpTopic(topicId);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (!topic) return null;
+
+  return (
+    <span ref={ref} className={`relative inline-flex align-middle ${className}`}>
+      <button
+        type="button"
+        aria-label={`Help: ${topic.title}`}
+        aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center border border-slate-300 text-[10px] font-semibold leading-none text-slate-400 hover:border-slate-400 hover:text-slate-600 focus:outline-none focus:border-slate-500"
+      >
+        ?
+      </button>
+      {open && <HelpHintPopup topic={topic} place={place} />}
+    </span>
+  );
+}
+
 /* ── Panel ────────────────────────────────────────────────────────────────
    The only "container": a hairline rule and a label, never a card. Use for
    any grouped block that needs a name. */
-export function Panel({ label, action, children, className = '' }: {
+export function Panel({ label, hint, action, children, className = '' }: {
   label: string;
+  /** A help-topic id — renders a ? at the end of the label. */
+  hint?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -38,7 +117,7 @@ export function Panel({ label, action, children, className = '' }: {
   return (
     <section className={`border-b border-slate-200 py-7 ${className}`}>
       <div className="mb-4 flex items-baseline justify-between">
-        <h2 className={cls.sectionLabel}>{label}</h2>
+        <h2 className={cls.sectionLabel}>{label}{hint && <HelpHint topic={hint} />}</h2>
         {action}
       </div>
       {children}
@@ -50,8 +129,10 @@ export function Panel({ label, action, children, className = '' }: {
    The one slider. A 24px hit strip for fingers whose visible track is a
    4px hairline (the thumb rides a clipped content-box). Square thumb, no
    fill to the left — the position itself is the signal. */
-export function Fader({ label, value, min, max, step, format, onChange, hint }: {
+export function Fader({ label, help, value, min, max, step, format, onChange, hint }: {
   label: string;
+  /** A help-topic id — renders a ? at the end of the label. */
+  help?: string;
   value: number;
   min: number;
   max: number;
@@ -63,7 +144,7 @@ export function Fader({ label, value, min, max, step, format, onChange, hint }: 
   return (
     <div className="border-l-2 border-slate-200 pl-4">
       <div className="mb-1.5 flex items-baseline justify-between">
-        <label className="text-[13px] font-medium text-slate-700">{label}</label>
+        <label className="text-[13px] font-medium text-slate-700">{label}{help && <HelpHint topic={help} />}</label>
         <span className="num text-[15px] font-bold text-slate-900">{format(value)}</span>
       </div>
       <input
@@ -79,6 +160,57 @@ export function Fader({ label, value, min, max, step, format, onChange, hint }: 
       </div>
       {hint && <p className="mt-2 text-[11.5px] leading-relaxed text-slate-500">{hint}</p>}
     </div>
+  );
+}
+
+/* ── Check ────────────────────────────────────────────────────────────────
+   The one checkbox. A square (never round, never blue): hairline border when
+   off, solid INK with a white ✓ when on. Pages compose this instead of a raw
+   <input type="checkbox"> so no surface can drift back to the browser's blue
+   default. Renders a real input underneath — labels, focus, and keyboard all
+   behave natively. `size` scales the box for denser (12px) or roomier rows. */
+export function Check({ checked, onChange, size = 16, label, children, className = '' }: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  /** Box edge in px — 16 default, 12 for tight list rows, 20 for big tap targets. */
+  size?: 12 | 16 | 20;
+  /** Optional text rendered beside the box; wrapping in your own <label> also works. */
+  label?: ReactNode;
+  /** Rich content beside the box (title + note blocks) — wins over `label`. */
+  children?: ReactNode;
+  className?: string;
+}) {
+  const box = (
+    <span
+      aria-hidden
+      className={`inline-flex shrink-0 items-center justify-center border transition-colors ${
+        checked ? 'border-slate-900 bg-slate-900' : 'border-slate-300 bg-white'
+      }`}
+      style={{ width: size, height: size }}
+    >
+      {checked && (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 10 10" fill="none">
+          <path d="M1.5 5.2 4 7.7 8.5 2.3" stroke="#fff" strokeWidth="1.8" />
+        </svg>
+      )}
+    </span>
+  );
+  const input = (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="sr-only"
+    />
+  );
+  // The input is visually hidden but present, so the <label> click / focus /
+  // space-key semantics all come from the browser — no custom key handling.
+  return (
+    <label className={`inline-flex cursor-pointer items-center gap-2 ${className}`}>
+      {input}
+      {box}
+      {children ?? (label != null && <span className="text-[13px] text-slate-800">{label}</span>)}
+    </label>
   );
 }
 
@@ -182,7 +314,7 @@ export function Legend({ items }: {
 
 /* ── Dropdown ─────────────────────────────────────────────────────────────
    A flat, hairline-bordered panel under a text button — no shadow, no arrow
-   chrome. Used for the Details/Plans menus. Closes on selection. */
+   chrome. Used for the Details/Profiles menus. Closes on selection. */
 export function Dropdown({ label, children, wide = false }: {
   label: ReactNode;
   children: ReactNode;
@@ -200,7 +332,7 @@ export function Dropdown({ label, children, wide = false }: {
       </button>
       {open && (
         <div
-          className={`absolute left-0 top-[calc(100%+4px)] z-50 border border-slate-200 bg-white p-2 ${wide ? 'min-w-[300px]' : 'min-w-[230px]'}`}
+          className={`absolute left-0 top-[calc(100%+4px)] z-50 max-w-[calc(100vw-2rem)] border border-slate-200 bg-white p-2 ${wide ? 'min-w-[300px]' : 'min-w-[230px]'}`}
           onClick={() => setOpen(false)}
         >
           {children}
@@ -218,6 +350,70 @@ export function Footnote({ children }: { children: ReactNode }) {
     <footer className="mt-8 border-t border-slate-200 pt-4 text-[11px] text-slate-400">
       {children}
     </footer>
+  );
+}
+
+/* ── Dot ──────────────────────────────────────────────────────────────────
+   The small square status/legend dot — the system's dots are SQUARE, not
+   round. Used by legends, status indicators and the verdict chip. */
+export function Dot({ color, size = 10, title }: { color: string; size?: number; title?: string }) {
+  return (
+    <span
+      title={title}
+      className="inline-block shrink-0"
+      style={{ width: size, height: size, backgroundColor: color }}
+    />
+  );
+}
+
+/* ── Progress ─────────────────────────────────────────────────────────────
+   A thin hairline track with a flat fill of `pct` percent. No rounded pill,
+   no shadow, no inline-style div soup in the page — the fill's width is the
+   only inline value (a computed percent, not a forked color). */
+export function Progress({ pct, className = '' }: { pct: number; className?: string }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div className={`h-1 w-full border border-slate-200 bg-white ${className}`} role="progressbar"
+      aria-valuenow={Math.round(clamped)} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-full bg-blue-600" style={{ width: `${clamped}%` }} />
+    </div>
+  );
+}
+
+/* ── Modal ────────────────────────────────────────────────────────────────
+   The flat overlay shell — hairline border, no shadow, no rounded card. Pages
+   needing a dialog compose this instead of rolling their own shadow box.
+   Closes on the backdrop tap and on Esc. */
+export function Modal({ open, onClose, title, children, wide = false }: {
+  open: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Close" onClick={onClose}
+        className="absolute inset-0 cursor-default bg-slate-900/30" />
+      <div className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-sm'} border border-slate-200 bg-white`}>
+        {title != null && (
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <h2 className="text-[13px] font-semibold text-slate-900">{title}</h2>
+            <button type="button" onClick={onClose} aria-label="Close dialog"
+              className="px-1 text-slate-400 hover:text-slate-900">×</button>
+          </div>
+        )}
+        <div className="px-4 py-4">{children}</div>
+      </div>
+    </div>
   );
 }
 

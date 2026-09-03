@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Users, Home, SlidersHorizontal, Sparkles, GitCompareArrows } from 'lucide-react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import { Progress } from '../design/primitives';
+import { cls } from '../design/tokens';
 
 const formatMoney = (v: number) =>
   new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
@@ -171,8 +173,10 @@ interface SetupWizardProps {
   onSkip: () => void;
 }
 
+// Flat hairline field chrome — matches the design tokens (no rounded corners,
+// no focus ring; the focus affordance is the border going to slate-900).
 const NUM_CLS =
-  'w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500';
+  'w-full px-3 py-2 bg-white border border-slate-300 text-sm text-slate-900 focus:outline-none focus:border-slate-900';
 const LABEL_CLS = 'block text-[13px] font-medium text-slate-700 mb-1';
 const HINT_CLS = 'text-[11px] text-slate-400 mt-0.5 leading-snug';
 
@@ -295,7 +299,7 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
   const totalSavings = data.rrspBalance + data.tfsaBalance + data.taxableBalance + data.cashCushionBalance;
 
   return (
-    <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+    <div className="max-w-md mx-auto bg-white border border-slate-200 p-6">
       {/* Progress */}
       <div className="flex items-center justify-between mb-1">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-600">
@@ -305,11 +309,8 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
           {isSpousePass ? 'Skip — use typical defaults' : 'Skip setup'}
         </button>
       </div>
-      <div className="h-1 bg-slate-100 rounded-full mb-5 overflow-hidden">
-        <div
-          className="h-full bg-blue-600 rounded-full transition-all"
-          style={{ width: `${((step + 1) / totalSteps) * 100}%` }}
-        />
+      <div className="mb-5">
+        <Progress pct={((step + 1) / totalSteps) * 100} />
       </div>
 
       {isReview ? (
@@ -337,7 +338,7 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
           )}
 
           {/* Summary of what they entered */}
-          <dl className="mb-5 rounded-md border border-slate-200 divide-y divide-slate-100 text-[13px]">
+          <dl className="mb-5 border border-slate-200 divide-y divide-slate-100 text-[13px]">
             <div className="flex justify-between px-3 py-2">
               <dt className="text-slate-500">Ages</dt>
               <dd className="font-medium text-slate-900">
@@ -388,8 +389,8 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
                 <span className="text-[13px] text-slate-700 flex-1">
                   <span className="font-medium text-slate-900">Do you own your home?</span>
                   <span className="ml-2 inline-flex gap-2">
-                    <button onClick={() => setOwnsHome(true)} className={`px-2 py-0.5 rounded border text-[11px] ${ownsHome === true ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 text-slate-600'}`}>Yes</button>
-                    <button onClick={() => setOwnsHome(false)} className={`px-2 py-0.5 rounded border text-[11px] ${ownsHome === false ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-300 text-slate-600'}`}>No</button>
+                    <button onClick={() => setOwnsHome(true)} className={`px-2 py-0.5 border text-[11px] ${ownsHome === true ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 text-slate-600 hover:border-slate-900'}`}>Yes</button>
+                    <button onClick={() => setOwnsHome(false)} className={`px-2 py-0.5 border text-[11px] ${ownsHome === false ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 text-slate-600 hover:border-slate-900'}`}>No</button>
                   </span>
                   {ownsHome === true && (
                     <span className="block mt-2">
@@ -412,7 +413,7 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
             </div>
 
             {/* The power tools, matching the top nav: Steering / Optimize / Compare. */}
-            <div className="rounded-md bg-slate-50 border border-slate-200 px-3 py-2.5 space-y-1.5">
+            <div className="bg-slate-50 border border-slate-200 px-3 py-2.5 space-y-1.5">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Once your plan is in</p>
               <p className="flex items-center gap-2 text-[12px] text-slate-600"><SlidersHorizontal size={13} className="text-amber-600 shrink-0" /> <span><strong>Steering</strong> — drag the plan and watch the success rate move.</span></p>
               <p className="flex items-center gap-2 text-[12px] text-slate-600"><Sparkles size={13} className="text-blue-600 shrink-0" /> <span><strong>Optimize</strong> — ranks CPP/OAS timing, withdrawal order and reverse-mortgage timing for you.</span></p>
@@ -468,7 +469,7 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
           onClick={next}
           disabled={isLast && !isSpousePass && !data.scenarioName.trim()}
           title={isLast && !isSpousePass && !data.scenarioName.trim() ? 'Give the plan a name first' : undefined}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`flex items-center gap-2 ${cls.primaryBtn} disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {isLast
             ? (isSpousePass

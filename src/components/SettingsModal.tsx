@@ -10,6 +10,8 @@ import { DB_STORAGE_KEY } from '../data/db';
 import { AsyncOpfsBackend } from '../data/opfs';
 import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';
 import { AI_SETTINGS_STORAGE_KEY } from '../lib/aiSettings';
+import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } from '../lib/rangePrefs';
+import { HelpHint } from '../design/primitives';
 
 interface SettingsModalProps {
   config: AppConfig;
@@ -34,20 +36,25 @@ interface SettingsModalProps {
 //                                     (the localStorage mirror of the kv row)
 //   retirement_ai_chats             — assistant chat threads
 //   retirement_ai_settings          — model connections + AI preferences
+//   wealthconsole_schedule_cols     — year-by-year table column picker
+//   wealthconsole_ranges            — lever slider min/max prefs
 const ERASABLE_KEYS = [
   DB_STORAGE_KEY,
   'wealthconsole_scenarios',
   'wealthconsole_config',
   'wealthconsole_eq',
   'wealthconsole_panel_state',
+  'wealthconsole_schedule_cols',
+  'wealthconsole_ranges',
   AI_CHATS_STORAGE_KEY,
   AI_SETTINGS_STORAGE_KEY,
 ];
 
-type Section = 'general' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
+type Section = 'general' | 'levers' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'general', label: 'General' },
+  { id: 'levers', label: 'Lever Ranges' },
   { id: 'federal', label: 'Federal Tax' },
   { id: 'provinces', label: 'Provincial Tax' },
   { id: 'rrif', label: 'RRIF Rates' },
@@ -71,6 +78,11 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   const [section, setSection] = useState<Section>('federal');
   const [selectedProvince, setSelectedProvince] = useState<string>('ONT');
   const [error, setError] = useState<string | null>(null);
+  // Lever ranges live in prefKV (UI prefs), not the engine config — they shape
+  // the sliders, not the math. Edits save immediately and the faders pick them
+  // up on their next render.
+  const [ranges, setRanges] = useState<RangePrefs>(getRangePrefs);
+  const updateRanges = (patch: Partial<RangePrefs>) => setRanges(setRangePrefs(patch));
 
   const update = (mutate: (c: AppConfig) => void) => {
     setDraft(prev => {
@@ -114,15 +126,15 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   return (
     <div>
         {/* Section tabs */}
-        <div className="flex gap-1 border-b border-neutral-200 mb-4">
+        <div className="mb-5 flex gap-4 border-b border-slate-200">
           {SECTIONS.map(s => (
             <button
               key={s.id}
               onClick={() => setSection(s.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-t ${
+              className={`-mb-px border-b-2 px-1 pb-2 text-xs font-medium ${
                 section === s.id
-                  ? 'bg-blue-50 text-blue-700 border border-b-white border-neutral-200 -mb-px'
-                  : 'text-slate-600 hover:bg-neutral-50'
+                  ? 'border-slate-900 text-slate-900'
+                  : 'border-transparent text-slate-400 hover:text-slate-900'
               }`}
             >
               {s.label}
@@ -149,7 +161,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   is sent to a server. Use the sidebar's Export to back them up.
                 </p>
               </div>
-              <div className="border-t border-neutral-200 pt-3">
+              <div className="border-t border-slate-200 pt-3">
                 <h3 className="text-xs font-semibold text-slate-700 mb-1.5">Welcome section</h3>
                 <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
@@ -168,7 +180,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 </label>
               </div>
 
-              <div className="border-t border-neutral-200 pt-3">
+              <div className="border-t border-slate-200 pt-3">
                 <h3 className="text-xs font-semibold text-slate-700 mb-1.5">Unsaved changes</h3>
                 <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
@@ -191,9 +203,9 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   mirror) and every app key, then reloads to first-run defaults.
                   Kept out of the draft/save flow — it acts immediately, on the
                   stored data itself. */}
-              <div className="border border-red-300 bg-red-50/60 rounded p-3">
-                <h3 className="text-xs font-semibold text-red-800 mb-1">Danger zone</h3>
-                <p className="text-[11px] text-red-700 leading-snug mb-2">
+              <div className="border border-rose-200 p-3">
+                <h3 className="mb-1 text-xs font-semibold text-rose-800">Danger zone</h3>
+                <p className="mb-2 text-[11.5px] leading-relaxed text-rose-700">
                   Erase it all: every scenario, engine setting, agent memory, AI chat, model
                   connection, panel layout and dismissal is permanently deleted from this browser —
                   including the database file itself — and the app restarts with factory defaults.
@@ -201,11 +213,47 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 </p>
                 <button
                   onClick={handleEraseAll}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700"
+                  className="flex items-center gap-1.5 border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
                 >
                   <Trash2 size={13} /> Erase everything and reset
                 </button>
               </div>
+            </div>
+          )}
+
+          {section === 'levers' && (
+            <div className="space-y-4 max-w-lg">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">Lever ranges<HelpHint topic="lever-ranges" /></h3>
+                <p className="text-xs text-slate-600 leading-snug">
+                  The sliders for spending, savings, expected return and volatility only span the
+                  range below. Widen one if your plan lives past the default edge — these are
+                  preferences, not engine settings, so they save the moment you change them.
+                  Retirement age, plan-to age, CPP and OAS start ages keep fixed spans; a fixed
+                  span is part of their meaning.
+                </p>
+              </div>
+              <RangeNum label="Spending slider max" value={ranges.spendingMax} step={10000}
+                hint={`Default ${DEFAULT_RANGE_PREFS.spendingMax.toLocaleString('en-CA')}`}
+                onChange={(v) => updateRanges({ spendingMax: v })} money />
+              <RangeNum label="Annual savings slider max" value={ranges.savingsMax} step={10000}
+                hint={`Default ${DEFAULT_RANGE_PREFS.savingsMax.toLocaleString('en-CA')}`}
+                onChange={(v) => updateRanges({ savingsMax: v })} money />
+              <RangeNum label="Expected return slider min" value={+(ranges.returnMin * 100).toFixed(2)} step={0.25}
+                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.returnMin * 100).toFixed(1)}%`}
+                onChange={(v) => updateRanges({ returnMin: Math.max(0, v) / 100 })} />
+              <RangeNum label="Expected return slider max" value={+(ranges.returnMax * 100).toFixed(2)} step={0.25}
+                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.returnMax * 100).toFixed(1)}%`}
+                onChange={(v) => updateRanges({ returnMax: Math.max(0.01, v) / 100 })} />
+              <RangeNum label="Volatility slider max" value={+(ranges.volatilityMax * 100).toFixed(1)} step={1}
+                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.volatilityMax * 100).toFixed(0)}%`}
+                onChange={(v) => updateRanges({ volatilityMax: Math.max(0.01, v) / 100 })} />
+              <button
+                onClick={() => setRanges(setRangePrefs({ ...DEFAULT_RANGE_PREFS }))}
+                className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+              >
+                <RotateCcw size={13} /> Back to the default ranges
+              </button>
             </div>
           )}
 
@@ -232,7 +280,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                       setSelectedProvince(code);
                       setError(null);
                     }}
-                    className="p-1 hover:bg-neutral-100 rounded" title="Add province"
+                    className="p-1 hover:bg-slate-100" title="Add province"
                   >
                     <Plus size={14} />
                   </button>
@@ -242,8 +290,8 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                     <div key={code} className="flex items-center group">
                       <button
                         onClick={() => setSelectedProvince(code)}
-                        className={`flex-1 text-left px-2 py-1 text-xs rounded ${
-                          selectedProvince === code ? 'bg-blue-100 text-blue-800 font-medium' : 'hover:bg-neutral-50'
+                        className={`flex-1 px-2 py-1 text-left text-xs ${
+                          selectedProvince === code ? 'font-semibold text-slate-900' : 'text-slate-600 hover:bg-slate-50'
                         }`}
                       >
                         {code}{PROVINCE_NAMES[code] ? ` — ${PROVINCE_NAMES[code]}` : ''}
@@ -256,7 +304,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                             setSelectedProvince(Object.keys(draft.provinces).find(k => k !== code) ?? '');
                           }
                         }}
-                        className="p-1 text-neutral-400 hover:text-red-600 opacity-0 group-hover:opacity-100"
+                        className="p-1 text-slate-400 hover:text-rose-700 opacity-0 group-hover:opacity-100"
                         title="Remove province"
                       >
                         <Trash2 size={12} />
@@ -273,13 +321,13 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                       onChange={t => update(c => { c.provinces[selectedProvince] = t; })}
                     />
                     {selectedProvince === 'QC' && (
-                      <div className="mt-3 pt-3 border-t border-neutral-200 max-w-sm">
+                      <div className="mt-3 max-w-sm border-t border-slate-200 pt-3">
                         <PercentField label="Federal abatement (% of federal tax)" value={draft.qcFederalAbatement}
                           onChange={v => update(c => { c.qcFederalAbatement = v; })} />
                       </div>
                     )}
                     {selectedProvince === 'ONT' && (
-                      <div className="mt-3 pt-3 border-t border-neutral-200 max-w-sm space-y-2">
+                      <div className="mt-3 max-w-sm space-y-2 border-t border-slate-200 pt-3">
                         <NumberField label="Surtax threshold 1 ($ of ON tax)" value={draft.ontarioSurtax.threshold1}
                           onChange={v => update(c => { c.ontarioSurtax.threshold1 = v; })} />
                         <PercentField label="Surtax rate 1 (%)" value={draft.ontarioSurtax.rate1}
@@ -319,7 +367,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                         onChange={e => update(c => {
                           c.rrifRates[String(age)] = parseFloat(e.target.value) || 0;
                         })}
-                        className="w-full px-1.5 py-1 text-xs border border-neutral-300 rounded"
+                        className="w-full border border-slate-300 px-1.5 py-1 text-xs focus:border-slate-900 focus:outline-none"
                       />
                     </div>
                   ))}
@@ -372,8 +420,8 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={v => update(c => { c.cpp.earlyPenaltyPerMonth = v; })} />
               <PercentField label="Deferral bonus (%/month after standard age)" value={draft.cpp.deferralBonusPerMonth}
                 onChange={v => update(c => { c.cpp.deferralBonusPerMonth = v; })} />
-              <div className="pt-2 border-t border-neutral-700">
-                <p className="text-[11px] text-neutral-500 mb-2">Self-employed CPP contribution (both sides) — a deduction from taxable self-employment income.</p>
+              <div className="pt-2 border-t border-slate-700">
+                <p className="text-[11px] text-slate-500 mb-2">Self-employed CPP contribution (both sides) — a deduction from taxable self-employment income.</p>
                 <PercentField label="Combined employee+employer rate" value={draft.cpp.selfEmployedRate}
                   onChange={v => update(c => { c.cpp.selfEmployedRate = v; })} />
                 <NumberField label="YMPE (max pensionable earnings)" value={draft.cpp.ympe}
@@ -413,12 +461,10 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={v => update(c => { c.rdsp.grantLifetimeMax = v; })} step="1000" />
               <NumberField label="Grant/bond end age" value={draft.rdsp.grantEndAge}
                 onChange={v => update(c => { c.rdsp.grantEndAge = v; })} />
-              <div className="grid grid-cols-2 gap-2">
-                <NumberField label="Bond lower threshold ($)" value={draft.rdsp.bondThresholdLower}
-                  onChange={v => update(c => { c.rdsp.bondThresholdLower = v; })} step="500" />
-                <NumberField label="Bond upper threshold ($)" value={draft.rdsp.bondThresholdUpper}
-                  onChange={v => update(c => { c.rdsp.bondThresholdUpper = v; })} step="500" />
-              </div>
+              <NumberField label="Bond lower threshold ($)" value={draft.rdsp.bondThresholdLower}
+                onChange={v => update(c => { c.rdsp.bondThresholdLower = v; })} step="500" />
+              <NumberField label="Bond upper threshold ($)" value={draft.rdsp.bondThresholdUpper}
+                onChange={v => update(c => { c.rdsp.bondThresholdUpper = v; })} step="500" />
               <NumberField label="Bond annual max ($)" value={draft.rdsp.bondAnnualMax}
                 onChange={v => update(c => { c.rdsp.bondAnnualMax = v; })} step="100" />
               <NumberField label="Bond lifetime max ($)" value={draft.rdsp.bondLifetimeMax}
@@ -522,24 +568,52 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between py-3 border-t border-neutral-200 mt-2">
+        <div className="flex items-center justify-between py-3 border-t border-slate-200 mt-2">
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-neutral-100 rounded"
+            className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
           >
             <RotateCcw size={13} /> Reset to defaults
           </button>
           <div className="flex items-center gap-2">
-            {error && <span className="text-xs text-red-600">{error}</span>}
+            {error && <span className="text-xs text-rose-700">{error}</span>}
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700"
+              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
             >
               <Save size={13} /> Save settings
             </button>
           </div>
         </div>
     </div>
+  );
+}
+
+/** Lever-range editor row: label + number + a one-line default hint. */
+function RangeNum({ label, value, onChange, step, hint, money }: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+  hint?: string;
+  money?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-slate-700">{label}</span>
+      <span className="mt-0.5 flex items-baseline gap-1.5">
+        {money && <span className="text-[11px] text-slate-400">$</span>}
+        <input
+          type="number"
+          step={step ?? 1}
+          min={0}
+          value={Number.isFinite(value) ? value : 0}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="num w-36 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+        />
+      </span>
+      {hint && <span className="mt-0.5 block text-[11px] text-slate-500">{hint}</span>}
+    </label>
   );
 }
 
@@ -557,7 +631,7 @@ function NumberField({ label, value, onChange, step }: {
         step={step ?? '1'}
         value={value}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="w-32 px-2 py-1 text-xs border border-neutral-300 rounded text-right"
+        className="num w-32 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
       />
     </label>
   );
@@ -578,7 +652,7 @@ function PercentField({ label, value, onChange }: {
         min="0"
         value={+(value * 100).toFixed(4)}
         onChange={e => onChange((parseFloat(e.target.value) || 0) / 100)}
-        className="w-32 px-2 py-1 text-xs border border-neutral-300 rounded text-right"
+        className="num w-32 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
       />
     </label>
   );
@@ -622,38 +696,38 @@ function TaxTableEditor({ table, onChange }: {
           step="1000"
           value={table.exemption}
           onChange={e => onChange({ ...table, exemption: parseFloat(e.target.value) || 0 })}
-          className="w-28 px-2 py-1 text-xs border border-neutral-300 rounded text-right"
+          className="num w-28 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
         />
       </div>
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-left text-slate-500 border-b border-neutral-200">
+          <tr className="text-left text-slate-500 border-b border-slate-200">
             <th className="py-1 font-medium">Bracket threshold</th>
             <th className="py-1 font-medium">Rate above threshold</th>
             <th className="w-8"></th>
           </tr>
         </thead>
         <tbody>
-          <tr className="border-b border-neutral-100">
+          <tr className="border-b border-slate-100">
             <td className="py-1 text-slate-500">$0</td>
             <td>
               <input
                 type="number" step="0.005" min="0" max="1"
                 value={table.rates[0] ?? 0}
                 onChange={e => setRate(0, parseFloat(e.target.value) || 0)}
-                className="w-24 px-1.5 py-1 border border-neutral-300 rounded text-right"
+                className="num w-24 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
               />
             </td>
             <td></td>
           </tr>
           {table.brackets.map((b, i) => (
-            <tr key={i} className="border-b border-neutral-100">
+            <tr key={i} className="border-b border-slate-100">
               <td className="py-1">
                 <input
                   type="number" step="1000" min="0"
                   value={b}
                   onChange={e => setBracket(i, parseFloat(e.target.value) || 0)}
-                  className="w-28 px-1.5 py-1 border border-neutral-300 rounded text-right"
+                  className="num w-28 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
                 />
               </td>
               <td>
@@ -661,11 +735,11 @@ function TaxTableEditor({ table, onChange }: {
                   type="number" step="0.005" min="0" max="1"
                   value={table.rates[i + 1] ?? 0}
                   onChange={e => setRate(i + 1, parseFloat(e.target.value) || 0)}
-                  className="w-24 px-1.5 py-1 border border-neutral-300 rounded text-right"
+                  className="num w-24 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
                 />
               </td>
               <td>
-                <button onClick={() => removeRow(i)} className="p-1 text-neutral-400 hover:text-red-600" title="Remove bracket">
+                <button onClick={() => removeRow(i)} className="p-1 text-slate-400 hover:text-rose-700" title="Remove bracket">
                   <Trash2 size={12} />
                 </button>
               </td>
@@ -675,7 +749,7 @@ function TaxTableEditor({ table, onChange }: {
       </table>
       <button
         onClick={addRow}
-        className="mt-2 flex items-center gap-1 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 rounded"
+        className="mt-2 flex items-center gap-1 px-1 py-1 text-xs font-medium text-slate-500 hover:text-slate-900"
       >
         <Plus size={12} /> Add bracket
       </button>

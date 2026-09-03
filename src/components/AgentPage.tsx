@@ -7,7 +7,7 @@
 // auto-scroll, and the composer. Connecting/switching models lives on the
 // separate Connections page.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AssistantRuntimeProvider,
   ThreadPrimitive,
@@ -31,8 +31,10 @@ import {
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { createBridge, type Bridge, type ChatMessage } from '@retired/ai-bridge';
+import { Progress } from '../design/primitives';
 import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
+import type { View } from '../lib/viewRoutes';
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
@@ -73,6 +75,21 @@ interface AgentPageProps {
   /** Agent scenario navigation: switch active scenario / save-current-as-new. */
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
+  /** Docked mode: render just the conversation column in the beta's narrow
+   *  right rail — no page header, no chat-list sidebar (a slim strip handles
+   *  chat switching so the rail stays 340px). */
+  docked?: boolean;
+  /** Hide the inner "AI Assistant" title (the beta page chrome already says
+   *  Assistant — an inner h2 would be a second header). Controls and the
+   *  connection badge stay. */
+  hideTitle?: boolean;
+  /** The view the host page is on when AgentPage mounts — for the ambient
+   *  prompt line and find_page's "already here" tag. */
+  currentView?: View;
+  /** Route the host to a view (the action behind an approved propose_navigate
+   *  card). Its presence also advertises `canNavigate` to the tools: no prop,
+   *  and the card degrades to a shareable #/hash result. */
+  onNavigate?: (view: View) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +240,94 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
+/* The docked chat picker: a clickable icon in a slim strip that drops down to
+   select, start, or delete a chat. The rail's width stays for the conversation —
+   no permanent chat list. Flat, hairline, f7. */
+function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, modelPicker }: {
+  threads: ChatThread[];
+  activeThreadId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
+  /** The model picker rides this strip in docked mode — the dock has no full
+   *  header, and without it there'd be no way to switch models once one is
+   *  connected (the offline CTA that links to Connections only shows before). */
+  modelPicker?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const active = threads.find(t => t.id === activeThreadId);
+
+  return (
+    <div ref={ref} className="relative flex items-center gap-1 border-b border-slate-200 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-label="Choose a chat"
+        title="Choose a chat"
+        className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[12px] text-slate-700 hover:text-slate-900"
+      >
+        <MessageSquare size={13} className="shrink-0 text-slate-400" />
+        <span className="min-w-0 flex-1 truncate">{active ? active.title : 'No chat selected'}</span>
+        <ChevronDown size={13} className="shrink-0 text-slate-400" />
+      </button>
+      <button
+        type="button"
+        onClick={onNew}
+        aria-label="Start a new chat"
+        title="Start a new chat"
+        className="shrink-0 p-1 text-slate-500 hover:text-slate-900"
+      >
+        <Plus size={14} />
+      </button>
+      {modelPicker && <div className="shrink-0">{modelPicker}</div>}
+      {open && (
+        <div className="absolute left-0 top-full z-50 w-full border border-slate-200 bg-white">
+          {threads.length === 0 && (
+            <p className="px-2.5 py-2 text-[11px] text-slate-400">No chats yet. Start a new one.</p>
+          )}
+          {threads.map(t => (
+            <div
+              key={t.id}
+              className={`group flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[12px] ${
+                t.id === activeThreadId ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+              onClick={() => { onSelect(t.id); setOpen(false); }}
+            >
+              <MessageSquare size={12} className="shrink-0 text-slate-400" />
+              <span className="min-w-0 flex-1 truncate">{t.title}</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDelete(t.id); }}
+                aria-label="Delete this chat"
+                className="shrink-0 text-slate-300 opacity-0 hover:text-rose-600 group-hover:opacity-100"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle, currentView, onNavigate }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
   const [chatState, setChatState] = useState(() => loadChats());
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
@@ -343,66 +447,89 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-11rem)] min-h-[30rem]">
+    <div className={`flex flex-col ${docked ? 'h-full min-h-0' : 'h-[calc(100vh-11rem)] min-h-[30rem]'}`}>
       {/* Header: title + model picker + connections link. Lives on the page so
-          it's visible in chat, empty, and copy/paste modes alike. */}
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        <Bot size={16} className="text-violet-600" />
-        <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
-        <span
-          className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
-          title="Experimental: the assistant is new and still being tuned. It proposes changes for you to approve — it never edits your plan on its own."
-        >
-          Experimental
-        </span>
-        <div className="flex items-center gap-2 ml-auto">
-          <ModelPicker
-            settings={settings}
-            activeId={settings.activeConnectionId}
-            onChoose={chooseConnection}
-            onLoadModel={onOpenConnections}
-          />
-          {connection && (
-            <span
-              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold ${
-                isLocal ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-              }`}
-              title={isLocal
-                ? 'Runs entirely on this device: no account, no key, nothing you type leaves the computer.'
-                : 'Chats go directly from this browser to the provider; the key is stored only in this browser.'}
-            >
-              {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
-              {isLocal ? 'On this device · private' : 'Direct browser → provider'}
-            </span>
-          )}
-          {isLocal && !toolCapable && (
-            <span
-              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
-              title="This model is too small to read your plan or propose changes reliably, so tools are off: it answers questions from a summary of your plan. Pick a larger model (Connections) to let it edit."
-            >
-              Answers only · can't edit plan
-            </span>
-          )}
+          it's visible in chat, empty, and copy/paste modes alike. Docked mode
+          drops it — the rail is too narrow and the beta chrome owns the
+          assistant's on/off. */}
+      {!docked && (
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          {!hideTitle && <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>}
+          <span
+            className="border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
+            title="Experimental: the assistant is new and still being tuned. It proposes changes for you to approve — it never edits your plan on its own."
+          >
+            Experimental
+          </span>
+          <div className="flex items-center gap-2 ml-auto">
+            <ModelPicker
+              settings={settings}
+              activeId={settings.activeConnectionId}
+              onChoose={chooseConnection}
+              onLoadModel={onOpenConnections}
+            />
+            {connection && (
+              <span
+                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-semibold ${
+                  isLocal ? 'border border-slate-900 text-slate-900' : 'bg-slate-100 text-slate-600'
+                }`}
+                title={isLocal
+                  ? 'Runs entirely on this device: no account, no key, nothing you type leaves the computer.'
+                  : 'Chats go directly from this browser to the provider; the key is stored only in this browser.'}
+              >
+                {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
+                {isLocal ? 'On this device · private' : 'Direct browser → provider'}
+              </span>
+            )}
+            {isLocal && !toolCapable && (
+              <span
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold bg-amber-50 text-amber-800"
+                title="This model is too small to read your plan or propose changes reliably, so tools are off: it answers questions from a summary of your plan. Pick a larger model (Connections) to let it edit."
+              >
+                Answers only · can't edit plan
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex gap-3 flex-1 min-h-0">
-        {/* ---- Chat list: pinned open, or collapsed to a slim strip ---- */}
-        {chatsPinned ? (
-          <aside className="w-52 shrink-0 flex flex-col border border-slate-200 rounded bg-white">
+      <div className={`flex gap-3 flex-1 min-h-0 ${docked ? 'gap-0 flex-col' : ''}`}>
+        {/* Docked: a slim header strip — the chat picker is a clickable icon
+            that drops down to select a chat, so the rail keeps its width for
+            the conversation instead of a permanent list. */}
+        {docked && (
+          <DockChatPicker
+            threads={chatState.threads}
+            activeThreadId={chatState.activeThreadId}
+            onSelect={setActiveThread}
+            onNew={newChat}
+            onDelete={deleteChat}
+            modelPicker={
+              <ModelPicker
+                settings={settings}
+                activeId={settings.activeConnectionId}
+                onChoose={chooseConnection}
+                onLoadModel={onOpenConnections}
+              />
+            }
+          />
+        )}
+        {/* ---- Chat list (full page only): pinned open, or a slim strip. ---- */}
+        {docked ? null : chatsPinned ? (
+          <aside className="w-52 shrink-0 flex flex-col border border-slate-200 bg-white">
             <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Chats</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Chats</span>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={newChat}
-                  className="flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-900 font-semibold"
+                  className="flex items-center gap-1 font-semibold text-slate-900 text-[11px] hover:text-slate-600"
                   title="Start a new chat"
                 >
                   <Plus size={13} /> New
                 </button>
                 <button
                   onClick={() => setChatsPinned(false)}
-                  className="text-slate-400 hover:text-slate-700"
+                  className="text-slate-400 hover:text-slate-900"
                   title="Collapse the chat list to the left"
                 >
                   <ChevronsLeft size={13} />
@@ -416,8 +543,8 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               {chatState.threads.map(t => (
                 <div
                   key={t.id}
-                  className={`group flex items-center gap-1.5 rounded px-2 py-1.5 cursor-pointer text-[11px] ${
-                    t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-900' : 'hover:bg-slate-50 text-slate-700'
+                  className={`group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer text-[11px] ${
+                    t.id === chatState.activeThreadId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-600 hover:bg-slate-50'
                   }`}
                   onClick={() => setActiveThread(t.id)}
                 >
@@ -425,7 +552,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
                   <span className="flex-1 min-w-0 truncate">{t.title}</span>
                   <button
                     onClick={e => { e.stopPropagation(); deleteChat(t.id); }}
-                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 shrink-0"
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-700 shrink-0"
                     title="Delete this chat"
                   >
                     <Trash2 size={12} />
@@ -435,17 +562,17 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
             </div>
           </aside>
         ) : (
-          <aside className="w-9 shrink-0 flex flex-col items-center gap-2 border border-slate-200 rounded bg-white py-2">
+          <aside className="w-9 shrink-0 flex flex-col items-center gap-2 border border-slate-200 bg-white py-2">
             <button
               onClick={() => setChatsPinned(true)}
-              className="text-slate-400 hover:text-slate-700"
+              className="text-slate-400 hover:text-slate-900"
               title="Show the chat list"
             >
               <ChevronsRight size={14} />
             </button>
             <button
               onClick={newChat}
-              className="text-violet-700 hover:text-violet-900"
+              className="text-slate-900 hover:text-slate-600"
               title="Start a new chat"
             >
               <Plus size={14} />
@@ -456,8 +583,8 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
                   key={t.id}
                   onClick={() => { setActiveThread(t.id); setChatsPinned(true); }}
                   title={t.title}
-                  className={`flex items-center justify-center w-6 h-6 rounded ${
-                    t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-700' : 'text-slate-400 hover:bg-slate-50'
+                  className={`flex items-center justify-center w-6 h-6 ${
+                    t.id === chatState.activeThreadId ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'
                   }`}
                 >
                   <MessageSquare size={13} />
@@ -500,6 +627,8 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               patchThread={patchThread}
               recordCheckpoint={recordCheckpoint}
               checkpoints={activeThread.checkpoints ?? []}
+              currentView={currentView}
+              onNavigate={onNavigate}
               memory={memory}
               memoryScenarioId={memoryScenarioId}
               onOpenScenario={onOpenScenario}
@@ -534,7 +663,7 @@ export function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
           if (e.target.value === '__load__') onLoadModel();
           else if (e.target.value) onChoose(e.target.value);
         }}
-        className="px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-violet-500 max-w-56"
+        className="border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-slate-900 focus:outline-none max-w-56"
         title="Pick which model answers. Add or download models on the Connections page."
       >
         {settings.connections.map(c => (
@@ -563,15 +692,16 @@ function buildSystemBody(
   scenarioName: string,
   basePrompt: string | undefined,
   config: AppConfig,
+  currentView?: View,
 ): string {
   if (toolMode === 'prompt') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
+    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config, currentView }) + '\n\n' +
       buildPromptToolInstructions(toolSpecs());
   }
   if (toolMode === 'off') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config });
+    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config, currentView });
   }
-  return buildSystemPrompt(scenarioName, { basePrompt, config });
+  return buildSystemPrompt(scenarioName, { basePrompt, config, currentView });
 }
 
 /** The live plan digest for chat-only local models ('prompt' and 'off'
@@ -597,7 +727,7 @@ function planContextMessage(
   };
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
+function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -620,6 +750,8 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   memoryScenarioId?: string;
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
+  currentView?: View;
+  onNavigate?: (view: View) => void;
 }) {
   const turns = thread.turns as Turn[];
   const [running, setRunning] = useState(false);
@@ -632,6 +764,12 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   const abortRef = useRef<AbortController | null>(null);
   const downloadDoneRef = useRef(false);
   const pendingDecisions = useRef(new Map<string, (d: { approved: boolean; note?: string }) => void>());
+  // Approved propose_navigate cards queue their destination here instead of
+  // routing on the spot: AgentPage unmounts as soon as the view leaves
+  // 'agent', and its unmount cleanup aborts the in-flight turn — routing
+  // immediately would kill the assistant's own acknowledgment mid-stream.
+  // runTurn's finally flushes the queue once the turn is fully done.
+  const pendingNavigation = useRef<View[]>([]);
   // Filled in by SnapToBottomOnSend (inside the viewport) with the store's
   // scrollToBottom. send() calls it so a new user message snaps the reply into
   // view — the ONE auto-jump we keep now that the library's own triggers are
@@ -678,7 +816,13 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     get memoryScenarioId() { return memoryScenarioIdRef.current; },
     activeScenarioId, scenarioInputsById,
     onOpenScenario, onSaveScenarioAs,
-  }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
+    // Current page is ambient context (find_page tags it, the prompt names it)
+    // — not bound through a prop-less closure, so the memo tracks the prop.
+    currentView,
+    // Advertise the card path only if the host can actually route (see
+    // ToolContext.canNavigate); the routing itself happens on approval.
+    canNavigate: onNavigate != null,
+  }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs, currentView, onNavigate]);
 
   // The MCP-backed tool executor. The server re-resolves the LIVE context on
   // every call, so the executor closes over the memoized context object (its
@@ -699,7 +843,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
     const basePrompt = settings.systemPromptOverride;
-    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config);
+    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config, currentView);
     const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
     const planContext = planContextMessage(toolMode, inputs, config);
     const history = toHistory(turns);
@@ -757,7 +901,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     };
 
     const basePrompt = settings.systemPromptOverride;
-    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config);
+    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config, currentView);
     // The chat's standing instructions go last so they read as the user's own
     // voice; they can steer tone/focus but the base prompt's rules come first.
     const system = thread.systemNote?.trim()
@@ -923,6 +1067,15 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       setRunning(false);
       setLoadProgress(null);
       abortRef.current = null;
+      // Turn fully over (reply persisted, abort cleared) — NOW it's safe to
+      // honor any approved propose_navigate. Last queued destination wins:
+      // mid-turn re-proposals mean the user's real destination was the later
+      // one, and routing through both would double-jump.
+      if (pendingNavigation.current.length > 0) {
+        const target = pendingNavigation.current[pendingNavigation.current.length - 1];
+        pendingNavigation.current = [];
+        onNavigate?.(target);
+      }
     }
 
     // Write (or extend) the running digest after a compacted turn, so the next
@@ -942,15 +1095,24 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       changes: t.changes.map(c => c.callId === change.callId ? { ...c, resolved: approved ? 'approved' : 'rejected' } : c),
     })));
     if (approved) {
-      // Snapshot the plan BEFORE the patch lands — the automatic checkpoint
-      // propose_revert rolls back to. The label is the card's, so the model
-      // (and the user) can name the checkpoint later.
-      recordCheckpoint(change.label ?? 'Plan change', inputs);
-      // Revert patches carry encoded undefined-removals; decode them here so
-      // the spread in App's onApply actually deletes the keys.
-      const raw = changePatch(change);
-      const decoded = change.revert ? decodeRevertPatch(raw) : raw;
-      onApply(decoded as Partial<RetirementInputs>);
+      if (change.navigate != null) {
+        // Page-navigation card: no plan change to checkpoint and nothing to
+        // merge into inputs (the patch is empty by design). Queue the route —
+        // the host unmounts this chat when the view leaves 'agent', so moving
+        // now would abort the assistant's reply mid-stream (see
+        // pendingNavigation). runTurn's finally navigates once the turn is over.
+        pendingNavigation.current.push(change.navigate);
+      } else {
+        // Snapshot the plan BEFORE the patch lands — the automatic checkpoint
+        // propose_revert rolls back to. The label is the card's, so the model
+        // (and the user) can name the checkpoint later.
+        recordCheckpoint(change.label ?? 'Plan change', inputs);
+        // Revert patches carry encoded undefined-removals; decode them here so
+        // the spread in App's onApply actually deletes the keys.
+        const raw = changePatch(change);
+        const decoded = change.revert ? decodeRevertPatch(raw) : raw;
+        onApply(decoded as Partial<RetirementInputs>);
+      }
     }
     const live = pendingDecisions.current.get(change.callId);
     if (live) {
@@ -1070,7 +1232,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex flex-col h-full">
         {/* Thread */}
-        <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded bg-white">
+        <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0 border border-slate-200 bg-white">
           {/* All four auto-scroll triggers OFF. The defaults re-pin to the
               bottom on content growth (autoScroll), on run start, on
               initialize, and on the store's selectionChanged event — and in an
@@ -1112,7 +1274,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                           message part — the bubble must never depend on the
                           runtime's content conversion, so it can't vanish
                           while the assistant reply streams below it. */}
-                      <div className="max-w-[85%] min-w-0 px-3 py-2 rounded-lg bg-violet-600 text-white text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
+                      <div className="max-w-[85%] min-w-0 bg-slate-900 px-3 py-2 text-xs text-white whitespace-pre-wrap [overflow-wrap:anywhere]">
                         {turn?.text ?? <MessagePrimitive.Content />}
                       </div>
                     </div>
@@ -1179,7 +1341,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                         />
                       )}
                       {showBubble && (
-                        <div className="relative px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
+                        <div className="relative px-3 py-2 bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
                           {/* Activity spinner in the bubble's top-right corner
                               while it's a placeholder (thinking / working) —
                               same treatment as the reasoning block. */}
@@ -1200,7 +1362,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                         </div>
                       )}
                       {stuckPaused && (
-                        <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-snug">
+                        <div className="px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-snug">
                           This reply stopped while it was waiting for you. Use the
                           regenerate button to run it again.
                         </div>
@@ -1244,9 +1406,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                     <span className="ml-auto shrink-0">{Math.round(loadProgress.progress * 100)}%</span>
                   )}
                 </div>
-                <div className="h-1.5 bg-slate-200 rounded overflow-hidden">
-                  <div className="h-full bg-violet-500 transition-all" style={{ width: `${Math.round(loadProgress.progress * 100)}%` }} />
-                </div>
+                <Progress pct={loadProgress.progress * 100} className="h-1.5" />
               </div>
             )}
           </ThreadPrimitive.Viewport>
@@ -1275,11 +1435,11 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                 placeholder={ready ? 'Ask about your plan, or describe your situation…' : 'Connect a provider first (Connections page)'}
                 disabled={!ready}
                 rows={2}
-                className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-violet-500 disabled:bg-slate-50 disabled:text-slate-400 resize-none"
+                className="flex-1 border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-slate-900 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400 resize-none"
               />
               {running ? (
                 <ComposerPrimitive.Cancel asChild>
-                  <button className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 text-slate-600 text-xs font-semibold rounded hover:bg-slate-50">
+                  <button className="flex items-center gap-1.5 border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900">
                     <X size={13} /> Stop
                   </button>
                 </ComposerPrimitive.Cancel>
@@ -1287,7 +1447,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                 <ComposerPrimitive.Send asChild>
                   <button
                     disabled={!ready}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700 disabled:opacity-40"
+                    className="flex items-center gap-1.5 bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
                   >
                     Send
                   </button>
@@ -1382,7 +1542,7 @@ function ScrollControls({ register }: { register: React.MutableRefObject<(() => 
   return (
     <button
       onClick={() => store.getState().scrollToBottom({ behavior: 'smooth' })}
-      className="self-center mb-1 flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 border border-slate-200 text-slate-400 text-[10px] shadow-sm hover:text-slate-600 hover:border-slate-300"
+      className="self-center mb-1 flex items-center gap-1 px-2 py-0.5 bg-white/90 border border-slate-200 text-slate-400 text-[10px] hover:text-slate-600 hover:border-slate-300"
       title="Jump to the latest message"
     >
       <ChevronDown size={10} /> Latest
@@ -1514,15 +1674,15 @@ function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming
   // (whose pin state now survives re-renders — see elRef there).
   useEffect(() => { if (open) pin(); }, [open]);
   return (
-    <div className="relative border border-violet-200 rounded bg-violet-50/60 min-w-0">
+    <div className="relative min-w-0 border border-slate-200 bg-slate-50">
       {/* Activity spinner pinned to the block's top-right corner while the
           stream is live — visible whether the body is open or collapsed. */}
       {streaming && (
-        <Loader2 size={10} className="animate-spin absolute top-1.5 right-1.5 text-violet-500 pointer-events-none" />
+        <Loader2 size={10} className="animate-spin absolute top-1.5 right-1.5 text-slate-400 pointer-events-none" />
       )}
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 w-full px-2 py-1 pr-6 text-[10px] font-semibold text-violet-700 hover:text-violet-900 text-left"
+        className="flex items-center gap-1.5 w-full px-2 py-1 pr-6 text-[10px] font-semibold text-slate-500 hover:text-slate-900 text-left"
       >
         {open ? <ChevronDown size={11} className="shrink-0" /> : <ChevronRight size={11} className="shrink-0" />}
         <Brain size={11} className="shrink-0" />
@@ -1567,7 +1727,7 @@ function AssistantExtras({ turn, onDecide, tokensPerSecond, hideResolvedCards = 
         <ChangeCard key={change.callId} change={change} onDecide={onDecide} />
       ))}
       {turn.state === 'truncated' && (
-        <div className="flex items-start gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[10px] leading-snug">
+        <div className="flex items-start gap-1.5 border-l-2 border-amber-500 px-2 py-1.5 text-[11px] leading-snug text-amber-800">
           <AlertTriangle size={11} className="mt-px shrink-0" />
           <span>
             This answer was cut short (token limit).{turn.text ? ' Regenerate to retry it.' : ' It spent the whole budget thinking and produced no answer — regenerate to retry.'}
@@ -1593,11 +1753,12 @@ function ToolChip({ tool }: { tool: ToolActivity }) {
       <button
         onClick={() => hasDetail && setOpen(o => !o)}
         disabled={!hasDetail}
-        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-          tool.state === 'running' ? 'bg-violet-100 text-violet-700'
-          : tool.state === 'error' ? 'bg-red-100 text-red-700'
-          : 'bg-slate-200 text-slate-600'
-        } ${hasDetail ? 'hover:brightness-95 cursor-pointer' : 'cursor-default'}`}
+        className={`flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-medium ${
+          tool.state === 'running' ? 'border-slate-900 bg-slate-900 text-white'
+          : tool.state === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700'
+          : 'border-slate-200 bg-slate-100 text-slate-600'
+        } ${hasDetail ? 'hover:border-slate-900 hover:text-slate-900 cursor-pointer' : 'cursor-default'}
+        ${tool.state === 'running' ? 'hover:border-slate-700 hover:bg-slate-700 hover:text-white' : ''}`}
         title={hasDetail ? 'Click to see the call details' : undefined}
       >
         {tool.state === 'running' ? <Loader2 size={9} className="animate-spin" /> : <Wrench size={9} />}
@@ -1605,7 +1766,7 @@ function ToolChip({ tool }: { tool: ToolActivity }) {
         {hasDetail && (open ? <ChevronDown size={9} className="shrink-0" /> : <ChevronRight size={9} className="shrink-0" />)}
       </button>
       {open && (
-        <div className="mt-1 p-2 rounded bg-slate-50 border border-slate-200 text-[10px] leading-snug space-y-1.5 max-h-64 overflow-y-auto [overflow-wrap:anywhere]">
+        <div className="mt-1 border border-slate-200 bg-slate-50 p-2 text-[10px] leading-snug space-y-1.5 max-h-64 overflow-y-auto [overflow-wrap:anywhere]">
           {tool.args != null && (
             <div>
               <div className="font-semibold text-slate-500 uppercase tracking-wide text-[9px] mb-0.5">Input</div>
@@ -1617,7 +1778,7 @@ function ToolChip({ tool }: { tool: ToolActivity }) {
               <div className="font-semibold text-slate-500 uppercase tracking-wide text-[9px] mb-0.5">
                 {tool.state === 'error' ? 'Error' : 'Output'}
               </div>
-              <pre className={`whitespace-pre-wrap font-mono ${tool.state === 'error' ? 'text-red-700' : 'text-slate-700'}`}>{tool.summary}</pre>
+              <pre className={`whitespace-pre-wrap font-mono ${tool.state === 'error' ? 'text-rose-700' : 'text-slate-700'}`}>{tool.summary}</pre>
             </div>
           )}
         </div>
@@ -1635,7 +1796,7 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
     return (
       <button
         onClick={() => { setDraft(note); setOpen(true); }}
-        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
+        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-slate-900"
         title="Add standing instructions for this chat (appended to the system prompt)"
       >
         <Settings2 size={11} />
@@ -1644,14 +1805,14 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
     );
   }
   return (
-    <div className="mb-2 border border-slate-200 rounded p-2 bg-slate-50">
+    <div className="mb-2 border border-slate-200 bg-slate-50 p-2">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
           Custom instructions for this chat
         </span>
         <button
           onClick={() => setOpen(false)}
-          className="text-slate-400 hover:text-slate-700"
+          className="text-slate-400 hover:text-slate-900"
           title="Close"
         >
           <X size={12} />
@@ -1662,12 +1823,12 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
         onChange={e => setDraft(e.target.value)}
         rows={2}
         placeholder='e.g. "Keep answers short" or "Focus on the TFSA vs RRSP trade-off".'
-        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500 resize-none"
+        className="w-full border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-none"
       />
       <div className="flex justify-end gap-2 mt-1">
         <button
           onClick={() => { onChange(draft.trim()); setOpen(false); }}
-          className="px-2.5 py-1 bg-violet-600 text-white text-[11px] font-semibold rounded hover:bg-violet-700"
+          className="bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700"
         >
           Save
         </button>
@@ -1695,15 +1856,10 @@ function ContextMeter({ used, limit, compacted }: { used: number; limit: number;
             : `Past ${Math.round(COMPACT_AT * 100)}% the oldest messages are summarized to fit.`)
       }
     >
-      <span className={`text-[10px] font-semibold ${hard ? 'text-red-600' : over ? 'text-amber-600' : 'text-slate-400'}`}>
+      <span className={`text-[10px] font-semibold ${hard ? 'text-rose-700' : over ? 'text-amber-700' : 'text-slate-400'}`}>
         ~{fmt(used)}/{fmt(limit)}
       </span>
-      <span className="w-16 h-1.5 bg-slate-200 rounded overflow-hidden">
-        <span
-          className={`block h-full transition-all ${hard ? 'bg-red-500' : over ? 'bg-amber-500' : 'bg-violet-400'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </span>
+      <Progress pct={pct} className={`w-16 h-1.5 ${hard ? '[&>div]:bg-rose-500' : over ? '[&>div]:bg-amber-500' : ''}`} />
     </span>
   );
 }
@@ -1720,7 +1876,7 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
     return (
       <button
         onClick={() => { setDraft(customized ? override : DEFAULT_SYSTEM_PROMPT); setOpen(true); }}
-        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
+        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-slate-900"
         title="View and edit the assistant's base persona prompt (applies to every chat)"
       >
         <Bot size={11} />
@@ -1729,12 +1885,12 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
     );
   }
   return (
-    <div className="mb-2 border border-slate-200 rounded p-2 bg-slate-50 w-full">
+    <div className="mb-2 w-full border border-slate-200 bg-slate-50 p-2">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
           Base persona prompt (all chats)
         </span>
-        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700" title="Close">
+        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-900" title="Close">
           <X size={12} />
         </button>
       </div>
@@ -1742,12 +1898,12 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
         value={draft}
         onChange={e => setDraft(e.target.value)}
         rows={10}
-        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500 resize-y font-mono"
+        className="w-full border border-slate-300 bg-white px-2 py-1.5 font-mono text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-y"
       />
       <div className="flex items-center justify-between gap-2 mt-1">
         <button
           onClick={() => { setDraft(DEFAULT_SYSTEM_PROMPT); }}
-          className="text-[10px] font-semibold text-slate-400 hover:text-violet-700"
+          className="text-[10px] font-semibold text-slate-400 hover:text-slate-900"
           title="Restore the built-in default persona"
         >
           Reset to default
@@ -1756,7 +1912,7 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
           {customized && (
             <button
               onClick={() => { onChange(''); setOpen(false); }}
-              className="px-2.5 py-1 border border-slate-300 text-slate-600 text-[11px] font-semibold rounded hover:bg-slate-100"
+              className="border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900"
               title="Stop customizing and use the built-in default"
             >
               Use default
@@ -1764,7 +1920,7 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
           )}
           <button
             onClick={() => { onChange(draft.trim() === DEFAULT_SYSTEM_PROMPT.trim() ? '' : draft.trim()); setOpen(false); }}
-            className="px-2.5 py-1 bg-violet-600 text-white text-[11px] font-semibold rounded hover:bg-violet-700"
+            className="bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700"
           >
             Save
           </button>
@@ -1784,7 +1940,7 @@ function MessageActionButton({ onClick, title, children }: {
     <button
       onClick={onClick}
       title={title}
-      className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity"
+      className="p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity"
     >
       {children}
     </button>
@@ -1808,14 +1964,14 @@ function ChangeCard({ change, onDecide }: {
   onDecide: (change: PendingChange, approved: boolean) => void;
 }) {
   return (
-    <div className="border border-violet-200 bg-violet-50 rounded-lg p-2.5 text-xs min-w-0">
-      <div className="font-semibold text-violet-900 mb-1">{change.label ?? (change.field ? `Set ${change.field}` : 'Proposed change')}</div>
-      {change.rationale && <div className="text-violet-800/80 mb-1 [overflow-wrap:anywhere]">{change.rationale}</div>}
-      <div className="text-slate-600 mb-2 space-y-0.5 [overflow-wrap:anywhere]">
+    <div className="min-w-0 border border-slate-300 bg-white p-2.5 text-xs">
+      <div className="mb-1 font-semibold text-slate-900">{change.label ?? (change.field ? `Set ${change.field}` : 'Proposed change')}</div>
+      {change.rationale && <div className="mb-1 text-slate-500 [overflow-wrap:anywhere]">{change.rationale}</div>}
+      <div className="mb-2 space-y-0.5 text-slate-600 [overflow-wrap:anywhere]">
         <PreviewLines preview={change.preview} />
       </div>
       {change.resolved ? (
-        <div className={`flex items-center gap-1 font-semibold ${change.resolved === 'approved' ? 'text-emerald-700' : 'text-slate-500'}`}>
+        <div className={`flex items-center gap-1 font-semibold ${change.resolved === 'approved' ? 'text-blue-700' : 'text-slate-400'}`}>
           {change.resolved === 'approved' ? <Check size={12} /> : <X size={12} />}
           {change.resolved === 'approved' ? 'Applied' : 'Declined'}
         </div>
@@ -1823,13 +1979,13 @@ function ChangeCard({ change, onDecide }: {
         <div className="flex gap-2">
           <button
             onClick={() => onDecide(change, true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 text-white font-semibold rounded hover:bg-emerald-700"
+            className="flex items-center gap-1 bg-slate-900 px-2.5 py-1 font-semibold text-white hover:bg-slate-700"
           >
             <Check size={12} /> Accept
           </button>
           <button
             onClick={() => onDecide(change, false)}
-            className="flex items-center gap-1 px-2.5 py-1 border border-slate-300 text-slate-600 font-semibold rounded hover:bg-slate-100"
+            className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 font-semibold text-slate-600 hover:border-slate-900 hover:text-slate-900"
           >
             <X size={12} /> Decline
           </button>
@@ -1884,15 +2040,15 @@ const compact = (v: unknown): string =>
 
 function EmptyChatState({ onNew }: { onNew: () => void }) {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center border border-slate-200 rounded bg-white py-12">
-      <Bot size={32} className="text-violet-300 mb-3" />
-      <p className="text-sm font-medium text-slate-700 mb-1">Start a conversation</p>
-      <p className="text-xs text-slate-500 max-w-md mb-4">
+    <div className="h-full flex flex-col items-center justify-center border border-slate-200 bg-white py-12 text-center">
+      <Bot size={32} className="mb-3 text-slate-300" />
+      <p className="mb-1 text-sm font-medium text-slate-700">Start a conversation</p>
+      <p className="mb-4 max-w-md text-xs text-slate-500">
         Each chat is saved on this device so you can come back to it.
       </p>
       <button
         onClick={onNew}
-        className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+        className="flex items-center gap-1.5 bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700"
       >
         <Plus size={13} /> New chat
       </button>
@@ -1902,8 +2058,8 @@ function EmptyChatState({ onNew }: { onNew: () => void }) {
 
 function EmptyThread() {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center py-8">
-      <Bot size={28} className="text-violet-300 mb-3" />
+    <div className="h-full flex flex-col items-center justify-center py-8 text-center">
+      <Bot size={28} className="mb-3 text-slate-300" />
       <p className="text-xs text-slate-500 max-w-md">
         Ask about your plan, or describe your situation. The assistant reads your scenario and runs
         the real engine before answering; every change it proposes needs your approval.
@@ -1929,29 +2085,31 @@ function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect }
   const results = useMemo(() => calculateHousehold(inputs, config), [inputs, config]);
 
   return (
-    <div className="h-full overflow-y-auto border border-slate-200 rounded bg-white">
-      <div className="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-52">
+    <div className="h-full overflow-y-auto border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 p-4">
+        <div className="min-w-52 flex-1">
           <p className="text-sm font-semibold text-slate-800">No model connected</p>
-          <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
             Copy a self-contained prompt into any AI (ChatGPT, Claude, …) below — or connect a model
             (even one that runs privately on this device) to chat right here.
           </p>
         </div>
         <button
           onClick={onConnect}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 shrink-0"
+          className="flex shrink-0 items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
         >
           <Download size={13} /> {hasConnections ? 'Set up a connection' : 'Load a model'}
         </button>
       </div>
 
-      <div className="flex gap-1 px-4 pt-3">
+      <div className="flex gap-4 px-4 pt-3">
         {(['ask', 'tune'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-2.5 py-1 text-xs font-medium rounded ${tab === t ? 'bg-violet-50 text-violet-700' : 'text-slate-600 hover:bg-slate-100'}`}
+            className={`-mb-px border-b-2 px-1 pb-2 text-xs font-medium ${tab === t
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-400 hover:text-slate-900'}`}
           >
             {t === 'ask' ? 'Ask a question' : 'Tune inputs'}
           </button>
@@ -1996,32 +2154,32 @@ function AskQuestionPanel({ inputs, results }: {
           <button
             key={p.id}
             onClick={() => setPresetId(p.id)}
-            className={`w-full text-left px-2.5 py-1.5 rounded border text-xs ${presetId === p.id
-              ? 'border-violet-300 bg-violet-50 text-violet-800'
-              : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            className={`w-full border px-2.5 py-1.5 text-left text-xs ${presetId === p.id
+              ? 'border-slate-900 bg-slate-50 font-medium text-slate-900'
+              : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'}`}
           >
             <div className="font-medium">{p.title}</div>
-            <div className={`text-[10px] ${presetId === p.id ? 'text-violet-600' : 'text-slate-500'}`}>{p.blurb}</div>
+            <div className={`text-[10px] ${presetId === p.id ? 'text-slate-600' : 'text-slate-400'}`}>{p.blurb}</div>
           </button>
         ))}
         <div>
-          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-2 mb-1">
+          <label className="mb-1 mt-2 block text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
             …or your own question
           </label>
           <textarea
             value={customQuestion}
             onChange={e => setCustomQuestion(e.target.value)}
             placeholder="Type a custom question; it replaces the preset."
-            className="w-full h-16 px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500"
+            className="h-16 w-full border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none"
           />
         </div>
       </div>
 
       <div>
-        <div className="text-xs font-semibold text-slate-800 mb-1.5">
+        <div className="mb-1.5 text-xs font-semibold text-slate-800">
           Prompt{customQuestion.trim() ? ' (custom question)' : ` — ${preset.title}`}
         </div>
-        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
+        <p className="mb-2 text-[11px] leading-snug text-slate-500">
           Embeds your plan <em>and the computed results</em>, so the AI answers from the real numbers.
           Once you paste, that AI provider reads your plan under its own privacy policy.
         </p>
@@ -2029,17 +2187,17 @@ function AskQuestionPanel({ inputs, results }: {
           readOnly
           value={prompt}
           onFocus={e => e.target.select()}
-          className="w-full h-64 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded text-[10px] font-mono text-slate-600 focus:outline-none"
+          className="h-64 w-full border border-slate-300 bg-slate-50 px-2.5 py-2 font-mono text-[10px] text-slate-600 focus:outline-none"
         />
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={copy}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+            className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
             {copied ? 'Copied' : 'Copy prompt'}
           </button>
-          <span className="text-[10px] text-slate-400">~{Math.round(prompt.length / 4).toLocaleString()} tokens</span>
+          <span className="num text-[10px] text-slate-400">~{Math.round(prompt.length / 4).toLocaleString()} tokens</span>
         </div>
       </div>
     </div>
@@ -2076,8 +2234,8 @@ function TuneInputsPanel({ inputs, onApply }: {
   return (
     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
-        <div className="text-xs font-semibold text-slate-800 mb-1.5">1 · Copy the prompt</div>
-        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
+        <div className="mb-1.5 text-xs font-semibold text-slate-800">1 · Copy the prompt</div>
+        <p className="mb-2 text-[11px] leading-snug text-slate-500">
           A self-contained prompt describing your plan, the levers, and the exact JSON format to reply
           with. Paste it into any AI. <strong className="text-slate-700">Heads up:</strong> once you paste,
           that provider reads your full plan under its own privacy policy.
@@ -2086,11 +2244,11 @@ function TuneInputsPanel({ inputs, onApply }: {
           readOnly
           value={prompt}
           onFocus={e => e.target.select()}
-          className="w-full h-56 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded text-[10px] font-mono text-slate-600 focus:outline-none"
+          className="h-56 w-full border border-slate-300 bg-slate-50 px-2.5 py-2 font-mono text-[10px] text-slate-600 focus:outline-none"
         />
         <button
           onClick={copy}
-          className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+          className="mt-2 flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
           {copied ? 'Copied' : 'Copy prompt'}
@@ -2098,8 +2256,8 @@ function TuneInputsPanel({ inputs, onApply }: {
       </div>
 
       <div>
-        <div className="text-xs font-semibold text-slate-800 mb-1.5">2 · Paste the AI's JSON reply</div>
-        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
+        <div className="mb-1.5 text-xs font-semibold text-slate-800">2 · Paste the AI's JSON reply</div>
+        <p className="mb-2 text-[11px] leading-snug text-slate-500">
           Paste the model's JSON below. It's validated field-by-field — unknown fields ignored,
           out-of-range values rejected with reasons — then applied to your inputs.
         </p>
@@ -2107,20 +2265,20 @@ function TuneInputsPanel({ inputs, onApply }: {
           value={pasteText}
           onChange={e => { setPasteText(e.target.value); setIngest(null); }}
           placeholder='{"cppStartAge":70, "oasStartAge":70, ...}'
-          className="w-full h-56 px-2.5 py-2 bg-white border border-slate-300 rounded text-[10px] font-mono text-slate-700 focus:outline-none focus:border-violet-500"
+          className="h-56 w-full border border-slate-300 bg-white px-2.5 py-2 font-mono text-[10px] text-slate-700 focus:border-slate-900 focus:outline-none"
         />
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => setIngest(parseAgentResult(pasteText, inputs))}
             disabled={!pasteText.trim()}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 text-slate-700 text-xs font-semibold rounded hover:bg-slate-50 disabled:opacity-40"
+            className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
           >
             <ClipboardPaste size={13} /> Validate
           </button>
           {ingest?.ok && (
             <button
               onClick={apply}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
             >
               <Check size={13} /> Apply {ingest.applied.length} change{ingest.applied.length === 1 ? '' : 's'}
             </button>
@@ -2129,9 +2287,9 @@ function TuneInputsPanel({ inputs, onApply }: {
 
         {ingest && (
           <div className="mt-3 text-[11px] leading-snug space-y-1">
-            {ingest.error && <div className="text-red-600">✕ {ingest.error}</div>}
+            {ingest.error && <div className="text-rose-700">✕ {ingest.error}</div>}
             {ingest.applied.length > 0 && (
-              <div className="text-emerald-700">✓ Will apply: {ingest.applied.join('; ')}</div>
+              <div className="text-blue-700">✓ Will apply: {ingest.applied.join('; ')}</div>
             )}
             {ingest.warnings.map((w, i) => (
               <div key={i} className="text-amber-700">⚠ {w}</div>

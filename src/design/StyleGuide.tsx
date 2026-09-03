@@ -8,7 +8,19 @@ import { useState } from 'react';
 import * as T from './tokens';
 import {
   Fader, Chip, VerdictHero, Panel, Stat, AccountBars, Legend, Dropdown, Footnote,
+  HelpHint, Dot, Progress, Modal, Check,
 } from './primitives';
+import { ProjectionTimeline } from './ProjectionTimeline';
+
+// A plausible-looking demo plan for the ProjectionTimeline example: a saver
+// who retires at 65 and depletes at 94. Straight-line shapes — enough to show
+// the area, axis, pins, and overlays; the engine draws the real ones.
+const demoSeries = Array.from({ length: 50 }, (_, i) => {
+  const a = 45 + i;
+  const v = a < 65 ? 300_000 + ((a - 45) / 20) * 800_000 : 1_100_000 * ((94 - a) / 29);
+  return { age: a, value: Math.max(0, v) };
+});
+const demoSpend = demoSeries.map(p => ({ age: p.age, value: 72_000 }));
 
 function Swatch({ name, value, note }: { name: string; value: string; note?: string }) {
   return (
@@ -37,6 +49,9 @@ function Rule({ n, title, children }: { n: number; title: string; children: Reac
 export function StyleGuide() {
   const [spend, setSpend] = useState(85000);
   const [age, setAge] = useState(62);
+  const [open, setOpen] = useState(false);
+  const [checkOn, setCheckOn] = useState(true);
+  const [checkOff, setCheckOff] = useState(false);
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -109,10 +124,10 @@ export function StyleGuide() {
             sub="Spending $85,000 a year from 62. The dot sits below the boundary."
           />
           <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <Fader label="Stop working at" value={age} min={55} max={75} step={1}
+            <Fader label="Start Drawing" value={age} min={55} max={75} step={1}
               format={(v) => `${v}`} onChange={setAge}
               hint="Working one more year moves the boundary." />
-            <Fader label="Spend a year" value={spend} min={40000} max={160000} step={1000}
+            <Fader label="After Tax Spending" value={spend} min={40000} max={160000} step={1000}
               format={(v) => '$' + v.toLocaleString('en-CA')} onChange={setSpend}
               hint="$5,000 less a year and it lasts past the plan." />
           </div>
@@ -138,6 +153,21 @@ export function StyleGuide() {
           </div>
 
           <div className="mt-8 border-t border-slate-100 pt-6">
+            <p className={T.cls.sectionLabel}>Check — the one checkbox</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
+              Square, ink fill, white ✓. Never round, never blue — a control is not a
+              verdict. Pages compose <code>&lt;Check&gt;</code>; raw
+              <code> &lt;input type="checkbox"&gt;</code> in the beta skin is a bug.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
+              <Check checked={checkOn} onChange={setCheckOn} label="Include a partner" />
+              <Check checked={checkOff} onChange={setCheckOff} label="Include GST/HST credit" />
+              <Check checked={checkOn} onChange={setCheckOn} size={12} label="tight row (12)" />
+              <Check checked={checkOn} onChange={setCheckOn} size={20} label="big tap target (20)" />
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-slate-100 pt-6">
             <Legend items={[
               { swatch: 'line-blue', label: 'the boundary — where the plan stops holding' },
               { swatch: 'box-blue', label: 'below it, the money lasts past 95' },
@@ -152,6 +182,50 @@ export function StyleGuide() {
             <Dropdown label="Details">
               <div className="px-2 py-1 text-[12px] text-slate-600">Spouse · pensions · cash events · withdrawal order…</div>
             </Dropdown>
+            <span className="text-[12px] text-slate-500">
+              The small <HelpHint topic="withdrawal-order" /> sits at the end of a label — tap it for the short answer, follow through to Help.
+            </span>
+          </div>
+
+          <div className="mt-8 space-y-4 border-t border-slate-100 pt-6">
+            <div>
+              <p className={T.cls.sectionLabel}>Square dot, progress, modal — no round corners, no shadows</p>
+              <div className="mt-2 flex items-center gap-4">
+                <span className="flex items-center gap-1.5 text-[12px] text-slate-600"><Dot color={T.BLUE} title="holds" /> a status dot</span>
+                <span className="flex items-center gap-1.5 text-[12px] text-slate-600"><Dot color={T.RED_DOT} title="short" /> short</span>
+                <span className="flex items-center gap-1.5 text-[12px] text-slate-600"><Dot color={T.AMBER_DOT} title="borderline" /> borderline</span>
+              </div>
+            </div>
+            <Progress pct={62} />
+            <div>
+              <button className={T.cls.hairlineBtn} onClick={() => setOpen(true)}>open the flat modal</button>
+              <Modal open={open} onClose={() => setOpen(false)} title="A flat dialog">
+                <p className="text-[12.5px] text-slate-600">A hairline border, no rounded corners, no shadow — the shell every dialog composes.</p>
+              </Modal>
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-slate-100 pt-6">
+            <p className={T.cls.sectionLabel}>ProjectionTimeline — every money-over-age chart</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
+              One chart for the portfolio line: soft area-fill, clean axis, hairline year
+              ticks, token colours, labelled pins. Dashboard, steering, projection view,
+              and Compare all compose it. Legend entries toggle their line.
+            </p>
+            <div className="mt-3">
+              <ProjectionTimeline
+                series={[{ id: 'plan', label: 'portfolio', color: T.INK, area: true, points: demoSeries }]}
+                overlays={[
+                  { id: 'spend', label: 'spend', color: T.AMBER_DOT, points: demoSpend, dash: true },
+                ]}
+                pins={[
+                  { age: 45, label: 'you · 45', place: 'below', anchor: 'start', color: T.INK },
+                  { age: 65, label: 'work ends · 65', color: '#475569' },
+                  { age: 94, label: 'runs out · 94', color: T.RED_DOT },
+                ]}
+                marker={{ age: 65, style: 'dot' }}
+              />
+            </div>
           </div>
 
           <Footnote>

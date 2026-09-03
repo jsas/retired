@@ -14,7 +14,7 @@ export function Markdown({ text, className }: { text: string; className?: string
   const html = useMemo(() => renderMarkdown(text), [text]);
   return (
     <div
-      className={`md-reply leading-relaxed [&_a]:underline [&_a]:text-violet-700 [&_code]:rounded [&_code]:bg-slate-200/70 [&_code]:px-1 [&_code]:py-px [&_code]:text-[11px] [&_pre]:bg-slate-800 [&_pre]:text-slate-100 [&_pre]:rounded [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:text-inherit [&_table]:border-collapse [&_th]:border [&_th]:border-slate-300 [&_th]:px-1.5 [&_th]:py-0.5 [&_th]:bg-slate-100 [&_td]:border [&_td]:border-slate-300 [&_td]:px-1.5 [&_td]:py-0.5 ${className ?? ''}`}
+      className={`md-reply leading-relaxed [&_a]:underline [&_a]:text-blue-700 [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-px [&_code]:text-[11px] [&_pre]:bg-slate-900 [&_pre]:text-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:text-inherit [&_table]:border-collapse [&_th]:border [&_th]:border-slate-300 [&_th]:px-1.5 [&_th]:py-0.5 [&_th]:bg-slate-100 [&_td]:border [&_td]:border-slate-300 [&_td]:px-1.5 [&_td]:py-0.5 ${className ?? ''}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

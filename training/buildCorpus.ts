@@ -33,9 +33,11 @@ export interface CorpusRecord {
     | 'domain-explain'     // read a projection digest → explain in plain words
     | 'option-framing'     // "what can I optimize?" → survey the levers (run_strategies)
                           //   + plain-words framing of the trade-offs, never a directive
-    | 'domain-knowledge';  // Canadian tax / benefit-program / market-history fact,
+    | 'domain-knowledge'   // Canadian tax / benefit-program / market-history fact,
                           //   answered from the app's OWN shipped tables (can't drift),
                           //   always with an offer to ground it in the user's numbers
+    | 'navigation';        // site-awareness (issue #141): find_page / get_sitemap /
+                          //   propose_navigate, keyed to the ambient current-page line
   scenarioId: string;
   messages: ChatMessage[];
   /** Frozen ground truth the eval gate replays. */
@@ -104,6 +106,14 @@ export const TOOL_TAXONOMY: ReadonlyArray<{
     'Open my "Downsized at 65" plan.'] },
   { tool: 'save_scenario_as', mutation: false, sampleQuestions: [
     'Keep this as its own plan called "Retire at 60".'] },
+  // Navigation (issue #141): the site-awareness layer — find the page, show
+  // the whole map, propose a page switch (confirm card).
+  { tool: 'find_page', mutation: false, sampleQuestions: [
+    'Where do I enter my TFSA contribution room?', 'Which page has the Monte Carlo odds?'] },
+  { tool: 'get_sitemap', mutation: false, sampleQuestions: [
+    'What pages does this app have?', 'What can this app do?'] },
+  { tool: 'propose_navigate', mutation: true, sampleQuestions: [
+    'Take me to the print summary.', 'Open my saved plans.'] },
 ];
 
 /** Build the assistant's tool-call turn for a question→tool exemplar. */

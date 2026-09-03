@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit3, Trash2, Save, X, Copy, Check, History, Undo2 } from 'lucide-react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { diffRevisions, MAX_REVISIONS, type ScenarioRevision } from '../lib/scenarioRevisions';
+import { Dot } from '../design/primitives';
+import { BLUE, cls } from '../design/tokens';
 
 interface Scenario {
   id: string;
@@ -30,8 +31,9 @@ interface ScenarioManagerProps {
   onCreateScenario: (scenario: Scenario) => void;
 }
 
-// Manage-scenarios page (was a modal). Light-themed to match the other routed
-// pages; selecting a scenario loads it and returns to the projection dashboard.
+// The Profiles page body (BetaPage owns the page title — no heading here). One
+// hairline list: the active plan reads by weight and its blue dot, the rest
+// sit quiet until hovered. Every save keeps a revision you can roll back to.
 export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, revisions, onRollback, onSelectScenario, onCreateScenario }: ScenarioManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -83,93 +85,65 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Manage Scenarios</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Click a scenario to load it. Duplicate to branch a what-if; rename or delete below.
-            Each save keeps a revision (last {MAX_REVISIONS} per scenario) you can roll back to.
-          </p>
-        </div>
-        <button
-          onClick={handleCreateNew}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white flex items-center gap-1.5"
-        >
-          <Plus size={12} /> New Scenario
+      <div className="flex items-start justify-between gap-4">
+        <p className="max-w-lg text-[12.5px] leading-relaxed text-slate-500">
+          Click a profile to load it. Duplicate branches a what-if; each save keeps a
+          revision (last {MAX_REVISIONS} per plan) you can roll back to.
+        </p>
+        <button onClick={handleCreateNew} className={`${cls.primaryBtn} shrink-0`}>
+          New profile
         </button>
       </div>
 
-      <div className="space-y-2">
+      <div className="mt-5 divide-y divide-slate-100 border-y border-slate-200">
         {scenarios.map(scenario => {
           const isActive = scenario.id === activeScenarioId;
           const isEditing = editingId === scenario.id;
           return (
-            <div
-              key={scenario.id}
-              className={`p-3 rounded border bg-white ${
-                isActive ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200'
-              }`}
-            >
-              <div className="flex items-center gap-2">
+            <div key={scenario.id} className="py-3">
+              <div className="flex items-center gap-3">
                 {isEditing ? (
                   <div className="flex flex-1 items-center gap-2">
                     <input
                       type="text"
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
-                      className="flex-1 px-2 py-1 bg-white border border-slate-300 rounded text-sm text-slate-900"
+                      className={`${cls.input} flex-1 py-1.5`}
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleRename();
                         if (e.key === 'Escape') setEditingId(null);
                       }}
                     />
-                    <button onClick={handleRename} className="p-1.5 hover:bg-slate-100 rounded" title="Save name">
-                      <Save size={14} className="text-emerald-600" />
-                    </button>
-                    <button onClick={() => setEditingId(null)} className="p-1.5 hover:bg-slate-100 rounded" title="Cancel">
-                      <X size={14} className="text-slate-500" />
-                    </button>
+                    <button onClick={handleRename} className={cls.hairlineBtn} title="Save name">Save</button>
+                    <button onClick={() => setEditingId(null)} className={cls.hairlineBtn} title="Cancel">Cancel</button>
                   </div>
                 ) : (
                   <>
-                    <button onClick={() => onSelectScenario(scenario.id)} className="flex-1 text-left min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate">{scenario.name}</div>
-                      <div className="text-[11px] text-slate-500">
-                        {isActive ? 'Active — currently loaded' : 'Click to load'}
+                    <button onClick={() => onSelectScenario(scenario.id)} className="min-w-0 flex-1 text-left">
+                      <div className="flex items-center gap-2">
+                        {isActive && <Dot color={BLUE} title="the active plan" />}
+                        <span className={`truncate text-[14px] ${isActive ? 'font-semibold text-slate-900' : 'font-medium text-slate-600'}`}>
+                          {scenario.name}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-slate-400">
+                        {isActive ? 'Active — the dashboard shows this plan' : 'Click to load'}
                       </div>
                     </button>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {isActive && <Check size={15} className="text-blue-600 mr-1" />}
-                      <button
-                        onClick={() => setHistoryFor(historyFor === scenario.id ? null : scenario.id)}
-                        className={`p-1.5 rounded ${historyFor === scenario.id ? 'bg-blue-50' : 'hover:bg-slate-100'}`}
-                        title="Revision history"
-                      >
-                        <History size={14} className="text-slate-500" />
-                      </button>
-                      <button
-                        onClick={() => handleDuplicate(scenario.id)}
-                        className="p-1.5 hover:bg-slate-100 rounded"
-                        title="Duplicate"
-                      >
-                        <Copy size={14} className="text-slate-500" />
-                      </button>
-                      <button
-                        onClick={() => setEditingId(scenario.id)}
-                        className="p-1.5 hover:bg-slate-100 rounded"
-                        title="Rename"
-                      >
-                        <Edit3 size={14} className="text-slate-500" />
-                      </button>
-                      <button
+                    <div className="flex shrink-0 items-center gap-1 text-[11px]">
+                      <RowAction onClick={() => setHistoryFor(historyFor === scenario.id ? null : scenario.id)}>
+                        {historyFor === scenario.id ? 'Hide history' : 'History'}
+                      </RowAction>
+                      <RowAction onClick={() => handleDuplicate(scenario.id)}>Duplicate</RowAction>
+                      <RowAction onClick={() => setEditingId(scenario.id)}>Rename</RowAction>
+                      <RowAction
                         onClick={() => handleDelete(scenario.id)}
                         disabled={scenarios.length <= 1}
-                        className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-30"
-                        title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete'}
+                        title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete this scenario'}
                       >
-                        <Trash2 size={14} className="text-slate-500" />
-                      </button>
+                        <span className="text-rose-700">Delete</span>
+                      </RowAction>
                     </div>
                   </>
                 )}
@@ -194,6 +168,25 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
   );
 }
 
+/** A quiet per-row text action — words, not icon buttons. */
+function RowAction({ onClick, disabled, title, children }: {
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="px-1.5 py-1 text-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30"
+    >
+      {children}
+    </button>
+  );
+}
+
 /** One scenario's revisions, newest first. Each row diffs against the
  *  NEXT-NEWER revision (or the current plan for the newest) — i.e. what
  *  changed to get here — and rolling back to a row DELETES every revision
@@ -215,14 +208,14 @@ function RevisionList({ scenarioId, revisions, currentInputs, canRollback, onRol
 
   if (mine.length === 0) {
     return (
-      <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+      <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
         No revisions yet. Every save of this scenario keeps one here (last {MAX_REVISIONS}).
       </div>
     );
   }
 
   return (
-    <div className="mt-2 pt-2 border-t border-slate-100 space-y-1.5">
+    <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-2.5">
       {mine.map((rev, i) => (
         <RevisionRow
           key={rev.id}
@@ -264,19 +257,19 @@ function RevisionRow({ rev, baseline, canRollback, onRollback }: {
     <div className="flex items-start gap-2 text-[11px]">
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex-1 text-left min-w-0 hover:bg-slate-50 rounded px-1.5 py-1 -mx-1.5"
+        className="-mx-1.5 min-w-0 flex-1 px-1.5 py-1 text-left hover:bg-slate-50"
       >
-        <span className="font-medium text-slate-700">{when}</span>
-        <span className="text-slate-400"> · </span>
+        <span className="num font-medium text-slate-700">{when}</span>
+        <span className="text-slate-300"> · </span>
         <span className="text-slate-500">{source}</span>
-        <span className="text-slate-400"> · </span>
+        <span className="text-slate-300"> · </span>
         <span className="text-slate-500">{diffs.length === 0 ? 'no changes from previous' : `${diffs.length} change${diffs.length === 1 ? '' : 's'}`}</span>
         {open && diffs.length > 0 && (
-          <div className="mt-1 space-y-0.5 text-[10px] text-slate-600 font-mono break-all">
+          <div className="num mt-1 break-all font-mono text-[10px] text-slate-600">
             {diffs.map(d => (
               <div key={d.field}>
-                <span className="text-slate-500">{d.field}:</span>{' '}
-                <span className="text-rose-600">{fmt(d.from)}</span>
+                <span className="text-slate-400">{d.field}:</span>{' '}
+                <span className="text-rose-700">{fmt(d.from)}</span>
                 {' → '}
                 <span className="text-emerald-700">{fmt(d.to)}</span>
               </div>
@@ -289,10 +282,10 @@ function RevisionRow({ rev, baseline, canRollback, onRollback }: {
           // Rewind, not branch: everything after this point is deleted from
           // history immediately — no confirm, the row title says what it does.
           onClick={() => onRollback(rev.id)}
-          className="p-1 hover:bg-slate-100 rounded shrink-0"
+          className="shrink-0 px-1 py-1 text-slate-400 hover:text-slate-900"
           title="Roll back to this revision (deletes newer revisions)"
         >
-          <Undo2 size={12} className="text-slate-500" />
+          undo
         </button>
       )}
     </div>

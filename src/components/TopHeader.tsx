@@ -139,7 +139,7 @@ export function TopHeader({
         title={hasUnsavedChanges ? 'Save current inputs to the active scenario' : 'No unsaved changes'}
       >
         <Save size={14} /> Save
-        {hasUnsavedChanges && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+        {hasUnsavedChanges && <span className="w-1.5 h-1.5 bg-white" />}
       </button>
 
       {/* Desktop-only inline actions (hidden below md) */}
@@ -206,7 +206,7 @@ export function TopHeader({
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40 md:hidden" onClick={closeMenu} aria-hidden="true" />
-          <div className="absolute right-2 top-full z-50 mt-1 w-52 rounded-md border border-neutral-800 bg-neutral-900 p-1.5 shadow-xl md:hidden">
+          <div className="absolute right-2 top-full z-50 mt-1 w-52 border border-neutral-800 bg-neutral-900 p-1.5 md:hidden">
             {overflowItems}
           </div>
         </>

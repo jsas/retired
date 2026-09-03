@@ -1,6 +1,7 @@
-import { Printer, LineChart, Dices, Milestone, Table2, Loader2 } from 'lucide-react';
 import type { PrintOptions } from '../lib/printOptions';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
+import { Panel, Check } from '../design/primitives';
+import { cls } from '../design/tokens';
 
 interface PrintOptionsCardProps {
   options: PrintOptions;
@@ -12,9 +13,9 @@ interface PrintOptionsCardProps {
   mcResults: MonteCarloResults | null;
 }
 
-// Print-summary page: choose what goes into the printed plan summary. The base
-// one-page summary is always included; these toggles add optional sections.
-// Choices are persisted by the caller via savePrintOptions.
+// The Print & export page body (BetaPage owns the page title — this renders
+// no heading of its own). Choose the optional sections, then print. Flat,
+// hairline, text-first: no icons, no colour that isn't carrying meaning.
 export function PrintOptionsCard({
   options, onChange, onPrint, mcPending, mcResults
 }: PrintOptionsCardProps) {
@@ -25,114 +26,75 @@ export function PrintOptionsCard({
   const canPrint = mcReady && !mcPending;
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <Printer size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Print summary options</h2>
+    <Panel label="Build the printout">
+      <p className="max-w-lg text-[13px] leading-relaxed text-slate-600">
+        The one-page summary — profile, savings, verdict — is always included.
+        Add any of these sections:
+      </p>
+
+      <div className="mt-5 max-w-lg space-y-4">
+          <OptionRow
+            checked={options.includeTimeline}
+            onChange={v => set({ includeTimeline: v })}
+            title="Projection timeline chart"
+            note="Portfolio balance by age with the retirement-age marker."
+          />
+          <OptionRow
+            checked={options.includeMonteCarlo}
+            onChange={v => set({ includeMonteCarlo: v })}
+            title="Monte Carlo fan chart"
+            note="Percentile bands (10th–90th) and success rate from a fresh 500-run simulation. Takes a moment to compute."
+          />
+          <OptionRow
+            checked={options.includeMilestones}
+            onChange={v => set({ includeMilestones: v })}
+            title="Major spending milestones & changes"
+            note="Retirement, CPP/OAS start, RRIF conversion, spending-phase changes and one-time cash events, in age order."
+          />
+          <OptionRow
+            checked={options.includeDetailedTable}
+            onChange={v => set({ includeDetailedTable: v })}
+            title="Detailed year-by-year table"
+            note="Every year with balances, withdrawals, tax and benefits — plus the per-year drill-down (withdrawal sources, growth per account, reverse mortgage, events). Prints several pages."
+          />
       </div>
 
-      <div>
-        <p className="text-xs text-slate-600 mb-3 leading-snug">
-          The one-page plan summary (profile, savings, verdict) is always included.
-          Add any of these sections to the printout:
-        </p>
-
-        <div className="space-y-2.5 max-w-lg">
-          <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={options.includeTimeline}
-              onChange={e => set({ includeTimeline: e.target.checked })}
-              className="mt-0.5"
-            />
-            <span className="flex items-start gap-1.5">
-              <LineChart size={14} className="text-blue-600 mt-px shrink-0" />
-              <span>
-                <span className="font-medium">Projection timeline chart</span>
-                <span className="block text-[11px] text-slate-500 mt-0.5">
-                  Portfolio balance by age with the retirement-age marker.
-                </span>
-              </span>
-            </span>
-          </label>
-
-          <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={options.includeMonteCarlo}
-              onChange={e => set({ includeMonteCarlo: e.target.checked })}
-              className="mt-0.5"
-            />
-            <span className="flex items-start gap-1.5">
-              <Dices size={14} className="text-blue-600 mt-px shrink-0" />
-              <span>
-                <span className="font-medium">Monte Carlo fan chart</span>
-                <span className="block text-[11px] text-slate-500 mt-0.5">
-                  Percentile bands (10th–90th) and success rate from a fresh 500-run simulation.
-                  Takes a moment to compute.
-                </span>
-              </span>
-            </span>
-          </label>
-
-          <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={options.includeMilestones}
-              onChange={e => set({ includeMilestones: e.target.checked })}
-              className="mt-0.5"
-            />
-            <span className="flex items-start gap-1.5">
-              <Milestone size={14} className="text-blue-600 mt-px shrink-0" />
-              <span>
-                <span className="font-medium">Major spending milestones &amp; changes</span>
-                <span className="block text-[11px] text-slate-500 mt-0.5">
-                  Retirement, CPP/OAS start, RRIF conversion, spending-phase changes and one-time
-                  cash events, in age order.
-                </span>
-              </span>
-            </span>
-          </label>
-
-          <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={options.includeDetailedTable}
-              onChange={e => set({ includeDetailedTable: e.target.checked })}
-              className="mt-0.5"
-            />
-            <span className="flex items-start gap-1.5">
-              <Table2 size={14} className="text-blue-600 mt-px shrink-0" />
-              <span>
-                <span className="font-medium">Detailed year-by-year table</span>
-                <span className="block text-[11px] text-slate-500 mt-0.5">
-                  Every year with balances, withdrawals, tax and benefits — plus the per-year
-                  drill-down (withdrawal sources, growth per account, reverse mortgage, events).
-                  Prints several pages.
-                </span>
-              </span>
-            </span>
-          </label>
-        </div>
-
-        <div className="flex items-center gap-3 mt-4 pt-3 border-t border-slate-100">
-          <button
-            onClick={onPrint}
-            disabled={!canPrint}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={canPrint ? 'Open the print dialog' : 'Waiting for the Monte Carlo simulation…'}
-          >
-            {mcPending ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
-            {mcPending ? 'Preparing chart…' : 'Print summary'}
-          </button>
-          {options.includeMonteCarlo && !mcResults && !mcPending && (
-            <span className="text-[11px] text-slate-500">Simulation will run when the chart is needed.</span>
-          )}
-          {mcPending && (
-            <span className="text-[11px] text-slate-500">Running 500 simulations for the fan chart…</span>
-          )}
-        </div>
+      <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+        <button
+          onClick={onPrint}
+          disabled={!canPrint}
+          className={canPrint ? cls.primaryBtn : 'border border-slate-200 px-4 py-2 text-sm font-medium text-slate-400'}
+          title={canPrint ? 'Open the print dialog' : 'Waiting for the Monte Carlo simulation…'}
+        >
+          {mcPending ? 'Preparing chart…' : 'Print summary'}
+        </button>
+        {options.includeMonteCarlo && !mcResults && !mcPending && (
+          <span className="text-[11px] text-slate-400">The simulation runs when the chart is needed.</span>
+        )}
+        {mcPending && (
+          <span className="text-[11px] text-slate-400">Running 500 simulations for the fan chart…</span>
+        )}
       </div>
+    </Panel>
+  );
+}
+
+/** One flat checkbox row composed on the design primitive: the square ink
+ *  Check (never blue — colour carries verdicts), a plain-word title, a quiet
+ *  note. */
+function OptionRow({ checked, onChange, title, note }: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  title: string;
+  note: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <Check checked={checked} onChange={onChange} className="mt-0.5" />
+      <span className="min-w-0">
+        <span className="block text-[13px] font-medium text-slate-900">{title}</span>
+        <span className="mt-0.5 block text-[11.5px] leading-relaxed text-slate-500">{note}</span>
+      </span>
     </div>
   );
 }

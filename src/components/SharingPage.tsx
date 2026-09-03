@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Check, ClipboardCopy, Link2, Share2, Upload } from 'lucide-react';
 import { buildShareUrl } from '../lib/shareLink';
 import { buildPlanCode, parsePlanCode } from '../lib/planTransfer';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import { cls } from '../design/tokens';
+import { Panel } from '../design/primitives';
 
 export interface SharingImportRequest {
   inputs: RetirementInputs;
@@ -17,8 +18,9 @@ interface SharingPageProps {
   onImport: (req: SharingImportRequest) => void;
 }
 
-// Sharing page. A plan travels two ways, both built on the same planTransfer
-// backend so either side can decode the other:
+// The Data page's sharing half (BetaPage owns the page title — no heading
+// here). A plan travels two ways, both built on the same planTransfer backend
+// so either side can decode the other:
 //   - Share link  — the plan code in a URL fragment; one click for the receiver
 //   - Plan code   — the same payload as pasteable text, for chat/email/notes
 // Receiving is the reverse: paste a link or a code, give the plan a name, and
@@ -66,125 +68,107 @@ export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <Share2 size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Sharing</h2>
-      </div>
+    <div className="grid grid-cols-1 gap-x-10 lg:grid-cols-2">
+      {/* ---- Send this plan ---- */}
+      <Panel label="Send this plan">
+        <p className="mb-4 text-[12.5px] leading-relaxed text-slate-500">
+          <span className="font-medium text-slate-700">{scenarioName}</span> is encoded directly
+          in the link and the code (after the <code>#</code>) — nothing is uploaded. Whoever
+          receives it gets a copy as a new scenario.
+        </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl">
-        {/* ---- Send this plan ---- */}
-        <section>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-            Send this plan
-          </div>
-          <p className="text-[11px] text-slate-500 leading-snug mb-3">
-            <span className="font-medium text-slate-700">{scenarioName}</span> is encoded directly
-            in the link and the code (after the <code>#</code>) — nothing is uploaded. Whoever
-            receives it gets a copy as a new scenario.
-          </p>
-
-          {/* Share link */}
-          <div className="flex items-center gap-2">
-            <input
-              readOnly
-              value={url}
-              onFocus={(e) => e.target.select()}
-              aria-label="Share link"
-              className="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded text-xs text-slate-700 font-mono focus:outline-none focus:border-blue-500"
-            />
-            <button
-              onClick={() => copy(url, 'link')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 shrink-0"
-            >
-              {copiedWhat === 'link' ? <Check size={13} /> : <Link2 size={13} />}
-              {copiedWhat === 'link' ? 'Copied' : 'Copy link'}
-            </button>
-          </div>
-
-          {/* Plan code */}
-          <div className="mt-3">
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="plan-code-out" className="text-[11px] font-medium text-slate-600">
-                Plan code <span className="font-normal text-slate-400">(paste anywhere)</span>
-              </label>
-              <button
-                onClick={() => copy(planCode, 'code')}
-                className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline"
-              >
-                {copiedWhat === 'code' ? <Check size={12} /> : <ClipboardCopy size={12} />}
-                {copiedWhat === 'code' ? 'Copied' : 'Copy code'}
-              </button>
-            </div>
-            <textarea
-              id="plan-code-out"
-              readOnly
-              value={planCode}
-              onFocus={(e) => e.target.select()}
-              rows={5}
-              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded text-[10px] text-slate-600 font-mono break-all focus:outline-none focus:border-blue-500"
-            />
-            <p className="mt-2 text-[11px] text-slate-400 leading-snug">
-              The link uses the current host and path, so it works for anyone who can reach this
-              same address. The code works anywhere — paste it into the box on the right to import.
-            </p>
-          </div>
-        </section>
-
-        {/* ---- Receive a plan ---- */}
-        <section>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-            Receive a plan
-          </div>
-          <p className="text-[11px] text-slate-500 leading-snug mb-3">
-            Paste a share link or a plan code, give it a name, and it imports as a new scenario —
-            your existing scenarios are untouched.
-          </p>
-
-          <textarea
-            value={incoming}
-            onChange={(e) => setIncoming(e.target.value)}
-            placeholder="Paste a share link or plan code here…"
-            rows={3}
-            aria-label="Incoming plan"
-            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-700 font-mono focus:outline-none focus:border-blue-500"
+        {/* Share link */}
+        <div className="flex items-center gap-2">
+          <input
+            readOnly
+            value={url}
+            onFocus={(e) => e.target.select()}
+            aria-label="Share link"
+            className={`${cls.input} num min-w-0 flex-1 py-1.5 font-mono text-xs`}
           />
+          <button onClick={() => copy(url, 'link')} className={`${cls.hairlineBtn} shrink-0`}>
+            {copiedWhat === 'link' ? 'Copied' : 'Copy link'}
+          </button>
+        </div>
 
-          {/* Parse feedback */}
-          {incoming.trim() && !parsed && (
-            <p className="mt-1.5 text-[11px] text-rose-600">
-              That doesn't look like a RE: tired plan — check the whole link or code was copied.
-            </p>
-          )}
-          {parsed && (
-            <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] text-emerald-900">
-              <span className="font-semibold">Plan recognized.</span>{' '}
-              Age {parsed.inputs.currentAge} → retire {parsed.inputs.retirementAge} ·{' '}
-              {parsed.inputs.provinceCode} · spending ${parsed.inputs.desiredSpending?.toLocaleString() ?? '—'}/yr
-              {parsed.inputs.spouse?.enabled ? ' · with spouse' : ''}
-            </div>
-          )}
-
-          {/* Name + import */}
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              value={boxName}
-              onChange={(e) => { setName(e.target.value); setNameTouched(true); }}
-              placeholder="Name for the imported scenario"
-              aria-label="Imported scenario name"
-              className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-700 focus:outline-none focus:border-blue-500"
-            />
+        {/* Plan code */}
+        <div className="mt-5">
+          <div className="mb-1 flex items-center justify-between">
+            <label htmlFor="plan-code-out" className="text-[12px] font-medium text-slate-600">
+              Plan code <span className="font-normal text-slate-400">(paste anywhere)</span>
+            </label>
             <button
-              onClick={submit}
-              disabled={!parsed}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-              title={parsed ? `Import as "${importName}"` : 'Paste a valid plan first'}
+              onClick={() => copy(planCode, 'code')}
+              className="text-[11px] text-slate-400 hover:text-slate-900 hover:underline"
             >
-              <Upload size={13} /> Import scenario
+              {copiedWhat === 'code' ? 'Copied' : 'Copy code'}
             </button>
           </div>
-        </section>
-      </div>
+          <textarea
+            id="plan-code-out"
+            readOnly
+            value={planCode}
+            onFocus={(e) => e.target.select()}
+            rows={5}
+            className={`${cls.input} num w-full font-mono text-[10px] leading-relaxed text-slate-600`}
+          />
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+            The link uses the current host and path, so it works for anyone who can reach this
+            same address. The code works anywhere — paste it into the box on the right to import.
+          </p>
+        </div>
+      </Panel>
+
+      {/* ---- Receive a plan ---- */}
+      <Panel label="Receive a plan">
+        <p className="mb-4 text-[12.5px] leading-relaxed text-slate-500">
+          Paste a share link or a plan code, give it a name, and it imports as a new scenario —
+          your existing scenarios are untouched.
+        </p>
+
+        <textarea
+          value={incoming}
+          onChange={(e) => setIncoming(e.target.value)}
+          placeholder="Paste a share link or plan code here…"
+          rows={3}
+          aria-label="Incoming plan"
+          className={`${cls.input} num w-full font-mono text-xs`}
+        />
+
+        {/* Parse feedback */}
+        {incoming.trim() && !parsed && (
+          <p className="mt-2 text-[11.5px] text-rose-700">
+            That doesn't look like a RE: tired plan — check the whole link or code was copied.
+          </p>
+        )}
+        {parsed && (
+          <div className="mt-2 border-l-2 border-emerald-600 pl-3 text-[11.5px] leading-relaxed text-slate-600">
+            <span className="font-semibold text-slate-900">Plan recognized.</span>{' '}
+            Age {parsed.inputs.currentAge} → retire {parsed.inputs.retirementAge} ·{' '}
+            {parsed.inputs.provinceCode} · spending ${parsed.inputs.desiredSpending?.toLocaleString() ?? '—'}/yr
+            {parsed.inputs.spouse?.enabled ? ' · with spouse' : ''}
+          </div>
+        )}
+
+        {/* Name + import */}
+        <div className="mt-4 flex items-center gap-2">
+          <input
+            value={boxName}
+            onChange={(e) => { setName(e.target.value); setNameTouched(true); }}
+            placeholder="Name for the imported scenario"
+            aria-label="Imported scenario name"
+            className={`${cls.input} min-w-0 flex-1 py-1.5 text-xs`}
+          />
+          <button
+            onClick={submit}
+            disabled={!parsed}
+            className={parsed ? `${cls.primaryBtn} shrink-0` : 'shrink-0 border border-slate-200 px-4 py-2 text-sm font-medium text-slate-400'}
+            title={parsed ? `Import as "${importName}"` : 'Paste a valid plan first'}
+          >
+            Import scenario
+          </button>
+        </div>
+      </Panel>
     </div>
   );
 }

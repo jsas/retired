@@ -1,10 +1,26 @@
-import { Fragment, useState } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { ChevronRight, ChevronDown, Columns3, GripVertical } from 'lucide-react';
 import type { YearlyBreakdown, YearDetail } from '@retired/engine-core/retirementEngine';
+import { prefKV } from '../lib/prefKv';
+import {
+  SCHEDULE_COLUMNS,
+  SCHEDULE_COLS_PREF_KEY,
+  resolveVisibleColumns,
+  TOPICAL_COLUMN_SETS,
+  ALWAYS_VISIBLE_IDS,
+  type ScheduleColumn,
+} from './scheduleColumns';
+import { Check } from '../design/primitives';
 
 interface ScheduleTableProps {
   breakdown: YearlyBreakdown[];
   retirementAge: number;
+  /** Drag bounds for the retirement marker (the blue hairline row). */
+  currentAge?: number;
+  maxAge?: number;
+  /** When set, the retirement marker row is draggable: pull it up or down the
+      table to change the retirement age. Absent = read-only marker. */
+  onRetirementAgeChange?: (age: number) => void;
   // Household mode: the primary person's own rows + the spouse's rows keyed by
   // the primary's age axis (calendar year), so an expanded year can show both
   // people's detail. The combined `breakdown` rows themselves carry no detail.
@@ -20,6 +36,99 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+const TONE_CLASS: Record<ScheduleColumn['tone'], string> = {
+  plain: 'text-slate-700',
+  green: 'text-emerald-700',
+  red: 'text-red-700',
+  amber: 'text-amber-700',
+  amberDark: 'text-amber-800',
+  amberDeep: 'text-amber-900',
+  muted: 'text-slate-600',
+  strong: 'font-semibold text-slate-900',
+};
+
+function readVisibleCols(): Set<string> {
+  try {
+    const raw = prefKV().getItem(SCHEDULE_COLS_PREF_KEY);
+    return resolveVisibleColumns(raw ? (JSON.parse(raw) as string[]) : null);
+  } catch {
+    return resolveVisibleColumns(null);
+  }
+}
+
+// The column picker: a small checklist popover pinned to the table header.
+// Age and Ending Balance are the row's identity and its bottom line, so they
+// stay on; everything else is a toggle, persisted via prefKV.
+function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (next: Set<string>) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const toggleable = SCHEDULE_COLUMNS.filter((c) => !c.alwaysVisible);
+  // Reset cycles the topical sets (money flow → accounts → tax → income → …)
+  // rather than toggling everything on/off: each click lands on a coherent
+  // story, and the choice persists like any manual change. The current state
+  // matches a set iff the toggleable picks equal it exactly; a hand-picked
+  // mix matches none and the next click starts at the top of the list.
+  const toggleableVisible = [...visible].filter((id) => !ALWAYS_VISIBLE_IDS.includes(id));
+  const currentSet = TOPICAL_COLUMN_SETS.findIndex((s) =>
+    s.ids.length === toggleableVisible.length && s.ids.every((id) => visible.has(id)),
+  );
+  const reset = () => {
+    const next = currentSet >= 0 ? (currentSet + 1) % TOPICAL_COLUMN_SETS.length : 0;
+    onChange(new Set([...TOPICAL_COLUMN_SETS[next].ids]));
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+          onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-600 border border-slate-300 hover:border-slate-900 hover:text-slate-900"
+        title="Choose which columns the table shows"
+      >
+        <Columns3 size={13} />
+        Columns
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 p-2">
+          <button
+            type="button"
+            onClick={reset}
+            className="w-full text-left px-2 py-1 text-[11px] font-semibold text-slate-900 hover:bg-slate-50"
+            title="Cycle the topical column sets — money flow, accounts, tax, income"
+          >
+            Reset
+          </button>
+          <div className="my-1 border-t border-slate-100" />
+          {toggleable.map((c) => (
+            <div key={c.id} className="px-2 py-1 hover:bg-slate-50">
+              <Check
+                size={12}
+                checked={visible.has(c.id)}
+                onChange={(on) => {
+                  const next = new Set(visible);
+                  if (on) next.add(c.id); else next.delete(c.id);
+                  onChange(next);
+                }}
+                label={<span className="text-[11px] text-slate-700">{c.label}</span>}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // A single labelled money line inside the drill-down panel.
@@ -218,7 +327,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
   );
 }
 
-export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spouseBreakdown, spouseAgeOffset = 0 }: ScheduleTableProps) {
+export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, onRetirementAgeChange, primaryBreakdown, spouseBreakdown, spouseAgeOffset = 0 }: ScheduleTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const toggle = (age: number) =>
     setExpanded(prev => {
@@ -226,6 +335,81 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
       if (next.has(age)) next.delete(age); else next.add(age);
       return next;
     });
+
+  // The blue hairline row marks the start-drawing age. When the page hands us an
+  // onChange, that row is draggable: press on the grip and pull up or down;
+  // release and the retirement age moves to the row under the pointer, clamped
+  // to the same bounds the lever uses. The listeners live on the DOCUMENT, not
+  // the row — as the marker crosses to a new age React re-renders the row and
+  // would otherwise drop its handlers mid-drag. A small movement threshold
+  // separates a real drag from a plain click (so the row still expands).
+  const canDragRetire = onRetirementAgeChange != null && currentAge != null;
+  const dragLo = currentAge ?? 40, dragHi = Math.min(75, maxAge ?? 75);
+  const [dragAge, setDragAge] = useState<number | null>(null);
+  const dragState = useRef<{ pointerId: number; startY: number; moved: boolean; latest: number } | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  const ageAtClientY = (clientY: number): number | null => {
+    const tbody = tableRef.current?.querySelector('tbody');
+    if (!tbody) return null;
+    const rows = Array.from(tbody.querySelectorAll('tr[data-age]'));
+    for (const el of rows) {
+      const r = el.getBoundingClientRect();
+      if (clientY >= r.top && clientY <= r.bottom) {
+        return Number((el as HTMLElement).dataset.age);
+      }
+    }
+    return null;
+  };
+
+  const endDrag = () => {
+    const s = dragState.current;
+    if (!s) return;
+    dragState.current = null;
+    const finalAge = s.latest;
+    setDragAge(null);
+    if (s.moved && finalAge !== retirementAge) {
+      onRetirementAgeChange?.(Math.max(dragLo, Math.min(dragHi, finalAge)));
+    }
+  };
+
+  const beginRetireDrag = (e: React.PointerEvent) => {
+    if (!canDragRetire) return;
+    e.preventDefault(); // don't let the press select text or trigger the row's click
+    dragState.current = { pointerId: e.pointerId, startY: e.clientY, moved: false, latest: retirementAge };
+    setDragAge(retirementAge);
+
+    const onMove = (ev: PointerEvent) => {
+      const s = dragState.current;
+      if (!s || ev.pointerId !== s.pointerId) return;
+      if (Math.abs(ev.clientY - s.startY) > 5) s.moved = true; // past the click threshold
+      const a = ageAtClientY(ev.clientY);
+      if (a != null) {
+        s.latest = Math.max(dragLo, Math.min(dragHi, a));
+        setDragAge(s.latest);
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (dragState.current && ev.pointerId === dragState.current.pointerId) endDrag();
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+    // Auto-detach on unmount.
+    const cleanup = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+    };
+    // Stash cleanup so a pointercancel / re-render can't leak listeners.
+    (dragState.current as any).cleanup = cleanup;
+  };
+
+  useEffect(() => () => {
+    (dragState.current as any)?.cleanup?.();
+  }, []);
+
+  const effectiveRetirement = dragAge ?? retirementAge;
 
   // Household mode: look each row's per-person detail up by age (the combined
   // rows carry no detail — per-source numbers don't sum meaningfully).
@@ -242,38 +426,86 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
   // Debt balance column appears only when a person carries a debt.
   const hasDebts = breakdown.some(r => r.debtBalance !== undefined);
   const anyDetail = household || breakdown.some(r => r.detail);
-  // Number of columns the detail row must span: base 19 + the expand chevron
-  // (when any row is expandable) + optional RM/RDSP/FHSA/Debt columns. The chevron column
-  // was previously left out, so an expandable table's detail row spanned one
-  // column too few and the panel didn't reach the table's right edge.
-  const colCount = 19 + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0) + (hasDebts ? 1 : 0);
+
+  // User-visible base columns (picker + prefKV), unioned with the columns the
+  // profile actually uses: an account the plan holds money in, or a benefit it
+  // receives, stays on screen even if the stored pref hid it — the picker only
+  // governs the columns this profile could take or leave. (The feature columns
+  // — RDSP/FHSA/Home Equity/Debts — already work this way: active means shown.)
+  const PROFILE_CONDITIONAL_IDS = ['rrsp', 'rrif', 'tfsa', 'taxable', 'cashCushion', 'cpp', 'oas', 'gis', 'pension'];
+  const activeFromProfile = new Set(
+    SCHEDULE_COLUMNS
+      .filter((c) => PROFILE_CONDITIONAL_IDS.includes(c.id) && breakdown.some((r) => (c.value(r) ?? 0) > 0.5))
+      .map((c) => c.id),
+  );
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(readVisibleCols);
+  const updateVisibleCols = (next: Set<string>) => {
+    setVisibleCols(next);
+    prefKV().setItem(SCHEDULE_COLS_PREF_KEY, JSON.stringify([...next]));
+  };
+  const shownColumns = SCHEDULE_COLUMNS.filter((c) => visibleCols.has(c.id) || activeFromProfile.has(c.id));
+
+  // Number of columns the detail row must span: visible base columns + the
+  // expand chevron (when any row is expandable) + optional RM/RDSP/FHSA/Debt
+  // columns. The chevron column was previously left out, so an expandable
+  // table's detail row spanned one column too few and the panel didn't reach
+  // the table's right edge.
+  const colCount = shownColumns.length + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0) + (hasDebts ? 1 : 0);
+
+  const renderCell = (col: ScheduleColumn, row: YearlyBreakdown, isRetirement: boolean, dragAge: number | null = null) => {
+    if (col.id === 'age') {
+      return (
+        <td key={col.id} className={`px-3 py-1.5 ${isRetirement ? 'font-bold text-blue-700' : 'text-slate-900'}`}>
+          {row.age}
+          {isRetirement && (
+            canDragRetire
+              ? <span
+                  role="slider"
+                  aria-label={`Start drawing — drag to change (now ${effectiveRetirement})`}
+                  aria-valuemin={dragLo} aria-valuemax={dragHi} aria-valuenow={effectiveRetirement}
+                  onPointerDown={beginRetireDrag}
+                  title={`Drag to change the retirement age (now ${effectiveRetirement})`}
+                  className="ml-1.5 inline-flex cursor-grab touch-none select-none items-center gap-1 align-middle text-blue-500 active:cursor-grabbing"
+                >
+                  <GripVertical size={12} aria-hidden="true" />
+                  <span className="text-[10px] font-semibold">{dragAge != null ? `→ ${dragAge}` : 'drag'}</span>
+                </span>
+              : ' 🎯'
+          )}
+        </td>
+      );
+    }
+    const v = col.value(row);
+    const cls =
+      col.tone === 'strong' && isRetirement
+        ? 'font-semibold text-blue-700'
+        : TONE_CLASS[col.tone];
+    return (
+      <td key={col.id} className={`px-3 py-1.5 text-right font-mono ${cls}`}>
+        {v === undefined ? '—' : formatCurrency(v)}
+      </td>
+    );
+  };
 
   return (
-    <div className="bg-white border border-slate-200 rounded overflow-hidden">
+    <div className="bg-white border border-slate-200 overflow-hidden">
+      <div className="flex justify-end px-2 py-1.5 border-b border-slate-100 bg-slate-50/60">
+        <ColumnPicker visible={visibleCols} onChange={updateVisibleCols} />
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs" ref={tableRef}>
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               {anyDetail && <th className="w-6 px-1 py-2" title="Expand a year to see where the money came from" />}
-              <th className="text-left px-3 py-2 font-semibold text-slate-700">Age</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Starting Balance</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Contributions</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Market Gains</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="After-tax income goal for the year (desired spending inflated to that year)">Spending Target</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Withdrawals</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Incremental tax on this year's withdrawals (registered draws + realized gains) beyond the tax on benefits alone, plus OAS clawback. Reads $0 late in life once the portfolio is drained — that does NOT mean tax stopped; see Total Tax.">Income Tax</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Total tax on ALL of the year's income (CPP, OAS, pension, employment, withdrawals) plus OAS clawback. Charged every year taxable income is received, right to the final year.">Total Tax</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Running total of income tax paid since retirement">Tax Burden</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">CPP</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">OAS</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Guaranteed Income Supplement (tax-free; couples assessed on combined income)">GIS</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Defined-benefit / bridge pension income (taxable)">Pension</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Ending Balance</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">RRSP</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">RRIF</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">TFSA</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Taxable</th>
-              <th className="text-right px-3 py-2 font-semibold text-slate-700">Cash Cushion</th>
+              {shownColumns.map((c) => (
+                <th
+                  key={c.id}
+                  className={`${c.align === 'left' ? 'text-left' : 'text-right'} px-3 py-2 font-semibold text-slate-700`}
+                  title={c.title}
+                >
+                  {c.label}
+                </th>
+              ))}
               {hasRdsp && (
                 <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>
               )}
@@ -290,7 +522,7 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
           </thead>
           <tbody>
             {breakdown.map((row, index) => {
-              const isRetirement = row.age === retirementAge;
+              const isRetirement = row.age === effectiveRetirement;
               const isOpen = expanded.has(row.age);
               const personRows = household
                 ? ([['You', primaryByAge.get(row.age)], ['Spouse', spouseByAge.get(row.age)]] as Array<[string, YearlyBreakdown | undefined]>)
@@ -301,73 +533,17 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
               return (
                 <Fragment key={index}>
                   <tr
+                    data-age={row.age}
                     className={`${rowBg} ${isRetirement ? 'border-t-2 border-blue-500' : ''} ${canExpand ? 'cursor-pointer hover:bg-blue-50/40' : ''}`}
                     onClick={canExpand ? () => toggle(row.age) : undefined}
                     title={canExpand ? (isOpen ? 'Collapse year detail' : 'Expand year detail') : undefined}
                   >
                     {anyDetail && (
                       <td className="px-1 py-1.5 text-slate-400">
-                        {canExpand && (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
+                        {canExpand && !(canDragRetire && isRetirement) && (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
                       </td>
                     )}
-                    <td className={`px-3 py-1.5 ${isRetirement ? 'font-bold text-blue-700' : 'text-slate-900'}`}>
-                      {row.age}
-                      {isRetirement && ' 🎯'}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                      {formatCurrency(row.startingBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.contributions)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                      {formatCurrency(row.marketGains)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-700">
-                      {formatCurrency(row.spendingTarget)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-red-700">
-                      {formatCurrency(row.withdrawals)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-amber-700">
-                      {formatCurrency(row.incomeTax)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-amber-800">
-                      {formatCurrency(row.totalTaxPaid ?? 0)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-amber-900">
-                      {formatCurrency(row.cumulativeTax)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.cppIncome)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.oasIncome)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.gisIncome)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
-                      {formatCurrency(row.pensionIncome)}
-                    </td>
-                    <td className={`px-3 py-1.5 text-right font-mono font-semibold ${isRetirement ? 'text-blue-700' : 'text-slate-900'}`}>
-                      {formatCurrency(row.endingBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.rrspBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.rrifBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.tfsaBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.taxableBalance)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-slate-600">
-                      {formatCurrency(row.cashCushionBalance)}
-                    </td>
+                    {shownColumns.map((c) => renderCell(c, row, isRetirement, dragAge))}
                     {hasRdsp && (
                       <td className="px-3 py-1.5 text-right font-mono text-slate-600"
                         title={row.detail?.rdsp ? `Contribution basis ${formatCurrency(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
@@ -381,13 +557,13 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
                       </td>
                     )}
                     {hasRm && (
-                      <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}
+                      <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'font-semibold text-rose-700' : 'text-slate-600'}`}
                         title={row.homeValue !== undefined ? `Home ${formatCurrency(row.homeValue)} − loan ${formatCurrency(row.loanBalance ?? 0)}` : undefined}>
                         {row.netHomeEquity !== undefined ? formatCurrency(row.netHomeEquity) : '—'}
                       </td>
                     )}
                     {hasDebts && (
-                      <td className={`px-3 py-1.5 text-right font-mono ${(row.debtBalance ?? 0) > 0.5 ? 'text-red-600' : 'text-slate-600'}`}
+                      <td className={`px-3 py-1.5 text-right font-mono ${(row.debtBalance ?? 0) > 0.5 ? 'text-rose-700' : 'text-slate-600'}`}
                         title={(row.debtPayments ?? 0) > 0.5 ? `Paid ${formatCurrency(row.debtPayments ?? 0)} this year` : undefined}>
                         {row.debtBalance !== undefined ? formatCurrency(row.debtBalance) : '—'}
                       </td>
@@ -421,7 +597,8 @@ export function ScheduleTable({ breakdown, retirementAge, primaryBreakdown, spou
       </div>
       <p className="px-3 py-2 text-[10px] text-slate-400 border-t border-slate-100">
         Click a year to expand its inner workings — withdrawal sources, growth, tax, benefits and reverse
-        mortgage. Amounts are in nominal (future) dollars of each year: the spending target and contributions
+        mortgage.{canDragRetire && ' Drag the blue "stop working" row up or down to move the retirement age.'} Amounts
+        are in nominal (future) dollars of each year: the spending target and contributions
         grow with inflation, while balances, gains and benefits are the actual dollars that year. CPP/OAS are
         shown at 2026 values unless "Index tax tables, OAS and CPP" is on in Settings → Engine.
       </p>
