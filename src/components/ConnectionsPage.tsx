@@ -85,7 +85,38 @@ export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
         onChange={updateSettings}
         webllmConn={webllmConn}
       />
+
+      <OverlaySection settings={settings} onChange={updateSettings} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// OVERLAY — opt-in markup layer over the live app
+// ---------------------------------------------------------------------------
+
+function OverlaySection({ settings, onChange }: {
+  settings: AiSettings;
+  onChange: (mutate: (s: AiSettings) => void) => void;
+}) {
+  return (
+    <section className="mt-4 border border-slate-200 bg-slate-50 rounded p-3">
+      <h3 className="text-sm font-bold text-slate-900 mb-1">Markup overlay</h3>
+      <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={settings.markupOverlay ?? false}
+          onChange={e => onChange(s => { s.markupOverlay = e.target.checked; })}
+        />
+        <span>
+          Let me draw on the app (<kbd className="px-1 border border-neutral-300 rounded bg-white text-[10px]">Ctrl+Shift+M</kbd>)
+          and have the assistant interpret it. Pen strokes, notes, arrows, drags, and cuts are sent to the
+          selected model; proposed page changes appear as a review card and are never applied without your
+          say-so. Reloads the overlay next time you open the app.
+        </span>
+      </label>
+    </section>
   );
 }
 

@@ -18,6 +18,13 @@ export default defineConfig({
       { find: '@retired/engine-core', replacement: join(here, 'packages/engine-core/src') },
       { find: '@retired/mcp-tools', replacement: join(here, 'packages/mcp-tools/src') },
       { find: '@retired/mcp-server', replacement: join(here, 'packages/mcp-server/src') },
+      // markup-assistant: most-specific first. The /node subpaths resolve to
+      // the package SOURCE for vitest — unlike node-runtime consumers, tests
+      // can compile the TS directly, so no prebuilt dist is required.
+      { find: '@retired/markup-assistant/node/engine', replacement: join(here, 'packages/markup-assistant/src/engine/index.ts') },
+      { find: '@retired/markup-assistant/node', replacement: join(here, 'packages/markup-assistant/src/vite/index.ts') },
+      { find: '@retired/markup-assistant', replacement: join(here, 'packages/markup-assistant/src') },
+      { find: '@retired/ai-bridge', replacement: join(here, 'packages/ai-bridge/src') },
     ],
   },
   test: {
