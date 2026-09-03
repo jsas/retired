@@ -48,6 +48,10 @@ const DEFAULT_SYSTEM_PROMPT = [
   '  Never name a file the excerpt did not label — a guessed path fails application',
   '  with "file unreadable". If no excerpt shows the element, reject with a note saying',
   '  which file is missing.',
+  '- The gesture names the element by its ON-SCREEN TEXT (e.g. "WITHDRAWAL RATE").',
+  '  Edit the file whose excerpt contains that exact text. Do NOT pick a file just',
+  '  because it shares a CSS class with the marked element — many files share classes;',
+  '  the label text is the reliable fingerprint.',
 ].join('\n')
 
 export class OpenAIEngine implements Engine {

@@ -54,6 +54,8 @@ export function gatherSourceContext(
   interface Candidate {
     rel: string
     firstLine: number
+    /** Last line containing a needle — the excerpt must span the whole hit range. */
+    lastLine: number
     /** Distinct needles found in the file — breadth beats raw line count. */
     matches: number
     tier: number
@@ -72,22 +74,25 @@ export function gatherSourceContext(
       continue
     }
     const lines = content.split('\n')
-    let firstLine = -1
     const matched = new Set<number>()
+    const hitLines: number[] = []
     for (let i = 0; i < lines.length; i++) {
       const line = (lines[i] ?? '').toLowerCase()
+      let hit = false
       for (let n = 0; n < lowerNeedles.length; n++) {
         if (matched.has(n)) continue
         if (line.includes(lowerNeedles[n]!)) {
           matched.add(n)
-          if (firstLine === -1) firstLine = i
+          hit = true
         }
       }
+      if (hit) hitLines.push(i)
     }
-    if (firstLine === -1) continue
+    if (hitLines.length === 0) continue
     candidates.push({
       rel: file.slice(rootAbs.length + 1).replace(/\\/g, '/'),
-      firstLine,
+      firstLine: hitLines[0]!,
+      lastLine: hitLines[hitLines.length - 1]!,
       matches: matched.size,
       tier,
     })
@@ -110,8 +115,11 @@ export function gatherSourceContext(
       continue
     }
     const lines = content.split('\n')
+    // The excerpt must span the whole hit range: a card grid's four cards can
+    // sit 20+ lines apart, so centering on the first hit would cut off the
+    // card the user actually circled. Pad a little on each side.
     const from = Math.max(0, cand.firstLine - CONTEXT_LINES)
-    const to = Math.min(lines.length, cand.firstLine + CONTEXT_LINES + 1)
+    const to = Math.min(lines.length, cand.lastLine + CONTEXT_LINES + 1)
     // Show the lines VERBATIM (no line-number gutter): the model copies this
     // text into a `find` string, and any prefix we add would never match the
     // file on disk. The header carries the starting line for orientation.
