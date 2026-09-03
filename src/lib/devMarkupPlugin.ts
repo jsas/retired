@@ -26,6 +26,7 @@ import {
   markupEnvEnabled,
   openaiEngineFromEnv,
   readMarkupEnv,
+  OpenAIEngine,
 } from '@retired/markup-assistant/node/engine'
 import type { Sink } from '@retired/markup-assistant/node/engine'
 import type { Edit } from '@retired/markup-assistant/node/engine'
@@ -83,6 +84,21 @@ export function devMarkupOverlay(options: DevMarkupOverlayOptions = {}): Plugin[
         return { state: 'failed' as const, reason: String(err) }
       }
     },
+  }
+
+  // When the engine asks for a specific source file ("please share the file
+  // containing X"), it may come through the engine's fetchSource hook —
+  // point it at the bridge's /source route so the model really gets it.
+  if (engine instanceof OpenAIEngine) {
+    engine.fetchSource = async (file: string) => {
+      try {
+        const url = `${sinkOrigin()}/__markup_assistant__/source?file=${encodeURIComponent(file)}`
+        const res = await fetch(url)
+        return res.ok ? res.text() : undefined
+      } catch {
+        return undefined
+      }
+    }
   }
 
   const bridge = markupAssistant({

@@ -261,4 +261,32 @@ describe('OpenAIEngine nudge (described the change instead of making it)', () =>
     expect(d.rejection).toContain('not sure')
     expect(d.edits).toHaveLength(0)
   })
+
+  it('fetches a requested file and feeds it back to the model', async () => {
+    const sent: Array<{ body: string }> = []
+    const eng = new OpenAIEngine({
+      ...OPTS,
+      fetchImpl: scripted(
+        [
+          { content: 'Please share the file containing the Household Money Lasts To card, likely src/components/MetricCards.tsx.' },
+          toolCall({
+            edits: [
+              { kind: 'text', file: 'src/components/MetricCards.tsx', find: 'bg-white', replace: 'bg-emerald-50', description: 'sparkly' },
+            ],
+          }),
+        ],
+        sent,
+      ),
+      fetchSource: async (file) => `file: ${file}\n<div className="bg-white">never</div>`,
+    })
+    const d = await eng.decide(questionInput('make this bkg mega sparkily'))
+    expect(sent).toHaveLength(2)
+    expect(d.edits).toHaveLength(1)
+    // the fetched content was fed back to the model on the retry
+    const second = JSON.parse(sent[1]!.body) as { messages: Array<{ role: string; content?: string }> }
+    const fed = second.messages.find(
+      (m) => m.role === 'user' && m.content?.includes('src/components/MetricCards.tsx'),
+    )
+    expect(fed?.content).toContain('bg-white')
+  })
 })

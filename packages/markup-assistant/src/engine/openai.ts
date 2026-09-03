@@ -19,6 +19,12 @@ export interface OpenAIEngineOptions {
   systemPrompt?: string
   temperature?: number
   fetchImpl?: typeof fetch
+  /**
+   * When the model rejects with "please share the file containing X", any
+   * the host can hand back via this hook gets appended to the conversation
+   * and the retry is told it arrived. In the vite bridge this hits /source.
+   */
+  fetchSource?: (file: string) => Promise<string | undefined>
 }
 
 const DEFAULT_SYSTEM_PROMPT = [
@@ -50,28 +56,46 @@ export class OpenAIEngine implements Engine {
   constructor(options: OpenAIEngineOptions) {
     if (!options.endpoint) throw new Error('OpenAIEngine: endpoint is required')
     if (!options.model) throw new Error('OpenAIEngine: model is required')
+    this.fetchSource = options.fetchSource
     this.opts = { temperature: 0.2, ...options }
   }
+
+  /** Also settable post-construction so the app plugin can wire /source in. */
+  fetchSource: OpenAIEngineOptions['fetchSource']
 
   async decide(input: EngineInput): Promise<EngineDecision> {
     const messages = buildMessages(input, this.opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT)
     const first = await this.callModel(messages)
     const decision = this.interpret(first, input)
 
-    // A change request that came back with no edits — the model described
-    // what it would do ("set their container background to green") instead
-    // of doing it — gets ONE nudge: its own words are appended to the
-    // conversation and it's told to make the actual tool call. Small models
-    // do this constantly and usually comply on the second ask. The prose can
-    // arrive as plain content or as an apply_edits `note` with zero edits.
+    // A change request that came back with no edits gets ONE more round
+    // trip. Two shapes of comeback:
+    //  - "please share the file with the X component" — the /source hook
+    //    (when the host provides one) is called and its content appended,
+    //    so the retry really gets the file.
+    //  - described-in-prose ("set their background to green") — the model's
+    //    own words are echoed and it's told to make the actual tool call.
     const said = (first.content ?? '').trim() || (decision.rejection ?? '').trim()
     const needsNudge = Boolean(decision.rejection) && !looksLikeQuestion(input) && said.length > 0
     if (!needsNudge) return decision
 
     messages.push({ role: 'assistant', content: said })
+
+    const requestedFile = filenameWanted(said)
+    let brought: string | undefined
+    if (this.fetchSource && requestedFile) {
+      try {
+        brought = await this.fetchSource(requestedFile)
+      } catch {
+        brought = undefined
+      }
+    }
     messages.push({
       role: 'user',
       content:
+        (requestedFile && brought
+          ? `Here is the file you asked for:\n\nfile: ${requestedFile}\n${brought}\n\n`
+          : '') +
         'You just described the change in prose instead of making it. Do it now: ' +
         'call apply_edits with the real edits (exact find/replace against the ' +
         'source excerpts). Do not explain — only make the tool call.',
@@ -185,6 +209,18 @@ function extractJsonFromText(content: string): string | undefined {
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (fence?.[1]) text = fence[1].trim()
   return text.startsWith('{') ? text : undefined
+}
+
+/**
+ * The model said "please share the file / the file containing / I need the
+ * component that renders" — pull the first source-path-ish token out of the
+ * sentence so the host's /source hook can bring it back.
+ */
+function filenameWanted(text: string): string | undefined {
+  const match = text.match(
+    /(?:src|packages|app)\/[\w./-]+(?:\.tsx?|\.jsx?|\.css|\.html)\b/i,
+  )
+  return match?.[0]
 }
 
 /** True when the interaction text reads as a question, not a change request. */
