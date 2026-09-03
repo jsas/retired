@@ -166,11 +166,14 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
           {actions}
 
           {/* the assistant toggle — ALWAYS present, not gated on the dock
-              being wired: one click opens or closes it, on every page */}
+              being wired: one click opens or closes it, on every page. The
+              grow/shrink arrows live here too (nowhere else): click the
+              arrows to expand the open dock to fullscreen or shrink it back
+              to the rail — or to open straight into fullscreen when closed. */}
           <button
             type="button"
             onClick={() => setDockOpen(!dockOpen)}
-            className={`border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            className={`flex items-center border px-3 py-1.5 text-xs font-semibold transition-colors ${
               dockOpen
                 ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-700'
                 : 'border-slate-300 text-slate-800 hover:border-slate-900'
@@ -178,6 +181,22 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             title="The assistant — reads your plan, answers questions, shows its work"
           >
             Assistant
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={fullscreen ? 'Shrink the assistant back to the side rail' : 'Grow the assistant to fullscreen'}
+              title={fullscreen ? 'Shrink' : 'Grow'}
+              className="ml-2 flex items-center border-l border-white/30 pl-2 text-white/80 hover:text-white"
+              onClick={(e) => { e.stopPropagation(); setAssistantFullscreen(!fullscreen); setDockOpen(true); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault(); e.stopPropagation();
+                  setAssistantFullscreen(!fullscreen); setDockOpen(true);
+                }
+              }}
+            >
+              {fullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            </span>
           </button>
 
           {/* the persistent verdict chip — number and colour carry it; the words live in the tooltip */}
@@ -222,28 +241,8 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
               <div className="flex h-5 w-5 items-center justify-center bg-slate-900 text-[8px] font-bold text-white">RE</div>
               <HelpHint topic="assistant" />
               <div className="flex-1" />
-              {/* fullscreen toggle: arrows out to expand, in to return to the rail */}
-              {fullscreen ? (
-                <button
-                  type="button"
-                  onClick={() => setAssistantFullscreen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-700"
-                  aria-label="Return the assistant to the side rail"
-                  title="Back to the side rail"
-                >
-                  <Minimize2 size={14} />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAssistantFullscreen(true)}
-                  className="p-1 text-slate-400 hover:text-slate-700"
-                  aria-label="Expand the assistant to fullscreen"
-                  title="Fullscreen"
-                >
-                  <Maximize2 size={14} />
-                </button>
-              )}
+              {/* grow/shrink moved to the header's Assistant button (its arrow
+                  chips) — the dock header stays pure chrome */}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">{assistant}</div>
           </aside>

@@ -1,19 +1,22 @@
 // The steering surface: a goals-level equalizer over the plan. Each control is
-// a double-slider that sets an allowed band (min–max); the control's value
-// thumb stays inside its band. The XY pad lets you drag retirement-age ×
-// spending together, shaded by where the plan meets a reference success rate.
+// a styleguide fader; the XY pad lets you drag retirement-age × spending
+// together, shaded by where the plan meets a reference success rate.
 //
-// Bands are enforced synchronously (clampToBand). The success-rate readout and
-// the pad's feasibility shading come from the EQ worker (runEqSolver), scored
-// against one seeded batch of futures so they stay stable while dragging.
+// Bands (min–max crops) still exist under the hood — they bound the pad's
+// allowed rectangle and the solver's search — but the faders render plain:
+// no per-control band chrome. Values clamp into their band (clampToBand).
+// The success-rate readout and the pad's feasibility shading come from the EQ
+// worker (runEqSolver), scored against one seeded batch of futures so they
+// stay stable while dragging.
 import { useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { ProjectionTimeline } from '../design/ProjectionTimeline';
+import { Fader } from '../design/primitives';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
-  AXES, axisValue, withAxis, clampToBand, normalizeBand, effectiveRange, deterministicOutcome, isLimited,
-  renderRange, reconcileControl, INT_AXES,
+  AXES, axisValue, withAxis, clampToBand, effectiveRange, deterministicOutcome, isLimited,
+  renderRange, reconcileControl,
   type EqAxis, type Band,
 } from '@retired/engine-core/eqConstraints';
 
@@ -43,15 +46,15 @@ export interface EqPageProps {
 }
 
 // ---------------------------------------------------------------------------
-// RangeFader — a double-slider: two thumbs set the allowed band (min–max), the
-// control's value thumb moves within the band. Toggle the band on/off to pin
-// the control or let it roam the full axis.
+// RangeFader — the styleguide's one slider (Fader), fed by the band system.
+// The min–max crop edges are gone: bands still shape what the plan may try
+// (the pad, the solver), but each control reads as a plain fader — label,
+// value, hairline track, square thumb, the axis ends below.
 // ---------------------------------------------------------------------------
-function RangeFader({ axis, inputs, band, onBand, onChange }: {
+function RangeFader({ axis, inputs, band, onChange }: {
   axis: EqAxis;
   inputs: RetirementInputs;
   band: Band;
-  onBand: (b: Band) => void;
   onChange: (inputs: RetirementInputs) => void;
 }) {
   const spec = AXES[axis];
@@ -59,120 +62,23 @@ function RangeFader({ axis, inputs, band, onBand, onChange }: {
   // Reconcile for DISPLAY so a stale crop (edges outside the track, or framing
   // out the value) never renders a stuck knob; the page effect persists it back.
   const rc = reconcileControl(axis, inputs, band);
-  const n = rc.band; // the crop [min,max], edges ordered/clamped/framed
-  const limited = isLimited(axis, n);
-
   // The range actually RENDERED: the axis, floored at the plan's logical min
   // (retirement ≥ current age, savings ≥ locked RRSP+TFSA) and grown in
   // whole-axis steps when the value exceeds the axis max.
   const range = rc.range;
-  const span = range.max - range.min;
 
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  // The value knob moves inside the crop [n.min, n.max].
+  // The knob moves inside the band (it can't be dragged outside the allowed
+  // crop even though the track shows the full range).
   const setValue = (raw: number) => onChange(withAxis(inputs, axis, clampToBand(axis, band, raw)));
 
-  // Drag a crop edge. The edge can't cross the opposite edge. The value only
-  // moves when the crop actually EXCLUDES it (the edge swept past it) — it is
-  // NOT dragged along on every edge move, so the knob stays put while you fence.
-  // Edges may ride the grown range (past the base axis max) while it's grown.
-  const setEdge = (edge: 'min' | 'max', raw: number) => {
-    const clamped = Math.min(range.max, Math.max(range.min, raw));
-    const snapped = INT_AXES.has(axis) ? Math.round(clamped) : clamped;
-    const bounded = edge === 'min' ? Math.min(snapped, n.max) : Math.max(snapped, n.min);
-    const next = normalizeBand(axis, { ...n, [edge]: bounded });
-    onBand(next);
-    if (value < next.min || value > next.max) {
-      onChange(withAxis(inputs, axis, clampToBand(axis, next, value)));
-    }
-  };
-
-  // The value knob is a CUSTOM pointer-dragged control, not a third range
-  // input — stacking three native inputs breaks the middle one's hit-area (the
-  // edge inputs paint over it and steal its pointer events). Dragging maps the
-  // pointer's x to an axis value, clamped into the crop.
-  const onValuePointer = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const track = trackRef.current;
-    if (!track) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => {
-      const rect = track.getBoundingClientRect();
-      const f = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
-      setValue(range.min + f * span);
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-
-  // Track fractions for the crop highlight (the selected region between edges).
-  // Clamped into [0,1]: a persisted crop edge past the grown range pins to the
-  // track end rather than rendering out of bounds.
-  const loF = Math.min(1, Math.max(0, (n.min - range.min) / span));
-  const hiF = Math.min(1, Math.max(0, (n.max - range.min) / span));
-  const valF = Math.min(1, Math.max(0, (value - range.min) / span));
-
   return (
-    <div className={`border bg-white p-2.5 ${limited ? 'border-slate-900' : 'border-slate-200'}`}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] font-semibold text-slate-700">{spec.label}</span>
-        <span className="text-sm font-semibold text-slate-900">{spec.format(value)}</span>
-      </div>
-
-      {/* One track: two native edge thumbs + a custom value knob on top. */}
-      <div ref={trackRef} className="relative h-6">
-        {/* base track */}
-        <div className="absolute top-1/2 left-0 right-0 h-1.5 -translate-y-1/2 bg-slate-200" />
-        {/* selected crop region */}
-        <div
-          className="absolute top-1/2 h-1.5 -translate-y-1/2 bg-blue-200"
-          style={{ left: `${loF * 100}%`, width: `${(hiF - loF) * 100}%` }}
-        />
-        {/* min crop edge (native thumb, small). Rendered over `range` (the same
-            floored/grown range the highlight + value knob use), NOT spec.min/max —
-            otherwise the browser positions the thumb on the raw axis while the
-            highlight positions it on `range`, and the grabbable thumb floats
-            away from the visible edge (the stuck-can't-drag bug). */}
-        <input
-          type="range" aria-label={`${spec.label} minimum`}
-          min={range.min} max={range.max} step={spec.step} value={n.min}
-          onChange={e => setEdge('min', Number(e.target.value))}
-          className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none band-thumb"
-        />
-        {/* max crop edge (native thumb, small) */}
-        <input
-          type="range" aria-label={`${spec.label} maximum`}
-          min={range.min} max={range.max} step={spec.step} value={n.max}
-          onChange={e => setEdge('max', Number(e.target.value))}
-          className="absolute inset-0 w-full appearance-none bg-transparent pointer-events-none band-thumb"
-        />
-        {/* value knob — custom drag, rendered above the edges so it's grabbable */}
-        <div
-          role="slider"
-          aria-label={spec.label}
-          aria-valuemin={n.min} aria-valuemax={n.max} aria-valuenow={value}
-          tabIndex={0}
-          onPointerDown={onValuePointer}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); setValue(value - spec.step); }
-            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); setValue(value + spec.step); }
-          }}
-          className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 border-2 border-white bg-blue-600 cursor-grab touch-none active:cursor-grabbing"
-          style={{ left: `${valF * 100}%` }}
-        />
-      </div>
-
-      <div className="flex items-center justify-between text-[10px] text-slate-500 mt-0.5">
-        <span className="font-medium text-slate-700">{spec.format(n.min)}</span>
-        <span className="font-medium text-slate-700">{spec.format(n.max)}</span>
-      </div>
-    </div>
+    <Fader
+      label={spec.label}
+      value={value}
+      min={range.min} max={range.max} step={spec.step}
+      format={spec.format}
+      onChange={setValue}
+    />
   );
 }
 
@@ -395,7 +301,6 @@ function ReadoutCard({ label, value, tone, solving }: {
 // ---------------------------------------------------------------------------
 export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved, projection }: EqPageProps) {
   const o = deterministicOutcome(inputs, config);
-  const setBand = (axis: EqAxis) => (b: Band) => onBandsChange({ ...bands, [axis]: b });
 
   // RECONCILE every control to a sane state (crop edges inside the rendered
   // range, value inside its crop) whenever the plan or a crop changes. This
@@ -419,20 +324,19 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
     <div>
       <p className="text-xs text-slate-500 mb-3 leading-snug max-w-2xl">
         Push the sliders or drag the pad to explore your plan — the readouts update live.
-        Drag a slider's edges to crop its range (at least / at most) while you adjust the rest.
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start mb-3">
         {/* sliders flow 1→2→3 columns so more fit above the fold */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <RangeFader axis="desiredSpending" inputs={inputs} band={bands.desiredSpending} onBand={setBand('desiredSpending')} onChange={onChange} />
-          <RangeFader axis="retirementAge" inputs={inputs} band={bands.retirementAge} onBand={setBand('retirementAge')} onChange={onChange} />
-          <RangeFader axis="investmentReturn" inputs={inputs} band={bands.investmentReturn} onBand={setBand('investmentReturn')} onChange={onChange} />
-          <RangeFader axis="annualSavings" inputs={inputs} band={bands.annualSavings} onBand={setBand('annualSavings')} onChange={onChange} />
-          <RangeFader axis="maxAge" inputs={inputs} band={bands.maxAge} onBand={setBand('maxAge')} onChange={onChange} />
-          <RangeFader axis="returnVolatility" inputs={inputs} band={bands.returnVolatility} onBand={setBand('returnVolatility')} onChange={onChange} />
-          <RangeFader axis="cppStartAge" inputs={inputs} band={bands.cppStartAge} onBand={setBand('cppStartAge')} onChange={onChange} />
-          <RangeFader axis="oasStartAge" inputs={inputs} band={bands.oasStartAge} onBand={setBand('oasStartAge')} onChange={onChange} />
+          <RangeFader axis="desiredSpending" inputs={inputs} band={bands.desiredSpending} onChange={onChange} />
+          <RangeFader axis="retirementAge" inputs={inputs} band={bands.retirementAge} onChange={onChange} />
+          <RangeFader axis="investmentReturn" inputs={inputs} band={bands.investmentReturn} onChange={onChange} />
+          <RangeFader axis="annualSavings" inputs={inputs} band={bands.annualSavings} onChange={onChange} />
+          <RangeFader axis="maxAge" inputs={inputs} band={bands.maxAge} onChange={onChange} />
+          <RangeFader axis="returnVolatility" inputs={inputs} band={bands.returnVolatility} onChange={onChange} />
+          <RangeFader axis="cppStartAge" inputs={inputs} band={bands.cppStartAge} onChange={onChange} />
+          <RangeFader axis="oasStartAge" inputs={inputs} band={bands.oasStartAge} onChange={onChange} />
         </div>
         <div className="space-y-3">
           <XyPad

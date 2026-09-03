@@ -27,9 +27,8 @@ describe('BetaPage assistant dock', () => {
     expect(html).toContain('Assistant');
     expect(html).toContain('chat-body');
     expect(html).toContain('page-body');
-    // the fullscreen toggle (arrows out to expand); closing lives on the
-    // header toggle now — no × in the dock header
-    expect(html).toContain('aria-label="Expand the assistant to fullscreen"');
+    // the grow/shrink arrows live ON the Assistant button now (nowhere else)
+    expect(html).toContain('aria-label="Grow the assistant to fullscreen"');
     expect(html).not.toContain('aria-label="Close the assistant"');
   });
 
@@ -37,7 +36,7 @@ describe('BetaPage assistant dock', () => {
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, children: createElement('div', null, 'page-body') }),
     );
-    expect(html).toContain('>Assistant</button>');
+    expect(html).toContain('>Assistant<');
     expect(html).toContain('page-body');
     // but the dock rail itself stays out — nothing to show
     expect(html).not.toContain('chat-body');
@@ -94,12 +93,12 @@ describe('BetaPage assistant dock', () => {
     vi.unstubAllGlobals();
   });
 
-  it('the dock header carries the fullscreen expand control', () => {
+  it('the Assistant button in the header carries the grow/shrink control', () => {
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
-    expect(html).toContain('title="Fullscreen"');
-    expect(html).toContain('aria-label="Expand the assistant to fullscreen"');
+    expect(html).toContain('title="Grow"');
+    expect(html).toContain('aria-label="Grow the assistant to fullscreen"');
   });
 
   it('the open dock shows as a full-screen sheet on phones (not hidden below lg)', () => {

@@ -321,6 +321,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       <>
         <P>The Markets dial assumes one average return every year. To model a <strong>crash, a boom, or a choppy stretch</strong>, shape a curve with <strong>return anchors</strong> — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.</P>
         <P>The projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.</P>
+        <P>On the dashboard's life timeline you can shape the curve directly: <strong>double-click the market strip</strong> (below the balance line) to drop an anchor at that age, <strong>drag</strong> it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples.</P>
       </>
     ),
   },
@@ -364,7 +365,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'The life timeline',
     section: 'Reading the answer',
     keywords: ['timeline', 'balance over time', 'work ends', 'money runs out'],
-    body: <P>Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when work ends, and when the money runs out (or that it outlasts the plan).</P>,
+    body: <P>Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when work ends, and when the money runs out (or that it outlasts the plan). Below the line: the <strong>spend strip</strong> (what the plan targets spending each year — drag its handle to change today's spending) and, when your plan has them, <strong>event diamonds</strong> (drag to move/resize a cash event) and the <strong>market strip</strong> (double-click to drop a return anchor — see Market hypothesis).</P>,
   },
   {
     id: 'evidence-row',
@@ -488,7 +489,7 @@ export const HELP_TOPICS: HelpTopic[] = [
           <><strong>What-if</strong> — it re-runs the engine with changed inputs and quotes the result.</>,
           <><strong>Propose changes</strong> — shown as a review card; nothing is applied until you confirm.</>,
         ])}
-        <P>Open or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The arrows in the dock's header expand it to fullscreen and back to the side rail.</P>
+        <P>Open or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The small arrows on the Assistant button grow it to fullscreen; the shrink arrows bring it back to the side rail.</P>
       </>
     ),
   },

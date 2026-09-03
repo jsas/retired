@@ -62,6 +62,25 @@ function verdict(inputs: RetirementInputs, results: RetirementResults) {
   return { text: `Your money runs out at ${runsTo} — ${short} years short of ${inputs.maxAge}.`, holds: false };
 }
 
+/** The base spending level at retirement, in nominal (that-year) dollars —
+ *  desiredSpending inflated to the retirement year, times the spending band
+ *  in force there. Matches what the engine builds its spendingTarget from
+ *  (no events, no RM), so the spend strip's handle sits ON the line. */
+function baseSpendAtRetirement(inputs: RetirementInputs, inflationRate: number): number {
+  const inflation = Math.max(0, inflationRate ?? 0);
+  const yearsTo = Math.max(0, inputs.retirementAge - inputs.currentAge);
+  const nominal = inputs.desiredSpending * Math.pow(1 + inflation, yearsTo);
+  const bands = Array.isArray(inputs.spendingBands)
+    ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge)
+    : [];
+  let pct = 1;
+  for (const b of bands) {
+    if (inputs.retirementAge >= b.fromAge) pct = b.pctOfBase;
+    else break;
+  }
+  return nominal * pct;
+}
+
 export function BetaApp({
   scenarios, activeScenarioId, onScenarioChange,
   inputs, onInputsChange, results, config, hasUnsavedChanges, onSave, assistant,
@@ -157,6 +176,16 @@ export function BetaApp({
                 ? [{ age: lifeDepletion, label: `money runs out · ${lifeDepletion}`, color: RED_DOT }]
                 : []),
             ]}
+            /* The interactive layers (old-site parity, restyled): the spend
+               strip with its base handle, the cash-event diamonds, and the
+               market strip. Drags write through onInputsChange and re-simulate
+               live — same contract as every fader. */
+            spend={{ points: breakdown.map(r => ({ age: r.age, value: r.spendingTarget })), baseSpend: baseSpendAtRetirement(inputs, config.engine.inflationRate) }}
+            onSpendChange={(today) => onInputsChange({ ...inputs, desiredSpending: today })}
+            events={(inputs.events ?? []).map(ev => ({ id: ev.id, age: ev.age, amount: ev.amount, direction: ev.direction, label: ev.label }))}
+            onEventChange={(next) => onInputsChange({ ...inputs, events: (inputs.events ?? []).map(ev => (ev.id === next.id ? { ...ev, age: next.age, amount: next.amount } : ev)) })}
+            anchors={(inputs.marketPeriods ?? []).map(p => ({ id: p.id, age: p.age, return: p.return, volatility: p.volatility }))}
+            onAnchorsChange={(next) => onInputsChange({ ...inputs, marketPeriods: next.map(a => ({ id: a.id, age: a.age, return: a.return, volatility: a.volatility })) })}
           />
         </Panel>
 
