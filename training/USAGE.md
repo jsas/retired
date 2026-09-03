@@ -1,175 +1,164 @@
-# Usage — fine-tune spike toolkit
+# Usage — fine-tune the tool-calling model
 
 Everything in `training/` is **elective and off the deploy path**. Nothing here
 ships to GitHub Pages; the only thing that would ever merge to `main` is a
 verified `WEBLLM_MODELS` entry on its own PR. This doc is the operator's guide:
-generate the corpus, sanity-check it, run the bake-off, and score a model.
+mint the corpus, convert it for LLaMA-Factory, train, and score the result.
 
-> The design rationale (why the data is shaped this way) lives in
-> [METHODOLOGY.md](./METHODOLOGY.md). The plan + guardrails live in
-> [SPIKE.md](./SPIKE.md). This file is just the *how* — for the **repeatable
-> "main changed → re-ground → retrain" loop**, see [UPDATING.md](./UPDATING.md).
+> Why the data is shaped this way: [METHODOLOGY.md](./METHODOLOGY.md).
+> The repeatable "main changed → retrain" loop: [UPDATING.md](./UPDATING.md).
+> Background + guardrails: [SPIKE.md](./SPIKE.md).
 
 ---
 
 ## TL;DR
 
 ```bash
-npx tsx training/generate.ts                 # 1. mint the corpus → training/data/
-npx vitest run -c training/vitest.config.ts  # 2. prove the toolkit is green
-npx tsx training/runGate.ts                  # 3. corpus self-check (must be 100%)
-node training/driver/smoke.mjs               # 4. confirm WebGPU + driver (no download)
-node training/driver/runBakeoff.mjs --only Qwen3-0.6B --limit 20   # 5. smoke one base
-npx tsx training/runGate.ts --replies data/bakeoff/<id>.replies.json --model <id>  # 6. score it
+npx tsx training/generate.ts                  # 1. mint corpus → training/data/corpus.{train,eval}.jsonl
+npx tsx training/toLlamaFactory.ts            # 2. convert → lf_train/lf_eval.json + dataset_info.json
+npx vitest run -c training/vitest.config.ts   # 3. toolkit tests green
+npx tsx training/runGate.ts                   # 4. corpus self-check (must be 100%)
+
+# 5. train (pick one — see §4):
+training/train.sh training/lf_lora.yaml       # fast validation pass (~15h)
+training/train.sh training/lf_sft.yaml        # full SFT (~40h, the ship candidate)
+
+# 6. score a checkpoint against the frozen eval split:
+npx tsx training/runGate.ts --replies data/bakeoff/<id>.replies.json --model <id>
 ```
 
 ---
 
-## 1. Generate the corpus
+## 1. Mint the corpus
 
 ```bash
 npx tsx training/generate.ts
 ```
 
-Mints the full corpus by running the **real tool executor against the real
-deterministic engine** across the plan sweep, and writes:
+Runs the **real tool executor against the real deterministic engine** across the
+plan sweep and writes `training/data/corpus.train.jsonl` +
+`corpus.eval.jsonl` (+ `corpus.eval.sha256`, the frozen benchmark hash).
+Assistant turns carry **Qwen3-native `<tool_call>` blocks** (see
+`training/protocol.ts`); the runtime parser accepts both those and the legacy
+`TOOL_CALL:` line. `training/data/` is gitignored — regenerate, never hand-edit.
 
-```
-training/data/corpus.train.jsonl     # train split
-training/data/corpus.eval.jsonl      # frozen eval split (the benchmark)
-training/data/corpus.eval.sha256     # 16-char hash of the eval split (golden)
-```
-
-Console output reports record count, the eval hash, and the per-kind /
-per-tool breakdown. `training/data/` is gitignored (regenerable artifacts).
-
-**When to regenerate:** after changing `mint.ts`, `plans.ts`, or the app's
-tool catalog. The eval hash *will* change — that's expected. See §7.
-
----
-
-## 2. Test the toolkit
+## 2. Convert for LLaMA-Factory
 
 ```bash
-npx vitest run -c training/vitest.config.ts
+npx tsx training/toLlamaFactory.ts
 ```
 
-Runs the training-side suites (protocol contract, minter scale + behavior
-invariants, eval-gate grading, corpus determinism). The shipped `tsconfig`/
-`vitest` configs only cover `src/**`, so the training config is separate.
+Converts the OpenAI-style corpus into LLaMA-Factory's **sharegpt** format
+(`function_call` / `observation` roles) and writes:
 
-> **Note:** engine-running tests are slow (Monte Carlo × plans) — the full
-> suite takes ~2 minutes. The app suite (`npx vitest run`) is unaffected.
+```
+training/data/lf_train.json        # train split (sharegpt)
+training/data/lf_eval.json         # eval split
+training/data/dataset_info.json    # LLaMA-Factory dataset registry
+```
 
----
+The converter emits a **slim tool manifest** (~2.1k tokens for 29 tools — name,
+short description, arg names/types/required, enum values). The full JSON schemas
+ran ~6.2k tokens — larger than the training window — so every example was being
+truncated mid-manifest and the model never saw the conversations. Slimming keeps
+what the model needs to emit a valid call; the full schemas stay in
+`src/lib/ai/tools.ts` for runtime validation. **Regenerate this after any change
+to the tool catalog or `toLlamaFactory.ts`.**
 
-## 3. Corpus self-check (the sanity floor)
+## 3. Test + self-check
 
 ```bash
-npx tsx training/runGate.ts
+npx vitest run -c training/vitest.config.ts   # toolkit suites (protocol, mint, eval)
+npx tsx training/runGate.ts                   # corpus self-check — MUST be 100%
 ```
 
-Feeds each eval record's **own assistant target** back through the eval gate as
-the "reply". A correct corpus scores **100% protocol-validity** and exits 0.
-This must hold before any real model is measured — if it doesn't, the corpus or
-the gate is broken, not the model. Exit code is 0 iff pass, so it's CI-gateable.
+The self-check feeds each eval record's own assistant target back through the
+gate; a correct corpus scores 100%. If it's lower, the corpus or gate is broken
+— don't train on it.
 
 ---
 
-## 4. Confirm the driver + WebGPU (no model download)
+## 4. Train with LLaMA-Factory
+
+Training runs through [LLaMA-Factory](https://github.com/hiyouga/LlamaFactory),
+configured by a single YAML. Two recipes ship:
+
+| recipe | file | method | time (5070 Ti) | when |
+|---|---|---|---|---|
+| **LoRA** | `training/lf_lora.yaml` | rank-16 adapters (~1.7% of params) | ~15h | fast validation of the whole pipeline |
+| **Full SFT** | `training/lf_sft.yaml` | all 596M params | ~40h | the ship candidate |
+
+**Launch (from the worktree root):**
 
 ```bash
-node training/driver/smoke.mjs
+DISABLE_VERSION_CHECK=1 PYTHONIOENCODING=utf-8 PYTHONUTF8=1 \
+  llamafactory-cli train training/lf_lora.yaml
 ```
 
-Launches headless Chrome, serves the harness, and confirms the `BAKEOFF`
-channel + a live **WebGPU adapter** come up — *without* downloading a model.
-Prints `SMOKE PASS` when the plumbing works. Run this first on any new machine.
+Or use the wrapper that sets those env vars for you: `training/train.sh <yaml>`.
+The three env vars are **required** on this machine (see Troubleshooting).
 
-**Requirements:** a Chrome or Edge binary (auto-detected; override with
-`CHROME_PATH`), and a WebGPU-capable GPU/browser. Node 22+ (uses the built-in
-`WebSocket`).
+Both recipes share: `Qwen/Qwen3-0.6B` base, the `qwen3_nothink` chat template
+(renders `<tool_call>` natively, no empty `<think>` block), the slim-manifest
+corpus, `cutoff_len 3584` (fits every example whole), `packing: true`, bf16,
+`plot_loss: true`.
 
----
-
-## 5. Run the bake-off (the "confirm" step)
+**Watch it live:**
 
 ```bash
-node training/driver/runBakeoff.mjs                                # all redistributable bases, smallest first
-node training/driver/runBakeoff.mjs --only Qwen3-0.6B              # one base (substring match)
-node training/driver/runBakeoff.mjs --only Qwen3-0.6B --limit 20   # smoke: first 20 eval questions
+python training/watch_train.py        # tail the log's progress bar + GPU stats
+tensorboard --logdir training/saves/qwen3-0.6b-lora   # loss curves on :6006
 ```
 
-For each base it: serves the WebGPU harness, downloads + warms the model
-(slow on first run; cached in the browser profile after), feeds every
-eval-split tool-call question under the **production system prompt**, captures
-the raw replies, and writes:
+Checkpoints and the loss log (`trainer_log.jsonl`) land in
+`training/saves/<run>/`.
 
-```
-training/data/bakeoff/<modelId>.replies.json    # array aligned to the eval records
-```
+## 5. Merge the adapter + export
 
-Flags: `--serve-port` (default 8788), `--cdp-port` (default 9222).
-
-The driver walks `CANDIDATES_SMALLEST_FIRST` so you can **stop at the first
-base that clears the bar** — the smallest viable mobile base (the whole
-thesis). First real run downloads ~0.3–1.2 GB per base.
-
----
-
-## 6. Score a model
+LoRA produces a base + adapter; merge before MLC compile or Ollama import
+(web-llm loads a single merged model):
 
 ```bash
-npx tsx training/runGate.ts --replies data/bakeoff/<modelId>.replies.json --model <label>
+DISABLE_VERSION_CHECK=1 PYTHONIOENCODING=utf-8 PYTHONUTF8=1 \
+  llamafactory-cli export training/lf_merge.yaml   # see §5 note below
 ```
 
-Prints protocol-validity %, the four strictness tiers (parseable → in-catalog
-→ args-valid → tool-match), a failure-reason triage, and PASS/FAIL vs the 95%
-ship bar. Exit 0 iff pass.
+Full SFT already yields a standalone model in `training/saves/qwen3-0.6b-sft/`.
 
-**Reading the tiers:** a model can be parseable but pick the wrong tool
-(`toolMatch` low → it understands the format but not the task), or pick the
-right tool with junk args (`argsValid` low → SFT data needs more arg
-diversity). The failure triage tells you *which* lever to pull.
+## 6. Score the result
 
----
+```bash
+node training/driver/runBakeoff.mjs --only <modelId>        # capture replies on the eval set
+npx tsx training/runGate.ts --replies data/bakeoff/<id>.replies.json --model <id>
+```
 
-## 7. The eval-hash rule (golden-master analogue)
-
-`corpus.eval.sha256` is the **frozen benchmark**. Two rules:
-
-1. **Never let it drift silently.** `generate.test.ts` proves the mint is
-   deterministic (byte-identical re-mint). If a legitimate change (new
-   plans, new kinds, a changed tool catalog) alters the eval split, the
-   hash changes — that's fine, but it must be a **deliberate** event.
-2. **Regenerate + re-baseline intentionally.** When the hash changes, say so in
-   the commit, and treat any previously-scored model numbers as
-   not-comparable until re-run against the new eval split.
+Prints protocol-validity %, the four strictness tiers (parseable → in-catalog →
+args-valid → tool-match), failure triage, and PASS/FAIL vs the 95% ship bar.
 
 ---
 
-## 8. Where things live
+## Where things live
 
 ```
 training/
   protocol.ts        protocol contract — imports the LIVE catalog + parser (can't drift)
   buildCorpus.ts     record shapes + kind taxonomy + tool coverage matrix
-  plans.ts       the 24-household plan sweep (all 13 provinces + couples/RM/RDSP/bands)
-  domain.ts          domain-knowledge facts (CPP/OAS/GIS/tax/history) read live from config
-  mint.ts            the generator (reads, mutations, guardrails, option-framing, domain)
-  generate.ts        CLI: mint → training/data/*.jsonl (+ eval sha256)
-  eval.ts            the gate: scoreReply tiers, follow-up/mutation graders, gateReport
+  plans.ts           the 24-household plan sweep (all 13 provinces + couples/RM/RDSP/bands)
+  domain.ts          domain-knowledge facts read live from appConfig
+  mint.ts            the corpus generator
+  generate.ts        CLI: mint → corpus.{train,eval}.jsonl (+ eval sha256)
+  toLlamaFactory.ts  CLI: corpus → sharegpt JSON + dataset_info.json (slim manifest)
+  eval.ts            the gate: scoreReply tiers, follow-up/mutation graders
   runGate.ts         CLI: self-check (default) or score --replies
   bakeoff.ts         base manifest + CANDIDATES_SMALLEST_FIRST + THRESHOLDS
-  driver/
-    cdp.mjs          dependency-free Chrome DevTools client (raw WebSocket)
-    harness.html     WebGPU page; loads web-llm from CDN, exposes BAKEOFF channel
-    runBakeoff.mjs   the bake-off runner
-    extractEvalSet.ts  emits eval records + live system prompt as JSON (drives the model)
-    candidates.mjs   plain-JS mirror of the smallest-first base list
-    smoke.mjs        no-download plumbing + WebGPU check
-  SPIKE.md           the plan + guardrails
-  METHODOLOGY.md     why the data is shaped this way (the behavior design)
+  lf_lora.yaml       LoRA training recipe (validation)
+  lf_sft.yaml        full-SFT training recipe (ship candidate)
+  train.sh           launcher: sets the 3 required env vars, runs llamafactory-cli
+  watch_train.py     live progress + GPU monitor
+  driver/            WebGPU bake-off harness (CDP client, harness.html, runBakeoff.mjs)
+  SPIKE.md           background + guardrails
+  METHODOLOGY.md     why the data is shaped this way
+  UPDATING.md        the repeatable retrain loop
   USAGE.md           this file
 ```
 
@@ -177,11 +166,12 @@ training/
 
 ## Troubleshooting
 
-| symptom | likely cause | fix |
+| symptom | cause | fix |
 |---|---|---|
-| `No Chrome/Edge binary found` | non-standard install path | `export CHROME_PATH=/path/to/chrome.exe` |
-| smoke test: `WebGPU adapter: NO` | headless GPU disabled / old Chrome | update Chrome; the launch already passes `--enable-unsafe-webgpu` |
-| `/json/new` … `only PUT verb` | very old driver on new Chrome | already handled (driver uses PUT) — pull latest |
-| `Execution context was destroyed` | fresh-tab navigation race | already handled (`evalWhenReady` retries) — pull latest |
-| self-check < 100% | corpus or gate regression | don't score models; `npx vitest run -c training/vitest.config.ts` to find it |
-| model loads but replies are empty | model too weak / OOM | try `--limit 5`; check VRAM; drop to a smaller base |
+| `llamafactory-cli: command not found` | Scripts dir not on PATH | call it by full path: `C:/Users/mrsas/AppData/Roaming/Python/Python314/Scripts/llamafactory-cli.exe` |
+| `Pickler._batch_setitems() takes 2 positional arguments` | `datasets` dill bug on Python 3.14 | `pip install "datasets==4.8.5"` |
+| version-check aborts (datasets/transformers cap) | llamafactory 0.9.5 caps | set `DISABLE_VERSION_CHECK=1` |
+| `UnicodeEncodeError` (`\u2192`) on data example | Windows cp1252 console | set `PYTHONIOENCODING=utf-8 PYTHONUTF8=1` |
+| `Your setup doesn't support bf16/gpu` | CPU torch crept in | reinstall CUDA torch: `pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu128` |
+| training ~400s/step, ETA days | full tool manifest truncating every example | regenerate with `toLlamaFactory.ts` (slim manifest) — fixed |
+| self-check < 100% | corpus or gate regression | `npx vitest run -c training/vitest.config.ts` to find it; don't train |

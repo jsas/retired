@@ -93,12 +93,61 @@ describe('formatPromptToolResults', () => {
 });
 
 describe('buildPromptToolInstructions', () => {
-  it('teaches the one-line format and lists every tool compactly', () => {
+  it('teaches the <tool_call> block format and lists every tool compactly', () => {
     const s = buildPromptToolInstructions(toolSpecs());
-    expect(s).toContain('TOOL_CALL:');
+    expect(s).toContain('<tool_call>');
+    expect(s).toContain('</tool_call>');
+    expect(s).toContain('"arguments"');
     for (const name of names) expect(s).toContain(name);
     // Compact: no full JSON-schema dump (token-heavy for small models).
     expect(s).not.toContain('"$schema"');
     expect(s).not.toContain('additionalProperties');
+  });
+});
+
+describe('extractPromptToolCalls — <tool_call> blocks (Qwen native)', () => {
+  it('pulls a <tool_call> block with arguments out of prose', () => {
+    const { prose, calls, errors } = extractPromptToolCalls(
+      'Checking now.\n<tool_call>\n{"name": "run_projection", "arguments": {}}\n</tool_call>\nOne moment.',
+      names,
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].name).toBe('run_projection');
+    expect(errors).toHaveLength(0);
+    expect(prose).toContain('Checking now.');
+    expect(prose).toContain('One moment.');
+  });
+
+  it('normalizes native "arguments" to internal args', () => {
+    const { calls } = extractPromptToolCalls(
+      '<tool_call>{"name": "set_plan_value", "arguments": {"field": "retirementAge", "value": 67}}</tool_call>',
+      names,
+    );
+    expect(calls[0].args).toEqual({ field: 'retirementAge', value: 67 });
+  });
+
+  it('accepts a block that runs to end-of-text (truncated generation)', () => {
+    const { calls } = extractPromptToolCalls(
+      '<tool_call>\n{"name": "get_plan", "arguments": {}}',
+      names,
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].name).toBe('get_plan');
+  });
+
+  it('accepts both formats in one reply', () => {
+    const { calls } = extractPromptToolCalls(
+      '<tool_call>{"name": "get_plan"}</tool_call>\nTOOL_CALL: {"name": "run_projection"}',
+      names,
+    );
+    expect(calls.map(c => c.name)).toEqual(['get_plan', 'run_projection']);
+  });
+
+  it('flags unknown tool inside a block', () => {
+    const { errors } = extractPromptToolCalls(
+      '<tool_call>{"name": "delete_everything", "arguments": {}}</tool_call>',
+      names,
+    );
+    expect(errors[0].message).toContain('Unknown tool');
   });
 });

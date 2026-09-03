@@ -48,3 +48,14 @@ training/sft/llama.cpp/
 training/sft/quantized/
 training/sft/__pycache__/
 training/driver/evalset.json
+
+# LLaMA-Factory training output + cache (regenerable / too big for git).
+# `train.sh <yaml>` re-runs a recipe; saves/ holds checkpoints + event files.
+training/saves/
+llamaboard_cache/
+saves/
+
+# Training run logs + pid scratch (ephemeral).
+training/*.log
+train-*.pid
+train-*.pid.txt

@@ -2,11 +2,11 @@
 //
 // Native function-calling APIs don't exist on the web-llm chat surface we use,
 // so instead the tools are DESCRIBED IN THE SYSTEM PROMPT as a text protocol:
-// the model emits ```tool fenced JSON blocks and we parse + dispatch them
-// exactly like native tool calls. Small models sometimes emit malformed calls —
-// those come back as tool errors (same shape as a Zod rejection), so the model
-// gets a retry with feedback, and a per-turn call cap breaks degenerate loops
-// of repeated broken calls.
+// the model emits <tool_call>{…}</tool_call> blocks (Qwen3's native dialect)
+// and we parse + dispatch them exactly like native tool calls. Small models
+// sometimes emit malformed calls — those come back as tool errors (same shape
+// as a Zod rejection), so the model gets a retry with feedback, and a per-turn
+// call cap breaks degenerate loops of repeated broken calls.
 //
 // The confirm-before-apply guarantee is unchanged: set_plan_value still
 // produces a mutation proposal that pauses the loop for user approval.
@@ -28,68 +28,117 @@ export interface ParsedToolText {
 let promptCallSeq = 0;
 const nextCallId = () => `prompt-call-${++promptCallSeq}`;
 
-/** Extract TOOL_CALL: lines from assistant text. Tolerates prose before/after
- *  and multiple calls; anything not matching a known tool name is an error
- *  the model can learn from, not a silent drop. The line format (vs a fenced
- *  block) gives small models one unambiguous thing to emit and no closing
- *  fence to forget — the main source of raw-protocol leakage into the chat. */
+/** Canonical example we show the model in errors + instructions. */
+const CALL_EXAMPLE = '<tool_call>\n{"name": "<tool>", "arguments": {…}}\n</tool_call>';
+
+/** Decode one tool-call JSON body into a validated call, or push an error.
+ *  Accepts both wire shapes and normalizes to the internal {name, args}:
+ *    Qwen native:  {"name": "…", "arguments": {…}}   (trained dialect)
+ *    Legacy line:  {"name": "…", "args": {…}}        (TOOL_CALL: fallback)
+ *  Returns true when the call was accepted (pushed onto `calls`). */
+function acceptCallBody(
+  raw: string,
+  toolNames: ReadonlySet<string>,
+  calls: AgentToolCall[],
+  errors: ParsedToolText['errors'],
+): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    errors.push({
+      raw,
+      message: 'That tool call was not valid JSON. Emit one block:\n' +
+        `${CALL_EXAMPLE} — no comments, no trailing commas.`,
+    });
+    return false;
+  }
+  const obj = parsed as Record<string, unknown>;
+  const name = typeof obj?.name === 'string' ? obj.name : '';
+  if (!toolNames.has(name)) {
+    errors.push({
+      raw,
+      message: name
+        ? `Unknown tool "${name}". Use one of the listed tool names exactly.`
+        : `Tool call is missing "name". Format:\n${CALL_EXAMPLE}`,
+    });
+    return false;
+  }
+  // arguments (native) wins; fall back to args (legacy) so older fine-tunes
+  // and hand-written calls keep working.
+  const rawArgs = obj.arguments !== undefined ? obj.arguments : obj.args;
+  const args = rawArgs !== undefined && typeof rawArgs === 'object' && rawArgs !== null
+    ? (rawArgs as Record<string, unknown>)
+    : {};
+  // A confused model can emit dozens of tool calls in one reply — running them
+  // all spams the transcript. Keep the first few and report the overflow as an
+  // error so the model learns to stop.
+  if (calls.length >= PROMPT_TOOL_MAX_CALLS_PER_REPLY) {
+    errors.push({
+      raw,
+      message: `Too many tool calls in one reply (max ${PROMPT_TOOL_MAX_CALLS_PER_REPLY}). ` +
+        'Call one tool, read its result, then decide the next step.',
+    });
+    return false;
+  }
+  calls.push({ id: nextCallId(), name, args });
+  return true;
+}
+
+/** Extract tool calls from assistant text. Two accepted shapes:
+ *
+ *    <tool_call>                       <- Qwen3 native (what we now teach)
+ *    {"name": "<tool>", "arguments": {…}}
+ *    </tool_call>
+ *
+ *    TOOL_CALL: {"name": "<tool>", "args": {…}}   <- legacy fallback
+ *
+ *  Tolerates prose before/after and multiple calls; anything not matching a
+ *  known tool name is an error the model can learn from, not a silent drop.
+ *  The <tool_call> block format is what Qwen3's chat template emits natively,
+ *  so it rides the pre-trained prior instead of fighting it; the TOOL_CALL:
+ *  line stays accepted so older models and hand-written calls don't break. */
 export function extractPromptToolCalls(text: string, toolNames: ReadonlySet<string>): ParsedToolText {
   const calls: AgentToolCall[] = [];
   const errors: ParsedToolText['errors'] = [];
-  const proseLines: string[] = [];
-  // A call runs from 'TOOL_CALL:' to the end of its line; a call with an
-  // "args" object may wrap onto continuation lines that end with '}'.
-  const lines = text.split('\n');
+  const proseChunks: string[] = [];
+
+  // Pass 1: pull every <tool_call>…</tool_call> block out of the text. The
+  // close tag is mandatory in the taught format, but a truncated generation
+  // can drop it — so we also accept a block that runs to end-of-text.
+  let rest = text;
+  const BLOCK_RE = /<tool_call>([\s\S]*?)(?:<\/tool_call>|$)/gi;
+  let m: RegExpExecArray | null;
+  let lastIdx = 0;
+  BLOCK_RE.lastIndex = 0;
+  const stripped: string[] = [];
+  while ((m = BLOCK_RE.exec(text)) !== null) {
+    stripped.push(text.slice(lastIdx, m.index));
+    lastIdx = m.index + m[0].length;
+    const body = m[1].trim();
+    if (body) acceptCallBody(body, toolNames, calls, errors);
+  }
+  stripped.push(text.slice(lastIdx));
+  rest = stripped.join('\n');
+
+  // Pass 2: legacy TOOL_CALL: lines in whatever prose remains.
+  const lines = rest.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     // Small models emit the marker in any casing (tool_call:, Tool_Call:, …) —
     // match case-insensitively so a lowercase marker doesn't leak into the chat.
     const start = line.toLowerCase().indexOf('tool_call:');
-    if (start === -1) { proseLines.push(line); continue; }
-    proseLines.push(line.slice(0, start));
+    if (start === -1) { proseChunks.push(line); continue; }
+    proseChunks.push(line.slice(0, start));
     let raw = line.slice(start + 'tool_call:'.length).trim();
     // Swallow continuation lines while the JSON is incomplete (more opens
     // than closes) so multi-line args still parse.
     while (i + 1 < lines.length && !jsonLooksComplete(raw)) {
       raw += '\n' + lines[++i];
     }
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      const obj = parsed as Record<string, unknown>;
-      const name = typeof obj?.name === 'string' ? obj.name : '';
-      if (!toolNames.has(name)) {
-        errors.push({
-          raw,
-          message: name
-            ? `Unknown tool "${name}". Use one of the listed tool names exactly.`
-            : 'Tool call is missing "name". Format: TOOL_CALL: {"name": "<tool>", "args": {…}}',
-        });
-        continue;
-      }
-      const args = obj.args !== undefined && typeof obj.args === 'object' && obj.args !== null
-        ? (obj.args as Record<string, unknown>)
-        : {};
-      // A confused model can emit dozens of TOOL_CALL: lines in one reply —
-      // running them all spams the transcript. Keep the first few and report
-      // the overflow as an error so the model learns to stop.
-      if (calls.length >= PROMPT_TOOL_MAX_CALLS_PER_REPLY) {
-        errors.push({
-          raw,
-          message: `Too many tool calls in one reply (max ${PROMPT_TOOL_MAX_CALLS_PER_REPLY}). ` +
-            'Call one tool, read its result, then decide the next step.',
-        });
-        continue;
-      }
-      calls.push({ id: nextCallId(), name, args });
-    } catch {
-      errors.push({
-        raw,
-        message: 'That tool call was not valid JSON. Emit one line: ' +
-          'TOOL_CALL: {"name": "<tool>", "args": {…}} — no comments, no trailing commas.',
-      });
-    }
+    acceptCallBody(raw, toolNames, calls, errors);
   }
-  return { prose: proseLines.join('\n').trim(), calls, errors };
+  return { prose: proseChunks.join('\n').trim(), calls, errors };
 }
 
 /** Cheap brace balance check: true when the string plausibly contains a whole
@@ -115,7 +164,7 @@ export function formatPromptToolResults(
   }
   parts.push(
     '\nIf you have everything you need, answer the user in plain prose now. ' +
-    'Otherwise emit another TOOL_CALL: line.',
+    'Otherwise call the next tool.',
   );
   return parts.join('\n');
 }
@@ -153,12 +202,14 @@ function compactSchema(jsonSchema: Record<string, unknown>): string {
 export function buildPromptToolInstructions(specs: ToolSpec[]): string {
   const catalog = specs.map(s => `- ${s.name}: ${s.description}\n  args:\n${compactSchema(s.jsonSchema)}`).join('\n');
   return [
-    'TOOLS: to run local code, output ONE line starting with TOOL_CALL: followed by one JSON object:',
-    'TOOL_CALL: {"name": "run_projection", "args": {}}',
+    'TOOLS: to run local code, output ONE tool call as a <tool_call> block with one JSON object:',
+    '<tool_call>',
+    '{"name": "run_projection", "arguments": {}}',
+    '</tool_call>',
     'The result comes back as the next message. Rules:',
-    '- The TOOL_CALL: line contains ONLY the JSON — all prose goes on other lines.',
+    '- The <tool_call> block contains ONLY the JSON — all prose goes OUTSIDE the block.',
     '- Call AT MOST ONE tool, then STOP and wait for its result. Do NOT emit',
-    '  several TOOL_CALL: lines in one reply.',
+    '  several <tool_call> blocks in one reply.',
     '- Never call the same tool twice in a row with the same arguments.',
     '- Available tools:',
     catalog,

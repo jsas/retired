@@ -30,16 +30,16 @@ main lands a feature
      domain facts, plan sweep
         │
         ▼
-  4. REGENERATE + re-gate → new eval hash        (hash change is intentional)
+  4. REGENERATE + re-convert + re-gate           (hash change is intentional)
         │
         ▼
-  5. RETRAIN off-repo → re-score the gate        (same recipe, fresh corpus)
+  5. RETRAIN (LLaMA-Factory) → re-score gate     (same recipe, fresh corpus)
 ```
 
-Steps 1–4 are in-repo and cheap (minutes). Step 5 is off-repo and the only part
-that costs GPU. **The corpus is disposable** — it's gitignored and re-minted on
-demand, so "updating the data" always means "edit the minter, re-run generate,"
-never "hand-edit the JSONL."
+Steps 1–4 are in-repo and cheap (minutes). Step 5 is the only part that costs
+GPU. **The corpus is disposable** — it's gitignored and re-minted on demand, so
+"updating the data" always means "edit the minter, re-run generate, re-run
+toLlamaFactory," never "hand-edit the JSONL."
 
 ---
 
@@ -166,6 +166,7 @@ flat overrides).
 
 ```bash
 npx tsx training/generate.ts                 # re-mint → new eval hash
+npx tsx training/toLlamaFactory.ts           # re-convert → fresh lf_train/lf_eval.json
 npx vitest run -c training/vitest.config.ts  # toolkit green (incl. new facts/exemplars)
 npx tsx training/runGate.ts                  # self-check — MUST be 100%
 npx vitest run                               # main app suite still green (rule 1)
@@ -175,22 +176,27 @@ npx vitest run                               # main app suite still green (rule 
 (rule 2). A new feature legitimately changes the corpus; the hash exists to make
 that deliberate, not to prevent it. Say so in the commit message. **If the
 self-check gate is <100%, stop** — a minted call is invalid against the live
-schema; fix the spec (3b) before any training.
+schema; fix the spec (3b) before any training. **Always re-run `toLlamaFactory.ts`
+after `generate.ts`** — the LLaMA-Factory JSON is derived from the corpus and goes
+stale the moment the corpus changes.
 
 ---
 
-## 5. Retrain (off-repo, same recipe)
+## 5. Retrain (LLaMA-Factory, same recipe)
 
-Nothing about the *method* changes — only the corpus is fresher. Re-run the
-training recipe from [SPIKE.md §5](./SPIKE.md) against the new
-`training/data/corpus.train.jsonl`, then re-score against the **new** frozen eval
-hash:
+Nothing about the *method* changes — only the corpus is fresher. Re-convert
+(step 4), then re-run the training recipe against the fresh
+`training/data/lf_train.json`, and re-score against the **new** frozen eval hash:
 
-- Same base (the bake-off winner) unless the size picture changed — the
-  small-vs-large bracket reading (SPIKE §5) only needs redoing if the corpus grew
-  a lot or a new capability tier became available.
-- Full-SFT vs QLoRA: same default (full-SFT), same tiebreak if you want to
-  re-confirm on the fresh slice (`generate.ts --subset 3`).
+```bash
+training/train.sh training/lf_lora.yaml    # fast validation pass first
+training/train.sh training/lf_sft.yaml     # then the full-SFT ship candidate
+```
+
+- Same base (`Qwen/Qwen3-0.6B`) unless the size picture changed.
+- LoRA first to validate the pipeline cheaply (~15h), then full SFT (~40h) for
+  the ship candidate — escalate to full SFT only if the LoRA gate score shows
+  adapters underfit the format.
 - Ship bar is unchanged: protocol-validity ≥ `postSftShipBar` (0.95) on the new
   eval hash.
 

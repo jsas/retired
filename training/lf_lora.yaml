@@ -1,0 +1,62 @@
+# LLaMA-Factory LoRA config — fast validation pass before the full SFT run.
+# Trains only low-rank adapters (~1% of params) so an epoch lands in ~2-4h,
+# letting us bakeoff-test the whole pipeline (data -> train -> eval -> Ollama)
+# before committing ~40h to full SFT (lf_sft.yaml).
+#
+#   llamafactory-cli train training/lf_lora.yaml
+#
+# Shares the slim-manifest corpus + qwen3_nothink template with lf_sft.yaml.
+
+### model
+model_name_or_path: Qwen/Qwen3-0.6B
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32                  # 2x rank — standard scaling
+lora_dropout: 0.05
+lora_target: all                # all linear layers (q/k/v/o + gate/up/down)
+# qwen3_nothink renders <tool_call> natively WITHOUT the empty <think></think>
+# the stock qwen3 template injects on every assistant turn.
+template: qwen3_nothink
+
+### dataset
+dataset: retired_train
+eval_dataset: retired_eval
+dataset_dir: training/data
+# Slim manifest (2.1k tokens) — examples run p50=2.2k / max=3.2k, all fit whole.
+cutoff_len: 3584
+packing: true
+overwrite_cache: true
+preprocessing_num_workers: 1
+
+### output
+output_dir: training/saves/qwen3-0.6b-lora
+logging_steps: 25
+save_steps: 500
+plot_loss: true
+overwrite_output_dir: true
+
+### train — LoRA updates far fewer params, so it wants a higher LR than full
+# SFT's 5e-6. 1e-4 is the standard starting point for rank 16.
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 8         # effective batch 32
+learning_rate: 1.0e-4
+num_train_epochs: 1
+lr_scheduler_type: cosine
+warmup_steps: 100
+weight_decay: 0.0                      # no weight decay on LoRA adapters
+bf16: true
+gradient_checkpointing: false          # VRAM headroom is ample at this size
+
+### eval
+val_size: 0                            # eval split comes pre-separated as retired_eval
+per_device_eval_batch_size: 2
+eval_strategy: steps
+eval_steps: 500
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+greater_is_better: false

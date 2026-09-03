@@ -60,12 +60,17 @@ hand-held persona. The contract is fully specified by the app itself and locked
 into `training/protocol.ts` (which imports the real catalog + parser, so the
 corpus can't drift from shipped behavior):
 
-- **Wire format** (`src/lib/ai/promptTools.ts`): the model emits **one bare
-  line** — `TOOL_CALL: {"name": "<tool>", "args": {…}}`. Not fenced. Prose goes
-  on other lines. The parser is case-insensitive on the marker, swallows
-  wrapped-JSON continuation lines, and caps executed calls at 3/reply
-  (`PROMPT_TOOL_MAX_CALLS_PER_REPLY`) and 5 round-trips/user-message
-  (`PROMPT_TOOL_MAX_CALLS`).
+- **Wire format** (`src/lib/ai/promptTools.ts`): the model emits **one
+  `<tool_call>` block** — `<tool_call>{"name": "<tool>", "arguments": {…}}</tool_call>`,
+  Qwen3's native format, with prose outside the block. The parser
+  (`extractPromptToolCalls`) accepts **both** the native block and the legacy
+  bare `TOOL_CALL: {"name","args"}` line (normalizing `arguments`→`args`), so
+  other models that only know the old format still work at runtime. It caps
+  executed calls at 3/reply (`PROMPT_TOOL_MAX_CALLS_PER_REPLY`) and 5
+  round-trips/user-message (`PROMPT_TOOL_MAX_CALLS`). The corpus mints the
+  native block; the `qwen3_nothink` chat template renders it through Qwen3's own
+  special tokens, so the model learns tool-calling in the format its weights
+  were pre-trained on.
 - **Result envelope**: results come back as the **next user message** under a
   `Tool results:` header with `[OK] …` / `[ERROR] …` blocks. There is **no
   `TOOL_RESULT:` line** the model ever emits.
@@ -87,7 +92,7 @@ corpus can't drift from shipped behavior):
 **This is the highest-value, cheapest target.** Protocol-following is a
 *format/behavior* skill, and format is exactly what small-model SFT teaches
 well. A 1.5B model doesn't need to "understand retirement" to emit a clean
-`TOOL_CALL:` line — it needs to have seen enough correct examples that the
+`<tool_call>` block — it needs to have seen enough correct examples that the
 format is muscle memory.
 
 ### 2b. Retirement-domain fluency — *the force multiplier*
@@ -115,7 +120,7 @@ emitter/scorer wired to the live app. Record kinds:
 
 | kind | what it teaches | share* |
 |---|---|---|
-| `tool-call` | question → ONE in-catalog `TOOL_CALL:` line | ~40% |
+| `tool-call` | question → ONE in-catalog `<tool_call>` block | ~40% |
 | `tool-followup` | `TOOL_CALL` → real `[OK]` result → plain-prose explanation quoting the numbers | ~25% |
 | `mutation-confirm` | `propose_*` → APPROVED **and** REJECTED variants → confirm, never re-propose | ~15% |
 | `refusal` | out-of-guardrail ask ("should I retire at 60?") → deflect, "I can show the consequences, not advise" | ~8% |
@@ -210,24 +215,30 @@ gate shows it doesn't cost protocol reliability.
 
 ---
 
-## 5. How to do it — the pipeline (off-repo)
+## 5. How to do it — the pipeline (LLaMA-Factory)
+
+Training runs through **LLaMA-Factory**, driven by a single YAML — no bespoke
+trainer. The in-repo work is the corpus + eval gate; LLaMA-Factory is the
+engine that consumes them.
 
 ```
 ┌─ IN THIS REPO (elective, not on deploy path) ────────────────┐
-│ training/protocol.ts     lock the protocol contract to the app │
-│ training/buildCorpus.ts    mint plan-grounded JSONL        │
-│ training/eval/*            protocol-validity gate (replay)     │
+│ training/protocol.ts       lock the protocol contract to app   │
+│ training/mint.ts + generate.ts   mint plan-grounded JSONL      │
+│ training/toLlamaFactory.ts  corpus → sharegpt (slim manifest)  │
+│ training/eval.ts + runGate.ts    protocol-validity gate        │
 └──────────────┬───────────────────────────────────────────────┘
-               │ corpus.jsonl  (+ held-out eval split)
+               │ lf_train.json / lf_eval.json  (+ frozen eval hash)
                ▼
-┌─ OFF-REPO (your machine / a GPU box) ────────────────────────┐
+┌─ LLaMA-Factory (local GPU) ──────────────────────────────────┐
 │ 0. BAKE-OFF: run the eval gate on each STOCK tiny base       │
 │    (0.6B→2B); rank protocol-validity per GB; pick the        │
 │    SMALLEST that clears the bar (the mobile thesis)          │
-│ 1. SFT  <bake-off winner> on corpus.jsonl (HF TRL SFTTrainer │
-│    / Axolotl / LLaMA-Factory), bf16, full-FT, early-stop     │
+│ 1. TRAIN:  train.sh lf_lora.yaml (validate, ~15h) then        │
+│    train.sh lf_sft.yaml (full SFT ship candidate, ~40h)       │
+│    — qwen3_nothink template renders <tool_call> natively      │
 │ 2. Eval vs the frozen eval split → protocol-validity %       │
-│ 3. Export → HuggingFace (public)                             │
+│ 3. Export (merge LoRA adapter) → HF-format model dir          │
 │ 4. MLC compile:  mlc_llm gen_config + convert_weight          │
 │    (q4f16_1) → likely REUSE the prebuilt webgpu wasm for the │
 │    same arch; else mlc_llm compile --device webgpu           │
@@ -241,34 +252,41 @@ gate shows it doesn't cost protocol reliability.
 └───────────────────────────────────────────────────────────────┘
 ```
 
-**Sample training config (starting point, off-repo):** HF TRL `SFTTrainer`,
-`<bake-off winner>` (e.g. `Qwen3-0.6B` … `Qwen3-1.7B`), bf16, packing off,
-`learning_rate ~1e-5` (full-FT) / `~1e-4` (LoRA r=16), `num_train_epochs 2–3`,
-cosine schedule, `per_device_train_batch_size` sized to VRAM (16 GB → full-FT of
-≤2B fits with gradient checkpointing). Mask the loss to **assistant tokens
-only** so the model learns to *produce* tool calls and explanations, not to
-parrot the user/system text. Smaller bases (≤1B) may want a touch more LR and
-an extra epoch — tune on the eval gate, not vibes.
+**Training config lives in the YAMLs** (`lf_lora.yaml`, `lf_sft.yaml`), not in
+this doc. Shared: `Qwen/Qwen3-0.6B` base, `qwen3_nothink` template, the
+slim-manifest sharegpt corpus, bf16, `cutoff_len 3584`, packing, cosine
+schedule, `plot_loss`. Per-recipe: LoRA uses `lr 1e-4` / rank 16 / all-linear;
+full SFT uses `lr 5e-6`. Loss is masked to **assistant tokens** by the sharegpt
+SFT processor (only `gpt`/`function_call` turns compute loss), so the model
+learns to *produce* tool calls and explanations, not to parrot user/system text.
 
-**Two training methods — full-SFT (default) or QLoRA (the cheaper option):**
+**The slim tool manifest is load-bearing.** The full JSON schemas ran ~6.2k
+tokens — bigger than the training window — so every example truncated
+mid-manifest and the model never saw the conversations. The converter emits a
+~2.1k slim manifest (name + short description + arg names/types/required +
+enums); full schemas stay in `src/lib/ai/tools.ts` for runtime validation. This
+took full examples to max ~3.2k tokens and made training tractable. Regenerate
+with `toLlamaFactory.ts` whenever the catalog changes.
 
-| | **Full-parameter SFT** (default) | **QLoRA** (the cheaper path) |
+**Two training methods — LoRA first, then full-SFT (decide on the number):**
+
+| | **Full-parameter SFT** (`lf_sft.yaml`) | **LoRA** (`lf_lora.yaml`, the scouting pass) |
 |---|---|---|
-| **VRAM** | ~16 GB for ≤2B (w/ grad ckpt) | ~4–6 GB — fits a laptop card |
-| **Cost** | a few $ of electricity, hours | ~3–4× less memory + faster steps |
+| **Time (5070 Ti)** | ~40h/epoch — memory-bandwidth-bound at 3.5k ctx | ~15h/epoch |
+| **Params trained** | all 596M | ~10M adapters (1.7%) |
 | **Structured-output reliability** | best — updates every weight | slightly worse (only adapters train) |
 | **Output** | a standalone model | a base + a small adapter (merged at export) |
-| **When to use** | the goal is *protocol reliability*, so start here | iterate cheaply, or VRAM is tight |
+| **When to use** | the ship candidate | validate the pipeline cheaply first |
 
-**Default to full-SFT** because the entire goal is a clean `TOOL_CALL:` line —
-structured-output reliability is exactly what full-FT buys over adapters. Reach
-for **QLoRA** (4-bit, `r=16`, `lora_alpha=32`, `lora_dropout=0.05`,
-`learning_rate ~1e-4`) when you want to iterate fast/cheap or the GPU can't fit
-full-FT. Either way: **mask loss to assistant tokens**, early-stop on the eval
-gate, and merge the adapter into the base before the MLC compile (web-llm loads
-a single merged model, not a base + LoRA). If QLoRA's protocol-validity comes
-back materially worse on the gate, that's the signal to spend the extra VRAM on
-full-SFT — decide on the number, not vibes.
+**Run LoRA first** to validate the whole pipeline (data → train → eval → export)
+at ~15h instead of committing 40h blind. Then escalate to full SFT for the ship
+candidate — *unless* the LoRA gate score already clears the bar, in which case
+adapters suffice and we've saved 25h. This reverses the earlier full-SFT-first
+default: on a memory-bandwidth-bound card the time gap is large enough that the
+cheap validation pass pays for itself. Either way: **mask loss to assistant
+tokens** (the sharegpt processor does this), decide the ship method on the
+**protocol-validity gate number**, and merge the adapter into the base before
+the MLC compile (web-llm loads a single merged model, not a base + LoRA).
 
 **Two size brackets — small vs very-large (decided with the user).** The mobile
 thesis says "smallest that clears the bar," but that begs a question we can

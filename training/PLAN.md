@@ -62,13 +62,19 @@ the wrong-tool reply by counter-example.
 Golden-master rule: any corpus change regenerates corpus + eval hash in the
 same commit (CLAUDE.md rule 2).
 
-## L4 — training knobs
+## L4 — training knobs (now LLaMA-Factory)
 
-- `--epochs 3` ran at bs2/accum16 (eff 32); loss still falling at end → run
-  `--epochs 4–5` on the new corpus.
-- Longer `--max-length 4096` only if corpus grows multi-turn; bs/accum scale
-  down (VRAM pressure at 16 GB showed as 19.5 s/step degradation).
-- Keep full-SFT (not LoRA) — structured output benefits per SPIKE.md.
+- Training is LLaMA-Factory via `lf_lora.yaml` / `lf_sft.yaml` — no bespoke
+  trainer, no `--epochs/--max-length` CLI flags. Edit the YAML.
+- **Slim tool manifest was the big unlock** (6.2k→2.1k tokens): full examples
+  now fit the `cutoff_len 3584` window whole. If the catalog grows and the
+  manifest balloons again, re-slim in `toLlamaFactory.ts` rather than raising
+  cutoff (attention cost is quadratic in the window).
+- LoRA first to validate (~15h), then full SFT (~40h) for the ship candidate.
+  Escalate to full SFT only if LoRA's protocol-validity underfits the format.
+- Full SFT on the 5070 Ti is memory-bandwidth-bound at 3.5k ctx (~40h/epoch) —
+  batch-size / gradient-checkpointing knobs shift step time ±20% but don't break
+  that wall. Don't chase them.
 
 ## L5 — eval scoring beyond protocol-validity (fill the blind spot)
 

@@ -2,7 +2,7 @@
 // #112 fine-tuning spike to mint and score synthetic training data.
 //
 // The contract this enforces is the app's OWN (`src/lib/ai/promptTools.ts`):
-//   - the model emits ONE bare line:  TOOL_CALL: {"name": "<tool>", "args": {…}}
+//   - the model emits ONE block:  <tool_call>{"name": "<tool>", "arguments": {…}}</tool_call>
 //   - results come back as the next USER message under a "Tool results:" header
 //     with "[OK] …" / "[ERROR] …" blocks (never a TOOL_RESULT: line),
 //   - a mutation (propose_* / set_plan_value) pauses for a confirm card and
@@ -41,9 +41,9 @@ export function ambientPageLine(view: View): string {
   return `The user is currently on the ${pageTitleLine(view)} page.`;
 }
 
-/** Emit one canonical tool-call line, matching the taught format exactly. */
+/** Emit one canonical tool-call block, matching the taught format exactly. */
 export function emitToolCall(name: string, args: Record<string, unknown> = {}): string {
-  return `TOOL_CALL: ${JSON.stringify({ name, args })}`;
+  return `<tool_call>\n${JSON.stringify({ name, arguments: args })}\n</tool_call>`;
 }
 
 export type Validity =
