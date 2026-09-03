@@ -138,13 +138,17 @@ export function gatherSourceContext(
 
 /**
  * Search needles from serializeDom snapshot lines. Two kinds, most
- * discriminating first:
+ * discriminating first. A serializeDom line looks like:
  *
- *  1. Class strings. A line's selector token `div.bg-white.border.p-3`
- *     becomes `bg-white border p-3` — which appears VERBATIM inside the
- *     JSX `className="..."` attribute that renders the element. This is the
- *     needle that finds the component when the on-screen text is dynamic
- *     ("Never", "$2,824,194") and lives in engine code, not markup.
+ *   <div.bg-white.border.p-3> [420,96 200x16] "WITHDRAWAL RATE"
+ *
+ * (tag+classes in angle brackets, geometry in […], text preview quoted at
+ * the end). Two needle kinds:
+ *
+ *  1. Class strings. `<div.bg-white.border.p-3>` becomes `bg-white border
+ *     p-3` — which appears VERBATIM inside the JSX `className="..."`
+ *     attribute that renders the element. This is the needle that finds the
+ *     component when the on-screen text is dynamic ("Never", "$2,824,194").
  *  2. Text previews (`... "some visible text"`), longest first — a full
  *     sentence pins the exact component; a four-letter word matches half
  *     the repo.
@@ -154,9 +158,8 @@ export function needlesFromDomSnapshot(dom: string, max = 12): string[] {
   const textNeedles: string[] = []
   const seen = new Set<string>()
   for (const line of dom.split('\n')) {
-    // Selector token: first non-space run, e.g. `div.bg-white.border.p-3`
-    // or `#metric-card`. Only the leading token of a snapshot line.
-    const sel = line.match(/^\s*([a-zA-Z][\w.#-]*)/)?.[1]
+    // Selector token inside the angle brackets: `tag.cls.cls` or `tag#id`.
+    const sel = line.match(/<\s*([a-zA-Z][\w.#-]*)\s*>/)?.[1]
     if (sel && sel.includes('.')) {
       const classes = sel
         .split('.')

@@ -29,11 +29,12 @@ afterAll(() => {
 
 describe('needlesFromDomSnapshot', () => {
   it('extracts quoted text previews, longest first, deduped', () => {
+    // REAL serializeDom output: <tag.cls> [x,y wxh] "text"
     const dom = [
-      'div "Plan" [0,0 10x10]',
-      'h1 "Welcome to your retirement plan" [0,20 300x40]',
-      'p "Track your savings here." [0,70 300x20]',
-      'h1 "Welcome to your retirement plan" [0,20 300x40]',
+      '<div> [0,0 10x10] "Plan"',
+      '<h1.title> [0,20 300x40] "Welcome to your retirement plan"',
+      '<p> [0,70 300x20] "Track your savings here."',
+      '<h1.title> [0,20 300x40] "Welcome to your retirement plan"',
     ].join('\n')
     const needles = needlesFromDomSnapshot(dom)
     expect(needles).toEqual([
@@ -44,17 +45,18 @@ describe('needlesFromDomSnapshot', () => {
   })
 
   it('strips truncation ellipses and skips tiny fragments', () => {
-    const dom = 'span "A" [0,0 1x1]\np "Some longer sentence tha…" [0,0 9x9]'
+    const dom = '<span> [0,0 1x1] "A"\n<p> [0,0 9x9] "Some longer sentence tha…"'
     expect(needlesFromDomSnapshot(dom)).toEqual(['Some longer sentence tha'])
   })
 
-  it('turns selector class chains into verbatim className needles, first', () => {
-    // The snapshot's `div.bg-white.border.p-3` mirrors the JSX attribute
+  it('turns angle-bracket class chains into verbatim className needles, first', () => {
+    // The snapshot's `<div.bg-white.border.p-3>` mirrors the JSX attribute
     // `className="bg-white border p-3"` — the needle that finds the component
-    // when the visible text is dynamic.
+    // when the visible text is dynamic. (The leading `<` used to break the
+    // selector match entirely.)
     const dom = [
-      'div.bg-white.border.p-3 "Never" [16,120 60x36]',
-      'div "combined accounts · you 84 · spouse never" [16,160 220x16]',
+      '<div.bg-white.border.p-3> [16,120 60x36] "Never"',
+      '<div> [16,160 220x16] "combined accounts · you 84 · spouse never"',
     ].join('\n')
     const needles = needlesFromDomSnapshot(dom)
     expect(needles[0]).toBe('bg-white border p-3')
@@ -62,7 +64,7 @@ describe('needlesFromDomSnapshot', () => {
   })
 
   it('ignores single-class selectors (too common to discriminate)', () => {
-    const dom = 'div.card "Some visible text here" [0,0 9x9]'
+    const dom = '<div.card> [0,0 9x9] "Some visible text here"'
     expect(needlesFromDomSnapshot(dom)).toEqual(['Some visible text here'])
   })
 })
