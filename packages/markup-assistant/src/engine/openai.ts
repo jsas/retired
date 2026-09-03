@@ -63,11 +63,15 @@ export class OpenAIEngine implements Engine {
     if (!options.endpoint) throw new Error('OpenAIEngine: endpoint is required')
     if (!options.model) throw new Error('OpenAIEngine: model is required')
     this.fetchSource = options.fetchSource
+    this.requestLogger = options.requestLogger
     this.opts = { temperature: 0.2, ...options }
   }
 
   /** Also settable post-construction so the app plugin can wire /source in. */
   fetchSource: OpenAIEngineOptions['fetchSource']
+  /** Dev-only: settable post-construction (the vite bridge attaches it when
+   *  MARKUP_DEBUG_LOG is set, after openaiEngineFromEnv built the engine). */
+  requestLogger: OpenAIEngineOptions['requestLogger']
 
   /**
    * Rolling transcript of what the user asked and what the model concluded,
@@ -163,7 +167,7 @@ export class OpenAIEngine implements Engine {
 
   /** One chat-completions round trip; returns the assistant message. */
   private async callModel(messages: unknown[]): Promise<AssistantMessage> {
-    this.opts.requestLogger?.({ messages })
+    this.requestLogger?.({ messages })
     const doFetch = this.opts.fetchImpl ?? fetch
     const res = await doFetch(this.opts.endpoint, {
       method: 'POST',
