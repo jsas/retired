@@ -220,6 +220,7 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
   try {
     for (let round = 0; round < maxRounds; round++) {
       let text = '';
+      let reasoningText = '';
       const calls: AgentToolCall[] = [];
       let stopReason = 'unknown';
       let parseErrors: Array<{ raw: string; message: string }> = [];
@@ -233,6 +234,7 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
           text += evt.text;
           if (!bufferText) yield { type: 'text', text: evt.text };
         } else if (evt.type === 'reasoning') {
+          reasoningText += evt.text;
           // Chain-of-thought is never part of the answer text; forward it for
           // display only (and even in prompt mode, where prose is buffered).
           yield { type: 'reasoning', text: evt.text };
@@ -244,10 +246,19 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
       }
 
       if (mode === 'prompt') {
-        const parsed = extractPromptToolCalls(text, knownTools);
-        calls.push(...parsed.calls);
-        parseErrors = parsed.errors;
-        if (parsed.prose) yield { type: 'text', text: parsed.prose };
+        // Scan BOTH channels: a Qwen-family model that "thinks" before acting
+        // can emit the tool call inside its <think> block, which the provider
+        // routes to the reasoning channel — scanning only the visible text
+        // would miss the call entirely (the "tool calls are not being
+        // surfaced" bug). Visible text wins: if the same call appears in both,
+        // the reasoning copy is a duplicate and must not double-execute.
+        const visible = extractPromptToolCalls(text, knownTools);
+        const hidden = text.trim() === '' && reasoningText !== ''
+          ? extractPromptToolCalls(reasoningText, knownTools)
+          : { calls: [], errors: [] as typeof visible.errors };
+        calls.push(...visible.calls, ...hidden.calls);
+        parseErrors = [...visible.errors, ...hidden.errors];
+        if (visible.prose) yield { type: 'text', text: visible.prose };
       }
 
       if (calls.length === 0 && parseErrors.length === 0) {
@@ -405,6 +416,9 @@ async function* finalizeWithoutTools(
       // but if a provider emitted one anyway it's ignored, not executed.
     }
     if (mode === 'prompt') {
+      // Strip any tool-call attempt out of the prose. No hidden-channel scan
+      // here: the finalize pass cannot execute tools, so a call found in the
+      // reasoning text would have nowhere to go.
       const parsed = extractPromptToolCalls(text, knownTools);
       if (parsed.prose) yield { type: 'text', text: parsed.prose };
     }

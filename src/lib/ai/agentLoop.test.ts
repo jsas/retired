@@ -446,6 +446,56 @@ describe('prompt-protocol tools (local models)', () => {
     expect(events.some(e => e.type === 'done')).toBe(false);
   });
 
+  it('finds the tool call when a thinking model emits it inside its reasoning', async () => {
+    // The local fine-tune "thinks" first: the provider splits <think>…</think>
+    // into the reasoning channel, and the TOOL_CALL line rides along in it —
+    // visible text stays empty. The loop must scan both channels or the call
+    // silently never runs (the "tool calls are not being surfaced" bug).
+    const { chat, requests } = scripted([
+      [
+        { type: 'reasoning', text: 'The user wants numbers. ' },
+        { type: 'reasoning', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+      [
+        { type: 'text', text: 'Your plan is funded to age 95.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'how am I doing?',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const result = events.find(e => e.type === 'tool_result');
+    expect(result && !result.isError).toBe(true);
+    expect((result as { content: string }).content).toContain('lifetime tax');
+    expect(requests.length).toBe(2);
+  });
+
+  it('does not double-execute a call that appears in BOTH the reasoning and the visible text', async () => {
+    // A model that repeats its call outside the <think> block must not get the
+    // tool run twice — the visible copy wins, the reasoning copy is ignored.
+    const { chat } = scripted([
+      [
+        { type: 'reasoning', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'text', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+      [
+        { type: 'text', text: 'Done — funded to age 95.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'check',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const results = events.filter(e => e.type === 'tool_result');
+    expect(results).toHaveLength(1);
+  });
+
   it('refuses to re-run the identical tool+args back-to-back (loop guard)', async () => {
     // A stuck model calls run_projection with the same args twice in a row.
     // The second must bounce as an error instead of re-executing and feeding
