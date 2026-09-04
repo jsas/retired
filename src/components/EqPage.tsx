@@ -14,6 +14,7 @@ import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '@reti
 import { ProjectionTimeline } from '../design/ProjectionTimeline';
 import { Fader } from '../design/primitives';
 import { baseSpendAtRetirement } from '../design/ProjectionTimeline';
+import { rangePrefsOverride } from '../lib/rangePrefs';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
   AXES, axisValue, withAxis, clampToBand, effectiveRange, deterministicOutcome, isLimited,
@@ -62,7 +63,7 @@ function RangeFader({ axis, inputs, band, onChange }: {
   const value = axisValue(inputs, axis);
   // Reconcile for DISPLAY so a stale crop (edges outside the track, or framing
   // out the value) never renders a stuck knob; the page effect persists it back.
-  const rc = reconcileControl(axis, inputs, band);
+  const rc = reconcileControl(axis, inputs, band, rangePrefsOverride());
   // The range actually RENDERED: the axis, floored at the plan's logical min
   // (retirement ≥ current age, savings ≥ locked RRSP+TFSA) and grown in
   // whole-axis steps when the value exceeds the axis max.
@@ -105,8 +106,8 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, solved, onChange }
   const point = { x: axisValue(inputs, xAxis), y: axisValue(inputs, yAxis) };
   // RENDERED axis ranges grow to fit the point; the crop (allowed rectangle)
   // frames it too, so both always render in-bounds.
-  const xView = renderRange(xAxis, point.x, inputs);
-  const yView = renderRange(yAxis, point.y, inputs);
+  const xView = renderRange(xAxis, point.x, inputs, rangePrefsOverride());
+  const yView = renderRange(yAxis, point.y, inputs, rangePrefsOverride());
   const xRange = effectiveRange(xAxis, bands[xAxis]);
   const yRange = effectiveRange(yAxis, bands[yAxis]);
 
@@ -312,7 +313,7 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
     let bandChanged = false;
     const nextBands = { ...bands };
     for (const axis of Object.keys(AXES) as EqAxis[]) {
-      const r = reconcileControl(axis, inputs, bands[axis]);
+      const r = reconcileControl(axis, inputs, bands[axis], rangePrefsOverride());
       if (r.band.min !== bands[axis].min || r.band.max !== bands[axis].max) {
         nextBands[axis] = r.band;
         bandChanged = true;
