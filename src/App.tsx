@@ -810,7 +810,8 @@ function App() {
       case 'math':
         return (
           <BetaSchedulePage chip={chip} assistant={assistantDock}
-            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge }}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             breakdown={householdBreakdown}
             retirementAge={results.retirementAge}
             currentAge={inputs.currentAge}
@@ -832,28 +833,32 @@ function App() {
       case 'optimize':
         return (
           <BetaOptimizerPage chip={chip} assistant={assistantDock}
-            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge }}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             optimizeProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
           />
         );
       case 'solver':
         return (
           <BetaSolverPage chip={chip} assistant={assistantDock}
-            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge }}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             solverProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
           />
         );
       case 'montecarlo':
         return (
           <BetaMonteCarloPage chip={chip} assistant={assistantDock}
-            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge }}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             mcProps={mcRequest ? { request: mcRequest, retirementAge: results.retirementAge, onRefresh: () => setMcRefreshNonce(n => n + 1) } : null}
           />
         );
       case 'backtest':
         return (
           <BetaBacktestPage chip={chip} assistant={assistantDock}
-            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge }}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             backtestProps={backtestResult ? { result: backtestResult } : null}
           />
         );
@@ -1236,7 +1241,7 @@ function App() {
                 <CollapsiblePanel id="timeline" title="Projection Timeline">
                   <ProjectionTimeline
                     series={[{ id: 'plan', label: 'portfolio', area: true, points: householdBreakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
-                    pins={[{ age: inputs.retirementAge, label: `work ends · ${inputs.retirementAge}` }]}
+                    pins={[{ age: inputs.retirementAge, label: `start drawing · ${inputs.retirementAge}` }]}
                   />
                 </CollapsiblePanel>
 

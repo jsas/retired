@@ -9,10 +9,11 @@
 // dashboard draws — so each tool answers its question with the plan's shape
 // always on screen.
 import type { ComponentProps, ReactNode } from 'react';
-import type { YearlyBreakdown } from '@retired/engine-core/retirementEngine';
+import type { YearlyBreakdown, RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { BetaPage, type VerdictChip } from './BetaPage';
 import { HelpHint } from '../../design/primitives';
-import { ProjectionTimeline } from '../../design/ProjectionTimeline';
+import { ProjectionTimeline, baseSpendAtRetirement } from '../../design/ProjectionTimeline';
+import type { TimelineEvent, TimelineMarketAnchor } from '../../design/ProjectionTimeline';
 import { INK, RED_DOT } from '../../design/tokens';
 import { ScheduleTable } from '../ScheduleTable';
 import { EqPage } from '../EqPage';
@@ -30,14 +31,25 @@ import { DonateCard } from '../DonateCard';
 import { DataPage } from '../DataPage';
 
 /** The featured projection timeline — one line of money over age with the
- *  three pins that matter (you, work ends, money runs out). Derived wholly
- *  from the household breakdown so it always matches the numbers beside it. */
-export function ProjectStrip({ breakdown, currentAge, retirementAge }: {
+ *  three pins that matter (you, start drawing, money runs out). Derived wholly
+ *  from the household breakdown so it always matches the numbers beside it.
+ *  With edit handlers present the timeline is LIVE here too: the draw-age pin
+ *  drags, the spend handle drags, events and market anchors edit the plan. */
+export function ProjectStrip({ breakdown, currentAge, retirementAge, edit }: {
   breakdown: YearlyBreakdown[];
   currentAge: number;
   retirementAge: number;
+  /** Interactive plan hooks — pass to make the timeline live (dashboard and
+   *  tool pages); omit on read-only surfaces (print). */
+  edit?: {
+    inputs: RetirementInputs;
+    onInputsChange: (next: RetirementInputs) => void;
+    inflationRate: number;
+  };
 }) {
   const depletion = breakdown.find(r => r.endingBalance <= 0)?.age ?? null;
+  const e = edit;
+  const baseSpend = e ? baseSpendAtRetirement(e.inputs, e.inflationRate, retirementAge) : undefined;
   return (
     <section>
       <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
@@ -47,11 +59,20 @@ export function ProjectStrip({ breakdown, currentAge, retirementAge }: {
         series={[{ id: 'plan', label: 'portfolio', color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
         pins={[
           { age: currentAge, label: `you · ${currentAge}`, place: 'below', anchor: 'start', color: INK },
-          { age: retirementAge, label: `work ends · ${retirementAge}`, color: '#475569' },
+          { age: retirementAge, label: `start drawing · ${retirementAge}`, color: '#475569',
+            ...(e ? { onDragAge: (age: number) => e.onInputsChange({ ...e.inputs, retirementAge: Math.max(currentAge + 1, Math.min(e.inputs.maxAge - 1, age)) }) } : {}) },
           ...(depletion != null
             ? [{ age: depletion, label: `money runs out · ${depletion}`, color: RED_DOT }]
             : []),
         ]}
+        {...(e ? {
+          spend: { points: breakdown.map(r => ({ age: r.age, value: r.spendingTarget })), baseSpend },
+          onSpendChange: (today: number) => e.onInputsChange({ ...e.inputs, desiredSpending: Math.max(0, today) }),
+          events: (e.inputs.events ?? []).map(ev => ({ id: ev.id, age: ev.age, amount: ev.amount, direction: ev.direction, label: ev.label })),
+          onEventChange: (next: TimelineEvent) => e.onInputsChange({ ...e.inputs, events: (e.inputs.events ?? []).map(ev => (ev.id === next.id ? { ...ev, age: next.age, amount: next.amount } : ev)) }),
+          anchors: (e.inputs.marketPeriods ?? []).map(p => ({ id: p.id, age: p.age, return: p.return, volatility: p.volatility })),
+          onAnchorsChange: (next: TimelineMarketAnchor[]) => e.onInputsChange({ ...e.inputs, marketPeriods: next.map(a => ({ id: a.id, age: a.age, return: a.return, volatility: a.volatility })) }),
+        } : {})}
       />
     </section>
   );
@@ -62,6 +83,12 @@ export interface ProjectStripProps {
   breakdown: YearlyBreakdown[];
   currentAge: number;
   retirementAge: number;
+  /** Live-plan hooks; forwarded to ProjectStrip's `edit`. */
+  edit?: {
+    inputs: RetirementInputs;
+    onInputsChange: (next: RetirementInputs) => void;
+    inflationRate: number;
+  };
 }
 
 export function BetaSchedulePage({ chip, assistant, timeline, ...props }: ComponentProps<typeof ScheduleTable> & {

@@ -364,8 +364,8 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: 'life-timeline',
     title: 'The life timeline',
     section: 'Reading the answer',
-    keywords: ['timeline', 'balance over time', 'work ends', 'money runs out'],
-    body: <P>Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when work ends, and when the money runs out (or that it outlasts the plan). Below the line: the <strong>spend strip</strong> (what the plan targets spending each year — drag its handle to change today's spending) and, when your plan has them, <strong>event diamonds</strong> (drag to move/resize a cash event) and the <strong>market strip</strong> (double-click to drop a return anchor — see Market hypothesis).</P>,
+    keywords: ['timeline', 'balance over time', 'start drawing', 'retirement age', 'money runs out'],
+    body: <P>Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when you <strong>start drawing</strong> (the transition into retirement — drag it to change the age), and when the money runs out (or that it outlasts the plan). Below the line: the <strong>spend strip</strong> (what the plan targets spending each year — drag its handle to change today's spending) and, when your plan has them, <strong>event diamonds</strong> (drag to move/resize a cash event) and the <strong>market strip</strong> (double-click to drop a return anchor — see Market hypothesis).</P>,
   },
   {
     id: 'evidence-row',

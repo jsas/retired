@@ -6,15 +6,17 @@
  *
  * It takes one or more balance series (one line/area each) with a toggleable
  * legend, optional auxiliary overlay lines (spend, market/portfolio components,
- * home equity), optional labelled pins (retirement, depletion, "you"), and —
- * when wired to the plan (BetaApp) — three interactive layers ported from the
- * old site's TimelineChart (restyled, same math):
+ * home equity), optional labelled pins (start drawing, depletion, "you"), and —
+ * when wired to the plan — three interactive layers ported from the old site's
+ * TimelineChart (restyled, same math):
  *   - the spend strip: the plan's nominal spending target, base handle draggable
  *   - event diamonds: one-time/recurring cash events, draggable age + amount
  *   - the market strip: the market-hypothesis anchors (return circles, volatility
  *     squares) — double-click to drop an anchor, drag to move, × to delete
- * Interactive layers appear only when their callbacks are provided (draggable
- * prop), so read-only surfaces (Compare, print, steering) are untouched.
+ *   - the "start drawing" pin drags horizontally when it carries an
+ *     onRetirementChange callback (the old site's retirement marker)
+ * Interactive layers appear only when their callbacks are provided, so
+ * read-only surfaces (Compare, print) are untouched.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { INK, FAINT, HAIRLINE, RED_DOT, AMBER_DOT } from './tokens';
@@ -49,6 +51,9 @@ export interface TimelinePin {
   place?: 'above' | 'below';
   /** Anchor for the label text. */
   anchor?: 'start' | 'middle' | 'end';
+  /** When set, the pin drags horizontally and reports the new age — the
+   *  "start drawing" marker (the old site's draggable retirement line). */
+  onDragAge?: (age: number) => void;
 }
 
 /** One cash event rendered as a draggable diamond in the spend strip. */
@@ -67,6 +72,30 @@ export interface TimelineMarketAnchor {
   age: number;
   return: number;
   volatility?: number;
+}
+
+/** The base spending level at `atAge`, in nominal (that-year) dollars —
+ *  desiredSpending inflated to that age, times the spending band in force
+ *  there. The same math the engine builds spendingTarget from (no events, no
+ *  reverse mortgage), so the spend strip's handle sits ON the line. Lives here
+ *  (not in a page component) because the strip's own contract needs it and
+ *  several surfaces feed it. Kept dependency-free: structural input shape. */
+export function baseSpendAtRetirement(
+  inputs: { desiredSpending: number; currentAge: number; spendingBands?: Array<{ fromAge: number; pctOfBase: number }> },
+  inflationRate: number,
+  atAge: number,
+): number {
+  const inflation = Math.max(0, inflationRate ?? 0);
+  const nominal = inputs.desiredSpending * Math.pow(1 + inflation, Math.max(0, atAge - inputs.currentAge));
+  const bands = Array.isArray(inputs.spendingBands)
+    ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge)
+    : [];
+  let pct = 1;
+  for (const b of bands) {
+    if (atAge >= b.fromAge) pct = b.pctOfBase;
+    else break;
+  }
+  return nominal * pct;
 }
 
 const PALETTE = ['#1d4ed8', '#059669', '#d97706', '#be123c', '#7c3aed', '#0e7490'];
@@ -107,7 +136,7 @@ export function ProjectionTimeline({
   series: TimelineSeries[];
   /** Extra lines on the same axis — spend, market components, home equity. */
   overlays?: OverlayLine[];
-  /** Labelled pins on the axis (you / work ends / money runs out). */
+  /** Labelled pins on the axis (you / start drawing / money runs out). */
   pins?: TimelinePin[];
   /** A retirement marker. 'line' = dashed rule, 'dot' = square on the axis,
    *  omitted = none. (Use `pins` for a labelled marker instead.) */
@@ -195,11 +224,13 @@ export function ProjectionTimeline({
   const yVol = (v: number) => MKT_TOP + (1 - v / VOL_MAX) * STRIP_H;
   const volAtY = (py: number) => Math.min(VOL_MAX, Math.max(0, (1 - (py - MKT_TOP) / STRIP_H) * VOL_MAX));
 
-  // Drag state — one at a time: an event diamond or a market anchor.
+  // Drag state — one at a time: an event diamond, a market anchor, or a
+  // draggable pin (the "start drawing" marker).
   const svgRef = useRef<SVGSVGElement>(null);
   type Drag =
     | { kind: 'event'; id: string }
-    | { kind: 'mkt'; id: string; field: 'return' | 'volatility' };
+    | { kind: 'mkt'; id: string; field: 'return' | 'volatility' }
+    | { kind: 'pin'; index: number };
   const [drag, setDrag] = useState<Drag | null>(null);
   // The selected market anchor (the floating × targets it).
   const [selectedMkt, setSelectedMkt] = useState<string | null>(null);
@@ -241,15 +272,38 @@ export function ProjectionTimeline({
 
   // Window-level move/up so a drag continues outside the SVG (pointer capture
   // covers the same case natively; window listeners are the belt to suspenders).
-  const onStripPointerDown = (kind: Drag['kind'], id: string, field?: 'return' | 'volatility') =>
+  const onStripPointerDown = (kind: 'event' | 'mkt', id: string, field?: 'return' | 'volatility') =>
     (e: React.PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setDrag(kind === 'event' ? { kind, id } : { kind, id, field: field! });
+      setDrag(kind === 'event' ? { kind, id } : { kind: 'mkt', id, field: field ?? 'return' });
       if (kind === 'mkt') setSelectedMkt(id);
       const el = e.currentTarget as Element;
       el.setPointerCapture?.(e.pointerId);
     };
+
+  // A pin drag: horizontal only — the age follows the pointer.
+  const pinPointerDown = (index: number) => (e: React.PointerEvent) => {
+    const pin = pins[index];
+    if (!pin?.onDragAge) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDrag({ kind: 'pin', index });
+    const el = e.currentTarget as Element;
+    el.setPointerCapture?.(e.pointerId);
+    const move = (ev: PointerEvent | React.PointerEvent) => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const px = ((ev.clientX - rect.left) / rect.width) * W;
+      pin.onDragAge?.(ageAtX(px));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
 
   useEffect(() => {
     if (!drag) return;
@@ -261,6 +315,7 @@ export function ProjectionTimeline({
       const fake = { clientX: e.clientX, clientY: e.clientY } as React.PointerEvent;
       void rect;
       if (drag.kind === 'event') moveEvent(fake, drag.id);
+      else if (drag.kind === 'pin') pinPointerMove(e, drag.index);
       else moveAnchor(fake, drag.id, drag.field);
     };
     const up = () => setDrag(null);
@@ -270,7 +325,18 @@ export function ProjectionTimeline({
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
     };
-  }, [drag, events, anchors, minAge, maxAge, span, maxSpend]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [drag, events, anchors, pins, minAge, maxAge, span, maxSpend]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The window-listener path for pin drags (the pointerdown path installs its
+  // own listeners; this one covers capture falls-through).
+  const pinPointerMove = (e: PointerEvent, index: number) => {
+    const pin = pins[index];
+    if (!pin?.onDragAge) return;
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    pin.onDragAge(ageAtX(px));
+  };
 
   return (
     <div>
@@ -382,15 +448,24 @@ export function ProjectionTimeline({
           <rect x={x(marker.age) - 4.5} y={AXIS - 4.5} width="9" height="9" fill="#f59e0b" />
         )}
 
-        {/* labelled pins */}
+        {/* labelled pins — the "start drawing" pin (onDragAge set) drags
+            horizontally like the old site's retirement marker */}
         {pins.map((p, i) => {
           const px = x(Math.max(minAge, Math.min(maxAge, p.age)));
           const above = (p.place ?? 'above') === 'above';
           const ly = above ? AREA_TOP - 4 : AXIS + 40;
           const color = p.color ?? '#475569';
+          const draggable = !!p.onDragAge;
           return (
-            <g key={i}>
+            <g key={i} className={draggable ? 'cursor-ew-resize' : undefined}
+              onPointerDown={draggable ? pinPointerDown(i) : undefined}>
+              <title>Start drawing — drag to change</title>
               <line x1={px} y1={AXIS} x2={px} y2={above ? ly + 4 : AXIS + 30} stroke={HAIRLINE} strokeWidth="1" />
+              {/* a wider invisible grab strip over the rule so the drag is
+                  easy to catch (the 1px line alone is a sub-pixel target) */}
+              {draggable && (
+                <rect x={px - 8} y={AREA_TOP} width="16" height={AXIS - AREA_TOP} fill="transparent" />
+              )}
               <text x={px} y={ly} textAnchor={p.anchor ?? 'middle'} fontSize="11" fontWeight="600" fill={color} fontFamily="inherit">
                 {p.label}
               </text>
@@ -410,10 +485,12 @@ export function ProjectionTimeline({
                 <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="8" fill={FAINT} />
                 <path d={spend.points.map((p, j) => `${j === 0 ? 'M' : 'L'}${x(p.age).toFixed(1)},${ySp(p.value).toFixed(1)}`).join(' ')}
                   fill="none" stroke="#059669" strokeWidth="1.5" />
-                {/* base-spending handle at retirement (draggable) */}
+                {/* base-spending handle at the draw age (draggable). The age
+                    comes from the marker, the draggable pin, or the left edge
+                    — never from sniffing a label string. */}
                 {spend.baseSpend != null && onSpendChange && (
                   <circle
-                    cx={x(marker?.age ?? pins.find(p => p.label.startsWith('work ends'))?.age ?? minAge)}
+                    cx={x(marker?.age ?? pins.find(p => p.onDragAge)?.age ?? minAge)}
                     cy={ySp(spend.baseSpend)}
                     r="5" fill="#059669" stroke="#fff" strokeWidth="1.5" className="cursor-ns-resize"
                     onPointerDown={(e) => {
@@ -476,15 +553,22 @@ export function ProjectionTimeline({
                       fill="none" stroke={AMBER_DOT} strokeWidth="1.5" strokeDasharray="5 3" />
                   )}
                   {withVol.map(a => (
-                    <rect key={`v-${a.id}`}
-                      x={x(a.age) - 4} y={yVol(a.volatility!) - 4} width="8" height="8"
-                      fill={selectedMkt === a.id ? '#b45309' : AMBER_DOT} stroke="#fff" strokeWidth="1.5"
-                      className="cursor-move" opacity={drag?.kind === 'mkt' && drag.id === a.id ? 1 : 0.9}
-                      onPointerDown={onStripPointerDown('mkt', a.id, 'volatility')}
-                      onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
-                    >
-                      <title>Age {a.age}: σ {(a.volatility! * 100).toFixed(0)}% — drag to adjust; click to select</title>
-                    </rect>
+                    <g key={`v-${a.id}`}>
+                      <rect
+                        x={x(a.age) - 4} y={yVol(a.volatility!) - 4} width="8" height="8"
+                        fill={selectedMkt === a.id ? '#b45309' : AMBER_DOT} stroke="#fff" strokeWidth="1.5"
+                        className="cursor-move" opacity={drag?.kind === 'mkt' && drag.id === a.id ? 1 : 0.9}
+                        onPointerDown={onStripPointerDown('mkt', a.id, 'volatility')}
+                        onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
+                      >
+                        <title>Age {a.age}: σ {(a.volatility! * 100).toFixed(0)}% — drag to adjust; click to select</title>
+                      </rect>
+                      {/* the value, readable without hovering */}
+                      <text x={x(a.age) + 7} y={yVol(a.volatility!) + 3} fontSize="8" fill="#b45309"
+                        fontFamily="inherit" className="pointer-events-none select-none">
+                        {Math.round(a.volatility! * 100)}%
+                      </text>
+                    </g>
                   ))}
                 </>
               );
@@ -497,15 +581,22 @@ export function ProjectionTimeline({
                 fill="none" stroke="#7c3aed" strokeWidth="2" />
             )}
             {anchors.map(a => (
-              <circle key={`r-${a.id}`}
-                cx={x(a.age)} cy={yRet(a.return)} r={selectedMkt === a.id ? 5.5 : 4.5}
-                fill={selectedMkt === a.id ? '#5b21b6' : '#7c3aed'} stroke="#fff" strokeWidth="1.5"
-                className="cursor-move" opacity={drag?.kind === 'mkt' && drag.id === a.id ? 1 : 0.9}
-                onPointerDown={onStripPointerDown('mkt', a.id, 'return')}
-                onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
-              >
-                <title>Age {a.age}: {(a.return * 100).toFixed(1)}% — drag to adjust; click to select</title>
-              </circle>
+              <g key={`r-${a.id}`}>
+                <circle
+                  cx={x(a.age)} cy={yRet(a.return)} r={selectedMkt === a.id ? 5.5 : 4.5}
+                  fill={selectedMkt === a.id ? '#5b21b6' : '#7c3aed'} stroke="#fff" strokeWidth="1.5"
+                  className="cursor-move" opacity={drag?.kind === 'mkt' && drag.id === a.id ? 1 : 0.9}
+                  onPointerDown={onStripPointerDown('mkt', a.id, 'return')}
+                  onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
+                >
+                  <title>Age {a.age}: {(a.return * 100).toFixed(1)}% — drag to adjust; click to select</title>
+                </circle>
+                {/* the value, readable without hovering */}
+                <text x={x(a.age) + 8} y={yRet(a.return) - 5} fontSize="8" fill="#5b21b6"
+                  fontFamily="inherit" className="pointer-events-none select-none">
+                  {(a.return * 100).toFixed(1)}%
+                </text>
+              </g>
             ))}
 
             {/* delete affordance for the selected anchor */}

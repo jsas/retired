@@ -15,7 +15,7 @@ import { BETA_COOKIE_NAME } from '../lib/betaSkin';
 import { getRangePrefs } from '../lib/rangePrefs';
 import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
 import { cls, INK, RED_DOT } from '../design/tokens';
-import { ProjectionTimeline } from '../design/ProjectionTimeline';
+import { ProjectionTimeline, baseSpendAtRetirement } from '../design/ProjectionTimeline';
 import { BetaPage, type VerdictChip } from './beta/BetaPage';
 import { ContourMap } from './beta/ContourMap';
 import { MarketDial } from './beta/MarketDial';
@@ -60,25 +60,6 @@ function verdict(inputs: RetirementInputs, results: RetirementResults) {
   const runsTo = results.depletionAge ?? '?';
   const short = inputs.maxAge - (results.depletionAge ?? inputs.maxAge);
   return { text: `Your money runs out at ${runsTo} — ${short} years short of ${inputs.maxAge}.`, holds: false };
-}
-
-/** The base spending level at retirement, in nominal (that-year) dollars —
- *  desiredSpending inflated to the retirement year, times the spending band
- *  in force there. Matches what the engine builds its spendingTarget from
- *  (no events, no RM), so the spend strip's handle sits ON the line. */
-function baseSpendAtRetirement(inputs: RetirementInputs, inflationRate: number): number {
-  const inflation = Math.max(0, inflationRate ?? 0);
-  const yearsTo = Math.max(0, inputs.retirementAge - inputs.currentAge);
-  const nominal = inputs.desiredSpending * Math.pow(1 + inflation, yearsTo);
-  const bands = Array.isArray(inputs.spendingBands)
-    ? [...inputs.spendingBands].sort((a, b) => a.fromAge - b.fromAge)
-    : [];
-  let pct = 1;
-  for (const b of bands) {
-    if (inputs.retirementAge >= b.fromAge) pct = b.pctOfBase;
-    else break;
-  }
-  return nominal * pct;
 }
 
 export function BetaApp({
@@ -171,7 +152,8 @@ export function BetaApp({
             series={[{ id: 'plan', label: 'portfolio', color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
             pins={[
               { age: inputs.currentAge, label: `you · ${inputs.currentAge}`, place: 'below', anchor: 'start', color: INK },
-              { age: inputs.retirementAge, label: `work ends · ${inputs.retirementAge}`, color: '#475569' },
+              { age: inputs.retirementAge, label: `start drawing · ${inputs.retirementAge}`, color: '#475569',
+                onDragAge: (age) => onInputsChange({ ...inputs, retirementAge: Math.max(inputs.currentAge + 1, Math.min(inputs.maxAge - 1, age)) }) },
               ...(lifeDepletion != null
                 ? [{ age: lifeDepletion, label: `money runs out · ${lifeDepletion}`, color: RED_DOT }]
                 : []),
@@ -180,7 +162,7 @@ export function BetaApp({
                strip with its base handle, the cash-event diamonds, and the
                market strip. Drags write through onInputsChange and re-simulate
                live — same contract as every fader. */
-            spend={{ points: breakdown.map(r => ({ age: r.age, value: r.spendingTarget })), baseSpend: baseSpendAtRetirement(inputs, config.engine.inflationRate) }}
+            spend={{ points: breakdown.map(r => ({ age: r.age, value: r.spendingTarget })), baseSpend: baseSpendAtRetirement(inputs, config.engine.inflationRate, inputs.retirementAge) }}
             onSpendChange={(today) => onInputsChange({ ...inputs, desiredSpending: today })}
             events={(inputs.events ?? []).map(ev => ({ id: ev.id, age: ev.age, amount: ev.amount, direction: ev.direction, label: ev.label }))}
             onEventChange={(next) => onInputsChange({ ...inputs, events: (inputs.events ?? []).map(ev => (ev.id === next.id ? { ...ev, age: next.age, amount: next.amount } : ev)) })}

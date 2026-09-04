@@ -13,6 +13,7 @@ import { Loader2 } from 'lucide-react';
 import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { ProjectionTimeline } from '../design/ProjectionTimeline';
 import { Fader } from '../design/primitives';
+import { baseSpendAtRetirement } from '../design/ProjectionTimeline';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
   AXES, axisValue, withAxis, clampToBand, effectiveRange, deterministicOutcome, isLimited,
@@ -361,14 +362,17 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
       </div>
 
       {/* Live projection under the controls — the visual aid while steering. The
-          shared ProjectionTimeline draws the balance; a retirement pin marks where
-          work ends. (The full drag-to-edit timeline stays on the Dashboard.) */}
+          start-drawing pin drags (the instant way to answer "what if I drew
+          later?"); the spend strip rides along for context. */}
       {projection && (
         <div className="mt-3 bg-white border border-slate-200 p-3">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Projection timeline</div>
           <ProjectionTimeline
             series={[{ id: 'plan', label: 'portfolio', area: true, points: projection.breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
-            pins={[{ age: inputs.retirementAge, label: `work ends · ${inputs.retirementAge}` }]}
+            pins={[{ age: inputs.retirementAge, label: `start drawing · ${inputs.retirementAge}`,
+              onDragAge: (age) => onChange({ ...inputs, retirementAge: Math.max(inputs.currentAge + 1, Math.min(inputs.maxAge - 1, age)) }) }]}
+            spend={{ points: projection.breakdown.map(r => ({ age: r.age, value: r.spendingTarget })), baseSpend: baseSpendAtRetirement(inputs, config.engine.inflationRate, inputs.retirementAge) }}
+            onSpendChange={(today) => onChange({ ...inputs, desiredSpending: Math.max(0, today) })}
           />
         </div>
       )}

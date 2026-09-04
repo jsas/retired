@@ -597,7 +597,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
       </div>
       <p className="px-3 py-2 text-[10px] text-slate-400 border-t border-slate-100">
         Click a year to expand its inner workings — withdrawal sources, growth, tax, benefits and reverse
-        mortgage.{canDragRetire && ' Drag the blue "stop working" row up or down to move the retirement age.'} Amounts
+        mortgage.{canDragRetire && ' Drag the blue "start drawing" row up or down to move the retirement age.'} Amounts
         are in nominal (future) dollars of each year: the spending target and contributions
         grow with inflation, while balances, gains and benefits are the actual dollars that year. CPP/OAS are
         shown at 2026 values unless "Index tax tables, OAS and CPP" is on in Settings → Engine.

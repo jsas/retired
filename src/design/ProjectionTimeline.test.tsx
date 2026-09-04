@@ -47,12 +47,12 @@ describe('ProjectionTimeline', () => {
         series,
         pins: [
           { age: 50, label: 'you · 50', place: 'below', anchor: 'start' },
-          { age: 60, label: 'work ends · 60' },
+          { age: 60, label: 'start drawing · 60' },
         ],
       }),
     );
     expect(html).toContain('you · 50');
-    expect(html).toContain('work ends · 60');
+    expect(html).toContain('start drawing · 60');
   });
 
   it('says why when there is nothing to draw (a zero-savings plan)', () => {
@@ -116,5 +116,38 @@ describe('ProjectionTimeline', () => {
     );
     expect(noVol).toContain('stroke="#7c3aed"');
     expect(noVol).not.toContain('stroke="#f59e0b"');
+  });
+
+  it('each anchor shows its % beside the handle (no hover needed)', () => {
+    const html = renderToStaticMarkup(
+      createElement(ProjectionTimeline, {
+        series,
+        anchors: [
+          { id: 'a1', age: 60, return: 0.05 },
+          { id: 'a2', age: 68, return: -0.15, volatility: 0.25 },
+        ],
+        onAnchorsChange: () => {},
+      }),
+    );
+    expect(html).toContain('>5.0%</text>');
+    expect(html).toContain('>-15.0%</text>');
+    expect(html).toContain('>25%</text>');
+  });
+
+  it('a pin with onDragAge renders the drag affordance; plain pins stay static', () => {
+    const live = renderToStaticMarkup(
+      createElement(ProjectionTimeline, {
+        series,
+        pins: [{ age: 62, label: 'start drawing · 62', onDragAge: () => {} }],
+      }),
+    );
+    expect(live).toContain('cursor-ew-resize');
+    const still = renderToStaticMarkup(
+      createElement(ProjectionTimeline, {
+        series,
+        pins: [{ age: 62, label: 'start drawing · 62' }],
+      }),
+    );
+    expect(still).not.toContain('cursor-ew-resize');
   });
 });

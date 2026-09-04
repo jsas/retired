@@ -158,7 +158,7 @@ export function ContourMap({ inputs, config, window: win, onChange }: ContourMap
           {hTicks.map(s => (
             <text key={`hl${s}`} x={BOX.left - 8} y={BOX.top + yFrac(s, win) * (BOX.bottom - BOX.top) + 4} textAnchor="end">{fmtK(s)}</text>
           ))}
-          <text x={(BOX.left + BOX.right) / 2} y={VH - 8} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569">the age you stop working →</text>
+          <text x={(BOX.left + BOX.right) / 2} y={VH - 8} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569">the age you start drawing →</text>
           <text x="16" y={(BOX.top + BOX.bottom) / 2} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569" transform={`rotate(-90 16 ${(BOX.top + BOX.bottom) / 2})`}>what you spend each year →</text>
         </g>
 
