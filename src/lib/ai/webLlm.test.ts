@@ -6,6 +6,8 @@ import { buildPlanDigest } from '../agentQA';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { baseInputs, testConfig } from '@retired/engine-core/test/helpers';
 import type { StreamEvent } from './providers';
+import { buildMachineGuide } from './machineGuide';
+import { customAppConfig } from '@retired/ai-bridge/webLlmProvider';
 
 // Fake the @mlc-ai/web-llm module: the real engine needs WebGPU and downloads
 // multi-GB weights, so tests drive a scripted engine instead. The mock engine
@@ -59,25 +61,59 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
 });
 
 describe('curated web-llm model list', () => {
-  it('ships only valid MLC prebuilt ids with VRAM labels', () => {
+  it('ships only valid MLC prebuilt ids (or marked custom) with VRAM labels', () => {
     expect(WEBLLM_MODELS.length).toBeGreaterThanOrEqual(5);
     for (const m of WEBLLM_MODELS) {
-      expect(m.id).toMatch(/-MLC$/);
+      // Custom (self-served fine-tune) entries carry their own weights URL and
+      // are exempt from the prebuilt-id shape; everything else is a prebuild.
+      if (m.custom) {
+        expect(m.localDevOnly, `${m.id}: a custom (self-served) model must be localDevOnly — its weights aren't deployed`).toBe(true);
+        expect(m.custom.weightsUrl).toMatch(/^models\//);
+        expect(m.custom.modelLib).toMatch(/\.wasm$/);
+      } else {
+        expect(m.id).toMatch(/-MLC$/);
+      }
       expect(m.vramMB).toBeGreaterThan(0);
       expect(m.label.length).toBeGreaterThan(3);
       expect(m.blurb.length).toBeGreaterThan(10);
     }
   });
 
-  it('contains only ids that exist in web-llm\'s prebuilt catalog (else they won\'t load)', () => {
+  it('contains only ids that exist in web-llm\'s prebuilt catalog — unless they carry their own appConfig', () => {
     // A stale or hand-typed id fails at download time with a confusing error —
-    // verify every curated id is actually a known prebuild.
+    // verify every curated id is a known prebuild or a custom entry the
+    // provider resolves through its own appConfig.
     const prebuilt = new Set(
       (prebuiltAppConfig.model_list as Array<{ model_id: string }>).map(m => m.model_id),
     );
     for (const m of WEBLLM_MODELS) {
+      if (m.custom) continue;
       expect(prebuilt.has(m.id), `model ${m.id} is not in web-llm's prebuilt catalog`).toBe(true);
     }
+  });
+
+  it('never recommends a dev-only model (its weights are not deployed)', () => {
+    const g = buildMachineGuide(true);
+    expect(g.recommended.localDevOnly ?? false).toBe(false);
+  });
+
+  it("builds a custom appConfig whose model URL survives web-llm's cleanModelUrl", () => {
+    // Regression for the "Unexpected token '<'…" download failure: web-llm
+    // appends HuggingFace's "resolve/main/" to any model URL that lacks a
+    // /resolve/ segment. The dev server strips that suffix back for
+    // /models/ paths (src/lib/localModels.ts), so the record must point at
+    // the PLAIN folder — no /resolve/ of its own — and carry the wasm lib.
+    const cfg = customAppConfig(
+      'retired-qwen3-0.6b-ft-q4f16_1',
+      { weightsUrl: 'models/qwen3-0.6b-ft-q4f16_1-MLC', modelLib: 'Qwen3-0.6B-q4f16_1_cs1k-webgpu.wasm' },
+      { modelLibURLPrefix: 'https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/', modelVersion: 'v0_2_84/base' },
+    );
+    expect(cfg.model_list).toHaveLength(1);
+    const rec = cfg.model_list[0];
+    expect(rec.model_id).toBe('retired-qwen3-0.6b-ft-q4f16_1');
+    expect(rec.model).toMatch(/\/models\/qwen3-0\.6b-ft-q4f16_1-MLC\/?$/);
+    expect(rec.model).not.toContain('/resolve/');
+    expect(rec.model_lib).toContain('Qwen3-0.6B-q4f16_1_cs1k-webgpu.wasm');
   });
 
   it('formats VRAM for the picker', () => {

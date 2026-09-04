@@ -18,7 +18,9 @@
 // just the good defaults.
 
 export interface WebLlmModelChoice {
-  /** The prebuilt model_id from web-llm's prebuiltAppConfig. */
+  /** The prebuilt model_id from web-llm's prebuiltAppConfig. For a `custom`
+   *  entry this is just the registry key — the engine looks it up in the custom
+   *  appConfig the provider builds, not in web-llm's prebuilt list. */
   id: string;
   /** Short display label. */
   label: string;
@@ -39,12 +41,53 @@ export interface WebLlmModelChoice {
   maxWindow: number;
   /** One-line "why this one" for the picker. */
   blurb: string;
+  /** Present for NON-prebuilt models — a fine-tune served from our own URL
+   *  rather than MLC's HuggingFace mirror. `weightsUrl` is the directory holding
+   *  mlc-chat-config.json + params_shard_*.bin (relative to the app origin);
+   *  `modelLib` is the MLC wasm to run it on (usually the matching prebuilt
+   *  lib for the base architecture + quantization). When set, the provider
+   *  builds a custom appConfig instead of relying on prebuiltAppConfig. */
+  custom?: {
+    weightsUrl: string;
+    /** wasm filename, e.g. 'Qwen3-0.6B-q4f16_1_cs1k-webgpu.wasm' — resolved
+     *  against web-llm's modelLibURLPrefix + modelVersion at load time. */
+    modelLib: string;
+  };
+  /** True for entries whose weights only exist on a DEVELOPMENT machine
+   *  (served from public/models/ by the dev server, never deployed). Excluded
+   *  from the machine-guide recommendation; the Connections page shows a
+   *  "weights not on this server" hint instead of a Download button when the
+   *  folder isn't being served. */
+  localDevOnly?: boolean;
 }
 
 export const WEBLLM_MODELS: WebLlmModelChoice[] = [
   // NOTE: ordered best-first for a typical laptop GPU. Small ≠ good here —
   // the weakest models can't follow the tool protocol, so the list starts at
   // models that actually work and only goes down to genuinely usable ones.
+  {
+    // EXPERIMENTAL LOCAL FINE-TUNE (issue #112/#135): Qwen3-0.6B SFT'd on the
+    // app's own tool-protocol corpus, quantized to q4f16_1. Weights are served
+    // from the dev server's /models/ dir (a symlink to training/dist/…), NOT
+    // from HuggingFace — this entry only loads when running locally with the
+    // weights symlinked into public/models/. It reuses the prebuilt Qwen3-0.6B
+    // q4f16 wasm. Tiny + tool-trained: the candidate for a sub-GB on-device
+    // assistant. toolCapable reflects its 66.6% protocol-validity gate score —
+    // it speaks the protocol but still mis-chooses tools ~1/3 of the time.
+    id: 'retired-qwen3-0.6b-ft-q4f16_1',
+    label: 'RE:tired 0.6B (local fine-tune)',
+    vramMB: 700,
+    sizeGB: 0.34,
+    toolCapable: true,
+    maxWindow: 8192,
+    blurb: 'Our own 0.6B fine-tune on the app\'s tool protocol — tiny, local, experimental. Weights live in public/models/ on a dev machine only.',
+    // Weights are never deployed — a production visitor can't download this.
+    localDevOnly: true,
+    custom: {
+      weightsUrl: 'models/qwen3-0.6b-ft-q4f16_1-MLC',
+      modelLib: 'Qwen3-0.6B-q4f16_1_cs1k-webgpu.wasm',
+    },
+  },
   {
     id: 'Qwen3.5-4B-q4f16_1-MLC',
     label: 'Qwen3.5 4B',
