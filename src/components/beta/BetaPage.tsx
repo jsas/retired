@@ -14,6 +14,10 @@ import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { DETAILS_SECTIONS } from './detailsSections';
 import { Maximize2, Minimize2 } from 'lucide-react';
+
+// The grow/shrink arrows follow the Assistant button's own text colour —
+// white on the dark (open) button, black on the white (closed) one.
+const ASSISTANT_TOGGLE_ICON = 'h-3.5 w-3.5';
 import { prefKV } from '../../lib/prefKv';
 
 const DOCK_PREF_KEY = 'wealthconsole_dock_open';
@@ -186,7 +190,11 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
               tabIndex={0}
               aria-label={fullscreen ? 'Shrink the assistant back to the side rail' : 'Grow the assistant to fullscreen'}
               title={fullscreen ? 'Shrink' : 'Grow'}
-              className="ml-2 flex items-center border-l border-white/30 pl-2 text-white/80 hover:text-white"
+              className={`ml-2 flex items-center border-l pl-2 ${
+                dockOpen
+                  ? 'border-white/30 text-white/80 hover:text-white'
+                  : 'border-slate-300 text-slate-900 hover:text-slate-600'
+              }`}
               onClick={(e) => { e.stopPropagation(); setAssistantFullscreen(!fullscreen); setDockOpen(true); }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -195,7 +203,9 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
                 }
               }}
             >
-              {fullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+              {fullscreen
+                ? <Minimize2 size={12} className={ASSISTANT_TOGGLE_ICON} />
+                : <Maximize2 size={12} className={ASSISTANT_TOGGLE_ICON} />}
             </span>
           </button>
 
