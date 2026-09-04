@@ -33,8 +33,7 @@ import { CollapsiblePanel } from './components/CollapsiblePanel';
 import { SharingPage, type SharingImportRequest } from './components/SharingPage';
 import { DataPage, type FullBackupSelection, type ProjectionImportRequest, type AiBackupInclude } from './components/DataPage';
 import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
-import { AI_SETTINGS_STORAGE_KEY, loadAiSettings } from './lib/aiSettings';
-import { MarkupOverlay } from './components/MarkupOverlay';
+import { AI_SETTINGS_STORAGE_KEY } from './lib/aiSettings';
 import { OptimizeCard } from './components/OptimizeCard';
 import { AgentPage } from './components/AgentPage';
 import { ConnectionsPage } from './components/ConnectionsPage';
@@ -136,9 +135,6 @@ function App() {
   // montecarlo route is active. backtestResult is built while backtest is.
   const [mcRequest, setMcRequest] = useState<MonteCarloRequest | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
-  // Markup-overlay opt-in (AI settings). Read once at mount; toggling it on the
-  // Connections page takes effect on next load, same as connection edits.
-  const [markupSettings] = useState(loadAiSettings);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const cancelEqSolveRef = useRef<(() => void) | null>(null);
 
@@ -998,9 +994,6 @@ function App() {
       />
       <div className="no-print">
         {betaPage}
-        {/* Markup-overlay opt-in (AI settings) — same gate the old skin used;
-            toggling takes effect on next load. */}
-        {markupSettings.markupOverlay && <MarkupOverlay settings={markupSettings} />}
       </div>
     </>
   );
@@ -1441,8 +1434,6 @@ function App() {
           onCancel={() => resolvePendingSwitch('cancel', false)}
         />
       )}
-
-      {markupSettings.markupOverlay && <MarkupOverlay settings={markupSettings} />}
     </div>
   );
 }

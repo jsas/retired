@@ -103,9 +103,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       // Dev markup overlay: mark -> snap -> send -> a real model edits source ->
-      // HMR reloads -> the snapped layer clears. Enabled only when
+      // HMR reloads -> the snapped layer clears. LOCAL DEVELOPMENT ONLY — it
+      // never runs for a build (and never in singlefile mode), so the shipped
+      // site carries none of it even when a .env is present. Enabled only when
       // MARKUP_MODEL_ENDPOINT is set in the local .env; otherwise a no-op.
-      ...(single ? [] : devMarkupOverlay({ env })),
+      ...(single || process.env.NODE_ENV === 'production' ? [] : devMarkupOverlay({ env })),
       ...(single
         ? [viteSingleFile(), pruneToSingleHtml('dist-single')]
         : [emitSitemap(join(here, 'dist'))]),
