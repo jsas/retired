@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   loadChats, saveChats, newThread, newThreadId, titleFromFirstMessage,
+  getChats, subscribeChats, updateChats, setChats, resetChatsForTests,
   type ChatStore, type StoredTurn,
 } from './chatStore';
 
@@ -149,5 +150,63 @@ describe('thread helpers', () => {
     expect(t.updatedAt).toBe(5000);
     expect(t.turns).toHaveLength(0);
     expect(t.title).toBe('New chat');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The LIVE store: background runs write turns with no component mounted
+// ---------------------------------------------------------------------------
+
+describe('live chat store (module-level)', () => {
+  it('updateChats patches one thread and persists', () => {
+    const store = kv();
+    resetChatsForTests(store);
+    const t = newThread('P', 1);
+    setChats({ threads: [t], activeThreadId: t.id });
+    updateChats(prev => ({
+      ...prev,
+      threads: prev.threads.map(x => x.id === t.id
+        ? { ...x, turns: [...x.turns, { id: 'u1', role: 'user' as const, text: 'hi', tools: [], changes: [] }] }
+        : x),
+    }));
+    expect(getChats().threads[0].turns).toHaveLength(1);
+    // Persisted to the store's own KV (localStorage in the browser).
+    expect(loadChats(store).threads[0].turns).toHaveLength(1);
+  });
+
+  it('notifies subscribers on every mutation', () => {
+    resetChatsForTests();
+    let n = 0;
+    const unsub = subscribeChats(() => { n += 1; });
+    updateChats(prev => ({ ...prev, activeThreadId: null }));
+    expect(n).toBe(1);
+    // A mutator returning null means "no change" — no notify, no save.
+    updateChats(() => null);
+    expect(n).toBe(1);
+    unsub();
+  });
+
+  it('a background run appends turns after "unmount" (no component at all)', () => {
+    // This is the regression contract for "chats keep running when I go to
+    // another page": runTurn closes over updateChats + threadId, never over
+    // component state, so the patch below models exactly what a streaming
+    // event does after the Conversation is gone.
+    resetChatsForTests();
+    const t = newThread('P', 1);
+    setChats({ threads: [t], activeThreadId: t.id });
+    const patchTurnsOf = (threadId: string) => (mutate: (turns: StoredTurn[]) => StoredTurn[]) => {
+      updateChats(prev => ({
+        ...prev,
+        threads: prev.threads.map(x => x.id === threadId
+          ? { ...x, turns: mutate(x.turns as StoredTurn[]), updatedAt: Date.now() }
+          : x),
+      }));
+    };
+    const patch = patchTurnsOf(t.id);
+    patch(prev => [...prev, { id: 'a1', role: 'assistant', text: '', tools: [], changes: [], state: 'streaming' }]);
+    patch(prev => prev.map(x => x.id === 'a1' ? { ...x, text: 'streamed in the background' } : x));
+    const saved = getChats().threads.find(x => x.id === t.id)!;
+    expect(saved.turns).toHaveLength(1);
+    expect(saved.turns[0].text).toBe('streamed in the background');
   });
 });
