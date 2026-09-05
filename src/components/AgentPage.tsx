@@ -7,7 +7,7 @@
 // auto-scroll, and the composer. Connecting/switching models lives on the
 // separate Connections page.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
   AssistantRuntimeProvider,
   ThreadPrimitive,
@@ -51,9 +51,13 @@ import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
-  loadChats, saveChats, newThread, titleFromFirstMessage,
+  getChats, subscribeChats, updateChats, newThread, titleFromFirstMessage,
   type ChatThread,
 } from '../lib/ai/chatStore';
+import {
+  subscribeRuns, getRunsVersion, getRun, hasActiveRun, runSnapshot, startRun, setRunPhase, setRunProgress,
+  setRunDecision, takeRunDecision, abortRun, endRun,
+} from '../lib/ai/chatRuns';
 import { resetWebLlmChat, loadedWebLlmModel } from '../lib/ai/webLlmProvider';
 import { Markdown } from './Markdown';
 
@@ -243,7 +247,7 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 /* The docked chat picker: a clickable icon in a slim strip that drops down to
    select, start, or delete a chat. The rail's width stays for the conversation —
    no permanent chat list. Flat, hairline, f7. */
-function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, modelPicker }: {
+export function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, modelPicker }: {
   threads: ChatThread[];
   activeThreadId: string | null;
   onSelect: (id: string) => void;
@@ -254,6 +258,10 @@ function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, mo
    *  connected (the offline CTA that links to Connections only shows before). */
   modelPicker?: ReactNode;
 }) {
+  // Runs are keyed by thread id in the registry; a chat that is thinking
+  // elsewhere shows the same spinner the conversation bubble shows.
+  const runsVersion = useSyncExternalStore(subscribeRuns, getRunsVersion, getRunsVersion);
+  const runStates = useMemo(() => runSnapshot(), [runsVersion]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -271,6 +279,7 @@ function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, mo
   }, [open]);
 
   const active = threads.find(t => t.id === activeThreadId);
+  const activeRunning = active != null && runStates.has(active.id);
 
   return (
     <div ref={ref} className="relative flex items-center gap-1 border-b border-slate-200 px-2 py-1.5">
@@ -284,6 +293,7 @@ function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, mo
       >
         <MessageSquare size={13} className="shrink-0 text-slate-400" />
         <span className="min-w-0 flex-1 truncate">{active ? active.title : 'No chat selected'}</span>
+        {activeRunning && <Loader2 size={12} className="shrink-0 animate-spin text-slate-400" aria-label="This chat is answering" />}
         <ChevronDown size={13} className="shrink-0 text-slate-400" />
       </button>
       <button
@@ -301,26 +311,31 @@ function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, mo
           {threads.length === 0 && (
             <p className="px-2.5 py-2 text-[11px] text-slate-400">No chats yet. Start a new one.</p>
           )}
-          {threads.map(t => (
-            <div
-              key={t.id}
-              className={`group flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[12px] ${
-                t.id === activeThreadId ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-50'
-              }`}
-              onClick={() => { onSelect(t.id); setOpen(false); }}
-            >
-              <MessageSquare size={12} className="shrink-0 text-slate-400" />
-              <span className="min-w-0 flex-1 truncate">{t.title}</span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onDelete(t.id); }}
-                aria-label="Delete this chat"
-                className="shrink-0 text-slate-300 opacity-0 hover:text-rose-600 group-hover:opacity-100"
+          {threads.map(t => {
+            const run = runStates.get(t.id);
+            return (
+              <div
+                key={t.id}
+                className={`group flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[12px] ${
+                  t.id === activeThreadId ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-50'
+                }`}
+                onClick={() => { onSelect(t.id); setOpen(false); }}
               >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          ))}
+                {run
+                  ? <Loader2 size={12} className="shrink-0 animate-spin text-slate-500" aria-label={run.phase === 'parked' ? 'Waiting for your decision' : 'Answering'} />
+                  : <MessageSquare size={12} className="shrink-0 text-slate-400" />}
+                <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDelete(t.id); }}
+                  aria-label="Delete this chat"
+                  className="shrink-0 text-slate-300 opacity-0 hover:text-rose-600 group-hover:opacity-100"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -329,12 +344,20 @@ function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, mo
 
 export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle, currentView, onNavigate }: AgentPageProps) {
   const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
-  const [chatState, setChatState] = useState(() => loadChats());
+  // The chat store is MODULE-level (chatStore.ts): a background run keeps
+  // appending turns after this component unmounts (page navigation, thread
+  // switch), so the transcript can't live in React state. Read + write go
+  // through the store; useSyncExternalStore re-renders on change.
+  const chatState = useSyncExternalStore(subscribeChats, getChats, getChats);
+  // The run registry (chatRuns.ts) — who is currently thinking, parked on a
+  // confirm card, or loading a local model, keyed by thread id. The thread
+  // lists read it to show the thinking spinner next to a running chat.
+  const runsVersion = useSyncExternalStore(subscribeRuns, getRunsVersion, getRunsVersion);
+  const runStates = useMemo(() => runSnapshot(), [runsVersion]);
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
   // only — not worth persisting.
   const [chatsPinned, setChatsPinned] = useState(true);
   useEffect(() => { saveAiSettings(settings); }, [settings]);
-  useEffect(() => { saveChats(chatState); }, [chatState]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
@@ -367,12 +390,15 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     chatState.threads.find(t => t.id === chatState.activeThreadId) ?? null;
 
   const setActiveThread = (id: string | null) =>
-    setChatState(prev => {
+    updateChats(prev => {
       // Switching threads must not carry the local engine's KV cache over:
       // the engine reuses it when the next request happens to match its last
       // conversation, so a different chat could inherit this one's context
-      // (the "new chat sees the same window" bug). Reset before the switch.
-      if (id !== prev.activeThreadId) void resetWebLlmChat();
+      // (the "new chat sees the same window" bug). Reset before the switch —
+      // but NEVER while a run is in flight on either side: the engine is one
+      // shared resource and a mid-stream reset would corrupt the background
+      // reply. A thread switch away from a running chat just leaves it running.
+      if (id !== prev.activeThreadId && !hasActiveRun()) void resetWebLlmChat();
       return { ...prev, activeThreadId: id };
     });
 
@@ -380,12 +406,16 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     const t = newThread(scenarioName, Date.now());
     // A fresh thread starts from an EMPTY context — never the last chat's
     // KV cache (see setActiveThread).
-    void resetWebLlmChat();
-    setChatState(prev => ({ threads: [t, ...prev.threads], activeThreadId: t.id }));
+    if (!hasActiveRun()) void resetWebLlmChat();
+    updateChats(prev => ({ threads: [t, ...prev.threads], activeThreadId: t.id }));
   };
 
   const deleteChat = (id: string) => {
-    setChatState(prev => {
+    // A running chat can't be deleted — its run would keep writing into a
+    // thread that no longer exists (and the user would lose the stop button).
+    // Stop it first, then the delete lands on a quiet thread.
+    if (getRun(id)) abortRun(id);
+    updateChats(prev => {
       const threads = prev.threads.filter(t => t.id !== id);
       return {
         threads,
@@ -399,51 +429,41 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   const chooseConnection = (id: string) =>
     setSettings(prev => ({ ...prev, activeConnectionId: id }));
 
-  /** Patch the active thread's turns (and bump updatedAt / title). */
-  const patchTurns = (mutate: (turns: Turn[]) => Turn[]) => {
-    setChatState(prev => {
-      const id = prev.activeThreadId;
-      if (!id) return prev;
-      return {
-        ...prev,
-        threads: prev.threads.map(t => {
-          if (t.id !== id) return t;
-          const turns = mutate(t.turns as Turn[]);
-          // Title the chat from the first user message once it exists.
-          const firstUser = turns.find(x => x.role === 'user');
-          const title = t.title === 'New chat' && firstUser ? titleFromFirstMessage(firstUser.text) : t.title;
-          return { ...t, turns, title, updatedAt: Date.now() };
-        }),
-      };
-    });
+  /** Patch ONE thread's turns (and bump updatedAt / title). Runs target their
+   *  own thread by id — the active thread can switch mid-run, so the run may
+   *  be writing to a thread that isn't the one on screen. */
+  const patchTurnsOf = (threadId: string) => (mutate: (turns: Turn[]) => Turn[]) => {
+    updateChats(prev => ({
+      ...prev,
+      threads: prev.threads.map(t => {
+        if (t.id !== threadId) return t;
+        const turns = mutate(t.turns as Turn[]);
+        // Title the chat from the first user message once it exists.
+        const firstUser = turns.find(x => x.role === 'user');
+        const title = t.title === 'New chat' && firstUser ? titleFromFirstMessage(firstUser.text) : t.title;
+        return { ...t, turns, title, updatedAt: Date.now() };
+      }),
+    }));
   };
 
-  /** Patch non-turn fields of the active thread (e.g. its system note). */
-  const patchThread = (patch: Partial<ChatThread>) => {
-    setChatState(prev => {
-      const id = prev.activeThreadId;
-      if (!id) return prev;
-      return {
-        ...prev,
-        threads: prev.threads.map(t => (t.id === id ? { ...t, ...patch } : t)),
-      };
-    });
+  /** Patch non-turn fields of one thread (e.g. its system note or digest). */
+  const patchThreadOf = (threadId: string) => (patch: Partial<ChatThread>) => {
+    updateChats(prev => ({
+      ...prev,
+      threads: prev.threads.map(t => (t.id === threadId ? { ...t, ...patch } : t)),
+    }));
   };
 
-  /** Record an automatic checkpoint for the active thread: the plan as it was
-   *  JUST BEFORE an approved change landed. Ring-buffered per thread; kept in
-   *  the chat store so revert history survives a reload. */
-  const recordCheckpoint = (label: string, inputsBefore: RetirementInputs) => {
-    setChatState(prev => {
-      const id = prev.activeThreadId;
-      if (!id) return prev;
-      return {
-        ...prev,
-        threads: prev.threads.map(t => (t.id === id
-          ? { ...t, checkpoints: appendCheckpoint(t.checkpoints ?? [], captureCheckpoint(label, inputsBefore)) }
-          : t)),
-      };
-    });
+  /** Record an automatic checkpoint on one thread: the plan as it was JUST
+   *  BEFORE an approved change landed. Ring-buffered per thread; kept in the
+   *  chat store so revert history survives a reload. */
+  const recordCheckpointOn = (threadId: string) => (label: string, inputsBefore: RetirementInputs) => {
+    updateChats(prev => ({
+      ...prev,
+      threads: prev.threads.map(t => (t.id === threadId
+        ? { ...t, checkpoints: appendCheckpoint(t.checkpoints ?? [], captureCheckpoint(label, inputsBefore)) }
+        : t)),
+    }));
   };
 
   return (
@@ -514,7 +534,9 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
             }
           />
         )}
-        {/* ---- Chat list (full page only): pinned open, or a slim strip. ---- */}
+        {/* ---- Chat list (full page only): pinned open, or a slim strip. ----
+            Both variants show the thinking spinner on a running chat — the
+            registry re-renders them the moment any thread's run state moves. */}
         {docked ? null : chatsPinned ? (
           <aside className="w-52 shrink-0 flex flex-col border border-slate-200 bg-white">
             <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
@@ -540,25 +562,30 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               {chatState.threads.length === 0 && (
                 <p className="text-[11px] text-slate-400 px-1.5 py-2">No chats yet. Start a new one.</p>
               )}
-              {chatState.threads.map(t => (
-                <div
-                  key={t.id}
-                  className={`group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer text-[11px] ${
-                    t.id === chatState.activeThreadId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                  onClick={() => setActiveThread(t.id)}
-                >
-                  <MessageSquare size={12} className="shrink-0 text-slate-400" />
-                  <span className="flex-1 min-w-0 truncate">{t.title}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteChat(t.id); }}
-                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-700 shrink-0"
-                    title="Delete this chat"
+              {chatState.threads.map(t => {
+                const run = runStates.get(t.id);
+                return (
+                  <div
+                    key={t.id}
+                    className={`group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer text-[11px] ${
+                      t.id === chatState.activeThreadId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                    onClick={() => setActiveThread(t.id)}
                   >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
+                    {run
+                      ? <Loader2 size={12} className="shrink-0 animate-spin text-slate-500" aria-label={run.phase === 'parked' ? 'Waiting for your decision' : 'Answering'} />
+                      : <MessageSquare size={12} className="shrink-0 text-slate-400" />}
+                    <span className="flex-1 min-w-0 truncate">{t.title}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteChat(t.id); }}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-700 shrink-0"
+                      title="Delete this chat"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </aside>
         ) : (
@@ -578,18 +605,23 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               <Plus size={14} />
             </button>
             <div className="flex-1 overflow-y-auto flex flex-col items-center gap-1.5 w-full px-1">
-              {chatState.threads.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => { setActiveThread(t.id); setChatsPinned(true); }}
-                  title={t.title}
-                  className={`flex items-center justify-center w-6 h-6 ${
-                    t.id === chatState.activeThreadId ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'
-                  }`}
-                >
-                  <MessageSquare size={13} />
-                </button>
-              ))}
+              {chatState.threads.map(t => {
+                const run = runStates.get(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => { setActiveThread(t.id); setChatsPinned(true); }}
+                    title={run ? `${t.title} — ${run.phase === 'parked' ? 'waiting for your decision' : 'answering…'}` : t.title}
+                    className={`flex items-center justify-center w-6 h-6 ${
+                      t.id === chatState.activeThreadId ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    {run
+                      ? <Loader2 size={13} className="animate-spin" aria-label={run.phase === 'parked' ? 'Waiting for your decision' : 'Answering'} />
+                      : <MessageSquare size={13} />}
+                  </button>
+                );
+              })}
             </div>
           </aside>
         )}
@@ -623,10 +655,9 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               activeScenarioId={activeScenarioId}
               scenarioInputsById={scenarioInputsById}
               onApply={onApply}
-              patchTurns={patchTurns}
-              patchThread={patchThread}
-              recordCheckpoint={recordCheckpoint}
-              checkpoints={activeThread.checkpoints ?? []}
+              patchTurns={patchTurnsOf(activeThread.id)}
+              patchThread={patchThreadOf(activeThread.id)}
+              recordCheckpoint={recordCheckpointOn(activeThread.id)}
               currentView={currentView}
               onNavigate={onNavigate}
               memory={memory}
@@ -727,7 +758,28 @@ function planContextMessage(
   };
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
+// The LIVE plan bindings a run's tools read through. A run can outlive the
+// Conversation that started it (thread switch, page navigation unmounts the
+// dock), and its tool calls must see the plan as it is NOW — not frozen at
+// the unmounted component's last render. The mounted Conversation writes
+// these on every render; the getters in toolContext read them at tool-
+// execution time. One AgentPage is mounted at a time (App guarantees it), so
+// module-level is correct, not a leak.
+const livePlan: {
+  inputs: RetirementInputs | null;
+  config: AppConfig | null;
+  memory: MemoryStore | undefined;
+  memoryScenarioId: string | undefined;
+  currentView: View | undefined;
+} = {
+  inputs: null,
+  config: null,
+  memory: undefined,
+  memoryScenarioId: undefined,
+  currentView: undefined,
+};
+
+function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -745,7 +797,6 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
   patchThread: (patch: Partial<ChatThread>) => void;
   recordCheckpoint: (label: string, inputsBefore: RetirementInputs) => void;
-  checkpoints: PlanCheckpoint[];
   memory?: MemoryStore;
   memoryScenarioId?: string;
   onOpenScenario?: (id: string) => void;
@@ -753,31 +804,41 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   currentView?: View;
   onNavigate?: (view: View) => void;
 }) {
+  const threadId = thread.id;
   const turns = thread.turns as Turn[];
-  const [running, setRunning] = useState(false);
-  const [loadProgress, setLoadProgress] = useState<{ progress: number; text: string } | null>(null);
+  // Run state lives in the registry (chatRuns.ts), keyed by THIS thread id —
+  // not in component state — so a run survives unmount (thread switch, page
+  // navigation) and the thread lists can show who's thinking. Subscribe to
+  // the registry; `run` is this thread's record (null = idle).
+  useSyncExternalStore(subscribeRuns, getRunsVersion, getRunsVersion);
+  const run = getRun(threadId);
+  /** This chat has a live or parked run (Stop button, send/delete guards). */
+  const running = run != null;
+  // Local-model load/compile progress rides the run record, so the bar
+  // survives thread switches too (component state died with the chat).
+  const loadProgress = run?.progress ?? null;
+  // The local engine is one shared resource: while ANY chat runs, no other
+  // chat can ask the local model anything (the engine would interleave two
+  // conversations into one KV cache). Cloud providers parallelize fine.
+  const localEngineBusy = isLocal && hasActiveRun() && run == null;
   // Speed of the current/last reply, measured while it streams. Tokens are
   // estimated from characters (~4 chars/token) since prompt-mode streams give
   // us no provider counts.
   const [tps, setTps] = useState<number | null>(null);
   const statsRef = useRef<{ start: number; first: number | null; chars: number } | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const downloadDoneRef = useRef(false);
-  const pendingDecisions = useRef(new Map<string, (d: { approved: boolean; note?: string }) => void>());
   // Approved propose_navigate cards queue their destination here instead of
-  // routing on the spot: AgentPage unmounts as soon as the view leaves
-  // 'agent', and its unmount cleanup aborts the in-flight turn — routing
-  // immediately would kill the assistant's own acknowledgment mid-stream.
-  // runTurn's finally flushes the queue once the turn is fully done.
+  // routing on the spot: routing immediately would unmount the dock mid-
+  // stream and kill the assistant's own acknowledgment. runTurn's finally
+  // flushes the queue once the turn is over — but ONLY while this chat is
+  // still the active one (a background chat finishing must not yank the user
+  // to another page; the route waits until they come back and it's still last).
   const pendingNavigation = useRef<View[]>([]);
   // Filled in by SnapToBottomOnSend (inside the viewport) with the store's
   // scrollToBottom. send() calls it so a new user message snaps the reply into
   // view — the ONE auto-jump we keep now that the library's own triggers are
   // off (they re-pinned on every streaming update and blocked scrolling up).
   const snapToBottomRef = useRef<(() => void) | null>(null);
-
-  // Cancel any in-flight request on unmount.
-  useEffect(() => () => abortRef.current?.abort(), []);
 
   /** Like patchTurns but lets the mutator also RETURN a value computed from
    *  the up-to-date turns (avoids acting on a stale `turns` closure, and keeps
@@ -793,36 +854,37 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     return result;
   };
 
-  // The loop runs async across renders, and approving a change updates `inputs`
-  // in the PARENT — so a memoized snapshot would leave a resumed turn reading
-  // the pre-approval plan (the model then thinks the change never landed and
-  // re-proposes it). Keep a ref to the live inputs, updated every render, and
-  // hand the loop a context whose `inputs` reads through it at tool-execution
-  // time. The rest of the context (config/name/list) only changes with the
-  // scenario, so a plain memo is fine for those.
-  const inputsRef = useRef(inputs);
-  inputsRef.current = inputs;
-  // Same trick for checkpoints: the loop is long-lived across renders, and a
-  // revert proposal must read the checkpoint list AS OF execution time (it
-  // grows as changes are approved mid-conversation).
-  const checkpointsRef = useRef(checkpoints);
-  checkpointsRef.current = checkpoints;
-  const memoryScenarioIdRef = useRef(memoryScenarioId);
-  memoryScenarioIdRef.current = memoryScenarioId;
+  // Publish the live plan bindings for tool execution. Runs outlive this
+  // component (thread switch / page navigation), so a module-level holder —
+  // not a ref that dies with the unmount — is what a background run's tools
+  // read through. The props are current on every render of the mounted chat.
+  livePlan.inputs = inputs;
+  livePlan.config = config;
+  livePlan.memory = memory;
+  livePlan.memoryScenarioId = memoryScenarioId;
+  livePlan.currentView = currentView;
+
+  // Checkpoints live in the chat store (per thread) — read them through the
+  // store at tool-execution time so a revert proposal sees the list as it is
+  // NOW (it grows as changes are approved, including by background runs).
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
   const toolContext: ToolContext = useMemo(() => ({
-    get inputs() { return inputsRef.current; },
-    get checkpoints() { return checkpointsRef.current; },
-    config, scenarioName, scenarioList, memory,
-    get memoryScenarioId() { return memoryScenarioIdRef.current; },
-    activeScenarioId, scenarioInputsById,
+    get inputs() { return livePlan.inputs!; },
+    get config() { return livePlan.config!; },
+    get checkpoints() {
+      const t = getChats().threads.find(x => x.id === threadIdRef.current);
+      return (t?.checkpoints ?? []) as PlanCheckpoint[];
+    },
+    get memory() { return livePlan.memory; },
+    get memoryScenarioId() { return livePlan.memoryScenarioId; },
+    get currentView() { return livePlan.currentView; },
+    scenarioName, scenarioList, activeScenarioId, scenarioInputsById,
     onOpenScenario, onSaveScenarioAs,
-    // Current page is ambient context (find_page tags it, the prompt names it)
-    // — not bound through a prop-less closure, so the memo tracks the prop.
-    currentView,
     // Advertise the card path only if the host can actually route (see
     // ToolContext.canNavigate); the routing itself happens on approval.
     canNavigate: onNavigate != null,
-  }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs, currentView, onNavigate]);
+  }), [scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs, onNavigate]);
 
   // The MCP-backed tool executor. The server re-resolves the LIVE context on
   // every call, so the executor closes over the memoized context object (its
@@ -866,8 +928,12 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
    * after that proposal rather than start a fresh turn that would re-propose.
    */
   const runTurn = async (priorTurns: Turn[], content: string, appendUser: boolean, resumeTurnId?: string) => {
-    if (!content || running || !connection) return;
-    setRunning(true);
+    if (!content || running || !connection || localEngineBusy) return;
+    // Register the run BEFORE any patch: the registry record is what keeps
+    // this run alive across the Conversation unmounting (thread switch, page
+    // navigation) — the loop below closes over threadId and the registry, not
+    // over component state.
+    const abort = startRun(threadId);
     statsRef.current = { start: Date.now(), first: null, chars: 0 };
     setTps(null);
 
@@ -890,9 +956,6 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
         ? { ...t, text: '', reasoning: undefined, tools: [], changes: [], state: 'streaming' }
         : t)));
     }
-
-    const abort = new AbortController();
-    abortRef.current = abort;
 
     const patchAssistant = (mutate: (t: Turn) => void) => {
       patchTurns(prev => prev.map(t => (t.id === assistantTurn.id
@@ -954,9 +1017,8 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
           '"How much the model reads at once" (if your GPU has the memory), pick a model compiled for a larger ' +
           'window, or switch to a cloud provider (Advanced), which offers a much bigger window.';
       });
-      setRunning(false);
-      setLoadProgress(null);
-      abortRef.current = null;
+      setRunProgress(threadId, null);
+      endRun(threadId);
       return;
     }
 
@@ -966,16 +1028,16 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       // it and never calls onProgress — the bar would sit at 0% for the whole
       // reply (the "Preparing the local model… on every chat" bug).
       downloadDoneRef.current = false;
-      setLoadProgress({ progress: 0, text: 'Preparing the local model…' });
+      setRunProgress(threadId, { progress: 0, text: 'Preparing the local model…' });
     }
     const reportLoad = (p: { progress: number; text: string }) => {
       if (p.progress >= 1) {
         if (!downloadDoneRef.current) {
           downloadDoneRef.current = true;
-          setLoadProgress({ progress: 1, text: 'Compiling the model for your GPU — this can take a minute…' });
+          setRunProgress(threadId, { progress: 1, text: 'Compiling the model for your GPU — this can take a minute…' });
         }
       } else {
-        setLoadProgress(p);
+        setRunProgress(threadId, p);
       }
     };
 
@@ -1007,7 +1069,11 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
               // decision instead of losing the loop.
               t.state = 'needs-decision';
             });
-            pendingDecisions.current.set(proposal.callId, resolve);
+            // The resolver lives in the REGISTRY, not a component ref: the
+            // user can switch threads while this run is parked, and the card
+            // must still resume the loop when they come back and click it.
+            setRunPhase(threadId, 'parked');
+            setRunDecision(threadId, proposal.callId, resolve);
           }),
       })) {
         switch (evt.type) {
@@ -1064,14 +1130,22 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
         // here means the generator ended without a 'done' (usually an abort).
         if (t.state === 'streaming') t.state = abort.signal.aborted ? 'aborted' : 'done';
       });
-      setRunning(false);
-      setLoadProgress(null);
-      abortRef.current = null;
-      // Turn fully over (reply persisted, abort cleared) — NOW it's safe to
-      // honor any approved propose_navigate. Last queued destination wins:
-      // mid-turn re-proposals mean the user's real destination was the later
-      // one, and routing through both would double-jump.
-      if (pendingNavigation.current.length > 0) {
+      setRunProgress(threadId, null);
+      // The run is over (or parked waiting on a decision) — the registry
+      // record must go so the lists stop spinning and the thread can be
+      // deleted. A PARKED run: the turn state says 'needs-decision', the
+      // resolver is dead (the loop generator returned), and the resume path
+      // below (decideChange's no-live-loop fallback) starts a NEW run on
+      // decision. So ending the registry record here is correct for both.
+      endRun(threadId);
+      // Turn fully over (reply persisted, run unregistered) — NOW it's safe
+      // to honor any approved propose_navigate. Last queued destination
+      // wins: mid-turn re-proposals mean the user's real destination was the
+      // later one, and routing through both would double-jump. A run that
+      // finished in the BACKGROUND never navigates — yanking the user off
+      // whatever they're reading to serve a chat they left is hostile; the
+      // route is only honored if this chat is still the one on screen.
+      if (pendingNavigation.current.length > 0 && getChats().activeThreadId === threadId) {
         const target = pendingNavigation.current[pendingNavigation.current.length - 1];
         pendingNavigation.current = [];
         onNavigate?.(target);
@@ -1114,7 +1188,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
         onApply(decoded as Partial<RetirementInputs>);
       }
     }
-    const live = pendingDecisions.current.get(change.callId);
+    const live = takeRunDecision(threadId, change.callId);
     if (live) {
       // The loop that proposed this is parked on the promise — resolve it and
       // it continues on its own. Flip the turn back to 'streaming' so the state
@@ -1124,13 +1198,15 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       patchTurns(prev => prev.map(t => (t.changes.some(c => c.callId === change.callId) && t.state === 'needs-decision'
         ? { ...t, state: 'streaming' }
         : t)));
+      // The run leaves 'parked' and goes back to actively streaming.
+      setRunPhase(threadId, 'streaming');
       live({ approved });
-      pendingDecisions.current.delete(change.callId);
       return;
     }
-    // No live loop (page reloaded, or the turn was cancelled while parked):
-    // resume the paused turn with the decision so the assistant acknowledges
-    // it instead of the card just going quiet.
+    // No live loop (page reloaded, the turn was cancelled while parked, or
+    // the run's finally already ended the registry record): resume the paused
+    // turn with the decision so the assistant acknowledges it instead of the
+    // card just going quiet.
     const turn = turns.find(t => t.changes.some(c => c.callId === change.callId));
     if (turn && !running) {
       void runTurn(
@@ -1143,33 +1219,6 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       );
     }
   };
-
-  // After a reload the in-memory decision map is empty but a paused turn is
-  // still persisted as 'needs-decision' with an unresolved card. Re-bind a
-  // resolver for it: decideChange looks the map up FIRST, so it finds this,
-  // resolves it (resuming the paused turn with the decision), and returns
-  // before its own no-live-loop fallback — exactly one resume, not two.
-  useEffect(() => {
-    if (running) return;
-    for (const t of turns) {
-      if (t.state !== 'needs-decision') continue;
-      for (const c of t.changes) {
-        if (!c.resolved && !pendingDecisions.current.has(c.callId)) {
-          pendingDecisions.current.set(c.callId, ({ approved }) => {
-            void runTurn(
-              turns,
-              approved
-                ? `I accepted the change you proposed (${c.label ?? 'plan update'}). Continue.`
-                : `I declined the change you proposed (${c.label ?? 'plan update'}). Don't apply it — answer with that in mind.`,
-              false,
-              t.id,
-            );
-          });
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turns, running]);
 
   const send = async (message: AppendMessage) => {
     const textPart = message.content.find(p => p.type === 'text');
@@ -1212,7 +1261,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     });
   };
 
-  const cancel = async () => { abortRef.current?.abort(); };
+  const cancel = async () => { abortRun(threadId); };
 
   const runtime = useExternalStoreRuntime<Turn>({
     messages: turns,
@@ -1432,8 +1481,11 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
             </div>
             <ComposerPrimitive.Root className="flex items-end gap-2">
               <ComposerPrimitive.Input
-                placeholder={ready ? 'Ask about your plan, or describe your situation…' : 'Connect a provider first (Connections page)'}
-                disabled={!ready}
+                placeholder={
+                  !ready ? 'Connect a provider first (Connections page)'
+                  : localEngineBusy ? 'The local model is answering another chat — pick a cloud model or wait for it to finish…'
+                  : 'Ask about your plan, or describe your situation…'}
+                disabled={!ready || localEngineBusy}
                 rows={2}
                 className="flex-1 border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-slate-900 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400 resize-none"
               />

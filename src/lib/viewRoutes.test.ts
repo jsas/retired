@@ -7,6 +7,7 @@ describe('viewFromHash', () => {
     expect(viewFromHash('#/projection')).toBe('projection');
     expect(viewFromHash('#/year-math')).toBe('math');
     expect(viewFromHash('#/steering')).toBe('eq');
+    expect(viewFromHash('#/solver')).toBe('solver');
     expect(viewFromHash('#/optimize')).toBe('optimize');
     expect(viewFromHash('#/compare')).toBe('compare');
     expect(viewFromHash('#/monte-carlo')).toBe('montecarlo');
@@ -57,10 +58,12 @@ describe('viewFromHash', () => {
 
 describe('hashForView', () => {
   it('round-trips every unfolded view', () => {
-    // Folded legacy views intentionally resolve to their destination page —
-    // the round-trip for those is covered by the fold tests below.
+    // Folded legacy views (compare/export/sharing) intentionally resolve to
+    // their destination page — the round-trip for those is covered by the
+    // fold tests below. Issue #162 unfurled the Tools surfaces into this list.
     const views: View[] = [
-      'projection', 'math', 'eq', 'scenarios', 'data', 'print', 'donate',
+      'projection', 'math', 'eq', 'optimize', 'montecarlo', 'backtest', 'solver',
+      'scenarios', 'data', 'print', 'donate',
       'welcome', 'help', 'settings', 'styleguide', 'details',
     ];
     for (const v of views) {
@@ -68,28 +71,33 @@ describe('hashForView', () => {
     }
   });
 
-  it('folds legacy views to their destination page', () => {
-    expect(foldTarget('optimize')).toBe('eq');
-    expect(foldTarget('montecarlo')).toBe('eq');
-    expect(foldTarget('backtest')).toBe('eq');
+  it('folds the merged legacy views to their destination page', () => {
+    // Only the truly-merged pages fold now — the Tools surfaces are their own
+    // pages again (identity).
+    expect(foldTarget('optimize')).toBe('optimize');
+    expect(foldTarget('montecarlo')).toBe('montecarlo');
+    expect(foldTarget('backtest')).toBe('backtest');
+    expect(foldTarget('solver')).toBe('solver');
     expect(foldTarget('compare')).toBe('scenarios');
     expect(foldTarget('export')).toBe('data');
     expect(foldTarget('sharing')).toBe('data');
   });
 
   it('hashForView prints the destination hash for folded views', () => {
-    // A "Go to Monte Carlo" link the assistant prints must land on Insights —
+    // A "Go to Compare" link the assistant prints must land on Profiles —
     // not on a dead folded route.
-    expect(hashForView('montecarlo')).toBe('#/steering');
-    expect(hashForView('optimize')).toBe('#/steering');
-    expect(hashForView('backtest')).toBe('#/steering');
     expect(hashForView('compare')).toBe('#/scenarios');
     expect(hashForView('export')).toBe('#/data');
     expect(hashForView('sharing')).toBe('#/data');
+    // Unfurled tools print their own routes.
+    expect(hashForView('montecarlo')).toBe('#/monte-carlo');
+    expect(hashForView('backtest')).toBe('#/backtest');
+    expect(hashForView('optimize')).toBe('#/optimize');
+    expect(hashForView('solver')).toBe('#/solver');
   });
 
   it('round-trips folded views through their fold', () => {
-    for (const v of ['optimize', 'montecarlo', 'backtest', 'compare', 'export', 'sharing'] as View[]) {
+    for (const v of ['compare', 'export', 'sharing'] as View[]) {
       expect(viewFromHash(hashForView(v))).toBe(foldTarget(v));
     }
   });

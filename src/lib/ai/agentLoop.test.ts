@@ -279,10 +279,13 @@ describe('buildSystemPrompt', () => {
   });
 
   it('names the destination page for a folded legacy view, and drops the line when absent', () => {
-    // The beta folds Monte Carlo into Insights — the user is on the Insights
-    // page even at a legacy #/monte-carlo route.
-    const folded = buildSystemPrompt('My Plan', { currentView: 'montecarlo' });
-    expect(folded).toContain('The user is currently on the Insights page.');
+    // Compare has no page of its own — the user is on Profiles even at a
+    // legacy #/compare route. (The Tools surfaces unfurled in issue #162.)
+    const folded = buildSystemPrompt('My Plan', { currentView: 'compare' });
+    expect(folded).toContain('The user is currently on the Profiles page.');
+    // An unfurled tool names its own page.
+    expect(buildSystemPrompt('My Plan', { currentView: 'montecarlo' }))
+      .toContain('The user is currently on the Monte Carlo page.');
     // No currentView (tests / MCP hosts): the line simply falls out.
     expect(buildSystemPrompt('My Plan')).not.toContain('currently on the');
   });
@@ -441,6 +444,56 @@ describe('prompt-protocol tools (local models)', () => {
     expect((err as { message: string }).message).toContain('GPU device lost');
     // The loop terminated (no infinite hang waiting for a done that never came).
     expect(events.some(e => e.type === 'done')).toBe(false);
+  });
+
+  it('finds the tool call when a thinking model emits it inside its reasoning', async () => {
+    // The local fine-tune "thinks" first: the provider splits <think>…</think>
+    // into the reasoning channel, and the TOOL_CALL line rides along in it —
+    // visible text stays empty. The loop must scan both channels or the call
+    // silently never runs (the "tool calls are not being surfaced" bug).
+    const { chat, requests } = scripted([
+      [
+        { type: 'reasoning', text: 'The user wants numbers. ' },
+        { type: 'reasoning', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+      [
+        { type: 'text', text: 'Your plan is funded to age 95.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'how am I doing?',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const result = events.find(e => e.type === 'tool_result');
+    expect(result && !result.isError).toBe(true);
+    expect((result as { content: string }).content).toContain('lifetime tax');
+    expect(requests.length).toBe(2);
+  });
+
+  it('does not double-execute a call that appears in BOTH the reasoning and the visible text', async () => {
+    // A model that repeats its call outside the <think> block must not get the
+    // tool run twice — the visible copy wins, the reasoning copy is ignored.
+    const { chat } = scripted([
+      [
+        { type: 'reasoning', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'text', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+      [
+        { type: 'text', text: 'Done — funded to age 95.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'check',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const results = events.filter(e => e.type === 'tool_result');
+    expect(results).toHaveLength(1);
   });
 
   it('refuses to re-run the identical tool+args back-to-back (loop guard)', async () => {

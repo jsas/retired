@@ -220,7 +220,7 @@ export function StyleGuide() {
                 ]}
                 pins={[
                   { age: 45, label: 'you · 45', place: 'below', anchor: 'start', color: T.INK },
-                  { age: 65, label: 'work ends · 65', color: '#475569' },
+                  { age: 65, label: 'start drawing · 65', color: '#475569' },
                   { age: 94, label: 'runs out · 94', color: T.RED_DOT },
                 ]}
                 marker={{ age: 65, style: 'dot' }}

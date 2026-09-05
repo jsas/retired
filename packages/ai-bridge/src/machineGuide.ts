@@ -27,8 +27,11 @@ export function buildMachineGuide(webgpu: boolean): MachineGuide {
   const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
   // Recommend the smallest model that can still drive the tool protocol (read
   // the plan, propose edits). Since #118 every curated model is tool-capable,
-  // so this lands on the lightest download in the catalog.
-  const recommended = byVram.find(m => m.toolCapable) ?? byVram[0];
+  // so this lands on the lightest download in the catalog. Dev-only entries
+  // (local fine-tunes whose weights aren't deployed) never recommend — most
+  // visitors would be pointed at a download that can't work.
+  const recommended =
+    byVram.find(m => m.toolCapable && !m.localDevOnly) ?? byVram[0];
 
   if (!webgpu) {
     const browser = detectBrowser();

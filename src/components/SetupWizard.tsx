@@ -208,7 +208,7 @@ interface Step {
 const STEPS: Step[] = [
   {
     title: 'Your ages',
-    intro: 'Three numbers anchor the whole projection: where you are, when you stop work, and how long to plan for.',
+    intro: 'Three numbers anchor the whole projection: where you are, when you start drawing, and how long to plan for.',
     fields: [
       { key: 'currentAge', label: 'Your age now', min: 18, max: 80, hint: 'The projection starts here.', spouseLabel: 'Their age now' },
       { key: 'retirementAge', label: 'Retire at', min: 40, max: 75, hint: 'When contributions stop and drawdown begins.', spouseLabel: 'They retire at' },
@@ -256,7 +256,7 @@ const STEPS: Step[] = [
 // The spouse pass runs the same skeleton with partner-focused copy; the
 // household-level fields (maxAge, home) stay with the primary pass.
 const SPOUSE_STEPS: Step[] = [
-  { ...STEPS[0], title: 'Their ages', intro: 'Your partner\'s age now and when they plan to stop work. The planning horizon is shared with yours.' },
+  { ...STEPS[0], title: 'Their ages', intro: 'Your partner\'s age now and when they plan to start drawing. The planning horizon is shared with yours.' },
   { ...STEPS[1], title: 'Their savings', intro: 'Your partner\'s balances today, by account type. Estimates are fine.' },
   { ...STEPS[2], title: 'Are they still saving?', intro: 'What is your partner putting away each year? Skip (0) if they\'re already retired.' },
   { ...STEPS[3], title: 'Their government benefits', intro: 'Your partner\'s CPP and OAS. Their My Service Canada statement has the CPP estimate — a guess works too.' },

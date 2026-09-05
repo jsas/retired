@@ -1,7 +1,8 @@
 // The shared beta page chrome — brand header, the named homes (Details ▾,
-// Profiles, Schedule, Insights, Data, style guide), the persistent verdict
-// chip, and the assistant dock. Every beta page sits inside this so navigation
-// and the answer are always one glance away. Flat, hairline, sticky.
+// Projection, Tools ▾: Steering/Optimizer/Monte Carlo/Backtest/Solver,
+// Profiles, Data), the persistent verdict chip, and the assistant dock. Every
+// beta page sits inside this so navigation and the answer are always one
+// glance away. Flat, hairline, sticky.
 //
 // The dock (f7's star): a 340px right rail on desktop, a full-screen sheet on
 // phones. The app works without it — the Assistant button toggles it and it
@@ -13,6 +14,10 @@ import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { DETAILS_SECTIONS } from './detailsSections';
 import { Maximize2, Minimize2 } from 'lucide-react';
+
+// The grow/shrink arrows follow the Assistant button's own text colour —
+// white on the dark (open) button, black on the white (closed) one.
+const ASSISTANT_TOGGLE_ICON = 'h-3.5 w-3.5';
 import { prefKV } from '../../lib/prefKv';
 
 const DOCK_PREF_KEY = 'wealthconsole_dock_open';
@@ -38,15 +43,27 @@ export interface VerdictChip {
   label: string;
 }
 
+/** The Tools menu (issue #162): the five analytic surfaces, each its own page.
+ *  Desktop opens them from the header dropdown; the phone menu carries the same
+ *  items flat (a dropdown inside a dropdown would close on the first tap). */
+export const TOOLS_MENU_ITEMS: Array<{ view: View; label: string }> = [
+  { view: 'eq', label: 'Steering' },
+  { view: 'optimize', label: 'Optimizer' },
+  { view: 'montecarlo', label: 'Monte Carlo' },
+  { view: 'backtest', label: 'Backtest' },
+  { view: 'solver', label: 'Solver' },
+];
+
 /** The phone menu's contents — the same named homes the desktop row shows
  *  (plus Dashboard/Details/Help, which desktop reaches other ways). Exported
  *  so tests can prove nothing was dropped on phones. */
 export const MOBILE_MENU_ITEMS: Array<{ view: View; label: string }> = [
   { view: 'projection', label: 'Dashboard' },
-  { view: 'math', label: 'Schedule' },
-  { view: 'eq', label: 'Insights' },
-  { view: 'scenarios', label: 'Profiles' },
+  { view: 'math', label: 'Projection' },
   { view: 'details', label: 'Details' },
+  // Tools ▾ flattened: every tool one tap away on phones.
+  ...TOOLS_MENU_ITEMS,
+  { view: 'scenarios', label: 'Profiles' },
   { view: 'data', label: 'Data' },
   { view: 'print', label: 'Print' },
   { view: 'settings', label: 'Settings' },
@@ -108,8 +125,28 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             </p>
           </Dropdown>
 
-          <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Schedule</Link>
-          <Link view="eq" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Insights</Link>
+          <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Projection</Link>
+
+          {/* The Tools menu (issue #162): the five analytic surfaces, each its
+              own page — steered by the same projection timeline they all show. */}
+          <div className="hidden md:block">
+            <Dropdown label="Tools">
+              <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Ask the plan a different question
+              </p>
+              <div className="flex flex-col">
+                {TOOLS_MENU_ITEMS.map(t => (
+                  <Link key={t.view} view={t.view} className="px-2 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    {t.label}
+                  </Link>
+                ))}
+              </div>
+              <p className="border-t border-slate-100 px-2 pt-1.5 text-[10.5px] text-slate-400">
+                Steering drags · Optimizer compares · Monte Carlo rolls the futures · Backtest replays history · Solver inverts the verdict
+              </p>
+            </Dropdown>
+          </div>
+
           <Link view="scenarios" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Profiles</Link>
           <Link view="data" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Data</Link>
           <Link view="print" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Print</Link>
@@ -133,11 +170,14 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
           {actions}
 
           {/* the assistant toggle — ALWAYS present, not gated on the dock
-              being wired: one click opens or closes it, on every page */}
+              being wired: one click opens or closes it, on every page. The
+              grow/shrink arrows live here too (nowhere else): click the
+              arrows to expand the open dock to fullscreen or shrink it back
+              to the rail — or to open straight into fullscreen when closed. */}
           <button
             type="button"
             onClick={() => setDockOpen(!dockOpen)}
-            className={`border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            className={`flex items-center border px-3 py-1.5 text-xs font-semibold transition-colors ${
               dockOpen
                 ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-700'
                 : 'border-slate-300 text-slate-800 hover:border-slate-900'
@@ -145,6 +185,28 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             title="The assistant — reads your plan, answers questions, shows its work"
           >
             Assistant
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={fullscreen ? 'Shrink the assistant back to the side rail' : 'Grow the assistant to fullscreen'}
+              title={fullscreen ? 'Shrink' : 'Grow'}
+              className={`ml-2 flex items-center border-l pl-2 ${
+                dockOpen
+                  ? 'border-white/30 text-white/80 hover:text-white'
+                  : 'border-slate-300 text-slate-900 hover:text-slate-600'
+              }`}
+              onClick={(e) => { e.stopPropagation(); setAssistantFullscreen(!fullscreen); setDockOpen(true); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault(); e.stopPropagation();
+                  setAssistantFullscreen(!fullscreen); setDockOpen(true);
+                }
+              }}
+            >
+              {fullscreen
+                ? <Minimize2 size={12} className={ASSISTANT_TOGGLE_ICON} />
+                : <Maximize2 size={12} className={ASSISTANT_TOGGLE_ICON} />}
+            </span>
           </button>
 
           {/* the persistent verdict chip — number and colour carry it; the words live in the tooltip */}
@@ -189,28 +251,8 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
               <div className="flex h-5 w-5 items-center justify-center bg-slate-900 text-[8px] font-bold text-white">RE</div>
               <HelpHint topic="assistant" />
               <div className="flex-1" />
-              {/* fullscreen toggle: arrows out to expand, in to return to the rail */}
-              {fullscreen ? (
-                <button
-                  type="button"
-                  onClick={() => setAssistantFullscreen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-700"
-                  aria-label="Return the assistant to the side rail"
-                  title="Back to the side rail"
-                >
-                  <Minimize2 size={14} />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAssistantFullscreen(true)}
-                  className="p-1 text-slate-400 hover:text-slate-700"
-                  aria-label="Expand the assistant to fullscreen"
-                  title="Fullscreen"
-                >
-                  <Maximize2 size={14} />
-                </button>
-              )}
+              {/* grow/shrink moved to the header's Assistant button (its arrow
+                  chips) — the dock header stays pure chrome */}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">{assistant}</div>
           </aside>

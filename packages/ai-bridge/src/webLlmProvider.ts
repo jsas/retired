@@ -15,7 +15,53 @@
 
 import { DEFAULT_LOCAL_TEMPERATURE, effectiveGeneration, type AiConnection } from './connections.js';
 import { ProviderError, type ChatMessage, type StreamEvent, type StreamChatRequest } from './providers.js';
-import { WEBLLM_MODELS } from './webLlmModels.js';
+import { WEBLLM_MODELS, type WebLlmModelChoice } from './webLlmModels.js';
+
+/** The slice of the web-llm module customAppConfig reads. Structural so tests
+ *  can pass a stub without loading the real engine. */
+interface WebLlmModuleMeta {
+  modelLibURLPrefix: string;
+  modelVersion: string;
+}
+
+/**
+ * The app's origin at runtime, when there is one. The ai-bridge package has
+ * no DOM lib (it also compiles for node), so `window` isn't nameable here —
+ * reach through globalThis instead.
+ */
+function appOrigin(): string {
+  const loc = (globalThis as { location?: { href?: string } }).location;
+  return loc?.href ?? 'http://localhost/';
+}
+
+/**
+ * The appConfig for a `custom` registry entry (a fine-tune served from this
+ * app's own origin, not an MLC prebuilt). Without it web-llm looks the id up
+ * in prebuiltAppConfig — where it doesn't exist — and every load AND cache
+ * helper (has/delete) throws ModelNotFoundError.
+ *
+ * The record's model URL deliberately carries no "/resolve/" segment:
+ * web-llm's cleanModelUrl appends HuggingFace's "resolve/main/" to any URL
+ * that lacks it, and the dev server's local-models plugin strips that suffix
+ * back off so the fetch lands on the plain folder in public/models/. Every
+ * cache key derives from this same URL, so load, cache check and delete stay
+ * in step. Exported for tests.
+ */
+export function customAppConfig(
+  modelId: string,
+  custom: NonNullable<WebLlmModelChoice['custom']>,
+  webllm: WebLlmModuleMeta,
+): { model_list: Array<{ model: string; model_id: string; model_lib: string }> } {
+  return {
+    model_list: [
+      {
+        model: new URL(custom.weightsUrl, appOrigin()).href,
+        model_id: modelId,
+        model_lib: webllm.modelLibURLPrefix + webllm.modelVersion + '/' + custom.modelLib,
+      },
+    ],
+  };
+}
 
 /** Engine handle; one per loaded model, reused across chats. */
 interface MlcEngine {
@@ -102,26 +148,46 @@ export async function loadWebLlmEngine(
       },
     };
 
+    // A `custom` registry entry (a fine-tune we serve ourselves, not an MLC
+    // prebuilt) needs an explicit appConfig so web-llm resolves the model_id to
+    // OUR weights URL + the matching prebuilt wasm lib, instead of looking it
+    // up in prebuiltAppConfig (where it doesn't exist). The weights URL is
+    // resolved against the app origin so a relative 'models/…' path works from
+    // any deploy path (Pages serves under /retired/).
+    const custom = WEBLLM_MODELS.find(m => m.id === modelId)?.custom;
+    const customConfig = custom
+      ? {
+          appConfig: customAppConfig(modelId, custom, webllm),
+        }
+      : undefined;
+
     // Auto (targetWindow 0) tries the model's ceiling first and backs off on
     // OOM; an explicit window is honoured as-is but still retries smaller if
     // even that won't load, since a working smaller window beats a crash.
-    let window = targetWindow > 0 ? Math.min(targetWindow, autoWindowFor(modelId)) : autoWindowFor(modelId);
+    // NOTE: named `ctxWindow`, NOT `window` — a `let window` here would shadow
+    // the DOM global and break the `window.location.href` in the custom-config
+    // block above (TDZ ReferenceError before this line initializes).
+    let ctxWindow = targetWindow > 0 ? Math.min(targetWindow, autoWindowFor(modelId)) : autoWindowFor(modelId);
     const FLOOR = 2048;
     for (;;) {
       try {
-        const engine = await webllm.CreateMLCEngine(modelId, init, { context_window_size: window });
-        engineWindow = window;
-        if (window < autoWindowFor(modelId) || targetWindow === 0) {
+        const engine = await webllm.CreateMLCEngine(
+          modelId,
+          customConfig ? { ...init, ...customConfig } : init,
+          { context_window_size: ctxWindow },
+        );
+        engineWindow = ctxWindow;
+        if (ctxWindow < autoWindowFor(modelId) || targetWindow === 0) {
           // Tell the user when auto had to settle below the model's ceiling.
-          onProgress?.({ progress: 1, text: `Ready — using a ${window.toLocaleString()}-token window.` });
+          onProgress?.({ progress: 1, text: `Ready — using a ${ctxWindow.toLocaleString()}-token window.` });
         }
         return engine as unknown as MlcEngine;
       } catch (err) {
         // Out of memory at this window: halve and try again while there's room
         // to back off. Any other failure (or the floor) is fatal — rethrow.
-        if (!isOom(err) || window <= FLOOR) throw err;
-        window = Math.max(FLOOR, Math.floor(window / 2));
-        onProgress?.({ progress: 0, text: `Not enough graphics memory for a big window — retrying at ${window.toLocaleString()} tokens…` });
+        if (!isOom(err) || ctxWindow <= FLOOR) throw err;
+        ctxWindow = Math.max(FLOOR, Math.floor(ctxWindow / 2));
+        onProgress?.({ progress: 0, text: `Not enough graphics memory for a big window — retrying at ${ctxWindow.toLocaleString()} tokens…` });
       }
     }
   })();
@@ -175,12 +241,25 @@ export async function resetWebLlmChat(): Promise<void> {
   }
 }
 
+/**
+ * The appConfig a cache helper must use for `modelId`: the custom one for a
+ * `custom` registry entry (the helpers otherwise look the id up in
+ * prebuiltAppConfig and throw ModelNotFoundError), undefined (→ prebuilt)
+ * otherwise.
+ */
+async function cacheConfigFor(modelId: string) {
+  const custom = WEBLLM_MODELS.find(m => m.id === modelId)?.custom;
+  if (!custom) return undefined;
+  const webllm = await import('@mlc-ai/web-llm');
+  return customAppConfig(modelId, custom, webllm);
+}
+
 /** True when the model's weights are cached on this device. Best-effort:
  *  resolves false when the cache can't be queried. */
 export async function isWebLlmModelCached(modelId: string): Promise<boolean> {
   try {
     const webllm = await import('@mlc-ai/web-llm');
-    return await webllm.hasModelInCache(modelId);
+    return await webllm.hasModelInCache(modelId, await cacheConfigFor(modelId));
   } catch {
     return false;
   }
@@ -192,7 +271,7 @@ export async function isWebLlmModelCached(modelId: string): Promise<boolean> {
 export async function deleteWebLlmModel(modelId: string): Promise<void> {
   if (engineModel === modelId) await unloadWebLlmEngine();
   const webllm = await import('@mlc-ai/web-llm');
-  await webllm.deleteModelAllInfoInCache(modelId);
+  await webllm.deleteModelAllInfoInCache(modelId, await cacheConfigFor(modelId));
 }
 
 /** Streaming <think>…</think> splitter. Reasoning models wrap their chain-of-

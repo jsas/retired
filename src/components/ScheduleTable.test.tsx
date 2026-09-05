@@ -110,7 +110,7 @@ describe('ScheduleTable column picker', () => {
     expect(html).toContain('role="slider"');
     expect(html).toContain('cursor-grab');
     expect(html).toContain('Drag to change the retirement age');
-    expect(html).toContain('Drag the blue &quot;stop working&quot; row');
+    expect(html).toContain('Drag the blue &quot;start drawing&quot; row');
   });
 
   it('keeps the marker a plain 🎯 when no onChange is wired', () => {

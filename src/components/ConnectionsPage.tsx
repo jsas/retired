@@ -85,38 +85,7 @@ export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
         onChange={updateSettings}
         webllmConn={webllmConn}
       />
-
-      <OverlaySection settings={settings} onChange={updateSettings} />
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// OVERLAY — opt-in markup layer over the live app
-// ---------------------------------------------------------------------------
-
-function OverlaySection({ settings, onChange }: {
-  settings: AiSettings;
-  onChange: (mutate: (s: AiSettings) => void) => void;
-}) {
-  return (
-    <section className="mt-4 border border-slate-200 bg-slate-50 rounded p-3">
-      <h3 className="text-sm font-bold text-slate-900 mb-1">Markup overlay</h3>
-      <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={settings.markupOverlay ?? false}
-          onChange={e => onChange(s => { s.markupOverlay = e.target.checked; })}
-        />
-        <span>
-          Let me draw on the app (<kbd className="px-1 border border-neutral-300 rounded bg-white text-[10px]">Ctrl+Shift+M</kbd>)
-          and have the assistant interpret it. Pen strokes, notes, arrows, drags, and cuts are sent to the
-          selected model; proposed page changes appear as a review card and are never applied without your
-          say-so. Reloads the overlay next time you open the app.
-        </span>
-      </label>
-    </section>
   );
 }
 
@@ -136,6 +105,10 @@ function ModelsSection({ onChange, webllmConn }: {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ progress: number; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Dev-only entries: is the weights folder actually being served? (These
+  // models exist only on a dev machine; elsewhere a Download would 404 into
+  // the SPA fallback and die parsing HTML as JSON.)
+  const [localWeightsReady, setLocalWeightsReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const chosenId = webllmConn?.model ?? null;
@@ -145,6 +118,22 @@ function ModelsSection({ onChange, webllmConn }: {
   useEffect(() => {
     setGuide(buildMachineGuide(webGpuAvailable()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Probe the dev-only fine-tune's weights folder once: a HEAD on its config.
+  // Missing (or HTML SPA fallback — HEAD returns 404 before the fallback in
+  // vite) means "not on this server": show why instead of a Download button.
+  useEffect(() => {
+    let cancelled = false;
+    const dev = WEBLLM_MODELS.find(m => m.localDevOnly && m.custom);
+    if (!dev?.custom) return;
+    void fetch(new URL(dev.custom.weightsUrl + '/mlc-chat-config.json', document.baseURI), { method: 'HEAD' })
+      .then(res => {
+        const type = res.headers.get('content-type') ?? '';
+        if (!cancelled && res.ok && type.includes('json')) setLocalWeightsReady(true);
+      })
+      .catch(() => { /* offline/blocked: leave not-ready */ });
+    return () => { cancelled = true; };
   }, []);
 
   /** Re-check every catalog id (and the chosen/custom id) against the cache,
@@ -303,6 +292,10 @@ function ModelsSection({ onChange, webllmConn }: {
                 </span>
               ) : isCached ? (
                 <CachedActions id={m.id} sizeGB={m.sizeGB} onDelete={() => void remove(m.id)} />
+              ) : m.localDevOnly && !localWeightsReady ? (
+                <span className="shrink-0 text-[10px] text-slate-400" title="The weights folder (public/models/) isn't served by this instance — it exists only on a dev machine.">
+                  weights not on this server
+                </span>
               ) : (
                 <button
                   onClick={() => void download(m.id)}

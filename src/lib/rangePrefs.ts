@@ -59,3 +59,23 @@ export function setRangePrefs(patch: Partial<RangePrefs>): RangePrefs {
   prefKV().setItem(RANGES_PREF_KEY, JSON.stringify(next));
   return next;
 }
+
+/**
+ * The prefs as a steering-axis range override — the shape renderRange/
+ * reconcileControl take. Maps the four user-tunable axes onto their EQ axis
+ * names; the fixed-span axes (retirement age, plan-to age, CPP/OAS start)
+ * stay absent, per the Settings page's own promise. Kept here (not in
+ * engine-core) so the engine never reads browser prefs.
+ */
+export function rangePrefsOverride(): Partial<Record<
+  'desiredSpending' | 'annualSavings' | 'investmentReturn' | 'returnVolatility',
+  { min: number; max: number }
+>> {
+  const r = getRangePrefs();
+  return {
+    desiredSpending: { min: 0, max: r.spendingMax },
+    annualSavings: { min: 0, max: r.savingsMax },
+    investmentReturn: { min: r.returnMin, max: r.returnMax },
+    returnVolatility: { min: 0, max: r.volatilityMax },
+  };
+}

@@ -198,11 +198,16 @@ People (Personal Profile · Spouse) · Accounts (Balances · Contribution Rates 
 FHSA) · Income (Income · Government Benefits · Cash Events) · Spending (Spending
 Phases · Withdrawal Strategy · Debts) · Property (Home Equity).
 
-### 3b. Old views → homes (18 in `viewRoutes.ts`)
-projection→dashboard · math→Schedule · eq+optimize+montecarlo+backtest→Insights ·
+### 3b. Old views → homes (19 in `viewRoutes.ts`)
+projection→dashboard · math→**Projection** (was Schedule, issue #162) ·
+**Tools menu (issue #162):** eq→Steering · optimize→Optimizer ·
+montecarlo→Monte Carlo · backtest→Backtest · **solver→Solver** (new page —
+the spending solve, was the OptimizeCard tab) ·
 compare+scenarios→Profiles · sharing+export→Data (one page) · print→Print ·
 donate→footer · agent→assistant dock (+ own page, see §2C) · connections→Settings ·
 welcome→Landing · help→Help · settings→Settings · styleguide→dev surface.
+Every tool page features the shared ProjectionTimeline (ProjectStrip in
+`beta/pages.tsx`).
 
 ### 3c. Assistant tools → surfaces (27 in `packages/mcp-tools`)
 Read / analyze / propose (confirm cards) / manage / memory / scenarios — all execute

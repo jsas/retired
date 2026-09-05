@@ -53,7 +53,7 @@ const QUESTIONS: Q[] = [
   },
   {
     key: 'retirementAge', chips: ['60', '62', '65'], placeholder: 'e.g. 65',
-    ask: (a) => `When would you like to stop working? (You're ${a.currentAge} now.)`,
+    ask: (a) => `When would you like to start drawing? (You're ${a.currentAge} now.)`,
     parse: (t, a) => { const n = parseAge(t); return n != null && a.currentAge != null && n >= a.currentAge ? n : null; },
   },
   {
@@ -63,7 +63,7 @@ const QUESTIONS: Q[] = [
   },
   {
     key: 'spending', chips: ['$60k', '$85k', '$110k'], placeholder: 'e.g. 85k',
-    ask: () => 'Once you stop working, how much do you want to spend each year? What would a good year cost?',
+    ask: () => 'Once you start drawing, how much do you want to spend each year? What would a good year cost?',
     parse: (t) => { const n = parseMoney(t); return n != null && n >= 5000 ? n : null; },
   },
   {

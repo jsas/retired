@@ -15,7 +15,7 @@ import { BETA_COOKIE_NAME } from '../lib/betaSkin';
 import { getRangePrefs } from '../lib/rangePrefs';
 import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
 import { cls, INK, RED_DOT } from '../design/tokens';
-import { ProjectionTimeline } from '../design/ProjectionTimeline';
+import { ProjectionTimeline, baseSpendAtRetirement } from '../design/ProjectionTimeline';
 import { BetaPage, type VerdictChip } from './beta/BetaPage';
 import { ContourMap } from './beta/ContourMap';
 import { MarketDial } from './beta/MarketDial';
@@ -152,11 +152,22 @@ export function BetaApp({
             series={[{ id: 'plan', label: 'portfolio', color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
             pins={[
               { age: inputs.currentAge, label: `you · ${inputs.currentAge}`, place: 'below', anchor: 'start', color: INK },
-              { age: inputs.retirementAge, label: `work ends · ${inputs.retirementAge}`, color: '#475569' },
+              { age: inputs.retirementAge, label: `start drawing · ${inputs.retirementAge}`, color: '#475569',
+                onDragAge: (age) => onInputsChange({ ...inputs, retirementAge: Math.max(inputs.currentAge + 1, Math.min(inputs.maxAge - 1, age)) }) },
               ...(lifeDepletion != null
                 ? [{ age: lifeDepletion, label: `money runs out · ${lifeDepletion}`, color: RED_DOT }]
                 : []),
             ]}
+            /* The interactive layers (old-site parity, restyled): the spend
+               strip with its base handle, the cash-event diamonds, and the
+               market strip. Drags write through onInputsChange and re-simulate
+               live — same contract as every fader. */
+            spend={{ points: breakdown.map(r => ({ age: r.age, value: r.spendingTarget })), baseSpend: baseSpendAtRetirement(inputs, config.engine.inflationRate, inputs.retirementAge) }}
+            onSpendChange={(today) => onInputsChange({ ...inputs, desiredSpending: today })}
+            events={(inputs.events ?? []).map(ev => ({ id: ev.id, age: ev.age, amount: ev.amount, direction: ev.direction, label: ev.label }))}
+            onEventChange={(next) => onInputsChange({ ...inputs, events: (inputs.events ?? []).map(ev => (ev.id === next.id ? { ...ev, age: next.age, amount: next.amount } : ev)) })}
+            anchors={(inputs.marketPeriods ?? []).map(p => ({ id: p.id, age: p.age, return: p.return, volatility: p.volatility }))}
+            onAnchorsChange={(next) => onInputsChange({ ...inputs, marketPeriods: next.map(a => ({ id: a.id, age: a.age, return: a.return, volatility: a.volatility })) })}
           />
         </Panel>
 
@@ -165,7 +176,7 @@ export function BetaApp({
         </Panel>
 
         <Footnote>
-          Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, levers ranked and backtests live one level down. · The old site stays up as a reference for a while — <a className="underline" href="?beta">open it</a> ({BETA_COOKIE_NAME} cookie remembers; <a className="underline" href="?beta=off">back to the app</a>)
+          Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, the levers, the odds, the history and the solver live under the Tools menu. · The old site stays up as a reference for a while — <a className="underline" href="?beta">open it</a> ({BETA_COOKIE_NAME} cookie remembers; <a className="underline" href="?beta=off">back to the app</a>)
         </Footnote>
     </BetaPage>
   );

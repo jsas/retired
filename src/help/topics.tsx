@@ -321,6 +321,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       <>
         <P>The Markets dial assumes one average return every year. To model a <strong>crash, a boom, or a choppy stretch</strong>, shape a curve with <strong>return anchors</strong> — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.</P>
         <P>The projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.</P>
+        <P>On the dashboard's life timeline you can shape the curve directly: <strong>double-click the market strip</strong> (below the balance line) to drop an anchor at that age, <strong>drag</strong> it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples.</P>
       </>
     ),
   },
@@ -357,14 +358,14 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'The down-market check',
     section: 'Reading the answer',
     keywords: ['stress test', 'pessimistic', 'low return', 'bear market'],
-    body: <P>Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo on the Insights page.</P>,
+    body: <P>Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo in the Tools menu.</P>,
   },
   {
     id: 'life-timeline',
     title: 'The life timeline',
     section: 'Reading the answer',
-    keywords: ['timeline', 'balance over time', 'work ends', 'money runs out'],
-    body: <P>Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when work ends, and when the money runs out (or that it outlasts the plan).</P>,
+    keywords: ['timeline', 'balance over time', 'start drawing', 'retirement age', 'money runs out'],
+    body: <P>Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when you <strong>start drawing</strong> (the transition into retirement — drag it to change the age), and when the money runs out (or that it outlasts the plan). Below the line: the <strong>spend strip</strong> (what the plan targets spending each year — drag its handle to change today's spending) and, when your plan has them, <strong>event diamonds</strong> (drag to move/resize a cash event) and the <strong>market strip</strong> (double-click to drop a return anchor — see Market hypothesis).</P>,
   },
   {
     id: 'evidence-row',
@@ -421,31 +422,41 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'levers-ranked',
-    title: 'Levers, ranked (the equalizer)',
+    title: 'Steering (the equalizer)',
     section: 'Analysis',
-    keywords: ['eq', 'equalizer', 'sliders', 'drag pad', 'strategy ranking', 'crops'],
+    keywords: ['eq', 'equalizer', 'sliders', 'drag pad', 'strategy ranking', 'crops', 'steering'],
     body: (
       <>
-        <P>The equalizer is a goals-level surface over your whole plan: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast.</P>
-        <P>The Strategy Explorer re-runs your plan under a menu of alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing — each scored on the sustainable after-tax spending it supports, with a one-click Apply.</P>
+        <P>Steering is a goals-level surface over your whole plan: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast. The projection timeline under the controls redraws with every drag.</P>
+      </>
+    ),
+  },
+  {
+    id: 'strategy-explorer',
+    title: 'Optimizer (strategy explorer)',
+    section: 'Analysis',
+    keywords: ['optimize', 'strategies', 'variants', 'apply', 'what helps most'],
+    body: (
+      <>
+        <P>The Optimizer re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.</P>
       </>
     ),
   },
   {
     id: 'optimize-spending',
-    title: 'Sustainable spending solve',
+    title: 'Solver: sustainable spending',
     section: 'Analysis',
-    keywords: ['how much can i spend', 'solve', 'maximum spending', 'safe withdrawal'],
-    body: <P>Answers "how much could I spend?" instead of "will my spending last?" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures.</P>,
+    keywords: ['how much can i spend', 'solve', 'solver', 'maximum spending', 'safe withdrawal'],
+    body: <P>The Solver answers "how much could I spend?" instead of "will my spending last?" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures.</P>,
   },
 
   // ── Schedule ───────────────────────────────────────────────────────────
   {
     id: 'schedule-columns',
-    title: 'The schedule columns',
+    title: 'The Projection page columns',
     section: 'Schedule',
-    keywords: ['year by year', 'table', 'column picker', 'show all', 'balances'],
-    body: <P>The year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The <strong>Columns</strong> button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one "show all" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail.</P>,
+    keywords: ['projection', 'year by year', 'table', 'column picker', 'show all', 'balances'],
+    body: <P>The Projection page's year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The <strong>Columns</strong> button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one "show all" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail.</P>,
   },
 
   // ── Profiles ──────────────────────────────────────────────────────────────
@@ -478,7 +489,7 @@ export const HELP_TOPICS: HelpTopic[] = [
           <><strong>What-if</strong> — it re-runs the engine with changed inputs and quotes the result.</>,
           <><strong>Propose changes</strong> — shown as a review card; nothing is applied until you confirm.</>,
         ])}
-        <P>Open or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The arrows in the dock's header expand it to fullscreen and back to the side rail.</P>
+        <P>Open or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The small arrows on the Assistant button grow it to fullscreen; the shrink arrows bring it back to the side rail.</P>
       </>
     ),
   },
@@ -504,22 +515,6 @@ export const HELP_TOPICS: HelpTopic[] = [
     section: 'Assistant',
     keywords: ['model', 'local', 'online', 'download', 'api key', 'provider'],
     body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter, but your plan details travel to that provider). Local models are smaller, so keep questions focused. Pick a model in the dock's model dropdown (or Connections, which the dropdown's "Load a model…" opens).</P>,
-  },
-  {
-    id: 'markup-overlay',
-    title: 'Drawing on the page (markup overlay)',
-    section: 'Assistant',
-    keywords: ['markup', 'overlay', 'draw', 'annotate', 'pen', 'arrow', 'lasso', 'note', 'ctrl+shift+m', 'markup assistant'],
-    body: (
-      <>
-        <P>Turn on <strong>Markup overlay</strong> on the Connections page, then press <strong>Ctrl+Shift+M</strong> to mark up the app itself: draw a pen stroke around something, drop a typed note, drag an element to a new spot, draw an arrow ("put this there"), or lasso a region to move it. Your markup goes to the selected model, which proposes the page change as a review card — nothing is applied until you click <strong>Apply</strong>, exactly like a chat proposal.</P>
-        {ul([
-          <><strong>Ctrl+Shift+M</strong> — show / hide the markup toolbar (or press Escape).</>,
-          <><strong>Ctrl+Z</strong> — undo the last markup; <strong>Ctrl+Backspace</strong> — clear everything.</>,
-          <>Markup recolors as the model works: blue while it's thinking, green when applied, red if it couldn't or you discarded it.</>,
-        ])}
-      </>
-    ),
   },
   {
     id: 'assistant-privacy',

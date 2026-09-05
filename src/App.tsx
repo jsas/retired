@@ -6,7 +6,8 @@ import { BetaPage } from './components/beta/BetaPage';
 import { DetailsPage } from './components/beta/DetailsPage';
 import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/beta/LandingPage';
 import {
-  BetaSchedulePage, BetaInsightsPage, BetaPlansPage, BetaDataPage,
+  BetaSchedulePage, BetaSteeringPage, BetaOptimizerPage, BetaMonteCarloPage,
+  BetaBacktestPage, BetaSolverPage, BetaPlansPage, BetaDataPage,
   BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
   BetaPrintPage, BetaDonatePage,
 } from './components/beta/pages';
@@ -32,8 +33,7 @@ import { CollapsiblePanel } from './components/CollapsiblePanel';
 import { SharingPage, type SharingImportRequest } from './components/SharingPage';
 import { DataPage, type FullBackupSelection, type ProjectionImportRequest, type AiBackupInclude } from './components/DataPage';
 import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
-import { AI_SETTINGS_STORAGE_KEY, loadAiSettings } from './lib/aiSettings';
-import { MarkupOverlay } from './components/MarkupOverlay';
+import { AI_SETTINGS_STORAGE_KEY } from './lib/aiSettings';
 import { OptimizeCard } from './components/OptimizeCard';
 import { AgentPage } from './components/AgentPage';
 import { ConnectionsPage } from './components/ConnectionsPage';
@@ -135,9 +135,6 @@ function App() {
   // montecarlo route is active. backtestResult is built while backtest is.
   const [mcRequest, setMcRequest] = useState<MonteCarloRequest | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
-  // Markup-overlay opt-in (AI settings). Read once at mount; toggling it on the
-  // Connections page takes effect on next load, same as connection edits.
-  const [markupSettings] = useState(loadAiSettings);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const cancelEqSolveRef = useRef<(() => void) | null>(null);
 
@@ -702,15 +699,15 @@ function App() {
     [results.spouse, resolvedInputs],
   );
 
-  // Monte Carlo lives on the Insights page (the folded 'montecarlo' route
-  // maps to 'eq' too). Build the request while either route is active,
+  // Monte Carlo has its own page again (issue #162 — the Tools menu unfurled
+  // it from the old Insights). Build the request while the route is active,
   // refreshing when inputs/config change (debounced so dragging a slider
   // doesn't fire a 500-run batch per pixel). MonteCarloChart re-runs whenever
   // request changes. mcRefreshNonce forces an immediate re-run.
   const [mcRefreshNonce, setMcRefreshNonce] = useState(0);
   const mcNonceSeen = useRef(0);
   useEffect(() => {
-    if (view !== 'montecarlo' && view !== 'eq') { setMcRequest(null); return; }
+    if (view !== 'montecarlo') { setMcRequest(null); return; }
     const vol = resolvedInputs.returnVolatility ?? 0;
     if (vol <= 0) { setMcRequest(null); return; }
     // Build immediately when there's nothing showing yet (first visit) or a
@@ -731,12 +728,12 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resolvedInputs, config, mcRefreshNonce]);
 
-  // Backtest lives on the Insights page too (the folded 'backtest' route maps
-  // to 'eq'). It's fast and synchronous, so recompute whenever either route is
-  // active — no debounce needed. Real-return series: inflation off so
-  // historical multipliers match today's-dollar spending.
+  // Backtest has its own page too (issue #162). It's fast and synchronous, so
+  // recompute whenever the route is active — no debounce needed. Real-return
+  // series: inflation off so historical multipliers match today's-dollar
+  // spending.
   useEffect(() => {
-    if (view !== 'backtest' && view !== 'eq') { setBacktestResult(null); return; }
+    if (view !== 'backtest') { setBacktestResult(null); return; }
     const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
     realConfig.engine.inflationRate = 0;
     // Backtest the RESOLVED plan so a linked spouse's balances/benefits are
@@ -809,6 +806,8 @@ function App() {
       case 'math':
         return (
           <BetaSchedulePage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             breakdown={householdBreakdown}
             retirementAge={results.retirementAge}
             currentAge={inputs.currentAge}
@@ -819,15 +818,43 @@ function App() {
             spouseAgeOffset={spouseAgeOffset}
           />
         );
+      // The Tools menu (issue #162): five surfaces, five pages. Each features
+      // the projection timeline (Steering through EqPage's own strip).
       case 'eq':
-      case 'optimize':   // legacy routes — the catalog's foldedInto faces land
-      case 'montecarlo': // on the Insights page (levers + optimize + MC + backtest)
+        return (
+          <BetaSteeringPage chip={chip} assistant={assistantDock}
+            eqProps={{ inputs: resolvedInputs, config, onChange: handleInputsChange, bands: eqBands, onBandsChange: setEqBands, solved: eqSolved, projection: { results, breakdown: householdBreakdown } }}
+          />
+        );
+      case 'optimize':
+        return (
+          <BetaOptimizerPage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
+            optimizeProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
+          />
+        );
+      case 'solver':
+        return (
+          <BetaSolverPage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
+            solverProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
+          />
+        );
+      case 'montecarlo':
+        return (
+          <BetaMonteCarloPage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
+            mcProps={mcRequest ? { request: mcRequest, retirementAge: results.retirementAge, onRefresh: () => setMcRefreshNonce(n => n + 1) } : null}
+          />
+        );
       case 'backtest':
         return (
-          <BetaInsightsPage chip={chip} assistant={assistantDock}
-            eqProps={{ inputs: resolvedInputs, config, onChange: handleInputsChange, bands: eqBands, onBandsChange: setEqBands, solved: eqSolved, projection: { results, breakdown: householdBreakdown } }}
-            optimizeProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
-            mcProps={mcRequest ? { request: mcRequest, retirementAge: results.retirementAge, onRefresh: () => setMcRefreshNonce(n => n + 1) } : null}
+          <BetaBacktestPage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             backtestProps={backtestResult ? { result: backtestResult } : null}
           />
         );
@@ -967,9 +994,6 @@ function App() {
       />
       <div className="no-print">
         {betaPage}
-        {/* Markup-overlay opt-in (AI settings) — same gate the old skin used;
-            toggling takes effect on next load. */}
-        {markupSettings.markupOverlay && <MarkupOverlay settings={markupSettings} />}
       </div>
     </>
   );
@@ -1210,7 +1234,7 @@ function App() {
                 <CollapsiblePanel id="timeline" title="Projection Timeline">
                   <ProjectionTimeline
                     series={[{ id: 'plan', label: 'portfolio', area: true, points: householdBreakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
-                    pins={[{ age: inputs.retirementAge, label: `work ends · ${inputs.retirementAge}` }]}
+                    pins={[{ age: inputs.retirementAge, label: `start drawing · ${inputs.retirementAge}` }]}
                   />
                 </CollapsiblePanel>
 
@@ -1410,8 +1434,6 @@ function App() {
           onCancel={() => resolvePendingSwitch('cancel', false)}
         />
       )}
-
-      {markupSettings.markupOverlay && <MarkupOverlay settings={markupSettings} />}
     </div>
   );
 }
