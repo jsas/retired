@@ -251,7 +251,7 @@ export function BetaSettingsPage({ chip, assistant, ...props }: ComponentProps<t
 
 export function BetaConnectionsPage({ chip, assistant, ...props }: ComponentProps<typeof ConnectionsPage> & { chip: VerdictChip; assistant?: ReactNode }) {
   return (
-    <BetaPage title="Assistant connection" hint="assistant-local-vs-online" chip={chip} assistant={assistant}>
+    <BetaPage title="Models" hint="assistant-local-vs-online" chip={chip} assistant={assistant}>
       <div className="pt-6"><ConnectionsPage {...props} /></div>
     </BetaPage>
   );

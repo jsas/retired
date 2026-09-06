@@ -465,7 +465,23 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'Profiles',
     section: 'Profiles',
     keywords: ['what-if', 'save', 'switch', 'new plan', 'duplicate', 'scenario'],
-    body: <P>A profile is one complete set of inputs (internally a "scenario" — same idea). The top bar switches between them; Save writes your edits into the active profile; the Profiles page creates, renames, duplicates and deletes. Switching away with unsaved edits asks whether to save first. Make several — "retire at 60" vs "65" — and flip or compare them.</P>,
+    body: <P>A profile is one complete set of inputs (internally a "scenario" — same idea). The profile icon in the header (top right, next to the verdict chip) opens this page — create, rename, duplicate, delete, or roll a plan back through its history. Edits save themselves a moment after you apply them; the undo icon next to the profile icon steps back one save at a time. Make several — "retire at 60" vs "65" — and flip or compare them.</P>,
+  },
+  {
+    id: 'autosave-undo',
+    title: 'Autosave and undo',
+    section: 'Profiles',
+    keywords: ['undo', 'save', 'autosave', 'rollback', 'revision', 'history', 'profile icon'],
+    body: (
+      <>
+        <P>Every change you apply (a fader, a details field, an assistant proposal you confirm) saves itself after a short pause. There is no Save button to remember — the plan on screen is the plan on disk.</P>
+        {ul([
+          <><strong>Profile icon</strong> (top right, next to the coloured age chip) — opens Profiles, the plan page: switch, create, or inspect history.</>,
+          <><strong>Undo icon</strong> (right of the profile icon) — discards unsaved edits, or steps back one saved version. Repeated taps walk the history; newer saves after that point are dropped.</>,
+          <><strong>History on Profiles</strong> — the same revisions, listed, if you want to jump further back than one step.</>,
+        ])}
+      </>
+    ),
   },
   {
     id: 'compare',
@@ -514,7 +530,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'Local vs online models',
     section: 'Assistant',
     keywords: ['model', 'local', 'online', 'download', 'api key', 'provider'],
-    body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter, but your plan details travel to that provider). Local models are smaller, so keep questions focused. Pick a model in the dock's model dropdown (or Connections, which the dropdown's "Load a model…" opens).</P>,
+    body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download once from the Models list) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter, but your plan details travel to that provider). Every model from every connection shows in one list — add a key and its models appear automatically; an on-computer model that isn&apos;t downloaded yet shows as downloadable. Pick from the dock dropdown, or open the Models page (the dropdown&apos;s "More models…"). Local models are smaller, so keep questions focused.</P>,
   },
   {
     id: 'assistant-privacy',

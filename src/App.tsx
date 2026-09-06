@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { BetaApp } from './components/BetaApp';
 import { StyleGuide } from './design/StyleGuide';
 import { applyBetaAtBoot } from './lib/betaSkin';
-import { BetaPage } from './components/beta/BetaPage';
+import { BetaPage, PlanUndoContext } from './components/beta/BetaPage';
 import { DetailsPage } from './components/beta/DetailsPage';
 import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/beta/LandingPage';
 import {
@@ -389,17 +389,6 @@ function App() {
     setHasUnsavedChanges(false);
   };
 
-  // Update inputs when scenario changes. If the current scenario has unsaved
-  // edits and the user hasn't opted out, ask whether to save before switching.
-  const handleScenarioChange = (id: string) => {
-    if (id === activeScenarioId) return;
-    if (hasUnsavedChanges && config.general.promptToSaveOnSwitch) {
-      setPendingSwitch(id);
-      return;
-    }
-    applyScenarioSwitch(id);
-  };
-
   // Update scenario when inputs change - with save button
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -416,6 +405,102 @@ function App() {
     ));
     setHasUnsavedChanges(false);
   };
+
+  // Issue #165 — autosave: in the beta UI every applied edit saves itself a
+  // moment after the last keystroke, so the plan on disk IS the plan on
+  // screen and each save lands in the revision ring (the persist effect
+  // records it). The header's undo icon steps back through those saves. The
+  // debounce groups a burst of fader drags / chip clicks into one save; a
+  // scenario switch or unmount saves immediately so nothing mid-flight is
+  // lost to the timer.
+  const saveTimer = useRef<number | null>(null);
+  const pendingSaveRef = useRef(false);
+  const cancelPendingSave = () => {
+    if (saveTimer.current != null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    pendingSaveRef.current = false;
+  };
+  useEffect(() => {
+    if (!beta) return; // the stable skin keeps its explicit Save button
+    if (!hasUnsavedChanges) {
+      pendingSaveRef.current = false;
+      return;
+    }
+    pendingSaveRef.current = true;
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      if (pendingSaveRef.current) {
+        pendingSaveRef.current = false;
+        handleSaveScenario();
+      }
+    }, 1200);
+    return () => {
+      if (saveTimer.current != null) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beta, hasUnsavedChanges, inputs]);
+
+  // Persist a pending autosave into the *current* scenario. Used on switch
+  // and unmount so the timer never drops the last edit. Does the write in
+  // the same setScenarios as the caller when `into` is provided.
+  const flushPendingSave = () => {
+    const pending = pendingSaveRef.current;
+    cancelPendingSave();
+    if (pending) handleSaveScenario();
+    return pending;
+  };
+  useEffect(() => () => { flushPendingSave(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update inputs when scenario changes. If the current scenario has unsaved
+  // edits and the user hasn't opted out, ask whether to save before switching.
+  const handleScenarioChange = (id: string) => {
+    if (id === activeScenarioId) return;
+    // Beta autosaves on apply, so a switch just flushes the pending save
+    // (no "save first?" prompt — the plan on screen is already the plan).
+    if (beta) {
+      flushPendingSave();
+      applyScenarioSwitch(id);
+      return;
+    }
+    if (hasUnsavedChanges && config.general.promptToSaveOnSwitch) {
+      setPendingSwitch(id);
+      return;
+    }
+    applyScenarioSwitch(id);
+  };
+
+  // The header's undo icon: step back one saved plan. Rolling back rewinds
+  // the live plan AND deletes the revisions newer than the target (history
+  // doesn't branch), so repeated taps walk backwards one save at a time.
+  //
+  //   • with unsaved edits pending: discard them (restore the last saved
+  //     inputs). Do NOT flush-then-rollback — persist is async, so the
+  //     just-saved revision isn't in the store yet, and flushing would
+  //     write the thing we're trying to undo.
+  //   • otherwise: roll back to the SECOND-newest revision, which deletes
+  //     the newest and restores the state before it.
+  const handleUndoSave = () => {
+    cancelPendingSave();
+    if (hasUnsavedChanges) {
+      const saved = scenarios.find(s => s.id === activeScenarioId);
+      if (!saved) return;
+      setInputs(JSON.parse(JSON.stringify(saved.inputs)));
+      setHasUnsavedChanges(false);
+      return;
+    }
+    const mine = (store?.allRevisions() ?? []).filter(r => r.scenarioId === activeScenarioId);
+    const target = mine[mine.length - 2];
+    if (!target) return;
+    handleRollback(target.id);
+  };
+  const canUndo = hasUnsavedChanges
+    || (store?.allRevisions() ?? []).filter(r => r.scenarioId === activeScenarioId).length >= 2;
+  const undoState = { canUndo, onUndo: handleUndoSave };
 
   // Agent scenario tools (open_scenario / save_scenario_as). Both mirror the
   // sidebar paths: open saves the current plan first (nothing the user typed
@@ -924,15 +1009,10 @@ function App() {
         if (scenarios.length > 0) {
           return (
             <BetaApp
-              scenarios={scenarios}
-              activeScenarioId={activeScenarioId}
-              onScenarioChange={handleScenarioChange}
               inputs={inputs}
               onInputsChange={handleInputsChange}
               results={results}
               config={config}
-              hasUnsavedChanges={hasUnsavedChanges}
-              onSave={handleSaveScenario}
               assistant={assistantDock}
             />
           );
@@ -963,15 +1043,10 @@ function App() {
         // projection / welcome / everything else → the dashboard
         return (
           <BetaApp
-            scenarios={scenarios}
-            activeScenarioId={activeScenarioId}
-            onScenarioChange={handleScenarioChange}
             inputs={inputs}
             onInputsChange={handleInputsChange}
             results={results}
             config={config}
-            hasUnsavedChanges={hasUnsavedChanges}
-            onSave={handleSaveScenario}
             assistant={assistantDock}
           />
         );
@@ -993,7 +1068,9 @@ function App() {
         rrifConversionAge={config.engine.rrifConversionAge}
       />
       <div className="no-print">
-        {betaPage}
+        <PlanUndoContext.Provider value={undoState}>
+          {betaPage}
+        </PlanUndoContext.Provider>
       </div>
     </>
   );

@@ -65,6 +65,17 @@ describe('BetaPage assistant dock', () => {
     expect(html).toContain('>Tools');
   });
 
+  it('puts a profile icon (to Profiles) and an undo icon next to the verdict chip', () => {
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, children: createElement('div') }),
+    );
+    expect(html).toContain('aria-label="Your profiles — the plan page"');
+    expect(html).toContain('href="#/scenarios"');
+    expect(html).toContain('aria-label="Undo — step back to the previous saved plan"');
+    // Undo is inert until App wires a history through PlanUndoContext.
+    expect(html).toContain('disabled');
+  });
+
   it('offers a phone Menu carrying the same named homes', () => {
     // Under md the inline links hide and a Menu ▾ takes over — the menu's
     // item list must cover every home (nothing dropped on phones), and the

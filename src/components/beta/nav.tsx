@@ -11,6 +11,7 @@ export function Link({ view, section, className, children, ...rest }: {
   className?: string;
   children: ReactNode;
   'aria-label'?: string;
+  title?: string;
 }) {
   const href = hashForView(view) + (section ? `?section=${section}` : '');
   // Let the default anchor navigation set the hash; App's hash listener picks
