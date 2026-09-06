@@ -80,6 +80,9 @@ describe('LandingPage', () => {
     // the wordy two-door copy is gone
     expect(container.textContent).not.toContain('Open the dashboard');
     expect(container.textContent).not.toContain('Tune the details');
+    // after the questions: a short "what's next" so the user isn't dumped
+    expect(container.textContent).toContain("What's next");
+    expect(container.textContent).toContain('Edits save themselves');
   });
 
   it('"Go to dashboard" closes the dock, "Keep chatting" opens it — both build the plan', () => {

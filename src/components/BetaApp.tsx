@@ -9,12 +9,11 @@
 // engine run.
 import type { ReactNode } from 'react';
 import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
-import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
 import { getRangePrefs } from '../lib/rangePrefs';
 import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
-import { cls, INK, RED_DOT } from '../design/tokens';
+import { INK, RED_DOT } from '../design/tokens';
 import { ProjectionTimeline } from '../design/ProjectionTimeline';
 import { BetaPage, type VerdictChip } from './beta/BetaPage';
 import { ContourMap } from './beta/ContourMap';
@@ -40,15 +39,10 @@ export function mapWindow({ desiredSpending }: { desiredSpending: number }) {
 }
 
 interface BetaAppProps {
-  scenarios: Scenario[];
-  activeScenarioId: string;
-  onScenarioChange: (id: string) => void;
   inputs: RetirementInputs;
   onInputsChange: (next: RetirementInputs) => void;
   results: RetirementResults;
   config: AppConfig;
-  hasUnsavedChanges: boolean;
-  onSave: () => void;
   /** The assistant conversation, docked on the right (f7's star). */
   assistant?: ReactNode;
 }
@@ -63,8 +57,7 @@ function verdict(inputs: RetirementInputs, results: RetirementResults) {
 }
 
 export function BetaApp({
-  scenarios, activeScenarioId, onScenarioChange,
-  inputs, onInputsChange, results, config, hasUnsavedChanges, onSave, assistant,
+  inputs, onInputsChange, results, config, assistant,
 }: BetaAppProps) {
   const v = verdict(inputs, results);
   const breakdown = results.yearlyBreakdown ?? [];
@@ -77,25 +70,7 @@ export function BetaApp({
     label: v.holds ? 'the plan holds' : 'runs short',
   };
   return (
-    <BetaPage chip={chip} assistant={assistant} actions={
-      <>
-        <select
-          className="min-w-0 max-w-[30vw] cursor-pointer appearance-none border-b border-transparent bg-transparent py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-slate-900"
-          value={activeScenarioId}
-          onChange={(e) => onScenarioChange(e.target.value)}
-          aria-label="Active scenario"
-        >
-          {scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <button
-          className={hasUnsavedChanges ? cls.primaryBtn : 'px-3 py-1.5 text-xs font-medium text-slate-400'}
-          onClick={onSave}
-          disabled={!hasUnsavedChanges}
-        >
-          Save{hasUnsavedChanges ? ' · unsaved' : 'd'}
-        </button>
-      </>
-    }>
+    <BetaPage chip={chip} assistant={assistant}>
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="min-w-0 flex-1">
             <VerdictHero

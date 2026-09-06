@@ -221,6 +221,15 @@ export function LandingPage({ config, onBuild }: {
               </p>
             </div>
 
+            <div className="border-l border-slate-200 pl-4 text-[13px] leading-relaxed text-slate-600">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">What&apos;s next</p>
+              <ul className="mt-1.5 space-y-1">
+                <li>The dashboard is the live plan — drag a fader and the answer updates.</li>
+                <li>Edits save themselves. Top right: the profile icon is your plans; undo steps back through saved versions.</li>
+                <li>The Assistant button answers questions about this plan, on every page.</li>
+              </ul>
+            </div>
+
             {/* the two exits — both go to the dashboard; "keep chatting" just
                 opens the assistant dock on arrival */}
             <div className="flex flex-wrap gap-3">

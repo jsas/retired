@@ -48,6 +48,7 @@ import {
   type PlanCheckpoint,
 } from '@retired/mcp-tools/checkpoints';
 import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
+import { activeCatalogKey, pickModel, useModelCatalog } from '../lib/modelCatalog';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
@@ -394,11 +395,6 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     });
   };
 
-  /** Switch the active connection (and implicitly its model) from the header
-   *  picker. */
-  const chooseConnection = (id: string) =>
-    setSettings(prev => ({ ...prev, activeConnectionId: id }));
-
   /** Patch the active thread's turns (and bump updatedAt / title). */
   const patchTurns = (mutate: (turns: Turn[]) => Turn[]) => {
     setChatState(prev => {
@@ -464,8 +460,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
           <div className="flex items-center gap-2 ml-auto">
             <ModelPicker
               settings={settings}
-              activeId={settings.activeConnectionId}
-              onChoose={chooseConnection}
+              onChange={setSettings}
               onLoadModel={onOpenConnections}
             />
             {connection && (
@@ -507,8 +502,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
             modelPicker={
               <ModelPicker
                 settings={settings}
-                activeId={settings.activeConnectionId}
-                onChoose={chooseConnection}
+                onChange={setSettings}
                 onLoadModel={onOpenConnections}
               />
             }
@@ -641,39 +635,59 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   );
 }
 
-/** Model picker in the header: every configured connection's model, plus a
- *  "Load model…" escape hatch that opens the Connections page. Choosing an
- *  entry makes that connection (and its model) active. */
-export function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
-  settings: AiSettings;
-  activeId: string | null;
-  onChoose: (id: string) => void;
+/** The select itself, fed a pre-built catalog so node tests can render it
+ *  without the hook (cache probe / listModels). */
+export function ModelPickerSelect({ entries, activeKey, onPick, onLoadModel }: {
+  entries: import('../lib/modelCatalog').ModelCatalogEntry[];
+  activeKey: string | null;
+  onPick: (key: string) => void;
   onLoadModel: () => void;
 }) {
-  if (settings.connections.length === 0) {
-    // No connection configured: the OfflineAssistant body renders the same
-    // "Load a model" CTA, so render nothing here to avoid a duplicate button.
-    return null;
-  }
+  const value = entries.some(e => e.key === activeKey) ? (activeKey ?? '') : '';
   return (
     <div className="flex items-center gap-1.5">
       <select
-        value={activeId ?? ''}
+        value={value}
         onChange={e => {
           if (e.target.value === '__load__') onLoadModel();
-          else if (e.target.value) onChoose(e.target.value);
+          else if (e.target.value) onPick(e.target.value);
         }}
-        className="border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-slate-900 focus:outline-none max-w-56"
-        title="Pick which model answers. Add or download models on the Connections page."
+        className="max-w-56 border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-slate-900 focus:outline-none"
+        title="Pick which model answers. On-computer models download on first use; more models live on the Models page."
       >
-        {settings.connections.map(c => (
-          <option key={c.id} value={c.id}>
-            {c.label || c.provider} · {c.model}
+        {entries.length === 0 && <option value="">No models yet</option>}
+        {entries.map(e => (
+          <option key={e.key} value={e.key}>
+            {e.local
+              ? `${e.label}${e.cached === false ? ' · download' : ''}`
+              : `${e.label}${e.connectionLabel ? ` · ${e.connectionLabel}` : ''}`}
           </option>
         ))}
-        <option value="__load__">Load a model…</option>
+        <option value="__load__">More models…</option>
       </select>
     </div>
+  );
+}
+
+/** Model picker: every model the catalog knows — on-computer (downloadable
+ *  if not cached) plus every ready connection's listModels results — plus a
+ *  "More models…" hatch that opens the Models page. */
+export function ModelPicker({ settings, onChange, onLoadModel }: {
+  settings: AiSettings;
+  onChange: (next: AiSettings) => void;
+  onLoadModel: () => void;
+}) {
+  const { entries } = useModelCatalog(settings);
+  return (
+    <ModelPickerSelect
+      entries={entries}
+      activeKey={activeCatalogKey(settings)}
+      onPick={key => {
+        const entry = entries.find(x => x.key === key);
+        if (entry) onChange(pickModel(settings, entry));
+      }}
+      onLoadModel={onLoadModel}
+    />
   );
 }
 

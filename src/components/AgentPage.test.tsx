@@ -1,39 +1,37 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ModelPicker } from './AgentPage';
-import type { AiSettings } from '../lib/aiSettings';
-
-const noConnections: AiSettings = {
-  connections: [],
-  activeConnectionId: null,
-  prompts: [],
-};
-
-const oneConnection: AiSettings = {
-  connections: [
-    { id: 'c1', provider: 'webllm', label: 'Local', apiKey: '', model: 'm1' },
-  ],
-  activeConnectionId: 'c1',
-  prompts: [],
-};
+import { ModelPickerSelect } from './AgentPage';
+import { buildModelCatalog } from '../lib/modelCatalog';
+import type { AiConnection } from '../lib/aiSettings';
 
 const noop = () => {};
 
-describe('ModelPicker', () => {
-  it('renders nothing when no connections exist (OfflineAssistant owns the CTA)', () => {
-    const html = renderToStaticMarkup(
-      <ModelPicker settings={noConnections} activeId={null} onChoose={noop} onLoadModel={noop} />,
-    );
-    expect(html).toBe('');
-  });
+const localOnly = buildModelCatalog([]);
 
-  it('renders the select with a single Load a model… option when connections exist', () => {
+describe('ModelPickerSelect', () => {
+  it('always lists on-computer models even with no connections (downloadable)', () => {
     const html = renderToStaticMarkup(
-      <ModelPicker settings={oneConnection} activeId="c1" onChoose={noop} onLoadModel={noop} />,
+      <ModelPickerSelect entries={localOnly} activeKey={null} onPick={noop} onLoadModel={noop} />,
     );
     expect(html).toContain('<select');
-    expect(html.match(/Load a model/g)?.length).toBe(1);
+    expect(html).toContain('Qwen3.5 4B');
     expect(html).toContain('__load__');
+    expect(html).toContain('More models');
+  });
+
+  it('lists every ready connection’s models alongside the locals', () => {
+    const gemini: AiConnection = {
+      id: 'g1', provider: 'gemini', label: 'My key', apiKey: 'k', model: 'm-default',
+    };
+    const entries = buildModelCatalog([gemini], {
+      cloudLists: { g1: [{ id: 'gemini-2.5-flash', detail: 'Gemini 2.5 Flash' }] },
+    });
+    const html = renderToStaticMarkup(
+      <ModelPickerSelect entries={entries} activeKey="g1:gemini-2.5-flash" onPick={noop} onLoadModel={noop} />,
+    );
+    expect(html).toContain('Gemini 2.5 Flash');
+    expect(html).toContain('My key');
+    expect(html.match(/More models/g)?.length).toBe(1);
   });
 });
