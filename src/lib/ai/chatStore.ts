@@ -55,6 +55,10 @@ const turnSchema = z.object({
    *  waiting for the user to Accept/Decline it (survives a page reload, where
    *  'streaming' would wrongly suggest it's still working). */
   state: z.enum(['streaming', 'done', 'aborted', 'truncated', 'error', 'needs-decision']).optional(),
+  /** Model id the user picked for this reply (e.g. openrouter/free). */
+  askedModel: z.string().optional(),
+  /** Model id the provider actually served (OpenRouter's free router rewrites). */
+  servedModel: z.string().optional(),
 });
 
 export type StoredTurn = z.infer<typeof turnSchema>;

@@ -14,6 +14,7 @@
 // prompt instead — the model still answers from real numbers.
 
 import { DEFAULT_LOCAL_TEMPERATURE, effectiveGeneration, type AiConnection } from './connections.js';
+import { isGpuOom, unloadSiblingLocalEngine } from './localGpu.js';
 import { ProviderError, type ChatMessage, type StreamEvent, type StreamChatRequest } from './providers.js';
 import { WEBLLM_MODELS, type WebLlmModelChoice } from './webLlmModels.js';
 
@@ -106,8 +107,7 @@ function autoWindowFor(modelId: string): number {
 /** True when a load/generation failure looks like the GPU ran out of memory
  *  (the only failure auto mode retries smaller on). */
 function isOom(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return /out of memory|oom|device.?lost|mapAsync|was unmapped|GPUBuffer|maxBufferSize|maxStorageBufferBindingSize|context window/i.test(msg);
+  return isGpuOom(err);
 }
 
 /**
@@ -129,6 +129,8 @@ export async function loadWebLlmEngine(
   if (enginePromise && engineModel === modelId) return enginePromise;
   // A different model was requested: drop the old engine (VRAM is scarce).
   if (enginePromise) await unloadWebLlmEngine();
+  // Bonsai and web-llm cannot share the GPU — drop the other local engine first.
+  await unloadSiblingLocalEngine('webllm');
 
   engineModel = modelId;
   enginePromise = (async () => {
@@ -171,10 +173,16 @@ export async function loadWebLlmEngine(
     const FLOOR = 2048;
     for (;;) {
       try {
+        // Gemma (and a few others) ship mlc-chat-config.json with BOTH a
+        // positive context_window_size and sliding_window_size: 512. web-llm
+        // forbids that combo. Prebuilt ModelRecord.overrides only set the
+        // context size, so chatOpts must also pin sliding_window_size to -1
+        // (same as Mistral's catalog entries) or load throws
+        // WindowSizeConfigurationError.
         const engine = await webllm.CreateMLCEngine(
           modelId,
           customConfig ? { ...init, ...customConfig } : init,
-          { context_window_size: ctxWindow },
+          { context_window_size: ctxWindow, sliding_window_size: -1 },
         );
         engineWindow = ctxWindow;
         if (ctxWindow < autoWindowFor(modelId) || targetWindow === 0) {
@@ -448,9 +456,13 @@ function translateLocalError(err: unknown): ProviderError {
   return new ProviderError(`Local model error: ${msg.slice(0, 300)}`);
 }
 
-/** Serialize the provider-neutral history into OpenAI-style messages. */
-function toMessages(system: string, messages: ChatMessage[]): Array<Record<string, unknown>> {
-  const out: Array<Record<string, unknown>> = [{ role: 'system', content: system }];
+/** Serialize the provider-neutral history into OpenAI-style messages.
+ *  An empty system string is omitted entirely — a blank `{role:system}` still
+ *  occupies the template slot and some small models treat it as "stay in
+ *  assistant mode" (the leftover protocol text you get with every flag off). */
+export function toMessages(system: string, messages: ChatMessage[]): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  if (system.trim()) out.push({ role: 'system', content: system });
   for (const m of messages) {
     if (m.role === 'assistant') {
       out.push({ role: 'assistant', content: m.content });

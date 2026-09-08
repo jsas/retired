@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Plus, Trash2, RotateCcw, Save } from 'lucide-react';
 import {
   type AppConfig,
@@ -9,8 +9,18 @@ import {
 import { DB_STORAGE_KEY } from '../data/db';
 import { AsyncOpfsBackend } from '../data/opfs';
 import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';
-import { AI_SETTINGS_STORAGE_KEY } from '../lib/aiSettings';
+import {
+  AI_SETTINGS_STORAGE_KEY, getAiSettings, subscribeAiSettings, updateAiSettings,
+  resolveAiPromptSend, resolveLocalToolCapable, DEFAULT_AI_PROMPT_SEND, isLocalProvider,
+  type AiPromptSend, type AiSettings,
+} from '../lib/aiSettings';
+import {
+  assembleSystemPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_TOOL_INSTRUCTIONS_NATIVE,
+  DEFAULT_TOOL_INSTRUCTIONS_PROMPT, DEFAULT_TOOL_INSTRUCTIONS_OFF,
+} from '../lib/ai/agentLoop';
 import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } from '../lib/rangePrefs';
+import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
+import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { HelpHint } from '../design/primitives';
 
 interface SettingsModalProps {
@@ -50,10 +60,11 @@ const ERASABLE_KEYS = [
   AI_SETTINGS_STORAGE_KEY,
 ];
 
-type Section = 'general' | 'levers' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
+type Section = 'general' | 'assistant' | 'levers' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'general', label: 'General' },
+  { id: 'assistant', label: 'Assistant' },
   { id: 'levers', label: 'Lever Ranges' },
   { id: 'federal', label: 'Federal Tax' },
   { id: 'provinces', label: 'Provincial Tax' },
@@ -83,6 +94,14 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   // up on their next render.
   const [ranges, setRanges] = useState<RangePrefs>(getRangePrefs);
   const updateRanges = (patch: Partial<RangePrefs>) => setRanges(setRangePrefs(patch));
+  const ai = useSyncExternalStore(subscribeAiSettings, getAiSettings, getAiSettings);
+  const patchAi = (mutate: (s: AiSettings) => void) => {
+    updateAiSettings(prev => {
+      const next = structuredClone(prev);
+      mutate(next);
+      return next;
+    });
+  };
 
   const update = (mutate: (c: AppConfig) => void) => {
     setDraft(prev => {
@@ -219,6 +238,10 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 </button>
               </div>
             </div>
+          )}
+
+          {section === 'assistant' && (
+            <AssistantSettings ai={ai} patchAi={patchAi} config={draft} />
           )}
 
           {section === 'levers' && (
@@ -585,6 +608,216 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
             </button>
           </div>
         </div>
+    </div>
+  );
+}
+
+const SEND_TOGGLES: Array<{ key: keyof Required<AiPromptSend>; label: string; hint: string }> = [
+  { key: 'includePersona', label: 'Persona', hint: 'The base voice (built-in or your override).' },
+  { key: 'includePageLine', label: 'Current page', hint: 'One line naming the page you are on.' },
+  { key: 'includeToolInstructions', label: 'Tool instructions', hint: 'How to use tools / what to do when tools are off.' },
+  { key: 'includePromptCatalog', label: 'Tool catalog (local)', hint: 'The TOOL_CALL: list of every tool. Local models only.' },
+  { key: 'includeProgramRules', label: 'Program rules', hint: 'Live CPP/OAS/GIS/RRIF/limit figures from engine settings.' },
+  { key: 'includeScenarioName', label: 'Active plan name', hint: 'The active scenario is "…".' },
+  { key: 'includePlanDigest', label: 'Plan digest (local)', hint: 'Pinned summary of ages, balances, projection. Local models only.' },
+  { key: 'includeChatNote', label: 'Per-chat note', hint: '“Additional instructions for this chat” from the composer.' },
+  { key: 'sendTools', label: 'Send tools', hint: 'Advertise and execute tools. Off = chat only, even on a capable model.' },
+  { key: 'personaLast', label: 'Persona last', hint: 'Put the persona after the mechanics so a small model honors a custom override.' },
+];
+
+function AssistantSettings({ ai, patchAi, config }: {
+  ai: AiSettings;
+  patchAi: (mutate: (s: AiSettings) => void) => void;
+  config: AppConfig;
+}) {
+  const send = resolveAiPromptSend(ai.promptSend);
+  const connection = ai.connections.find(c => c.id === ai.activeConnectionId);
+  const isLocal = connection != null && isLocalProvider(connection.provider);
+  const localMeta = !isLocal || !connection
+    ? undefined
+    : connection.provider === 'bonsai'
+      ? BONSAI_MODELS.find(m => m.id === connection.model)
+      : WEBLLM_MODELS.find(m => m.id === connection.model);
+  const toolCapable = !isLocal || resolveLocalToolCapable(
+    localMeta?.toolCapable,
+    connection ? ai.toolCapableByModel?.[connection.model] : undefined,
+  );
+  const toolMode: 'native' | 'prompt' | 'off' = !connection
+    ? 'off'
+    : !isLocal ? 'native' : toolCapable ? 'prompt' : 'off';
+  const effectiveMode = send.sendTools ? toolMode : 'off';
+  const toolOverride = effectiveMode === 'native' ? ai.toolInstructionsNative
+    : effectiveMode === 'prompt' ? ai.toolInstructionsPrompt
+    : ai.toolInstructionsOff;
+  const assembled = assembleSystemPrompt({
+    scenarioName: 'Active plan',
+    toolMode: effectiveMode,
+    send,
+    basePrompt: ai.systemPromptOverride,
+    config,
+    toolInstructions: toolOverride,
+  });
+  const setSend = (key: keyof Required<AiPromptSend>, value: boolean) => {
+    patchAi(s => {
+      s.promptSend = { ...resolveAiPromptSend(s.promptSend), [key]: value };
+    });
+  };
+  const resetSend = () => patchAi(s => { s.promptSend = { ...DEFAULT_AI_PROMPT_SEND }; });
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      <div>
+        <h3 className="text-xs font-semibold text-slate-700 mb-1">
+          What is sent<HelpHint topic="assistant-prompts" />
+        </h3>
+        <p className="text-xs text-slate-600 leading-snug">
+          Every request to the model is assembled from the pieces below. Uncheck one to drop
+          it. Edits save immediately (same as lever ranges) and apply to the next message in
+          every chat. Per-chat notes still live on the composer.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {SEND_TOGGLES.map(t => (
+          <label key={t.key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={send[t.key]}
+              onChange={e => setSend(t.key, e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              {t.label}
+              <span className="block text-[11px] text-slate-500 mt-0.5">{t.hint}</span>
+            </span>
+          </label>
+        ))}
+        <button
+          onClick={resetSend}
+          className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+        >
+          <RotateCcw size={13} /> Back to default send flags
+        </button>
+      </div>
+
+      <div className="border border-slate-200 bg-slate-50 p-3">
+        <h3 className="text-xs font-semibold text-slate-700 mb-1">Assembled system (this request)</h3>
+        <p className="text-[11px] text-slate-500 leading-snug mb-2">
+          Exactly what the next message will put in the system slot. Empty means
+          nothing — no blank system role, and the local engine drops its previous
+          system from cache. Chat history still goes as user/assistant turns.
+        </p>
+        {assembled.trim()
+          ? <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-slate-700">{assembled}</pre>
+          : <p className="text-xs font-medium text-slate-800">(empty — no system message)</p>}
+      </div>
+
+      <div className="border-t border-slate-200 pt-3">
+        <h3 className="text-xs font-semibold text-slate-700 mb-1">
+          Tools per local model<HelpHint topic="assistant-prompts" />
+        </h3>
+        <p className="text-xs text-slate-600 leading-snug mb-2">
+          The catalog decides the default: Qwen 1.7B and Bonsai 1.7B are questions-only; 4B and up run tools.
+          Force a model on or off here for testing — Auto restores the catalog. Cloud
+          models always use tools unless Send tools is unchecked above.
+        </p>
+        <div className="space-y-1.5">
+          {[...visibleWebLlmModels(), ...BONSAI_MODELS].map(m => {
+            const value = ai.toolCapableByModel?.[m.id] ?? 'auto';
+            const catalog = m.toolCapable ? 'on' : 'off';
+            return (
+              <div key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="text-xs text-slate-800 min-w-[10rem]">
+                  {m.label}
+                  <span className="block text-[10px] text-slate-400">
+                    catalog default: tools {catalog}
+                  </span>
+                </span>
+                {(['auto', 'on', 'off'] as const).map(opt => (
+                  <label key={opt} className="flex items-center gap-1 text-[11px] text-slate-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name={`toolcap-${m.id}`}
+                      checked={value === opt}
+                      onChange={() => patchAi(s => {
+                        const next = { ...(s.toolCapableByModel ?? {}) };
+                        if (opt === 'auto') delete next[m.id];
+                        else next[m.id] = opt;
+                        s.toolCapableByModel = Object.keys(next).length ? next : undefined;
+                      })}
+                    />
+                    {opt === 'auto' ? 'Auto' : opt === 'on' ? 'On' : 'Off'}
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <PromptEditor
+        title="Persona (all chats)"
+        hint="Replaces the built-in planner voice when non-empty. Leave blank to use the default."
+        value={ai.systemPromptOverride ?? ''}
+        fallback={DEFAULT_SYSTEM_PROMPT}
+        onChange={text => patchAi(s => { s.systemPromptOverride = text || undefined; })}
+      />
+      <PromptEditor
+        title="Tool instructions — native (cloud)"
+        hint="How a function-calling model should use the tools. Sent only when Tool instructions is on and the model is cloud."
+        value={ai.toolInstructionsNative ?? ''}
+        fallback={DEFAULT_TOOL_INSTRUCTIONS_NATIVE}
+        onChange={text => patchAi(s => { s.toolInstructionsNative = text || undefined; })}
+      />
+      <PromptEditor
+        title="Tool instructions — local (prompt protocol)"
+        hint="How a chat-only local model should use TOOL_CALL. The catalog of tools is a separate toggle."
+        value={ai.toolInstructionsPrompt ?? ''}
+        fallback={DEFAULT_TOOL_INSTRUCTIONS_PROMPT}
+        onChange={text => patchAi(s => { s.toolInstructionsPrompt = text || undefined; })}
+      />
+      <PromptEditor
+        title="Instructions when tools are off"
+        hint="Used when this model’s tools are off (catalog default or your override), or when Send tools is unchecked."
+        value={ai.toolInstructionsOff ?? ''}
+        fallback={DEFAULT_TOOL_INSTRUCTIONS_OFF}
+        onChange={text => patchAi(s => { s.toolInstructionsOff = text || undefined; })}
+      />
+    </div>
+  );
+}
+
+function PromptEditor({ title, hint, value, fallback, onChange }: {
+  title: string;
+  hint: string;
+  value: string;
+  fallback: string;
+  onChange: (text: string) => void;
+}) {
+  const customized = value.trim().length > 0;
+  const shown = customized ? value : fallback;
+  return (
+    <div className="border-t border-slate-200 pt-3">
+      <h3 className="text-xs font-semibold text-slate-700 mb-0.5">{title}</h3>
+      <p className="text-[11px] text-slate-500 leading-snug mb-1.5">{hint}</p>
+      <textarea
+        value={shown}
+        onChange={e => onChange(e.target.value)}
+        rows={8}
+        className="w-full border border-slate-300 bg-white px-2 py-1.5 font-mono text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-y"
+      />
+      <div className="flex items-center gap-2 mt-1">
+        <button
+          onClick={() => onChange('')}
+          className="text-[10px] font-semibold text-slate-400 hover:text-slate-900"
+          title="Restore the built-in default"
+        >
+          Reset to default
+        </button>
+        {customized && (
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">customized</span>
+        )}
+      </div>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { ContourMap } from './beta/ContourMap';
 import { MarketDial } from './beta/MarketDial';
 import { DownMarketCheck } from './beta/DownMarketCheck';
 import { EvidenceRow } from './beta/EvidenceRow';
+import { firstEmptyAge, potDisplay } from '../lib/planDisplay';
 
 // The map's axis window defaults — retire age × spending. The spending axis
 // reads the Settings lever-range pref (spendingMax) when set; age bounds stay
@@ -48,11 +49,15 @@ interface BetaAppProps {
 }
 
 function verdict(inputs: RetirementInputs, results: RetirementResults) {
-  if (results.status === 'ON_TRACK') {
+  const pot = potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge);
+  if (pot.holds) {
     return { text: `Your money lasts to ${inputs.maxAge}.`, holds: true };
   }
-  const runsTo = results.depletionAge ?? '?';
-  const short = inputs.maxAge - (results.depletionAge ?? inputs.maxAge);
+  const runsTo = pot.lastsTo ?? '?';
+  const short = inputs.maxAge - (pot.lastsTo ?? inputs.maxAge);
+  if (typeof runsTo === 'number' && short <= 0) {
+    return { text: `Your money lasts to ${runsTo}.`, holds: false };
+  }
   return { text: `Your money runs out at ${runsTo} — ${short} years short of ${inputs.maxAge}.`, holds: false };
 }
 
@@ -61,13 +66,14 @@ export function BetaApp({
 }: BetaAppProps) {
   const v = verdict(inputs, results);
   const breakdown = results.yearlyBreakdown ?? [];
-  // Where the money runs out (null = outlasts the plan) — drives the timeline pin.
-  const lifeDepletion = breakdown.find(r => r.endingBalance <= 0)?.age ?? null;
+  const pot = potDisplay(breakdown, inputs.maxAge);
+  // Where the investable pot hits $0 (null = leftover at the horizon).
+  const lifeDepletion = firstEmptyAge(breakdown);
   const window = mapWindow({ desiredSpending: inputs.desiredSpending });
   const chip: VerdictChip = {
-    tone: v.holds ? 'holds' : (results.depletionAge != null && inputs.maxAge - results.depletionAge <= 6) ? 'borderline' : 'short',
-    age: v.holds ? `${inputs.maxAge}+` : `${results.depletionAge ?? '—'}`,
-    label: v.holds ? 'the plan holds' : 'runs short',
+    tone: pot.holds ? 'holds' : (pot.emptyAge != null && inputs.maxAge - pot.emptyAge <= 6) ? 'borderline' : 'short',
+    age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
+    label: pot.holds ? 'the plan holds' : 'runs short',
   };
   return (
     <BetaPage chip={chip} assistant={assistant}>

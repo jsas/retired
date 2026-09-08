@@ -3,8 +3,12 @@
 // hook's async probing is deliberately not (jsdom fetch/network — the page
 // tests cover the rendered behavior).
 import { describe, expect, it } from 'vitest';
-import { buildLocalModels, cloudEntriesFor, buildModelCatalog, pickModel, activeCatalogKey } from './modelCatalog';
-import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
+import {
+  buildLocalModels, cloudEntriesFor, buildModelCatalog, pickModel, activeCatalogKey,
+  catalogBucket, toggleFavorite, chatPickerEntries, DEFAULT_CHAT_LOCAL_ID,
+} from './modelCatalog';
+import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
+import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import type { AiConnection } from '../lib/aiSettings';
 
 const conn = (over: Partial<AiConnection>): AiConnection => ({
@@ -15,7 +19,8 @@ const conn = (over: Partial<AiConnection>): AiConnection => ({
 describe('buildLocalModels', () => {
   it('lists every curated model with a local: key and no connection', () => {
     const entries = buildLocalModels();
-    expect(entries.map(e => e.modelId)).toEqual(WEBLLM_MODELS.map(m => m.id));
+    const expected = [...visibleWebLlmModels().map(m => m.id), ...BONSAI_MODELS.map(m => m.id)];
+    expect(entries.map(e => e.modelId)).toEqual(expected);
     for (const e of entries) {
       expect(e.key).toBe(`local:${e.modelId}`);
       expect(e.local).toBe(true);
@@ -63,6 +68,23 @@ describe('cloudEntriesFor', () => {
     expect(entries.map(e => e.key)).toEqual(['g1:gemini-2.5-flash', 'g1:gemini-2.5-pro']);
     expect(entries[0]!.label).toBe('Gemini 2.5 Flash');
     expect(entries[1]!.label).toBe('gemini-2.5-pro');
+  });
+
+  it('injects the OpenRouter free router when a ready OpenRouter key lists models', () => {
+    const c = conn({
+      id: 'or1', provider: 'openrouter', label: 'OR',
+      model: 'openrouter/free', baseUrl: 'https://openrouter.ai/api/v1',
+    });
+    const entries = cloudEntriesFor(c, [
+      { id: 'meta-llama/llama-3.3-70b-instruct:free' },
+      { id: 'openai/gpt-4o' },
+    ]);
+    expect(entries[0]!.modelId).toBe('openrouter/free');
+    expect(entries.map(e => e.modelId)).toEqual([
+      'openrouter/free',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'openai/gpt-4o',
+    ]);
   });
 });
 
@@ -113,6 +135,23 @@ describe('pickModel / activeCatalogKey', () => {
     expect(next.connections[0]!.model).toBe(local().modelId);
   });
 
+  it('creates a separate bonsai connection instead of retargeting webllm', () => {
+    const settings: import('../lib/aiSettings').AiSettings = {
+      connections: [{ id: 'w1', provider: 'webllm', label: 'On this computer', apiKey: '', model: 'Qwen3.5-2B-q4f16_1-MLC' }],
+      activeConnectionId: 'w1',
+      prompts: [],
+    };
+    const bonsai = buildLocalModels().find(e => e.engine === 'bonsai')!;
+    const next = pickModel(settings, bonsai, () => 'new-b');
+    expect(next.connections).toHaveLength(2);
+    expect(next.connections.find(c => c.provider === 'webllm')?.model).toBe('Qwen3.5-2B-q4f16_1-MLC');
+    expect(next.connections.find(c => c.provider === 'bonsai')).toMatchObject({
+      id: 'new-b', provider: 'bonsai', model: bonsai.modelId,
+    });
+    expect(next.activeConnectionId).toBe('new-b');
+    expect(activeCatalogKey(next)).toBe(bonsai.key);
+  });
+
   it('sets the cloud connection’s model and makes it active', () => {
     const c = conn({ id: 'g1', model: 'old' });
     const settings: import('../lib/aiSettings').AiSettings = {
@@ -123,5 +162,47 @@ describe('pickModel / activeCatalogKey', () => {
     expect(next.activeConnectionId).toBe('g1');
     expect(next.connections[0]!.model).toBe('gemini-2.5-flash');
     expect(activeCatalogKey(next)).toBe('g1:gemini-2.5-flash');
+  });
+
+  it('adds the picked model to the chat shortlist', () => {
+    const settings: import('../lib/aiSettings').AiSettings = { connections: [], activeConnectionId: null, prompts: [] };
+    const next = pickModel(settings, local());
+    expect(next.favoriteModels).toContain(local().key);
+  });
+});
+
+describe('catalogBucket / favorites / chatPickerEntries', () => {
+  it('buckets local vs OpenRouter free vs paid remote', () => {
+    const local = buildLocalModels()[0]!;
+    const or: AiConnection = {
+      id: 'or1', provider: 'openrouter', label: 'OR', apiKey: 'k', model: 'openrouter/free',
+    };
+    const gem: AiConnection = conn({ id: 'g1' });
+    const entries = [
+      local,
+      ...cloudEntriesFor(or, [{ id: 'openrouter/free' }, { id: 'anthropic/claude-sonnet-4' }]),
+      ...cloudEntriesFor(gem, [{ id: 'gemini-2.5-flash' }]),
+    ];
+    expect(catalogBucket(local)).toBe('local');
+    expect(catalogBucket(entries.find(e => e.modelId === 'openrouter/free')!)).toBe('free');
+    expect(catalogBucket(entries.find(e => e.modelId === 'anthropic/claude-sonnet-4')!)).toBe('remote');
+    expect(catalogBucket(entries.find(e => e.modelId === 'gemini-2.5-flash')!)).toBe('remote');
+  });
+
+  it('toggles a key on and off the shortlist', () => {
+    const s: import('../lib/aiSettings').AiSettings = { connections: [], activeConnectionId: null, prompts: [] };
+    const on = toggleFavorite(s, 'local:x');
+    expect(on.favoriteModels).toEqual(['local:x']);
+    expect(toggleFavorite(on, 'local:x').favoriteModels).toEqual([]);
+  });
+
+  it('chat picker lists only favorites (plus active), not the whole catalog', () => {
+    const entries = buildModelCatalog([]);
+    const rec = entries.find(e => e.modelId === DEFAULT_CHAT_LOCAL_ID)!;
+    const other = entries.find(e => e.local && e.modelId !== DEFAULT_CHAT_LOCAL_ID)!;
+    const empty: import('../lib/aiSettings').AiSettings = { connections: [], activeConnectionId: null, prompts: [] };
+    expect(chatPickerEntries(entries, empty).map(e => e.key)).toEqual([rec.key]);
+    const shortlisted = { ...empty, favoriteModels: [other.key] };
+    expect(chatPickerEntries(entries, shortlisted).map(e => e.key)).toEqual([other.key]);
   });
 });

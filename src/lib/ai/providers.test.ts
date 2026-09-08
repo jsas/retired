@@ -82,6 +82,15 @@ describe('anthropic adapter', () => {
     expect(headers['anthropic-dangerous-direct-browser-access']).toBe('true');
   });
 
+  it('omits an empty system field from the request body', async () => {
+    let body = '';
+    await collect(streamChat(anthropic, { system: '', messages: userTurn },
+      sseFetch([], 200, (_u, init) => { body = String(init.body); })));
+    const parsed = JSON.parse(body);
+    expect(parsed.system).toBeUndefined();
+    expect(parsed.messages[0]).toEqual({ role: 'user', content: 'hello' });
+  });
+
   it('serializes tool results as a user-turn tool_result block', async () => {
     let body = '';
     await collect(streamChat(anthropic, {
@@ -178,6 +187,15 @@ describe('openai-compatible adapter', () => {
     expect(headers.authorization).toBeUndefined();
   });
 
+  it('omits an empty system role from the request messages', async () => {
+    let body = '';
+    await collect(streamChat(openai, { system: '', messages: userTurn },
+      sseFetch(['[DONE]'], 200, (_u, init) => { body = String(init.body); })));
+    const parsed = JSON.parse(body);
+    expect(parsed.messages.some((m: { role: string }) => m.role === 'system')).toBe(false);
+    expect(parsed.messages[0]).toEqual({ role: 'user', content: 'hello' });
+  });
+
   it('serializes tool results as role:tool messages', async () => {
     let body = '';
     await collect(streamChat(openai, {
@@ -195,6 +213,15 @@ describe('openai-compatible adapter', () => {
 });
 
 describe('gemini adapter', () => {
+  it('omits an empty systemInstruction from the request body', async () => {
+    let body = '';
+    await collect(streamChat(gemini, { system: '', messages: userTurn },
+      sseFetch([], 200, (_u, init) => { body = String(init.body); })));
+    const parsed = JSON.parse(body);
+    expect(parsed.systemInstruction).toBeUndefined();
+    expect(parsed.contents[0]).toEqual({ role: 'user', parts: [{ text: 'hello' }] });
+  });
+
   it('streams text parts and STOP → end_turn', async () => {
     const events = await collect(streamChat(gemini, { system: 's', messages: userTurn },
       sseFetch([

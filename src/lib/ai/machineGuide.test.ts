@@ -38,12 +38,12 @@ describe('buildMachineGuide', () => {
   });
 
   it('recommends the smallest TOOL-CAPABLE model', () => {
-    // Since #118 pruned the weak models, every catalog entry is tool-capable —
-    // the recommendation is the lightest download that can still drive the
-    // plan (never a questions-only assistant).
+    // Tiny catalog entries (Qwen3.5 2B) are questions-only — the recommendation
+    // is the lightest download that can still drive the plan.
     const g = buildMachineGuide(true);
     expect(g.recommended).toBe(smallestToolCapable);
     expect(g.recommended.toolCapable).toBe(true);
+    expect(g.recommended.id).not.toContain('1.7B');
     expect(g.headline).toContain(g.recommended.label);
   });
 

@@ -58,7 +58,7 @@ export function estimateTokens(system: string, messages: ChatMessage[]): number 
  *  history was compacted so hard the model lost the thread and rambled. Cloud
  *  endpoints default to a large window the user can narrow in Connections. */
 export function defaultContextSize(provider: string): number {
-  return provider === 'webllm' ? 16384 : 128000;
+  return provider === 'webllm' || provider === 'bonsai' ? 16384 : 128000;
 }
 
 export interface CompactionPlan {

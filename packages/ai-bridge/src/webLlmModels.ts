@@ -10,12 +10,13 @@
 // LiteRT/MediaPipe collections (litert-community Gemma etc.) are a DIFFERENT
 // runtime and are intentionally absent here.
 //
-// The list is curated toward INSTRUCT/REASONING models that can follow the
-// tool protocol and stay grounded on a retirement projection, ordered
-// best-first for a typical laptop GPU. VRAM figures come straight from
-// web-llm's own metadata. The full prebuilt catalog (160+ general-chat and
-// vision models) stays available via the free-text model field; these are
-// just the good defaults.
+// The list is a slice of chat.webllm.ai's settings catalog: instruct /
+// reasoning chat prebuilds a laptop GPU can actually hold. VRAM figures
+// come from web-llm's own metadata. Sub-4B stays questions-only so the
+// machine guide still recommends a 4B that can drive plan tools. Phi-4
+// is omitted on purpose. 70B-class packs are omitted (they won't fit).
+// Anything else in the 160+ prebuilt catalog stays available via the
+// free-text model field.
 
 export interface WebLlmModelChoice {
   /** The prebuilt model_id from web-llm's prebuiltAppConfig. For a `custom`
@@ -107,17 +108,6 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     blurb: 'Reasoning mode for multi-step math; a touch smaller download than 3.5.',
   },
   {
-    id: 'Phi-4-mini-instruct-q4f16_1-MLC',
-    label: 'Phi-4 Mini 3.8B',
-    vramMB: 3438,
-    sizeGB: 2.5,
-    toolCapable: true,
-    maxWindow: 16384,
-    // Loop-prone: see MODEL_SAMPLER_DEFAULTS in connections for its stronger
-    // anti-repeat profile (diverse word-salad is its failure mode).
-    blurb: 'Microsoft\'s small instruct model; reliable at following formats.',
-  },
-  {
     id: 'Qwen3-8B-q4f16_1-MLC',
     label: 'Qwen3 8B (thinking)',
     vramMB: 5696,
@@ -134,6 +124,150 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     toolCapable: true,
     maxWindow: 32768,
     blurb: 'Strongest model in the list, for GPUs with 8 GB+. Largest download.',
+  },
+  {
+    id: 'Qwen3.5-2B-q4f16_1-MLC',
+    label: 'Qwen3.5 2B',
+    vramMB: 2245,
+    sizeGB: 1.3,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Smaller Qwen3.5 — short questions. Compiled at 4096 tokens, so a full plan summary often will not fit; pick the 4B for that.',
+  },
+  {
+    id: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+    label: 'Qwen2.5 7B',
+    vramMB: 5107,
+    sizeGB: 4.0,
+    toolCapable: true,
+    maxWindow: 4096,
+    blurb: 'Previous-gen Qwen instruct. Solid tools if 3.5 8B/9B is too big.',
+  },
+  {
+    id: 'Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC',
+    label: 'Qwen2.5 Math 1.5B',
+    vramMB: 1630,
+    sizeGB: 0.9,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Tiny math specialist. Questions only — not for plan tools.',
+  },
+  {
+    id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+    label: 'Llama 3.2 3B',
+    vramMB: 2264,
+    sizeGB: 1.7,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Compact Llama instruct. Questions only — pick a 4B for tools.',
+  },
+  {
+    id: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
+    label: 'Llama 3.1 8B',
+    vramMB: 5001,
+    sizeGB: 4.5,
+    toolCapable: true,
+    maxWindow: 4096,
+    blurb: 'Full-size Llama instruct. Needs ~5 GB VRAM.',
+  },
+  {
+    id: 'Hermes-3-Llama-3.2-3B-q4f16_1-MLC',
+    label: 'Hermes 3 Llama 3.2 3B',
+    vramMB: 2264,
+    sizeGB: 1.7,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Nous Hermes on Llama 3.2 3B. Chat-first; too small for plan tools.',
+  },
+  {
+    id: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
+    label: 'DeepSeek R1 Distill Qwen 7B',
+    vramMB: 5107,
+    sizeGB: 4.0,
+    toolCapable: true,
+    maxWindow: 4096,
+    blurb: 'R1 reasoning distilled onto Qwen 7B. Thinks out loud; needs ~5 GB.',
+  },
+  {
+    id: 'DeepSeek-R1-Distill-Llama-8B-q4f16_1-MLC',
+    label: 'DeepSeek R1 Distill Llama 8B',
+    vramMB: 5001,
+    sizeGB: 4.5,
+    toolCapable: true,
+    maxWindow: 4096,
+    blurb: 'R1 reasoning distilled onto Llama 8B. Similar size to Llama 3.1 8B.',
+  },
+  {
+    id: 'gemma-2-2b-it-q4f16_1-MLC',
+    label: 'Gemma 2 2B',
+    vramMB: 1895,
+    sizeGB: 1.2,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Small Gemma 2 instruct. Short questions; not for plan tools.',
+  },
+  {
+    id: 'gemma-2-9b-it-q4f16_1-MLC',
+    label: 'Gemma 2 9B',
+    vramMB: 6422,
+    sizeGB: 5.5,
+    toolCapable: true,
+    maxWindow: 4096,
+    blurb: 'Large Gemma 2 instruct. Needs ~6 GB free VRAM.',
+  },
+  {
+    id: 'Mistral-7B-Instruct-v0.3-q4f16_1-MLC',
+    label: 'Mistral 7B Instruct',
+    vramMB: 4573,
+    sizeGB: 4.0,
+    toolCapable: true,
+    maxWindow: 4096,
+    blurb: 'Classic Mistral instruct. Tools on; ~4.5 GB VRAM.',
+  },
+  {
+    id: 'Hermes-2-Pro-Mistral-7B-q4f16_1-MLC',
+    label: 'Hermes 2 Pro Mistral 7B',
+    vramMB: 4033,
+    sizeGB: 4.0,
+    toolCapable: true,
+    maxWindow: 4096,
+    blurb: 'Nous Hermes 2 Pro on Mistral 7B — trained to follow function calls.',
+  },
+  {
+    id: 'Ministral-3-3B-Instruct-2512-BF16-q4f16_1-MLC',
+    label: 'Ministral 3 3B Instruct',
+    vramMB: 2864,
+    sizeGB: 1.8,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Mistral\'s small instruct. Questions only — pick a 4B for tools.',
+  },
+  {
+    id: 'Ministral-3-3B-Reasoning-2512-q4f16_1-MLC',
+    label: 'Ministral 3 3B Reasoning',
+    vramMB: 2864,
+    sizeGB: 1.8,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Mistral\'s small reasoning pack. Thinks out loud; still questions only.',
+  },
+  {
+    id: 'SmolLM2-1.7B-Instruct-q4f16_1-MLC',
+    label: 'SmolLM2 1.7B',
+    vramMB: 1774,
+    sizeGB: 1.1,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Hugging Face tiny instruct. Small download, questions only.',
+  },
+  {
+    id: 'WizardMath-7B-V1.1-q4f16_1-MLC',
+    label: 'WizardMath 7B',
+    vramMB: 4573,
+    sizeGB: 4.0,
+    toolCapable: false,
+    maxWindow: 4096,
+    blurb: 'Math-tuned 7B. Good at arithmetic; not trained for plan tools.',
   },
 ];
 
@@ -154,4 +288,18 @@ export function fmtVram(mb: number): string {
 /** Human-readable download size ("2.5 GB"). */
 export function fmtSize(gb: number): string {
   return `${gb.toFixed(1)} GB`;
+}
+
+/** Approximate disk used by cached catalog rows. Cache API bytes aren't
+ *  cheap to sum (every response blob), so we add the same sizeGB the picker
+ *  already shows. Rows without a size (unlisted extras) contribute 0. */
+export function sumCachedSizeGB(
+  rows: Array<{ id: string; sizeGB?: number }>,
+  cached: Record<string, boolean>,
+): number {
+  let n = 0;
+  for (const row of rows) {
+    if (cached[row.id] && row.sizeGB) n += row.sizeGB;
+  }
+  return n;
 }

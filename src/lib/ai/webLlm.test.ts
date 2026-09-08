@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { prebuiltAppConfig } from '@mlc-ai/web-llm';
-import { WEBLLM_MODELS, fmtVram, webGpuAvailable } from './webLlmModels';
+import { WEBLLM_MODELS, visibleWebLlmModels, fmtVram, sumCachedSizeGB, webGpuAvailable } from './webLlmModels';
 import { connectionReady, defaultModelFor, type AiConnection } from '../aiSettings';
 import { buildPlanDigest } from '../agentQA';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
@@ -20,7 +20,7 @@ let crashWith: string | null = null; // the error message to throw (defaults to 
 const cachedModels = new Set<string>(); // models the fake cache reports as present
 let deletedModels: string[] = [];
 let lastRequest: Record<string, unknown> | null = null; // the completion request, captured
-let loadAttempts: Array<{ contextWindow: number | undefined }> = []; // CreateMLCEngine calls
+let loadAttempts: Array<{ contextWindow: number | undefined; slidingWindow: number | undefined }> = []; // CreateMLCEngine calls
 let oomFirstLoads = 0; // how many initial loads should throw OOM before succeeding
 
 vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
@@ -29,8 +29,8 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@mlc-ai/web-llm')>();
   return {
     ...actual,
-    CreateMLCEngine: async (_modelId: string, _init?: unknown, chatOpts?: { context_window_size?: number }) => {
-      loadAttempts.push({ contextWindow: chatOpts?.context_window_size });
+    CreateMLCEngine: async (_modelId: string, _init?: unknown, chatOpts?: { context_window_size?: number; sliding_window_size?: number }) => {
+      loadAttempts.push({ contextWindow: chatOpts?.context_window_size, slidingWindow: chatOpts?.sliding_window_size });
       if (oomFirstLoads > 0) {
         oomFirstLoads--;
         throw new Error('WebGPU device was lost while loading the model (OOM)');
@@ -79,6 +79,24 @@ describe('curated web-llm model list', () => {
     }
   });
 
+  it('includes the public Qwen3.5 2B prebuild as a small, questions-only download', () => {
+    const tiny = WEBLLM_MODELS.find(m => m.id === 'Qwen3.5-2B-q4f16_1-MLC');
+    expect(tiny).toBeDefined();
+    expect(tiny!.toolCapable).toBe(false);
+    expect(tiny!.localDevOnly).toBeFalsy();
+    expect(tiny!.sizeGB).toBeLessThan(2);
+  });
+
+  it('hides the 0.6B fine-tune outside local Vite and never lists Phi-4', () => {
+    expect(WEBLLM_MODELS.some(m => m.id.includes('Phi-4'))).toBe(false);
+    const prod = visibleWebLlmModels(false);
+    expect(prod.some(m => m.localDevOnly)).toBe(false);
+    expect(prod.some(m => m.id === 'Qwen3.5-2B-q4f16_1-MLC')).toBe(true);
+    expect(prod.some(m => m.id === 'retired-qwen3-0.6b-ft-q4f16_1')).toBe(false);
+    const dev = visibleWebLlmModels(true);
+    expect(dev.some(m => m.id === 'retired-qwen3-0.6b-ft-q4f16_1')).toBe(true);
+  });
+
   it('contains only ids that exist in web-llm\'s prebuilt catalog — unless they carry their own appConfig', () => {
     // A stale or hand-typed id fails at download time with a confusing error —
     // verify every curated id is a known prebuild or a custom entry the
@@ -122,17 +140,37 @@ describe('curated web-llm model list', () => {
     expect(fmtVram(512)).toBe('512 MB VRAM');
   });
 
-  it('curates only tool-capable models — every listed model can drive the plan', () => {
-    // The tool-capability contract after #118: the probe sweep showed the two
-    // weak/low-value models (Gemma 2 2B, DeepSeek R1 7B) weren't earning their
-    // download, so the catalog is now all-tool-capable. A user who still wants
-    // a tiny Q&A-only model reaches it via the free-text field (assumed
-    // capable); the tools-off tier in AgentPage stays for that path.
-    const weak = WEBLLM_MODELS.filter(m => !m.toolCapable);
-    expect(weak).toEqual([]);
-    // And the smallest download is still modest, so "start small" is real.
-    const minSize = Math.min(...WEBLLM_MODELS.map(m => m.sizeGB));
-    expect(minSize).toBeLessThanOrEqual(2.5);
+  it('keeps the 4B+ catalog tool-capable; sub-4B stays questions-only', () => {
+    // Tiny public packs (Qwen3.5 2B, Llama 3B, …) are chat-only.
+    // Everything at 4B and up that we mark for tools still drives the plan —
+    // that's what the machine guide recommends. Sub-4B must stay off tools.
+    const tiny = WEBLLM_MODELS.find(m => m.id === 'Qwen3.5-2B-q4f16_1-MLC')!;
+    expect(tiny.toolCapable).toBe(false);
+    expect(WEBLLM_MODELS.filter(m => m.toolCapable && !m.localDevOnly).length).toBeGreaterThanOrEqual(4);
+    const minPublic = Math.min(...WEBLLM_MODELS.filter(m => !m.localDevOnly).map(m => m.sizeGB));
+    expect(minPublic).toBeLessThanOrEqual(1.2);
+    for (const m of WEBLLM_MODELS.filter(m => !m.localDevOnly && m.vramMB < 3000)) {
+      expect(m.toolCapable, `${m.id} is sub-4B and must stay questions-only`).toBe(false);
+    }
+  });
+
+  it('covers the chat.webllm.ai families without Phi-4', () => {
+    const ids = WEBLLM_MODELS.map(m => m.id).join(' ');
+    for (const needle of ['Llama-3.2', 'Llama-3.1-8B', 'DeepSeek-R1', 'gemma-2', 'Mistral-7B', 'SmolLM2', 'WizardMath', 'Ministral-3']) {
+      expect(ids, `missing ${needle}`).toContain(needle);
+    }
+    expect(ids).not.toContain('Phi-4');
+  });
+
+  it('sums cached catalog sizes for the disk-used line', () => {
+    const rows = [
+      { id: 'a', sizeGB: 1.2 },
+      { id: 'b', sizeGB: 2.8 },
+      { id: 'c' },
+    ];
+    expect(sumCachedSizeGB(rows, { a: true, b: true })).toBeCloseTo(4.0);
+    expect(sumCachedSizeGB(rows, { a: false, b: true, c: true })).toBeCloseTo(2.8);
+    expect(sumCachedSizeGB(rows, {})).toBe(0);
   });
 
   it('webGpuAvailable reports a boolean without throwing', () => {
@@ -324,6 +362,7 @@ describe('streamWebLlm', () => {
       system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
     })) void _;
     expect(loadAttempts[0]?.contextWindow).toBe(32768);
+    expect(loadAttempts[0]?.slidingWindow).toBe(-1);
     expect(lastRequest?.context_window_size).toBe(32768);
   });
 
@@ -353,7 +392,18 @@ describe('streamWebLlm', () => {
       system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
     })) void _;
     expect(loadAttempts[0]?.contextWindow).toBe(8192);
+    expect(loadAttempts[0]?.slidingWindow).toBe(-1);
     expect(lastRequest?.context_window_size).toBe(8192);
+  });
+
+  it('pins sliding_window_size to -1 so Gemma MLC configs can load', async () => {
+    // Gemma packs ship context_window_size AND sliding_window_size: 512;
+    // web-llm throws unless one of them is -1.
+    const { loadWebLlmEngine, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    loadAttempts = [];
+    await loadWebLlmEngine('gemma-2-2b-it-q4f16_1-MLC');
+    expect(loadAttempts[0]).toEqual({ contextWindow: 4096, slidingWindow: -1 });
   });
 
   it('splits <think>…</think> reasoning out of the visible stream', async () => {
@@ -572,6 +622,27 @@ describe('web-llm model cache management', () => {
     })) { /* drain to load */ }
     await resetWebLlmChat();
     expect(resetChatCalls).toBe(1);
+  });
+
+  it('omits an empty system role from the engine request', async () => {
+    // Regression: a blank {role:system} still occupies the chat template and
+    // small models treat it as leftover assistant protocol. Flags-all-off
+    // must send only the user turn.
+    const { streamWebLlm, unloadWebLlmEngine, toMessages } = await import('./webLlmProvider');
+    expect(toMessages('', [{ role: 'user', content: 'hi' }])).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(toMessages('   ', [{ role: 'user', content: 'hi' }])).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(toMessages('you are a planner', [{ role: 'user', content: 'hi' }])[0]).toEqual({
+      role: 'system', content: 'you are a planner',
+    });
+    await unloadWebLlmEngine();
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    lastRequest = null;
+    for await (const _ of streamWebLlm(conn, {
+      system: '', messages: [{ role: 'user', content: 'say yes' }], tools: [],
+    })) { /* drain */ }
+    const msgs = lastRequest?.messages as Array<{ role: string }>;
+    expect(msgs.some(m => m.role === 'system')).toBe(false);
+    expect(msgs[0]).toEqual({ role: 'user', content: 'say yes' });
   });
 
   it('unloads the live engine before deleting its model', async () => {

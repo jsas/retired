@@ -11,6 +11,7 @@ import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
+import { potDisplay } from '../../lib/planDisplay';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { INK, BLUE, RED_TEXT } from '../../design/tokens';
 import { prefKV } from '../../lib/prefKv';
@@ -142,8 +143,9 @@ export function LandingPage({ config, onBuild }: {
     setStep(s => s + 1);
   };
 
-  const holds = results?.status === 'ON_TRACK';
-  const lastsLabel = holds ? `${plan?.maxAge}` : `${results?.depletionAge ?? '—'}`;
+  const pot = results && plan ? potDisplay(results.yearlyBreakdown ?? [], plan.maxAge) : null;
+  const holds = pot?.holds ?? false;
+  const lastsLabel = holds ? `${plan?.maxAge}` : `${pot?.lastsTo ?? '—'}`;
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-white">
@@ -212,11 +214,11 @@ export function LandingPage({ config, onBuild }: {
               <p className="num text-[17px] font-semibold" style={{ color: holds ? BLUE : RED_TEXT }}>
                 {holds
                   ? <>Your money lasts until you're {lastsLabel}.</>
-                  : <>Your money runs out at {lastsLabel} — {plan.maxAge - (results.depletionAge ?? plan.maxAge)} years short of {plan.maxAge}.</>}
+                  : <>Your money runs out at {lastsLabel} — {plan.maxAge - (pot?.lastsTo ?? plan.maxAge)} years short of {plan.maxAge}.</>}
               </p>
               <p className="mt-1 text-[13px] text-slate-500">
                 {holds
-                  ? `On those numbers the plan holds${results.depletionAge == null ? ` — there's money left at ${plan.maxAge}` : ''}.`
+                  ? `On those numbers the plan holds — there's money left at ${plan.maxAge}.`
                   : 'The dashboard lets you drag the levers and watch the answer change; the assistant can answer questions about the plan.'}
               </p>
             </div>

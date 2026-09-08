@@ -4,13 +4,15 @@
 // CPP+OAS that arrives every year. Everything reads the same engine breakdown.
 import { useState } from 'react';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
+import { potDisplay } from '../../lib/planDisplay';
 import { AccountBars, Stat } from '../../design/primitives';
 
 const fmt = (v: number) => '$' + Math.round(v).toLocaleString('en-CA');
 
-export function EvidenceRow({ inputs, results, breakdown }: {
+export function EvidenceRow({ inputs, breakdown }: {
   inputs: RetirementInputs;
-  results: RetirementResults;
+  /** Unused — leftover is read from `breakdown` so it matches the life-timeline pin. */
+  results?: RetirementResults;
   breakdown: YearlyBreakdown[];
 }) {
   const { currentAge, retirementAge, maxAge } = inputs;
@@ -28,11 +30,13 @@ export function EvidenceRow({ inputs, results, breakdown }: {
   const accTotal = accounts.reduce((s, a) => s + a.value, 0);
 
   const atRet = rowAt(retirementAge);
-  const depletionAge = results.depletionAge;
-  const holds = results.status === 'ON_TRACK';
+  // Follow leftover in the pot (same as the life-timeline pin), not engine
+  // ON_TRACK — a reverse mortgage can keep status green after the pot is empty.
+  const pot = potDisplay(breakdown, maxAge);
+  const holds = pot.holds;
+  const depletionAge = pot.emptyAge;
   const borderline = !holds && depletionAge != null && (maxAge - depletionAge) <= 6;
-  const lastRow = breakdown[breakdown.length - 1];
-  const leftAtMax = holds ? (lastRow?.endingBalance ?? 0) : 0;
+  const leftAtMax = pot.leftover;
 
   // CPP + OAS yearly at the benefit age (first row that has any).
   const benRow = breakdown.find(r => (r.cppIncome ?? 0) + (r.oasIncome ?? 0) > 0);

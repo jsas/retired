@@ -82,4 +82,19 @@ describe('EvidenceRow', () => {
     expect(html).toContain('RRSP');
     expect(html).toContain('TFSA');
   });
+
+  it('prints the first empty year, not maxAge+, when leftover is gone', () => {
+    const broke = { ...plan, tfsaBalance: 5000, rrspBalance: 0, desiredSpending: 120000 };
+    const brokeResults = calculateHousehold(broke, config);
+    const brokeRows = brokeResults.yearlyBreakdown;
+    const depAge = brokeRows.find(r => r.endingBalance <= 0)?.age ?? 0;
+    expect(depAge).toBeTypeOf('number');
+    const html = renderToStaticMarkup(
+      <EvidenceRow inputs={broke} results={{ ...brokeResults, status: 'ON_TRACK' }} breakdown={brokeRows} />,
+    );
+    expect(html).toContain(`>${depAge}<`);
+    expect(html).not.toContain(`${broke.maxAge}+`);
+    expect(html).toContain('nothing');
+    expect(html).not.toContain('past the plan');
+  });
 });

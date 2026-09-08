@@ -19,7 +19,7 @@
 import type {
   AiConnection,
 } from './connections.js'
-import { connectionReady } from './connections.js'
+import { connectionReady, isLocalProvider } from './connections.js'
 import {
   streamChat as providerStreamChat,
   type AgentToolCall,
@@ -98,8 +98,8 @@ export function createBridge(options: BridgeOptions = {}): Bridge {
       label: c.label || c.model,
       provider: c.provider,
       model: c.model,
-      local: c.provider === 'webllm',
-      requiresKey: c.provider !== 'webllm' && c.provider !== 'ollama',
+      local: isLocalProvider(c.provider),
+      requiresKey: !isLocalProvider(c.provider) && c.provider !== 'ollama',
       apiKey: c.apiKey,
       baseUrl: c.baseUrl,
       contextSize: c.contextSize,
@@ -130,7 +130,7 @@ export function createBridge(options: BridgeOptions = {}): Bridge {
       ...spec,
       options: {
         maxTokens: spec.options?.maxTokens ?? 4096,
-        temperature: spec.options?.temperature ?? (spec.provider === 'webllm' ? 0.3 : 0),
+        temperature: spec.options?.temperature ?? (isLocalProvider(spec.provider) ? 0.3 : 0),
       },
     }
   }
@@ -170,6 +170,12 @@ export function createBridge(options: BridgeOptions = {}): Bridge {
         return (async function* () {
           const { streamWebLlm } = await import('./webLlmProvider.js')
           yield* streamWebLlm(c, req, onProgress)
+        })()
+      }
+      if (c.provider === 'bonsai') {
+        return (async function* () {
+          const { streamBonsai } = await import('./bonsaiProvider.js')
+          yield* streamBonsai(c, req, onProgress)
         })()
       }
       return providerStreamChat(c, req)

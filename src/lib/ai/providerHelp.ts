@@ -27,8 +27,8 @@ export const PROVIDER_HELP: Partial<Record<AiProviderId, ProviderHelp>> = {
   openrouter: {
     name: 'OpenRouter',
     keyUrl: 'https://openrouter.ai/keys',
-    howTo: 'Create an OpenRouter account, go to Keys → "Create key", and paste it here. One key reaches many models (Claude, GPT, Llama, …).',
-    cost: 'Pay-as-you-go; also hosts some free models (ids ending in ":free").',
+    howTo: 'Create an OpenRouter account, go to Keys → "Create key", and paste it here. One key reaches the free pool (openrouter/free and ids ending in :free) plus paid models.',
+    cost: 'Free models: no token charge (rate-limited). Paid models are pay-as-you-go.',
     easiest: true,
   },
   anthropic: {

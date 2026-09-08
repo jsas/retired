@@ -14,8 +14,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listModels, type ModelInfo } from './ai/providers';
-import { WEBLLM_MODELS } from './ai/webLlmModels';
-import { connectionReady, newConnectionId, type AiConnection, type AiSettings } from './aiSettings';
+import { visibleWebLlmModels } from './ai/webLlmModels';
+import { BONSAI_MODELS } from './ai/bonsaiModels';
+import { connectionReady, isLocalProvider, newConnectionId, type AiConnection, type AiSettings } from './aiSettings';
+import { isOpenRouterFreeId, OPENROUTER_FREE_ROUTER } from './ai/openRouterFree';
+
+/** Chat-picker / Models-page grouping. */
+export type CatalogBucket = 'local' | 'free' | 'remote';
+
+/** Recommended on-computer default when the user hasn't shortlisted yet. */
+export const DEFAULT_CHAT_LOCAL_ID = 'Qwen3.5-4B-q4f16_1-MLC';
 
 /** One row of the merged catalog: a model, where it runs, and how to pick it. */
 export interface ModelCatalogEntry {
@@ -31,8 +39,10 @@ export interface ModelCatalogEntry {
   connectionId: string | null;
   /** Human name of the connection for grouping ("My key", "On this computer"). */
   connectionLabel: string | null;
-  /** True for on-computer (web-llm) models. */
+  /** True for on-computer (web-llm / Bonsai) models. */
   local: boolean;
+  /** Which in-browser engine serves this local row. Clouds omit it. */
+  engine?: 'webllm' | 'bonsai';
   /** Local only: is the model already downloaded to this browser? Undefined
    *  while the cache probe hasn't answered; clouds are always undefined. */
   cached?: boolean;
@@ -45,19 +55,36 @@ export interface ModelCatalogEntry {
  *  cached ids the catalog no longer lists (older downloads — still runnable,
  *  still deletable, so they belong in the list). */
 export function buildLocalModels(cached: Record<string, boolean> = {}): ModelCatalogEntry[] {
-  const entries: ModelCatalogEntry[] = WEBLLM_MODELS.map(m => ({
-    key: `local:${m.id}`,
-    modelId: m.id,
-    label: m.label,
-    connectionId: null,
-    connectionLabel: null,
-    local: true,
-    cached: cached[m.id],
-    sizeGB: m.sizeGB,
-    blurb: m.blurb,
-  }));
+  const webllm = visibleWebLlmModels();
+  const listedIds = new Set([...webllm.map(m => m.id), ...BONSAI_MODELS.map(m => m.id)]);
+  const entries: ModelCatalogEntry[] = [
+    ...webllm.map(m => ({
+      key: `local:${m.id}`,
+      modelId: m.id,
+      label: m.label,
+      connectionId: null,
+      connectionLabel: null,
+      local: true,
+      engine: 'webllm' as const,
+      cached: cached[m.id],
+      sizeGB: m.sizeGB,
+      blurb: m.blurb,
+    })),
+    ...BONSAI_MODELS.map(m => ({
+      key: `local:${m.id}`,
+      modelId: m.id,
+      label: m.label,
+      connectionId: null,
+      connectionLabel: null,
+      local: true,
+      engine: 'bonsai' as const,
+      cached: cached[m.id],
+      sizeGB: m.sizeGB,
+      blurb: m.blurb,
+    })),
+  ];
   for (const id of Object.keys(cached)) {
-    if (cached[id] && !WEBLLM_MODELS.some(m => m.id === id)) {
+    if (cached[id] && !listedIds.has(id)) {
       entries.push({
         key: `local:${id}`,
         modelId: id,
@@ -65,6 +92,7 @@ export function buildLocalModels(cached: Record<string, boolean> = {}): ModelCat
         connectionId: null,
         connectionLabel: null,
         local: true,
+        engine: id.startsWith('onnx-community/Bonsai') ? 'bonsai' : 'webllm',
         cached: true,
       });
     }
@@ -78,7 +106,11 @@ export function buildLocalModels(cached: Record<string, boolean> = {}): ModelCat
  *  its configured model so the picker is never empty for it. */
 export function cloudEntriesFor(conn: AiConnection, models: ModelInfo[] | null | undefined): ModelCatalogEntry[] {
   if (!connectionReady(conn)) return [];
-  const list = models && models.length > 0 ? models : [{ id: conn.model }];
+  const list = models && models.length > 0 ? [...models] : [{ id: conn.model }];
+  // OpenRouter's list endpoint often omits the free router; keep it pickable.
+  if (conn.provider === 'openrouter' && !list.some(m => m.id === OPENROUTER_FREE_ROUTER)) {
+    list.unshift({ id: OPENROUTER_FREE_ROUTER, detail: 'Free router (picks a :free model)' });
+  }
   return list.map(m => ({
     key: `${conn.id}:${m.id}`,
     modelId: m.id,
@@ -93,7 +125,7 @@ export function cloudEntriesFor(conn: AiConnection, models: ModelInfo[] | null |
 export function activeCatalogKey(settings: AiSettings): string | null {
   const c = settings.connections.find(x => x.id === settings.activeConnectionId);
   if (!c) return null;
-  return c.provider === 'webllm' ? `local:${c.model}` : `${c.id}:${c.model}`;
+  return isLocalProvider(c.provider) ? `local:${c.model}` : `${c.id}:${c.model}`;
 }
 
 /** Apply a catalog pick: set the connection's model (creating the on-computer
@@ -105,11 +137,13 @@ export function pickModel(settings: AiSettings, entry: ModelCatalogEntry, newId:
     connections: settings.connections.map(c => ({ ...c })),
   };
   if (entry.local) {
-    const idx = next.connections.findIndex(c => c.provider === 'webllm');
+    const provider = entry.engine === 'bonsai' ? 'bonsai' : 'webllm';
+    const label = provider === 'bonsai' ? 'Bonsai (on this computer)' : 'On this computer';
+    const idx = next.connections.findIndex(c => c.provider === provider);
     if (idx < 0) {
       const id = newId();
       next.connections.push({
-        id, provider: 'webllm', label: 'On this computer', apiKey: '', model: entry.modelId,
+        id, provider, label, apiKey: '', model: entry.modelId,
       });
       next.activeConnectionId = id;
     } else {
@@ -122,7 +156,43 @@ export function pickModel(settings: AiSettings, entry: ModelCatalogEntry, newId:
     );
     next.activeConnectionId = entry.connectionId;
   }
+  const favorites = new Set(next.favoriteModels ?? []);
+  favorites.add(entry.key);
+  next.favoriteModels = [...favorites];
   return next;
+}
+
+export function catalogBucket(entry: ModelCatalogEntry): CatalogBucket {
+  if (entry.local) return 'local';
+  if (isOpenRouterFreeId(entry.modelId)) return 'free';
+  return 'remote';
+}
+
+export function toggleFavorite(settings: AiSettings, key: string): AiSettings {
+  const have = new Set(settings.favoriteModels ?? []);
+  if (have.has(key)) have.delete(key);
+  else have.add(key);
+  return { ...settings, favoriteModels: [...have] };
+}
+
+/** What the dock dropdown lists: shortlisted keys, plus the in-use model so
+ *  a pick never vanishes mid-chat. Empty shortlist → the recommended local. */
+export function chatPickerEntries(
+  entries: ModelCatalogEntry[],
+  settings: AiSettings,
+): ModelCatalogEntry[] {
+  const fav = new Set(settings.favoriteModels ?? []);
+  const active = activeCatalogKey(settings);
+  const picked = entries.filter(e => fav.has(e.key) || e.key === active);
+  if (picked.length > 0) return picked;
+  const rec = entries.find(e => e.local && e.modelId === DEFAULT_CHAT_LOCAL_ID);
+  return rec ? [rec] : entries.filter(e => e.local).slice(0, 1);
+}
+
+export function entriesByBucket(entries: ModelCatalogEntry[]): Record<CatalogBucket, ModelCatalogEntry[]> {
+  const out: Record<CatalogBucket, ModelCatalogEntry[]> = { local: [], free: [], remote: [] };
+  for (const e of entries) out[catalogBucket(e)].push(e);
+  return out;
 }
 
 export function buildModelCatalog(
@@ -132,7 +202,7 @@ export function buildModelCatalog(
   return [
     ...buildLocalModels(opts.cached),
     ...connections
-      .filter(c => c.provider !== 'webllm')
+      .filter(c => !isLocalProvider(c.provider))
       .flatMap(c => cloudEntriesFor(c, opts.cloudLists?.[c.id])),
   ];
 }
@@ -156,39 +226,54 @@ export function useModelCatalog(settings: AiSettings) {
   const fetchedRef = useRef<Set<string>>(new Set());
 
   const webllmModel = settings.connections.find(c => c.provider === 'webllm')?.model ?? null;
+  const bonsaiModelId = settings.connections.find(c => c.provider === 'bonsai')?.model ?? null;
 
-  // Local tier: probe the browser cache. Dynamic import — the web-llm module
-  // is heavy and browser-only, same pattern the download path uses.
+  // Local tier: probe the browser cache. Dynamic import — the web-llm / Bonsai
+  // modules are heavy and browser-only, same pattern the download path uses.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const next: Record<string, boolean> = {};
       try {
         const { isWebLlmModelCached } = await import('./ai/webLlmProvider');
-        const ids = new Set<string>(WEBLLM_MODELS.map(m => m.id));
+        const ids = new Set<string>(visibleWebLlmModels().map(m => m.id));
         if (webllmModel) ids.add(webllmModel);
-        const next: Record<string, boolean> = {};
         for (const id of ids) next[id] = await isWebLlmModelCached(id);
-        if (!cancelled) setCached(next);
       } catch {
         /* no WebGPU / probe unavailable — locals just read as not cached */
       }
+      try {
+        const { isBonsaiModelCached } = await import('./ai/bonsaiProvider');
+        const ids = new Set<string>(BONSAI_MODELS.map(m => m.id));
+        if (bonsaiModelId) ids.add(bonsaiModelId);
+        for (const id of ids) next[id] = await isBonsaiModelCached(id);
+      } catch {
+        /* transformers.js / cache unavailable */
+      }
+      if (!cancelled) setCached(next);
     })();
     return () => { cancelled = true; };
-  }, [webllmModel]);
+  }, [webllmModel, bonsaiModelId]);
 
   // Cloud tier: list models for every ready connection not yet fetched.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const todo = settings.connections.filter(
-        c => c.provider !== 'webllm' && connectionReady(c) && !fetchedRef.current.has(cloudSig(c)),
+        c => !isLocalProvider(c.provider) && connectionReady(c) && !fetchedRef.current.has(cloudSig(c)),
       );
-      if (todo.length === 0) return;
+      // Strict Mode remounts this effect: the first run is cancelled after it
+      // set loading true. If we then early-return here (already fetched / nothing
+      // to do) without clearing loading, "Refreshing…" sticks forever.
+      if (todo.length === 0) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
       setLoading(true);
       await Promise.all(todo.map(async c => {
-        fetchedRef.current.add(cloudSig(c));
         try {
           const models = await listModels(c);
+          fetchedRef.current.add(cloudSig(c));
           if (cancelled) return;
           setCloudLists(prev => ({ ...prev, [c.id]: models }));
           setErrors(prev => {
@@ -198,7 +283,6 @@ export function useModelCatalog(settings: AiSettings) {
             return next;
           });
         } catch (err) {
-          fetchedRef.current.delete(cloudSig(c)); // failed — allow a retry
           if (!cancelled) {
             setErrors(prev => ({ ...prev, [c.id]: err instanceof Error ? err.message : String(err) }));
           }
@@ -217,5 +301,11 @@ export function useModelCatalog(settings: AiSettings) {
   );
   const markCached = (id: string, v: boolean) =>
     setCached(prev => ({ ...prev, [id]: v }));
-  return { entries, loading, errors, cached, markCached, refresh: () => setNonce(n => n + 1) };
+  const refresh = () => {
+    // Drop the "already listed" set so a failed LM Studio / Ollama fetch
+    // (or a server that wasn't up yet) is tried again from scratch.
+    fetchedRef.current.clear();
+    setNonce(n => n + 1);
+  };
+  return { entries, loading, errors, cached, markCached, refresh };
 }

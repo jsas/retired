@@ -21,26 +21,27 @@ import {
 import {
   Bot, Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench,
   Copy, ClipboardPaste, Download, RotateCcw, Settings2, Brain, ChevronDown,
-  ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle,
+  ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle, Info,
 } from 'lucide-react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
-  connectionReady, loadAiSettings, saveAiSettings, type AiConnection, type AiSettings,
+  connectionReady, getAiSettings, subscribeAiSettings, updateAiSettings,
+  resolveAiPromptSend, resolveLocalToolCapable, isLocalProvider,
+  type AiConnection, type AiSettings,
 } from '../lib/aiSettings';
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { createBridge, type Bridge, type ChatMessage } from '@retired/ai-bridge';
 import { Progress } from '../design/primitives';
-import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { assembleSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
 import type { View } from '../lib/viewRoutes';
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
 import { reasoningTail } from '../lib/ai/reasoningPreview';
-import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
-import { toolSpecs } from '@retired/mcp-tools/tools';
+import { PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import type { ToolContext } from '@retired/mcp-tools/tools';
 import type { MemoryStore } from '@retired/mcp-tools/memoryStore';
 import {
@@ -48,7 +49,9 @@ import {
   type PlanCheckpoint,
 } from '@retired/mcp-tools/checkpoints';
 import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
-import { activeCatalogKey, pickModel, useModelCatalog } from '../lib/modelCatalog';
+import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
+import { activeCatalogKey, chatPickerEntries, pickModel, useModelCatalog } from '../lib/modelCatalog';
+import { provenanceLine } from '../lib/ai/modelProvenance';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
@@ -60,6 +63,7 @@ import {
   setRunDecision, takeRunDecision, abortRun, endRun,
 } from '../lib/ai/chatRuns';
 import { resetWebLlmChat, loadedWebLlmModel } from '../lib/ai/webLlmProvider';
+import { resetBonsaiChat, loadedBonsaiModel } from '../lib/ai/bonsaiProvider';
 import { Markdown } from './Markdown';
 
 interface AgentPageProps {
@@ -72,6 +76,8 @@ interface AgentPageProps {
   /** Saved inputs of any scenario by id (list_scenarios withDetails). */
   scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
+  /** Mint a partner plan and link the current plan to it (propose_spouse create). */
+  onCreateSpousePlan?: (name?: string, inputs?: RetirementInputs) => string;
   onOpenConnections: () => void;
   /** Agent memory (scenario + global); absent only if the store failed to open. */
   memory?: MemoryStore;
@@ -80,9 +86,9 @@ interface AgentPageProps {
   /** Agent scenario navigation: switch active scenario / save-current-as-new. */
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
-  /** Docked mode: render just the conversation column in the beta's narrow
+  /** Docked mode: render just the conversation column in the beta's
    *  right rail — no page header, no chat-list sidebar (a slim strip handles
-   *  chat switching so the rail stays 340px). */
+   *  chat switching so the rail can stay at its 340px floor). */
   docked?: boolean;
   /** Hide the inner "AI Assistant" title (the beta page chrome already says
    *  Assistant — an inner h2 would be a second header). Controls and the
@@ -139,6 +145,10 @@ interface Turn {
    *  is actively replying) so a reload doesn't leave the bubble looking busy
    *  forever, and so the spinner clears while the card waits. */
   state?: 'streaming' | 'done' | 'aborted' | 'truncated' | 'error' | 'needs-decision';
+  /** Catalog / connection model the user had selected. */
+  askedModel?: string;
+  /** Provider-reported model that actually answered (OpenRouter free router). */
+  servedModel?: string;
 }
 
 let turnSeq = 0;
@@ -153,6 +163,9 @@ function effectiveContextLimit(connection: AiConnection): number {
   if (connection.contextSize) return connection.contextSize;
   if (connection.provider === 'webllm') {
     return WEBLLM_MODELS.find(m => m.id === connection.model)?.maxWindow ?? defaultContextSize('webllm');
+  }
+  if (connection.provider === 'bonsai') {
+    return BONSAI_MODELS.find(m => m.id === connection.model)?.maxWindow ?? defaultContextSize('bonsai');
   }
   return defaultContextSize(connection.provider);
 }
@@ -343,8 +356,9 @@ export function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDel
   );
 }
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle, currentView, onNavigate }: AgentPageProps) {
-  const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onCreateSpousePlan, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle, currentView, onNavigate }: AgentPageProps) {
+  const settings = useSyncExternalStore(subscribeAiSettings, getAiSettings, getAiSettings);
+  const setSettings = (next: AiSettings) => updateAiSettings(() => next);
   // The chat store is MODULE-level (chatStore.ts): a background run keeps
   // appending turns after this component unmounts (page navigation, thread
   // switch), so the transcript can't live in React state. Read + write go
@@ -358,7 +372,6 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
   // only — not worth persisting.
   const [chatsPinned, setChatsPinned] = useState(true);
-  useEffect(() => { saveAiSettings(settings); }, [settings]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
@@ -377,13 +390,20 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   }, [settings.connections, settings.activeConnectionId]);
 
   const ready = connection != null && connectionReady(connection);
-  const isLocal = connection?.provider === 'webllm';
-  // A local model flagged too weak for the tool protocol drops to 'off': it
-  // answers from the plan summary instead of mangling fenced-JSON tool calls.
-  // Since #118 no curated model is weak, so this only bites if a future
-  // entry opts in; free-text models are assumed capable.
-  const localMeta = isLocal ? WEBLLM_MODELS.find(m => m.id === connection?.model) : undefined;
-  const toolCapable = !isLocal || (localMeta?.toolCapable ?? true);
+  const isLocal = connection != null && isLocalProvider(connection.provider);
+  // Local tool mode: catalog `toolCapable` is the default (1.7B off, 4B+ on).
+  // Settings → Assistant can force a model on or off for testing without
+  // editing the catalog. Cloud connections always use native tools (until
+  // Send tools is unchecked).
+  const localMeta = !isLocal || !connection
+    ? undefined
+    : connection.provider === 'bonsai'
+      ? BONSAI_MODELS.find(m => m.id === connection.model)
+      : WEBLLM_MODELS.find(m => m.id === connection.model);
+  const toolCapable = !isLocal || resolveLocalToolCapable(
+    localMeta?.toolCapable,
+    connection ? settings.toolCapableByModel?.[connection.model] : undefined,
+  );
   const toolMode: 'native' | 'prompt' | 'off' = !isLocal ? 'native' : toolCapable ? 'prompt' : 'off';
 
   // The active thread object (creating one lazily if the store is empty).
@@ -399,7 +419,10 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
       // but NEVER while a run is in flight on either side: the engine is one
       // shared resource and a mid-stream reset would corrupt the background
       // reply. A thread switch away from a running chat just leaves it running.
-      if (id !== prev.activeThreadId && !hasActiveRun()) void resetWebLlmChat();
+      if (id !== prev.activeThreadId && !hasActiveRun()) {
+        void resetWebLlmChat();
+        void resetBonsaiChat();
+      }
       return { ...prev, activeThreadId: id };
     });
 
@@ -407,7 +430,10 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     const t = newThread(scenarioName, Date.now());
     // A fresh thread starts from an EMPTY context — never the last chat's
     // KV cache (see setActiveThread).
-    if (!hasActiveRun()) void resetWebLlmChat();
+    if (!hasActiveRun()) {
+      void resetWebLlmChat();
+      void resetBonsaiChat();
+    }
     updateChats(prev => ({ threads: [t, ...prev.threads], activeThreadId: t.id }));
   };
 
@@ -499,7 +525,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
             {isLocal && !toolCapable && (
               <span
                 className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold bg-amber-50 text-amber-800"
-                title="This model is too small to read your plan or propose changes reliably, so tools are off: it answers questions from a summary of your plan. Pick a larger model (Connections) to let it edit."
+                title="Tools are off for this model (catalog default, or a Settings → Assistant override). It answers from a summary of your plan. Force tools on under Settings → Assistant to test."
               >
                 Answers only · can't edit plan
               </span>
@@ -629,6 +655,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               hasConnections={settings.connections.length > 0}
               onApply={onApply}
               onConnect={onOpenConnections}
+              compact={docked}
             />
           ) : !activeThread ? (
             <EmptyChatState onNew={newChat} />
@@ -641,7 +668,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               toolMode={toolMode}
               bridge={bridge}
               settings={settings}
-              onSettingsChange={setSettings}
+              onSettingsChange={updateAiSettings}
               inputs={inputs}
               config={config}
               scenarioName={scenarioName}
@@ -649,6 +676,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               activeScenarioId={activeScenarioId}
               scenarioInputsById={scenarioInputsById}
               onApply={onApply}
+              onCreateSpousePlan={onCreateSpousePlan}
               patchTurns={patchTurnsOf(activeThread.id)}
               patchThread={patchThreadOf(activeThread.id)}
               recordCheckpoint={recordCheckpointOn(activeThread.id)}
@@ -700,9 +728,8 @@ export function ModelPickerSelect({ entries, activeKey, onPick, onLoadModel }: {
   );
 }
 
-/** Model picker: every model the catalog knows — on-computer (downloadable
- *  if not cached) plus every ready connection's listModels results — plus a
- *  "More models…" hatch that opens the Models page. */
+/** Chat-dock picker: shortlisted models only (plus the one in use). Full
+ *  catalog lives on the Models page behind "More models…". */
 export function ModelPicker({ settings, onChange, onLoadModel }: {
   settings: AiSettings;
   onChange: (next: AiSettings) => void;
@@ -711,7 +738,7 @@ export function ModelPicker({ settings, onChange, onLoadModel }: {
   const { entries } = useModelCatalog(settings);
   return (
     <ModelPickerSelect
-      entries={entries}
+      entries={chatPickerEntries(entries, settings)}
       activeKey={activeCatalogKey(settings)}
       onPick={key => {
         const entry = entries.find(x => x.key === key);
@@ -726,27 +753,33 @@ export function ModelPicker({ settings, onChange, onLoadModel }: {
 // One conversation (assistant-ui runtime around our agent loop)
 // ---------------------------------------------------------------------------
 
-/** Assemble the system prompt body for a turn, by tool mode. 'prompt' adds
- *  the fenced-JSON tool catalog; 'off' leaves it out so a weak model isn't
- *  tempted to emit tool calls it can't form; 'native' relies on the provider's
- *  function-calling. The live plan digest for chat-only modes is NOT here — it
- *  rides as a pinned leading history message (see planContextMessage) so a
- *  plan edit doesn't invalidate the engine's cached system prefix. */
+/** Assemble the system prompt body for a turn. Shared with Settings so the
+ *  Assistant preview matches the wire. The live plan digest for chat-only
+ *  modes is NOT here — it rides as a pinned leading history message (see
+ *  planContextMessage) so a plan edit doesn't invalidate the engine's cached
+ *  system prefix. */
 function buildSystemBody(
   toolMode: 'native' | 'prompt' | 'off',
   scenarioName: string,
-  basePrompt: string | undefined,
+  settings: AiSettings,
   config: AppConfig,
   currentView?: View,
+  chatNote?: string,
 ): string {
-  if (toolMode === 'prompt') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config, currentView }) + '\n\n' +
-      buildPromptToolInstructions(toolSpecs());
-  }
-  if (toolMode === 'off') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config, currentView });
-  }
-  return buildSystemPrompt(scenarioName, { basePrompt, config, currentView });
+  const send = resolveAiPromptSend(settings.promptSend);
+  const toolOverride = toolMode === 'native' ? settings.toolInstructionsNative
+    : toolMode === 'prompt' ? settings.toolInstructionsPrompt
+    : settings.toolInstructionsOff;
+  return assembleSystemPrompt({
+    scenarioName,
+    toolMode,
+    send,
+    basePrompt: settings.systemPromptOverride,
+    config,
+    currentView,
+    toolInstructions: toolOverride,
+    chatNote,
+  });
 }
 
 /** The live plan digest for chat-only local models ('prompt' and 'off'
@@ -764,8 +797,9 @@ function planContextMessage(
   toolMode: 'native' | 'prompt' | 'off',
   inputs: RetirementInputs,
   config: AppConfig,
+  includePlanDigest: boolean,
 ): ChatMessage | null {
-  if (toolMode === 'native') return null;
+  if (!includePlanDigest || toolMode === 'native') return null;
   return {
     role: 'user',
     content: buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) }),
@@ -793,7 +827,7 @@ const livePlan: {
   currentView: undefined,
 };
 
-function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
+function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onCreateSpousePlan, patchTurns, patchThread, recordCheckpoint, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -808,6 +842,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   activeScenarioId?: string;
   scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
+  onCreateSpousePlan?: (name?: string, inputs?: RetirementInputs) => string;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
   patchThread: (patch: Partial<ChatThread>) => void;
   recordCheckpoint: (label: string, inputsBefore: RetirementInputs) => void;
@@ -910,6 +945,24 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
+  // Unchecking send flags must actually take effect on the NEXT message. The
+  // local engine reuses its KV cache when the next request "matches" the last
+  // conversation — so a previous persona/tool blurb stays in GPU memory even
+  // after the app stops sending it. Reset whenever the assembled system (or
+  // the digest/tools flags that ride beside it) changes. Skip mid-run: a
+  // reset would corrupt the in-flight reply.
+  const sendForReset = resolveAiPromptSend(settings.promptSend);
+  const systemFingerprint = `${buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote)}|digest:${sendForReset.includePlanDigest}|tools:${sendForReset.sendTools}|mode:${toolMode}`;
+  const fingerprintRef = useRef(systemFingerprint);
+  useEffect(() => {
+    if (fingerprintRef.current === systemFingerprint) return;
+    fingerprintRef.current = systemFingerprint;
+    if (isLocal && !hasActiveRun()) {
+      void resetWebLlmChat();
+      void resetBonsaiChat();
+    }
+  }, [systemFingerprint, isLocal]);
+
   // Estimated context usage for the meter. Mirror what runTurn actually sends:
   // prompt-mode (local) prepends the tool catalog AND the computed plan digest
   // to the system prompt — that's the bulk of a local model's small window, so
@@ -918,17 +971,16 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   // honest about what the local model must fit.
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
-    const basePrompt = settings.systemPromptOverride;
-    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config, currentView);
-    const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
-    const planContext = planContextMessage(toolMode, inputs, config);
+    const send = resolveAiPromptSend(settings.promptSend);
+    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote);
+    const planContext = planContextMessage(toolMode, inputs, config, send.includePlanDigest);
     const history = toHistory(turns);
     const full = planContext ? [planContext, ...history] : history;
     if (thread.contextSummary) {
       return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...full]);
     }
     return estimateTokens(system, full);
-  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config]);
+  }, [connection, settings, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config, currentView]);
 
   /**
    * Run one assistant turn: append (or replace) a streaming assistant bubble
@@ -957,7 +1009,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       : null;
     const assistantTurn: Turn = resuming
       ? priorTurns.find(t => t.id === resumeTurnId)!
-      : { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming' };
+      : { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming', askedModel: connection.model };
     if (!resuming) {
       patchTurns(prev => userTurn ? [...prev, userTurn, assistantTurn] : [...prev, assistantTurn]);
     } else {
@@ -967,7 +1019,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       // in place makes the continued reply append on top — re-sending the old
       // answer and stacking a duplicate Applied card next to the decided one.
       patchTurns(prev => prev.map(t => (t.id === resumeTurnId
-        ? { ...t, text: '', reasoning: undefined, tools: [], changes: [], state: 'streaming' }
+        ? { ...t, text: '', reasoning: undefined, tools: [], changes: [], state: 'streaming', askedModel: connection.model, servedModel: undefined }
         : t)));
     }
 
@@ -977,13 +1029,8 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
         : t)));
     };
 
-    const basePrompt = settings.systemPromptOverride;
-    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config, currentView);
-    // The chat's standing instructions go last so they read as the user's own
-    // voice; they can steer tone/focus but the base prompt's rules come first.
-    const system = thread.systemNote?.trim()
-      ? `${baseSystem}\n\nAdditional instructions for this chat:\n${thread.systemNote.trim()}`
-      : baseSystem;
+    const send = resolveAiPromptSend(settings.promptSend);
+    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote);
 
     // Fit the conversation into the model's context window: when the estimated
     // usage crosses the trigger, the oldest turns are folded away and replaced
@@ -997,7 +1044,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     // message instead ("I accepted/declined the change you proposed…").
     const historyTurns = resuming ? priorTurns.filter(t => t.id !== resumeTurnId) : priorTurns;
     const contextSize = effectiveContextLimit(connection);
-    const planContext = planContextMessage(toolMode, inputs, config);
+    const planContext = planContextMessage(toolMode, inputs, config, send.includePlanDigest);
     const fullHistory = toHistory(historyTurns);
     // The plan digest message must never be a compaction victim: a tool-less
     // local model that loses it can no longer see the plan at all. Plan the
@@ -1036,7 +1083,8 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       return;
     }
 
-    if (isLocal && loadedWebLlmModel() !== connection.model) {
+    const loadedLocal = connection.provider === 'bonsai' ? loadedBonsaiModel() : loadedWebLlmModel();
+    if (isLocal && loadedLocal !== connection.model) {
       // Only a turn that might actually DOWNLOAD/COMPILE the model shows the
       // progress bar. When the engine is already resident, streamWebLlm reuses
       // it and never calls onProgress — the bar would sit at 0% for the whole
@@ -1045,11 +1093,13 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       setRunProgress(threadId, { progress: 0, text: 'Preparing the local model…' });
     }
     const reportLoad = (p: { progress: number; text: string }) => {
+      // progress 1 means the engine is loaded (web-llm and Bonsai both report
+      // Ready at 1). Leaving a "Compiling…" bar after that is the stuck
+      // overlay you get once the model is already thinking. First token also
+      // clears it, but reasoning-only openings never emit text.
       if (p.progress >= 1) {
-        if (!downloadDoneRef.current) {
-          downloadDoneRef.current = true;
-          setRunProgress(threadId, { progress: 1, text: 'Compiling the model for your GPU — this can take a minute…' });
-        }
+        downloadDoneRef.current = true;
+        setRunProgress(threadId, null);
       } else {
         setRunProgress(threadId, p);
       }
@@ -1071,8 +1121,13 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
           yield* bridge.streamChat({ ...req, signal: abort.signal }, reportLoad);
         },
         signal: abort.signal,
-        toolMode,
-        maxRounds: toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS : toolMode === 'off' ? 0 : undefined,
+        // sendTools off (or a questions-only local model) = chat only:
+        // maxRounds 0 is one generation with the assembled system, not the
+        // wrap-up pass that would rebuild a default persona.
+        toolMode: send.sendTools ? toolMode : 'off',
+        maxRounds: !send.sendTools || toolMode === 'off' ? 0
+          : toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS
+          : undefined,
         config,
         onMutation: proposal =>
           new Promise(resolve => {
@@ -1092,6 +1147,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       })) {
         switch (evt.type) {
           case 'text':
+            setRunProgress(threadId, null);
             patchAssistant(t => { t.text += evt.text; });
             if (statsRef.current) {
               statsRef.current.chars += evt.text.length;
@@ -1101,9 +1157,30 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
             }
             break;
           case 'reasoning':
+            setRunProgress(threadId, null);
             patchAssistant(t => { t.reasoning = (t.reasoning ?? '') + evt.text; });
             break;
+          case 'promote_reasoning':
+            // Untagged CoT was shown live as thinking; this round is the
+            // answer. Peel just this round's live tokens off the thinking
+            // block (earlier tool-round thoughts stay) and put them in the
+            // reply.
+            patchAssistant(t => {
+              if (t.reasoning) {
+                const i = t.reasoning.lastIndexOf(evt.text);
+                t.reasoning = i >= 0
+                  ? (t.reasoning.slice(0, i) + t.reasoning.slice(i + evt.text.length)).trim() || undefined
+                  : t.reasoning;
+              }
+              t.text += evt.text;
+            });
+            if (statsRef.current) {
+              statsRef.current.chars += evt.text.length;
+              statsRef.current.first ??= Date.now();
+            }
+            break;
           case 'tool_start':
+            setRunProgress(threadId, null);
             patchAssistant(t => { t.tools.push({ id: evt.call.id, name: evt.call.name, state: 'running', args: evt.call.args }); });
             break;
           case 'tool_result':
@@ -1122,6 +1199,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
             break;
           case 'done':
             patchAssistant(t => {
+              if (evt.servedModel) t.servedModel = evt.servedModel;
               if (t.state !== 'error') {
                 t.state = evt.stopReason === 'max_tokens'
                   ? 'truncated'
@@ -1195,11 +1273,15 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
         // propose_revert rolls back to. The label is the card's, so the model
         // (and the user) can name the checkpoint later.
         recordCheckpoint(change.label ?? 'Plan change', inputs);
-        // Revert patches carry encoded undefined-removals; decode them here so
-        // the spread in App's onApply actually deletes the keys.
-        const raw = changePatch(change);
-        const decoded = change.revert ? decodeRevertPatch(raw) : raw;
-        onApply(decoded as Partial<RetirementInputs>);
+        if (change.createPartner) {
+          onCreateSpousePlan?.(change.createPartner.name, change.createPartner.inputs);
+        } else {
+          // Revert patches carry encoded undefined-removals; decode them here so
+          // the spread in App's onApply actually deletes the keys.
+          const raw = changePatch(change);
+          const decoded = change.revert ? decodeRevertPatch(raw) : raw;
+          onApply(decoded as Partial<RetirementInputs>);
+        }
       }
     }
     const live = takeRunDecision(threadId, change.callId);
@@ -1439,6 +1521,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                         can be regenerated or deleted. */}
                     {(!streaming || needsDecision) && (
                       <div className="flex flex-col gap-0.5 pt-1.5">
+                        {turn && <ProvenanceButton asked={turn.askedModel} served={turn.servedModel} />}
                         {message.isLast && (
                           <MessageActionButton onClick={() => void reload(message.parentId)} title="Regenerate this response">
                             <RotateCcw size={12} />
@@ -2013,6 +2096,28 @@ function MessageActionButton({ onClick, title, children }: {
   );
 }
 
+/** Per-reply who-answered icon. OpenRouter's free router hides the real model
+ *  unless we stash the served id from the stream. Always visible (not hover-only)
+ *  so the user can see it without hunting. */
+function ProvenanceButton({ asked, served }: { asked?: string; served?: string }) {
+  const line = provenanceLine(asked, served);
+  if (!line) return null;
+  const routed = Boolean(asked && served && asked !== served);
+  const title = routed
+    ? `Asked ${asked}\nServed ${served}`
+    : `Answered by ${line}`;
+  return (
+    <button
+      type="button"
+      title={title}
+      className="p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+      aria-label={title}
+    >
+      <Info size={12} />
+    </button>
+  );
+}
+
 /** Per-message delete; hidden while a reply is streaming. */
 function DeleteButton({ running, onDelete }: { running: boolean; onDelete: () => void }) {
   if (running) return null;
@@ -2140,52 +2245,69 @@ function EmptyThread() {
 // paste the JSON reply back through the local validation/apply path.
 // ---------------------------------------------------------------------------
 
-function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect }: {
+function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect, compact = false }: {
   inputs: RetirementInputs;
   config: AppConfig;
   hasConnections: boolean;
   onApply: (patch: Partial<RetirementInputs>) => void;
   onConnect: () => void;
+  /** Docked rail: keep the empty state to a short stack, not a two-column copy-prompt desk. */
+  compact?: boolean;
 }) {
   const [tab, setTab] = useState<'ask' | 'tune'>('ask');
+  const [showCopy, setShowCopy] = useState(!compact);
   const results = useMemo(() => calculateHousehold(inputs, config), [inputs, config]);
 
   return (
     <div className="h-full overflow-y-auto border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 p-4">
-        <div className="min-w-52 flex-1">
-          <p className="text-sm font-semibold text-slate-800">No model connected</p>
-          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-            Copy a self-contained prompt into any AI (ChatGPT, Claude, …) below — or connect a model
-            (even one that runs privately on this device) to chat right here.
+      <div className={`border-b border-slate-100 ${compact ? 'space-y-2 p-3' : 'flex flex-wrap items-center gap-3 p-4'}`}>
+        <div className={compact ? '' : 'min-w-52 flex-1'}>
+          <p className={`font-semibold text-slate-800 ${compact ? 'text-xs' : 'text-sm'}`}>No model connected</p>
+          <p className={`mt-0.5 leading-snug text-slate-500 ${compact ? 'text-[10.5px]' : 'text-[11px]'}`}>
+            {compact
+              ? 'Load a local or free model to chat here — or copy a prompt into another AI.'
+              : 'Copy a self-contained prompt into any AI (ChatGPT, Claude, …) below — or connect a model (even one that runs privately on this device) to chat right here.'}
           </p>
         </div>
         <button
           onClick={onConnect}
-          className="flex shrink-0 items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+          className={`flex items-center gap-1.5 bg-slate-900 text-xs font-semibold text-white hover:bg-slate-700 ${compact ? 'w-full justify-center px-3 py-2' : 'shrink-0 px-3 py-1.5'}`}
         >
           <Download size={13} /> {hasConnections ? 'Set up a connection' : 'Load a model'}
         </button>
-      </div>
-
-      <div className="flex gap-4 px-4 pt-3">
-        {(['ask', 'tune'] as const).map(t => (
+        {compact && (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-1 pb-2 text-xs font-medium ${tab === t
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+            type="button"
+            onClick={() => setShowCopy(v => !v)}
+            className="w-full border border-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
           >
-            {t === 'ask' ? 'Ask a question' : 'Tune inputs'}
+            {showCopy ? 'Hide copy-prompt tools' : 'Copy a prompt instead'}
           </button>
-        ))}
+        )}
       </div>
 
-      {tab === 'ask' ? (
-        <AskQuestionPanel inputs={inputs} results={results} />
-      ) : (
-        <TuneInputsPanel inputs={inputs} onApply={onApply} />
+      {showCopy && (
+        <>
+          <div className={`flex gap-4 ${compact ? 'px-3 pt-2' : 'px-4 pt-3'}`}>
+            {(['ask', 'tune'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`-mb-px border-b-2 px-1 pb-2 text-xs font-medium ${tab === t
+                  ? 'border-slate-900 text-slate-900'
+                  : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+              >
+                {t === 'ask' ? 'Ask a question' : 'Tune inputs'}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'ask' ? (
+            <AskQuestionPanel inputs={inputs} results={results} compact={compact} />
+          ) : (
+            <TuneInputsPanel inputs={inputs} onApply={onApply} />
+          )}
+        </>
       )}
     </div>
   );
@@ -2193,9 +2315,10 @@ function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect }
 
 /** Copy a question prompt (plan + computed results + question) to paste into
  *  any external AI. Nothing is ingested back. */
-function AskQuestionPanel({ inputs, results }: {
+function AskQuestionPanel({ inputs, results, compact = false }: {
   inputs: RetirementInputs;
   results: ReturnType<typeof calculateHousehold>;
+  compact?: boolean;
 }) {
   const [presetId, setPresetId] = useState(QA_PRESETS[0].id);
   const [customQuestion, setCustomQuestion] = useState('');
@@ -2214,7 +2337,7 @@ function AskQuestionPanel({ inputs, results }: {
   };
 
   return (
-    <div className="p-4 grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-4">
+    <div className={`p-4 grid grid-cols-1 gap-4 ${compact ? '' : 'sm:grid-cols-[240px_1fr]'}`}>
       <div className="space-y-1">
         {QA_PRESETS.map(p => (
           <button
