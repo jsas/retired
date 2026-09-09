@@ -346,6 +346,19 @@ export const HELP_TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: 'rescore',
+    title: 'The Re:score',
+    section: 'Reading the answer',
+    keywords: ['rescore', 're score', 'retirement score', 'health check'],
+    body: (
+      <>
+        <P>The Re:score is a 0–100 summary of your plan's health: how close you are to your max age before money runs out. <strong>0</strong> = the plan fails immediately (depletion before retirement). <strong>50</strong> = the plan fails halfway through the retirement horizon. <strong>100</strong> = the plan holds to the max age.</P>
+        <P>It's computed as <strong>depletionAge ÷ maxAge × 100</strong>. A couple's household Re:score uses the combined depletion age (the age when BOTH partners' money runs out together).</P>
+        <P>Use it as a quick snapshot: if your Re:score is below 60, the plan needs attention — move retirement later, spend less, or increase savings.</P>
+      </>
+    ),
+  },
+  {
     id: 'contour-map',
     title: 'The contour map',
     section: 'Reading the answer',

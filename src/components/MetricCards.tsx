@@ -3,9 +3,12 @@ import type { Household } from '@retired/engine-core/householdTypes';
 import { Dot } from '../design/primitives';
 import { BLUE, AMBER_DOT } from '../design/tokens';
 
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+
 interface MetricCardsProps {
   results: RetirementResults;
   household: Household;
+  inputs: RetirementInputs;
 }
 
 function formatCurrency(value: number): string {
@@ -21,7 +24,13 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-export function MetricCards({ results, household }: MetricCardsProps) {
+function formatReScore(ho: { depletionAge: number | null }, maxAge: number): number {
+  const { depletionAge } = ho;
+  if (depletionAge === null) return 100; // never depletes — fully funded to horizon
+  return Math.min(100, Math.max(0, Math.round((depletionAge / maxAge) * 100)));
+}
+
+export function MetricCards({ results, household, inputs }: MetricCardsProps) {
   // Household-first verdict: when the COMBINED money runs out, not either silo.
   const ho = householdOutcome(results, household);
   const statusColor = ho.status === 'ON_TRACK' ? 'text-blue-700' : 'text-amber-700';
@@ -45,17 +54,17 @@ export function MetricCards({ results, household }: MetricCardsProps) {
         )}
       </div>
 
-      {/* Age of Depletion — household-first: combined money exhausted */}
+      {/* Re:score — years of retirement funded per year of spending (0 = runs out immediately, 1 = funded to max age, >1 = beyond max age) */}
       <div className="border-t-2 border-slate-900 pt-2">
         <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">
-          {spouse ? 'Household Money Lasts To' : 'Age of Depletion'}
+          {spouse ? 'Household Re:score' : 'Re:score'}
         </div>
         <div className="num text-lg font-semibold text-slate-900">
-          {ho.depletionAge ?? 'Never'}
+          {formatReScore(ho, inputs.maxAge)}/100
         </div>
         {spouse && (
           <div className="mt-0.5 text-[10px] text-slate-500">
-            combined accounts · you {results.depletionAge ?? 'never'} · spouse {spouse.depletionAge ?? 'never'}
+            {formatReScore(ho, inputs.maxAge)}/100 · you {formatReScore(results, inputs.maxAge)}/100 · spouse {formatReScore(spouse, inputs.maxAge)}/100
           </div>
         )}
       </div>

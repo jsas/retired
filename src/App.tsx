@@ -1202,7 +1202,7 @@ function App() {
               <>
                 {/* KPI Cards */}
                 <CollapsiblePanel id="summary" title="Projection Summary">
-                  <MetricCards results={results} household={household} />
+                  <MetricCards results={results} household={household} inputs={resolvedInputs} />
                 </CollapsiblePanel>
 
                 {/* Projection timeline (household when a spouse is enabled) — the
