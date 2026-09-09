@@ -1,24 +1,22 @@
-// Connections page, in two separate halves —
+// Models page (issue #165): one list of every model the assistant can run.
 //
-//   MODELS (on this computer) — the private, offline web-llm tier. A catalog
-//   row per known model shows whether it's downloaded and offers Download or
-//   Delete; a "downloads" block underneath lists anything else living in the
-//   browser cache (a model you fetched earlier that's no longer in the
-//   catalog) so it can be deleted to reclaim disk. One row is "chosen" — the
-//   model the local assistant actually runs.
+//   ON THIS COMPUTER — the curated web-llm catalog, each row downloadable if
+//   the weights aren't cached yet. Picking a row (or finishing a download)
+//   makes that the local model.
 //
-//   CONNECTIONS — how the assistant reaches a model at all: the local engine
-//   (which uses whatever model is chosen above) plus any BYO-key cloud
-//   providers. Picking the active connection here is what the assistant's
-//   header picker mirrors.
+//   FROM YOUR KEYS — every ready cloud connection's models, listed
+//   automatically via listModels (no "Fetch models" click). Multiple keys
+//   just add more rows.
 //
-// This page owns its own AI-settings state and the local-engine warm-up so the
-// assistant page stays focused on chatting. Keys and settings are stored only
-// in this browser and never touch our servers.
+//   KEYS — collapse: paste an API key / add a provider. The catalog above
+//   fills itself once the key is ready.
+//
+// This page owns its own AI-settings state so the assistant page stays
+// focused on chatting. Keys never leave this browser.
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  Plus, Trash2, X, Check, ChevronDown, ChevronRight, Loader2, RefreshCw,
+  Plus, Trash2, X, Check, ChevronDown, ChevronRight, Loader2,
 } from 'lucide-react';
 import {
   AI_PROVIDERS, connectionReady, defaultBaseUrlFor, defaultModelFor,
@@ -28,7 +26,7 @@ import {
   DEFAULT_LOCAL_FREQUENCY_PENALTY, MODEL_SAMPLER_DEFAULTS,
   type AiConnection, type AiGenerationSettings, type AiSettings,
 } from '../lib/aiSettings';
-import { listModels, testConnection, type ModelInfo } from '../lib/ai/providers';
+import { testConnection } from '../lib/ai/providers';
 import { WEBLLM_MODELS, fmtSize, webGpuAvailable } from '../lib/ai/webLlmModels';
 import { buildMachineGuide, type MachineGuide } from '../lib/ai/machineGuide';
 import { estimateContextFit, fmtMB } from '../lib/ai/vramEstimate';
@@ -37,6 +35,7 @@ import { Check as CheckBox } from '../design/primitives';
 import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 import { Progress } from '../design/primitives';
+import { activeCatalogKey, pickModel, useModelCatalog, type ModelCatalogEntry } from '../lib/modelCatalog';
 
 /** Upper bound for the local context window — above this even big GPUs run
  *  out of room for the KV cache, and the small models lose coherence long
@@ -56,6 +55,7 @@ export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
   };
 
   const webllmConn = settings.connections.find(c => c.provider === 'webllm') ?? null;
+  const catalog = useModelCatalog(settings);
 
   return (
     <div className="max-w-3xl">
@@ -68,16 +68,20 @@ export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
           <X size={16} />
         </button>
       )}
-      <p className="text-[12.5px] text-slate-500 leading-relaxed mb-5">
-        <strong className="text-slate-700">Models</strong> are what thinks; <strong className="text-slate-700">connections</strong> are
-        how the assistant reaches one. The simplest model runs <strong className="text-slate-700">entirely on this
-        computer</strong> — free, private, offline. Cloud connections store their key only in this browser and
-        contact the provider directly when you chat.
+      <p className="mb-5 text-[12.5px] leading-relaxed text-slate-500">
+        Every model the assistant can run, in one list. On-computer models download once and stay
+        private; add a key below and that provider&apos;s models appear automatically.
       </p>
 
       <ModelsSection
         onChange={updateSettings}
         webllmConn={webllmConn}
+      />
+
+      <CloudModelsSection
+        settings={settings}
+        catalog={catalog}
+        onPick={entry => setSettings(prev => pickModel(prev, entry))}
       />
 
       <ConnectionsSection
@@ -590,8 +594,75 @@ function CachedActions({ id, sizeGB, onDelete }: { id: string; sizeGB?: number; 
 }
 
 // ---------------------------------------------------------------------------
-// CONNECTIONS — how the assistant reaches a model (local engine + cloud keys)
+// FROM YOUR KEYS — every ready cloud connection's models, listed automatically
 // ---------------------------------------------------------------------------
+
+function CloudModelsSection({ settings, catalog, onPick }: {
+  settings: AiSettings;
+  catalog: ReturnType<typeof useModelCatalog>;
+  onPick: (entry: ModelCatalogEntry) => void;
+}) {
+  const { entries, loading, errors } = catalog;
+  const clouds = entries.filter(e => !e.local);
+  const active = activeCatalogKey(settings);
+  if (clouds.length === 0 && Object.keys(errors).length === 0 && !loading) return null;
+
+  const groups = new Map<string, ModelCatalogEntry[]>();
+  for (const e of clouds) {
+    const k = e.connectionId ?? 'other';
+    const list = groups.get(k) ?? [];
+    list.push(e);
+    groups.set(k, list);
+  }
+
+  return (
+    <section className="mt-8 border-b border-slate-200 pb-5">
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+        From your keys
+      </div>
+      <p className="text-[12.5px] leading-relaxed text-slate-600">
+        Listed automatically from each connection. Pick one to use it.
+        {loading && <span className="ml-1.5 text-slate-400">Refreshing…</span>}
+      </p>
+      <div className="mt-2 space-y-3">
+        {[...groups.entries()].map(([id, list]) => (
+          <div key={id}>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {list[0]?.connectionLabel ?? id}
+            </div>
+            {errors[id] && <p className="mb-1 text-[11px] text-rose-700">{errors[id]}</p>}
+            <div className="space-y-1">
+              {list.map(e => {
+                const isChosen = e.key === active;
+                return (
+                  <button
+                    key={e.key}
+                    type="button"
+                    onClick={() => onPick(e)}
+                    className={`flex w-full items-center gap-2 border px-2.5 py-1.5 text-left text-[11px] ${
+                      isChosen ? 'border-slate-900 bg-white' : 'border-slate-200 bg-white hover:border-slate-400'
+                    }`}
+                  >
+                    <span className={`h-3.5 w-3.5 shrink-0 border-2 ${isChosen ? 'border-slate-900 bg-slate-900' : 'border-slate-300'}`} />
+                    <span className="min-w-0 flex-1 truncate font-semibold text-slate-800">{e.label}</span>
+                    {isChosen && (
+                      <span className="shrink-0 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">IN USE</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KEYS — paste an API key / add a provider. The list above fills itself.
+// ---------------------------------------------------------------------------
+
 
 function ConnectionsSection({ settings, onChange, webllmConn }: {
   settings: AiSettings;
@@ -644,25 +715,7 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
 
   return (
     <section className="mt-8">
-      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Connections</div>
-
-      {/* Active connection picker */}
-      {settings.connections.length > 0 && (
-        <div className="mb-4 border border-slate-200 bg-white p-3">
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Active connection — what the assistant uses
-          </div>
-          <select
-            value={settings.activeConnectionId ?? ''}
-            onChange={e => onChange(s => { s.activeConnectionId = e.target.value || null; })}
-            className="w-full border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none sm:w-auto"
-          >
-            {settings.connections.map(c => (
-              <option key={c.id} value={c.id}>{c.label || c.provider} · {c.model}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Keys</div>
 
       {/* The local connection uses whatever model is chosen in Models above.
           Hidden entirely when this browser can't run local models (no WebGPU)
@@ -711,7 +764,7 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
         className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800"
       >
         {advancedOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        Online providers (needs an API key)
+        Add an online provider (needs an API key)
       </button>
 
       {advancedOpen && (
@@ -761,8 +814,6 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
   const help = PROVIDER_HELP[c.provider];
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [fetchingModels, setFetchingModels] = useState(false);
-  const [modelList, setModelList] = useState<ModelInfo[] | null>(null);
 
   const runTest = async () => {
     setTesting(true);
@@ -777,22 +828,6 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
     }
   };
 
-  const fetchModels = async () => {
-    setFetchingModels(true);
-    setTestResult(null);
-    try {
-      const models = await listModels(c);
-      setModelList(models);
-      setTestResult(models.length
-        ? { ok: true, message: `${models.length} model${models.length === 1 ? '' : 's'} available.` }
-        : { ok: false, message: 'Connected, but the endpoint listed no models.' });
-    } catch (err) {
-      setModelList(null);
-      setTestResult({ ok: false, message: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setFetchingModels(false);
-    }
-  };
   return (
     <div className="border border-slate-200 bg-white p-2.5">
       <div className="mb-2 flex items-center gap-2">
@@ -846,20 +881,16 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
           </label>
         )}
         <label className="block">
-          <span className="block text-[10px] text-slate-500 mb-0.5">Model</span>
+          <span className="block text-[10px] text-slate-500 mb-0.5">Default model (optional)</span>
           <input
             value={c.model}
             onChange={e => onPatch(c.id, { model: e.target.value })}
             placeholder={defaultModelFor(c.provider) || 'model id'}
-            list={`models-${c.id}`}
             className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
           />
-          {/* Suggestions appear after "Fetch models" below; typing still works. */}
-          <datalist id={`models-${c.id}`}>
-            {(modelList ?? []).map(m => (
-              <option key={m.id} value={m.id}>{m.detail ?? m.id}</option>
-            ))}
-          </datalist>
+          <span className="mt-0.5 block text-[9px] text-slate-400">
+            The list above fills itself once the key works. This is just the fallback.
+          </span>
         </label>
         {(c.provider === 'ollama' || c.provider === 'openai-compatible' || c.provider === 'openrouter' || c.provider === 'openai') && (
           <label className="block sm:col-span-2">
@@ -894,19 +925,11 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
       <div className="flex flex-wrap items-center gap-2 mt-2">
         <button
           onClick={() => void runTest()}
-          disabled={testing || fetchingModels}
+          disabled={testing}
           className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
         >
           {testing ? <Loader2 size={11} className="animate-spin" /> : null}
           Test connection
-        </button>
-        <button
-          onClick={() => void fetchModels()}
-          disabled={testing || fetchingModels}
-          className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
-        >
-          {fetchingModels ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-          Fetch models
         </button>
         {testResult && (
           <span className={`flex items-center gap-1 text-[11px] ${testResult.ok ? 'text-blue-700' : 'text-rose-700'}`}>

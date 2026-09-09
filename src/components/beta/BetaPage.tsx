@@ -6,14 +6,23 @@
 // The dock (f7's star): a 340px right rail on desktop, a full-screen sheet on
 // phones. The app works without it — the Assistant button toggles it and it
 // never traps you.
-import { useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Link } from './nav';
 import type { View } from '../../lib/viewRoutes';
 import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { DETAILS_SECTIONS } from './detailsSections';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { CircleUserRound, Maximize2, Minimize2, Undo2 } from 'lucide-react';
 import { prefKV } from '../../lib/prefKv';
+
+/** The plan's undo surface for the header (issue #165): edits autosave, and
+ *  the undo icon steps back through the saved revisions (the rollback
+ *  machinery). App owns the handler; every beta page's header reads it from
+ *  here so the icons never need threading through each page's props. */
+export const PlanUndoContext = createContext<{ canUndo: boolean; onUndo: () => void }>({
+  canUndo: false,
+  onUndo: () => {},
+});
 
 const DOCK_PREF_KEY = 'wealthconsole_dock_open';
 // Remember the dock's open state across loads (issue #20 prefKV — captured by
@@ -82,6 +91,7 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
     setDockOpenState(open || openRoute);
     try { prefKV().setItem(DOCK_PREF_KEY, (open || openRoute) ? '1' : '0'); } catch { /* storage blocked */ }
   };
+  const undo = useContext(PlanUndoContext);
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-800">
@@ -145,6 +155,35 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             title="The assistant — reads your plan, answers questions, shows its work"
           >
             Assistant
+          </button>
+
+          {/* Issue #165: profile + undo beside the verdict chip. The profile
+              icon is the plan's home (Profiles — where profiles are created,
+              renamed, and rolled back); undo steps back through the saved
+              revisions, one tap per press. */}
+          <Link
+            view="scenarios"
+            aria-label="Your profiles — the plan page"
+            title="Your profiles — switch, create, or roll back the plan"
+            className="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          >
+            <CircleUserRound size={18} />
+          </Link>
+          <button
+            type="button"
+            onClick={undo.onUndo}
+            disabled={!undo.canUndo}
+            aria-label="Undo — step back to the previous saved plan"
+            title={undo.canUndo
+              ? 'Undo — step back to the previous saved plan'
+              : 'Nothing to undo — edits save automatically and undo steps through saved plans'}
+            className={`flex h-8 w-8 items-center justify-center transition-colors ${
+              undo.canUndo
+                ? 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                : 'cursor-not-allowed text-slate-300'
+            }`}
+          >
+            <Undo2 size={18} />
           </button>
 
           {/* the persistent verdict chip — number and colour carry it; the words live in the tooltip */}
