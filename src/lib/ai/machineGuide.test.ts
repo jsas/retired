@@ -3,7 +3,9 @@ import { buildMachineGuide } from './machineGuide';
 import { WEBLLM_MODELS } from './webLlmModels';
 
 // The list is ordered best-first (not by size), so derive size facts here.
-const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
+// Dev-only entries (local fine-tunes whose weights aren't deployed) are
+// excluded — the guide never recommends a model a visitor can't download.
+const byVram = [...WEBLLM_MODELS].filter(m => !m.localDevOnly).sort((a, b) => a.vramMB - b.vramMB);
 const smallestToolCapable = byVram.find(m => m.toolCapable)!;
 
 // Swap navigator.userAgent per test, then restore (the guide reads it via
@@ -36,12 +38,12 @@ describe('buildMachineGuide', () => {
   });
 
   it('recommends the smallest TOOL-CAPABLE model', () => {
-    // Since #118 pruned the weak models, every catalog entry is tool-capable —
-    // the recommendation is the lightest download that can still drive the
-    // plan (never a questions-only assistant).
+    // Tiny catalog entries (Qwen3.5 2B) are questions-only — the recommendation
+    // is the lightest download that can still drive the plan.
     const g = buildMachineGuide(true);
     expect(g.recommended).toBe(smallestToolCapable);
     expect(g.recommended.toolCapable).toBe(true);
+    expect(g.recommended.id).not.toContain('1.7B');
     expect(g.headline).toContain(g.recommended.label);
   });
 

@@ -71,7 +71,7 @@ function TimelinePrintChart({ inputs, rows }: {
     return (
       <p className="border-l-2 border-slate-300 py-1 pl-3 text-[11px] text-slate-500">
         Nothing to draw — the plan has no savings yet. Add balances on the
-        Details page and the timeline will render.
+        Plans page and the timeline will render.
       </p>
     );
   }
@@ -150,7 +150,7 @@ function MonteCarloPrintChart({ results, retirementAge, maxAge }: {
     return (
       <p className="border-l-2 border-slate-300 py-1 pl-3 text-[11px] text-slate-500">
         Nothing to draw — the plan has no savings yet. Add balances on the
-        Details page and the simulation will render.
+        Plans page and the simulation will render.
       </p>
     );
   }

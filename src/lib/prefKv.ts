@@ -37,6 +37,7 @@ export const PREF_KEYS = [
   'wealthconsole_schedule_cols', // year-by-year table: user-visible column ids
   'wealthconsole_ranges',      // lever slider min/max prefs (spending/savings/return/volatility)
   'wealthconsole_dock_open',   // the assistant dock: open or closed
+  'wealthconsole_dock_width',  // the assistant dock: desktop width in px (min 340)
 ] as const;
 
 export type PrefKey = (typeof PREF_KEYS)[number];

@@ -1,7 +1,7 @@
-// The registry of the details page's sections — the single source the Details ▾
-// menu and the page both read, so they can't drift. Plain names, grouped the
-// way a person looks for them (BETA-MAP.md §2). `conditional` sections appear
-// only when the plan uses them (RDSP / FHSA / Home Equity).
+// The registry of the plan editor's sections — the single source the Plans
+// page reads. Plain names, grouped the way a person looks for them
+// (BETA-MAP.md §2). `conditional` sections appear only when the plan uses
+// them (RDSP / FHSA / Home Equity).
 
 export interface DetailsSection {
   id: string;

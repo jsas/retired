@@ -2,6 +2,7 @@ import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { validateAppConfig } from '@retired/engine-core/appConfig';
+import { promoteEmbeddedSpouses } from '@retired/engine-core/householdTypes';
 import { AppDatabase, DB_STORAGE_KEY } from './db';
 import { attachPrefKv, reconcilePrefKv } from '../lib/prefKv';
 import type { AppDbDoc } from './schemas';
@@ -89,6 +90,15 @@ export class AppStore {
       db.saveScenarios(scenarios);
       db.saveActiveScenarioId(activeScenarioId);
       db.save();
+    } else {
+      // Leftover in-plan spouses (pre-link-only saves) become their own plans
+      // and the host stores a link. Already-linked rows are left alone.
+      const promoted = promoteEmbeddedSpouses(scenarios);
+      if (promoted.changed) {
+        scenarios = promoted.scenarios;
+        db.saveScenarios(scenarios);
+        db.save();
+      }
     }
 
     // Corrupted/invalid stored config: we fall back to defaults. Make it loud —

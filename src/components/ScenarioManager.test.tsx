@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The Profiles page's scenario list, rebuilt in the f7 design: no inner page
+// The Plans page's scenario list, rebuilt in the f7 design: no inner page
 // heading (BetaPage owns it), no rounded blue button/cards — one hairline
 // list where the active plan reads by weight and its blue dot.
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -32,7 +32,7 @@ describe('ScenarioManager (beta design)', () => {
     // the list and its quiet explainer remain
     expect(html).toContain('Base plan');
     expect(html).toContain('Retire later');
-    expect(html).toContain('Click a profile to load it');
+    expect(html).toContain('Click a plan to load it');
   });
 
   it('marks the active plan with the square blue dot and weight — no card, no ring', () => {

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
+import { resolveSpouseSource } from '@retired/engine-core/householdTypes';
 import { migrateInputs } from './migrations';
 
 /**
@@ -23,9 +24,10 @@ const byName = (name: string) => {
 };
 
 describe('exampleScenarios — data audit', () => {
-  it('ships exactly the four documented examples with unique ids', () => {
+  it('ships the documented examples with unique ids (couple + linked partner)', () => {
     expect(examples.map(s => s.name)).toEqual([
       'Example - Early Couple',
+      'Example - Partner',
       'Example - Single at 60',
       'Example - Semi-retirement',
       'Example - RDSP Starting Out',
@@ -54,12 +56,15 @@ describe('exampleScenarios — data audit', () => {
     expect(r.depletionAge === null || r.depletionAge >= 80).toBe(true);
   });
 
-  it('Early Couple exercises the spouse plan and spending bands', () => {
+  it('Early Couple links Example - Partner and spending bands still run as a household', () => {
     const s = byName('Example - Early Couple');
-    expect(s.inputs.spouse?.enabled).toBe(true);
+    const partner = byName('Example - Partner');
+    expect(s.inputs.spouseSource).toEqual({ kind: 'scenario', scenarioId: partner.id });
+    expect(s.inputs.spouse).toBeUndefined();
     expect(s.inputs.spendingBands?.length).toBeGreaterThanOrEqual(2);
-    const r = calculateHousehold({ ...migrateInputs(s.inputs) }, DEFAULT_APP_CONFIG);
-    // The spouse plan actually ran (not silently dropped).
+    const resolved = resolveSpouseSource(s.inputs, examples, s.id);
+    expect(resolved.spouse?.enabled).toBe(true);
+    const r = calculateHousehold({ ...migrateInputs(s.inputs), spouse: resolved.spouse }, DEFAULT_APP_CONFIG);
     expect(r.spouse).toBeDefined();
     expect(r.spouse!.yearlyBreakdown.length).toBeGreaterThan(10);
   });

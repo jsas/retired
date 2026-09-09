@@ -29,6 +29,9 @@ describe('DetailsPage inline editors', () => {
       'details-income', 'details-benefits', 'details-events', 'details-spending', 'details-withdrawal', 'details-markets', 'details-debts']) {
       expect(html, id).toContain(id);
     }
+    // Sections stack in one column (the old two-col desktop grid is gone).
+    expect(html).toContain('flex max-w-xl flex-col');
+    expect(html).not.toContain('md:grid-cols-2');
   });
 
   it('renders the Markets section: flat volatility and return anchors', () => {
@@ -84,49 +87,38 @@ describe('DetailsPage inline editors', () => {
     expect(html).toContain('aria-label="Remove Mortgage"');
   });
 
-  it('offers the partner toggle and renders partner fields once enabled', () => {
-    const off = render();
-    expect(off).toContain('Include a partner');
-    expect(off).not.toContain('Partner age');
-    const on = render({
-      spouse: {
-        enabled: true, currentAge: 55, retirementAge: 60,
-        rrspBalance: 1, tfsaBalance: 2, taxableBalance: 3, cashCushionBalance: 4,
-        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-        cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 0,
-      },
+  it('offers a link picker when other plans exist, and create when they do not', () => {
+    const none = render();
+    expect(none).toContain('No other saved plans yet');
+    expect(none).not.toContain('Partner age');
+    expect(none).not.toContain('Include a partner');
+    const withPlans = render({}, {
+      scenarios: [
+        { id: 'me', name: 'Mine', inputs },
+        { id: 'partner', name: 'Alex', inputs },
+      ],
+      activeScenarioId: 'me',
     });
-    expect(on).toContain('Partner age');
-    expect(on).toContain('CPP start age');
+    expect(withPlans).toContain('Linked plan');
+    expect(withPlans).toContain('Alex');
+    expect(withPlans).toContain('No partner');
+    expect(withPlans).not.toContain('Partner age');
   });
 
-  it('renders the full partner register: contributions, room, income, events, phases', () => {
-    const html = render({
-      spouse: {
-        enabled: true, currentAge: 55, retirementAge: 60,
-        rrspBalance: 1, tfsaBalance: 2, taxableBalance: 3, cashCushionBalance: 4,
-        rrspContribution: 3000, tfsaContribution: 6000, taxableContribution: 0,
-        tfsaRoom: 40000, rrspRoom: 25000,
-        cppStartAge: 65, cppMonthlyAmount: 1000, oasStartAge: 65, oasYearsInCanada: 40,
-        desiredSpending: 0,
-        income: [{ id: 'i1', label: 'Consulting', kind: 'employment', annualAmount: 20000, startAge: 60, endAge: 65, indexedToCpi: true }],
-        events: [{ id: 'e1', label: 'Gift', amount: 50000, age: 70, direction: 'out' }],
-        spendingBands: [{ fromAge: 70, pctOfBase: 0.7 }],
+  it('shows Open / Unlink when a plan is already linked', () => {
+    const html = render(
+      { spouseSource: { kind: 'scenario', scenarioId: 'partner' } },
+      {
+        scenarios: [
+          { id: 'me', name: 'Mine', inputs },
+          { id: 'partner', name: 'Alex', inputs },
+        ],
+        activeScenarioId: 'me',
       },
-    });
-    expect(html).toContain('Partner contributions');
-    expect(html).toContain('Partner income');
-    expect(html).toContain('Partner cash events');
-    expect(html).toContain('Partner spending phases');
-    expect(html).toContain('Consulting');
-    expect(html).toContain('Gift');
-    expect(html).toContain('TFSA room');
-    expect(html).toContain('value="40000"');
-    expect(html).toContain('value="25000"');
-    expect(html).toContain('value="3000"');
-    expect(html).toContain('value="6000"');
-    expect(html).toContain('% of base');
+    );
+    expect(html).toContain('Open Alex');
+    expect(html).toContain('Unlink');
+    expect(html).not.toContain('Partner contributions');
   });
 
   it('offers the RDSP toggle and editors once enabled', () => {

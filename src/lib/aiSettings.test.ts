@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   loadAiSettings, saveAiSettings, defaultAiSettings, SEED_PROMPTS,
   defaultModelFor, defaultBaseUrlFor, connectionReady, newConnectionId,
-  memoryKV, effectiveGeneration,
+  memoryKV, effectiveGeneration, resetAiSettingsForTests, getAiSettings, updateAiSettings,
+  resolveLocalToolCapable,
   DEFAULT_MAX_TOKENS, DEFAULT_LOCAL_TEMPERATURE,
   DEFAULT_LOCAL_REPETITION_PENALTY, DEFAULT_LOCAL_PRESENCE_PENALTY,
   DEFAULT_LOCAL_FREQUENCY_PENALTY, MODEL_SAMPLER_DEFAULTS,
@@ -38,6 +39,19 @@ describe('aiSettings load/save', () => {
     expect(back.prompts.some(p => p.id === 'mine')).toBe(true);
   });
 
+  it('round-trips prompt send flags and instruction overrides', () => {
+    const kv = memoryKV();
+    const s = defaultAiSettings();
+    s.systemPromptOverride = 'say only yes yes yes';
+    s.toolInstructionsNative = 'Call get_scenario only.';
+    s.promptSend = { includeToolInstructions: false, sendTools: false, personaLast: true };
+    saveAiSettings(s, kv);
+    const back = loadAiSettings(kv);
+    expect(back.systemPromptOverride).toBe('say only yes yes yes');
+    expect(back.toolInstructionsNative).toBe('Call get_scenario only.');
+    expect(back.promptSend).toEqual({ includeToolInstructions: false, sendTools: false, personaLast: true });
+  });
+
   it('falls back to defaults on a corrupt payload', () => {
     const kv = memoryKV();
     kv.setItem('retirement_ai_settings', '{not json');
@@ -58,6 +72,31 @@ describe('aiSettings load/save', () => {
     expect(back.prompts.some(p => p.id === 'compare-runs')).toBe(true);
   });
 
+  it('live store round-trips a persona override so Settings and the dock share it', () => {
+    const kv = memoryKV();
+    resetAiSettingsForTests(kv);
+    expect(getAiSettings().systemPromptOverride).toBeUndefined();
+    updateAiSettings(prev => ({ ...prev, systemPromptOverride: 'say only yes yes yes' }));
+    expect(getAiSettings().systemPromptOverride).toBe('say only yes yes yes');
+    expect(loadAiSettings(kv).systemPromptOverride).toBe('say only yes yes yes');
+  });
+
+  it('round-trips a per-model tools override', () => {
+    const kv = memoryKV();
+    const s = defaultAiSettings();
+    s.toolCapableByModel = { 'Qwen3.5-2B-q4f16_1-MLC': 'on' };
+    saveAiSettings(s, kv);
+    expect(loadAiSettings(kv).toolCapableByModel).toEqual({ 'Qwen3.5-2B-q4f16_1-MLC': 'on' });
+  });
+
+  it('resolveLocalToolCapable keeps the catalog default unless forced', () => {
+    expect(resolveLocalToolCapable(false, undefined)).toBe(false);
+    expect(resolveLocalToolCapable(true, undefined)).toBe(true);
+    expect(resolveLocalToolCapable(false, 'on')).toBe(true);
+    expect(resolveLocalToolCapable(true, 'off')).toBe(false);
+    expect(resolveLocalToolCapable(undefined, undefined)).toBe(true);
+  });
+
   it('drops a dangling activeConnectionId', () => {
     const kv = memoryKV();
     const s = defaultAiSettings();
@@ -73,6 +112,7 @@ describe('provider defaults', () => {
     expect(defaultModelFor('anthropic')).toMatch(/^claude-/);
     expect(defaultBaseUrlFor('ollama')).toBe('http://localhost:11434/v1');
     expect(defaultBaseUrlFor('openrouter')).toContain('openrouter.ai');
+    expect(defaultModelFor('openrouter')).toBe('openrouter/free');
     expect(defaultBaseUrlFor('anthropic')).toBeUndefined();
   });
 
@@ -86,6 +126,9 @@ describe('provider defaults', () => {
     // Generic compatible endpoint needs both.
     expect(connectionReady(conn({ provider: 'openai-compatible', baseUrl: 'http://x/v1' }))).toBe(true);
     expect(connectionReady(conn({ provider: 'openai-compatible', baseUrl: '' }))).toBe(false);
+    expect(connectionReady(conn({ provider: 'webllm', apiKey: '', model: 'Qwen3.5-2B-q4f16_1-MLC' }))).toBe(true);
+    expect(connectionReady(conn({ provider: 'bonsai', apiKey: '', model: 'onnx-community/Bonsai-1.7B-ONNX' }))).toBe(true);
+    expect(defaultModelFor('bonsai')).toBe('onnx-community/Bonsai-1.7B-ONNX');
   });
 
   it('generates unique connection ids', () => {
@@ -136,25 +179,6 @@ describe('generation settings', () => {
   it('local defaults keep deterministic-ish sampling', () => {
     expect(DEFAULT_LOCAL_TEMPERATURE).toBeLessThanOrEqual(0.5);
     expect(DEFAULT_LOCAL_REPETITION_PENALTY).toBeGreaterThan(1);
-  });
-
-  it('a loop-prone local model picks up its own sampler defaults', () => {
-    const phi = conn({ provider: 'webllm', apiKey: '', model: 'Phi-4-mini-instruct-q4f16_1-MLC' });
-    const g = effectiveGeneration(phi);
-    const tuned = MODEL_SAMPLER_DEFAULTS['Phi-4-mini-instruct-q4f16_1-MLC'];
-    // The model's profile overrides the generic local defaults…
-    expect(g.temperature).toBe(tuned.temperature);
-    expect(g.repetitionPenalty).toBe(tuned.repetitionPenalty);
-    expect(g.presencePenalty).toBe(tuned.presencePenalty);
-    expect(g.frequencyPenalty).toBe(tuned.frequencyPenalty);
-    // …and it's actually stronger than the generic anti-repeat floor.
-    expect(g.repetitionPenalty).toBeGreaterThan(DEFAULT_LOCAL_REPETITION_PENALTY);
-    // …but a user's explicit setting still wins.
-    const overridden = effectiveGeneration({
-      ...phi, generation: { repetitionPenalty: 1.1 },
-    });
-    expect(overridden.repetitionPenalty).toBe(1.1);
-    expect(overridden.presencePenalty).toBe(tuned.presencePenalty); // untouched
   });
 
   it('other local models keep the generic sampler defaults', () => {

@@ -343,10 +343,10 @@ describe('propose_patch', () => {
 });
 
 describe('propose_spouse', () => {
-  it('proposes adding a spouse from a full block', () => {
+  it('proposes minting a partner plan from a full block (no inline spouse)', () => {
     const out = executeToolCall(ctx(), {
       id: '1', name: 'propose_spouse',
-      args: { changes: {
+      args: { name: 'Alex', changes: {
         enabled: true, currentAge: 60, retirementAge: 65,
         rrspBalance: 100000, tfsaBalance: 50000, taxableBalance: 20000, cashCushionBalance: 5000,
         rrspContribution: 5000, tfsaContribution: 3000, taxableContribution: 0,
@@ -356,30 +356,47 @@ describe('propose_spouse', () => {
     });
     expect(out.kind).toBe('mutation');
     if (out.kind !== 'mutation') return;
-    expect(out.label).toBe('Add spouse/partner');
-    expect((out.patch.spouse as { enabled: boolean }).enabled).toBe(true);
+    expect(out.label).toBe('Add spouse/partner as "Alex"');
+    expect(out.patch).toEqual({});
+    expect(out.createPartner?.name).toBe('Alex');
+    expect(out.createPartner?.inputs.currentAge).toBe(60);
+    expect(out.createPartner?.inputs.desiredSpending).toBe(30000);
+    expect(out.createPartner?.inputs.spouse).toBeUndefined();
+    expect(out.createPartner?.inputs.spouseSource).toBeUndefined();
   });
 
-  it('rejects an incomplete add with guidance', () => {
-    const out = executeToolCall(ctx(), {
-      id: '1', name: 'propose_spouse', args: { changes: { enabled: true, currentAge: 60 } },
+  it('rejects when neither a plan id nor partner numbers are given', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'propose_spouse', args: {} });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('scenarioId');
+  });
+
+  it('proposes unlinking a spouse (encoded so JSON can carry the removal)', () => {
+    const c = ctx();
+    c.inputs = { ...c.inputs, spouseSource: { kind: 'scenario', scenarioId: 'partner' } };
+    const out = executeToolCall(c, { id: '1', name: 'propose_spouse', args: { enabled: false } });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Unlink spouse');
+    expect(out.revert).toBe(true);
+    expect(out.patch.spouse).toBe(UNDEFINED_SENTINEL);
+    expect(out.patch.spouseSource).toBe(UNDEFINED_SENTINEL);
+  });
+
+  it('proposes linking an existing saved plan', () => {
+    const out = executeToolCall(ctx({
+      scenarioList: [{ id: 'a', name: 'Test plan' }, { id: 'partner', name: 'Alex' }],
+      activeScenarioId: 'a',
+    }), { id: '1', name: 'propose_spouse', args: { scenarioId: 'partner' } });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.label).toBe('Link spouse: Alex');
+    expect(out.patch.spouseSource).toEqual({ kind: 'scenario', scenarioId: 'partner' });
+  });
+
+  it('refuses linking a plan to itself', () => {
+    const out = executeToolCall(ctx({ activeScenarioId: 'a' }), {
+      id: '1', name: 'propose_spouse', args: { scenarioId: 'a' },
     });
     expect(out.kind).toBe('error');
-    if (out.kind === 'error') expect(out.content).toContain('full block');
-  });
-
-  it('proposes removing a spouse', () => {
-    const c = ctx();
-    c.inputs = { ...c.inputs, spouse: {
-      enabled: true, currentAge: 60, retirementAge: 65,
-      rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
-      rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-      cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
-      desiredSpending: 0,
-    } };
-    const out = executeToolCall(c, { id: '1', name: 'propose_spouse', args: { changes: { enabled: false } } });
-    if (out.kind !== 'mutation') throw new Error('expected mutation');
-    expect(out.label).toBe('Remove spouse');
   });
 });
 
@@ -1123,18 +1140,26 @@ describe('find_page / get_sitemap / propose_navigate', () => {
   it('find_page resolves plain words to the page that holds them', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'tfsa room' } });
     if (out.kind !== 'result') throw new Error('expected result');
-    // Contribution room lives in the details page's account section.
-    expect(out.content).toMatch(/\n1\. Details — #\/details/);
+    // Contribution room lives on Plans (the numbers behind the current plan).
+    expect(out.content).toMatch(/\n1\. Plans — #\/plan/);
   });
 
-  it('find_page routes a folded feature name to its destination page', () => {
-    // "monte carlo" is a keyword on the (folded) legacy view and on eq.
+  it('find_page routes a tool name straight to its own page (issue #162)', () => {
+    // The Tools menu unfurled the surfaces that used to fold into Insights —
+    // "monte carlo" now resolves to the Monte Carlo page itself.
     const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'monte carlo' } });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('Insights');
-    expect(out.content).toContain('#/steering');
-    // The folded page must not surface as its own destination.
-    expect(out.content).not.toContain('#/monte-carlo');
+    expect(out.content).toContain('Monte Carlo');
+    expect(out.content).toContain('#/monte-carlo');
+    expect(out.content).not.toContain('Steering');
+  });
+
+  it('find_page still routes a folded legacy name to its destination page', () => {
+    // "sharing" has no page of its own — Data hosts it.
+    const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'share' } });
+    if (out.kind !== 'result') throw new Error('expected result');
+    expect(out.content).toContain('#/data');
+    expect(out.content).not.toContain('#/sharing');
   });
 
   it('find_page tags the page the user is on as "already here"', () => {
@@ -1153,32 +1178,45 @@ describe('find_page / get_sitemap / propose_navigate', () => {
   it('get_sitemap lists the reachable pages, not the folded legacy names', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'get_sitemap', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('(view details)');
     expect(out.content).toContain('(view eq)');
     expect(out.content).toContain('(view scenarios)');
+    expect(out.content).toContain('#/plan');
     expect(out.content).toContain('(view data)');
-    expect(out.content).not.toContain('(view montecarlo)');
+    // The Tools surfaces are pages now (issue #162) — they belong on the map.
+    expect(out.content).toContain('(view montecarlo)');
+    expect(out.content).toContain('(view solver)');
     expect(out.content).not.toContain('(view sharing)');
+    expect(out.content).not.toContain('(view compare)');
+    expect(out.content).not.toContain('(view details)');
   });
 
   it('propose_navigate returns a confirm card with the destination, empty patch', () => {
     const out = executeToolCall(ctx({ canNavigate: true }), {
-      id: '1', name: 'propose_navigate', args: { view: 'steering', label: 'Open Insights' },
+      id: '1', name: 'propose_navigate', args: { view: 'steering', label: 'Open Steering' },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
     expect(out.patch).toEqual({});
     expect(out.navigate).toBe('eq');
-    expect(out.label).toBe('Open Insights');
-    expect(out.preview).toMatchObject({ Page: 'Insights', Route: '#/steering' });
+    expect(out.label).toBe('Open Steering');
+    expect(out.preview).toMatchObject({ Page: 'Steering', Route: '#/steering' });
   });
 
-  it('propose_navigate redirects a folded view to the page that hosts it', () => {
+  it('propose_navigate lands an unfurled tool on its own page (issue #162)', () => {
     const out = executeToolCall(ctx({ canNavigate: true }), {
       id: '1', name: 'propose_navigate', args: { view: 'montecarlo', label: 'Open Monte Carlo' },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
-    expect(out.navigate).toBe('eq');
-    expect(out.preview).toMatchObject({ Page: 'Insights' });
+    expect(out.navigate).toBe('montecarlo');
+    expect(out.preview).toMatchObject({ Page: 'Monte Carlo' });
+  });
+
+  it('propose_navigate still redirects a merged legacy view to its host page', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'compare', label: 'Open Compare' },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.navigate).toBe('scenarios');
+    expect(out.preview).toMatchObject({ Page: 'Plans' });
   });
 
   it('propose_navigate without a UI returns the shareable hash instead', () => {
@@ -1196,6 +1234,9 @@ describe('find_page / get_sitemap / propose_navigate', () => {
     if (out.kind !== 'error') throw new Error('expected error');
     expect(out.content).toContain('Unknown view');
     expect(out.content).toContain('projection');
-    expect(out.content).not.toContain('montecarlo');
+    // Issue #162: the Tools surfaces are real view ids now — the suggestion
+    // list carries them; the still-folded legacy ones stay out.
+    expect(out.content).toContain('montecarlo');
+    expect(out.content).not.toContain('compare');
   });
 });

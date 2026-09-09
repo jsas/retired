@@ -30,6 +30,7 @@ describe('AppStore', () => {
     const { state } = await AppStore.open(buildDefaultScenarios);
     expect(state.scenarios.map(s => s.name)).toEqual([
       'Example - Early Couple',
+      'Example - Partner',
       'Example - Single at 60',
       'Example - Semi-retirement',
       'Example - RDSP Starting Out',
@@ -111,6 +112,35 @@ describe('AppStore', () => {
     expect(again.state.scenarios.map(s => s.name)).toEqual(['Renamed', 'Second']);
     expect(again.state.activeScenarioId).toBe('new-2');
     expect(again.state.config?.oas.clawbackThreshold).toBe(DEFAULT_APP_CONFIG.oas.clawbackThreshold);
+  });
+
+  it('promotes a leftover in-plan spouse into its own plan on open', async () => {
+    const leftover = baseInputs({
+      spouse: {
+        enabled: true, currentAge: 57, retirementAge: 62,
+        rrspBalance: 100000, tfsaBalance: 20000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 25000,
+      },
+      spouseSource: { kind: 'builtin' },
+    });
+    const { store } = await AppStore.open(customDefaults);
+    store.persist({
+      scenarios: [{ id: 'seed-1', name: 'Seeded plan', inputs: leftover }],
+      activeScenarioId: 'seed-1',
+    });
+
+    const again = await AppStore.open(customDefaults);
+    expect(again.state.scenarios).toHaveLength(2);
+    expect(again.state.scenarios[0].inputs.spouse).toBeUndefined();
+    expect(again.state.scenarios[0].inputs.spouseSource).toEqual({
+      kind: 'scenario', scenarioId: 'seed-1-spouse',
+    });
+    expect(again.state.scenarios[1].id).toBe('seed-1-spouse');
+    expect(again.state.scenarios[1].name).toBe('Seeded plan — Partner');
+    expect(again.state.scenarios[1].inputs.currentAge).toBe(57);
+    expect(again.state.scenarios[1].inputs.desiredSpending).toBe(25000);
   });
 
   it('a dead stored active id falls back to the first scenario', async () => {

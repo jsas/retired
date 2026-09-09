@@ -63,7 +63,7 @@ SOFTWARE.`;
 /** Section order on the page. */
 export const HELP_SECTIONS = [
   'People', 'Accounts', 'Income', 'Spending', 'Property', 'Levers',
-  'Reading the answer', 'Analysis', 'Schedule', 'Profiles', 'Assistant', 'Data',
+  'Reading the answer', 'Analysis', 'Schedule', 'Plans', 'Assistant', 'Data',
   'Assumptions', 'Glossary', 'Legal',
 ] as const;
 
@@ -88,20 +88,16 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'Include spouse',
     section: 'People',
     keywords: ['partner', 'couple', 'household'],
-    body: <P>Runs a second, independent projection for your partner using their own ages, balances, contributions, CPP/OAS and spending. The two plans are combined into a household verdict: the household is SHORTFALL if either plan runs out, and the metric cards show household wealth at retirement with per-person detail.</P>,
+    body: <P>A partner is another saved plan, linked from this one. Their ages, balances, contributions, CPP/OAS and spending live on that plan — open it to edit. The two plans combine into a household verdict: the household is SHORTFALL if either plan runs out, and the metric cards show household wealth at retirement with per-person detail.</P>,
   },
   {
     id: 'built-in-vs-linked-spouse',
-    title: 'Built-in vs linked spouse',
+    title: 'Linked spouse',
     section: 'People',
-    keywords: ['link a plan', 'shared spouse', 'one source of truth'],
+    keywords: ['link a plan', 'shared spouse', 'one source of truth', 'built-in'],
     body: (
       <>
-        <P>The spouse can live two places, switched by the <strong>Built-in / Link a plan</strong> toggle at the top of the Spouse section:</P>
-        {ul([
-          <><strong>Built-in</strong> — the spouse's numbers are stored inside this scenario and edited inline. <em>Save spouse as its own plan…</em> promotes them to a standalone scenario.</>,
-          <><strong>Link a plan</strong> — the spouse <em>is</em> another saved scenario, fetched live. One source of truth — editing the linked plan updates every household that links to it.</>,
-        ])}
+        <P>A partner is always another saved plan. This plan stores only the link; their numbers live on that plan and are edited there. Creating a partner plan (wizard, Plans, or the assistant) mints a new saved plan and links it.</P>
         <P>A household shares one province, one market assumption and one planning horizon, so a linked spouse's own values for those are overridden by this plan.</P>
       </>
     ),
@@ -321,6 +317,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       <>
         <P>The Markets dial assumes one average return every year. To model a <strong>crash, a boom, or a choppy stretch</strong>, shape a curve with <strong>return anchors</strong> — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.</P>
         <P>The projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.</P>
+        <P>On the dashboard's life timeline you can shape the curve directly: <strong>double-click the market strip</strong> (below the balance line) to drop an anchor at that age, <strong>drag</strong> it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples.</P>
       </>
     ),
   },
@@ -340,8 +337,9 @@ export const HELP_TOPICS: HelpTopic[] = [
     keywords: ['on track', 'shortfall', 'depletion', 'answer', 'will it last'],
     body: (
       <>
-        <P>The verdict comes straight from the simulation: the plan is <strong>SHORTFALL</strong> if the money runs out (every account, including the cash cushion, reaches $0) before your max age, and <strong>ON TRACK</strong> if it lasts. The age shown is the year it runs out, or the horizon if it never does.</P>
-        <P>For a couple, the household verdict is the worst of the two plans.</P>
+        <P>The number on the dashboard is leftover in the pot: <strong>Money lasts to</strong> is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the life-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.</P>
+        <P>The engine&apos;s ON TRACK / SHORTFALL flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The receipts, chip, and chart pin all follow the pot so they cannot disagree.</P>
+        <P>For a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined life line.</P>
       </>
     ),
   },
@@ -370,21 +368,21 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'The down-market check',
     section: 'Reading the answer',
     keywords: ['stress test', 'pessimistic', 'low return', 'bear market'],
-    body: <P>Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo on the Insights page.</P>,
+    body: <P>Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo in the Tools menu.</P>,
   },
   {
     id: 'life-timeline',
     title: 'The life timeline',
     section: 'Reading the answer',
-    keywords: ['timeline', 'balance over time', 'work ends', 'money runs out'],
-    body: <P>Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when work ends, and when the money runs out (or that it outlasts the plan).</P>,
+    keywords: ['timeline', 'balance over time', 'start drawing', 'retirement age', 'money runs out'],
+    body: <P>Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when you <strong>start drawing</strong> (the transition into retirement — drag it to change the age), and when the money runs out (or that it outlasts the plan). Below the line: the <strong>spend strip</strong> (what the plan targets spending each year — drag its handle to change today's spending) and, when your plan has them, <strong>event diamonds</strong> (drag to move/resize a cash event) and the <strong>market strip</strong> (double-click to drop a return anchor — see Market hypothesis).</P>,
   },
   {
     id: 'evidence-row',
     title: 'The evidence row',
     section: 'Reading the answer',
     keywords: ['account bars', 'money lasts to', 'left at', 'stats', 'proof'],
-    body: <P>The numbers behind the verdict: the account mix at any age you pick (RRSP+RRIF, TFSA, Taxable+cash), plus how long the money lasts, what's left at max age, the pot at work's end, and when CPP+OAS start.</P>,
+    body: <P>The numbers behind the verdict: the account mix at any age you pick (RRSP+RRIF, TFSA, Taxable+cash), plus how long the money lasts (first empty year of the pot — the same age as the life-timeline pin), what's left at max age, the pot at work's end, and when CPP+OAS start. "90+ / past the plan" only prints when leftover is still there.</P>,
   },
   {
     id: 'stress-test',
@@ -434,47 +432,73 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: 'levers-ranked',
-    title: 'Levers, ranked (the equalizer)',
+    title: 'Steering (the equalizer)',
     section: 'Analysis',
-    keywords: ['eq', 'equalizer', 'sliders', 'drag pad', 'strategy ranking', 'crops'],
+    keywords: ['eq', 'equalizer', 'sliders', 'drag pad', 'strategy ranking', 'crops', 'steering'],
     body: (
       <>
-        <P>The equalizer is a goals-level surface over your whole plan: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast.</P>
-        <P>The Strategy Explorer re-runs your plan under a menu of alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing — each scored on the sustainable after-tax spending it supports, with a one-click Apply.</P>
+        <P>Steering is a goals-level surface over your whole plan: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast. The projection timeline under the controls redraws with every drag.</P>
+      </>
+    ),
+  },
+  {
+    id: 'strategy-explorer',
+    title: 'Optimizer (strategy explorer)',
+    section: 'Analysis',
+    keywords: ['optimize', 'strategies', 'variants', 'apply', 'what helps most'],
+    body: (
+      <>
+        <P>The Optimizer re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.</P>
       </>
     ),
   },
   {
     id: 'optimize-spending',
-    title: 'Sustainable spending solve',
+    title: 'Solver: sustainable spending',
     section: 'Analysis',
-    keywords: ['how much can i spend', 'solve', 'maximum spending', 'safe withdrawal'],
-    body: <P>Answers "how much could I spend?" instead of "will my spending last?" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures.</P>,
+    keywords: ['how much can i spend', 'solve', 'solver', 'maximum spending', 'safe withdrawal'],
+    body: <P>The Solver answers "how much could I spend?" instead of "will my spending last?" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures.</P>,
   },
 
   // ── Schedule ───────────────────────────────────────────────────────────
   {
     id: 'schedule-columns',
-    title: 'The schedule columns',
+    title: 'The Projection page columns',
     section: 'Schedule',
-    keywords: ['year by year', 'table', 'column picker', 'show all', 'balances'],
-    body: <P>The year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The <strong>Columns</strong> button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one "show all" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail.</P>,
+    keywords: ['projection', 'year by year', 'table', 'column picker', 'show all', 'balances'],
+    body: <P>The Projection page's year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The <strong>Columns</strong> button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one "show all" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail.</P>,
   },
 
-  // ── Profiles ──────────────────────────────────────────────────────────────
+  // ── Plans ────────────────────────────────────────────────────────────────
   {
     id: 'scenarios',
-    title: 'Profiles',
-    section: 'Profiles',
-    keywords: ['what-if', 'save', 'switch', 'new plan', 'duplicate', 'scenario'],
-    body: <P>A profile is one complete set of inputs (internally a "scenario" — same idea). The top bar switches between them; Save writes your edits into the active profile; the Profiles page creates, renames, duplicates and deletes. Switching away with unsaved edits asks whether to save first. Make several — "retire at 60" vs "65" — and flip or compare them.</P>,
+    title: 'Plans',
+    section: 'Plans',
+    keywords: ['what-if', 'save', 'switch', 'new plan', 'duplicate', 'scenario', 'profile', 'details'],
+    body: <P>A plan is one complete set of numbers (internally a "scenario" — same idea). The profile icon in the header (top right, next to the verdict chip) opens <strong>Plans</strong> (#/plan) — the list of saved plans, then the numbers behind the current one (what used to be Details), then a side-by-side compare. Create, rename, duplicate, delete, or roll a plan back through its history. Edits save themselves a moment after you apply them; the undo icon next to the profile icon steps back one save at a time. Make several — "retire at 60" vs "65" — and flip or compare them.</P>,
+  },
+  {
+    id: 'autosave-undo',
+    title: 'Autosave and undo',
+    section: 'Plans',
+    keywords: ['undo', 'save', 'autosave', 'rollback', 'revision', 'history', 'profile icon'],
+    body: (
+      <>
+        <P>Every change you apply (a fader, a details field, an assistant proposal you confirm) saves itself after a short pause. There is no Save button to remember — the plan on screen is the plan on disk.</P>
+        {ul([
+          <><strong>Profile icon</strong> (top right, next to the coloured age chip) — opens Plans, the current plan: switch, edit numbers, or inspect history.</>,
+          <><strong>Undo icon</strong> (right of the profile icon) — discards unsaved edits, or steps back one saved version. Repeated taps walk the history; newer saves after that point are dropped.</>,
+          <><strong>History on Plans</strong> — the same revisions, listed, if you want to jump further back than one step.</>,
+        ])}
+      </>
+    ),
   },
   {
     id: 'compare',
-    title: 'Comparing profiles',
-    section: 'Profiles',
-    keywords: ['side by side', 'compare scenarios', 'which is better'],
-    body: <P>The Compare card puts your saved profiles side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version of a plan holds up best. Each is scored with its own resolved spouse: a profile whose spouse is a linked profile is compared as the full household.</P>,
+    title: 'Comparing plans',
+    section: 'Plans',
+    keywords: ['side by side', 'compare scenarios', 'which is better', 'profiles'],
+    body: <P>The Compare card on the Plans page puts your saved plans side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version holds up best. Each is scored with its own resolved spouse: a plan whose spouse is a linked plan is compared as the full household.</P>,
   },
 
   // ── Assistant ──────────────────────────────────────────────────────────
@@ -491,7 +515,7 @@ export const HELP_TOPICS: HelpTopic[] = [
           <><strong>What-if</strong> — it re-runs the engine with changed inputs and quotes the result.</>,
           <><strong>Propose changes</strong> — shown as a review card; nothing is applied until you confirm.</>,
         ])}
-        <P>Open or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The arrows in the dock's header expand it to fullscreen and back to the side rail.</P>
+        <P>Open or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The small arrows on the Assistant button grow it to fullscreen; the shrink arrows bring it back to the side rail.</P>
       </>
     ),
   },
@@ -516,21 +540,22 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'Local vs online models',
     section: 'Assistant',
     keywords: ['model', 'local', 'online', 'download', 'api key', 'provider'],
-    body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download once on the Connections page) or use an <strong>online provider</strong> like Google or Anthropic (generally smarter, but your plan details travel to that provider). Local models are smaller, so keep questions focused. Pick a model in the dock's model dropdown (or Connections, which the dropdown's "Load a model…" opens).</P>,
+    body: <P>The assistant can run a model <strong>entirely on this computer</strong> (free, private, works offline — download once from the Models list) or use an <strong>online provider</strong> like Google, Anthropic, or OpenRouter (generally smarter, but your plan details travel to that provider). The Models page groups Local / Free / Remote; tick the ones you want. The chat dropdown only lists that shortlist (plus whatever is in use) — not every model the provider offers. An on-computer model that isn&apos;t downloaded yet shows as downloadable. The smallest packs are fine for short questions; a 4B is the smallest that can still run the plan tools. 1-bit Bonsai (Prism, via Transformers.js WebGPU) is a separate on-computer engine from the MLC packs. The in-browser Bonsai path only reliably loads 1.7B. Open the Models page from the dropdown&apos;s "More models…". Local models are smaller, so keep questions focused.</P>,
   },
   {
-    id: 'markup-overlay',
-    title: 'Drawing on the page (markup overlay)',
+    id: 'openrouter-free',
+    title: 'OpenRouter free models',
     section: 'Assistant',
-    keywords: ['markup', 'overlay', 'draw', 'annotate', 'pen', 'arrow', 'lasso', 'note', 'ctrl+shift+m', 'markup assistant'],
+    keywords: ['openrouter', 'free models', ':free', 'api key', 'cloud', 'no charge'],
     body: (
       <>
-        <P>Turn on <strong>Markup overlay</strong> on the Connections page, then press <strong>Ctrl+Shift+M</strong> to mark up the app itself: draw a pen stroke around something, drop a typed note, drag an element to a new spot, draw an arrow ("put this there"), or lasso a region to move it. Your markup goes to the selected model, which proposes the page change as a review card — nothing is applied until you click <strong>Apply</strong>, exactly like a chat proposal.</P>
+        <P>OpenRouter is a one-key gateway to many cloud models. Their <strong>free</strong> pool has no token charge: the model id <span className="num">openrouter/free</span> is a router that picks a matching <span className="num">:free</span> variant (including tools when the request needs them). Named free models end in <span className="num">:free</span>.</P>
         {ul([
-          <><strong>Ctrl+Shift+M</strong> — show / hide the markup toolbar (or press Escape).</>,
-          <><strong>Ctrl+Z</strong> — undo the last markup; <strong>Ctrl+Backspace</strong> — clear everything.</>,
-          <>Markup recolors as the model works: blue while it's thinking, green when applied, red if it couldn't or you discarded it.</>,
+          <><strong>Sign up</strong> at openrouter.ai (email or GitHub).</>,
+          <><strong>Create a key</strong> under Keys, paste it on the Models page in the OpenRouter free section. The key stays in this browser and is sent only to OpenRouter.</>,
+          <><strong>Tick</strong> the free router, or any listed :free row, to put it on the chat dropdown. Paid OpenRouter models stay under Remote.</>,
         ])}
+        <P>Free inference is rate-limited and the pool changes. Your question still goes to OpenRouter — they (and the model that answers) may log it and use it for training. Unlike an on-computer model. After a reply, the info icon next to regenerate shows which model actually answered (the free router picks one per request).</P>
       </>
     ),
   },
@@ -540,6 +565,20 @@ export const HELP_TOPICS: HelpTopic[] = [
     section: 'Assistant',
     keywords: ['privacy', 'read by the ai', 'data sent', 'local model'],
     body: <P>A local model never sends anything anywhere — inference happens on your machine. An online connection sends your question (and the plan details in it) to that provider under its privacy policy; your API key is stored only in this browser and sent only to that provider. Chats are saved on this computer only, and the Data page's backup includes them only if you opt in.</P>,
+  },
+  {
+    id: 'assistant-prompts',
+    title: 'What the assistant is sent',
+    section: 'Assistant',
+    keywords: ['system prompt', 'persona', 'tool instructions', 'settings', 'override'],
+    body: (
+      <>
+        <P>Settings → Assistant controls every piece of the request: the persona, tool instructions, the live program rules, the current-page line, the plan name, the local-model tool catalog and plan digest, and whether tools are advertised at all. Uncheck a piece to drop it from the next message. Edit a prompt to replace the built-in text; blank restores the default.</P>
+        <P>Each local model has a catalog default for tools (Qwen3.5 2B and Bonsai 1.7B off; 4B and up on). Force a model On or Off on that page for testing; Auto restores the catalog. Cloud models always use tools unless you uncheck Send tools.</P>
+        <P>Small local models follow the last text they see — leave “Persona last” on so a custom voice (even “say only yes”) is not drowned by the tool blurb. Per-chat notes still live on the composer and can be toggled separately.</P>
+        <P>Unchecking every piece sends no system message at all (not a blank one). The Assistant tab shows the assembled system so you can confirm it is empty. Changing those flags also clears the local model’s leftover cache so the next message does not keep the previous instructions. Questions-only models (and Send tools off) still run one ordinary chat pass with that empty system — they do not fall into a wrap-up that would rebuild the default persona.</P>
+      </>
+    ),
   },
 
   // ── Data ───────────────────────────────────────────────────────────────

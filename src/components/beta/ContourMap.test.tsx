@@ -34,7 +34,7 @@ describe('ContourMap', () => {
     expect(html).toContain('<svg');
     expect(html).toContain('url(#holdWash)');           // the wash fill
     expect(html.match(/<path/g)!.length).toBeGreaterThanOrEqual(3); // wash + deep + boundary
-    expect(html).toContain('the age you stop working');
+    expect(html).toContain('the age you start drawing');
     expect(html).toContain('what you spend each year');
   });
 

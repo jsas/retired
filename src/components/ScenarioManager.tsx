@@ -31,7 +31,7 @@ interface ScenarioManagerProps {
   onCreateScenario: (scenario: Scenario) => void;
 }
 
-// The Profiles page body (BetaPage owns the page title — no heading here). One
+// The Plans page list (BetaPage owns the page title — no heading here). One
 // hairline list: the active plan reads by weight and its blue dot, the rest
 // sit quiet until hovered. Every save keeps a revision you can roll back to.
 export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, revisions, onRollback, onSelectScenario, onCreateScenario }: ScenarioManagerProps) {
@@ -87,11 +87,11 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
     <div>
       <div className="flex items-start justify-between gap-4">
         <p className="max-w-lg text-[12.5px] leading-relaxed text-slate-500">
-          Click a profile to load it. Duplicate branches a what-if; each save keeps a
+          Click a plan to load it. Duplicate branches a what-if; each save keeps a
           revision (last {MAX_REVISIONS} per plan) you can roll back to.
         </p>
         <button onClick={handleCreateNew} className={`${cls.primaryBtn} shrink-0`}>
-          New profile
+          New plan
         </button>
       </div>
 

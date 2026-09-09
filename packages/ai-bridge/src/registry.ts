@@ -16,6 +16,18 @@ import type { ModelSpec } from './types.js'
 export const BUILTIN_MODELS: ModelSpec[] = [
   // ---- Local WebGPU (in-browser, keyless) -------------------------------
   {
+    id: 'local:qwen3.5-2b',
+    label: 'Qwen3.5 2B (local)',
+    provider: 'webllm',
+    model: 'Qwen3.5-2B-q4f16_1-MLC',
+    local: true,
+    requiresKey: false,
+    toolCapable: false,
+    contextSize: 4096,
+    options: { temperature: 0.3, maxTokens: 2048 },
+    blurb: 'Smaller Qwen3.5 — short questions. This pack\'s window is 4096 tokens, so a full plan summary may not fit.',
+  },
+  {
     id: 'local:qwen3.5-4b',
     label: 'Qwen3.5 4B (local)',
     provider: 'webllm',
@@ -41,18 +53,6 @@ export const BUILTIN_MODELS: ModelSpec[] = [
     blurb: 'Reasoning mode for multi-step math; a touch smaller download than 3.5.',
   },
   {
-    id: 'local:phi4-mini',
-    label: 'Phi-4 Mini 3.8B (local)',
-    provider: 'webllm',
-    model: 'Phi-4-mini-instruct-q4f16_1-MLC',
-    local: true,
-    requiresKey: false,
-    toolCapable: true,
-    contextSize: 16384,
-    options: { temperature: 0.3, maxTokens: 4096, repetitionPenalty: 1.15, presencePenalty: 0.3 },
-    blurb: "Microsoft's small instruct model; reliable at following formats.",
-  },
-  {
     id: 'local:qwen3.5-9b',
     label: 'Qwen3.5 9B (local)',
     provider: 'webllm',
@@ -63,6 +63,18 @@ export const BUILTIN_MODELS: ModelSpec[] = [
     contextSize: 32768,
     options: { temperature: 0.3, maxTokens: 4096 },
     blurb: 'Strongest local model, for GPUs with 8 GB+. Largest download.',
+  },
+  {
+    id: 'local:bonsai-1.7b',
+    label: 'Bonsai 1.7B (1-bit, local)',
+    provider: 'bonsai',
+    model: 'onnx-community/Bonsai-1.7B-ONNX',
+    local: true,
+    requiresKey: false,
+    toolCapable: false,
+    contextSize: 32768,
+    options: { temperature: 0.3, maxTokens: 2048 },
+    blurb: 'Prism 1-bit Bonsai via Transformers.js WebGPU — tiny, questions only.',
   },
 
   // ---- Remote (BYO key) --------------------------------------------------

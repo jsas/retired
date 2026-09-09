@@ -11,6 +11,7 @@ import { execSync } from 'node:child_process'
 // the node_modules symlink (which can point at another worktree).
 import { buildSitemapJson, buildSitemapXml } from './packages/mcp-tools/src/navigation.ts'
 import { devMarkupOverlay } from './src/lib/devMarkupPlugin.js'
+import { serveLocalModels } from './src/lib/localModels.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -102,10 +103,17 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
+      // Local fine-tune weights: a folder in public/models/ is static-served,
+      // but web-llm appends HuggingFace's "resolve/main/" to every model URL —
+      // without this rewrite the fetch falls through to index.html and the
+      // engine dies parsing HTML as JSON. Dev only; builds ship no weights.
+      serveLocalModels(),
       // Dev markup overlay: mark -> snap -> send -> a real model edits source ->
-      // HMR reloads -> the snapped layer clears. Enabled only when
+      // HMR reloads -> the snapped layer clears. LOCAL DEVELOPMENT ONLY — it
+      // never runs for a build (and never in singlefile mode), so the shipped
+      // site carries none of it even when a .env is present. Enabled only when
       // MARKUP_MODEL_ENDPOINT is set in the local .env; otherwise a no-op.
-      ...(single ? [] : devMarkupOverlay({ env })),
+      ...(single || process.env.NODE_ENV === 'production' ? [] : devMarkupOverlay({ env })),
       ...(single
         ? [viteSingleFile(), pruneToSingleHtml('dist-single')]
         : [emitSitemap(join(here, 'dist'))]),

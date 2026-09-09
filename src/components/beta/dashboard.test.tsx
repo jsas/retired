@@ -45,19 +45,19 @@ describe('DownMarketCheck', () => {
 
 describe('dashboard life timeline (ProjectionTimeline)', () => {
   const toSeries = (rows: typeof breakdown) => [{ id: 'plan', label: 'portfolio', area: true, points: rows.map(r => ({ age: r.age, value: r.endingBalance })) }];
-  it('renders the axis and the you / work-ends pins', () => {
+  it('renders the axis and the you / start-drawing pins', () => {
     const html = renderToStaticMarkup(
       <ProjectionTimeline
         series={toSeries(breakdown)}
         pins={[
           { age: plan.currentAge, label: `you · ${plan.currentAge}`, place: 'below', anchor: 'start' },
-          { age: plan.retirementAge, label: `work ends · ${plan.retirementAge}` },
+          { age: plan.retirementAge, label: `start drawing · ${plan.retirementAge}` },
         ]}
       />,
     );
     expect(html).toContain('<svg');
     expect(html).toContain('you · 55');
-    expect(html).toContain('work ends · 62');
+    expect(html).toContain('start drawing · 62');
   });
   it('marks where the money runs out when the plan depletes', () => {
     const broke = { ...plan, tfsaBalance: 5000, rrspBalance: 0, desiredSpending: 120000 };
@@ -81,5 +81,20 @@ describe('EvidenceRow', () => {
     expect(html).toContain('CPP + OAS');
     expect(html).toContain('RRSP');
     expect(html).toContain('TFSA');
+  });
+
+  it('prints the first empty year, not maxAge+, when leftover is gone', () => {
+    const broke = { ...plan, tfsaBalance: 5000, rrspBalance: 0, desiredSpending: 120000 };
+    const brokeResults = calculateHousehold(broke, config);
+    const brokeRows = brokeResults.yearlyBreakdown;
+    const depAge = brokeRows.find(r => r.endingBalance <= 0)?.age ?? 0;
+    expect(depAge).toBeTypeOf('number');
+    const html = renderToStaticMarkup(
+      <EvidenceRow inputs={broke} results={{ ...brokeResults, status: 'ON_TRACK' }} breakdown={brokeRows} />,
+    );
+    expect(html).toContain(`>${depAge}<`);
+    expect(html).not.toContain(`${broke.maxAge}+`);
+    expect(html).toContain('nothing');
+    expect(html).not.toContain('past the plan');
   });
 });

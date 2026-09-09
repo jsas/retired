@@ -280,19 +280,28 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       "properties": {
         "changes": {
           "additionalProperties": {},
-          "description": "Spouse fields to set. Use {"enabled":true,...} to add a spouse (fill the key fields), or {"enabled":false} to remove. Any SpouseInputs scalar field is allowed.",
+          "description": "Person fields for a NEW partner plan (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending). Ignored when scenarioId is set. Use {"enabled":false} or enabled:false to unlink.",
           "propertyNames": {
             "type": "string",
           },
           "type": "object",
         },
+        "enabled": {
+          "description": "false unlinks the partner (this plan becomes single). true with changes mints a new partner plan and links it.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Name for a newly created partner plan (default "Partner").",
+          "type": "string",
+        },
         "rationale": {
           "type": "string",
         },
+        "scenarioId": {
+          "description": "Id of an existing saved plan to link as the partner. Preferred when the partner already has a plan.",
+          "type": "string",
+        },
       },
-      "required": [
-        "changes",
-      ],
       "type": "object",
     },
     "name": "propose_spouse",
@@ -1392,26 +1401,35 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "propose_patch",
   },
   {
-    "description": "PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.",
+    "description": "PROPOSE linking a partner (another saved plan), creating a new partner plan then linking it, or unlinking. Partner numbers live on that plan, not inline. User confirms.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "changes": {
           "additionalProperties": {},
-          "description": "Spouse fields to set. Use {"enabled":true,...} to add a spouse (fill the key fields), or {"enabled":false} to remove. Any SpouseInputs scalar field is allowed.",
+          "description": "Person fields for a NEW partner plan (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending). Ignored when scenarioId is set. Use {"enabled":false} or enabled:false to unlink.",
           "propertyNames": {
             "type": "string",
           },
           "type": "object",
         },
+        "enabled": {
+          "description": "false unlinks the partner (this plan becomes single). true with changes mints a new partner plan and links it.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Name for a newly created partner plan (default "Partner").",
+          "type": "string",
+        },
         "rationale": {
           "type": "string",
         },
+        "scenarioId": {
+          "description": "Id of an existing saved plan to link as the partner. Preferred when the partner already has a plan.",
+          "type": "string",
+        },
       },
-      "required": [
-        "changes",
-      ],
       "type": "object",
     },
     "name": "propose_spouse",
@@ -2218,7 +2236,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "get_sitemap",
   },
   {
-    "description": "PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → the Insights page that now hosts it — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.",
+    "description": "PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → montecarlo, "solver" → solver — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,

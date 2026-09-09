@@ -314,7 +314,7 @@ export function Legend({ items }: {
 
 /* ── Dropdown ─────────────────────────────────────────────────────────────
    A flat, hairline-bordered panel under a text button — no shadow, no arrow
-   chrome. Used for the Details/Profiles menus. Closes on selection. */
+   chrome. Used for the Tools/phone menus. Closes on selection. */
 export function Dropdown({ label, children, wide = false }: {
   label: ReactNode;
   children: ReactNode;

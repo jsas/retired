@@ -43,14 +43,14 @@ function outcomeToCallToolResult(outcome: ToolOutcome): CallToolResult {
         isError: true,
       };
     case 'mutation': {
-      const { patch, label, preview, rationale, revert, navigate } = outcome;
+      const { patch, label, preview, rationale, revert, navigate, createPartner } = outcome;
       return {
         content: [{
           type: 'text',
           text: `${label} — proposal created; waiting for the user to confirm.`,
         }],
         structuredContent: {
-          [MUTATION_STRUCTURED_KEY]: { patch, label, preview, rationale, revert, navigate },
+          [MUTATION_STRUCTURED_KEY]: { patch, label, preview, rationale, revert, navigate, createPartner },
         },
       };
     }

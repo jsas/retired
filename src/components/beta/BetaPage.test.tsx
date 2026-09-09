@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { BetaPage, MOBILE_MENU_ITEMS, type VerdictChip } from './BetaPage';
+import { BetaPage, MOBILE_MENU_ITEMS, TOOLS_MENU_ITEMS, type VerdictChip } from './BetaPage';
 
 // Node has no localStorage — stub it so the dock-open pref read/write works.
 const store = new Map<string, string>();
@@ -27,9 +27,8 @@ describe('BetaPage assistant dock', () => {
     expect(html).toContain('Assistant');
     expect(html).toContain('chat-body');
     expect(html).toContain('page-body');
-    // the fullscreen toggle (arrows out to expand); closing lives on the
-    // header toggle now — no × in the dock header
-    expect(html).toContain('aria-label="Expand the assistant to fullscreen"');
+    // the grow/shrink arrows live ON the Assistant button now (nowhere else)
+    expect(html).toContain('aria-label="Grow the assistant to fullscreen"');
     expect(html).not.toContain('aria-label="Close the assistant"');
   });
 
@@ -37,7 +36,7 @@ describe('BetaPage assistant dock', () => {
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, children: createElement('div', null, 'page-body') }),
     );
-    expect(html).toContain('>Assistant</button>');
+    expect(html).toContain('>Assistant<');
     expect(html).toContain('page-body');
     // but the dock rail itself stays out — nothing to show
     expect(html).not.toContain('chat-body');
@@ -48,9 +47,35 @@ describe('BetaPage assistant dock', () => {
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('90+');
-    for (const label of ['Details', 'Schedule', 'Insights', 'Profiles']) {
+    for (const label of ['Projection', 'Tools', 'Plans']) {
       expect(html, label).toContain(label);
     }
+    expect(html).not.toContain('>Details<');
+    expect(html).not.toContain('>Profiles<');
+  });
+
+  it('the Tools menu carries all five analytic surfaces', () => {
+    // Issue #162: Steering, Optimizer, Monte Carlo, Backtest, Solver — the
+    // dropdown's item list is the contract the pages hang off. (The Dropdown
+    // renders its children only when open, so the static markup proves the
+    // trigger; the item list is proven against the exported source of truth.)
+    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['eq', 'optimize', 'montecarlo', 'backtest', 'solver']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver']);
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+    );
+    expect(html).toContain('>Tools');
+  });
+
+  it('puts a profile icon (to Plans / #/plan) and an undo icon next to the verdict chip', () => {
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, children: createElement('div') }),
+    );
+    expect(html).toContain('aria-label="Your plan — the Plans page"');
+    expect(html).toContain('href="#/plan"');
+    expect(html).toContain('aria-label="Undo — step back to the previous saved plan"');
+    // Undo is inert until App wires a history through PlanUndoContext.
+    expect(html).toContain('disabled');
   });
 
   it('offers a phone Menu carrying the same named homes', () => {
@@ -62,9 +87,11 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toContain('Menu');
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    for (const label of ['Dashboard', 'Schedule', 'Insights', 'Profiles', 'Details', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
+    for (const label of ['Dashboard', 'Projection', 'Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Plans', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
       expect(labels, label).toContain(label);
     }
+    expect(labels).not.toContain('Details');
+    expect(labels).not.toContain('Profiles');
   });
 
   it('the assistant route opens the dock regardless of the saved pref', () => {
@@ -81,12 +108,12 @@ describe('BetaPage assistant dock', () => {
     vi.unstubAllGlobals();
   });
 
-  it('the dock header carries the fullscreen expand control', () => {
+  it('the Assistant button in the header carries the grow/shrink control', () => {
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
-    expect(html).toContain('title="Fullscreen"');
-    expect(html).toContain('aria-label="Expand the assistant to fullscreen"');
+    expect(html).toContain('title="Grow"');
+    expect(html).toContain('aria-label="Grow the assistant to fullscreen"');
   });
 
   it('the open dock shows as a full-screen sheet on phones (not hidden below lg)', () => {
@@ -98,5 +125,32 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toMatch(/class="[^"]*fixed inset-0 top-12 z-50 flex flex-col lg:sticky/);
     expect(html).not.toMatch(/flex flex-col hidden/);
+    // unprefixed `relative` would beat `fixed` in Tailwind and drop the phone
+    // sheet back into the page flow (settings squeezed beside the chat).
+    expect(html).not.toMatch(/aria-label="Assistant"[^>]*\brelative\b/);
+    expect(html).not.toMatch(/class="[^"]*\brelative\b[^"]*" aria-label="Assistant"/);
+  });
+
+  it('the page chrome is wide and the dock remembers a dragged width', () => {
+    // Re-stub: the assistant-route test unstubs globals, and Node has no
+    // localStorage for prefKV to read the remembered width from.
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+    });
+    store.set('wealthconsole_dock_open', '1');
+    store.set('wealthconsole_dock_width', '480');
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+    );
+    expect(html).toContain('max-w-[90rem]');
+    expect(html).not.toContain('max-w-5xl');
+    expect(html).toContain('--dock-w:480px');
+    expect(html).toContain('aria-label="Resize the assistant"');
+    // phones stay a sheet — the width token is a lg: utility, not an inline width
+    expect(html).toMatch(/lg:w-\[var\(--dock-w\)\]/);
+    expect(html).not.toContain('lg:w-[340px]');
   });
 });

@@ -489,3 +489,86 @@ export function resolveSpouseSource(
   };
   return { spouse, warnings };
 }
+
+/**
+ * Lift an embedded SpouseInputs (plus the host's shared household fields) into
+ * a standalone RetirementInputs — the shape a saved partner plan stores. Used
+ * when promoting leftover in-plan spouses and when the wizard / assistant mint
+ * a new partner plan to link. The new plan has no spouse of its own.
+ */
+export function personPlanFromSpouse(
+  sp: SpouseInputs,
+  host: Pick<RetirementInputs, 'maxAge' | 'investmentReturn' | 'returnVolatility' | 'marketPeriods' | 'provinceCode'>,
+): RetirementInputs {
+  const person = legacySpouseToPerson(sp);
+  return {
+    ...person,
+    maxAge: host.maxAge,
+    investmentReturn: host.investmentReturn,
+    returnVolatility: host.returnVolatility,
+    marketPeriods: host.marketPeriods,
+    provinceCode: host.provinceCode,
+    annualWithdrawal: 0,
+    cppAdjustedAmount: false,
+    withdrawalOrder: person.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp'],
+    spouse: undefined,
+    spouseSource: undefined,
+  };
+}
+
+/**
+ * Promote leftover in-plan (builtin) spouses into their own saved plans and
+ * rewrite each host to a scenario link. Already-linked hosts are left alone
+ * (any stale embedded cache is dropped). Disabled leftover spouses are cleared
+ * rather than minted. Idempotent: a second pass is a no-op.
+ */
+export function promoteEmbeddedSpouses<T extends { id: string; name: string; inputs: RetirementInputs }>(
+  scenarios: T[],
+): { scenarios: T[]; changed: boolean } {
+  const usedIds = new Set(scenarios.map(s => s.id));
+  const extra: T[] = [];
+  let changed = false;
+
+  const next = scenarios.map(s => {
+    const src = s.inputs.spouseSource;
+    if (src?.kind === 'scenario') {
+      if (s.inputs.spouse == null) return s;
+      changed = true;
+      return { ...s, inputs: { ...s.inputs, spouse: undefined } };
+    }
+    const sp = s.inputs.spouse;
+    if (!sp) {
+      if (src?.kind === 'builtin') {
+        changed = true;
+        return { ...s, inputs: { ...s.inputs, spouseSource: undefined } };
+      }
+      return s;
+    }
+    if (sp.enabled !== true) {
+      changed = true;
+      return { ...s, inputs: { ...s.inputs, spouse: undefined, spouseSource: undefined } };
+    }
+    let id = `${s.id}-spouse`;
+    let n = 2;
+    while (usedIds.has(id)) id = `${s.id}-spouse-${n++}`;
+    usedIds.add(id);
+    extra.push({
+      ...s,
+      id,
+      name: `${s.name} — Partner`,
+      inputs: personPlanFromSpouse(sp, s.inputs),
+    });
+    changed = true;
+    return {
+      ...s,
+      inputs: {
+        ...s.inputs,
+        spouse: undefined,
+        spouseSource: { kind: 'scenario', scenarioId: id },
+      },
+    };
+  });
+
+  if (!changed) return { scenarios, changed: false };
+  return { scenarios: [...next, ...extra], changed: true };
+}

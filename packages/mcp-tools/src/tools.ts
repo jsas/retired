@@ -15,7 +15,7 @@
 import { z } from 'zod';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { calculateHousehold, householdOutcome } from '@retired/engine-core/retirementEngine';
-import { toHousehold } from '@retired/engine-core/householdTypes';
+import { toHousehold, baselineSpouse, personPlanFromSpouse } from '@retired/engine-core/householdTypes';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { runStrategies, type StrategyFilter } from '@retired/engine-core/strategies';
 import { solveSustainableSpending } from '@retired/engine-core/spendingSolver';
@@ -76,8 +76,14 @@ const proposePatchArgs = z.object({
 });
 
 const proposeSpouseArgs = z.object({
-  changes: z.record(z.string(), z.unknown())
-    .describe('Spouse fields to set. Use {"enabled":true,...} to add a spouse (fill the key fields), or {"enabled":false} to remove. Any SpouseInputs scalar field is allowed.'),
+  scenarioId: z.string().optional()
+    .describe('Id of an existing saved plan to link as the partner. Preferred when the partner already has a plan.'),
+  enabled: z.boolean().optional()
+    .describe('false unlinks the partner (this plan becomes single). true with changes mints a new partner plan and links it.'),
+  name: z.string().optional()
+    .describe('Name for a newly created partner plan (default "Partner").'),
+  changes: z.record(z.string(), z.unknown()).optional()
+    .describe('Person fields for a NEW partner plan (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending). Ignored when scenarioId is set. Use {"enabled":false} or enabled:false to unlink.'),
   rationale: z.string().optional(),
 });
 
@@ -345,7 +351,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
     get_schedule: { description:      'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.', schema: getScheduleArgs },
     set_scenario_value: { description:      'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.', schema: setScenarioValueArgs },
     propose_patch: { description:      'PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.', schema: proposePatchArgs },
-    propose_spouse: { description:      'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.', schema: proposeSpouseArgs },
+    propose_spouse: { description:      'PROPOSE linking a partner (another saved plan), creating a new partner plan then linking it, or unlinking. Partner numbers live on that plan, not inline. User confirms.', schema: proposeSpouseArgs },
     propose_income: { description:      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.', schema: proposeIncomeArgs },
     propose_spending_bands: { description:      'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.', schema: proposeSpendingBandsArgs },
     propose_market_periods: { description:      'PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.', schema: proposeMarketPeriodsArgs },
@@ -365,7 +371,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
     list_scenarios: { description:      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
     find_page: { description:      'Search the site\'s page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Use whenever the user asks WHERE something lives.', schema: findPageArgs },
     get_sitemap: { description:      'The full site map: every page (view), its route (#/hash), and one-line purpose. Use for "what can this app do?", "what pages exist?", or before guessing where something lives.', schema: getSitemapArgs },
-    propose_navigate: { description:      'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → the Insights page that now hosts it — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
+    propose_navigate: { description:      'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → montecarlo, "solver" → solver — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
 };
 
 /** Tool specs advertised to providers: the catalog rendered as JSON Schema. */
@@ -445,6 +451,10 @@ export type ToolOutcome =
       /** Revert proposals encode absent-at-checkpoint fields with a sentinel
        *  (JSON can't carry undefined); the UI must decode before applying. */
       revert?: true;
+      /** Mint a partner plan on approval, then link this plan to it. The host
+       *  patch is empty — create-and-link is the side effect, applied by the
+       *  host after the user confirms (never at propose time). */
+      createPartner?: { name: string; inputs: RetirementInputs };
     }
   | { kind: 'error'; content: string };
 
@@ -869,33 +879,66 @@ function proposePatch(
   };
 }
 
-/** Add/edit/remove the spouse. Edits merge over the existing spouse block. */
+/** Link, unlink, or mint a partner plan. Partner numbers never live inline. */
 function proposeSpouse(
   ctx: ToolContext,
-  args: { changes: Record<string, unknown>; rationale?: string },
+  args: { scenarioId?: string; enabled?: boolean; name?: string; changes?: Record<string, unknown>; rationale?: string },
 ): ToolOutcome {
-  const existing = ctx.inputs.spouse;
-  const merged = { ...(existing ?? {}), ...args.changes };
-  const res = spouseSchema.safeParse(merged);
-  if (!res.success) {
-    const missing = res.error.issues.map(i => i.path.join('.')).filter(Boolean);
+  const unlink = args.enabled === false || args.changes?.enabled === false;
+  if (unlink) {
+    // JSON drops `undefined`, so encode removals with the revert sentinel —
+    // the UI decodes before applying, same as propose_revert.
     return {
-      kind: 'error',
-      content: `Invalid spouse data: ${zodIssues(res.error)}.` +
-        (!existing && args.changes.enabled !== false
-          ? ' To ADD a spouse you must supply the full block (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending).'
-          : '') +
-        (missing.length ? ` Missing/invalid: ${missing.join(', ')}.` : ''),
+      kind: 'mutation',
+      patch: encodeRevertPatch({ spouse: undefined, spouseSource: undefined }),
+      revert: true,
+      label: 'Unlink spouse',
+      rationale: args.rationale,
+      preview: { spouseSource: null },
     };
   }
-  const enabling = args.changes.enabled === true && !existing?.enabled;
-  const disabling = args.changes.enabled === false;
+  if (args.scenarioId) {
+    const found = ctx.scenarioList.find(s => s.id === args.scenarioId);
+    if (!found) {
+      return { kind: 'error', content: `No saved plan with id "${args.scenarioId}".` };
+    }
+    if (ctx.activeScenarioId && args.scenarioId === ctx.activeScenarioId) {
+      return { kind: 'error', content: 'A plan cannot be its own spouse.' };
+    }
+    return {
+      kind: 'mutation',
+      patch: encodeRevertPatch({ spouse: undefined, spouseSource: { kind: 'scenario', scenarioId: args.scenarioId } }),
+      revert: true,
+      label: `Link spouse: ${found.name}`,
+      rationale: args.rationale,
+      preview: { spouseSource: { kind: 'scenario', scenarioId: args.scenarioId }, name: found.name },
+    };
+  }
+  if (!args.changes && args.enabled !== true) {
+    return {
+      kind: 'error',
+      content: 'To add a partner, pass scenarioId of an existing plan, or changes with their numbers (and enabled:true). Pass enabled:false to unlink.',
+    };
+  }
+  const raw = { ...(args.changes ?? {}) };
+  delete raw.enabled;
+  const merged = { ...baselineSpouse(ctx.inputs), ...raw, enabled: true };
+  const res = spouseSchema.safeParse(merged);
+  if (!res.success) {
+    return {
+      kind: 'error',
+      content: `Invalid spouse data: ${zodIssues(res.error)}. Pass person fields (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending) or scenarioId of an existing plan.`,
+    };
+  }
+  const partnerInputs = personPlanFromSpouse(res.data, ctx.inputs);
+  const name = (args.name ?? '').trim() || 'Partner';
   return {
     kind: 'mutation',
-    patch: { spouse: res.data },
-    label: disabling ? 'Remove spouse' : enabling ? 'Add spouse/partner' : 'Update spouse',
+    patch: {},
+    createPartner: { name, inputs: partnerInputs },
+    label: `Add spouse/partner as "${name}"`,
     rationale: args.rationale,
-    preview: { spouse: res.data },
+    preview: { name, currentAge: partnerInputs.currentAge, desiredSpending: partnerInputs.desiredSpending },
   };
 }
 
@@ -1275,7 +1318,7 @@ function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioA
 
 /** Resolve a name to its catalog entry (view id, route, title, or keyword).
  *  Returns null instead of guessing-then-erroring. The whole catalog is
- *  searched — a folded legacy name ("montecarlo") resolves so the tool can
+ *  searched — a folded legacy name ("compare") resolves so the tool can
  *  redirect it to its destination rather than reject a request the UI can
  *  satisfy. */
 function resolveNavView(name: string | View): NavEntry | null {
@@ -1321,7 +1364,7 @@ function getSitemapTool(): ToolOutcome {
  *  direct navigate, which would yank the user out of this chat mid-answer).
  *  Unbound hosts return the #/hash (not an error) — the model can share the
  *  destination as a link instead of actioning it. A folded legacy view is
- *  redirected to the page the UI shows (montecarlo → Insights), so the card
+ *  redirected to the page the UI shows (compare → Plans), so the card
  *  always opens a real destination. */
 function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavigateArgs>): ToolOutcome {
   const found = resolveNavView(args.view);

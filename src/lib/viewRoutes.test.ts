@@ -7,13 +7,15 @@ describe('viewFromHash', () => {
     expect(viewFromHash('#/projection')).toBe('projection');
     expect(viewFromHash('#/year-math')).toBe('math');
     expect(viewFromHash('#/steering')).toBe('eq');
+    expect(viewFromHash('#/solver')).toBe('solver');
     expect(viewFromHash('#/optimize')).toBe('optimize');
     expect(viewFromHash('#/compare')).toBe('compare');
     expect(viewFromHash('#/monte-carlo')).toBe('montecarlo');
     expect(viewFromHash('#/backtest')).toBe('backtest');
     expect(viewFromHash('#/print')).toBe('print');
     expect(viewFromHash('#/export')).toBe('export');
-    expect(viewFromHash('#/scenarios')).toBe('scenarios');
+    expect(viewFromHash('#/plan')).toBe('scenarios');
+    expect(viewFromHash('#/scenarios')).toBe('legacyScenarios');
     expect(viewFromHash('#/sharing')).toBe('sharing');
     expect(viewFromHash('#/donate')).toBe('donate');
     expect(viewFromHash('#/welcome')).toBe('welcome');
@@ -29,9 +31,10 @@ describe('viewFromHash', () => {
   });
 
   it('routes hashes carrying a query-string deep-link to their page', () => {
-    // The ? hints deep-link into Help (#/help?topic=…), Details carries
-    // ?section=… — the query must not break route matching.
+    // The ? hints deep-link into Help (#/help?topic=…), Plans carries
+    // ?section=… (legacy #/details too) — the query must not break route matching.
     expect(viewFromHash('#/help?topic=assistant')).toBe('help');
+    expect(viewFromHash('#/plan?section=spending')).toBe('scenarios');
     expect(viewFromHash('#/details?section=spending')).toBe('details');
     expect(viewFromHash('#steering?x=1')).toBe('eq');
   });
@@ -57,39 +60,51 @@ describe('viewFromHash', () => {
 
 describe('hashForView', () => {
   it('round-trips every unfolded view', () => {
-    // Folded legacy views intentionally resolve to their destination page —
-    // the round-trip for those is covered by the fold tests below.
+    // Folded legacy views (compare/export/sharing/details) intentionally
+    // resolve to their destination page — the round-trip for those is covered
+    // by the fold tests below. Issue #162 unfurled the Tools surfaces into this list.
     const views: View[] = [
-      'projection', 'math', 'eq', 'scenarios', 'data', 'print', 'donate',
-      'welcome', 'help', 'settings', 'styleguide', 'details',
+      'projection', 'math', 'eq', 'optimize', 'montecarlo', 'backtest', 'solver',
+      'scenarios', 'data', 'print', 'donate',
+      'welcome', 'help', 'settings', 'styleguide',
     ];
     for (const v of views) {
       expect(viewFromHash(hashForView(v))).toBe(v);
     }
   });
 
-  it('folds legacy views to their destination page', () => {
-    expect(foldTarget('optimize')).toBe('eq');
-    expect(foldTarget('montecarlo')).toBe('eq');
-    expect(foldTarget('backtest')).toBe('eq');
+  it('folds the merged legacy views to their destination page', () => {
+    // Only the truly-merged pages fold now — the Tools surfaces are their own
+    // pages again (identity).
+    expect(foldTarget('optimize')).toBe('optimize');
+    expect(foldTarget('montecarlo')).toBe('montecarlo');
+    expect(foldTarget('backtest')).toBe('backtest');
+    expect(foldTarget('solver')).toBe('solver');
     expect(foldTarget('compare')).toBe('scenarios');
+    expect(foldTarget('details')).toBe('scenarios');
+    expect(foldTarget('legacyScenarios')).toBe('scenarios');
     expect(foldTarget('export')).toBe('data');
     expect(foldTarget('sharing')).toBe('data');
   });
 
   it('hashForView prints the destination hash for folded views', () => {
-    // A "Go to Monte Carlo" link the assistant prints must land on Insights —
-    // not on a dead folded route.
-    expect(hashForView('montecarlo')).toBe('#/steering');
-    expect(hashForView('optimize')).toBe('#/steering');
-    expect(hashForView('backtest')).toBe('#/steering');
-    expect(hashForView('compare')).toBe('#/scenarios');
+    // A "Go to Compare" / "Go to Details" link the assistant prints must land
+    // on Plans — not on a dead folded route.
+    expect(hashForView('compare')).toBe('#/plan');
+    expect(hashForView('details')).toBe('#/plan');
+    expect(hashForView('legacyScenarios')).toBe('#/plan');
+    expect(hashForView('scenarios')).toBe('#/plan');
     expect(hashForView('export')).toBe('#/data');
     expect(hashForView('sharing')).toBe('#/data');
+    // Unfurled tools print their own routes.
+    expect(hashForView('montecarlo')).toBe('#/monte-carlo');
+    expect(hashForView('backtest')).toBe('#/backtest');
+    expect(hashForView('optimize')).toBe('#/optimize');
+    expect(hashForView('solver')).toBe('#/solver');
   });
 
   it('round-trips folded views through their fold', () => {
-    for (const v of ['optimize', 'montecarlo', 'backtest', 'compare', 'export', 'sharing'] as View[]) {
+    for (const v of ['compare', 'export', 'sharing', 'details', 'legacyScenarios'] as View[]) {
       expect(viewFromHash(hashForView(v))).toBe(foldTarget(v));
     }
   });

@@ -41,3 +41,8 @@ probe/results/*
 # #112 spike: generated corpus artifacts. The engine is deterministic, so
 # `npx tsx training/generate.ts` reproduces these; don't commit the JSONL.
 training/data/
+
+# Local fine-tune weights served by the dev server (a junction/symlink into
+# training/dist/…). 336MB of model shards — never commit; recreate with the
+# mklink command in the webLlmModels registry note.
+public/models/

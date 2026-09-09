@@ -11,6 +11,7 @@ import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { Scenario } from '@retired/engine-core/types';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
+import { potDisplay } from '../../lib/planDisplay';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { INK, BLUE, RED_TEXT } from '../../design/tokens';
 import { prefKV } from '../../lib/prefKv';
@@ -53,7 +54,7 @@ const QUESTIONS: Q[] = [
   },
   {
     key: 'retirementAge', chips: ['60', '62', '65'], placeholder: 'e.g. 65',
-    ask: (a) => `When would you like to stop working? (You're ${a.currentAge} now.)`,
+    ask: (a) => `When would you like to start drawing? (You're ${a.currentAge} now.)`,
     parse: (t, a) => { const n = parseAge(t); return n != null && a.currentAge != null && n >= a.currentAge ? n : null; },
   },
   {
@@ -63,7 +64,7 @@ const QUESTIONS: Q[] = [
   },
   {
     key: 'spending', chips: ['$60k', '$85k', '$110k'], placeholder: 'e.g. 85k',
-    ask: () => 'Once you stop working, how much do you want to spend each year? What would a good year cost?',
+    ask: () => 'Once you start drawing, how much do you want to spend each year? What would a good year cost?',
     parse: (t) => { const n = parseMoney(t); return n != null && n >= 5000 ? n : null; },
   },
   {
@@ -142,8 +143,9 @@ export function LandingPage({ config, onBuild }: {
     setStep(s => s + 1);
   };
 
-  const holds = results?.status === 'ON_TRACK';
-  const lastsLabel = holds ? `${plan?.maxAge}` : `${results?.depletionAge ?? '—'}`;
+  const pot = results && plan ? potDisplay(results.yearlyBreakdown ?? [], plan.maxAge) : null;
+  const holds = pot?.holds ?? false;
+  const lastsLabel = holds ? `${plan?.maxAge}` : `${pot?.lastsTo ?? '—'}`;
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-white">
@@ -212,13 +214,22 @@ export function LandingPage({ config, onBuild }: {
               <p className="num text-[17px] font-semibold" style={{ color: holds ? BLUE : RED_TEXT }}>
                 {holds
                   ? <>Your money lasts until you're {lastsLabel}.</>
-                  : <>Your money runs out at {lastsLabel} — {plan.maxAge - (results.depletionAge ?? plan.maxAge)} years short of {plan.maxAge}.</>}
+                  : <>Your money runs out at {lastsLabel} — {plan.maxAge - (pot?.lastsTo ?? plan.maxAge)} years short of {plan.maxAge}.</>}
               </p>
               <p className="mt-1 text-[13px] text-slate-500">
                 {holds
-                  ? `On those numbers the plan holds${results.depletionAge == null ? ` — there's money left at ${plan.maxAge}` : ''}.`
+                  ? `On those numbers the plan holds — there's money left at ${plan.maxAge}.`
                   : 'The dashboard lets you drag the levers and watch the answer change; the assistant can answer questions about the plan.'}
               </p>
+            </div>
+
+            <div className="border-l border-slate-200 pl-4 text-[13px] leading-relaxed text-slate-600">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">What&apos;s next</p>
+              <ul className="mt-1.5 space-y-1">
+                <li>The dashboard is the live plan — drag a fader and the answer updates.</li>
+                <li>Edits save themselves. Top right: the profile icon is your plans; undo steps back through saved versions.</li>
+                <li>The Assistant button answers questions about this plan, on every page.</li>
+              </ul>
             </div>
 
             {/* the two exits — both go to the dashboard; "keep chatting" just

@@ -15,18 +15,139 @@
         "run out",
         "shortfall",
         "money run out",
-        "projection",
         "overview",
         "main page"
       ]
     },
     {
-      "view": "details",
-      "route": "#/details",
-      "url": "https://jsas.github.io/retired/#/details",
-      "title": "Details",
-      "description": "Every input behind the plan, sectioned: personal profile, spouse, account balances and contribution room (TFSA/RRSP), contribution rates, income, government benefits, cash events, spending phases, debts and the reverse mortgage, and market hypotheses.",
+      "view": "math",
+      "route": "#/year-math",
+      "url": "https://jsas.github.io/retired/#/year-math",
+      "title": "Projection",
+      "description": "The projection: the money-over-age timeline plus the schedule table — one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.",
       "keywords": [
+        "projection",
+        "schedule",
+        "year-by-year",
+        "year by year",
+        "table",
+        "columns",
+        "withdrawals",
+        "tax paid",
+        "one year",
+        "timeline"
+      ]
+    },
+    {
+      "view": "eq",
+      "route": "#/steering",
+      "url": "https://jsas.github.io/retired/#/steering",
+      "title": "Steering",
+      "description": "The equalizer: drag the plan’s levers (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) with the projection timeline under your hands, and see the ranking of what helps most.",
+      "keywords": [
+        "steering",
+        "insights",
+        "equalizer",
+        "levers",
+        "options",
+        "ranked",
+        "what helps most",
+        "nudge",
+        "tools",
+        "drag"
+      ]
+    },
+    {
+      "view": "optimize",
+      "route": "#/optimize",
+      "url": "https://jsas.github.io/retired/#/optimize",
+      "title": "Optimizer",
+      "description": "The strategy explorer: named plan variants (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) each replayed and scored on sustainable spending, lifetime tax and GIS — with one-click apply.",
+      "keywords": [
+        "optimize",
+        "optimiser",
+        "optimizer",
+        "strategies",
+        "variants",
+        "best option",
+        "best lever",
+        "compare timing",
+        "apply",
+        "sustainable spending"
+      ]
+    },
+    {
+      "view": "montecarlo",
+      "route": "#/monte-carlo",
+      "url": "https://jsas.github.io/retired/#/monte-carlo",
+      "title": "Monte Carlo",
+      "description": "Probabilistic run: 500 randomized market futures over your plan — the success-rate fan, the odds of lasting, and a depletion histogram.",
+      "keywords": [
+        "monte carlo",
+        "simulation",
+        "odds",
+        "success rate",
+        "probabilities",
+        "market futures",
+        "probabilistic",
+        "fan chart",
+        "risk"
+      ]
+    },
+    {
+      "view": "backtest",
+      "route": "#/backtest",
+      "url": "https://jsas.github.io/retired/#/backtest",
+      "title": "Backtest",
+      "description": "Run the plan against every historical market stretch on record — real returns, not invented ones — and see how often it would have survived.",
+      "keywords": [
+        "backtest",
+        "historical",
+        "1926",
+        "1970",
+        "stress test",
+        "past markets",
+        "sequence risk",
+        "crash"
+      ]
+    },
+    {
+      "view": "solver",
+      "route": "#/solver",
+      "url": "https://jsas.github.io/retired/#/solver",
+      "title": "Solver",
+      "description": "Invert the verdict: pick a confidence level and the solver binary-searches the most you can spend per year while the Monte Carlo still succeeds that often — then apply it in one click.",
+      "keywords": [
+        "solver",
+        "solve",
+        "how much can i spend",
+        "maximum spending",
+        "safe withdrawal",
+        "sustainable",
+        "target success rate",
+        "spend freely"
+      ]
+    },
+    {
+      "view": "scenarios",
+      "route": "#/plan",
+      "url": "https://jsas.github.io/retired/#/plan",
+      "title": "Plans",
+      "description": "Your saved plans and the numbers behind the current one: switch, rename, duplicate, roll back — then edit every input (accounts, income, benefits, spending, markets) in one scroll, and compare plans side by side.",
+      "keywords": [
+        "plans",
+        "plan",
+        "profiles",
+        "scenarios",
+        "saved plans",
+        "manager",
+        "duplicate",
+        "rename",
+        "delete",
+        "compare",
+        "side-by-side",
+        "which plan",
+        "revisions",
         "tfsa room",
         "rrsp room",
         "contribution room",
@@ -49,73 +170,8 @@
         "inputs",
         "edit",
         "change my numbers",
-        "the details"
-      ]
-    },
-    {
-      "view": "math",
-      "route": "#/year-math",
-      "url": "https://jsas.github.io/retired/#/year-math",
-      "title": "Year-by-year",
-      "description": "The schedule table: one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.",
-      "keywords": [
-        "schedule",
-        "year-by-year",
-        "year by year",
-        "table",
-        "columns",
-        "withdrawals",
-        "tax paid",
-        "one year"
-      ]
-    },
-    {
-      "view": "eq",
-      "route": "#/steering",
-      "url": "https://jsas.github.io/retired/#/steering",
-      "title": "Insights",
-      "description": "Everything the plan can be nudged by: the equalizer lever ranking (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work), the optimize variants with one-click apply, the Monte Carlo odds, and the historical backtest.",
-      "keywords": [
-        "insights",
-        "steering",
-        "equalizer",
-        "levers",
-        "options",
-        "ranked",
-        "what helps most",
-        "optimize",
-        "best option",
-        "apply",
-        "monte carlo",
-        "simulation",
-        "odds",
-        "success rate",
-        "probabilities",
-        "backtest",
-        "historical",
-        "1926",
-        "stress test",
-        "past markets"
-      ]
-    },
-    {
-      "view": "scenarios",
-      "route": "#/scenarios",
-      "url": "https://jsas.github.io/retired/#/scenarios",
-      "title": "Profiles",
-      "description": "Your saved plans: open, rename, duplicate, delete, and roll back revisions — plus the side-by-side comparison of every profile.",
-      "keywords": [
-        "profiles",
-        "scenarios",
-        "saved plans",
-        "manager",
-        "duplicate",
-        "rename",
-        "delete",
-        "compare",
-        "side-by-side",
-        "which plan",
-        "revisions"
+        "the details",
+        "details"
       ]
     },
     {
@@ -185,7 +241,9 @@
         "online",
         "model",
         "privacy",
-        "wire"
+        "wire",
+        "openrouter",
+        "free models"
       ]
     },
     {

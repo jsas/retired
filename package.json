@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@assistant-ui/react": "^0.15.17",
+    "@huggingface/transformers": "^4.2.0",
     "@mlc-ai/web-llm": "^0.2.84",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "dompurify": "^3.4.14",

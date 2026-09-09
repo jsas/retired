@@ -1,42 +1,55 @@
-// Connections page, in two separate halves —
+// Models page (issue #165): one list of every model the assistant can run.
 //
-//   MODELS (on this computer) — the private, offline web-llm tier. A catalog
-//   row per known model shows whether it's downloaded and offers Download or
-//   Delete; a "downloads" block underneath lists anything else living in the
-//   browser cache (a model you fetched earlier that's no longer in the
-//   catalog) so it can be deleted to reclaim disk. One row is "chosen" — the
-//   model the local assistant actually runs.
+//   ON THIS COMPUTER — the curated web-llm catalog, each row downloadable if
+//   the weights aren't cached yet. Picking a row (or finishing a download)
+//   makes that the local model.
 //
-//   CONNECTIONS — how the assistant reaches a model at all: the local engine
-//   (which uses whatever model is chosen above) plus any BYO-key cloud
-//   providers. Picking the active connection here is what the assistant's
-//   header picker mirrors.
+//   FROM YOUR KEYS — every ready cloud connection's models, listed
+//   automatically via listModels (no "Fetch models" click). Multiple keys
+//   just add more rows.
 //
-// This page owns its own AI-settings state and the local-engine warm-up so the
-// assistant page stays focused on chatting. Keys and settings are stored only
-// in this browser and never touch our servers.
+//   KEYS — collapse: paste an API key / add a provider. The catalog above
+//   fills itself once the key is ready.
+//
+// This page owns its own AI-settings state so the assistant page stays
+// focused on chatting. Keys never leave this browser.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   Plus, Trash2, X, Check, ChevronDown, ChevronRight, Loader2, RefreshCw,
 } from 'lucide-react';
 import {
-  AI_PROVIDERS, connectionReady, defaultBaseUrlFor, defaultModelFor,
-  loadAiSettings, newConnectionId, saveAiSettings,
+  AI_PROVIDERS, connectionReady, defaultBaseUrlFor, defaultModelFor, isLocalProvider,
+  getAiSettings, subscribeAiSettings, updateAiSettings, newConnectionId,
   DEFAULT_MAX_TOKENS, DEFAULT_LOCAL_TEMPERATURE,
   DEFAULT_LOCAL_REPETITION_PENALTY, DEFAULT_LOCAL_PRESENCE_PENALTY,
   DEFAULT_LOCAL_FREQUENCY_PENALTY, MODEL_SAMPLER_DEFAULTS,
   type AiConnection, type AiGenerationSettings, type AiSettings,
 } from '../lib/aiSettings';
-import { listModels, testConnection, type ModelInfo } from '../lib/ai/providers';
-import { WEBLLM_MODELS, fmtSize, webGpuAvailable } from '../lib/ai/webLlmModels';
+import { testConnection } from '../lib/ai/providers';
+import { WEBLLM_MODELS, visibleWebLlmModels, fmtSize, sumCachedSizeGB, webGpuAvailable } from '../lib/ai/webLlmModels';
+import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { buildMachineGuide, type MachineGuide } from '../lib/ai/machineGuide';
 import { estimateContextFit, fmtMB } from '../lib/ai/vramEstimate';
 import { defaultContextSize } from '../lib/ai/context';
-import { Check as CheckBox } from '../design/primitives';
+import { Check as CheckBox, HelpHint } from '../design/primitives';
 import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
+import { deleteBonsaiModel, isBonsaiModelCached } from '../lib/ai/bonsaiProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 import { Progress } from '../design/primitives';
+import {
+  activeCatalogKey, pickModel, toggleFavorite, useModelCatalog,
+  type ModelCatalogEntry,
+} from '../lib/modelCatalog';
+import {
+  OPENROUTER_FREE_PAGE_URL,
+  OPENROUTER_FREE_ROUTER,
+  OPENROUTER_KEYS_URL,
+  OPENROUTER_SIGNUP_URL,
+  ensureOpenRouterFree,
+  isOpenRouterFreeId,
+  openRouterConnection,
+} from '../lib/ai/openRouterFree';
 
 /** Upper bound for the local context window — above this even big GPUs run
  *  out of room for the KV cache, and the small models lose coherence long
@@ -44,11 +57,10 @@ import { Progress } from '../design/primitives';
 const MAX_LOCAL_CONTEXT = 32768;
 
 export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
-  const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
-  useEffect(() => { saveAiSettings(settings); }, [settings]);
+  const settings = useSyncExternalStore(subscribeAiSettings, getAiSettings, getAiSettings);
 
   const updateSettings = (mutate: (s: AiSettings) => void) => {
-    setSettings(prev => {
+    updateAiSettings(prev => {
       const next = structuredClone(prev);
       mutate(next);
       return next;
@@ -56,6 +68,8 @@ export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
   };
 
   const webllmConn = settings.connections.find(c => c.provider === 'webllm') ?? null;
+  const bonsaiConn = settings.connections.find(c => c.provider === 'bonsai') ?? null;
+  const catalog = useModelCatalog(settings);
 
   return (
     <div className="max-w-3xl">
@@ -68,55 +82,41 @@ export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
           <X size={16} />
         </button>
       )}
-      <p className="text-[12.5px] text-slate-500 leading-relaxed mb-5">
-        <strong className="text-slate-700">Models</strong> are what thinks; <strong className="text-slate-700">connections</strong> are
-        how the assistant reaches one. The simplest model runs <strong className="text-slate-700">entirely on this
-        computer</strong> — free, private, offline. Cloud connections store their key only in this browser and
-        contact the provider directly when you chat.
+      <p className="mb-5 text-[12.5px] leading-relaxed text-slate-500">
+        Tick the models you want on the chat dropdown — Local, Free, and Remote below. The dock
+        only lists those (plus whatever is in use). Download a local pack, or paste a key, then tick.
       </p>
+      {(settings.favoriteModels?.length ?? 0) > 0 && (
+        <p className="mb-4 text-[12px] text-slate-600">
+          Chat list: <span className="font-semibold text-slate-800">{settings.favoriteModels!.length}</span> selected.
+        </p>
+      )}
 
       <ModelsSection
+        settings={settings}
         onChange={updateSettings}
         webllmConn={webllmConn}
+        bonsaiConn={bonsaiConn}
+        activeConnectionId={settings.activeConnectionId}
+      />
+
+      <CloudModelsSection
+        settings={settings}
+        catalog={catalog}
+        onPick={entry => updateAiSettings(prev => pickModel(prev, entry))}
+      />
+
+      <OpenRouterFreeSection
+        settings={settings}
+        catalog={catalog}
+        onPick={entry => updateAiSettings(prev => pickModel(prev, entry))}
       />
 
       <ConnectionsSection
         settings={settings}
         onChange={updateSettings}
-        webllmConn={webllmConn}
       />
-
-      <OverlaySection settings={settings} onChange={updateSettings} />
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// OVERLAY — opt-in markup layer over the live app
-// ---------------------------------------------------------------------------
-
-function OverlaySection({ settings, onChange }: {
-  settings: AiSettings;
-  onChange: (mutate: (s: AiSettings) => void) => void;
-}) {
-  return (
-    <section className="mt-4 border border-slate-200 bg-slate-50 rounded p-3">
-      <h3 className="text-sm font-bold text-slate-900 mb-1">Markup overlay</h3>
-      <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={settings.markupOverlay ?? false}
-          onChange={e => onChange(s => { s.markupOverlay = e.target.checked; })}
-        />
-        <span>
-          Let me draw on the app (<kbd className="px-1 border border-neutral-300 rounded bg-white text-[10px]">Ctrl+Shift+M</kbd>)
-          and have the assistant interpret it. Pen strokes, notes, arrows, drags, and cuts are sent to the
-          selected model; proposed page changes appear as a review card and are never applied without your
-          say-so. Reloads the overlay next time you open the app.
-        </span>
-      </label>
-    </section>
   );
 }
 
@@ -124,11 +124,15 @@ function OverlaySection({ settings, onChange }: {
 // MODELS — the on-this-computer catalog + anything else already downloaded
 // ---------------------------------------------------------------------------
 
-function ModelsSection({ onChange, webllmConn }: {
+function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConnectionId }: {
+  settings: AiSettings;
   onChange: (mutate: (s: AiSettings) => void) => void;
   webllmConn: AiConnection | null;
+  bonsaiConn: AiConnection | null;
+  activeConnectionId: string | null;
 }) {
   const [guide, setGuide] = useState<MachineGuide | null>(null);
+  const [open, setOpen] = useState(true);
   const [showAll, setShowAll] = useState(false);
   // modelId -> downloaded? Re-probed on demand after a download/delete.
   const [cached, setCached] = useState<Record<string, boolean>>({});
@@ -136,9 +140,17 @@ function ModelsSection({ onChange, webllmConn }: {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ progress: number; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [probed, setProbed] = useState(false);
+  // Dev-only entries: is the weights folder actually being served? (These
+  // models exist only on a dev machine; elsewhere a Download would 404 into
+  // the SPA fallback and die parsing HTML as JSON.)
+  const [localWeightsReady, setLocalWeightsReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const chosenId = webllmConn?.model ?? null;
+  const webllmChosen = webllmConn && webllmConn.id === activeConnectionId ? webllmConn.model : null;
+  const bonsaiChosen = bonsaiConn && bonsaiConn.id === activeConnectionId ? bonsaiConn.model : null;
+  const chosenId = webllmChosen ?? bonsaiChosen;
+  const offered = [...visibleWebLlmModels(), ...BONSAI_MODELS];
 
   // Check WebGPU support once on mount (for the recommendation + gating).
   // No memory detection — the browser won't report real VRAM.
@@ -147,25 +159,42 @@ function ModelsSection({ onChange, webllmConn }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Probe the dev-only fine-tune's weights folder once: a HEAD on its config.
+  // Missing (or HTML SPA fallback — HEAD returns 404 before the fallback in
+  // vite) means "not on this server": show why instead of a Download button.
+  useEffect(() => {
+    let cancelled = false;
+    const dev = WEBLLM_MODELS.find(m => m.localDevOnly && m.custom);
+    if (!dev?.custom) return;
+    void fetch(new URL(dev.custom.weightsUrl + '/mlc-chat-config.json', document.baseURI), { method: 'HEAD' })
+      .then(res => {
+        const type = res.headers.get('content-type') ?? '';
+        if (!cancelled && res.ok && type.includes('json')) setLocalWeightsReady(true);
+      })
+      .catch(() => { /* offline/blocked: leave not-ready */ });
+    return () => { cancelled = true; };
+  }, []);
+
   /** Re-check every catalog id (and the chosen/custom id) against the cache,
    *  and collect ids that are downloaded but NOT in the catalog (so the user
    *  can delete a model they fetched that's no longer offered). */
   const reprobe = async () => {
-    const ids = new Set<string>(WEBLLM_MODELS.map(m => m.id));
-    if (chosenId) ids.add(chosenId);
+    const webllmIds = new Set<string>(visibleWebLlmModels().map(m => m.id));
+    if (webllmConn?.model) webllmIds.add(webllmConn.model);
+    const bonsaiIds = new Set<string>(BONSAI_MODELS.map(m => m.id));
+    if (bonsaiConn?.model) bonsaiIds.add(bonsaiConn.model);
     const next: Record<string, boolean> = {};
-    for (const id of ids) next[id] = await isWebLlmModelCached(id);
-    // Any cached id the catalog doesn't know about is an "extra" (e.g. an
-    // older download). We only learn about ids we probe, so treat the chosen
-    // custom id as the canonical extra when it's cached.
-    const extras = [...ids].filter(id => next[id] && !WEBLLM_MODELS.some(m => m.id === id));
+    for (const id of webllmIds) next[id] = await isWebLlmModelCached(id);
+    for (const id of bonsaiIds) next[id] = await isBonsaiModelCached(id);
+    const known = new Set([...visibleWebLlmModels().map(m => m.id), ...BONSAI_MODELS.map(m => m.id)]);
+    const extras = [...webllmIds, ...bonsaiIds].filter(id => next[id] && !known.has(id));
     return { next, extras };
   };
 
   useEffect(() => {
     let cancelled = false;
     void reprobe().then(({ next, extras }) => {
-      if (!cancelled) { setCached(next); setExtraIds(extras); }
+      if (!cancelled) { setCached(next); setExtraIds(extras); setProbed(true); }
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,17 +210,30 @@ function ModelsSection({ onChange, webllmConn }: {
     setError(null);
     setProgress({ progress: 0, text: 'Downloading the model…' });
     try {
-      const { loadWebLlmEngine } = await import('../lib/ai/webLlmProvider');
-      await loadWebLlmEngine(id, p => {
-        setProgress(p.progress >= 1 ? { progress: 1, text: 'Compiling the model for your GPU…' } : p);
-      }, abort.signal);
+      const isBonsai = BONSAI_MODELS.some(m => m.id === id);
+      if (isBonsai) {
+        const { loadBonsaiEngine } = await import('../lib/ai/bonsaiProvider');
+        await loadBonsaiEngine(id, p => {
+          setProgress(p.progress >= 1 ? { progress: 1, text: 'Compiling Bonsai for your GPU…' } : p);
+        }, abort.signal);
+      } else {
+        const { loadWebLlmEngine } = await import('../lib/ai/webLlmProvider');
+        await loadWebLlmEngine(id, p => {
+          setProgress(p.progress >= 1 ? { progress: 1, text: 'Compiling the model for your GPU…' } : p);
+        }, abort.signal);
+      }
       setModelCached(id, true);
       // Downloading a model also makes it the chosen one, so the assistant
       // uses what you just fetched.
-      if (webllmConn) onChange(s => {
-        const c = s.connections.find(x => x.id === webllmConn.id);
-        if (c) c.model = id;
-      });
+      updateAiSettings(prev => pickModel(prev, {
+        key: `local:${id}`,
+        modelId: id,
+        label: offered.find(m => m.id === id)?.label ?? id,
+        connectionId: null,
+        connectionLabel: null,
+        local: true,
+        engine: isBonsai ? 'bonsai' : 'webllm',
+      }));
     } catch (err) {
       if (!abort.signal.aborted) {
         setError(err instanceof Error ? err.message : String(err));
@@ -204,20 +246,32 @@ function ModelsSection({ onChange, webllmConn }: {
   };
 
   const remove = async (id: string) => {
-    await deleteWebLlmModel(id);
+    if (BONSAI_MODELS.some(m => m.id === id) || id.startsWith('onnx-community/Bonsai')) {
+      await deleteBonsaiModel(id);
+    } else {
+      await deleteWebLlmModel(id);
+    }
     setModelCached(id, false);
     setExtraIds(prev => prev.filter(x => x !== id));
   };
 
   const pick = (id: string) => {
-    if (!webllmConn) return;
-    onChange(s => {
-      const c = s.connections.find(x => x.id === webllmConn.id);
-      if (c) c.model = id;
-    });
+    const meta = offered.find(m => m.id === id);
+    updateAiSettings(prev => pickModel(prev, {
+      key: `local:${id}`,
+      modelId: id,
+      label: meta?.label ?? id,
+      connectionId: null,
+      connectionLabel: null,
+      local: true,
+      engine: BONSAI_MODELS.some(m => m.id === id) ? 'bonsai' : 'webllm',
+    }));
   };
 
-  const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
+  const byVram = [...offered].sort((a, b) => a.vramMB - b.vramMB);
+  const usedGB = sumCachedSizeGB(offered, cached);
+  const catalogCached = offered.filter(m => cached[m.id]).length;
+  const unknownExtras = extraIds.length;
   const recommended = guide?.recommended.id ?? null;
   const visible = showAll
     ? byVram
@@ -254,15 +308,36 @@ function ModelsSection({ onChange, webllmConn }: {
     );
   }
 
+  const localFav = (settings.favoriteModels ?? []).filter(k => k.startsWith('local:')).length;
+
   return (
     <section className="border-b border-slate-200 pb-5">
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-        Models on this computer — free, private, works offline
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="mb-1.5 flex w-full items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 hover:text-slate-700"
+      >
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        Local — on this computer
+        {localFav > 0 && <span className="ml-auto font-medium normal-case tracking-normal text-slate-500">{localFav} on chat list</span>}
+      </button>
+      {open && (
+      <>
       <p className="text-[12.5px] leading-relaxed text-slate-600">
-        Download once, then the model runs here and nothing you type leaves the device.
+        Tick to put a model on the chat dropdown. Download once, then it runs here and nothing you type leaves the device.
         <> We suggest <strong className="text-slate-900">{guide.recommended.label}</strong> for this computer.</>
       </p>
+      {probed && (
+        <p className="mt-1 text-[12px] text-slate-500">
+          {catalogCached === 0 && unknownExtras === 0
+            ? 'Nothing downloaded yet — sizes next to each name are what a download will take.'
+            : catalogCached === 0
+              ? `${unknownExtras} unlisted download${unknownExtras === 1 ? '' : 's'} on this computer (size unknown).`
+              : unknownExtras > 0
+                ? `About ${fmtSize(usedGB)} on this computer (${catalogCached} download${catalogCached === 1 ? '' : 's'}), plus ${unknownExtras} unlisted.`
+                : `About ${fmtSize(usedGB)} on this computer (${catalogCached} download${catalogCached === 1 ? '' : 's'}).`}
+        </p>
+      )}
 
       {/* Catalog */}
       <div className="mt-2 space-y-1">
@@ -277,13 +352,19 @@ function ModelsSection({ onChange, webllmConn }: {
                 isChosen ? 'border-slate-900' : 'border-slate-200'
               }`}
             >
+              <input
+                type="checkbox"
+                checked={(settings.favoriteModels ?? []).includes(`local:${m.id}`)}
+                onChange={() => updateAiSettings(prev => toggleFavorite(prev, `local:${m.id}`))}
+                title="Show on the chat dropdown"
+                className="shrink-0"
+              />
               <button
                 onClick={() => pick(m.id)}
-                disabled={!webllmConn}
-                title={webllmConn ? 'Use this model' : 'Add the on-computer connection (below) to pick a model'}
+                title="Use this model"
                 className={`h-3.5 w-3.5 shrink-0 border-2 ${
                   isChosen ? 'border-slate-900 bg-slate-900' : 'border-slate-300'
-                } ${webllmConn ? '' : 'opacity-40 cursor-not-allowed'}`}
+                }`}
               />
               <span className="flex-1 min-w-0">
                 <span className="font-semibold text-slate-800">{m.label}</span>
@@ -303,6 +384,10 @@ function ModelsSection({ onChange, webllmConn }: {
                 </span>
               ) : isCached ? (
                 <CachedActions id={m.id} sizeGB={m.sizeGB} onDelete={() => void remove(m.id)} />
+              ) : m.localDevOnly && !localWeightsReady ? (
+                <span className="shrink-0 text-[10px] text-slate-400" title="The weights folder (public/models/) isn't served by this instance — it exists only on a dev machine.">
+                  weights not on this server
+                </span>
               ) : (
                 <button
                   onClick={() => void download(m.id)}
@@ -315,9 +400,9 @@ function ModelsSection({ onChange, webllmConn }: {
             </div>
           );
         })}
-        {!showAll && WEBLLM_MODELS.length > visible.length && (
+        {!showAll && offered.length > visible.length && (
           <button onClick={() => setShowAll(true)} className="pl-1 text-[11px] text-slate-500 hover:text-slate-900 hover:underline">
-            Show all {WEBLLM_MODELS.length} models…
+            Show all {offered.length} models…
           </button>
         )}
       </div>
@@ -343,12 +428,19 @@ function ModelsSection({ onChange, webllmConn }: {
           model "sees" this much of your plan and the conversation at a time.
           The window costs GPU memory on top of the model itself, so we show
           the estimated total and warn when it won't fit. */}
-      {webllmConn && (() => {
-        const modelMeta = WEBLLM_MODELS.find(m => m.id === webllmConn.model);
-        const isAuto = webllmConn.contextSize == null;
+      {(webllmConn || bonsaiConn) && (() => {
+        const localConn = (bonsaiConn && bonsaiConn.id === activeConnectionId)
+          ? bonsaiConn
+          : (webllmConn && webllmConn.id === activeConnectionId)
+            ? webllmConn
+            : (webllmConn ?? bonsaiConn)!;
+        const modelMeta =
+          WEBLLM_MODELS.find(m => m.id === localConn.model)
+          ?? BONSAI_MODELS.find(m => m.id === localConn.model);
+        const isAuto = localConn.contextSize == null;
         // Auto aims for the model's ceiling; the engine backs off on OOM and we
         // can't know real VRAM (WebGPU hides it), so show the target not a fit.
-        const tokens = webllmConn.contextSize ?? modelMeta?.maxWindow ?? defaultContextSize('webllm');
+        const tokens = localConn.contextSize ?? modelMeta?.maxWindow ?? defaultContextSize(localConn.provider);
         const fit = modelMeta ? estimateContextFit(modelMeta.vramMB, tokens, null) : null;
         return (
           <div className="mt-4 border-t border-slate-100 pt-3">
@@ -362,21 +454,21 @@ function ModelsSection({ onChange, webllmConn }: {
                 min={2048}
                 max={MAX_LOCAL_CONTEXT}
                 step={1024}
-                value={webllmConn.contextSize ?? ''}
+                value={localConn.contextSize ?? ''}
                 disabled={isAuto}
                 onChange={e => onChange(s => {
-                  const c = s.connections.find(x => x.id === webllmConn.id);
+                  const c = s.connections.find(x => x.id === localConn.id);
                   if (!c) return;
                   c.contextSize = e.target.value
                     ? Math.min(MAX_LOCAL_CONTEXT, Math.max(2048, Math.round(Number(e.target.value))))
                     : undefined;
                 })}
-                placeholder={isAuto ? 'Auto' : String(defaultContextSize('webllm'))}
+                placeholder={isAuto ? 'Auto' : String(defaultContextSize(localConn.provider))}
                 className="num w-24 border border-slate-300 bg-white px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
               />
               <CheckBox size={12} checked={isAuto}
                 onChange={(on) => onChange(s => {
-                  const c = s.connections.find(x => x.id === webllmConn.id);
+                  const c = s.connections.find(x => x.id === localConn.id);
                   if (!c) return;
                   // Auto = unset; unchecking seeds the current target as a manual value.
                   c.contextSize = on ? undefined : tokens;
@@ -401,10 +493,10 @@ function ModelsSection({ onChange, webllmConn }: {
             </div>
             <div className="mt-3 border-t border-slate-100 pt-3">
               <GenerationFields
-                conn={webllmConn}
+                conn={localConn}
                 isLocal
                 onPatch={p => onChange(s => {
-                  const c = s.connections.find(x => x.id === webllmConn.id);
+                  const c = s.connections.find(x => x.id === localConn.id);
                   if (c) Object.assign(c, p);
                 })}
               />
@@ -433,6 +525,8 @@ function ModelsSection({ onChange, webllmConn }: {
           </div>
         </div>
       )}
+      </>
+      )}
     </section>
   );
 }
@@ -459,8 +553,8 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
     ? 'text-[10px] text-slate-500 mb-0.5'
     : 'text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1';
 
-  // Loop-prone local models (Phi-4-mini) carry their own sampler defaults;
-  // show those as the placeholder so the user sees what blank actually means.
+  // A local model may carry its own sampler defaults; show those as the
+  // placeholder so the user sees what blank actually means.
   const sampler = isLocal ? MODEL_SAMPLER_DEFAULTS[conn.model] : undefined;
   const tempDefault = sampler?.temperature ?? DEFAULT_LOCAL_TEMPERATURE;
   const repDefault = sampler?.repetitionPenalty ?? DEFAULT_LOCAL_REPETITION_PENALTY;
@@ -549,7 +643,6 @@ function CachedActions({ id, sizeGB, onDelete }: { id: string; sizeGB?: number; 
   const doDelete = async () => {
     setDeleting(true);
     try {
-      await deleteWebLlmModel(id);
       onDelete();
     } finally {
       setDeleting(false);
@@ -590,13 +683,297 @@ function CachedActions({ id, sizeGB, onDelete }: { id: string; sizeGB?: number; 
 }
 
 // ---------------------------------------------------------------------------
-// CONNECTIONS — how the assistant reaches a model (local engine + cloud keys)
+// FROM YOUR KEYS — every ready cloud connection's models, listed automatically
 // ---------------------------------------------------------------------------
 
-function ConnectionsSection({ settings, onChange, webllmConn }: {
+function CloudModelsSection({ settings, catalog, onPick }: {
+  settings: AiSettings;
+  catalog: ReturnType<typeof useModelCatalog>;
+  onPick: (entry: ModelCatalogEntry) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { entries, loading, errors, refresh } = catalog;
+  const clouds = entries.filter(e => !e.local);
+  const active = activeCatalogKey(settings);
+  if (clouds.length === 0 && Object.keys(errors).length === 0 && !loading) return null;
+
+  const groups = new Map<string, ModelCatalogEntry[]>();
+  for (const e of clouds) {
+    const k = e.connectionId ?? 'other';
+    const list = groups.get(k) ?? [];
+    list.push(e);
+    groups.set(k, list);
+  }
+  const orConn = settings.connections.find(c => c.provider === 'openrouter');
+
+  const remoteFav = (settings.favoriteModels ?? []).filter(k => clouds.some(e => e.key === k)).length;
+
+  return (
+    <section className="mt-8 border-b border-slate-200 pb-5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="mb-1.5 flex w-full items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 hover:text-slate-700"
+      >
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        Remote — from your keys
+        {remoteFav > 0 && <span className="ml-auto font-medium normal-case tracking-normal text-slate-500">{remoteFav} on chat list</span>}
+      </button>
+      {open && (
+      <>
+      <p className="flex flex-wrap items-baseline gap-x-3 text-[12.5px] leading-relaxed text-slate-600">
+        <span>Tick to put a model on the chat dropdown. Listed from each connection.</span>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 disabled:text-slate-400"
+        >
+          <RefreshCw size={11} className={loading ? 'animate-spin' : undefined} />
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </p>
+      <div className="mt-2 space-y-3">
+        {[...groups.entries()].map(([id, list]) => (
+          <div key={id}>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {list[0]?.connectionLabel ?? id}
+            </div>
+            {errors[id] && (
+              <p className="mb-1 flex flex-wrap items-baseline gap-x-2 text-[11px] text-rose-700">
+                <span>{errors[id]}</span>
+                <button
+                  type="button"
+                  onClick={refresh}
+                  disabled={loading}
+                  className="font-medium text-rose-800 underline decoration-rose-300 hover:decoration-rose-800 disabled:no-underline disabled:opacity-50"
+                >
+                  Retry
+                </button>
+              </p>
+            )}
+            {orConn && id === orConn.id ? (
+              <OpenRouterModelGroups list={list} active={active} onPick={onPick} favorites={settings.favoriteModels} />
+            ) : (
+              <ModelPickList list={list} active={active} onPick={onPick} favorites={settings.favoriteModels} />
+            )}
+          </div>
+        ))}
+      </div>
+      </>
+      )}
+    </section>
+  );
+}
+
+function ModelPickList({ list, active, onPick, favorites = [] }: {
+  list: ModelCatalogEntry[];
+  active: string | null;
+  onPick: (entry: ModelCatalogEntry) => void;
+  favorites?: string[];
+}) {
+  const fav = new Set(favorites);
+  return (
+    <div className="space-y-1">
+      {list.map(e => {
+        const isChosen = e.key === active;
+        const free = isOpenRouterFreeId(e.modelId);
+        return (
+          <div
+            key={e.key}
+            className={`flex w-full items-center gap-2 border px-2.5 py-1.5 text-left text-[11px] ${
+              isChosen ? 'border-slate-900 bg-white' : 'border-slate-200 bg-white'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={fav.has(e.key)}
+              onChange={() => updateAiSettings(prev => toggleFavorite(prev, e.key))}
+              title="Show on the chat dropdown"
+              className="shrink-0"
+            />
+            <button
+              type="button"
+              onClick={() => onPick(e)}
+              title="Use this model"
+              className={`h-3.5 w-3.5 shrink-0 border-2 ${isChosen ? 'border-slate-900 bg-slate-900' : 'border-slate-300'}`}
+            />
+            <button type="button" onClick={() => onPick(e)} className="min-w-0 flex-1 truncate text-left font-semibold text-slate-800">
+              {e.label}
+            </button>
+            {free && (
+              <span className="shrink-0 border border-slate-200 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500">free</span>
+            )}
+            {isChosen && (
+              <span className="shrink-0 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">IN USE</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OpenRouterModelGroups({ list, active, onPick, favorites }: {
+  list: ModelCatalogEntry[];
+  active: string | null;
+  onPick: (entry: ModelCatalogEntry) => void;
+  favorites?: string[];
+}) {
+  const free = list.filter(e => isOpenRouterFreeId(e.modelId));
+  const paid = list.filter(e => !isOpenRouterFreeId(e.modelId));
+  return (
+    <div className="space-y-3">
+      {free.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Free</div>
+          <ModelPickList list={free} active={active} onPick={onPick} favorites={favorites} />
+        </div>
+      )}
+      {paid.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Paid</div>
+          <ModelPickList list={paid} active={active} onPick={onPick} favorites={favorites} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// OPENROUTER FREE — sign up, paste a key, pick the no-cost pool
+// ---------------------------------------------------------------------------
+
+function OpenRouterFreeSection({ settings, catalog, onPick }: {
+  settings: AiSettings;
+  catalog: ReturnType<typeof useModelCatalog>;
+  onPick: (entry: ModelCatalogEntry) => void;
+}) {
+  const conn = openRouterConnection(settings);
+  const ready = conn ? connectionReady(conn) : false;
+  const freeRows = catalog.entries.filter(e =>
+    !e.local && e.connectionId === conn?.id && isOpenRouterFreeId(e.modelId),
+  );
+  const active = activeCatalogKey(settings);
+  const usingFree = conn != null && settings.activeConnectionId === conn.id && isOpenRouterFreeId(conn.model);
+  const [open, setOpen] = useState(true);
+
+  const startSetup = () => {
+    updateAiSettings(prev => ensureOpenRouterFree(prev));
+  };
+
+  const patchKey = (apiKey: string) => {
+    updateAiSettings(prev => {
+      const next = ensureOpenRouterFree(prev);
+      return {
+        ...next,
+        connections: next.connections.map(c =>
+          c.provider === 'openrouter' ? { ...c, apiKey } : c,
+        ),
+      };
+    });
+  };
+
+  return (
+    <section className="mt-8 border-b border-slate-200 pb-5">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 hover:text-slate-700"
+        >
+          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          Free — OpenRouter
+        </button>
+        <HelpHint topic="openrouter-free" />
+      </div>
+      {open && (
+      <>
+      <p className="text-[12.5px] leading-relaxed text-slate-600">
+        Cloud chat with no token charge. OpenRouter&apos;s{' '}
+        <a href={OPENROUTER_FREE_PAGE_URL} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
+          free router
+        </a>
+        {' '}picks a <span className="num">:free</span> model for each request (tools and vision when the prompt needs them).
+        Rate-limited.
+      </p>
+      <p className="mt-2 border border-amber-200 bg-amber-50 px-2.5 py-2 text-[12px] leading-snug text-amber-900">
+        Free is not private. Your prompt (and any plan details in it) leaves this device.
+        OpenRouter and the model that answers may log it and use it for training. Don&apos;t paste
+        anything you wouldn&apos;t send to a third party — use an on-computer model for that.
+      </p>
+
+      <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-[12.5px] leading-relaxed text-slate-600">
+        <li>
+          <a href={OPENROUTER_SIGNUP_URL} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
+            Create an OpenRouter account
+          </a>
+          {' '}(email or GitHub).
+        </li>
+        <li>
+          Open{' '}
+          <a href={OPENROUTER_KEYS_URL} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
+            Keys
+          </a>
+          {' '}→ Create key. Copy it. It stays in this browser and is sent only to OpenRouter.
+        </li>
+        <li>Paste the key here, then tick the free router (or any listed :free model) to put it on the chat list.</li>
+      </ol>
+
+      {!conn ? (
+        <button
+          type="button"
+          onClick={startSetup}
+          className="mt-3 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+        >
+          Set up OpenRouter free
+        </button>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <label className="block max-w-md">
+            <span className="mb-0.5 block text-[10px] text-slate-500">OpenRouter API key (stored locally only)</span>
+            <input
+              type="password"
+              value={conn.apiKey}
+              onChange={e => patchKey(e.target.value)}
+              placeholder="sk-or-v1-…"
+              autoComplete="off"
+              className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+            />
+          </label>
+          {!ready && (
+            <p className="text-[11px] text-amber-700">Paste the key to list free models.</p>
+          )}
+          {ready && catalog.errors[conn.id] && (
+            <p className="text-[11px] text-rose-700">{catalog.errors[conn.id]}</p>
+          )}
+          {ready && (
+            <>
+              <p className="text-[11px] text-slate-500">
+                Default model is <span className="num font-semibold text-slate-700">{OPENROUTER_FREE_ROUTER}</span>
+                {usingFree ? ' — in use.' : '.'}
+              </p>
+              {freeRows.length > 0 && (
+                <ModelPickList list={freeRows} active={active} onPick={onPick} favorites={settings.favoriteModels} />
+              )}
+            </>
+          )}
+        </div>
+      )}
+      </>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KEYS — paste an API key / add a provider. The list above fills itself.
+// ---------------------------------------------------------------------------
+
+
+function ConnectionsSection({ settings, onChange }: {
   settings: AiSettings;
   onChange: (mutate: (s: AiSettings) => void) => void;
-  webllmConn: AiConnection | null;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [addingProvider, setAddingProvider] = useState<(typeof AI_PROVIDERS)[number]>('gemini');
@@ -605,21 +982,6 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
     onChange(s => {
       const c = s.connections.find(x => x.id === id);
       if (c) Object.assign(c, p);
-    });
-  };
-
-  const ensureWebllm = () => {
-    if (webllmConn) {
-      onChange(s => { s.activeConnectionId = webllmConn.id; });
-      return;
-    }
-    const id = newConnectionId();
-    onChange(s => {
-      s.connections.push({
-        id, provider: 'webllm', label: 'On this computer', apiKey: '',
-        model: defaultModelFor('webllm'),
-      });
-      s.activeConnectionId = id;
     });
   };
 
@@ -640,70 +1002,15 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
     if (s.activeConnectionId === id) s.activeConnectionId = s.connections[0]?.id ?? null;
   });
 
-  const cloudConns = settings.connections.filter(c => c.provider !== 'webllm');
+  const cloudConns = settings.connections.filter(c => !isLocalProvider(c.provider));
 
   return (
     <section className="mt-8">
-      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Connections</div>
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Keys</div>
 
-      {/* Active connection picker */}
-      {settings.connections.length > 0 && (
-        <div className="mb-4 border border-slate-200 bg-white p-3">
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Active connection — what the assistant uses
-          </div>
-          <select
-            value={settings.activeConnectionId ?? ''}
-            onChange={e => onChange(s => { s.activeConnectionId = e.target.value || null; })}
-            className="w-full border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none sm:w-auto"
-          >
-            {settings.connections.map(c => (
-              <option key={c.id} value={c.id}>{c.label || c.provider} · {c.model}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* The local connection uses whatever model is chosen in Models above.
-          Hidden entirely when this browser can't run local models (no WebGPU)
-          — offering a connection that can never load would just strand a broken
-          entry in the picker. */}
-      {!webllmConn ? (
-        webGpuAvailable() && (
-          <button
-            onClick={ensureWebllm}
-            className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
-          >
-            <Plus size={13} /> Add the on-computer connection
-          </button>
-        )
-      ) : (
-        <div className="mb-4 border border-slate-200 bg-white p-2.5">
-          <div className="flex items-center gap-2">
-            <span className="bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
-              On this computer
-            </span>
-            <span className="num min-w-0 flex-1 truncate text-[11px] text-slate-600">
-              Uses the model chosen above · <span className="font-mono">{webllmConn.model}</span>
-            </span>
-            {settings.activeConnectionId !== webllmConn.id && (
-              <button
-                onClick={() => onChange(s => { s.activeConnectionId = webllmConn.id; })}
-                className="shrink-0 text-[11px] text-slate-500 hover:text-slate-900 hover:underline"
-              >
-                Make active
-              </button>
-            )}
-            <button
-              onClick={() => deleteConnection(webllmConn.id)}
-              className="shrink-0 text-slate-400 hover:text-rose-700"
-              title="Remove this connection (the downloaded model stays until you delete it above)"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* The on-computer engine is always available from the catalog above —
+          picking a local model creates the connection. Keys here are only
+          online providers. */}
 
       {/* Cloud providers */}
       <button
@@ -711,7 +1018,7 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
         className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800"
       >
         {advancedOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        Online providers (needs an API key)
+        Add an online provider (needs an API key)
       </button>
 
       {advancedOpen && (
@@ -736,7 +1043,7 @@ function ConnectionsSection({ settings, onChange, webllmConn }: {
               onChange={e => setAddingProvider(e.target.value as (typeof AI_PROVIDERS)[number])}
               className="border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-slate-900 focus:outline-none"
             >
-              {AI_PROVIDERS.filter(p => p !== 'webllm').map(p => (
+              {AI_PROVIDERS.filter(p => !isLocalProvider(p)).map(p => (
                 <option key={p} value={p}>{PROVIDER_HELP[p]?.name ?? p}</option>
               ))}
             </select>
@@ -761,8 +1068,6 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
   const help = PROVIDER_HELP[c.provider];
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [fetchingModels, setFetchingModels] = useState(false);
-  const [modelList, setModelList] = useState<ModelInfo[] | null>(null);
 
   const runTest = async () => {
     setTesting(true);
@@ -777,22 +1082,6 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
     }
   };
 
-  const fetchModels = async () => {
-    setFetchingModels(true);
-    setTestResult(null);
-    try {
-      const models = await listModels(c);
-      setModelList(models);
-      setTestResult(models.length
-        ? { ok: true, message: `${models.length} model${models.length === 1 ? '' : 's'} available.` }
-        : { ok: false, message: 'Connected, but the endpoint listed no models.' });
-    } catch (err) {
-      setModelList(null);
-      setTestResult({ ok: false, message: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setFetchingModels(false);
-    }
-  };
   return (
     <div className="border border-slate-200 bg-white p-2.5">
       <div className="mb-2 flex items-center gap-2">
@@ -846,20 +1135,16 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
           </label>
         )}
         <label className="block">
-          <span className="block text-[10px] text-slate-500 mb-0.5">Model</span>
+          <span className="block text-[10px] text-slate-500 mb-0.5">Default model (optional)</span>
           <input
             value={c.model}
             onChange={e => onPatch(c.id, { model: e.target.value })}
             placeholder={defaultModelFor(c.provider) || 'model id'}
-            list={`models-${c.id}`}
             className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
           />
-          {/* Suggestions appear after "Fetch models" below; typing still works. */}
-          <datalist id={`models-${c.id}`}>
-            {(modelList ?? []).map(m => (
-              <option key={m.id} value={m.id}>{m.detail ?? m.id}</option>
-            ))}
-          </datalist>
+          <span className="mt-0.5 block text-[9px] text-slate-400">
+            The list above fills itself once the key works. This is just the fallback.
+          </span>
         </label>
         {(c.provider === 'ollama' || c.provider === 'openai-compatible' || c.provider === 'openrouter' || c.provider === 'openai') && (
           <label className="block sm:col-span-2">
@@ -894,19 +1179,11 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
       <div className="flex flex-wrap items-center gap-2 mt-2">
         <button
           onClick={() => void runTest()}
-          disabled={testing || fetchingModels}
+          disabled={testing}
           className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
         >
           {testing ? <Loader2 size={11} className="animate-spin" /> : null}
           Test connection
-        </button>
-        <button
-          onClick={() => void fetchModels()}
-          disabled={testing || fetchingModels}
-          className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
-        >
-          {fetchingModels ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-          Fetch models
         </button>
         {testResult && (
           <span className={`flex items-center gap-1 text-[11px] ${testResult.ok ? 'text-blue-700' : 'text-rose-700'}`}>
