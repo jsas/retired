@@ -4,6 +4,7 @@ import {
   legacyToShared,
   legacySpouseToPerson,
   resolveSpouseSource,
+  promoteEmbeddedSpouses,
   baselineSpouse,
   eventEndpoints,
   toHousehold,
@@ -284,5 +285,63 @@ describe('resolveSpouseSource — the spouse adapter the app stores', () => {
     expect(r.spouse?.events?.[0].label).toBe('sale');
     expect(r.spouse?.spendingBands).toEqual([{ fromAge: 70, pctOfBase: 0.8 }]);
     expect(r.spouse?.reverseMortgage?.homeValue).toBe(500000);
+  });
+});
+
+describe('promoteEmbeddedSpouses', () => {
+  it('mints a partner plan from an enabled leftover embed and rewrites the host to a link', () => {
+    const host = baseInputs({
+      spouse: {
+        enabled: true, currentAge: 57, retirementAge: 62,
+        rrspBalance: 100000, tfsaBalance: 20000, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 25000,
+      },
+    });
+    host.spouseSource = { kind: 'builtin' };
+    const { scenarios, changed } = promoteEmbeddedSpouses([
+      { id: 'me', name: 'Mine', inputs: host },
+    ]);
+    expect(changed).toBe(true);
+    expect(scenarios).toHaveLength(2);
+    expect(scenarios[0].inputs.spouse).toBeUndefined();
+    expect(scenarios[0].inputs.spouseSource).toEqual({ kind: 'scenario', scenarioId: 'me-spouse' });
+    expect(scenarios[1].id).toBe('me-spouse');
+    expect(scenarios[1].name).toBe('Mine — Partner');
+    expect(scenarios[1].inputs.currentAge).toBe(57);
+    expect(scenarios[1].inputs.desiredSpending).toBe(25000);
+    expect(scenarios[1].inputs.spouse).toBeUndefined();
+  });
+
+  it('clears a disabled leftover embed without minting a plan', () => {
+    const host = baseInputs({
+      spouse: {
+        enabled: false, currentAge: 57, retirementAge: 62,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 0, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 0,
+      },
+    });
+    const { scenarios, changed } = promoteEmbeddedSpouses([
+      { id: 'me', name: 'Mine', inputs: host },
+    ]);
+    expect(changed).toBe(true);
+    expect(scenarios).toHaveLength(1);
+    expect(scenarios[0].inputs.spouse).toBeUndefined();
+    expect(scenarios[0].inputs.spouseSource).toBeUndefined();
+  });
+
+  it('is a no-op on already-linked hosts with no cached spouse', () => {
+    const host = baseInputs();
+    host.spouseSource = { kind: 'scenario', scenarioId: 'partner' };
+    const list = [
+      { id: 'me', name: 'Mine', inputs: host },
+      { id: 'partner', name: 'Alex', inputs: baseInputs() },
+    ];
+    const { scenarios, changed } = promoteEmbeddedSpouses(list);
+    expect(changed).toBe(false);
+    expect(scenarios).toBe(list);
   });
 });

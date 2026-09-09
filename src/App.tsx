@@ -3,7 +3,6 @@ import { BetaApp } from './components/BetaApp';
 import { StyleGuide } from './design/StyleGuide';
 import { applyBetaAtBoot } from './lib/betaSkin';
 import { BetaPage, PlanUndoContext } from './components/beta/BetaPage';
-import { DetailsPage } from './components/beta/DetailsPage';
 import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/beta/LandingPage';
 import {
   BetaSchedulePage, BetaSteeringPage, BetaOptimizerPage, BetaMonteCarloPage,
@@ -18,7 +17,7 @@ import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from '@retired/engine-core/retirementEngine';
-import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson, toHousehold } from '@retired/engine-core/householdTypes';
+import { resolveSpouseSource, baselineSpouse, personPlanFromSpouse, promoteEmbeddedSpouses, toHousehold } from '@retired/engine-core/householdTypes';
 import type { Scenario } from '@retired/engine-core/types';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { AppStore } from './data/store';
@@ -33,7 +32,7 @@ import { CollapsiblePanel } from './components/CollapsiblePanel';
 import { SharingPage, type SharingImportRequest } from './components/SharingPage';
 import { DataPage, type FullBackupSelection, type ProjectionImportRequest, type AiBackupInclude } from './components/DataPage';
 import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
-import { AI_SETTINGS_STORAGE_KEY } from './lib/aiSettings';
+import { AI_SETTINGS_STORAGE_KEY, reloadAiSettingsFromStorage } from './lib/aiSettings';
 import { OptimizeCard } from './components/OptimizeCard';
 import { AgentPage } from './components/AgentPage';
 import { ConnectionsPage } from './components/ConnectionsPage';
@@ -52,6 +51,7 @@ import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
+import { potDisplay } from './lib/planDisplay';
 import { consumePlanFromHash } from './lib/shareLink';
 import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
@@ -75,7 +75,12 @@ import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
 const getSyncSeed = () => {
   const stored = readSeedScenariosFromMirror();
   if (stored) {
-    return { scenarios: stored.scenarios, activeScenarioId: stored.activeScenarioId };
+    // Mirror may still hold leftover in-plan spouses from before link-only.
+    const promoted = promoteEmbeddedSpouses(stored.scenarios);
+    const active = stored.activeScenarioId && promoted.scenarios.some(s => s.id === stored.activeScenarioId)
+      ? stored.activeScenarioId
+      : promoted.scenarios[0].id;
+    return { scenarios: promoted.scenarios, activeScenarioId: active };
   }
   const scenarios = buildDefaultScenarios();
   return { scenarios, activeScenarioId: scenarios[0].id };
@@ -107,15 +112,17 @@ function App() {
 
   // Keep the URL hash in sync with the current view (push a history entry per
   // navigation), and follow hash changes so back/forward and pasted links work.
-  // The details page carries a ?section=… deep-link (Details ▾ scrolls to the
-  // tapped section) and Help a ?topic=… one (the ? hints deep-link into Help);
-  // preserve the current page's param across the sync so it isn't stripped.
+  // Plans carries a ?section=… deep-link (scrolls to a details section) and
+  // Help a ?topic=… one (the ? hints deep-link into Help); preserve the current
+  // page's param across the sync so it isn't stripped. Legacy #/details still
+  // parses as view `details` (foldedInto Plans) — keep its section too.
   useEffect(() => {
     const route = hashForView(view);
     const current = window.location.hash;
     const paramMatch = current.match(/\?([a-z]+=[a-z0-9-]+)$/);
+    const onPlans = view === 'scenarios' || view === 'details' || view === 'compare' || view === 'legacyScenarios';
     const param = paramMatch && (
-      (view === 'details' && paramMatch[1].startsWith('section='))
+      (onPlans && paramMatch[1].startsWith('section='))
       || (view === 'help' && paramMatch[1].startsWith('topic='))
     ) ? `?${paramMatch[1]}` : '';
     if (current !== route + param) {
@@ -176,13 +183,11 @@ function App() {
   );
   const resolvedInputs = useMemo<RetirementInputs>(
     () => {
-      // Only materialize a linked scenario spouse when the spouse is actually
-      // ENABLED. The enabled flag is the user's explicit on/off and must win:
-      // otherwise unchecking a linked spouse would be silently overridden by
-      // the resolver re-injecting the referenced plan.
-      const linked = inputs.spouseSource?.kind === 'scenario';
-      if (!linked) return inputs;
-      if (!inputs.spouse?.enabled) return { ...inputs, spouse: undefined };
+      // A partner is always another saved plan. Unlinked (no scenario source)
+      // means a single-person household — drop any leftover embedded cache.
+      if (inputs.spouseSource?.kind !== 'scenario') {
+        return inputs.spouse ? { ...inputs, spouse: undefined } : inputs;
+      }
       return { ...inputs, spouse: spouseResolution.spouse };
     },
     [inputs, spouseResolution],
@@ -360,7 +365,10 @@ function App() {
     // the Data page only as parseable JSON, so a malformed payload can still
     // fail those pages' own loaders — they fall back to empty, never crash.
     if (sel.aiChats !== undefined) localStorage.setItem(AI_CHATS_STORAGE_KEY, JSON.stringify(sel.aiChats));
-    if (sel.aiSettings !== undefined) localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(sel.aiSettings));
+    if (sel.aiSettings !== undefined) {
+      localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(sel.aiSettings));
+      reloadAiSettingsFromStorage();
+    }
     setHasUnsavedChanges(false);
     setView('projection');
   };
@@ -576,17 +584,7 @@ function App() {
   // and a second, limited wizard pass opens to collect the partner's numbers.
   const [spouseWizardOpen, setSpouseWizardOpen] = useState(false);
   const handleWizardComplete = (data: WizardData, opts: { addSpouse: boolean }) => {
-    let next = applyWizardData(inputs, data);
-    // "Add a spouse" on the review step: enable a baseline spouse (starting at
-    // the same ages) so the household runs as a couple — then the spouse pass
-    // below replaces the baseline with the partner's real numbers.
-    if (opts.addSpouse && !next.spouse?.enabled) {
-      next = {
-        ...next,
-        spouseSource: { kind: 'builtin' },
-        spouse: baselineSpouse(next),
-      };
-    }
+    const next = applyWizardData(inputs, data);
     const finalInputs = consistentAges(JSON.parse(JSON.stringify(next)));
     setInputs(finalInputs);
     // Persist inputs AND the chosen name straight into the active scenario so
@@ -600,62 +598,41 @@ function App() {
     setHasUnsavedChanges(false);
     setWizardOpen(false);
     if (opts.addSpouse) {
-      // Run the partner through their own limited wizard rather than dropping
-      // the user into the sidebar's Spouse section cold.
+      // Partner numbers live on their own plan. The second wizard pass mints
+      // that plan and links it; stay on the host.
       setSpouseWizardOpen(true);
     } else {
       setView('projection');
     }
   };
 
-  // Spouse pass done: write the partner's numbers into the (already saved)
-  // scenario's spouse block and persist again.
+  // Spouse pass done: mint a standalone partner plan from the collected
+  // numbers, link this plan to it, stay on the host.
   const handleSpouseWizardComplete = (data: WizardData) => {
-    const next = consistentAges(applySpouseWizardData(inputs, data));
-    setInputs(next);
-    setScenarios(prev => prev.map(s =>
-      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(next)) } : s
-    ));
+    const name = data.scenarioName.trim() || `${activeScenario.name} — Partner`;
+    handleCreateSpousePlan(name, consistentAges(applySpouseWizardData(inputs, data)));
     setHasUnsavedChanges(false);
     setSpouseWizardOpen(false);
     setView('projection');
   };
 
-  // Sidebar "Save to linked plan": patch person fields on another saved
-  // scenario (the linked spouse) without switching to it. The resolution memo
-  // picks the change up on the next render, so the household updates in place.
-  const handleUpdateScenarioInputs = (scenarioId: string, patch: Partial<RetirementInputs>) => {
-    setScenarios(prev => prev.map(s =>
-      s.id === scenarioId ? { ...s, inputs: { ...s.inputs, ...patch } } : s
-    ));
-  };
-
-  // Sidebar "Save spouse as its own plan": promote the embedded spouse to a
-  // standalone scenario. Person fields come from the spouse block; the shared
-  // household fields (horizon, market, province) are inherited from the host —
-  // the same split legacyToShared/legacySpouseToPerson make for the engine.
-  // The new plan gets engine-typical defaults for fields a spouse block
-  // doesn't carry (annualWithdrawal is recomputed by the engine anyway).
-  const handleSaveSpouseAsScenario = (name: string) => {
-    if (!inputs.spouse) return;
-    const person = legacySpouseToPerson(inputs.spouse);
-    const spouseInputs: RetirementInputs = {
-      ...person,
-      maxAge: inputs.maxAge,
-      investmentReturn: inputs.investmentReturn,
-      returnVolatility: inputs.returnVolatility,
-      provinceCode: inputs.provinceCode,
-      annualWithdrawal: 0,
-      cppAdjustedAmount: false,
-      withdrawalOrder: person.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp'],
-      spouse: undefined,
-      spouseSource: undefined,
-    };
-    setScenarios(prev => [...prev, {
-      id: `scenario-${Date.now()}`,
-      name,
-      inputs: spouseInputs,
-    }]);
+  // Mint a blank partner plan from the host's ages/spending and link it.
+  // Used by Details / Sidebar when the user has no other plan to link yet.
+  const handleCreateSpousePlan = (name?: string, partnerInputs?: RetirementInputs) => {
+    const id = `scenario-${Date.now()}`;
+    const planName = (name ?? '').trim() || `${activeScenario.name} — Partner`;
+    const minted = partnerInputs ?? personPlanFromSpouse(baselineSpouse(inputs), inputs);
+    minted.spouse = undefined;
+    minted.spouseSource = undefined;
+    const hostNext = { ...inputs, spouse: undefined, spouseSource: { kind: 'scenario' as const, scenarioId: id } };
+    setInputs(hostNext);
+    setScenarios(prev => [
+      ...prev.map(s =>
+        s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(hostNext)) } : s
+      ),
+      { id, name: planName, inputs: minted },
+    ]);
+    return id;
   };
 
   // The runnable household derived once from the resolved inputs — the engine
@@ -842,16 +819,17 @@ function App() {
 
     // The persistent verdict chip — the answer, always top-right.
     const chip: import('./components/beta/BetaPage').VerdictChip = (() => {
-      const holds = results.status === 'ON_TRACK';
-      const borderline = !holds && results.depletionAge != null && (inputs.maxAge - results.depletionAge) <= 6;
+      const pot = potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge);
+      const borderline = !pot.holds && pot.emptyAge != null && (inputs.maxAge - pot.emptyAge) <= 6;
       return {
-        tone: holds ? 'holds' : borderline ? 'borderline' : 'short',
-        age: holds ? `${inputs.maxAge}+` : `${results.depletionAge ?? '—'}`,
-        label: holds ? 'the plan holds' : borderline ? 'borderline' : 'runs short',
+        tone: pot.holds ? 'holds' : borderline ? 'borderline' : 'short',
+        age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
+        label: pot.holds ? 'the plan holds' : borderline ? 'borderline' : 'runs short',
       };
     })();
 
-    // The section deep-link for the details page (Details ▾ scrolls to it).
+    // The section deep-link for the Plans page (#/plan?section=…, or the
+    // legacy #/details?section=… which folds here).
     const detailsSection = (() => {
       const m = window.location.hash.match(/[?&]section=([a-z]+)/);
       return m ? m[1] : null;
@@ -868,6 +846,7 @@ function App() {
         activeScenarioId={activeScenarioId}
         scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
         onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+        onCreateSpousePlan={handleCreateSpousePlan}
         onOpenConnections={() => setView('connections')}
         memory={store?.memory}
         memoryScenarioId={activeScenarioId}
@@ -882,12 +861,6 @@ function App() {
     // summary sheet + marking the app .no-print) wraps it below — same as the
     // stable path's return, so Ctrl+P prints the summary, not the chrome.
     const betaPage = (() => { switch (view) {
-      case 'details':
-        return (
-          <BetaPage title="The details" chip={chip} assistant={assistantDock}>
-            <DetailsPage inputs={inputs} onChange={handleInputsChange} section={detailsSection} provinceCodes={Object.keys(config.provinces).sort()} />
-          </BetaPage>
-        );
       case 'math':
         return (
           <BetaSchedulePage chip={chip} assistant={assistantDock}
@@ -944,21 +917,30 @@ function App() {
           />
         );
       case 'scenarios':
-      case 'compare': // legacy route — compare folds into Profiles (its foldedInto)
+      case 'details': // legacy — details now live under Plans
+      case 'compare': // legacy — compare folds into Plans
+      case 'legacyScenarios': // legacy #/scenarios URL
         return (
           <BetaPlansPage chip={chip} assistant={assistantDock}
             managerProps={{
               scenarios, activeScenarioId, onScenariosChange: setScenarios, revisions, onRollback: handleRollback,
-              onSelectScenario: (id) => { handleScenarioChange(id); setView('projection'); },
+              onSelectScenario: (id) => { handleScenarioChange(id); },
               onCreateScenario: (scenario) => {
                 setScenarios(prev => [...prev, scenario]);
                 setActiveScenarioId(scenario.id);
                 setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
                 setHasUnsavedChanges(false);
-                setView('projection');
               },
             }}
             compareProps={{ scenarios, activeScenarioId, config }}
+            detailsProps={{
+              inputs, onChange: handleInputsChange, section: detailsSection,
+              provinceCodes: Object.keys(config.provinces).sort(),
+              scenarios, activeScenarioId,
+              spouseWarnings: spouseResolution.warnings,
+              onCreateSpousePlan: handleCreateSpousePlan,
+              onOpenPlan: (id) => { handleScenarioChange(id); },
+            }}
           />
         );
       case 'data':
@@ -1187,8 +1169,8 @@ function App() {
             scenarios={scenarios}
             activeScenarioId={activeScenarioId}
             spouseWarnings={spouseResolution.warnings}
-            onUpdateScenarioInputs={handleUpdateScenarioInputs}
-            onSaveSpouseAsScenario={handleSaveSpouseAsScenario}
+            onCreateSpousePlan={handleCreateSpousePlan}
+            onOpenPlan={(id) => { handleScenarioChange(id); }}
           />
         </div>
 
@@ -1346,6 +1328,7 @@ function App() {
                 activeScenarioId={activeScenarioId}
                 scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+                onCreateSpousePlan={handleCreateSpousePlan}
                 onOpenConnections={() => setView('connections')}
                 memory={store?.memory}
                 memoryScenarioId={activeScenarioId}

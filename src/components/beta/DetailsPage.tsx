@@ -1,10 +1,12 @@
-// The details page — the whole plan in one place. The three top-level levers
-// sit at the top; the thirteen sections follow, all open in a single scroll
-// under plain-name groups. The Details ▾ menu lands here scrolled to the
-// tapped section (?section=…). Two-col on desktop, one-col on mobile. Every
-// field edits the real plan; the verdict, map and dock recompute together.
+// The plan editor — the whole plan in one place. Lives on the Plans page
+// under the list of saved plans. The three top-level levers sit at the top;
+// the thirteen sections follow in a single column so the page flows on a
+// phone as well as a desktop. A ?section=… deep-link (legacy #/details or
+// #/plan) scrolls to the tapped section. Every field edits the real plan;
+// the verdict, map and dock recompute together.
 import { useEffect, useRef } from 'react';
 import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt, MarketPeriod } from '@retired/engine-core/retirementEngine';
+import type { Scenario } from '@retired/engine-core/types';
 import { Panel, Fader, HelpHint, Check } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
@@ -89,33 +91,28 @@ function Section({ id, title, hint, children }: { id: string; title: string; hin
 
 const ACCOUNT_LABEL: Record<WithdrawalAccount, string> = { rrsp: 'RRSP', tfsa: 'TFSA', taxable: 'Taxable', rdsp: 'RDSP' };
 
-function defaultSpouse(primaryAge: number) {
-  return {
-    enabled: true,
-    currentAge: primaryAge,
-    retirementAge: primaryAge + 5,
-    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
-    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
-    cppStartAge: 65 as number | null, cppMonthlyAmount: 0,
-    oasStartAge: 65 as number | null, oasYearsInCanada: 40,
-    desiredSpending: 0,
-  };
-}
-
-export function DetailsPage({ inputs, onChange, section, provinceCodes }: {
+export function DetailsPage({ inputs, onChange, section, provinceCodes, scenarios, activeScenarioId, spouseWarnings, onCreateSpousePlan, onOpenPlan }: {
   inputs: RetirementInputs;
   onChange: (next: RetirementInputs) => void;
   section?: string | null;
   /** The engine config's configured province codes — Province is a choice
    *  among these, not free text (mirrors the stable app's SidebarForm). */
   provinceCodes?: string[];
+  /** Other saved plans a partner can be linked to. Absent in tests that don't
+   *  exercise the spouse section. */
+  scenarios?: Scenario[];
+  activeScenarioId?: string;
+  spouseWarnings?: string[];
+  onCreateSpousePlan?: (name?: string) => string;
+  onOpenPlan?: (id: string) => void;
 }) {
   const set = (patch: Partial<RetirementInputs>) => onChange({ ...inputs, ...patch });
   const provinces = provinceCodes && provinceCodes.length ? provinceCodes : null;
   const provinceKnown = !provinces || provinces.includes(inputs.provinceCode);
   const scrolled = useRef(false);
 
-  // Scroll to the deep-linked section once (Details ▾ → ?section=…).
+  // Scroll to the deep-linked section once (#/plan?section=…, or the
+  // legacy #/details?section=… which folds here).
   useEffect(() => {
     if (!section || scrolled.current) return;
     const el = document.getElementById(`details-${section}`);
@@ -159,9 +156,9 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes }: {
         return (
           <div key={group} className="pt-6">
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{group}</h2>
-            <div className="grid gap-x-10 md:grid-cols-2">
+            <div className="flex max-w-xl flex-col">
               {sections.map(s => (
-                <div key={s.id}>{renderSection(s.id, { inputs, set, order, move, bands, provinces, provinceKnown })}</div>
+                <div key={s.id}>{renderSection(s.id, { inputs, set, order, move, bands, provinces, provinceKnown, scenarios, activeScenarioId, spouseWarnings, onCreateSpousePlan, onOpenPlan })}</div>
               ))}
             </div>
           </div>
@@ -182,13 +179,18 @@ function renderSection(id: string, ctx: {
   bands: SpendingBand[];
   provinces: readonly string[] | null;
   provinceKnown: boolean;
+  scenarios?: Scenario[];
+  activeScenarioId?: string;
+  spouseWarnings?: string[];
+  onCreateSpousePlan?: (name?: string) => string;
+  onOpenPlan?: (id: string) => void;
 }) {
-  const { inputs: inp, set, order, move, bands, provinces, provinceKnown } = ctx;
+  const { inputs: inp, set, order, move, bands, provinces, provinceKnown, scenarios, activeScenarioId, spouseWarnings, onCreateSpousePlan, onOpenPlan } = ctx;
   switch (id) {
     case 'profile':
       return (
         <Section id="profile" title="Personal Profile" hint="current-retirement-max-age">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Num label="Current age" value={inp.currentAge} step={1} onChange={(v) => set({ currentAge: v })} />
             <Num label="Plan to age" value={inp.maxAge} step={1} onChange={(v) => set({ maxAge: v })} />
           </div>
@@ -208,141 +210,65 @@ function renderSection(id: string, ctx: {
         </Section>
       );
     case 'spouse': {
-      const sp = inp.spouse;
-      const enabled = sp?.enabled === true;
-      const setSpouse = (patch: Partial<NonNullable<typeof sp>>) =>
-        set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: true, ...patch } });
+      const linkable = (scenarios ?? []).filter(s => s.id !== activeScenarioId);
+      const linkedId = inp.spouseSource?.kind === 'scenario' ? inp.spouseSource.scenarioId : '';
+      const linked = linkedId ? linkable.find(s => s.id === linkedId) : undefined;
+      const link = (scenarioId: string) =>
+        set({ spouse: undefined, spouseSource: { kind: 'scenario', scenarioId } });
+      const unlink = () => set({ spouse: undefined, spouseSource: undefined });
       return (
         <Section id="spouse" title="Spouse" hint="include-spouse">
-          <div className="flex items-center gap-1">
-            <Check checked={enabled}
-              onChange={(on) => {
-                if (on) set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: true } });
-                else set({ spouse: { ...(sp ?? defaultSpouse(inp.currentAge)), enabled: false } });
-              }}
-              label="Include a partner" />
-            <HelpHint topic="include-spouse" />
-          </div>
-          {enabled && sp && (
-            <div className="mt-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Num label="Partner age" value={sp.currentAge} step={1} onChange={(v) => setSpouse({ currentAge: v })} />
-                <Num label="Retires at" value={sp.retirementAge} step={1} onChange={(v) => setSpouse({ retirementAge: v })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Num label="RRSP" value={sp.rrspBalance} onChange={(v) => setSpouse({ rrspBalance: v })} />
-                <Num label="TFSA" value={sp.tfsaBalance} onChange={(v) => setSpouse({ tfsaBalance: v })} />
-                <Num label="Taxable" value={sp.taxableBalance} onChange={(v) => setSpouse({ taxableBalance: v })} />
-                <Num label="Cash cushion" value={sp.cashCushionBalance} onChange={(v) => setSpouse({ cashCushionBalance: v })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Num label="CPP start age" value={sp.cppStartAge ?? 65} step={1} min={60} onChange={(v) => setSpouse({ cppStartAge: v })} />
-                <Num label="CPP monthly (at 65)" value={sp.cppMonthlyAmount} step={50} onChange={(v) => setSpouse({ cppMonthlyAmount: v })} />
-                <Num label="OAS start age" value={sp.oasStartAge ?? 65} step={1} min={65} onChange={(v) => setSpouse({ oasStartAge: v })} />
-                <Num label="OAS years in Canada" value={sp.oasYearsInCanada} step={1} onChange={(v) => setSpouse({ oasYearsInCanada: v })} />
-              </div>
-
-              <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Partner contributions</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <Num label="RRSP / yr" value={sp.rrspContribution} onChange={(v) => setSpouse({ rrspContribution: v })} />
-                <Num label="TFSA / yr" value={sp.tfsaContribution} onChange={(v) => setSpouse({ tfsaContribution: v })} />
-                <Num label="Taxable / yr" value={sp.taxableContribution} onChange={(v) => setSpouse({ taxableContribution: v })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Num label="TFSA room (blank = unlimited)" value={sp.tfsaRoom ?? NaN} step={1000}
-                  onChange={(v) => setSpouse({ tfsaRoom: Number.isFinite(v) ? v : null })} />
-                <Num label="RRSP room (blank = unlimited)" value={sp.rrspRoom ?? NaN} step={1000}
-                  onChange={(v) => setSpouse({ rrspRoom: Number.isFinite(v) ? v : null })} />
-              </div>
-
-              <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Partner income</h4>
-              <div className="space-y-2">
-                {(sp.income ?? []).map((s, i) => (
-                  <div key={s.id} className="space-y-2 border border-slate-200 p-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1"><Txt label="Name" value={s.label} placeholder="e.g. Part-time work, DB pension" onChange={(v) => {
-                        const next = [...(sp.income ?? [])]; next[i] = { ...s, label: v }; setSpouse({ income: next });
-                      }} /></div>
-                      <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${s.label || 'income'}`}
-                        onClick={() => setSpouse({ income: (sp.income ?? []).filter((_, j) => j !== i) })}>×</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Sel label="Kind" value={s.kind} onChange={(v) => {
-                        const next = [...(sp.income ?? [])]; next[i] = { ...s, kind: v }; setSpouse({ income: next });
-                      }} options={(Object.keys(INCOME_KIND_LABEL) as IncomeKind[]).map(k => ({ value: k, label: INCOME_KIND_LABEL[k] }))} />
-                      <Num label="$ a year" value={s.annualAmount} step={1000} onChange={(v) => {
-                        const next = [...(sp.income ?? [])]; next[i] = { ...s, annualAmount: v }; setSpouse({ income: next });
-                      }} />
-                      <Num label="From age" value={s.startAge} step={1} onChange={(v) => {
-                        const next = [...(sp.income ?? [])]; next[i] = { ...s, startAge: v }; setSpouse({ income: next });
-                      }} />
-                      <Num label="To age (blank = forever)" value={s.endAge ?? NaN} step={1} onChange={(v) => {
-                        const next = [...(sp.income ?? [])]; next[i] = { ...s, endAge: Number.isFinite(v) && v > 0 ? v : null }; setSpouse({ income: next });
-                      }} />
-                    </div>
-                  </div>
+          <p className="text-[12px] text-slate-500">
+            A partner is another saved plan. Their numbers live there; this plan only stores the link.
+            Open that plan to edit ages, balances, CPP/OAS, income, events.
+          </p>
+          {linkable.length > 0 ? (
+            <label className="block">
+              <span className="text-[12px] text-slate-500">Linked plan</span>
+              <select
+                className="mt-0.5 w-full cursor-pointer border border-slate-300 bg-white px-2 py-1.5 text-[13px] focus:border-slate-900 focus:outline-none"
+                value={linkedId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) unlink();
+                  else link(v);
+                }}
+              >
+                <option value="">No partner</option>
+                {linkable.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
-                <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
-                  onClick={() => setSpouse({ income: [...(sp.income ?? []), { id: uid(), label: '', kind: 'employment' as IncomeKind, annualAmount: 0, startAge: sp.currentAge, endAge: sp.retirementAge, indexedToCpi: true }] })}>
-                  + add income
-                </button>
-              </div>
-
-              <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Partner cash events</h4>
-              <div className="space-y-2">
-                {(sp.events ?? []).map((e, i) => (
-                  <div key={e.id} className="space-y-2 border border-slate-200 p-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1"><Txt label="Name" value={e.label} placeholder="e.g. Inheritance, renovation" onChange={(v) => {
-                        const next = [...(sp.events ?? [])]; next[i] = { ...e, label: v }; setSpouse({ events: next });
-                      }} /></div>
-                      <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${e.label || 'event'}`}
-                        onClick={() => setSpouse({ events: (sp.events ?? []).filter((_, j) => j !== i) })}>×</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Sel label="Direction" value={e.direction} onChange={(v) => {
-                        const next = [...(sp.events ?? [])]; next[i] = { ...e, direction: v }; setSpouse({ events: next });
-                      }} options={[{ value: 'in' as const, label: 'Inflow' }, { value: 'out' as const, label: 'Outflow' }]} />
-                      <Num label="$ amount" value={e.amount} step={1000} onChange={(v) => {
-                        const next = [...(sp.events ?? [])]; next[i] = { ...e, amount: v }; setSpouse({ events: next });
-                      }} />
-                      <Num label="At age" value={e.age} step={1} onChange={(v) => {
-                        const next = [...(sp.events ?? [])]; next[i] = { ...e, age: v }; setSpouse({ events: next });
-                      }} />
-                      <Num label="Repeat to age (blank = once)" value={e.endAge ?? NaN} step={1} onChange={(v) => {
-                        const next = [...(sp.events ?? [])]; next[i] = { ...e, endAge: Number.isFinite(v) && v > 0 ? v : null }; setSpouse({ events: next });
-                      }} />
-                    </div>
-                  </div>
-                ))}
-                <div className="flex gap-2">
-                  <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
-                    onClick={() => setSpouse({ events: [...(sp.events ?? []), { id: uid(), age: inp.retirementAge, label: '', amount: 0, direction: 'in' }] })}>+ add inflow</button>
-                  <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
-                    onClick={() => setSpouse({ events: [...(sp.events ?? []), { id: uid(), age: inp.retirementAge, label: '', amount: 0, direction: 'out' }] })}>+ add outflow</button>
-                </div>
-              </div>
-
-              <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Partner spending phases</h4>
-              <p className="text-[12px] text-slate-500">Scale the partner's spending goal by age (go-go / slow-go / no-go).</p>
-              <div className="space-y-2">
-                {(sp.spendingBands ?? []).map((b, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Num label="From age" value={b.fromAge} step={1} onChange={(v) => {
-                      const next = [...(sp.spendingBands ?? [])]; next[i] = { ...b, fromAge: v }; setSpouse({ spendingBands: next });
-                    }} />
-                    <Num label="% of base" value={Math.round(b.pctOfBase * 100)} step={5} onChange={(v) => {
-                      const next = [...(sp.spendingBands ?? [])]; next[i] = { ...b, pctOfBase: v / 100 }; setSpouse({ spendingBands: next });
-                    }} />
-                    <button className="mt-4 text-slate-400 hover:text-rose-600" aria-label="Remove phase"
-                      onClick={() => setSpouse({ spendingBands: (sp.spendingBands ?? []).filter((_, j) => j !== i) })}>×</button>
-                  </div>
-                ))}
-                <button className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
-                  onClick={() => setSpouse({ spendingBands: [...(sp.spendingBands ?? []), { fromAge: ((sp.spendingBands ?? [])[(sp.spendingBands ?? []).length - 1]?.fromAge ?? sp.retirementAge) + 10, pctOfBase: 0.8 }] })}>
-                  + add a phase
-                </button>
-              </div>
+              </select>
+            </label>
+          ) : (
+            <p className="text-[12px] text-slate-500">No other saved plans yet — create one to link as a partner.</p>
+          )}
+          {linked && (
+            <div className="flex flex-wrap gap-2">
+              <button type="button"
+                className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+                onClick={() => onOpenPlan?.(linked.id)}>
+                Open {linked.name}
+              </button>
+              <button type="button"
+                className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+                onClick={unlink}>
+                Unlink
+              </button>
+            </div>
+          )}
+          {!linked && onCreateSpousePlan && (
+            <button type="button"
+              className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+              onClick={() => onCreateSpousePlan()}>
+              Create a partner plan
+            </button>
+          )}
+          {(spouseWarnings ?? []).length > 0 && (
+            <div className="space-y-1 border border-amber-200 bg-amber-50 px-2 py-1.5">
+              {(spouseWarnings ?? []).map((w, i) => (
+                <p key={i} className="text-[12px] text-amber-800">{w}</p>
+              ))}
             </div>
           )}
         </Section>
@@ -351,7 +277,7 @@ function renderSection(id: string, ctx: {
     case 'accounts':
       return (
         <Section id="accounts" title="Account Balances" hint="rrsp">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Num label="RRSP" value={inp.rrspBalance} onChange={(v) => set({ rrspBalance: v })} />
             <Num label="TFSA" value={inp.tfsaBalance} onChange={(v) => set({ tfsaBalance: v })} />
             <Num label="Taxable" value={inp.taxableBalance} onChange={(v) => set({ taxableBalance: v })} />
@@ -362,7 +288,7 @@ function renderSection(id: string, ctx: {
     case 'contributions':
       return (
         <Section id="contributions" title="Contribution Rates" hint="contributions">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Num label="RRSP / yr" value={inp.rrspContribution} onChange={(v) => set({ rrspContribution: v })} />
             <Num label="TFSA / yr" value={inp.tfsaContribution} onChange={(v) => set({ tfsaContribution: v })} />
             <Num label="Taxable / yr" value={inp.taxableContribution} onChange={(v) => set({ taxableContribution: v })} />
@@ -386,7 +312,7 @@ function renderSection(id: string, ctx: {
                   <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${s.label || 'income'}`}
                     onClick={() => set({ income: list.filter((_, j) => j !== i) })}>×</button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Sel label="Kind" value={s.kind} onChange={(v) => upd(i, { kind: v })}
                     options={(Object.keys(INCOME_KIND_LABEL) as IncomeKind[]).map(k => ({ value: k, label: INCOME_KIND_LABEL[k] }))} />
                   <Num label="$ a year" value={s.annualAmount} step={1000} onChange={(v) => upd(i, { annualAmount: v })} />
@@ -405,7 +331,7 @@ function renderSection(id: string, ctx: {
     case 'benefits':
       return (
         <Section id="benefits" title="Government Benefits" hint="cpp-start-age">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Num label="CPP start age" value={inp.cppStartAge ?? 65} step={1} min={60} onChange={(v) => set({ cppStartAge: v })} />
             <Num label="CPP monthly (at 65)" value={inp.cppMonthlyAmount} step={50} onChange={(v) => set({ cppMonthlyAmount: v })} />
             <Num label="OAS start age" value={inp.oasStartAge ?? 65} step={1} min={65} onChange={(v) => set({ oasStartAge: v })} />
@@ -430,7 +356,7 @@ function renderSection(id: string, ctx: {
                   <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${e.label || 'event'}`}
                     onClick={() => set({ events: list.filter((_, j) => j !== i) })}>×</button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Sel label="Direction" value={e.direction} onChange={(v) => upd(i, { direction: v })}
                     options={[{ value: 'in' as const, label: 'Inflow' }, { value: 'out' as const, label: 'Outflow' }]} />
                   <Num label="$ amount" value={e.amount} step={1000} onChange={(v) => upd(i, { amount: v })} />
@@ -484,7 +410,7 @@ function renderSection(id: string, ctx: {
       };
       return (
         <Section id="markets" title="Markets" hint="expected-return">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Num label="Volatility (σ)" value={Math.round((inp.returnVolatility ?? 0) * 1000) / 10} step={0.5} min={0}
               hint="Drives Monte Carlo — set above 0 or the analysis can’t run."
               onChange={(v) => set({ returnVolatility: Math.max(0, v / 100) })} />
@@ -546,7 +472,7 @@ function renderSection(id: string, ctx: {
                   <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${d.label || 'debt'}`}
                     onClick={() => set({ debts: list.filter((_, j) => j !== i) })}>×</button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Sel label="Kind" value={d.kind} onChange={(v) => upd(i, { kind: v })}
                     options={(Object.keys(DEBT_KIND_LABEL) as Debt['kind'][]).map(k => ({ value: k, label: DEBT_KIND_LABEL[k] }))} />
                   <Num label="Balance" value={d.balance} step={1000} onChange={(v) => upd(i, { balance: v })} />
@@ -577,7 +503,7 @@ function renderSection(id: string, ctx: {
           <Check checked={enabled} onChange={(on) => setRm({ enabled: on })} label="Borrow against the home" />
           {enabled && rm && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Sel label="Product" value={rm.mode ?? 'reverse'} onChange={(v) => setRm({ mode: v })}
                   options={[
                     { value: 'reverse', label: 'Reverse mortgage (interest compounds)' },
@@ -599,7 +525,7 @@ function renderSection(id: string, ctx: {
                 : setRm({ drawAmount: undefined, startAge: undefined, durationYears: undefined })}
                 label="Scheduled draws" />
               {hasSchedule && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Num label="Draw $/yr" value={rm.drawAmount ?? 0} onChange={(v) => setRm({ drawAmount: v })} />
                   <Num label="From age" value={rm.startAge ?? inp.currentAge} step={1} onChange={(v) => setRm({ startAge: v })} />
                   <Num label="For years" value={rm.durationYears ?? 10} step={1} onChange={(v) => setRm({ durationYears: v })} />
@@ -623,7 +549,7 @@ function renderSection(id: string, ctx: {
           <Check checked={enabled} onChange={(on) => setRd({ enabled: on })} label="Enabled" />
           {enabled && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Num label="Balance" value={rd!.balance} onChange={(v) => setRd({ balance: v })} />
                 <Num label="Contribution / yr" value={rd!.contribution} onChange={(v) => setRd({ contribution: v })} />
                 <Num label="Family income" value={rd!.familyIncome} onChange={(v) => setRd({ familyIncome: v })}
@@ -646,7 +572,7 @@ function renderSection(id: string, ctx: {
         <Section id="fhsa" title="FHSA (First Home Savings)" hint="fhsa">
           <Check checked={enabled} onChange={(on) => setFh({ enabled: on })} label="Enabled" />
           {enabled && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Num label="Balance" value={fh!.balance} onChange={(v) => setFh({ balance: v })} />
               <Num label="Contribution / yr" value={fh!.contribution} onChange={(v) => setFh({ contribution: v })} />
               <Num label="Opened at age (blank = this year)" value={fh!.openAge ?? NaN} step={1}

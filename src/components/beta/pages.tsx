@@ -1,7 +1,8 @@
 // Beta page wrappers — each reuses the stable app's full-featured panel inside
 // the beta page chrome (BetaPage). This is how the beta reaches feature parity
 // without forking the complex editors: the surface is new, the substance is
-// shared. The Details page and dashboard are native beta; these wrap the rest.
+// shared. The Plans page (list + current-plan numbers) and dashboard are
+// native beta; these wrap the rest.
 //
 // Issue #162 split the old combined Insights page into the five Tools-menu
 // surfaces (Steering · Optimizer · Monte Carlo · Backtest · Solver). Every
@@ -15,6 +16,7 @@ import { HelpHint } from '../../design/primitives';
 import { ProjectionTimeline, baseSpendAtRetirement } from '../../design/ProjectionTimeline';
 import type { TimelineEvent, TimelineMarketAnchor } from '../../design/ProjectionTimeline';
 import { INK, RED_DOT } from '../../design/tokens';
+import { firstEmptyAge } from '../../lib/planDisplay';
 import { ScheduleTable } from '../ScheduleTable';
 import { EqPage } from '../EqPage';
 import { StrategyExplorer, SpendingSolver } from '../OptimizeCard';
@@ -22,6 +24,7 @@ import { BacktestPanel } from '../BacktestPanel';
 import { MonteCarloChart } from '../MonteCarloChart';
 import { ScenarioManager } from '../ScenarioManager';
 import { CompareCard } from '../CompareCard';
+import { DetailsPage } from './DetailsPage';
 import { SharingPage } from '../SharingPage';
 import { SettingsModal } from '../SettingsModal';
 import { ConnectionsPage } from '../ConnectionsPage';
@@ -47,7 +50,7 @@ export function ProjectStrip({ breakdown, currentAge, retirementAge, edit }: {
     inflationRate: number;
   };
 }) {
-  const depletion = breakdown.find(r => r.endingBalance <= 0)?.age ?? null;
+  const depletion = firstEmptyAge(breakdown);
   const e = edit;
   const baseSpend = e ? baseSpendAtRetirement(e.inputs, e.inflationRate, retirementAge) : undefined;
   return (
@@ -162,7 +165,7 @@ export function BetaMonteCarloPage({ chip, assistant, timeline, mcProps }: {
           <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Across many market futures<HelpHint topic="monte-carlo" /></h3>
           {mcProps
             ? <MonteCarloChart {...mcProps} />
-            : <p className="text-[12px] text-slate-500">Monte Carlo needs a volatility assumption — set one above 0% under Markets on the Details page and the fan appears.</p>}
+            : <p className="text-[12px] text-slate-500">Monte Carlo needs a volatility assumption — set one above 0% under Markets on the Plans page and the fan appears.</p>}
         </section>
       </div>
     </BetaPage>
@@ -209,18 +212,23 @@ export function BetaSolverPage({ chip, assistant, timeline, solverProps }: {
   );
 }
 
-export function BetaPlansPage({ chip, assistant, managerProps, compareProps }: {
+export function BetaPlansPage({ chip, assistant, managerProps, compareProps, detailsProps }: {
   chip: VerdictChip;
   assistant?: ReactNode;
   managerProps: ComponentProps<typeof ScenarioManager>;
   compareProps: ComponentProps<typeof CompareCard>;
+  detailsProps: ComponentProps<typeof DetailsPage>;
 }) {
   return (
-    <BetaPage title="Profiles" hint="scenarios" chip={chip} assistant={assistant}>
+    <BetaPage title="Plans" hint="scenarios" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ScenarioManager {...managerProps} />
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Compare profiles<HelpHint topic="compare" /></h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">This plan<HelpHint topic="scenarios" /></h3>
+          <DetailsPage {...detailsProps} />
+        </section>
+        <section>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Compare plans<HelpHint topic="compare" /></h3>
           <CompareCard {...compareProps} />
         </section>
       </div>

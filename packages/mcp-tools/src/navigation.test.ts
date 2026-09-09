@@ -41,7 +41,7 @@ describe('NAV_CATALOG shape', () => {
 
 describe('rankPages', () => {
   it('routes plain words to the page that holds them', () => {
-    expect(rankPages('tfsa room')[0]?.viewId).toBe('details');
+    expect(rankPages('tfsa room')[0]?.viewId).toBe('scenarios');
     // Issue #162: the Tools menu gave each analytic surface its own page, so
     // the words now resolve straight to it — no hop through a combined page.
     expect(rankPages('monte carlo')[0]?.viewId).toBe('montecarlo');
@@ -61,11 +61,12 @@ describe('rankPages', () => {
   it('searches only the reachable pages — folded legacy views never surface', () => {
     // Only the truly-merged legacy names fold now; the Tools surfaces are real
     // pages and DO surface for their own words.
-    for (const q of ['export', 'sharing', 'compare']) {
+    for (const q of ['export', 'sharing', 'compare', 'details']) {
       const ids = rankPages(q).map((e) => e.viewId);
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('export');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('sharing');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('compare');
+      expect(ids, `query "${q}" surfaced a folded page`).not.toContain('details');
     }
   });
 
@@ -92,6 +93,7 @@ describe('canonicalView / pageTitleLine', () => {
   it('maps folded views to their destination, identity otherwise', () => {
     expect(canonicalView('sharing')).toBe('data');
     expect(canonicalView('compare')).toBe('scenarios');
+    expect(canonicalView('details')).toBe('scenarios');
     // Issue #162 unfurled the Tools surfaces — they are destinations now.
     expect(canonicalView('montecarlo')).toBe('montecarlo');
     expect(canonicalView('backtest')).toBe('backtest');
@@ -102,17 +104,17 @@ describe('canonicalView / pageTitleLine', () => {
 
   it('names pages by their UI title — folded pages report their destination', () => {
     expect(pageTitleLine('projection')).toBe('Dashboard');
-    expect(pageTitleLine('details')).toBe('Details');
+    expect(pageTitleLine('details')).toBe('Plans');
     expect(pageTitleLine('eq')).toBe('Steering');
     expect(pageTitleLine('math')).toBe('Projection');
     expect(pageTitleLine('optimize')).toBe('Optimizer');
     expect(pageTitleLine('montecarlo')).toBe('Monte Carlo');
     expect(pageTitleLine('backtest')).toBe('Backtest');
     expect(pageTitleLine('solver')).toBe('Solver');
-    expect(pageTitleLine('scenarios')).toBe('Profiles');
+    expect(pageTitleLine('scenarios')).toBe('Plans');
     expect(pageTitleLine('data')).toBe('Data');
     // A legacy view's line is the page the user actually sees.
-    expect(pageTitleLine('compare')).toBe('Profiles');
+    expect(pageTitleLine('compare')).toBe('Plans');
   });
 
   it('titles are article-safe (no leading The/An/A — "on the X page" reads right)', () => {

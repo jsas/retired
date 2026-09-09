@@ -33,7 +33,6 @@ export function baselineInputs(): RetirementInputs {
     income: [],
     events: [],
     spendingBands: [],
-    spouseSource: { kind: 'builtin' },
   };
 }
 
@@ -43,7 +42,8 @@ export function baselineInputs(): RetirementInputs {
  * localStorage is empty (first launch or after a full reset) — the user's own
  * scenarios replace them permanently once saved.
  *
- *   Example - Early Couple ....... an embedded spouse plan + spending bands
+ *   Example - Early Couple ....... a household that LINKS Example - Partner
+ *                                  (scenario-1-spouse) + spending bands
  *   Example - Single at 60 ....... one-time cash events + CPP deferred to 70
  *   Example - Semi-retirement .... modest balances, spending bands, part-time
  *                                  style contributions into retirement
@@ -83,24 +83,34 @@ export const buildDefaultScenarios = (): Scenario[] => [
         { fromAge: 75, pctOfBase: 0.85 },
         { fromAge: 85, pctOfBase: 0.7 },
       ],
-      spouse: {
-        enabled: true,
-        currentAge: 43,
-        retirementAge: 55,
-        rrspBalance: 240000,
-        tfsaBalance: 110000,
-        taxableBalance: 40000,
-        cashCushionBalance: 20000,
-        rrspContribution: 18000,
-        tfsaContribution: 7000,
-        taxableContribution: 0,
-        cppStartAge: 65,
-        cppMonthlyAmount: 850,
-        oasStartAge: 65,
-        oasYearsInCanada: 40,
-        desiredSpending: 30000,
-        withdrawalOrder: ['taxable', 'rrsp', 'tfsa'],
-      },
+      spouseSource: { kind: 'scenario', scenarioId: 'scenario-1-spouse' },
+    },
+  },
+  {
+    id: 'scenario-1-spouse',
+    name: 'Example - Partner',
+    inputs: {
+      currentAge: 43,
+      retirementAge: 55,
+      maxAge: 95,
+      rrspBalance: 240000,
+      tfsaBalance: 110000,
+      taxableBalance: 40000,
+      cashCushionBalance: 20000,
+      rrspContribution: 18000,
+      tfsaContribution: 7000,
+      taxableContribution: 0,
+      annualWithdrawal: 0,
+      investmentReturn: 0.06,
+      returnVolatility: 0.15,
+      provinceCode: 'ONT',
+      cppStartAge: 65,
+      cppMonthlyAmount: 850,
+      cppAdjustedAmount: false,
+      oasStartAge: 65,
+      oasYearsInCanada: 40,
+      desiredSpending: 30000,
+      withdrawalOrder: ['taxable', 'rrsp', 'tfsa'],
     },
   },
   {

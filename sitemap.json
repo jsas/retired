@@ -20,38 +20,6 @@
       ]
     },
     {
-      "view": "details",
-      "route": "#/details",
-      "url": "https://jsas.github.io/retired/#/details",
-      "title": "Details",
-      "description": "Every input behind the plan, sectioned: personal profile, spouse, account balances and contribution room (TFSA/RRSP), contribution rates, income, government benefits, cash events, spending phases, debts and the reverse mortgage, and market hypotheses.",
-      "keywords": [
-        "tfsa room",
-        "rrsp room",
-        "contribution room",
-        "caps",
-        "balances",
-        "accounts",
-        "contributions",
-        "income",
-        "benefits",
-        "cpp",
-        "oas",
-        "spending",
-        "spouse",
-        "debts",
-        "loan",
-        "reverse mortgage",
-        "volatility",
-        "returns",
-        "market hypotheses",
-        "inputs",
-        "edit",
-        "change my numbers",
-        "the details"
-      ]
-    },
-    {
       "view": "math",
       "route": "#/year-math",
       "url": "https://jsas.github.io/retired/#/year-math",
@@ -162,11 +130,13 @@
     },
     {
       "view": "scenarios",
-      "route": "#/scenarios",
-      "url": "https://jsas.github.io/retired/#/scenarios",
-      "title": "Profiles",
-      "description": "Your saved plans: open, rename, duplicate, delete, and roll back revisions — plus the side-by-side comparison of every profile.",
+      "route": "#/plan",
+      "url": "https://jsas.github.io/retired/#/plan",
+      "title": "Plans",
+      "description": "Your saved plans and the numbers behind the current one: switch, rename, duplicate, roll back — then edit every input (accounts, income, benefits, spending, markets) in one scroll, and compare plans side by side.",
       "keywords": [
+        "plans",
+        "plan",
         "profiles",
         "scenarios",
         "saved plans",
@@ -177,7 +147,31 @@
         "compare",
         "side-by-side",
         "which plan",
-        "revisions"
+        "revisions",
+        "tfsa room",
+        "rrsp room",
+        "contribution room",
+        "caps",
+        "balances",
+        "accounts",
+        "contributions",
+        "income",
+        "benefits",
+        "cpp",
+        "oas",
+        "spending",
+        "spouse",
+        "debts",
+        "loan",
+        "reverse mortgage",
+        "volatility",
+        "returns",
+        "market hypotheses",
+        "inputs",
+        "edit",
+        "change my numbers",
+        "the details",
+        "details"
       ]
     },
     {
@@ -247,7 +241,9 @@
         "online",
         "model",
         "privacy",
-        "wire"
+        "wire",
+        "openrouter",
+        "free models"
       ]
     },
     {

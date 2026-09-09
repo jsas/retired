@@ -47,9 +47,11 @@ describe('BetaPage assistant dock', () => {
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('90+');
-    for (const label of ['Details', 'Projection', 'Tools', 'Profiles']) {
+    for (const label of ['Projection', 'Tools', 'Plans']) {
       expect(html, label).toContain(label);
     }
+    expect(html).not.toContain('>Details<');
+    expect(html).not.toContain('>Profiles<');
   });
 
   it('the Tools menu carries all five analytic surfaces', () => {
@@ -65,12 +67,12 @@ describe('BetaPage assistant dock', () => {
     expect(html).toContain('>Tools');
   });
 
-  it('puts a profile icon (to Profiles) and an undo icon next to the verdict chip', () => {
+  it('puts a profile icon (to Plans / #/plan) and an undo icon next to the verdict chip', () => {
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, children: createElement('div') }),
     );
-    expect(html).toContain('aria-label="Your profiles — the plan page"');
-    expect(html).toContain('href="#/scenarios"');
+    expect(html).toContain('aria-label="Your plan — the Plans page"');
+    expect(html).toContain('href="#/plan"');
     expect(html).toContain('aria-label="Undo — step back to the previous saved plan"');
     // Undo is inert until App wires a history through PlanUndoContext.
     expect(html).toContain('disabled');
@@ -85,9 +87,11 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toContain('Menu');
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    for (const label of ['Dashboard', 'Projection', 'Details', 'Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Profiles', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
+    for (const label of ['Dashboard', 'Projection', 'Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Plans', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
       expect(labels, label).toContain(label);
     }
+    expect(labels).not.toContain('Details');
+    expect(labels).not.toContain('Profiles');
   });
 
   it('the assistant route opens the dock regardless of the saved pref', () => {
@@ -121,5 +125,32 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toMatch(/class="[^"]*fixed inset-0 top-12 z-50 flex flex-col lg:sticky/);
     expect(html).not.toMatch(/flex flex-col hidden/);
+    // unprefixed `relative` would beat `fixed` in Tailwind and drop the phone
+    // sheet back into the page flow (settings squeezed beside the chat).
+    expect(html).not.toMatch(/aria-label="Assistant"[^>]*\brelative\b/);
+    expect(html).not.toMatch(/class="[^"]*\brelative\b[^"]*" aria-label="Assistant"/);
+  });
+
+  it('the page chrome is wide and the dock remembers a dragged width', () => {
+    // Re-stub: the assistant-route test unstubs globals, and Node has no
+    // localStorage for prefKV to read the remembered width from.
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+    });
+    store.set('wealthconsole_dock_open', '1');
+    store.set('wealthconsole_dock_width', '480');
+    const html = renderToStaticMarkup(
+      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+    );
+    expect(html).toContain('max-w-[90rem]');
+    expect(html).not.toContain('max-w-5xl');
+    expect(html).toContain('--dock-w:480px');
+    expect(html).toContain('aria-label="Resize the assistant"');
+    // phones stay a sheet — the width token is a lg: utility, not an inline width
+    expect(html).toMatch(/lg:w-\[var\(--dock-w\)\]/);
+    expect(html).not.toContain('lg:w-[340px]');
   });
 });

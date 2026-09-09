@@ -13,8 +13,8 @@ const formatMoney = (v: number) =>
  * contributions, CPP/OAS and a spending goal — each with a line of guidance,
  * then hands a complete RetirementInputs back to the caller to save as the
  * first scenario. Deliberately sparse: it gets a working plan on screen fast;
- * everything else (events, spending phases, spouse, reverse mortgage) stays in
- * the sidebar for later.
+ * everything else (events, spending phases, reverse mortgage) stays on the
+ * Plans page for later. A partner is a second wizard pass that mints its own plan.
  */
 
 // The values the wizard collects. Everything else on RetirementInputs is
@@ -112,7 +112,7 @@ export function spouseWizardDataFrom(host: RetirementInputs): WizardData {
   const sp = host.spouse;
   return {
     person: 'spouse',
-    scenarioName: '',
+    scenarioName: 'Partner',
     currentAge: sp?.currentAge ?? host.currentAge,
     retirementAge: sp?.retirementAge ?? host.retirementAge,
     maxAge: host.maxAge, // shared horizon — not asked in the spouse pass
@@ -133,34 +133,25 @@ export function spouseWizardDataFrom(host: RetirementInputs): WizardData {
   };
 }
 
-/** Write the spouse pass's collected values into the host plan's spouse block,
- *  enabling it. Fields the spouse pass doesn't ask about (income sources,
- *  events, spending bands, withdrawal order, an already-linked spouse RM)
- *  survive from the existing spouse if there is one. */
+/** Build a standalone partner plan from the spouse wizard pass. Shared
+ *  household fields (horizon, market, province) come from the host; person
+ *  numbers come from the wizard. The partner plan has no spouse of its own. */
 export function applySpouseWizardData(host: RetirementInputs, data: WizardData): RetirementInputs {
   const prev = host.spouse;
-  return {
+  const next = applyWizardData({
     ...host,
-    spouseSource: { kind: 'builtin' },
-    spouse: {
-      ...prev,
-      enabled: true,
-      currentAge: data.currentAge,
-      retirementAge: data.retirementAge,
-      rrspBalance: data.rrspBalance,
-      tfsaBalance: data.tfsaBalance,
-      taxableBalance: data.taxableBalance,
-      cashCushionBalance: data.cashCushionBalance,
-      rrspContribution: data.rrspContribution,
-      tfsaContribution: data.tfsaContribution,
-      taxableContribution: data.taxableContribution,
-      cppStartAge: data.cppStartAge,
-      cppMonthlyAmount: data.cppMonthlyAmount,
-      oasStartAge: data.oasStartAge,
-      oasYearsInCanada: data.oasYearsInCanada,
-      desiredSpending: data.desiredSpending,
-    },
-  };
+    events: prev?.events ?? [],
+    income: prev?.income ?? [],
+    spendingBands: prev?.spendingBands ?? [],
+    debts: prev?.debts,
+    rdsp: prev?.rdsp,
+    fhsa: prev?.fhsa,
+    reverseMortgage: prev?.reverseMortgage,
+    withdrawalOrder: prev?.withdrawalOrder ?? host.withdrawalOrder,
+    spouse: undefined,
+    spouseSource: undefined,
+  }, { ...data, ownsHome: null });
+  return { ...next, spouse: undefined, spouseSource: undefined };
 }
 
 interface SetupWizardProps {
@@ -322,20 +313,16 @@ export function SetupWizard({ initial, onComplete, onSkip }: SetupWizardProps) {
               : "Here's what you're starting with. Anything look off? Use Back to change it."}
           </p>
 
-          {/* Give the scenario a name — we suggest one, they can keep or change it.
-              (Primary pass only; the spouse shares the household's scenario.) */}
-          {!isSpousePass && (
-            <div className="mb-4">
-              <label className={LABEL_CLS}>Name this plan</label>
-              <input
-                type="text"
-                className={NUM_CLS}
-                value={data.scenarioName}
-                onChange={(e) => set('scenarioName', e.target.value)}
-                placeholder="My Plan"
-              />
-            </div>
-          )}
+          <div className="mb-4">
+            <label className={LABEL_CLS}>{isSpousePass ? 'Name their plan' : 'Name this plan'}</label>
+            <input
+              type="text"
+              className={NUM_CLS}
+              value={data.scenarioName}
+              onChange={(e) => set('scenarioName', e.target.value)}
+              placeholder={isSpousePass ? 'Partner' : 'My Plan'}
+            />
+          </div>
 
           {/* Summary of what they entered */}
           <dl className="mb-5 border border-slate-200 divide-y divide-slate-100 text-[13px]">

@@ -9,13 +9,12 @@
 // is a one-file change and the combined test fails on half-drift.
 //
 // KEYED FOR THE BETA SKIN (issue #141): titles/descriptions match what the
-// beta chrome shows (Dashboard, The details, the Tools menu, Profiles, Data).
+// beta chrome shows (Dashboard, the Tools menu, Plans, Data).
 // Issue #162 unfurled the analytics surfaces into the Tools menu — Steering,
 // Optimizer, Monte Carlo, Backtest and the new Solver are each their own page
-// again. Only the truly-merged legacy routes still fold (export/sharing →
-// Data; compare → Profiles); they keep their legacy view ids for back-compat
-// routing on the stable skin, carry `foldedInto`, and hide from
-// search/sitemap/proposals.
+// again. Merged legacy routes fold (export/sharing → Data; compare/details →
+// Plans); they keep their legacy view ids for back-compat routing, carry
+// `foldedInto`, and hide from search/sitemap/proposals.
 
 /** One navigable page (view) in the SPA. `viewId` must be importable by
  *  host-agnostic packages without depending on the app, so it lives here. */
@@ -47,7 +46,9 @@ export type View =
   // routable for existing deep links.
   | 'compare'
   | 'export'
-  | 'sharing';
+  | 'sharing'
+  // Old Profiles URL (#/scenarios) — the page now lives at #/plan.
+  | 'legacyScenarios';
 
 /** What a page is, in model-readable words. `keywords` powers find_page's
  *  ranking and the promptTools instruction hint ("tfsa room" → details). */
@@ -85,11 +86,10 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'details',
     route: 'details',
-    // Title is "Details" (not the page's "The details" display form) so the
-    // ambient line reads "on the Details page", not "on the The details page".
     title: 'Details',
-    description: 'Every input behind the plan, sectioned: personal profile, spouse, account balances and contribution room (TFSA/RRSP), contribution rates, income, government benefits, cash events, spending phases, debts and the reverse mortgage, and market hypotheses.',
+    description: 'Every input behind the plan — now on the Plans page, under the list of saved plans.',
     keywords: ['tfsa room', 'rrsp room', 'contribution room', 'caps', 'balances', 'accounts', 'contributions', 'income', 'benefits', 'cpp', 'oas', 'spending', 'spouse', 'debts', 'loan', 'reverse mortgage', 'volatility', 'returns', 'market hypotheses', 'inputs', 'edit', 'change my numbers', 'the details'],
+    foldedInto: 'scenarios',
   },
   {
     viewId: 'math',
@@ -135,10 +135,10 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   },
   {
     viewId: 'scenarios',
-    route: 'scenarios',
-    title: 'Profiles',
-    description: 'Your saved plans: open, rename, duplicate, delete, and roll back revisions — plus the side-by-side comparison of every profile.',
-    keywords: ['profiles', 'scenarios', 'saved plans', 'manager', 'duplicate', 'rename', 'delete', 'compare', 'side-by-side', 'which plan', 'revisions'],
+    route: 'plan',
+    title: 'Plans',
+    description: 'Your saved plans and the numbers behind the current one: switch, rename, duplicate, roll back — then edit every input (accounts, income, benefits, spending, markets) in one scroll, and compare plans side by side.',
+    keywords: ['plans', 'plan', 'profiles', 'scenarios', 'saved plans', 'manager', 'duplicate', 'rename', 'delete', 'compare', 'side-by-side', 'which plan', 'revisions', 'tfsa room', 'rrsp room', 'contribution room', 'caps', 'balances', 'accounts', 'contributions', 'income', 'benefits', 'cpp', 'oas', 'spending', 'spouse', 'debts', 'loan', 'reverse mortgage', 'volatility', 'returns', 'market hypotheses', 'inputs', 'edit', 'change my numbers', 'the details', 'details'],
   },
   {
     viewId: 'data',
@@ -166,7 +166,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     route: 'connections',
     title: 'Assistant connection',
     description: 'Where the assistant runs: local model or online provider, the API key, and exactly what the chat may see.',
-    keywords: ['connections', 'api key', 'llm', 'provider', 'local', 'online', 'model', 'privacy', 'wire'],
+    keywords: ['connections', 'api key', 'llm', 'provider', 'local', 'online', 'model', 'privacy', 'wire', 'openrouter', 'free models'],
   },
   {
     viewId: 'agent',
@@ -204,16 +204,23 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     keywords: ['style guide', 'design', 'beta', 'components'],
     betaOnly: true,
   },
-  // ── Legacy stable-skin pages still folded on beta ───────────────────────
+  // ── Legacy pages still folded on beta ───────────────────────────────────
   // (issue #162 unfurled optimize/montecarlo/backtest into the Tools menu;
-  // these three are what's left — their content merged into a neighbouring
-  // home rather than becoming a page of its own.)
+  // Details and the old Profiles URL now live on Plans.)
   {
     viewId: 'compare',
     route: 'compare',
     title: 'Compare',
-    description: 'Side-by-side outcomes across all saved profiles.',
+    description: 'Side-by-side outcomes across all saved plans.',
     keywords: ['compare', 'side-by-side', 'which plan', 'vs'],
+    foldedInto: 'scenarios',
+  },
+  {
+    viewId: 'legacyScenarios',
+    route: 'scenarios',
+    title: 'Plans',
+    description: 'Your saved plans — now at #/plan.',
+    keywords: ['scenarios', 'profiles'],
     foldedInto: 'scenarios',
   },
   {

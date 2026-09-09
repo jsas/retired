@@ -399,7 +399,7 @@ export function ProjectionTimeline({
       >
         {!hasAnything && (
           <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="13" fill={FAINT} fontFamily="inherit">
-            Nothing to draw — the plan has no savings yet. Add balances on the Details page.
+            Nothing to draw — the plan has no savings yet. Add balances on the Plans page.
           </text>
         )}
         {hasAnything && (

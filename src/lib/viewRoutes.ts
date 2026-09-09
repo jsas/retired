@@ -15,10 +15,10 @@ export const VIEW_ROUTES: Record<View, string> = Object.fromEntries(
 ) as Record<View, string>;
 
 // Map a location hash ('#/steering', '#steering', '#/steering/') to its view.
-// Query-string deep-links (#/help?topic=rrsp, #/details?section=spending) route
-// to their page — the destination reads its own ?param off the hash. Returns
-// null for empty/unknown hashes (including #plan= share links) so the caller
-// can keep its current view.
+// Query-string deep-links (#/help?topic=rrsp, #/plan?section=spending, and
+// the legacy #/details?section=…) route to their page — the destination reads
+// its own ?param off the hash. Returns null for empty/unknown hashes
+// (including #plan= share links) so the caller can keep its current view.
 export function viewFromHash(hash: string): View | null {
   const route = hash.replace(/^#\/?/, '').replace(/\?.*$/, '').replace(/\/+$/, '');
   for (const entry of NAV_CATALOG) {
@@ -28,11 +28,11 @@ export function viewFromHash(hash: string): View | null {
 }
 
 // The canonical hash for a view ('#/steering'). Folded legacy views
-// (compare/export/sharing) keep their own routes for parsing, but the
+// (compare/export/sharing/details) keep their own routes for parsing, but the
 // canonical link points at the page their catalog entry folds into — so a
-// "Go to Compare" link the assistant prints lands on Profiles, not a dead
-// route. (Issue #162 unfurled optimize/montecarlo/backtest into the Tools
-// menu — those are real pages now and print their own hashes.)
+// "Go to Compare" / "Go to Details" link the assistant prints lands on Plans,
+// not a dead route. (Issue #162 unfurled optimize/montecarlo/backtest into the
+// Tools menu — those are real pages now and print their own hashes.)
 export function hashForView(view: View): string {
   const target = foldTarget(view);
   return `#/${VIEW_ROUTES[target]}`;
