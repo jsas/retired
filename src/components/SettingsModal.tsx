@@ -22,6 +22,7 @@ import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } fr
 import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { HelpHint } from '../design/primitives';
+import { detectLocale } from '../lib/locale';
 
 interface SettingsModalProps {
   config: AppConfig;
@@ -241,7 +242,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
           )}
 
           {section === 'assistant' && (
-            <AssistantSettings ai={ai} patchAi={patchAi} config={draft} />
+            <AssistantSettings ai={ai} patchAi={patchAi} config={draft} update={update} />
           )}
 
           {section === 'levers' && (
@@ -625,10 +626,11 @@ const SEND_TOGGLES: Array<{ key: keyof Required<AiPromptSend>; label: string; hi
   { key: 'personaLast', label: 'Persona last', hint: 'Put the persona after the mechanics so a small model honors a custom override.' },
 ];
 
-function AssistantSettings({ ai, patchAi, config }: {
+function AssistantSettings({ ai, patchAi, config, update }: {
   ai: AiSettings;
   patchAi: (mutate: (s: AiSettings) => void) => void;
   config: AppConfig;
+  update: (mutate: (c: AppConfig) => void) => void;
 }) {
   const send = resolveAiPromptSend(ai.promptSend);
   const connection = ai.connections.find(c => c.id === ai.activeConnectionId);
@@ -655,6 +657,7 @@ function AssistantSettings({ ai, patchAi, config }: {
     send,
     basePrompt: ai.systemPromptOverride,
     config,
+    locale: config.general.locale ?? detectLocale(),
     toolInstructions: toolOverride,
   });
   const setSend = (key: keyof Required<AiPromptSend>, value: boolean) => {
@@ -666,6 +669,37 @@ function AssistantSettings({ ai, patchAi, config }: {
 
   return (
     <div className="space-y-5 max-w-2xl">
+      <div>
+        <h3 className="text-xs font-semibold text-slate-700 mb-1">
+          Assistant language<HelpHint topic="assistant-prompts" />
+        </h3>
+        <p className="text-xs text-slate-600 leading-snug mb-2">
+          The app chrome stays English. This only changes the language the assistant
+          writes in. Absent a pick, it follows the browser (French → français).
+          Save settings to apply.
+        </p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {([
+            { value: undefined, label: 'Follow browser' },
+            { value: 'en-CA' as const, label: 'English (Canada)' },
+            { value: 'fr-CA' as const, label: 'Français (Canada)' },
+          ]).map(opt => (
+            <label key={opt.label} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+              <input
+                type="radio"
+                name="assistant-locale"
+                checked={(config.general.locale ?? undefined) === opt.value}
+                onChange={() => update(c => {
+                  if (opt.value === undefined) delete c.general.locale;
+                  else c.general.locale = opt.value;
+                })}
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
       <div>
         <h3 className="text-xs font-semibold text-slate-700 mb-1">
           What is sent<HelpHint topic="assistant-prompts" />

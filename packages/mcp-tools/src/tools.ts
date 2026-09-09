@@ -428,6 +428,9 @@ export interface ToolContext {
    *  there's no view to switch. The flag only GATES the card; switching
    *  itself happens in the host after the user approves (see MutationProposal). */
   canNavigate?: boolean;
+  /** Assistant language (Canadian English / French). Optional — hosts that
+   *  omit it get English replies. UI chrome stays English either way. */
+  locale?: 'en-CA' | 'fr-CA';
 }
 
 export type ToolOutcome =

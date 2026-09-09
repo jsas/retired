@@ -570,9 +570,10 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: 'assistant-prompts',
     title: 'What the assistant is sent',
     section: 'Assistant',
-    keywords: ['system prompt', 'persona', 'tool instructions', 'settings', 'override'],
+    keywords: ['system prompt', 'persona', 'tool instructions', 'settings', 'override', 'language', 'locale', 'français', 'french'],
     body: (
       <>
+        <P>Settings → Assistant also picks the assistant’s language: follow the browser, English (Canada), or Français (Canada). The rest of the app stays in English; only the assistant’s replies change. A French browser defaults to français until you pick otherwise. The instruction is added only for French — English is the default and needs no extra line.</P>
         <P>Settings → Assistant controls every piece of the request: the persona, tool instructions, the live program rules, the current-page line, the plan name, the local-model tool catalog and plan digest, and whether tools are advertised at all. Uncheck a piece to drop it from the next message. Edit a prompt to replace the built-in text; blank restores the default.</P>
         <P>Each local model has a catalog default for tools (Qwen3.5 2B and Bonsai 1.7B off; 4B and up on). Force a model On or Off on that page for testing; Auto restores the catalog. Cloud models always use tools unless you uncheck Send tools.</P>
         <P>Small local models follow the last text they see — leave “Persona last” on so a custom voice (even “say only yes”) is not drowned by the tool blurb. Per-chat notes still live on the composer and can be toggled separately.</P>

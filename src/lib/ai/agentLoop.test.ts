@@ -318,6 +318,14 @@ describe('buildSystemPrompt', () => {
     expect(buildSystemPrompt('My Plan')).not.toContain('currently on the');
   });
 
+  it('embeds a locale line for fr-CA and omits it for en-CA or absent', () => {
+    const fr = buildSystemPrompt('My Plan', { locale: 'fr-CA' });
+    expect(fr).toContain("The user's browser locale is fr-CA.");
+    expect(fr).toContain('Answer in that language unless the user writes in English.');
+    expect(buildSystemPrompt('My Plan', { locale: 'en-CA' })).not.toContain('browser locale');
+    expect(buildSystemPrompt('My Plan')).not.toContain('browser locale');
+  });
+
   it('drops tool instructions for chat-only providers', () => {
     const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
     expect(s).not.toContain('set_scenario_value');

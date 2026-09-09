@@ -37,6 +37,7 @@ import { Progress } from '../design/primitives';
 import { assembleSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
 import type { View } from '../lib/viewRoutes';
+import type { Locale } from '../lib/locale';
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
@@ -101,6 +102,8 @@ interface AgentPageProps {
    *  card). Its presence also advertises `canNavigate` to the tools: no prop,
    *  and the card degrades to a shareable #/hash result. */
   onNavigate?: (view: View) => void;
+  /** Assistant language (Canadian English / French). UI chrome stays English. */
+  locale?: Locale;
 }
 
 // ---------------------------------------------------------------------------
@@ -356,7 +359,7 @@ export function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDel
   );
 }
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onCreateSpousePlan, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle, currentView, onNavigate }: AgentPageProps) {
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onCreateSpousePlan, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle, currentView, onNavigate, locale }: AgentPageProps) {
   const settings = useSyncExternalStore(subscribeAiSettings, getAiSettings, getAiSettings);
   const setSettings = (next: AiSettings) => updateAiSettings(() => next);
   // The chat store is MODULE-level (chatStore.ts): a background run keeps
@@ -682,6 +685,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               recordCheckpoint={recordCheckpointOn(activeThread.id)}
               currentView={currentView}
               onNavigate={onNavigate}
+              locale={locale}
               memory={memory}
               memoryScenarioId={memoryScenarioId}
               onOpenScenario={onOpenScenario}
@@ -765,6 +769,7 @@ function buildSystemBody(
   config: AppConfig,
   currentView?: View,
   chatNote?: string,
+  locale?: Locale,
 ): string {
   const send = resolveAiPromptSend(settings.promptSend);
   const toolOverride = toolMode === 'native' ? settings.toolInstructionsNative
@@ -777,6 +782,7 @@ function buildSystemBody(
     basePrompt: settings.systemPromptOverride,
     config,
     currentView,
+    locale,
     toolInstructions: toolOverride,
     chatNote,
   });
@@ -819,15 +825,17 @@ const livePlan: {
   memory: MemoryStore | undefined;
   memoryScenarioId: string | undefined;
   currentView: View | undefined;
+  locale: Locale | undefined;
 } = {
   inputs: null,
   config: null,
   memory: undefined,
   memoryScenarioId: undefined,
   currentView: undefined,
+  locale: undefined,
 };
 
-function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onCreateSpousePlan, patchTurns, patchThread, recordCheckpoint, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate }: {
+function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onCreateSpousePlan, patchTurns, patchThread, recordCheckpoint, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate, locale }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -852,6 +860,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   onSaveScenarioAs?: (name: string) => string;
   currentView?: View;
   onNavigate?: (view: View) => void;
+  locale?: Locale;
 }) {
   const threadId = thread.id;
   const turns = thread.turns as Turn[];
@@ -912,6 +921,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   livePlan.memory = memory;
   livePlan.memoryScenarioId = memoryScenarioId;
   livePlan.currentView = currentView;
+  livePlan.locale = locale;
 
   // Checkpoints live in the chat store (per thread) — read them through the
   // store at tool-execution time so a revert proposal sees the list as it is
@@ -928,6 +938,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     get memory() { return livePlan.memory; },
     get memoryScenarioId() { return livePlan.memoryScenarioId; },
     get currentView() { return livePlan.currentView; },
+    get locale() { return livePlan.locale; },
     scenarioName, scenarioList, activeScenarioId, scenarioInputsById,
     onOpenScenario, onSaveScenarioAs,
     // Advertise the card path only if the host can actually route (see
@@ -952,7 +963,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   // the digest/tools flags that ride beside it) changes. Skip mid-run: a
   // reset would corrupt the in-flight reply.
   const sendForReset = resolveAiPromptSend(settings.promptSend);
-  const systemFingerprint = `${buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote)}|digest:${sendForReset.includePlanDigest}|tools:${sendForReset.sendTools}|mode:${toolMode}`;
+  const systemFingerprint = `${buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale)}|digest:${sendForReset.includePlanDigest}|tools:${sendForReset.sendTools}|mode:${toolMode}`;
   const fingerprintRef = useRef(systemFingerprint);
   useEffect(() => {
     if (fingerprintRef.current === systemFingerprint) return;
@@ -972,7 +983,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
     const send = resolveAiPromptSend(settings.promptSend);
-    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote);
+    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale);
     const planContext = planContextMessage(toolMode, inputs, config, send.includePlanDigest);
     const history = toHistory(turns);
     const full = planContext ? [planContext, ...history] : history;
@@ -1030,7 +1041,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     };
 
     const send = resolveAiPromptSend(settings.promptSend);
-    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote);
+    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale);
 
     // Fit the conversation into the model's context window: when the estimated
     // usage crosses the trigger, the oldest turns are folded away and replaced
