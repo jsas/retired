@@ -846,7 +846,7 @@
         "original",
         "thanks"
       ],
-      "body": "The drawdown engine was originally built on{' '}\n[retirement_drawdown_simulator_canada\n](https://github.com/danielabar/retirement_drawdown_simulator_canada){' '}\nby **danielabar** — thank you to the original author for publishing it. The upstream repository did not carry a LICENSE file when incorporated (checked 2026-08-23); RE: tired's own code is MIT-licensed below."
+      "body": "The drawdown engine was originally built on [retirement_drawdown_simulator_canada](https://github.com/danielabar/retirement_drawdown_simulator_canada) by **danielabar** — thank you to the original author for publishing it. The upstream repository did not carry a LICENSE file when incorporated (checked 2026-08-23); RE: tired's own code is MIT-licensed below."
     },
     "mit-license": {
       "title": "MIT License (full text)",

@@ -44,39 +44,57 @@ function inline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
+function mdBlock(block: string, key: string): ReactNode {
+  const lines = block.split('\n');
+  if (lines.every(l => l.startsWith('- '))) {
+    return (
+      <ul key={key} className="list-disc pl-5 space-y-1 mb-2">
+        {lines.map((l, j) => (
+          <li key={j} className={LI_STYLE}>{inline(l.slice(2), `${key}-${j}`)}</li>
+        ))}
+      </ul>
+    );
+  }
+  if (lines.every(l => /^\d+\. /.test(l))) {
+    return (
+      <ol key={key} className="list-decimal pl-5 space-y-1 mb-2">
+        {lines.map((l, j) => (
+          <li key={j} className={LI_STYLE}>{inline(l.replace(/^\d+\. /, ''), `${key}-${j}`)}</li>
+        ))}
+      </ol>
+    );
+  }
+  return <p key={key} className={P_STYLE}>{inline(block.replace(/\n/g, ' '), key)}</p>;
+}
+
 export function HelpMarkdown({ markdown }: { markdown: string }): ReactNode {
-  const blocks = markdown.replace(/\r\n/g, '\n').trim().split(/\n\n+/);
+  // Pull fenced blocks out first — they contain blank lines (the MIT license)
+  // and must not be split into paragraphs.
+  const src = markdown.replace(/\r\n/g, '\n').trim();
+  const chunks: Array<{ kind: 'fence'; inner: string } | { kind: 'md'; text: string }> = [];
+  const fenceRe = /```[a-z]*\r?\n?([\s\S]*?)```/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = fenceRe.exec(src))) {
+    const before = src.slice(last, m.index).trim();
+    if (before) chunks.push({ kind: 'md', text: before });
+    chunks.push({ kind: 'fence', inner: m[1].replace(/\n$/, '') });
+    last = m.index + m[0].length;
+  }
+  const after = src.slice(last).trim();
+  if (after) chunks.push({ kind: 'md', text: after });
+
   return (
     <>
-      {blocks.map((block, i) => {
-        if (block.startsWith('```')) {
-          const inner = block.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '');
+      {chunks.flatMap((chunk, i) => {
+        if (chunk.kind === 'fence') {
           return (
-            <pre key={i} className="text-[11px] leading-relaxed text-slate-600 bg-slate-50 border border-slate-200 rounded p-3 whitespace-pre-wrap font-mono">
-              {inner}
+            <pre key={`f-${i}`} className="text-[11px] leading-relaxed text-slate-600 bg-slate-50 border border-slate-200 rounded p-3 whitespace-pre-wrap font-mono">
+              {chunk.inner}
             </pre>
           );
         }
-        const lines = block.split('\n');
-        if (lines.every(l => l.startsWith('- '))) {
-          return (
-            <ul key={i} className="list-disc pl-5 space-y-1 mb-2">
-              {lines.map((l, j) => (
-                <li key={j} className={LI_STYLE}>{inline(l.slice(2), `${i}-${j}`)}</li>
-              ))}
-            </ul>
-          );
-        }
-        if (lines.every(l => /^\d+\. /.test(l))) {
-          return (
-            <ol key={i} className="list-decimal pl-5 space-y-1 mb-2">
-              {lines.map((l, j) => (
-                <li key={j} className={LI_STYLE}>{inline(l.replace(/^\d+\. /, ''), `${i}-${j}`)}</li>
-              ))}
-            </ol>
-          );
-        }
-        return <p key={i} className={P_STYLE}>{inline(block.replace(/\n/g, ' '), String(i))}</p>;
+        return chunk.text.split(/\n\n+/).filter(Boolean).map((block, j) => mdBlock(block, `${i}-${j}`));
       })}
     </>
   );
