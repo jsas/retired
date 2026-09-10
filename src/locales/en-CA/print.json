@@ -1,0 +1,18 @@
+{
+  "build": "Build the printout",
+  "lead": "The one-page summary — profile, savings, verdict — is always included. Add any of these sections:",
+  "timeline": "Projection timeline chart",
+  "timelineNote": "Portfolio balance by age with the retirement-age marker.",
+  "monteCarlo": "Monte Carlo fan chart",
+  "monteCarloNote": "Percentile bands (10th–90th) and success rate from a fresh 500-run simulation. Takes a moment to compute.",
+  "milestones": "Major spending milestones & changes",
+  "milestonesNote": "Retirement, CPP/OAS start, RRIF conversion, spending-phase changes and one-time cash events, in age order.",
+  "table": "Detailed year-by-year table",
+  "tableNote": "Every year with balances, withdrawals, tax and benefits — plus the per-year drill-down (withdrawal sources, growth per account, reverse mortgage, events). Prints several pages.",
+  "printSummary": "Print summary",
+  "preparing": "Preparing chart…",
+  "printTitle": "Open the print dialog",
+  "waitingMc": "Waiting for the Monte Carlo simulation…",
+  "simWhenNeeded": "The simulation runs when the chart is needed.",
+  "running500": "Running 500 simulations for the fan chart…"
+}

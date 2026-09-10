@@ -23,6 +23,7 @@ import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { HelpHint } from '../design/primitives';
 import { detectLocale } from '../lib/locale';
+import { useTranslation } from 'react-i18next';
 
 interface SettingsModalProps {
   config: AppConfig;
@@ -86,6 +87,7 @@ const PROVINCE_NAMES: Record<string, string> = {
 };
 
 export function SettingsModal({ config, onSave }: SettingsModalProps) {
+  const { t } = useTranslation('settings');
   const [draft, setDraft] = useState<AppConfig>(() => structuredClone(config));
   const [section, setSection] = useState<Section>('federal');
   const [selectedProvince, setSelectedProvince] = useState<string>('ONT');
@@ -114,14 +116,14 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
 
   const handleSave = () => {
     if (!validateAppConfig(draft)) {
-      setError('Invalid configuration: check that every bracket has a rate (rates = brackets + 1) and all values are numbers.');
+      setError(t('invalid'));
       return;
     }
     onSave(draft);
   };
 
   const handleReset = () => {
-    if (!window.confirm('Reset all settings to the built-in defaults?')) return;
+    if (!window.confirm(t('resetConfirm'))) return;
     const defaults = defaultAppConfig();
     setDraft(structuredClone(defaults));
     setError(null);
@@ -131,8 +133,8 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   // removal is; the reload only fires once the bytes are gone so the app
   // can't boot from the old database.
   const handleEraseAll = async () => {
-    if (!window.confirm('Erase EVERYTHING — all scenarios, engine settings, agent memories, AI chats and model connections — from this browser? This cannot be undone.')) return;
-    if (!window.confirm('Really erase everything? Nothing is kept; the app restarts with factory defaults.')) return;
+    if (!window.confirm(t('eraseConfirm1'))) return;
+    if (!window.confirm(t('eraseConfirm2'))) return;
     try {
       const backend = await AsyncOpfsBackend.open();
       await backend?.clear();
@@ -157,7 +159,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   : 'border-transparent text-slate-400 hover:text-slate-900'
               }`}
             >
-              {s.label}
+              {t(`sections.${s.id}`)}
             </button>
           ))}
         </div>
@@ -167,22 +169,36 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
           {section === 'general' && (
             <div className="space-y-4 max-w-lg">
               <div>
-                <h3 className="text-xs font-semibold text-slate-700 mb-1">Help</h3>
-                <p className="text-xs text-slate-600 leading-snug">
-                  RE: tired projects a Canadian retirement drawdown year by year: growth while you
-                  contribute, then withdrawals across TFSA / taxable / RRSP-RRIF with federal and
-                  provincial tax, CPP, OAS (clawback + GIS) and RRIF minimums. Every input in the
-                  sidebar is documented on the <span className="font-medium">Help</span> page
-                  (top-right <span className="font-medium">?</span> button), and the sections below
-                  let you edit the tax tables and engine assumptions themselves.
-                </p>
-                <p className="text-xs text-slate-600 leading-snug mt-1.5">
-                  All profiles and settings are stored only in this browser's local storage — nothing
-                  is sent to a server. Use the sidebar's Export to back them up.
-                </p>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('language.title')}</h3>
+                <p className="text-xs text-slate-600 leading-snug mb-2">{t('language.lead')}</p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {([
+                    { value: undefined, label: t('language.followBrowser') },
+                    { value: 'en-CA' as const, label: t('language.en') },
+                    { value: 'fr-CA' as const, label: t('language.fr') },
+                  ]).map(opt => (
+                    <label key={opt.label} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="site-locale"
+                        checked={(draft.general.locale ?? undefined) === opt.value}
+                        onChange={() => update(c => {
+                          if (opt.value === undefined) delete c.general.locale;
+                          else c.general.locale = opt.value;
+                        })}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('helpHeading')}</h3>
+                <p className="text-xs text-slate-600 leading-snug">{t('helpBody1')}</p>
+                <p className="text-xs text-slate-600 leading-snug mt-1.5">{t('helpBody2')}</p>
               </div>
               <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">Welcome section</h3>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('welcome')}</h3>
                 <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
@@ -191,17 +207,16 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                     className="mt-0.5"
                   />
                   <span>
-                    Show the welcome section when the site loads
+                    {t('welcomeShow')}
                     <span className="block text-[11px] text-slate-500 mt-0.5">
-                      The getting-started card reappears at the top of the main page on every visit.
-                      Dismissing it still hides it for the rest of the current session.
+                      {t('welcomeHint')}
                     </span>
                   </span>
                 </label>
               </div>
 
               <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">Unsaved changes</h3>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('unsaved')}</h3>
                 <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
@@ -210,10 +225,9 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                     className="mt-0.5"
                   />
                   <span>
-                    Ask before switching away from a scenario with unsaved edits
+                    {t('unsavedAsk')}
                     <span className="block text-[11px] text-slate-500 mt-0.5">
-                      When on, changing scenarios with unsaved edits asks whether to save first —
-                      with a "don't ask again" box that turns this off. Off = switch silently.
+                      {t('unsavedHint')}
                     </span>
                   </span>
                 </label>
@@ -224,25 +238,22 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   Kept out of the draft/save flow — it acts immediately, on the
                   stored data itself. */}
               <div className="border border-rose-200 p-3">
-                <h3 className="mb-1 text-xs font-semibold text-rose-800">Danger zone</h3>
+                <h3 className="mb-1 text-xs font-semibold text-rose-800">{t('danger')}</h3>
                 <p className="mb-2 text-[11.5px] leading-relaxed text-rose-700">
-                  Erase it all: every scenario, engine setting, agent memory, AI chat, model
-                  connection, panel layout and dismissal is permanently deleted from this browser —
-                  including the database file itself — and the app restarts with factory defaults.
-                  Nothing is kept. Export a backup first if you might want any of it back.
+                  {t('dangerBody')}
                 </p>
                 <button
                   onClick={handleEraseAll}
                   className="flex items-center gap-1.5 border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
                 >
-                  <Trash2 size={13} /> Erase everything and reset
+                  <Trash2 size={13} /> {t('erase')}
                 </button>
               </div>
             </div>
           )}
 
           {section === 'assistant' && (
-            <AssistantSettings ai={ai} patchAi={patchAi} config={draft} update={update} />
+            <AssistantSettings ai={ai} patchAi={patchAi} config={draft} />
           )}
 
           {section === 'levers' && (
@@ -597,7 +608,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
             onClick={handleReset}
             className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
           >
-            <RotateCcw size={13} /> Reset to defaults
+            <RotateCcw size={13} /> {t('reset')}
           </button>
           <div className="flex items-center gap-2">
             {error && <span className="text-xs text-rose-700">{error}</span>}
@@ -605,7 +616,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               onClick={handleSave}
               className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
             >
-              <Save size={13} /> Save settings
+              <Save size={13} /> {t('save')}
             </button>
           </div>
         </div>
@@ -626,11 +637,10 @@ const SEND_TOGGLES: Array<{ key: keyof Required<AiPromptSend>; label: string; hi
   { key: 'personaLast', label: 'Persona last', hint: 'Put the persona after the mechanics so a small model honors a custom override.' },
 ];
 
-function AssistantSettings({ ai, patchAi, config, update }: {
+function AssistantSettings({ ai, patchAi, config }: {
   ai: AiSettings;
   patchAi: (mutate: (s: AiSettings) => void) => void;
   config: AppConfig;
-  update: (mutate: (c: AppConfig) => void) => void;
 }) {
   const send = resolveAiPromptSend(ai.promptSend);
   const connection = ai.connections.find(c => c.id === ai.activeConnectionId);
@@ -669,37 +679,6 @@ function AssistantSettings({ ai, patchAi, config, update }: {
 
   return (
     <div className="space-y-5 max-w-2xl">
-      <div>
-        <h3 className="text-xs font-semibold text-slate-700 mb-1">
-          Assistant language<HelpHint topic="assistant-prompts" />
-        </h3>
-        <p className="text-xs text-slate-600 leading-snug mb-2">
-          The app chrome stays English. This only changes the language the assistant
-          writes in. Absent a pick, it follows the browser (French → français).
-          Save settings to apply.
-        </p>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {([
-            { value: undefined, label: 'Follow browser' },
-            { value: 'en-CA' as const, label: 'English (Canada)' },
-            { value: 'fr-CA' as const, label: 'Français (Canada)' },
-          ]).map(opt => (
-            <label key={opt.label} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
-              <input
-                type="radio"
-                name="assistant-locale"
-                checked={(config.general.locale ?? undefined) === opt.value}
-                onChange={() => update(c => {
-                  if (opt.value === undefined) delete c.general.locale;
-                  else c.general.locale = opt.value;
-                })}
-              />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-      </div>
-
       <div>
         <h3 className="text-xs font-semibold text-slate-700 mb-1">
           What is sent<HelpHint topic="assistant-prompts" />

@@ -1,0 +1,13 @@
+{
+  "documentTitle": "RE: tired — Canadian Retirement Planner",
+  "brand": "RE:",
+  "brandTired": "tired",
+  "language": {
+    "switchTo": "Switch language to {{language}}",
+    "en": "English",
+    "fr": "Français"
+  },
+  "dismiss": "Dismiss",
+  "dismissWarning": "Dismiss this warning",
+  "dismissSettingsWarning": "Dismiss settings warning"
+}

@@ -1,5 +1,5 @@
-// Assistant language. The app is Canadian — English and French only.
-// UI chrome stays English; this locale is for the assistant's prose.
+// Site language. The app is Canadian — English and French only.
+// UI chrome, help, print, settings and the assistant all follow this locale.
 export type Locale = 'en-CA' | 'fr-CA';
 
 export const LOCALES: readonly Locale[] = ['en-CA', 'fr-CA'];

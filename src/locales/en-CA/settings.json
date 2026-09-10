@@ -1,0 +1,41 @@
+{
+  "sections": {
+    "general": "General",
+    "assistant": "Assistant",
+    "levers": "Lever Ranges",
+    "federal": "Federal Tax",
+    "provinces": "Provincial Tax",
+    "rrif": "RRIF Rates",
+    "oas": "OAS",
+    "cpp": "CPP",
+    "engine": "Engine",
+    "gains": "Capital Gains",
+    "rdsp": "RDSP",
+    "fhsa": "FHSA"
+  },
+  "language": {
+    "title": "Language",
+    "lead": "The whole site — chrome, help, print, and the assistant — follows this pick. Absent a pick, it follows the browser (French → français). Save settings to apply, or use the header control.",
+    "followBrowser": "Follow browser",
+    "en": "English (Canada)",
+    "fr": "Français (Canada)"
+  },
+  "helpHeading": "Help",
+  "helpBody1": "RE: tired projects a Canadian retirement drawdown year by year: growth while you contribute, then withdrawals across TFSA / taxable / RRSP-RRIF with federal and provincial tax, CPP, OAS (clawback + GIS) and RRIF minimums. Every input in the sidebar is documented on the Help page (top-right ? button), and the sections below let you edit the tax tables and engine assumptions themselves.",
+  "helpBody2": "All profiles and settings are stored only in this browser's local storage — nothing is sent to a server. Use the sidebar's Export to back them up.",
+  "welcome": "Welcome section",
+  "welcomeShow": "Show the welcome section when the site loads",
+  "welcomeHint": "The getting-started card reappears at the top of the main page on every visit. Dismissing it still hides it for the rest of the current session.",
+  "unsaved": "Unsaved changes",
+  "unsavedAsk": "Ask before switching away from a scenario with unsaved edits",
+  "unsavedHint": "When on, changing scenarios with unsaved edits asks whether to save first — with a \"don't ask again\" box that turns this off. Off = switch silently.",
+  "danger": "Danger zone",
+  "dangerBody": "Erase it all: every scenario, engine setting, agent memory, AI chat, model connection, panel layout and dismissal is permanently deleted from this browser — including the database file itself — and the app restarts with factory defaults. Nothing is kept. Export a backup first if you might want any of it back.",
+  "erase": "Erase everything and reset",
+  "invalid": "Invalid configuration: check that every bracket has a rate (rates = brackets + 1) and all values are numbers.",
+  "resetConfirm": "Reset all settings to the built-in defaults?",
+  "eraseConfirm1": "Erase EVERYTHING — all scenarios, engine settings, agent memories, AI chats and model connections — from this browser? This cannot be undone.",
+  "eraseConfirm2": "Really erase everything? Nothing is kept; the app restarts with factory defaults.",
+  "reset": "Reset to defaults",
+  "save": "Save settings"
+}

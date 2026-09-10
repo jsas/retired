@@ -9,11 +9,14 @@
 // wider, remembered), a full-screen sheet on phones. The app works without
 // it — the Assistant button toggles it and it never traps you.
 import { createContext, useCallback, useContext, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from './nav';
 import type { View } from '../../lib/viewRoutes';
 import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { CircleUserRound, Maximize2, Minimize2, Undo2 } from 'lucide-react';
+import { LanguageSwitch } from '../LanguageSwitch';
+import { useAppLocale } from '../../lib/localeContext';
 
 // The grow/shrink arrows follow the Assistant button's own text colour —
 // white on the dark (open) button, black on the white (closed) one.
@@ -70,6 +73,20 @@ export interface VerdictChip {
   age: string;
   label: string;
 }
+
+/** The Tools menu (issue #162): the five analytic surfaces, each its own page.
+ *  Desktop opens them from the header dropdown; the phone menu carries the same
+ *  items flat (a dropdown inside a dropdown would close on the first tap). */
+const TOOLS_MENU_VIEWS: View[] = ['eq', 'optimize', 'montecarlo', 'backtest', 'solver'];
+const TOOLS_MENU_KEYS = ['steering', 'optimizer', 'monteCarlo', 'backtest', 'solver'] as const;
+const MOBILE_MENU_VIEWS: View[] = [
+  'projection', 'math', ...TOOLS_MENU_VIEWS,
+  'scenarios', 'data', 'print', 'settings', 'connections', 'help',
+];
+const MOBILE_MENU_KEYS = [
+  'dashboard', 'projection', ...TOOLS_MENU_KEYS,
+  'plans', 'data', 'print', 'settings', 'connections', 'help',
+] as const;
 
 /** The Tools menu (issue #162): the five analytic surfaces, each its own page.
  *  Desktop opens them from the header dropdown; the phone menu carries the same
@@ -154,48 +171,52 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
     });
   }, [persistDockWidth]);
   const undo = useContext(PlanUndoContext);
+  const { t } = useTranslation('nav');
+  const { locale, setLocale } = useAppLocale();
+  const toolsItems = TOOLS_MENU_VIEWS.map((view, i) => ({ view, label: t(TOOLS_MENU_KEYS[i]) }));
+  const mobileItems = MOBILE_MENU_VIEWS.map((view, i) => ({ view, label: t(MOBILE_MENU_KEYS[i]) }));
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-800">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
         <div className={`mx-auto flex h-12 w-full ${PAGE_MAX} items-center gap-1 px-4`}>
-          <Link view="welcome" className="flex h-6 w-6 shrink-0 items-center justify-center bg-slate-900 text-[10px] font-bold text-white" aria-label="Home — the welcome">
+          <Link view="welcome" className="flex h-6 w-6 shrink-0 items-center justify-center bg-slate-900 text-[10px] font-bold text-white" aria-label={t('home')}>
             RE:
           </Link>
-          <Link view="projection" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">Dashboard</Link>
-          <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Projection</Link>
+          <Link view="projection" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">{t('dashboard')}</Link>
+          <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('projection')}</Link>
 
           {/* The Tools menu (issue #162): the five analytic surfaces, each its
               own page — steered by the same projection timeline they all show. */}
           <div className="hidden md:block">
-            <Dropdown label="Tools">
+            <Dropdown label={t('tools')}>
               <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Ask the plan a different question
+                {t('toolsBlurb')}
               </p>
               <div className="flex flex-col">
-                {TOOLS_MENU_ITEMS.map(t => (
-                  <Link key={t.view} view={t.view} className="px-2 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
-                    {t.label}
+                {toolsItems.map(item => (
+                  <Link key={item.view} view={item.view} className="px-2 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    {item.label}
                   </Link>
                 ))}
               </div>
               <p className="border-t border-slate-100 px-2 pt-1.5 text-[10.5px] text-slate-400">
-                Steering drags · Optimizer compares · Monte Carlo rolls the futures · Backtest replays history · Solver inverts the verdict
+                {t('toolsFoot')}
               </p>
             </Dropdown>
           </div>
 
-          <Link view="scenarios" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Plans</Link>
-          <Link view="data" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Data</Link>
-          <Link view="print" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Print</Link>
-          <Link view="settings" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">Settings</Link>
+          <Link view="scenarios" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('plans')}</Link>
+          <Link view="data" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('data')}</Link>
+          <Link view="print" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('print')}</Link>
+          <Link view="settings" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('settings')}</Link>
 
           {/* Phones: the same named homes collapse into one Menu — the row
               (logo, Menu, Assistant, verdict chip) fits a 375px viewport. */}
           <div className="md:hidden">
-            <Dropdown label="Menu">
+            <Dropdown label={t('menu')}>
               <div className="flex flex-col">
-                {MOBILE_MENU_ITEMS.map(item => (
+                {mobileItems.map(item => (
                   <Link key={item.view} view={item.view} className="px-2 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
                     {item.label}
                   </Link>
@@ -220,14 +241,14 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
                 ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-700'
                 : 'border-slate-300 text-slate-800 hover:border-slate-900'
             }`}
-            title="The assistant — reads your plan, answers questions, shows its work"
+            title={t('assistantTitle')}
           >
-            Assistant
+            {t('assistant')}
             <span
               role="button"
               tabIndex={0}
-              aria-label={fullscreen ? 'Shrink the assistant back to the side rail' : 'Grow the assistant to fullscreen'}
-              title={fullscreen ? 'Shrink' : 'Grow'}
+              aria-label={fullscreen ? t('assistantShrink') : t('assistantGrow')}
+              title={fullscreen ? t('shrink') : t('grow')}
               className={`ml-2 flex items-center border-l pl-2 ${
                 dockOpen
                   ? 'border-white/30 text-white/80 hover:text-white'
@@ -252,8 +273,8 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
               plan's numbers); undo steps back through the saved revisions. */}
           <Link
             view="scenarios"
-            aria-label="Your plan — the Plans page"
-            title="Your plan — switch plans or edit this one's numbers"
+            aria-label={t('yourPlan')}
+            title={t('yourPlanTitle')}
             className="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           >
             <CircleUserRound size={18} />
@@ -262,10 +283,8 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             type="button"
             onClick={undo.onUndo}
             disabled={!undo.canUndo}
-            aria-label="Undo — step back to the previous saved plan"
-            title={undo.canUndo
-              ? 'Undo — step back to the previous saved plan'
-              : 'Nothing to undo — edits save automatically and undo steps through saved plans'}
+            aria-label={t('undo')}
+            title={undo.canUndo ? t('undo') : t('undoIdle')}
             className={`flex h-8 w-8 items-center justify-center transition-colors ${
               undo.canUndo
                 ? 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -276,7 +295,12 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
           </button>
 
           {/* the persistent verdict chip — number and colour carry it; the words live in the tooltip */}
-          <Link view="projection" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label={`Back to the verdict — ${chip.label}`}>
+          <LanguageSwitch
+            locale={locale}
+            onChange={setLocale}
+            className="hidden px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block"
+          />
+          <Link view="projection" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label={t('verdictChip', { label: chip.label })}>
             <span title={chip.label} className="inline-block h-2.5 w-2.5" style={{ backgroundColor: chipDot(chip.tone) }} />
             <span className="num text-[14px] font-bold text-slate-900">{chip.age}</span>
           </Link>
@@ -313,13 +337,13 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
                 : 'hidden'
             } border-l border-slate-200 bg-white`}
             style={dockOpen && !fullscreen ? { ['--dock-w' as string]: `${dockWidth}px` } : undefined}
-            aria-label="Assistant"
+            aria-label={t('assistant')}
           >
             {dockOpen && !fullscreen && (
               <div
                 role="separator"
                 aria-orientation="vertical"
-                aria-label="Resize the assistant"
+                aria-label={t('resizeAssistant')}
                 aria-valuemin={DOCK_MIN_PX}
                 aria-valuemax={DOCK_MAX_PX}
                 aria-valuenow={dockWidth}
@@ -368,10 +392,15 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
       {/* Footer: the demoted links — not nav peers, always one click away. */}
       <footer className="border-t border-slate-200">
         <div className={`mx-auto flex w-full ${PAGE_MAX} items-center gap-4 px-4 py-4 text-[11px] text-slate-400`}>
-          <Link view="help" className="hover:text-slate-600">Help</Link>
-          <Link view="donate" className="hover:text-slate-600">Support this app</Link>
+          <Link view="help" className="hover:text-slate-600">{t('help')}</Link>
+          <Link view="donate" className="hover:text-slate-600">{t('support')}</Link>
+          <LanguageSwitch
+            locale={locale}
+            onChange={setLocale}
+            className="hover:text-slate-600 md:hidden"
+          />
           <span className="flex-1" />
-          <span>Runs entirely in your browser — nothing is sent anywhere.</span>
+          <span>{t('footerPrivacy')}</span>
         </div>
       </footer>
     </div>

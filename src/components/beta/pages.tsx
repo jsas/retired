@@ -10,6 +10,7 @@
 // dashboard draws — so each tool answers its question with the plan's shape
 // always on screen.
 import type { ComponentProps, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { YearlyBreakdown, RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { BetaPage, type VerdictChip } from './BetaPage';
 import { HelpHint } from '../../design/primitives';
@@ -33,6 +34,11 @@ import { PrintOptionsCard } from '../PrintOptionsCard';
 import { DonateCard } from '../DonateCard';
 import { DataPage } from '../DataPage';
 
+function usePageT() {
+  const { t } = useTranslation('pages');
+  return t;
+}
+
 /** The featured projection timeline — one line of money over age with the
  *  three pins that matter (you, start drawing, money runs out). Derived wholly
  *  from the household breakdown so it always matches the numbers beside it.
@@ -50,22 +56,23 @@ export function ProjectStrip({ breakdown, currentAge, retirementAge, edit }: {
     inflationRate: number;
   };
 }) {
+  const { t } = useTranslation('pages');
   const depletion = firstEmptyAge(breakdown);
   const e = edit;
   const baseSpend = e ? baseSpendAtRetirement(e.inputs, e.inflationRate, retirementAge) : undefined;
   return (
     <section>
       <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-        This plan, end to end<HelpHint topic="life-timeline" />
+        {t('thisPlanEndToEnd')}<HelpHint topic="life-timeline" />
       </h3>
       <ProjectionTimeline
-        series={[{ id: 'plan', label: 'portfolio', color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
+        series={[{ id: 'plan', label: t('portfolio'), color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
         pins={[
-          { age: currentAge, label: `you · ${currentAge}`, place: 'below', anchor: 'start', color: INK },
-          { age: retirementAge, label: `start drawing · ${retirementAge}`, color: '#475569',
+          { age: currentAge, label: t('youPin', { age: currentAge }), place: 'below', anchor: 'start', color: INK },
+          { age: retirementAge, label: t('startDrawingPin', { age: retirementAge }), color: '#475569',
             ...(e ? { onDragAge: (age: number) => e.onInputsChange({ ...e.inputs, retirementAge: Math.max(currentAge + 1, Math.min(e.inputs.maxAge - 1, age)) }) } : {}) },
           ...(depletion != null
-            ? [{ age: depletion, label: `money runs out · ${depletion}`, color: RED_DOT }]
+            ? [{ age: depletion, label: t('runsOutPin', { age: depletion }), color: RED_DOT }]
             : []),
         ]}
         {...(e ? {
@@ -99,8 +106,9 @@ export function BetaSchedulePage({ chip, assistant, timeline, ...props }: Compon
   assistant?: ReactNode;
   timeline: ProjectStripProps;
 }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Projection" hint="schedule-columns" chip={chip} assistant={assistant}>
+    <BetaPage title={t('projection')} hint="schedule-columns" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <ScheduleTable {...props} />
@@ -119,8 +127,9 @@ export function BetaSteeringPage({ chip, assistant, eqProps }: {
   timeline?: ProjectStripProps;
   eqProps: ComponentProps<typeof EqPage>;
 }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Steering" hint="levers-ranked" chip={chip} assistant={assistant}>
+    <BetaPage title={t('steering')} hint="levers-ranked" chip={chip} assistant={assistant}>
       {/* No separate ProjectStrip here on purpose: EqPage already features the
           same ProjectionTimeline under its controls (the `projection` prop),
           live-redrawing as you drag — the strip with a second copy under it
@@ -138,12 +147,13 @@ export function BetaOptimizerPage({ chip, assistant, timeline, optimizeProps }: 
   timeline: ProjectStripProps;
   optimizeProps: ComponentProps<typeof StrategyExplorer>;
 }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Optimizer" hint="strategy-explorer" chip={chip} assistant={assistant}>
+    <BetaPage title={t('optimizer')} hint="strategy-explorer" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Named variants, scored<HelpHint topic="strategy-explorer" /></h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('namedVariants')}<HelpHint topic="strategy-explorer" /></h3>
           <StrategyExplorer {...optimizeProps} />
         </section>
       </div>
@@ -157,15 +167,16 @@ export function BetaMonteCarloPage({ chip, assistant, timeline, mcProps }: {
   timeline: ProjectStripProps;
   mcProps: ComponentProps<typeof MonteCarloChart> | null;
 }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Monte Carlo" hint="monte-carlo" chip={chip} assistant={assistant}>
+    <BetaPage title={t('monteCarlo')} hint="monte-carlo" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Across many market futures<HelpHint topic="monte-carlo" /></h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('acrossFutures')}<HelpHint topic="monte-carlo" /></h3>
           {mcProps
             ? <MonteCarloChart {...mcProps} />
-            : <p className="text-[12px] text-slate-500">Monte Carlo needs a volatility assumption — set one above 0% under Markets on the Plans page and the fan appears.</p>}
+            : <p className="text-[12px] text-slate-500">{t('monteCarloNeedsVol')}</p>}
         </section>
       </div>
     </BetaPage>
@@ -178,15 +189,16 @@ export function BetaBacktestPage({ chip, assistant, timeline, backtestProps }: {
   timeline: ProjectStripProps;
   backtestProps: ComponentProps<typeof BacktestPanel> | null;
 }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Backtest" hint="backtest" chip={chip} assistant={assistant}>
+    <BetaPage title={t('backtest')} hint="backtest" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Against history<HelpHint topic="backtest" /></h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('againstHistory')}<HelpHint topic="backtest" /></h3>
           {backtestProps
             ? <BacktestPanel {...backtestProps} />
-            : <p className="text-[12px] text-slate-500">The historical run is computing…</p>}
+            : <p className="text-[12px] text-slate-500">{t('backtestComputing')}</p>}
         </section>
       </div>
     </BetaPage>
@@ -199,12 +211,13 @@ export function BetaSolverPage({ chip, assistant, timeline, solverProps }: {
   timeline: ProjectStripProps;
   solverProps: ComponentProps<typeof SpendingSolver>;
 }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Solver" hint="optimize-spending" chip={chip} assistant={assistant}>
+    <BetaPage title={t('solver')} hint="optimize-spending" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">How much can you safely spend<HelpHint topic="optimize-spending" /></h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('howMuchSpend')}<HelpHint topic="optimize-spending" /></h3>
           <SpendingSolver {...solverProps} />
         </section>
       </div>
@@ -219,16 +232,17 @@ export function BetaPlansPage({ chip, assistant, managerProps, compareProps, det
   compareProps: ComponentProps<typeof CompareCard>;
   detailsProps: ComponentProps<typeof DetailsPage>;
 }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Plans" hint="scenarios" chip={chip} assistant={assistant}>
+    <BetaPage title={t('plans')} hint="scenarios" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ScenarioManager {...managerProps} />
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">This plan<HelpHint topic="scenarios" /></h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('thisPlan')}<HelpHint topic="scenarios" /></h3>
           <DetailsPage {...detailsProps} />
         </section>
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Compare plans<HelpHint topic="compare" /></h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('comparePlans')}<HelpHint topic="compare" /></h3>
           <CompareCard {...compareProps} />
         </section>
       </div>
@@ -237,8 +251,9 @@ export function BetaPlansPage({ chip, assistant, managerProps, compareProps, det
 }
 
 export function BetaDataPage({ chip, assistant, ...props }: ComponentProps<typeof SharingPage> & ComponentProps<typeof DataPage> & { chip: VerdictChip; assistant?: ReactNode }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Data" hint="data-backup-restore" chip={chip} assistant={assistant}>
+    <BetaPage title={t('data')} hint="data-backup-restore" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         {/* share a plan — link/code, in and out */}
         <SharingPage {...props} />
@@ -250,40 +265,45 @@ export function BetaDataPage({ chip, assistant, ...props }: ComponentProps<typeo
 }
 
 export function BetaSettingsPage({ chip, assistant, ...props }: ComponentProps<typeof SettingsModal> & { chip: VerdictChip; assistant?: ReactNode }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Settings" chip={chip} assistant={assistant}>
+    <BetaPage title={t('settings')} chip={chip} assistant={assistant}>
       <div className="pt-6"><SettingsModal {...props} /></div>
     </BetaPage>
   );
 }
 
 export function BetaConnectionsPage({ chip, assistant, ...props }: ComponentProps<typeof ConnectionsPage> & { chip: VerdictChip; assistant?: ReactNode }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Models" hint="assistant-local-vs-online" chip={chip} assistant={assistant}>
+    <BetaPage title={t('models')} hint="assistant-local-vs-online" chip={chip} assistant={assistant}>
       <div className="pt-6"><ConnectionsPage {...props} /></div>
     </BetaPage>
   );
 }
 
 export function BetaHelpPage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Help" chip={chip} assistant={assistant}>
+    <BetaPage title={t('help')} chip={chip} assistant={assistant}>
       <div className="pt-6"><HelpModal /></div>
     </BetaPage>
   );
 }
 
 export function BetaPrintPage({ chip, assistant, ...props }: ComponentProps<typeof PrintOptionsCard> & { chip: VerdictChip; assistant?: ReactNode }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Print & export" hint="print-export" chip={chip} assistant={assistant}>
+    <BetaPage title={t('print')} hint="print-export" chip={chip} assistant={assistant}>
       <div className="pt-6"><PrintOptionsCard {...props} /></div>
     </BetaPage>
   );
 }
 
 export function BetaDonatePage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
+  const t = usePageT();
   return (
-    <BetaPage title="Support this app" chip={chip} assistant={assistant}>
+    <BetaPage title={t('support')} chip={chip} assistant={assistant}>
       <div className="pt-6"><DonateCard /></div>
     </BetaPage>
   );

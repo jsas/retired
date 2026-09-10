@@ -1,0 +1,41 @@
+{
+  "sections": {
+    "general": "Général",
+    "assistant": "Assistant",
+    "levers": "Plages des leviers",
+    "federal": "Impôt fédéral",
+    "provinces": "Impôt provincial",
+    "rrif": "Taux FERR",
+    "oas": "SV",
+    "cpp": "RPC",
+    "engine": "Moteur",
+    "gains": "Gains en capital",
+    "rdsp": "REEI",
+    "fhsa": "CELIAPP"
+  },
+  "language": {
+    "title": "Langue",
+    "lead": "Tout le site — l’interface, l’aide, l’impression et l’assistant — suit ce choix. Sans choix, le navigateur décide (français → français). Enregistrez les paramètres pour appliquer, ou utilisez le contrôle de l’en-tête.",
+    "followBrowser": "Suivre le navigateur",
+    "en": "English (Canada)",
+    "fr": "Français (Canada)"
+  },
+  "helpHeading": "Aide",
+  "helpBody1": "RE: tired projette un décaissement de retraite canadien année par année : croissance pendant que vous cotisez, puis retraits CELI / imposable / REER-FERR avec impôt fédéral et provincial, RPC, SV (récupération + SRG) et minimums FERR. Chaque champ de la barre latérale est documenté sur la page Aide (bouton ? en haut à droite), et les sections ci-dessous vous laissent modifier les tables fiscales et les hypothèses du moteur.",
+  "helpBody2": "Tous les profils et paramètres sont stockés uniquement dans le stockage local de ce navigateur — rien n’est envoyé à un serveur. Utilisez Exporter dans la barre latérale pour en faire une copie.",
+  "welcome": "Section de bienvenue",
+  "welcomeShow": "Afficher la section de bienvenue au chargement du site",
+  "welcomeHint": "La carte de démarrage réapparaît en haut de la page principale à chaque visite. La fermer la cache tout de même pour le reste de la session.",
+  "unsaved": "Modifications non enregistrées",
+  "unsavedAsk": "Demander avant de quitter un scénario avec des modifications non enregistrées",
+  "unsavedHint": "Lorsque c’est activé, changer de scénario avec des modifications non enregistrées demande d’abord d’enregistrer — avec une case « ne plus demander » qui désactive ceci. Désactivé = changement silencieux.",
+  "danger": "Zone dangereuse",
+  "dangerBody": "Tout effacer : chaque scénario, paramètre du moteur, mémoire d’agent, clavardage IA, connexion de modèle, mise en page et fermeture est définitivement supprimé de ce navigateur — y compris le fichier de base de données — et l’appli redémarre avec les valeurs d’usine. Rien n’est conservé. Exportez une copie d’abord si vous pourriez en vouloir une partie.",
+  "erase": "Tout effacer et réinitialiser",
+  "invalid": "Configuration invalide : vérifiez que chaque palier a un taux (taux = paliers + 1) et que toutes les valeurs sont des nombres.",
+  "resetConfirm": "Réinitialiser tous les paramètres aux valeurs intégrées?",
+  "eraseConfirm1": "Effacer TOUT — tous les scénarios, paramètres du moteur, mémoires d’agent, clavardages IA et connexions de modèles — de ce navigateur? Irréversible.",
+  "eraseConfirm2": "Vraiment tout effacer? Rien n’est conservé; l’appli redémarre avec les valeurs d’usine.",
+  "reset": "Réinitialiser aux valeurs par défaut",
+  "save": "Enregistrer les paramètres"
+}

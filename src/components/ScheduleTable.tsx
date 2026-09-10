@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronRight, ChevronDown, Columns3, GripVertical } from 'lucide-react';
 import type { YearlyBreakdown, YearDetail } from '@retired/engine-core/retirementEngine';
 import { prefKV } from '../lib/prefKv';
@@ -62,6 +63,7 @@ function readVisibleCols(): Set<string> {
 // Age and Ending Balance are the row's identity and its bottom line, so they
 // stay on; everything else is a toggle, persisted via prefKV.
 function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (next: Set<string>) => void }) {
+  const { t } = useTranslation('pages');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -95,10 +97,10 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
         type="button"
           onClick={() => setOpen((o) => !o)}
         className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-600 border border-slate-300 hover:border-slate-900 hover:text-slate-900"
-        title="Choose which columns the table shows"
+        title={t('schedule.columnsTitle')}
       >
         <Columns3 size={13} />
-        Columns
+        {t('schedule.columns')}
       </button>
       {open && (
         <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 p-2">
@@ -106,9 +108,9 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
             type="button"
             onClick={reset}
             className="w-full text-left px-2 py-1 text-[11px] font-semibold text-slate-900 hover:bg-slate-50"
-            title="Cycle the topical column sets — money flow, accounts, tax, income"
+            title={t('schedule.resetTitle')}
           >
-            Reset
+            {t('schedule.reset')}
           </button>
           <div className="my-1 border-t border-slate-100" />
           {toggleable.map((c) => (
@@ -121,7 +123,7 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
                   if (on) next.add(c.id); else next.delete(c.id);
                   onChange(next);
                 }}
-                label={<span className="text-[11px] text-slate-700">{c.label}</span>}
+                label={<span className="text-[11px] text-slate-700">{t(`schedule.cols.${c.id}`)}</span>}
               />
             </div>
           ))}
@@ -328,6 +330,7 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
 }
 
 export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, onRetirementAgeChange, primaryBreakdown, spouseBreakdown, spouseAgeOffset = 0 }: ScheduleTableProps) {
+  const { t } = useTranslation('pages');
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const toggle = (age: number) =>
     setExpanded(prev => {
@@ -461,14 +464,14 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
             canDragRetire
               ? <span
                   role="slider"
-                  aria-label={`Start drawing — drag to change (now ${effectiveRetirement})`}
+                  aria-label={t('schedule.dragNow', { age: effectiveRetirement })}
                   aria-valuemin={dragLo} aria-valuemax={dragHi} aria-valuenow={effectiveRetirement}
                   onPointerDown={beginRetireDrag}
-                  title={`Drag to change the retirement age (now ${effectiveRetirement})`}
+                  title={t('schedule.dragTitle', { age: effectiveRetirement })}
                   className="ml-1.5 inline-flex cursor-grab touch-none select-none items-center gap-1 align-middle text-blue-500 active:cursor-grabbing"
                 >
                   <GripVertical size={12} aria-hidden="true" />
-                  <span className="text-[10px] font-semibold">{dragAge != null ? `→ ${dragAge}` : 'drag'}</span>
+                  <span className="text-[10px] font-semibold">{dragAge != null ? `→ ${dragAge}` : t('schedule.drag')}</span>
                 </span>
               : ' 🎯'
           )}
@@ -496,27 +499,27 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
         <table className="w-full text-xs" ref={tableRef}>
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              {anyDetail && <th className="w-6 px-1 py-2" title="Expand a year to see where the money came from" />}
+              {anyDetail && <th className="w-6 px-1 py-2" title={t('schedule.expandTitle')} />}
               {shownColumns.map((c) => (
                 <th
                   key={c.id}
                   className={`${c.align === 'left' ? 'text-left' : 'text-right'} px-3 py-2 font-semibold text-slate-700`}
-                  title={c.title}
+                  title={c.title ? t(`schedule.colTitles.${c.id}`) : undefined}
                 >
-                  {c.label}
+                  {t(`schedule.cols.${c.id}`)}
                 </th>
               ))}
               {hasRdsp && (
-                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.rdsp')}>{t('schedule.cols.rdsp')}</th>
               )}
               {hasFhsa && (
-                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="First Home Savings Account. Contributions are deductible; growth is tax-sheltered. Transfers to the RRSP at retirement (never drawn directly).">FHSA</th>
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.fhsa')}>{t('schedule.cols.fhsa')}</th>
               )}
               {hasRm && (
-                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Home value minus reverse-mortgage loan balance. The loan compounds with interest and draws, eroding equity over time.">Home Equity</th>
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.home')}>{t('schedule.cols.home')}</th>
               )}
               {hasDebts && (
-                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Total outstanding debt balance (mortgage, credit cards, loans, lines of credit). Interest accrues each year; payments are funded from spending.">Debts</th>
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.debts')}>{t('schedule.cols.debts')}</th>
               )}
             </tr>
           </thead>
@@ -525,7 +528,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
               const isRetirement = row.age === effectiveRetirement;
               const isOpen = expanded.has(row.age);
               const personRows = household
-                ? ([['You', primaryByAge.get(row.age)], ['Spouse', spouseByAge.get(row.age)]] as Array<[string, YearlyBreakdown | undefined]>)
+                ? ([[t('schedule.you'), primaryByAge.get(row.age)], [t('schedule.spouse'), spouseByAge.get(row.age)]] as Array<[string, YearlyBreakdown | undefined]>)
                     .filter((x): x is [string, YearlyBreakdown] => !!x[1]?.detail)
                 : [];
               const canExpand = household ? personRows.length > 0 : !!row.detail;
@@ -536,7 +539,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
                     data-age={row.age}
                     className={`${rowBg} ${isRetirement ? 'border-t-2 border-blue-500' : ''} ${canExpand ? 'cursor-pointer hover:bg-blue-50/40' : ''}`}
                     onClick={canExpand ? () => toggle(row.age) : undefined}
-                    title={canExpand ? (isOpen ? 'Collapse year detail' : 'Expand year detail') : undefined}
+                    title={canExpand ? (isOpen ? t('schedule.collapseYear') : t('schedule.expandYear')) : undefined}
                   >
                     {anyDetail && (
                       <td className="px-1 py-1.5 text-slate-400">
@@ -577,7 +580,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
                             {personRows.map(([label, personRow]) => (
                               <div key={label}>
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700 mb-1.5">
-                                  {label}{personRow.age !== row.age ? ` (age ${personRow.age})` : ''}
+                                  {label}{personRow.age !== row.age ? t('schedule.ageOf', { age: personRow.age }) : ''}
                                 </div>
                                 <YearDetailPanel detail={personRow.detail!} row={personRow} />
                               </div>
@@ -596,11 +599,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
         </table>
       </div>
       <p className="px-3 py-2 text-[10px] text-slate-400 border-t border-slate-100">
-        Click a year to expand its inner workings — withdrawal sources, growth, tax, benefits and reverse
-        mortgage.{canDragRetire && ' Drag the blue "start drawing" row up or down to move the retirement age.'} Amounts
-        are in nominal (future) dollars of each year: the spending target and contributions
-        grow with inflation, while balances, gains and benefits are the actual dollars that year. CPP/OAS are
-        shown at 2026 values unless "Index tax tables, OAS and CPP" is on in Settings → Engine.
+        {t('schedule.foot')}{canDragRetire && t('schedule.footDrag')}{t('schedule.footAmounts')}
       </p>
     </div>
   );

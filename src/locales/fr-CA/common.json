@@ -1,0 +1,13 @@
+{
+  "documentTitle": "RE: tired — Planificateur de retraite canadien",
+  "brand": "RE:",
+  "brandTired": "tired",
+  "language": {
+    "switchTo": "Passer la langue à {{language}}",
+    "en": "English",
+    "fr": "Français"
+  },
+  "dismiss": "Fermer",
+  "dismissWarning": "Fermer cet avertissement",
+  "dismissSettingsWarning": "Fermer l’avertissement des paramètres"
+}

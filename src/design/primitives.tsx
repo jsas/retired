@@ -5,20 +5,22 @@
  * The living reference is StyleGuide.tsx; the prose is STYLEGUIDE.md.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from './tokens';
 import { helpTopic } from '../help/topics';
 
 /* ── VerdictHero ──────────────────────────────────────────────────────────
    The answer, first, in plain English. One uppercase eyebrow, one sentence,
    one supporting line. Nothing else competes with it on the page. */
-export function VerdictHero({ eyebrow = 'The verdict', verdict, sub }: {
+export function VerdictHero({ eyebrow, verdict, sub }: {
   eyebrow?: ReactNode;
   verdict: ReactNode;
   sub?: ReactNode;
 }) {
+  const { t } = useTranslation('help');
   return (
     <section className="border-b border-slate-200 pb-6 pt-8 md:pt-10">
-      <p className={cls.sectionLabel}>{eyebrow}</p>
+      <p className={cls.sectionLabel}>{eyebrow ?? t('verdict')}</p>
       <h1 className="num mt-1.5 text-[24px] font-semibold leading-snug text-slate-900 md:text-[30px]">
         {verdict}
       </h1>
@@ -41,6 +43,7 @@ export function HelpHintPopup({ topic, place = 'bottom' }: {
   topic: { id: string; title: string; body: ReactNode };
   place?: 'bottom' | 'top';
 }) {
+  const { t } = useTranslation('help');
   return (
     <span
       role="dialog"
@@ -55,7 +58,7 @@ export function HelpHintPopup({ topic, place = 'bottom' }: {
         href={`#/help?topic=${topic.id}`}
         className="mt-2 inline-block text-[11px] font-medium text-blue-700 hover:underline"
       >
-        More in Help →
+        {t('moreInHelp')}
       </a>
     </span>
   );
