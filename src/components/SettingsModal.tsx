@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Plus, Trash2, RotateCcw, Save } from 'lucide-react';
 import {
   type AppConfig,
@@ -15,14 +15,13 @@ import {
   type AiPromptSend, type AiSettings,
 } from '../lib/aiSettings';
 import {
-  assembleSystemPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_TOOL_INSTRUCTIONS_NATIVE,
-  DEFAULT_TOOL_INSTRUCTIONS_PROMPT, DEFAULT_TOOL_INSTRUCTIONS_OFF,
+  assembleSystemPrompt, defaultSystemPromptFor, defaultToolInstructionsFor,
 } from '../lib/ai/agentLoop';
 import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } from '../lib/rangePrefs';
 import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { HelpHint } from '../design/primitives';
-import { detectLocale } from '../lib/locale';
+import { useAppLocale } from '../lib/localeContext';
 import { useTranslation } from 'react-i18next';
 
 interface SettingsModalProps {
@@ -89,6 +88,18 @@ const PROVINCE_NAMES: Record<string, string> = {
 export function SettingsModal({ config, onSave }: SettingsModalProps) {
   const { t } = useTranslation('settings');
   const [draft, setDraft] = useState<AppConfig>(() => structuredClone(config));
+  // The header language switch writes live config immediately; this page's
+  // draft is a clone from mount. Keep the draft locale in step so the General
+  // radios and the Assistant default prompts don't stay on the previous language.
+  useEffect(() => {
+    setDraft(prev => {
+      if (prev.general.locale === config.general.locale) return prev;
+      const next = structuredClone(prev);
+      if (config.general.locale === undefined) delete next.general.locale;
+      else next.general.locale = config.general.locale;
+      return next;
+    });
+  }, [config.general.locale]);
   const [section, setSection] = useState<Section>('federal');
   const [selectedProvince, setSelectedProvince] = useState<string>('ONT');
   const [error, setError] = useState<string | null>(null);
@@ -597,7 +608,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
 }
 
 const SEND_TOGGLE_KEYS: Array<keyof Required<AiPromptSend>> = [
-  'includePersona', 'includePageLine', 'includeToolInstructions', 'includePromptCatalog',
+  'includePersona', 'includePageLine', 'includeLocale', 'includeToolInstructions', 'includePromptCatalog',
   'includeProgramRules', 'includeScenarioName', 'includePlanDigest', 'includeChatNote',
   'sendTools', 'personaLast',
 ];
@@ -608,6 +619,10 @@ function AssistantSettings({ ai, patchAi, config }: {
   config: AppConfig;
 }) {
   const { t } = useTranslation('settings');
+  // Live page language — not the Settings draft. The header switch updates
+  // i18n + config immediately; the draft clone from mount would otherwise keep
+  // showing French defaults after the chrome had already flipped to English.
+  const { locale } = useAppLocale();
   const send = resolveAiPromptSend(ai.promptSend);
   const connection = ai.connections.find(c => c.id === ai.activeConnectionId);
   const isLocal = connection != null && isLocalProvider(connection.provider);
@@ -633,7 +648,7 @@ function AssistantSettings({ ai, patchAi, config }: {
     send,
     basePrompt: ai.systemPromptOverride,
     config,
-    locale: config.general.locale ?? detectLocale(),
+    locale,
     toolInstructions: toolOverride,
   });
   const setSend = (key: keyof Required<AiPromptSend>, value: boolean) => {
@@ -732,28 +747,28 @@ function AssistantSettings({ ai, patchAi, config }: {
         title={t('assistant.personaTitle')}
         hint={t('assistant.personaHint')}
         value={ai.systemPromptOverride ?? ''}
-        fallback={DEFAULT_SYSTEM_PROMPT}
+        fallback={defaultSystemPromptFor(locale)}
         onChange={text => patchAi(s => { s.systemPromptOverride = text || undefined; })}
       />
       <PromptEditor
         title={t('assistant.toolNativeTitle')}
         hint={t('assistant.toolNativeHint')}
         value={ai.toolInstructionsNative ?? ''}
-        fallback={DEFAULT_TOOL_INSTRUCTIONS_NATIVE}
+        fallback={defaultToolInstructionsFor('native', locale)}
         onChange={text => patchAi(s => { s.toolInstructionsNative = text || undefined; })}
       />
       <PromptEditor
         title={t('assistant.toolPromptTitle')}
         hint={t('assistant.toolPromptHint')}
         value={ai.toolInstructionsPrompt ?? ''}
-        fallback={DEFAULT_TOOL_INSTRUCTIONS_PROMPT}
+        fallback={defaultToolInstructionsFor('prompt', locale)}
         onChange={text => patchAi(s => { s.toolInstructionsPrompt = text || undefined; })}
       />
       <PromptEditor
         title={t('assistant.toolOffTitle')}
         hint={t('assistant.toolOffHint')}
         value={ai.toolInstructionsOff ?? ''}
-        fallback={DEFAULT_TOOL_INSTRUCTIONS_OFF}
+        fallback={defaultToolInstructionsFor('off', locale)}
         onChange={text => patchAi(s => { s.toolInstructionsOff = text || undefined; })}
       />
     </div>

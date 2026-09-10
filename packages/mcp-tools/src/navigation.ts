@@ -12,9 +12,10 @@
 // beta chrome shows (Dashboard, the Tools menu, Plans, Data).
 // Issue #162 unfurled the analytics surfaces into the Tools menu — Steering,
 // Optimizer, Monte Carlo, Backtest and the new Solver are each their own page
-// again. Merged legacy routes fold (export/sharing → Data; compare/details →
-// Plans); they keep their legacy view ids for back-compat routing, carry
-// `foldedInto`, and hide from search/sitemap/proposals.
+// again. Compare later joined that menu (its own page at #/compare). Merged
+// legacy routes still fold (export/sharing → Data; details → Plans); they keep
+// their legacy view ids for back-compat routing, carry `foldedInto`, and hide
+// from search/sitemap/proposals.
 
 /** One navigable page (view) in the SPA. `viewId` must be importable by
  *  host-agnostic packages without depending on the app, so it lives here. */
@@ -28,6 +29,7 @@ export type View =
   | 'montecarlo'
   | 'backtest'
   | 'solver'
+  | 'compare'
   | 'scenarios'
   | 'data'
   | 'print'
@@ -44,7 +46,6 @@ export type View =
   // Legacy stable-skin pages whose content merged into a beta home. On the
   // beta skin these routes land on the page named in `foldedInto`; they stay
   // routable for existing deep links.
-  | 'compare'
   | 'export'
   | 'sharing'
   // Old Profiles URL (#/scenarios) — the page now lives at #/plan.
@@ -134,11 +135,18 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     keywords: ['solver', 'solve', 'how much can i spend', 'maximum spending', 'safe withdrawal', 'sustainable', 'target success rate', 'spend freely'],
   },
   {
+    viewId: 'compare',
+    route: 'compare',
+    title: 'Compare plans',
+    description: 'Side-by-side outcomes across all saved plans — each scored as a household when it has a spouse, with a compare-only toggle to hide the spouse on this page.',
+    keywords: ['compare', 'side-by-side', 'which plan', 'vs', 'household', 'spouse', 'partner', 'compare plans'],
+  },
+  {
     viewId: 'scenarios',
     route: 'plan',
     title: 'Plans',
-    description: 'Your saved plans and the numbers behind the current one: switch, rename, duplicate, roll back — then edit every input (accounts, income, benefits, spending, markets) in one scroll, and compare plans side by side.',
-    keywords: ['plans', 'plan', 'profiles', 'scenarios', 'saved plans', 'manager', 'duplicate', 'rename', 'delete', 'compare', 'side-by-side', 'which plan', 'revisions', 'tfsa room', 'rrsp room', 'contribution room', 'caps', 'balances', 'accounts', 'contributions', 'income', 'benefits', 'cpp', 'oas', 'spending', 'spouse', 'debts', 'loan', 'reverse mortgage', 'volatility', 'returns', 'market hypotheses', 'inputs', 'edit', 'change my numbers', 'the details', 'details'],
+    description: 'Your saved plans and the numbers behind the current one: switch, rename, duplicate, roll back — then edit every input (accounts, income, benefits, spending, markets) in one scroll.',
+    keywords: ['plans', 'plan', 'profiles', 'scenarios', 'saved plans', 'manager', 'duplicate', 'rename', 'delete', 'revisions', 'tfsa room', 'rrsp room', 'contribution room', 'caps', 'balances', 'accounts', 'contributions', 'income', 'benefits', 'cpp', 'oas', 'spending', 'spouse', 'debts', 'loan', 'reverse mortgage', 'volatility', 'returns', 'market hypotheses', 'inputs', 'edit', 'change my numbers', 'the details', 'details'],
   },
   {
     viewId: 'data',
@@ -206,15 +214,8 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   },
   // ── Legacy pages still folded on beta ───────────────────────────────────
   // (issue #162 unfurled optimize/montecarlo/backtest into the Tools menu;
-  // Details and the old Profiles URL now live on Plans.)
-  {
-    viewId: 'compare',
-    route: 'compare',
-    title: 'Compare',
-    description: 'Side-by-side outcomes across all saved plans.',
-    keywords: ['compare', 'side-by-side', 'which plan', 'vs'],
-    foldedInto: 'scenarios',
-  },
+  // Compare later joined that menu as its own page. Details and the old
+  // Profiles URL still live on Plans.)
   {
     viewId: 'legacyScenarios',
     route: 'scenarios',

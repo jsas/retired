@@ -167,7 +167,7 @@
     "on": "On",
     "off": "Off",
     "personaTitle": "Persona (all chats)",
-    "personaHint": "Replaces the built-in planner voice when non-empty. Leave blank to use the default.",
+    "personaHint": "Replaces the built-in planner voice when non-empty. Leave blank to use the default for the current page language.",
     "toolNativeTitle": "Tool instructions — native (cloud)",
     "toolNativeHint": "How a function-calling model should use the tools. Sent only when Tool instructions is on and the model is cloud.",
     "toolPromptTitle": "Tool instructions — local (prompt protocol)",
@@ -180,6 +180,7 @@
     "send": {
       "includePersona": { "label": "Persona", "hint": "The base voice (built-in or your override)." },
       "includePageLine": { "label": "Current page", "hint": "One line naming the page you are on." },
+      "includeLocale": { "label": "Page language", "hint": "Tells the model to think and answer in the site language (en-CA / fr-CA)." },
       "includeToolInstructions": { "label": "Tool instructions", "hint": "How to use tools / what to do when tools are off." },
       "includePromptCatalog": { "label": "Tool catalog (local)", "hint": "The TOOL_CALL: list of every tool. Local models only." },
       "includeProgramRules": { "label": "Program rules", "hint": "Live CPP/OAS/GIS/RRIF/limit figures from engine settings." },

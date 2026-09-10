@@ -6,7 +6,7 @@ import { BetaPage, PlanUndoContext } from './components/beta/BetaPage';
 import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/beta/LandingPage';
 import {
   BetaSchedulePage, BetaSteeringPage, BetaOptimizerPage, BetaMonteCarloPage,
-  BetaBacktestPage, BetaSolverPage, BetaPlansPage, BetaDataPage,
+  BetaBacktestPage, BetaSolverPage, BetaComparePage, BetaPlansPage, BetaDataPage,
   BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
   BetaPrintPage, BetaDonatePage,
 } from './components/beta/pages';
@@ -132,7 +132,7 @@ function App() {
     const route = hashForView(view);
     const current = window.location.hash;
     const paramMatch = current.match(/\?([a-z]+=[a-z0-9-]+)$/);
-    const onPlans = view === 'scenarios' || view === 'details' || view === 'compare' || view === 'legacyScenarios';
+    const onPlans = view === 'scenarios' || view === 'details' || view === 'legacyScenarios';
     const param = paramMatch && (
       (onPlans && paramMatch[1].startsWith('section='))
       || (view === 'help' && paramMatch[1].startsWith('topic='))
@@ -889,8 +889,9 @@ function App() {
             spouseAgeOffset={spouseAgeOffset}
           />
         );
-      // The Tools menu (issue #162): five surfaces, five pages. Each features
-      // the projection timeline (Steering through EqPage's own strip).
+      // The Tools menu (issue #162, later Compare): each analytic surface is
+      // its own page. Most feature the projection timeline; Compare draws
+      // every saved plan on one chart instead.
       case 'eq':
         return (
           <BetaSteeringPage chip={chip} assistant={assistantDock}
@@ -929,9 +930,14 @@ function App() {
             backtestProps={backtestResult ? { result: backtestResult } : null}
           />
         );
+      case 'compare':
+        return (
+          <BetaComparePage chip={chip} assistant={assistantDock}
+            compareProps={{ scenarios, activeScenarioId, config }}
+          />
+        );
       case 'scenarios':
       case 'details': // legacy — details now live under Plans
-      case 'compare': // legacy — compare folds into Plans
       case 'legacyScenarios': // legacy #/scenarios URL
         return (
           <BetaPlansPage chip={chip} assistant={assistantDock}
@@ -945,7 +951,6 @@ function App() {
                 setHasUnsavedChanges(false);
               },
             }}
-            compareProps={{ scenarios, activeScenarioId, config }}
             detailsProps={{
               inputs, onChange: handleInputsChange, section: detailsSection,
               provinceCodes: Object.keys(config.provinces).sort(),

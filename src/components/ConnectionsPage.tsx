@@ -38,6 +38,7 @@ import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider
 import { deleteBonsaiModel, isBonsaiModelCached } from '../lib/ai/bonsaiProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 import { Progress } from '../design/primitives';
+import { localizeLoadProgress } from '../lib/ai/loadProgress';
 import {
   activeCatalogKey, pickModel, toggleFavorite, useModelCatalog,
   type ModelCatalogEntry,
@@ -415,7 +416,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
         <div className="mt-2 max-w-md">
           <Progress pct={progress.progress * 100} className="h-2" />
           <div className="flex items-center justify-between mt-1">
-            <span className="text-[10px] text-slate-500">{progress.text}</span>
+            <span className="text-[10px] text-slate-500">{localizeLoadProgress(progress.text, t)}</span>
             <button
               onClick={() => abortRef.current?.abort()}
               className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-rose-700"

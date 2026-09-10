@@ -80,4 +80,21 @@ describe('PrintSummary (f7 tokens)', () => {
     expect(html).toContain('Detailed year-by-year');
     expect(html).toContain('Withdrawn');
   });
+
+  it('the sheet follows the site language', async () => {
+    const { setAppLanguage } = await import('../lib/i18n');
+    await setAppLanguage('fr-CA');
+    try {
+      const html = render();
+      expect(html).toContain('Résumé du plan de retraite');
+      expect(html).toContain('Verdict');
+      expect(html).toContain('Profil');
+      expect(html).toContain('Épargne');
+      expect(html).toContain('Jalons et changements de dépenses importants');
+      expect(html).not.toContain('Retirement Plan Summary');
+      expect(html).not.toContain('Major spending milestones');
+    } finally {
+      await setAppLanguage('en-CA');
+    }
+  });
 });

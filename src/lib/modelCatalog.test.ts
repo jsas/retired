@@ -201,7 +201,9 @@ describe('catalogBucket / favorites / chatPickerEntries', () => {
     const rec = entries.find(e => e.modelId === DEFAULT_CHAT_LOCAL_ID)!;
     const other = entries.find(e => e.local && e.modelId !== DEFAULT_CHAT_LOCAL_ID)!;
     const empty: import('../lib/aiSettings').AiSettings = { connections: [], activeConnectionId: null, prompts: [] };
+    // Suggested, not selected — activeCatalogKey stays null until pickModel.
     expect(chatPickerEntries(entries, empty).map(e => e.key)).toEqual([rec.key]);
+    expect(activeCatalogKey(empty)).toBeNull();
     const shortlisted = { ...empty, favoriteModels: [other.key] };
     expect(chatPickerEntries(entries, shortlisted).map(e => e.key)).toEqual([other.key]);
   });

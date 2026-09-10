@@ -53,7 +53,7 @@ describe('rankPages', () => {
     expect(rankPages('backup')[0]?.viewId).toBe('data');
     expect(rankPages('tax tables')[0]?.viewId).toBe('settings');
     expect(rankPages('print')[0]?.viewId).toBe('print');
-    expect(rankPages('compare')[0]?.viewId).toBe('scenarios');
+    expect(rankPages('compare')[0]?.viewId).toBe('compare');
     expect(rankPages('schedule')[0]?.viewId).toBe('math');
     expect(rankPages('projection')[0]?.viewId).toBe('math');
   });
@@ -61,21 +61,21 @@ describe('rankPages', () => {
   it('searches only the reachable pages — folded legacy views never surface', () => {
     // Only the truly-merged legacy names fold now; the Tools surfaces are real
     // pages and DO surface for their own words.
-    for (const q of ['export', 'sharing', 'compare', 'details']) {
+    for (const q of ['export', 'sharing', 'details']) {
       const ids = rankPages(q).map((e) => e.viewId);
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('export');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('sharing');
-      expect(ids, `query "${q}" surfaced a folded page`).not.toContain('compare');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('details');
     }
+    expect(rankPages('compare').map((e) => e.viewId)).toContain('compare');
   });
 
   it('hoists the current page first so "already here" is the first thing read', () => {
     const ranked = rankPages('compare', 'eq');
-    expect(ranked[0]?.viewId).toBe('scenarios');
+    expect(ranked[0]?.viewId).toBe('compare');
     // With the user on the destination itself, it leads.
-    const here = rankPages('compare', 'scenarios');
-    expect(here[0]?.viewId).toBe('scenarios');
+    const here = rankPages('compare', 'compare');
+    expect(here[0]?.viewId).toBe('compare');
     // A folded currentView canonicalizes for the hoist (on #/export means on
     // Data, and a Data search result is "already here").
     const folded = rankPages('export', 'export');
@@ -92,7 +92,7 @@ describe('rankPages', () => {
 describe('canonicalView / pageTitleLine', () => {
   it('maps folded views to their destination, identity otherwise', () => {
     expect(canonicalView('sharing')).toBe('data');
-    expect(canonicalView('compare')).toBe('scenarios');
+    expect(canonicalView('compare')).toBe('compare');
     expect(canonicalView('details')).toBe('scenarios');
     // Issue #162 unfurled the Tools surfaces — they are destinations now.
     expect(canonicalView('montecarlo')).toBe('montecarlo');
@@ -111,10 +111,11 @@ describe('canonicalView / pageTitleLine', () => {
     expect(pageTitleLine('montecarlo')).toBe('Monte Carlo');
     expect(pageTitleLine('backtest')).toBe('Backtest');
     expect(pageTitleLine('solver')).toBe('Solver');
+    expect(pageTitleLine('compare')).toBe('Compare plans');
     expect(pageTitleLine('scenarios')).toBe('Plans');
     expect(pageTitleLine('data')).toBe('Data');
-    // A legacy view's line is the page the user actually sees.
-    expect(pageTitleLine('compare')).toBe('Plans');
+    // A folded legacy view's line is the page the user actually sees.
+    expect(pageTitleLine('details')).toBe('Plans');
   });
 
   it('titles are article-safe (no leading The/An/A — "on the X page" reads right)', () => {
@@ -141,11 +142,11 @@ describe('sitemap artifact serialization', () => {
       expect(p.url).toBe(`${PAGES_ORIGIN}/${p.route}`);
       expect(p.title.length).toBeGreaterThan(0);
     }
-    // Folded legacy views (compare/export/sharing) and beta-only chrome never
-    // appear; the Tools surfaces (montecarlo et al.) do — issue #162.
+    // Folded legacy views (export/sharing/details) and beta-only chrome never
+    // appear; the Tools surfaces (montecarlo, compare, …) do.
     expect(views).toContain('montecarlo');
     expect(views).toContain('solver');
-    expect(views).not.toContain('compare');
+    expect(views).toContain('compare');
     expect(views).not.toContain('export');
     expect(views).not.toContain('styleguide');
   });

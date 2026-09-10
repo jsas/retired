@@ -16,6 +16,20 @@ describe('ProjectionTimeline', () => {
     expect(html).toContain('Retire Together');
     expect(html).toContain('Pierre');
     expect(html.match(/<path/g)?.length).toBe(2);
+    // Legend is a button per series so a hidden line still has a click target.
+    expect((html.match(/<button/g) ?? []).length).toBe(2);
+  });
+
+  it('a parent-owned hiddenIds set hides the line but keeps the legend click target', () => {
+    const html = renderToStaticMarkup(
+      createElement(ProjectionTimeline, { series, hiddenIds: new Set(['b']) }),
+    );
+    expect(html).toContain('Retire Together');
+    expect(html).toContain('Pierre');
+    // One remaining series fills its area, so there are two <path>s (area +
+    // line). Count the stroke-only line so the hide is what we assert.
+    expect((html.match(/fill="none"/g) ?? []).length).toBe(1);
+    expect((html.match(/<button/g) ?? []).length).toBe(2);
   });
 
   it('renders overlay lines (spend, market) with their own legend entries', () => {

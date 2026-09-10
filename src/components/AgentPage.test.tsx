@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ModelPickerSelect, DockChatPicker } from './AgentPage';
+import { ModelPickerSelect, DockChatPicker, precedingUserTurnId } from './AgentPage';
 import { startRun, endRun, resetRunsForTests } from '../lib/ai/chatRuns';
 import { newThread } from '../lib/ai/chatStore';
 import { buildModelCatalog } from '../lib/modelCatalog';
@@ -20,6 +20,22 @@ describe('ModelPickerSelect', () => {
     expect(html).toContain('Qwen3.5 4B');
     expect(html).toContain('__load__');
     expect(html).toContain('More models');
+    // Nothing is connected yet — don't let the browser fake-select the first model.
+    expect(html).toContain('Choose a model');
+    expect(html).toMatch(/<option[^>]*value=""[^>]*>Choose a model/);
+  });
+
+  it('hides the placeholder once a model is actually connected', () => {
+    const html = renderToStaticMarkup(
+      <ModelPickerSelect
+        entries={localOnly}
+        activeKey={`local:${localOnly[0]!.modelId}`}
+        onPick={noop}
+        onLoadModel={noop}
+      />,
+    );
+    expect(html).not.toContain('Choose a model');
+    expect(html).not.toMatch(/<option[^>]*value="">/);
   });
 
   it('lists every ready connection’s models alongside the locals', () => {
@@ -81,5 +97,28 @@ describe('DockChatPicker run spinners', () => {
     // rendered, and the trigger row is for the QUIET chat.
     const spins = html.match(/animate-spin/g) ?? [];
     expect(spins.length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('precedingUserTurnId', () => {
+  const turns = [
+    { id: 'u1', role: 'user' as const },
+    { id: 'a1', role: 'assistant' as const },
+    { id: 'u2', role: 'user' as const },
+    { id: 'a2', role: 'assistant' as const },
+  ];
+
+  it('returns the user turn immediately before an assistant reply', () => {
+    expect(precedingUserTurnId(turns, 'a1')).toBe('u1');
+    expect(precedingUserTurnId(turns, 'a2')).toBe('u2');
+  });
+
+  it('returns the user turn itself (trailing generate)', () => {
+    expect(precedingUserTurnId(turns, 'u2')).toBe('u2');
+  });
+
+  it('returns null when there is no preceding user turn', () => {
+    expect(precedingUserTurnId([{ id: 'a0', role: 'assistant' }], 'a0')).toBeNull();
+    expect(precedingUserTurnId(turns, 'missing')).toBeNull();
   });
 });

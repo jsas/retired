@@ -54,13 +54,14 @@ describe('BetaPage assistant dock', () => {
     expect(html).not.toContain('>Profiles<');
   });
 
-  it('the Tools menu carries all five analytic surfaces', () => {
-    // Issue #162: Steering, Optimizer, Monte Carlo, Backtest, Solver — the
-    // dropdown's item list is the contract the pages hang off. (The Dropdown
-    // renders its children only when open, so the static markup proves the
-    // trigger; the item list is proven against the exported source of truth.)
-    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['eq', 'optimize', 'montecarlo', 'backtest', 'solver']);
-    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver']);
+  it('the Tools menu carries the analytic surfaces including Compare', () => {
+    // Issue #162: Steering, Optimizer, Monte Carlo, Backtest, Solver — Compare
+    // later joined that menu. The dropdown's item list is the contract the
+    // pages hang off. (The Dropdown renders its children only when open, so
+    // the static markup proves the trigger; the item list is proven against
+    // the exported source of truth.)
+    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Compare plans']);
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
@@ -87,7 +88,7 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toContain('Menu');
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    for (const label of ['Dashboard', 'Projection', 'Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Plans', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
+    for (const label of ['Dashboard', 'Projection', 'Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Compare plans', 'Plans', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
       expect(labels, label).toContain(label);
     }
     expect(labels).not.toContain('Details');

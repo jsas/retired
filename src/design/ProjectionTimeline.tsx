@@ -126,6 +126,7 @@ export function ProjectionTimeline({
   pins = [],
   marker,
   onToggleSeries,
+  hiddenIds,
   // Interactive layers (all optional — read-only surfaces pass none):
   spend,
   events = [],
@@ -144,6 +145,10 @@ export function ProjectionTimeline({
   marker?: { age: number; style?: 'line' | 'dot' };
   /** Legend entries toggle when provided. */
   onToggleSeries?: (id: string) => void;
+  /** When set, this is the source of truth for which lines are off — the
+   *  parent owns the Set (Compare's table follows the same one). Omit to
+   *  let the timeline keep its own hide state (dashboard, steering). */
+  hiddenIds?: ReadonlySet<string>;
   /** The spend strip: the plan's nominal spending target by age. Renders the
    *  green spend line + the draggable base-spending handle at retirement. */
   spend?: { points: { age: number; value: number }[]; baseSpend?: number };
@@ -159,10 +164,17 @@ export function ProjectionTimeline({
   onSpendChange?: (todayDollars: number) => void;
 }) {
   const { t } = useTranslation('pages');
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [internalHidden, setInternalHidden] = useState<Set<string>>(new Set());
+  const hidden = hiddenIds ?? internalHidden;
   const isOn = (id: string) => !hidden.has(id);
   const toggle = (id: string) => {
-    setHidden(prev => {
+    if (hiddenIds) {
+      // Controlled: the parent flips the Set; flipping a local copy too would
+      // desync the legend from whatever else (Compare's table) reads it.
+      onToggleSeries?.(id);
+      return;
+    }
+    setInternalHidden(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -172,8 +184,18 @@ export function ProjectionTimeline({
 
   const visibleSeries = series.filter(s => s.points.length > 0 && isOn(s.id));
   const visibleOverlays = overlays.filter(o => o.points.length > 0 && isOn(o.id));
+  // Series still exist but every legend entry is off — keep the legend (so the
+  // user can click one back on) and don't swap the plot for the zero-savings
+  // empty state, which would read as if the plans themselves were empty.
+  const allToggledOff =
+    series.length + overlays.length > 0 && visibleSeries.length === 0 && visibleOverlays.length === 0;
+  // Colour follows the series' original index, not its position among the
+  // currently-visible ones — hiding a line must not recolour the rest.
+  const colorOf = (s: { id: string; color?: string }, i: number) =>
+    s.color ?? PALETTE[i % PALETTE.length];
+  const seriesColorById = new Map(series.map((s, i) => [s.id, colorOf(s, i)]));
   const allLines = [
-    ...series.map((s, i) => ({ id: s.id, label: s.label, color: s.color ?? PALETTE[i % PALETTE.length] })),
+    ...series.map((s, i) => ({ id: s.id, label: s.label, color: colorOf(s, i) })),
     ...overlays.map(o => ({ id: o.id, label: o.label, color: o.color })),
   ];
 
@@ -399,7 +421,7 @@ export function ProjectionTimeline({
           }]);
         }}
       >
-        {!hasAnything && (
+        {!hasAnything && !allToggledOff && (
           <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="13" fill={FAINT} fontFamily="inherit">
             {t('dash.emptyTimeline')}
           </text>
@@ -407,10 +429,10 @@ export function ProjectionTimeline({
         {hasAnything && (
           <>
           {/* balance areas (soft fill) */}
-          {visibleSeries.map((s, i) => {
+          {visibleSeries.map(s => {
           const fill = s.area ?? visibleSeries.length === 1;
           if (!fill) return null;
-          const color = s.color ?? PALETTE[i % PALETTE.length];
+          const color = seriesColorById.get(s.id) ?? PALETTE[0];
           return <path key={`area-${s.id}`} d={areaPath(s.points)} fill={color} opacity="0.06" />;
         })}
 
@@ -431,8 +453,8 @@ export function ProjectionTimeline({
         <text x={LL - 4} y={AXIS + 3} textAnchor="end" fontSize="10" fill={FAINT}>$0</text>
 
         {/* balance lines */}
-        {visibleSeries.map((s, i) => {
-          const color = s.color ?? PALETTE[i % PALETTE.length];
+        {visibleSeries.map(s => {
+          const color = seriesColorById.get(s.id) ?? PALETTE[0];
           return <path key={s.id} d={linePath(s.points)} fill="none" stroke={color} strokeWidth="2" />;
         })}
         {/* overlay lines */}

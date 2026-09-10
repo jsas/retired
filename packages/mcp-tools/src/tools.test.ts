@@ -1204,8 +1204,8 @@ describe('find_page / get_sitemap / propose_navigate', () => {
     // The Tools surfaces are pages now (issue #162) — they belong on the map.
     expect(out.content).toContain('(view montecarlo)');
     expect(out.content).toContain('(view solver)');
+    expect(out.content).toContain('(view compare)');
     expect(out.content).not.toContain('(view sharing)');
-    expect(out.content).not.toContain('(view compare)');
     expect(out.content).not.toContain('(view details)');
   });
 
@@ -1231,11 +1231,20 @@ describe('find_page / get_sitemap / propose_navigate', () => {
 
   it('propose_navigate still redirects a merged legacy view to its host page', () => {
     const out = executeToolCall(ctx({ canNavigate: true }), {
-      id: '1', name: 'propose_navigate', args: { view: 'compare', label: 'Open Compare' },
+      id: '1', name: 'propose_navigate', args: { view: 'details', label: 'Open Details' },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
     expect(out.navigate).toBe('scenarios');
     expect(out.preview).toMatchObject({ Page: 'Plans' });
+  });
+
+  it('propose_navigate lands Compare on its own Tools page', () => {
+    const out = executeToolCall(ctx({ canNavigate: true }), {
+      id: '1', name: 'propose_navigate', args: { view: 'compare', label: 'Open Compare' },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.navigate).toBe('compare');
+    expect(out.preview).toMatchObject({ Page: 'Compare plans', Route: '#/compare' });
   });
 
   it('propose_navigate without a UI returns the shareable hash instead', () => {
@@ -1256,6 +1265,7 @@ describe('find_page / get_sitemap / propose_navigate', () => {
     // Issue #162: the Tools surfaces are real view ids now — the suggestion
     // list carries them; the still-folded legacy ones stay out.
     expect(out.content).toContain('montecarlo');
-    expect(out.content).not.toContain('compare');
+    expect(out.content).toContain('compare');
+    expect(out.content).not.toContain('details');
   });
 });

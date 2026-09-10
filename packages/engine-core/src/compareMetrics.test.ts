@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   metricsFromResults, computeScenarioMetrics, compareScenarios,
+  inputsForCompare, linkedSpouseName,
 } from './compareMetrics';
 import { calculateHousehold } from './retirementEngine';
 import { testConfig, baseInputs } from '../test/helpers';
@@ -66,6 +67,48 @@ describe('computeScenarioMetrics', () => {
     expect(m.id).toBe(s.id);
     expect(m.name).toBe('Rich');
     expect(m.status).toBe('ON_TRACK');
+  });
+});
+
+describe('inputsForCompare — household overlay', () => {
+  const partner = (): Scenario => scenario('Pat', { tfsaBalance: 200000, desiredSpending: 25000, cppStartAge: null, oasStartAge: null });
+  const hostWithLink = (partnerId: string): Scenario => {
+    const s = scenario('Host', { tfsaBalance: 400000, desiredSpending: 30000, cppStartAge: null, oasStartAge: null });
+    s.inputs = { ...s.inputs, spouseSource: { kind: 'scenario', scenarioId: partnerId } };
+    return s;
+  };
+
+  it('resolves a linked spouse even when the host stores only the link', () => {
+    const pat = partner();
+    const host = hostWithLink(pat.id);
+    expect(host.inputs.spouse).toBeUndefined();
+    const withSpouse = inputsForCompare(host, [host, pat], true);
+    expect(withSpouse.spouse?.enabled).toBe(true);
+    expect(withSpouse.spouse?.tfsaBalance).toBe(200000);
+    expect(linkedSpouseName(host, [host, pat])).toBe('Pat');
+  });
+
+  it('spouse-off clones enabled:false and does not mutate the saved plan', () => {
+    const pat = partner();
+    const host = hostWithLink(pat.id);
+    const before = JSON.stringify(host.inputs);
+    const off = inputsForCompare(host, [host, pat], false);
+    expect(off.spouse?.enabled).toBe(false);
+    expect(JSON.stringify(host.inputs)).toBe(before);
+    expect(host.inputs.spouse).toBeUndefined();
+  });
+
+  it('includeSpouse false scores like a true single, not like the household', () => {
+    const pat = partner();
+    const host = hostWithLink(pat.id);
+    const asCouple = computeScenarioMetrics(host, config, [host, pat], true);
+    const spouseOff = computeScenarioMetrics(host, config, [host, pat], false);
+    const trueSingle = computeScenarioMetrics(host, config);
+    expect(asCouple.isCouple).toBe(true);
+    expect(spouseOff.isCouple).toBe(false);
+    expect(trueSingle.isCouple).toBe(false);
+    expect(spouseOff.householdWorth).toBeCloseTo(trueSingle.householdWorth, 6);
+    expect(asCouple.householdWorth).toBeGreaterThan(spouseOff.householdWorth);
   });
 });
 

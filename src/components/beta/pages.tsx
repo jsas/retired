@@ -4,11 +4,12 @@
 // shared. The Plans page (list + current-plan numbers) and dashboard are
 // native beta; these wrap the rest.
 //
-// Issue #162 split the old combined Insights page into the five Tools-menu
-// surfaces (Steering · Optimizer · Monte Carlo · Backtest · Solver). Every
-// tool page features the shared ProjectStrip — the same ProjectionTimeline the
-// dashboard draws — so each tool answers its question with the plan's shape
-// always on screen.
+// Issue #162 split the old combined Insights page into the Tools-menu
+// surfaces (Steering · Optimizer · Monte Carlo · Backtest · Solver). Compare
+// later joined that menu. Every tool page except Compare features the shared
+// ProjectStrip — the same ProjectionTimeline the dashboard draws — so each
+// tool answers its question with the plan's shape always on screen. Compare
+// draws every saved plan on one chart instead.
 import type { ComponentProps, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { YearlyBreakdown, RetirementInputs } from '@retired/engine-core/retirementEngine';
@@ -117,7 +118,7 @@ export function BetaSchedulePage({ chip, assistant, timeline, ...props }: Compon
   );
 }
 
-// ── The Tools menu (issue #162): five surfaces, five pages ─────────────────
+// ── The Tools menu (issue #162, later Compare) ────────────────────────────
 
 export function BetaSteeringPage({ chip, assistant, eqProps }: {
   chip: VerdictChip;
@@ -225,11 +226,27 @@ export function BetaSolverPage({ chip, assistant, timeline, solverProps }: {
   );
 }
 
-export function BetaPlansPage({ chip, assistant, managerProps, compareProps, detailsProps }: {
+export function BetaComparePage({ chip, assistant, compareProps }: {
+  chip: VerdictChip;
+  assistant?: ReactNode;
+  compareProps: ComponentProps<typeof CompareCard>;
+}) {
+  const t = usePageT();
+  return (
+    <BetaPage title={t('comparePlans')} hint="compare" chip={chip} assistant={assistant}>
+      {/* No ProjectStrip here: the compare timeline IS the chart — every saved
+          plan as a line. A second strip of the current plan would just repeat. */}
+      <div className="pt-6">
+        <CompareCard {...compareProps} />
+      </div>
+    </BetaPage>
+  );
+}
+
+export function BetaPlansPage({ chip, assistant, managerProps, detailsProps }: {
   chip: VerdictChip;
   assistant?: ReactNode;
   managerProps: ComponentProps<typeof ScenarioManager>;
-  compareProps: ComponentProps<typeof CompareCard>;
   detailsProps: ComponentProps<typeof DetailsPage>;
 }) {
   const t = usePageT();
@@ -240,10 +257,6 @@ export function BetaPlansPage({ chip, assistant, managerProps, compareProps, det
         <section>
           <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('thisPlan')}<HelpHint topic="scenarios" /></h3>
           <DetailsPage {...detailsProps} />
-        </section>
-        <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('comparePlans')}<HelpHint topic="compare" /></h3>
-          <CompareCard {...compareProps} />
         </section>
       </div>
     </BetaPage>

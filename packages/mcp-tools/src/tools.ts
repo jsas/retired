@@ -1324,7 +1324,7 @@ function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioA
 
 /** Resolve a name to its catalog entry (view id, route, title, or keyword).
  *  Returns null instead of guessing-then-erroring. The whole catalog is
- *  searched — a folded legacy name ("compare") resolves so the tool can
+ *  searched — a folded legacy name ("details") resolves so the tool can
  *  redirect it to its destination rather than reject a request the UI can
  *  satisfy. */
 function resolveNavView(name: string | View): NavEntry | null {
@@ -1370,7 +1370,7 @@ function getSitemapTool(): ToolOutcome {
  *  direct navigate, which would yank the user out of this chat mid-answer).
  *  Unbound hosts return the #/hash (not an error) — the model can share the
  *  destination as a link instead of actioning it. A folded legacy view is
- *  redirected to the page the UI shows (compare → Plans), so the card
+ *  redirected to the page the UI shows (details → Plans), so the card
  *  always opens a real destination. */
 function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavigateArgs>): ToolOutcome {
   const found = resolveNavView(args.view);

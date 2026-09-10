@@ -12,6 +12,8 @@ import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@reti
 import { householdOutcome } from '@retired/engine-core/retirementEngine';
 import { toHousehold } from '@retired/engine-core/householdTypes';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
+import type { Locale } from './locale';
+import { i18n } from './i18n';
 
 export interface QAPreset {
   id: string;
@@ -165,8 +167,19 @@ export function buildQAPrompt(
   ctx: QAContext,
   preset: QAPreset,
   customQuestion?: string,
+  locale?: Locale,
 ): string {
-  const question = (customQuestion?.trim() || preset.question).trim();
+  const localizedQuestion = locale
+    ? i18n.t(`qa.${preset.id}`, { ns: 'prompts', lng: locale, defaultValue: preset.question })
+    : preset.question;
+  const question = (customQuestion?.trim() || localizedQuestion).trim();
+  const frame = locale
+    ? i18n.t('qa.frame', {
+      ns: 'prompts',
+      lng: locale,
+      defaultValue: 'You are a Canadian retirement-planning analyst. Answer the question at the end using ONLY the plan and the computed projection below — do not re-derive the numbers, and give general educational analysis, not personalized financial advice.',
+    })
+    : 'You are a Canadian retirement-planning analyst. Answer the question at the end using ONLY the plan and the computed projection below — do not re-derive the numbers, and give general educational analysis, not personalized financial advice.';
 
   const digests: string[] = [
     // The household verdict leads (issue A-03); per-person digests follow as detail.
@@ -185,7 +198,7 @@ export function buildQAPrompt(
       `median final balance ${money(ctx.mcResults.medianFinalBalance)}\n`;
   }
 
-  return `You are a Canadian retirement-planning analyst. Answer the question at the end using ONLY the plan and the computed projection below — do not re-derive the numbers, and give general educational analysis, not personalized financial advice.
+  return `${frame}
 
 PLAN INPUTS (JSON):
 ${JSON.stringify(inputs, null, 2)}

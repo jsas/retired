@@ -34,4 +34,13 @@ describe('buildProgramRules', () => {
     expect(rules).toContain(Math.round(config.oas.clawbackThreshold).toLocaleString('en-CA'));
     expect(rules).toContain(Math.round(config.oas.gisMaxAnnualSingle).toLocaleString('en-CA'));
   });
+
+  it('renders French prose from the prompts catalog while quoting live figures', () => {
+    const config = testConfig();
+    config.engine.tfsaAnnualLimit = 12345;
+    const rules = buildProgramRules(config, 'fr-CA');
+    expect(rules).toContain('Règles que ce programme applique');
+    expect(rules).toContain('Résidents canadiens seulement');
+    expect(rules).toContain(Math.round(12345).toLocaleString('fr-CA'));
+  });
 });

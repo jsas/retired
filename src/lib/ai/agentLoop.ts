@@ -11,12 +11,13 @@
 import type { AgentToolCall, ChatMessage, StreamEvent, ToolSpec } from './providers';
 import { executeToolCall, toolSpecs, type ToolContext, type ToolOutcome } from '@retired/mcp-tools/tools';
 import { pageTitleLine } from '@retired/mcp-tools/navigation';
-import type { View } from '../viewRoutes';
+import { foldTarget, type View } from '../viewRoutes';
 import { buildPromptToolInstructions, extractPromptToolCalls, formatPromptToolResults } from './promptTools';
 import { buildProgramRules } from './programRules';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { Locale } from '../locale';
+import { i18n } from '../i18n';
 
 export type AgentEvent =
   | { type: 'text'; text: string }
@@ -196,6 +197,7 @@ export const DEFAULT_TOOL_INSTRUCTIONS_OFF =
 export interface PromptSendFlags {
   includePersona?: boolean;
   includePageLine?: boolean;
+  includeLocale?: boolean;
   includeToolInstructions?: boolean;
   includePromptCatalog?: boolean;
   includeProgramRules?: boolean;
@@ -209,6 +211,7 @@ export interface PromptSendFlags {
 export const DEFAULT_PROMPT_SEND: Required<PromptSendFlags> = {
   includePersona: true,
   includePageLine: true,
+  includeLocale: true,
   includeToolInstructions: true,
   includePromptCatalog: true,
   includeProgramRules: true,
@@ -223,10 +226,49 @@ export function resolvePromptSend(flags?: PromptSendFlags): Required<PromptSendF
   return { ...DEFAULT_PROMPT_SEND, ...flags };
 }
 
-export function defaultToolInstructionsFor(mode: 'native' | 'prompt' | 'off'): string {
-  if (mode === 'off') return DEFAULT_TOOL_INSTRUCTIONS_OFF;
-  if (mode === 'prompt') return DEFAULT_TOOL_INSTRUCTIONS_PROMPT;
-  return DEFAULT_TOOL_INSTRUCTIONS_NATIVE;
+function tPrompt(
+  key: string,
+  locale: Locale | undefined,
+  fallback: string,
+  vars?: Record<string, unknown>,
+): string {
+  if (!locale) return fallback;
+  const result = i18n.t(key, { ns: 'prompts', lng: locale, ...vars });
+  if (typeof result !== 'string' || result === key || result.startsWith('prompts:')) return fallback;
+  return result;
+}
+
+/** Locale-aware persona. Falls back to the English constant when no locale is given. */
+export function defaultSystemPromptFor(locale?: Locale): string {
+  return tPrompt('persona', locale, DEFAULT_SYSTEM_PROMPT);
+}
+
+export function defaultToolInstructionsFor(
+  mode: 'native' | 'prompt' | 'off',
+  locale?: Locale,
+): string {
+  if (mode === 'off') return tPrompt('toolOff', locale, DEFAULT_TOOL_INSTRUCTIONS_OFF);
+  if (mode === 'prompt') return tPrompt('toolPrompt', locale, DEFAULT_TOOL_INSTRUCTIONS_PROMPT);
+  return tPrompt('toolNative', locale, DEFAULT_TOOL_INSTRUCTIONS_NATIVE);
+}
+
+function localizedPageTitle(view: View, locale?: Locale): string {
+  return tPrompt(`pageTitle.${foldTarget(view)}`, locale, pageTitleLine(view));
+}
+
+const LOCALE_LINE_FALLBACK =
+  'The page language is {{locale}} ({{locale}}). Think and answer in that language. Only switch if the user writes a full sentence in another language — a greeting like "hi" is not a switch.';
+
+function localeLineFor(locale: Locale | undefined): string | null {
+  if (!locale) return null;
+  return tPrompt('localeLine', locale, LOCALE_LINE_FALLBACK.replaceAll('{{locale}}', locale), {
+    language: tPrompt(
+      'languageName',
+      locale,
+      locale === 'fr-CA' ? 'français (Canada)' : 'English (Canada)',
+    ),
+    locale,
+  });
 }
 
 /** Build the system prompt the agent runs under. The persona comes from
@@ -246,7 +288,7 @@ export function buildSystemPrompt(
     /** The view the host page is on. Ambient (one line); when the prop is
      *  absent (tests / MCP server), the line falls out. */
     currentView?: View;
-    /** Assistant language. A line is added only for non-default `fr-CA`. */
+    /** Page language. Always named in the prompt when supplied (en-CA and fr-CA). */
     locale?: Locale;
     send?: PromptSendFlags;
     /** Replacement for the mode-specific tool-instruction blurb. */
@@ -255,26 +297,33 @@ export function buildSystemPrompt(
 ): string {
   const mode = opts?.toolMode ?? (opts?.toolsEnabled === false ? 'off' : 'native');
   const send = resolvePromptSend(opts?.send);
+  const locale = opts?.locale;
   const persona = send.includePersona
-    ? ((opts?.basePrompt?.trim()) || DEFAULT_SYSTEM_PROMPT)
+    ? ((opts?.basePrompt?.trim()) || defaultSystemPromptFor(locale))
     : '';
-  const rules = send.includeProgramRules && opts?.config ? buildProgramRules(opts.config) : '';
+  const rules = send.includeProgramRules && opts?.config
+    ? buildProgramRules(opts.config, locale)
+    : '';
   const pageLine = send.includePageLine && opts?.currentView
-    ? `The user is currently on the ${pageTitleLine(opts.currentView)} page.`
-    : null;
-  const localeLine = opts?.locale && opts.locale !== 'en-CA'
-    ? `The user's browser locale is ${opts.locale}. Answer in that language unless the user writes in English.`
+    ? tPrompt(
+      'pageLine',
+      locale,
+      `The user is currently on the ${pageTitleLine(opts.currentView)} page.`,
+      { page: localizedPageTitle(opts.currentView, locale) },
+    )
     : null;
   const toolBlurb = send.includeToolInstructions
-    ? ((opts?.toolInstructions?.trim()) || defaultToolInstructionsFor(mode))
+    ? ((opts?.toolInstructions?.trim()) || defaultToolInstructionsFor(mode, locale))
     : '';
   const scenarioLine = send.includeScenarioName
-    ? `The active scenario is "${scenarioName}".`
+    ? tPrompt('scenarioLine', locale, `The active scenario is "${scenarioName}".`, { name: scenarioName })
     : '';
+  // Locale rides as its own send flag (Settings → What is sent). Appended last
+  // so a small model still sees it after the English TOOL_CALL catalog.
+  const localeLine = send.includeLocale ? localeLineFor(locale) : null;
 
   const mechanics = [
     ...(pageLine ? [pageLine] : []),
-    ...(localeLine ? [localeLine] : []),
     ...(toolBlurb ? ['', toolBlurb] : []),
     ...(rules ? ['', rules] : []),
     ...(scenarioLine ? ['', scenarioLine] : []),
@@ -283,6 +332,7 @@ export function buildSystemPrompt(
   const parts = send.personaLast
     ? [...mechanics, ...(persona ? ['', persona] : [])]
     : [...(persona ? [persona] : []), ...mechanics];
+  if (localeLine) parts.push('', localeLine);
 
   return parts.join('\n').replace(/^\n+/, '').replace(/\n+$/, '');
 }
@@ -318,8 +368,14 @@ export function assembleSystemPrompt(opts: {
     ? buildPromptToolInstructions(toolSpecs())
     : '';
   const note = send.includeChatNote ? (opts.chatNote?.trim() ?? '') : '';
-  const noteBlock = note ? `Additional instructions for this chat:\n${note}` : '';
-  return [body, catalog, noteBlock].filter(Boolean).join('\n\n');
+  const noteBlock = note
+    ? tPrompt('chatNote', opts.locale, `Additional instructions for this chat:\n${note}`, { note })
+    : '';
+  // Catalog stays English (protocol). Locale already sits at the end of `body`
+  // for native/off; when the catalog is present, re-append it after so a small
+  // model doesn't treat the English TOOL_CALL list as the language to think in.
+  const localeAgain = catalog && send.includeLocale ? (localeLineFor(opts.locale) ?? '') : '';
+  return [body, catalog, noteBlock, localeAgain].filter(Boolean).join('\n\n');
 }
 
 /**
@@ -559,22 +615,28 @@ async function* finalizeWithoutTools(
     currentView: opts.context.currentView,
     locale: opts.context.locale,
   });
-  const finalSystem = [
-    base,
-    '',
-    'You have already gathered tool results in this conversation. Do NOT call',
-    'any more tools. Answer the user\'s question NOW in plain prose, using the',
-    'numbers from the tool results above. If a needed number is missing, say so',
-    'briefly and give the best answer you can with what you have.',
-  ].join('\n');
+  const wrapLocale = opts.context.locale;
+  const wrapSystem = tPrompt(
+    'wrapUpSystem',
+    wrapLocale,
+    [
+      'You have already gathered tool results in this conversation. Do NOT call',
+      'any more tools. Answer the user\'s question NOW in plain prose, using the',
+      'numbers from the tool results above. If a needed number is missing, say so',
+      'briefly and give the best answer you can with what you have.',
+    ].join('\n'),
+  );
+  const finalSystem = [base, '', wrapSystem].join('\n');
 
   const finalMessages: ChatMessage[] = [
     ...messages,
     {
       role: 'user',
-      content:
-        'You have reached the tool-use limit. Do not call any more tools. ' +
-        'Answer my question now in plain prose using the tool results above.',
+      content: tPrompt(
+        'wrapUpUser',
+        wrapLocale,
+        'You have reached the tool-use limit. Do not call any more tools. Answer my question now in plain prose using the tool results above.',
+      ),
     },
   ];
 

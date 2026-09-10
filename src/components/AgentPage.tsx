@@ -36,7 +36,7 @@ import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { createBridge, type Bridge, type ChatMessage } from '@retired/ai-bridge';
 import { Progress } from '../design/primitives';
-import { assembleSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { assembleSystemPrompt, defaultSystemPromptFor, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
 import type { View } from '../lib/viewRoutes';
 import type { Locale } from '../lib/locale';
@@ -55,6 +55,7 @@ import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { activeCatalogKey, chatPickerEntries, pickModel, useModelCatalog } from '../lib/modelCatalog';
 import { provenanceLine } from '../lib/ai/modelProvenance';
+import { localizeLoadProgress } from '../lib/ai/loadProgress';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
@@ -262,6 +263,23 @@ function turnToMessage(t: Turn): ThreadMessageLike {
     : t.state === 'truncated' ? ({ type: 'incomplete', reason: 'length' } as const)
     : ({ type: 'complete', reason: 'stop' } as const);
   return { ...base, status };
+}
+
+/** User-turn id to re-run from. assistant-ui's `message.parentId` is always
+ *  null on our external-store runtime (ThreadMessageClient hardcodes it), so
+ *  regenerate must walk our own turns: a user bubble regenerates itself, an
+ *  assistant bubble regenerates the user turn immediately before it. */
+export function precedingUserTurnId(
+  turns: ReadonlyArray<{ id: string; role: 'user' | 'assistant' }>,
+  messageId: string,
+): string | null {
+  const idx = turns.findIndex(t => t.id === messageId);
+  if (idx === -1) return null;
+  if (turns[idx].role === 'user') return turns[idx].id;
+  for (let i = idx - 1; i >= 0; i--) {
+    if (turns[i].role === 'user') return turns[i].id;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -715,7 +733,8 @@ export function ModelPickerSelect({ entries, activeKey, onPick, onLoadModel }: {
   onLoadModel: () => void;
 }) {
   const { t } = useTranslation('pages');
-  const value = entries.some(e => e.key === activeKey) ? (activeKey ?? '') : '';
+  const connected = Boolean(activeKey && entries.some(e => e.key === activeKey));
+  const value = connected ? activeKey! : '';
   return (
     <div className="flex items-center gap-1.5">
       <select
@@ -727,7 +746,9 @@ export function ModelPickerSelect({ entries, activeKey, onPick, onLoadModel }: {
         className="max-w-56 border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-slate-900 focus:outline-none"
         title={t('assistant.pickerTitle')}
       >
-        {entries.length === 0 && <option value="">{t('assistant.noModels')}</option>}
+        {!connected && (
+          <option value="">{entries.length === 0 ? t('assistant.noModels') : t('assistant.chooseModel')}</option>
+        )}
         {entries.map(e => (
           <option key={e.key} value={e.key}>
             {e.local
@@ -1346,18 +1367,20 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   };
 
   /** Regenerate: drop every turn after the user message that preceded the
-   *  assistant reply, then re-run from that message. parentId is the id of
-   *  that user turn (null only for a leading assistant message — regenerate
-   *  is offered on user-preceded replies only, so this won't fire).
+   *  assistant reply, then re-run from that message. `messageId` is the bubble
+   *  the user clicked — a user turn (trailing generate) or an assistant turn
+   *  (regenerate). We never use assistant-ui's parentId: it is always null.
    *
    *  The truncation is computed from CURRENT state (not the `turns` closure,
    *  which can be stale) and the kept list always includes that user message —
    *  an earlier version could drop it when the closure was out of date. */
-  const reload = async (parentId: string | null) => {
-    if (running || !parentId) return;
+  const reload = async (messageId: string | null) => {
+    if (running || !messageId) return;
     const prior = reduceTurns(prev => {
+      const parentId = precedingUserTurnId(prev, messageId);
+      if (!parentId) return { turns: prev, result: null };
       const idx = prev.findIndex(t => t.id === parentId);
-      if (idx === -1 || prev[idx].role !== 'user') return { turns: prev, result: null };
+      if (idx === -1) return { turns: prev, result: null };
       return { turns: prev.slice(0, idx + 1), result: prev.slice(0, idx + 1) };
     });
     if (!prior || prior.length === 0) return;
@@ -1387,7 +1410,9 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     convertMessage: turnToMessage,
     onNew: send,
     onCancel: cancel,
-    onReload: reload,
+    // Runtime regenerate also passes parentId (always null here). Fall back to
+    // the last bubble so the library path hits the same lookup as the button.
+    onReload: parentId => reload(parentId ?? turns[turns.length - 1]?.id ?? null),
     onDelete: deleteMessage,
     // The runtime rewrites the list itself on some flows (e.g. cancel after
     // send); hand the rewrite straight back into the chat store.
@@ -1543,7 +1568,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                       <div className="flex flex-col gap-0.5 pt-1.5">
                         {turn && <ProvenanceButton asked={turn.askedModel} served={turn.servedModel} />}
                         {message.isLast && (
-                          <MessageActionButton onClick={() => void reload(message.parentId)} title={t('assistant.regenerate')}>
+                          <MessageActionButton onClick={() => void reload(message.id)} title={t('assistant.regenerate')}>
                             <RotateCcw size={12} />
                           </MessageActionButton>
                         )}
@@ -1567,7 +1592,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
               <div className="max-w-md">
                 <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                   <Loader2 size={13} className="animate-spin" />
-                  <span className="truncate">{loadProgress.text || t('assistant.loadingLocal')}</span>
+                  <span className="truncate">{localizeLoadProgress(loadProgress.text, t) || t('assistant.loadingLocal')}</span>
                   {loadProgress.progress < 1 && (
                     <span className="ml-auto shrink-0">{Math.round(loadProgress.progress * 100)}%</span>
                   )}
@@ -2041,13 +2066,15 @@ function ContextMeter({ used, limit, compacted }: { used: number; limit: number;
 function BasePromptEditor({ override, onChange }: { override: string; onChange: (text: string) => void }) {
   const { t } = useTranslation('pages');
   const { t: tc } = useTranslation('common');
+  const { locale } = useAppLocale();
+  const fallback = defaultSystemPromptFor(locale);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(override);
   const customized = override.trim().length > 0;
   if (!open) {
     return (
       <button
-        onClick={() => { setDraft(customized ? override : DEFAULT_SYSTEM_PROMPT); setOpen(true); }}
+        onClick={() => { setDraft(customized ? override : fallback); setOpen(true); }}
         className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-slate-900"
         title={t('assistant.basePromptTitle')}
       >
@@ -2074,7 +2101,7 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
       />
       <div className="flex items-center justify-between gap-2 mt-1">
         <button
-          onClick={() => { setDraft(DEFAULT_SYSTEM_PROMPT); }}
+          onClick={() => { setDraft(fallback); }}
           className="text-[10px] font-semibold text-slate-400 hover:text-slate-900"
           title={t('assistant.resetDefaultTitle')}
         >
@@ -2091,7 +2118,7 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
             </button>
           )}
           <button
-            onClick={() => { onChange(draft.trim() === DEFAULT_SYSTEM_PROMPT.trim() ? '' : draft.trim()); setOpen(false); }}
+            onClick={() => { onChange(draft.trim() === fallback.trim() ? '' : draft.trim()); setOpen(false); }}
             className="bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700"
           >
             {tc('save')}
@@ -2291,9 +2318,9 @@ function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect, 
     <div className="h-full overflow-y-auto border border-slate-200 bg-white">
       <div className={`border-b border-slate-100 ${compact ? 'space-y-2 p-3' : 'flex flex-wrap items-center gap-3 p-4'}`}>
         <div className={compact ? '' : 'min-w-52 flex-1'}>
-          <p className={`font-semibold text-slate-800 ${compact ? 'text-xs' : 'text-sm'}`}>{t('assistant.noModel')}</p>
+          <p className={`font-semibold text-slate-800 ${compact ? 'text-xs' : 'text-sm'}`}>{t('assistant.chooseModel')}</p>
           <p className={`mt-0.5 leading-snug text-slate-500 ${compact ? 'text-[10.5px]' : 'text-[11px]'}`}>
-            {compact ? t('assistant.offlineCompact') : t('assistant.offlineLead')}
+            {compact ? t('assistant.pickToChatCompact') : t('assistant.pickToChat')}
           </p>
         </div>
         <button
@@ -2355,8 +2382,8 @@ function AskQuestionPanel({ inputs, results, compact = false }: {
   const [copied, setCopied] = useState(false);
   const preset = QA_PRESETS.find(p => p.id === presetId) ?? QA_PRESETS[0];
   const prompt = useMemo(
-    () => buildQAPrompt(inputs, { results }, preset, customQuestion),
-    [inputs, results, preset, customQuestion],
+    () => buildQAPrompt(inputs, { results }, preset, customQuestion, locale),
+    [inputs, results, preset, customQuestion, locale],
   );
 
   const copy = () => {

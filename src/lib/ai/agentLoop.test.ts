@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runAgentTurn, buildSystemPrompt, assembleSystemPrompt, liveReasoningDelta, type AgentEvent, type MutationProposal } from './agentLoop';
+import { runAgentTurn, buildSystemPrompt, assembleSystemPrompt, liveReasoningDelta, defaultSystemPromptFor, defaultToolInstructionsFor, type AgentEvent, type MutationProposal } from './agentLoop';
 import type { ChatMessage, StreamEvent } from './providers';
 import type { ToolContext } from '@retired/mcp-tools/tools';
 import { baseInputs, testConfig } from '@retired/engine-core/test/helpers';
@@ -307,10 +307,12 @@ describe('buildSystemPrompt', () => {
   });
 
   it('names the destination page for a folded legacy view, and drops the line when absent', () => {
-    // Compare has no page of its own — the user is on Plans even at a
-    // legacy #/compare route. (The Tools surfaces unfurled in issue #162.)
-    const folded = buildSystemPrompt('My Plan', { currentView: 'compare' });
+    // Details still folds into Plans — the user is on Plans even at a
+    // legacy #/details route. Compare later joined Tools and names itself.
+    const folded = buildSystemPrompt('My Plan', { currentView: 'details' });
     expect(folded).toContain('The user is currently on the Plans page.');
+    expect(buildSystemPrompt('My Plan', { currentView: 'compare' }))
+      .toContain('The user is currently on the Compare plans page.');
     // An unfurled tool names its own page.
     expect(buildSystemPrompt('My Plan', { currentView: 'montecarlo' }))
       .toContain('The user is currently on the Monte Carlo page.');
@@ -318,12 +320,45 @@ describe('buildSystemPrompt', () => {
     expect(buildSystemPrompt('My Plan')).not.toContain('currently on the');
   });
 
-  it('embeds a locale line for fr-CA and omits it for en-CA or absent', () => {
+  it('names the page language for en-CA and fr-CA, and omits it when absent', () => {
+    const en = buildSystemPrompt('My Plan', { locale: 'en-CA' });
+    expect(en).toContain('The page language is English (Canada) (en-CA).');
+    expect(en).toContain('Think and answer in that language');
+    expect(en).toContain('planning assistant');
     const fr = buildSystemPrompt('My Plan', { locale: 'fr-CA' });
-    expect(fr).toContain("The user's browser locale is fr-CA.");
-    expect(fr).toContain('Answer in that language unless the user writes in English.');
-    expect(buildSystemPrompt('My Plan', { locale: 'en-CA' })).not.toContain('browser locale');
-    expect(buildSystemPrompt('My Plan')).not.toContain('browser locale');
+    expect(fr).toContain('La langue de la page est français (Canada) (fr-CA).');
+    expect(fr).toContain('Réfléchissez et répondez dans cette langue');
+    expect(fr).toContain("Vous êtes l'assistant de planification");
+    expect(fr).toContain('Le scénario actif est « My Plan ».');
+    expect(buildSystemPrompt('My Plan')).not.toContain('page language');
+    expect(buildSystemPrompt('My Plan')).not.toContain('langue de la page');
+  });
+
+  it('switches default persona and tool blurbs with the page language', () => {
+    // Settings shows these as the empty-override fallback. Switching the
+    // header from Français to English must replace the French copy, not leave
+    // the previous language sitting in the boxes.
+    expect(defaultSystemPromptFor('en-CA')).toContain('planning assistant');
+    expect(defaultSystemPromptFor('fr-CA')).toContain("Vous êtes l'assistant de planification");
+    expect(defaultToolInstructionsFor('native', 'en-CA')).toMatch(/^Tools:/);
+    expect(defaultToolInstructionsFor('native', 'fr-CA')).toMatch(/^Outils :/);
+    expect(defaultToolInstructionsFor('prompt', 'en-CA')).toContain('BELOW in this message');
+    expect(defaultToolInstructionsFor('prompt', 'fr-CA')).toContain('CI-DESSOUS dans ce message');
+    expect(defaultToolInstructionsFor('off', 'en-CA')).toContain("can't change the plan");
+    expect(defaultToolInstructionsFor('off', 'fr-CA')).toContain('ne peut pas modifier le plan');
+  });
+
+  it('drops the page-language line when that send flag is off', () => {
+    const s = buildSystemPrompt('My Plan', { locale: 'fr-CA', send: { includeLocale: false } });
+    expect(s).not.toContain('langue de la page');
+    expect(s).toContain("Vous êtes l'assistant de planification");
+  });
+
+  it('localizes the current-page line', () => {
+    expect(buildSystemPrompt('My Plan', { currentView: 'montecarlo', locale: 'fr-CA' }))
+      .toContain("L'utilisateur est actuellement sur la page Monte-Carlo.");
+    expect(buildSystemPrompt('My Plan', { currentView: 'details', locale: 'fr-CA' }))
+      .toContain("L'utilisateur est actuellement sur la page Plans.");
   });
 
   it('drops tool instructions for chat-only providers', () => {
@@ -368,6 +403,7 @@ describe('buildSystemPrompt', () => {
       send: {
         includePersona: true,
         includePageLine: false,
+        includeLocale: false,
         includeToolInstructions: false,
         includeProgramRules: false,
         includeScenarioName: false,
@@ -384,9 +420,11 @@ describe('buildSystemPrompt', () => {
       currentView: 'details',
       basePrompt: 'say only yes yes yes',
       chatNote: 'per-chat note',
+      locale: 'fr-CA',
       send: {
         includePersona: false,
         includePageLine: false,
+        includeLocale: false,
         includeToolInstructions: false,
         includePromptCatalog: false,
         includeProgramRules: false,
@@ -397,6 +435,20 @@ describe('buildSystemPrompt', () => {
       },
     });
     expect(s).toBe('');
+  });
+
+  it('keeps the TOOL_CALL catalog in English when the page is French', () => {
+    const s = assembleSystemPrompt({
+      scenarioName: 'My Plan',
+      toolMode: 'prompt',
+      locale: 'fr-CA',
+    });
+    expect(s).toContain('TOOL_CALL');
+    expect(s).toContain('TOOLS: to run local code');
+    expect(s).toContain("Vous êtes l'assistant de planification");
+    // Language instruction must come AFTER the English catalog so a small model
+    // still thinks in the page language.
+    expect(s.lastIndexOf('La langue de la page')).toBeGreaterThan(s.lastIndexOf('TOOL_CALL'));
   });
 
   it('uses a custom tool-instruction override', () => {

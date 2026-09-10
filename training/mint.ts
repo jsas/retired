@@ -685,10 +685,21 @@ export const NAV_SPECS: NavSpec[] = [
     ],
   },
   {
-    view: 'scenarios', query: 'compare',
+    view: 'compare', query: 'compare',
     findAsks: [
       () => 'Where can I compare my saved plans side by side?',
+      () => 'Which page lines up my plans as a household?',
+    ],
+    goAsks: [
+      () => 'Take me to Compare plans.',
+      () => 'Open the plan comparison.',
+    ],
+  },
+  {
+    view: 'scenarios', query: 'saved plans',
+    findAsks: [
       () => 'Which page lists my saved scenarios?',
+      () => 'Where do I rename or duplicate a plan?',
     ],
     goAsks: [
       () => 'Take me to my saved plans.',

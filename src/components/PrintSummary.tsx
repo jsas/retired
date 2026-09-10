@@ -1,15 +1,20 @@
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import type { PrintOptions } from '../lib/printOptions';
 import { BLUE, AMBER_TEXT, MUTED, FAINT, HAIRLINE, cls } from '../design/tokens';
+import { useAppLocale } from '../lib/localeContext';
 
 // The print sheet (hidden on screen — see the `print-only` rule in index.css).
 // Composes the same visual language as the app (tokens.ts / the slate+blue
 // scale) via Tailwind classes; the only raw values left are SVG paint
 // attributes, which read the token constants directly. No inline styles.
+// Copy follows the site locale — the options card already did; the sheet
+// itself used to stay English.
 
-function fmt(value: number): string {
-  return new Intl.NumberFormat('en-CA', {
+function fmt(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'CAD',
     maximumFractionDigits: 0,
@@ -49,9 +54,10 @@ const TL_PAD = { top: 10, right: 10, bottom: 20, left: 52 };
 // (portfolio + net home equity) and the portfolio/equity components show as
 // secondary lines; without RM it's just the portfolio balance. Uses the
 // household-combined breakdown (same rows as the on-screen ProjectionTimeline).
-function TimelinePrintChart({ inputs, rows }: {
+function TimelinePrintChart({ inputs, rows, t }: {
   inputs: RetirementInputs;
   rows: YearlyBreakdown[];
+  t: TFunction<'print'>;
 }) {
   if (rows.length < 2) return null;
   const minAge = rows[0].age;
@@ -70,8 +76,7 @@ function TimelinePrintChart({ inputs, rows }: {
   if (maxBal < 2) {
     return (
       <p className="border-l-2 border-slate-300 py-1 pl-3 text-[11px] text-slate-500">
-        Nothing to draw — the plan has no savings yet. Add balances on the
-        Plans page and the timeline will render.
+        {t('sheet.emptyTimeline')}
       </p>
     );
   }
@@ -91,10 +96,10 @@ function TimelinePrintChart({ inputs, rows }: {
   return (
     <div>
       <svg viewBox={`0 0 ${TL_W} ${TL_H}`} className="h-auto w-full">
-        {yTicks.map((t, i) => (
+        {yTicks.map((tick, i) => (
           <g key={i}>
-            <line x1={TL_PAD.left} x2={TL_W - TL_PAD.right} y1={y(t)} y2={y(t)} stroke={HAIRLINE} strokeWidth="1" />
-            <text x={TL_PAD.left - 5} y={y(t) + 3} textAnchor="end" fontSize="9" fill={MUTED}>{fmtShort(t)}</text>
+            <line x1={TL_PAD.left} x2={TL_W - TL_PAD.right} y1={y(tick)} y2={y(tick)} stroke={HAIRLINE} strokeWidth="1" />
+            <text x={TL_PAD.left - 5} y={y(tick) + 3} textAnchor="end" fontSize="9" fill={MUTED}>{fmtShort(tick)}</text>
           </g>
         ))}
         {xTicks.map(a => (
@@ -114,13 +119,13 @@ function TimelinePrintChart({ inputs, rows }: {
           stroke={FAINT} strokeWidth="1" strokeDasharray="4 3"
         />
         <text x={x(inputs.retirementAge) + 4} y={TL_PAD.top + 9} fontSize="9" fill={MUTED}>
-          retire {inputs.retirementAge}
+          {t('sheet.retireAge', { age: inputs.retirementAge })}
         </text>
       </svg>
       <div className="mt-0.5 flex gap-3.5 text-[9px] text-slate-600">
-        <span className="text-blue-700">— {hasRm ? 'total cash (portfolio + home equity)' : 'portfolio'}</span>
-        {hasRm && <span className="text-blue-700/45">— portfolio</span>}
-        {hasRm && <span className="text-amber-700">–– net home equity</span>}
+        <span className="text-blue-700">— {hasRm ? t('sheet.legendTotalCash') : t('sheet.legendPortfolio')}</span>
+        {hasRm && <span className="text-blue-700/45">— {t('sheet.legendPortfolio')}</span>}
+        {hasRm && <span className="text-amber-700">–– {t('sheet.legendHomeEquity')}</span>}
       </div>
     </div>
   );
@@ -133,10 +138,12 @@ const MC_H = 190;
 const MC_PAD = { top: 10, right: 10, bottom: 20, left: 52 };
 
 // Static print rendering of the Monte Carlo percentile fan + success rate.
-function MonteCarloPrintChart({ results, retirementAge, maxAge }: {
+function MonteCarloPrintChart({ results, retirementAge, maxAge, t, locale }: {
   results: MonteCarloResults;
   retirementAge: number;
   maxAge: number;
+  t: TFunction<'print'>;
+  locale: string;
 }) {
   const bands = results.percentileBands;
   if (bands.length < 2) return null;
@@ -149,8 +156,7 @@ function MonteCarloPrintChart({ results, retirementAge, maxAge }: {
   if (maxBal < 2) {
     return (
       <p className="border-l-2 border-slate-300 py-1 pl-3 text-[11px] text-slate-500">
-        Nothing to draw — the plan has no savings yet. Add balances on the
-        Plans page and the simulation will render.
+        {t('sheet.emptyMc')}
       </p>
     );
   }
@@ -172,15 +178,20 @@ function MonteCarloPrintChart({ results, retirementAge, maxAge }: {
   return (
     <div>
       <div className="mb-1 text-[12px]">
-        <strong>{(results.successRate * 100).toFixed(1)}%</strong> of {results.runs} runs funded to age {maxAge}
-        {' '}· median final balance <strong>{fmt(results.medianFinalBalance)}</strong>
-        {' '}· {(results.volatility * 100).toFixed(1)}% volatility, fat-tailed (Student-t)
+        <Trans
+          i18nKey="sheet.mcFunded"
+          ns="print"
+          values={{ pct: (results.successRate * 100).toFixed(1), runs: results.runs, age: maxAge }}
+          components={{ strong: <strong /> }}
+        />
+        {' '}· {t('sheet.mcMedian')} <strong>{fmt(results.medianFinalBalance, locale)}</strong>
+        {' '}· {t('sheet.mcVol', { vol: (results.volatility * 100).toFixed(1) })}
       </div>
       <svg viewBox={`0 0 ${MC_W} ${MC_H}`} className="h-auto w-full">
-        {yTicks.map((t, i) => (
+        {yTicks.map((tick, i) => (
           <g key={i}>
-            <line x1={MC_PAD.left} x2={MC_W - MC_PAD.right} y1={y(t)} y2={y(t)} stroke={HAIRLINE} strokeWidth="1" />
-            <text x={MC_PAD.left - 5} y={y(t) + 3} textAnchor="end" fontSize="9" fill={MUTED}>{fmtShort(t)}</text>
+            <line x1={MC_PAD.left} x2={MC_W - MC_PAD.right} y1={y(tick)} y2={y(tick)} stroke={HAIRLINE} strokeWidth="1" />
+            <text x={MC_PAD.left - 5} y={y(tick) + 3} textAnchor="end" fontSize="9" fill={MUTED}>{fmtShort(tick)}</text>
           </g>
         ))}
         {xTicks.map(a => (
@@ -194,12 +205,12 @@ function MonteCarloPrintChart({ results, retirementAge, maxAge }: {
           y1={MC_PAD.top} y2={MC_H - MC_PAD.bottom}
           stroke={FAINT} strokeWidth="1" strokeDasharray="4 3"
         />
-        <text x={x(retirementAge) + 4} y={MC_PAD.top + 9} fontSize="9" fill={MUTED}>retire</text>
+        <text x={x(retirementAge) + 4} y={MC_PAD.top + 9} fontSize="9" fill={MUTED}>{t('sheet.retire')}</text>
       </svg>
       <div className="mt-0.5 flex gap-3.5 text-[9px] text-slate-600">
-        <span>■ 10th–90th percentile</span>
-        <span className="opacity-80">■ 25th–75th percentile</span>
-        <span>— median</span>
+        <span>■ {t('sheet.p1090')}</span>
+        <span className="opacity-80">■ {t('sheet.p2575')}</span>
+        <span>— {t('sheet.median')}</span>
       </div>
     </div>
   );
@@ -215,48 +226,53 @@ interface Milestone {
 
 // Major spending-relevant milestones in age order: retirement, benefit start
 // ages, RRIF conversion, spending-phase changes and one-time cash events.
-function buildMilestones(inputs: RetirementInputs, rrifConversionAge: number): Milestone[] {
+function buildMilestones(inputs: RetirementInputs, rrifConversionAge: number, t: TFunction<'print'>, locale: string): Milestone[] {
   const list: Milestone[] = [];
 
   list.push({
     age: inputs.retirementAge,
-    label: 'Retirement',
-    detail: `contributions stop; withdrawals begin toward ${fmt(inputs.desiredSpending)}/yr spending (today's $)`
+    label: t('sheet.retirement'),
+    detail: t('sheet.retirementDetail', { amount: fmt(inputs.desiredSpending, locale) }),
   });
 
   if (inputs.cppStartAge != null) {
+    const amount = fmt(inputs.cppMonthlyAmount * 12, locale);
     list.push({
       age: inputs.cppStartAge,
-      label: 'CPP starts',
-      detail: `${fmt(inputs.cppMonthlyAmount * 12)}/yr at age 65 basis${inputs.cppStartAge !== 65 ? ` (adjusted for age ${inputs.cppStartAge})` : ''}`
+      label: t('sheet.cppStarts'),
+      detail: inputs.cppStartAge !== 65
+        ? t('sheet.cppDetailAdjusted', { amount, age: inputs.cppStartAge })
+        : t('sheet.cppDetail', { amount }),
     });
   }
   if (inputs.oasStartAge != null) {
     list.push({
       age: inputs.oasStartAge,
-      label: 'OAS starts',
-      detail: inputs.oasStartAge !== 65 ? `deferred to ${inputs.oasStartAge} (+0.6%/month past 65)` : 'standard age 65'
+      label: t('sheet.oasStarts'),
+      detail: inputs.oasStartAge !== 65
+        ? t('sheet.oasDeferred', { age: inputs.oasStartAge })
+        : t('sheet.oasStandard'),
     });
   }
   list.push({
     age: rrifConversionAge,
-    label: 'RRIF conversion',
-    detail: 'RRSP converts to RRIF; mandatory minimum withdrawals begin'
+    label: t('sheet.rrifConversion'),
+    detail: t('sheet.rrifDetail'),
   });
 
   for (const band of [...(inputs.spendingBands ?? [])].sort((a, b) => a.fromAge - b.fromAge)) {
     list.push({
       age: band.fromAge,
-      label: `Spending → ${Math.round(band.pctOfBase * 100)}%`,
-      detail: `${fmt(inputs.desiredSpending * band.pctOfBase)}/yr (today's $) from age ${band.fromAge}`
+      label: t('sheet.spendingBand', { pct: Math.round(band.pctOfBase * 100) }),
+      detail: t('sheet.spendingBandDetail', { amount: fmt(inputs.desiredSpending * band.pctOfBase, locale), age: band.fromAge }),
     });
   }
 
   for (const ev of inputs.events ?? []) {
     list.push({
       age: ev.age,
-      label: ev.direction === 'in' ? `${ev.label} (inflow)` : `${ev.label} (expense)`,
-      detail: `${ev.direction === 'in' ? '+' : '−'}${fmt(ev.amount)} one-time`
+      label: ev.direction === 'in' ? t('sheet.inflow', { label: ev.label }) : t('sheet.expense', { label: ev.label }),
+      detail: t('sheet.oneTime', { sign: ev.direction === 'in' ? '+' : '−', amount: fmt(ev.amount, locale) }),
     });
   }
 
@@ -272,35 +288,35 @@ const HEAD_CELL = 'border-b border-slate-300 px-1.5 py-[3px] text-right whitespa
 
 // One-line drill-down summary for a year's detail (print can't expand rows, so
 // the same sections render as a compact inline list under the year's row).
-function detailLine(row: YearlyBreakdown): string | null {
+function detailLine(row: YearlyBreakdown, t: TFunction<'print'>): string | null {
   const d = row.detail;
   if (!d) return null;
   const w = d.withdraw;
   const parts: string[] = [];
   const src: string[] = [];
-  if (w.rrifMin > 0.5) src.push(`RRIF min ${fmtShort(w.rrifMin)}`);
-  if (w.rrif > 0.5) src.push(`RRIF ${fmtShort(w.rrif)}`);
-  if (w.rrsp > 0.5) src.push(`RRSP ${fmtShort(w.rrsp)}`);
-  if (w.tfsa > 0.5) src.push(`TFSA ${fmtShort(w.tfsa)}`);
+  if (w.rrifMin > 0.5) src.push(`${t('sheet.acctRrifMin')} ${fmtShort(w.rrifMin)}`);
+  if (w.rrif > 0.5) src.push(`${t('sheet.acctRrif')} ${fmtShort(w.rrif)}`);
+  if (w.rrsp > 0.5) src.push(`${t('sheet.acctRrsp')} ${fmtShort(w.rrsp)}`);
+  if (w.tfsa > 0.5) src.push(`${t('sheet.acctTfsa')} ${fmtShort(w.tfsa)}`);
   if (w.taxable > 0.5) {
-    src.push(`taxable ${fmtShort(w.taxable)}${d.tax.capitalGains > 0.5 ? ` (${fmtShort(d.tax.capitalGains)} gain)` : ''}`);
+    src.push(`${t('sheet.acctTaxable')} ${fmtShort(w.taxable)}${d.tax.capitalGains > 0.5 ? ` (${t('sheet.gain', { amount: fmtShort(d.tax.capitalGains) })})` : ''}`);
   }
-  if (w.cash > 0.5) src.push(`cash ${fmtShort(w.cash)}`);
-  if (w.rmDraw > 0.5) src.push(`rev. mortgage ${fmtShort(w.rmDraw)}`);
-  if (src.length > 0) parts.push(`from: ${src.join(' + ')}`);
+  if (w.cash > 0.5) src.push(`${t('sheet.acctCash')} ${fmtShort(w.cash)}`);
+  if (w.rmDraw > 0.5) src.push(`${t('sheet.acctRm')} ${fmtShort(w.rmDraw)}`);
+  if (src.length > 0) parts.push(`${t('sheet.from')}: ${src.join(' + ')}`);
 
   const g = d.growth;
   const growth: string[] = [];
-  if (g.rrsp > 0.5) growth.push(`RRSP ${fmtShort(g.rrsp)}`);
-  if (g.rrif > 0.5) growth.push(`RRIF ${fmtShort(g.rrif)}`);
-  if (g.tfsa > 0.5) growth.push(`TFSA ${fmtShort(g.tfsa)}`);
-  if (g.taxable > 0.5) growth.push(`taxable ${fmtShort(g.taxable)}`);
-  if (g.cash > 0.5) growth.push(`cash ${fmtShort(g.cash)}`);
-  if (growth.length > 0) parts.push(`growth: ${growth.join(', ')}`);
+  if (g.rrsp > 0.5) growth.push(`${t('sheet.acctRrsp')} ${fmtShort(g.rrsp)}`);
+  if (g.rrif > 0.5) growth.push(`${t('sheet.acctRrif')} ${fmtShort(g.rrif)}`);
+  if (g.tfsa > 0.5) growth.push(`${t('sheet.acctTfsa')} ${fmtShort(g.tfsa)}`);
+  if (g.taxable > 0.5) growth.push(`${t('sheet.acctTaxable')} ${fmtShort(g.taxable)}`);
+  if (g.cash > 0.5) growth.push(`${t('sheet.acctCash')} ${fmtShort(g.cash)}`);
+  if (growth.length > 0) parts.push(`${t('sheet.growth')}: ${growth.join(', ')}`);
 
-  if (d.tax.oasClawback > 0.5) parts.push(`OAS clawback ${fmtShort(d.tax.oasClawback)}`);
+  if (d.tax.oasClawback > 0.5) parts.push(t('sheet.oasClawback', { amount: fmtShort(d.tax.oasClawback) }));
   if (d.rm) {
-    parts.push(`RM loan ${fmtShort(d.rm.loanBalance)} (interest ${fmtShort(d.rm.interestAccrued)})`);
+    parts.push(t('sheet.rmLoan', { loan: fmtShort(d.rm.loanBalance), interest: fmtShort(d.rm.interestAccrued) }));
   }
   for (const ev of d.events) {
     parts.push(`${ev.label} ${ev.direction === 'in' ? '+' : '−'}${fmtShort(ev.amount)}`);
@@ -310,14 +326,15 @@ function detailLine(row: YearlyBreakdown): string | null {
 
 // The full year-by-year table with per-year drill-down lines, for the print
 // option. Renders per person when a spouse is enabled.
-function DetailedTablePrint({ results, spouseAgeOffset }: {
+function DetailedTablePrint({ results, spouseAgeOffset, t }: {
   results: RetirementResults;
   spouseAgeOffset: number;
+  t: TFunction<'print'>;
 }) {
   const people: Array<{ label: string; rows: YearlyBreakdown[] }> = [
-    { label: results.spouse ? 'You' : '', rows: results.yearlyBreakdown },
+    { label: results.spouse ? t('sheet.you') : '', rows: results.yearlyBreakdown },
   ];
-  if (results.spouse) people.push({ label: 'Spouse', rows: results.spouse.yearlyBreakdown });
+  if (results.spouse) people.push({ label: t('sheet.spouse'), rows: results.spouse.yearlyBreakdown });
 
   const money = (v: number) => fmtShort(v);
   // RM columns appear only when the feature produced them (matches ScheduleTable).
@@ -327,9 +344,10 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
   // FHSA column appears only when a person has an FHSA (matches ScheduleTable).
   const hasFhsa = people.some(p => p.rows.some(r => r.fhsaBalance !== undefined));
   const colSpan = 17 + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0);
+  const n = Math.abs(spouseAgeOffset);
   return (
     <div className="mt-3.5">
-      <div className={SECTION_TITLE}>Detailed year-by-year</div>
+      <div className={SECTION_TITLE}>{t('sheet.detailed')}</div>
       {people.map(person => (
         <div key={person.label || 'single'} className="mb-2.5">
           {person.label && (
@@ -338,31 +356,31 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th className={`${HEAD_CELL} text-left`}>Age</th>
-                <th className={HEAD_CELL}>Start</th>
-                <th className={HEAD_CELL}>Contrib.</th>
-                <th className={HEAD_CELL}>Gains</th>
-                <th className={HEAD_CELL}>Target</th>
-                <th className={HEAD_CELL}>Withdrawn</th>
-                <th className={HEAD_CELL}>Tax</th>
-                <th className={HEAD_CELL}>CPP</th>
-                <th className={HEAD_CELL}>OAS</th>
-                <th className={HEAD_CELL}>GIS</th>
-                <th className={HEAD_CELL}>Pension</th>
-                <th className={HEAD_CELL}>End</th>
-                <th className={HEAD_CELL}>RRSP</th>
-                <th className={HEAD_CELL}>RRIF</th>
-                <th className={HEAD_CELL}>TFSA</th>
-                <th className={HEAD_CELL}>Taxable</th>
-                <th className={HEAD_CELL}>Cash</th>
-                {hasRdsp && <th className={HEAD_CELL} title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>}
-                {hasFhsa && <th className={HEAD_CELL} title="First Home Savings Account. Contributions are deductible; growth is tax-sheltered. Transfers to the RRSP at retirement.">FHSA</th>}
-                {hasRm && <th className={HEAD_CELL}>Home eq.</th>}
+                <th className={`${HEAD_CELL} text-left`}>{t('sheet.colAge')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colStart')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colContrib')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colGains')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colTarget')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colWithdrawn')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colTax')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colCpp')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colOas')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colGis')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colPension')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colEnd')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colRrsp')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colRrif')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colTfsa')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colTaxable')}</th>
+                <th className={HEAD_CELL}>{t('sheet.colCash')}</th>
+                {hasRdsp && <th className={HEAD_CELL} title={t('sheet.rdspTitle')}>{t('sheet.colRdsp')}</th>}
+                {hasFhsa && <th className={HEAD_CELL} title={t('sheet.fhsaTitle')}>{t('sheet.colFhsa')}</th>}
+                {hasRm && <th className={HEAD_CELL}>{t('sheet.colHomeEq')}</th>}
               </tr>
             </thead>
             <tbody>
               {person.rows.map((row, i) => {
-                const detail = detailLine(row);
+                const detail = detailLine(row, t);
                 const zebra = i % 2 === 0 ? 'bg-white' : 'bg-slate-50';
                 return [
                   <tr key={`r${i}`} className={`border-t border-slate-200 ${zebra}`}>
@@ -385,13 +403,13 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
                     <td className={`${CELL} ${NUM}`}>{money(row.cashCushionBalance)}</td>
                     {hasRdsp && (
                       <td className={`${CELL} ${NUM}`}
-                        title={row.detail?.rdsp ? `Contribution basis ${fmtShort(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
+                        title={row.detail?.rdsp ? t('sheet.rdspCell', { amount: fmtShort(row.detail.rdsp.contributionBasis) }) : undefined}>
                         {row.rdspBalance !== undefined ? money(row.rdspBalance) : '—'}
                       </td>
                     )}
                     {hasFhsa && (
                       <td className={`${CELL} ${NUM}`}
-                        title={row.detail?.fhsa ? `Contributed to date ${fmtShort(row.detail.fhsa.contributionBasis)}; transfers to the RRSP at retirement` : undefined}>
+                        title={row.detail?.fhsa ? t('sheet.fhsaCell', { amount: fmtShort(row.detail.fhsa.contributionBasis) }) : undefined}>
                         {row.fhsaBalance !== undefined ? money(row.fhsaBalance) : '—'}
                       </td>
                     )}
@@ -415,8 +433,13 @@ function DetailedTablePrint({ results, spouseAgeOffset }: {
         </div>
       ))}
       <div className="mt-0.5 text-[9px] text-slate-400">
-        Nominal (future) dollars of each year. Spouse years are their own ages
-        {spouseAgeOffset !== 0 ? ` (spouse is ${Math.abs(spouseAgeOffset)} year${Math.abs(spouseAgeOffset) === 1 ? '' : 's'} ${spouseAgeOffset > 0 ? 'younger' : 'older'})` : ''}.
+        {spouseAgeOffset !== 0
+          ? t('sheet.spouseNoteOffset', {
+              n,
+              unit: t('sheet.year', { count: n }),
+              rel: spouseAgeOffset > 0 ? t('sheet.younger') : t('sheet.older'),
+            })
+          : t('sheet.spouseNote')}
       </div>
     </div>
   );
@@ -437,6 +460,8 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
   mcResults: MonteCarloResults | null;
   rrifConversionAge: number;
 }) {
+  const { t } = useTranslation('print');
+  const { locale } = useAppLocale();
   const spouseAgeOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
   const spouse = results.spouse;
   const rmOn = inputs.reverseMortgage?.enabled === true;
@@ -445,8 +470,9 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
   const debtsOn = debts.length > 0;
   const totalDebtBalance = debts.reduce((s, d) => s + d.balance, 0);
   const totalDebtMonthly = debts.reduce((s, d) => s + Math.max(0, d.monthlyPayment), 0);
-  const today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
-  const milestones = options.includeMilestones ? buildMilestones(inputs, rrifConversionAge) : [];
+  const today = new Date().toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  const milestones = options.includeMilestones ? buildMilestones(inputs, rrifConversionAge, t, locale) : [];
+  const statusLabel = results.status === 'ON_TRACK' ? t('sheet.onTrack') : t('sheet.shortfall');
 
   return (
     <div className="print-only p-2 text-slate-900">
@@ -455,56 +481,56 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
       <div className="mb-3 flex items-center gap-2 border-b-2 border-slate-900 pb-1.5">
         <div className="flex h-[22px] w-[22px] items-center justify-center bg-slate-900 text-[9px] font-bold text-white">RE:</div>
         <div>
-          <div className="text-[15px] font-bold">RE: tired — Retirement Plan Summary</div>
-          <div className="text-[11px] text-slate-500">{scenarioName} · generated {today}</div>
+          <div className="text-[15px] font-bold">{t('sheet.title')}</div>
+          <div className="text-[11px] text-slate-500">{t('sheet.generated', { name: scenarioName, date: today })}</div>
         </div>
       </div>
 
       {/* Verdict first (guide principle 1): the answer leads the sheet. */}
       <div className="flex gap-6">
         <div className="flex-1">
-          <div className={SECTION_TITLE}>Verdict</div>
+          <div className={SECTION_TITLE}>{t('sheet.verdict')}</div>
           <table className="border-collapse text-[12px]">
             <tbody>
-              <Row label="Status" value={results.status.replace('_', ' ')} />
-              <Row label="Wealth at retirement" value={fmt(results.totalNetWorthAtRetirement + (spouse?.totalNetWorthAtRetirement ?? 0))} />
-              <Row label="Money lasts until" value={results.depletionAge ? `age ${results.depletionAge}` : `age ${inputs.maxAge}+`} />
-              <Row label="Withdrawal rate" value={`${(results.withdrawalRate * 100).toFixed(1)}%`} />
-              <Row label="Expected return" value={`${(inputs.investmentReturn * 100).toFixed(1)}%`} />
+              <Row label={t('sheet.status')} value={statusLabel} />
+              <Row label={t('sheet.wealth')} value={fmt(results.totalNetWorthAtRetirement + (spouse?.totalNetWorthAtRetirement ?? 0), locale)} />
+              <Row label={t('sheet.lastsUntil')} value={results.depletionAge ? t('sheet.age', { age: results.depletionAge }) : t('sheet.agePlus', { age: inputs.maxAge })} />
+              <Row label={t('sheet.withdrawal')} value={`${(results.withdrawalRate * 100).toFixed(1)}%`} />
+              <Row label={t('sheet.expectedReturn')} value={`${(inputs.investmentReturn * 100).toFixed(1)}%`} />
             </tbody>
           </table>
         </div>
 
         <div className="flex-1">
-          <div className={SECTION_TITLE}>Profile</div>
+          <div className={SECTION_TITLE}>{t('sheet.profile')}</div>
           <table className="border-collapse text-[12px]">
             <tbody>
-              <Row label="Current age" value={String(inputs.currentAge)} />
-              <Row label="Retirement age" value={String(inputs.retirementAge)} />
-              <Row label="Projection to age" value={String(inputs.maxAge)} />
-              <Row label="Province" value={inputs.provinceCode} />
-              <Row label="Desired spending (today's $)" value={fmt(inputs.desiredSpending)} />
-              {spouse && <Row label="Spouse" value={`age ${inputs.spouse?.currentAge}, ret. ${inputs.spouse?.retirementAge}`} />}
+              <Row label={t('sheet.currentAge')} value={String(inputs.currentAge)} />
+              <Row label={t('sheet.retirementAge')} value={String(inputs.retirementAge)} />
+              <Row label={t('sheet.projectionTo')} value={String(inputs.maxAge)} />
+              <Row label={t('sheet.province')} value={inputs.provinceCode} />
+              <Row label={t('sheet.desiredSpending')} value={fmt(inputs.desiredSpending, locale)} />
+              {spouse && <Row label={t('sheet.spouse')} value={t('sheet.spouseValue', { age: inputs.spouse?.currentAge, ret: inputs.spouse?.retirementAge })} />}
             </tbody>
           </table>
         </div>
 
         <div className="flex-1">
-          <div className={SECTION_TITLE}>Savings</div>
+          <div className={SECTION_TITLE}>{t('sheet.savings')}</div>
           <table className="border-collapse text-[12px]">
             <tbody>
-              <Row label="RRSP" value={fmt(inputs.rrspBalance)} />
-              <Row label="TFSA" value={fmt(inputs.tfsaBalance)} />
-              <Row label="Taxable" value={fmt(inputs.taxableBalance)} />
-              <Row label="Cash cushion" value={fmt(inputs.cashCushionBalance)} />
-              <Row label="Total" value={fmt(inputs.rrspBalance + inputs.tfsaBalance + inputs.taxableBalance + inputs.cashCushionBalance)} />
+              <Row label={t('sheet.rrsp')} value={fmt(inputs.rrspBalance, locale)} />
+              <Row label={t('sheet.tfsa')} value={fmt(inputs.tfsaBalance, locale)} />
+              <Row label={t('sheet.taxable')} value={fmt(inputs.taxableBalance, locale)} />
+              <Row label={t('sheet.cashCushion')} value={fmt(inputs.cashCushionBalance, locale)} />
+              <Row label={t('sheet.total')} value={fmt(inputs.rrspBalance + inputs.tfsaBalance + inputs.taxableBalance + inputs.cashCushionBalance, locale)} />
               {rmOn && (
-                <Row label="Home (reverse mtg.)" value={fmt(inputs.reverseMortgage!.homeValue)} />
+                <Row label={t('sheet.homeRm')} value={fmt(inputs.reverseMortgage!.homeValue, locale)} />
               )}
               {debtsOn && (
                 <Row
-                  label={`Debts (${debts.length})`}
-                  value={`${fmt(totalDebtBalance)} · ${fmt(totalDebtMonthly)}/mo`}
+                  label={t('sheet.debts', { count: debts.length })}
+                  value={t('sheet.debtsValue', { balance: fmt(totalDebtBalance, locale), monthly: fmt(totalDebtMonthly, locale) })}
                 />
               )}
             </tbody>
@@ -515,29 +541,27 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
       {options.includeTimeline && (
         <div className="mt-3.5 break-inside-avoid">
           <div className={SECTION_TITLE}>
-            {rmOn
-              ? 'Projection timeline — household portfolio & home equity by age'
-              : 'Projection timeline — household portfolio by age'}
+            {rmOn ? t('sheet.timelineTitleRm') : t('sheet.timelineTitle')}
           </div>
-          <TimelinePrintChart inputs={inputs} rows={householdBreakdown} />
+          <TimelinePrintChart inputs={inputs} rows={householdBreakdown} t={t} />
         </div>
       )}
 
       {options.includeMonteCarlo && mcResults && (
         <div className="mt-3.5 break-inside-avoid">
-          <div className={SECTION_TITLE}>Monte Carlo simulation</div>
-          <MonteCarloPrintChart results={mcResults} retirementAge={inputs.retirementAge} maxAge={inputs.maxAge} />
+          <div className={SECTION_TITLE}>{t('sheet.mcTitle')}</div>
+          <MonteCarloPrintChart results={mcResults} retirementAge={inputs.retirementAge} maxAge={inputs.maxAge} t={t} locale={locale} />
         </div>
       )}
 
       {options.includeMilestones && milestones.length > 0 && (
         <div className="mt-3.5 break-inside-avoid">
-          <div className={SECTION_TITLE}>Major spending milestones &amp; changes</div>
+          <div className={SECTION_TITLE}>{t('sheet.milestonesTitle')}</div>
           <table className="w-full border-collapse text-[11px]">
             <tbody>
               {milestones.map((m, i) => (
                 <tr key={i} className={i === 0 ? '' : 'border-t border-slate-200'}>
-                  <td className="w-[60px] whitespace-nowrap py-0.5 pr-3 font-bold">Age {m.age}</td>
+                  <td className="w-[60px] whitespace-nowrap py-0.5 pr-3 font-bold">{t('sheet.ageRow', { age: m.age })}</td>
                   <td className="whitespace-nowrap py-0.5 pr-3 font-semibold">{m.label}</td>
                   <td className="py-0.5 text-slate-600">{m.detail}</td>
                 </tr>
@@ -548,13 +572,15 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
       )}
 
       {options.includeDetailedTable && (
-        <DetailedTablePrint results={results} spouseAgeOffset={spouseAgeOffset} />
+        <DetailedTablePrint results={results} spouseAgeOffset={spouseAgeOffset} t={t} />
       )}
 
       <div className="mt-3 text-[11px] leading-snug text-slate-500">
-        CPP from age {inputs.cppStartAge ?? '—'} · OAS from {inputs.oasStartAge ?? '—'} ·
-        inflation-adjusted spending · Canadian federal + {inputs.provinceCode} provincial tax.
-        {' '}Estimates only — not financial advice.
+        {t('sheet.footer', {
+          cpp: inputs.cppStartAge ?? '—',
+          oas: inputs.oasStartAge ?? '—',
+          province: inputs.provinceCode,
+        })}
       </div>
     </div>
   );

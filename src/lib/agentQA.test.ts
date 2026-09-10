@@ -67,6 +67,13 @@ describe('buildQAPrompt', () => {
     expect(out).toContain('not personalized financial advice');
   });
 
+  it('localizes the framing and question when a locale is given', () => {
+    const out = buildQAPrompt(inputs, { results }, QA_PRESETS[0], undefined, 'fr-CA');
+    expect(out).toContain('Vous êtes un analyste canadien');
+    expect(out).toContain('suis-je en voie de financer ma retraite');
+    expect(out).not.toContain(QA_PRESETS[0].question.trim());
+  });
+
   it('labels the two plans "You" and "Spouse" for a household', () => {
     const withSpouse = baseInputs({
       rrspBalance: 500000, desiredSpending: 60000,

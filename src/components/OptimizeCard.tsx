@@ -61,6 +61,14 @@ export function OptimizeCard({ inputs, config, onApply }: OptimizeCardProps) {
 export function StrategyExplorer({ inputs, config, onApply }: OptimizeCardProps) {
   const { t } = useTranslation('pages');
   const report: StrategyReport = useMemo(() => runStrategies(inputs, config), [inputs, config]);
+  // Default ON: the table is "what adds money", not the full battery. Suggested
+  // actions still come from the full report so a losing lever that the engine
+  // still wants to mention (GIS, tax) isn't silently dropped.
+  const [onlyGains, setOnlyGains] = useState(true);
+  const shown = onlyGains
+    ? report.strategies.filter(s => s.deltaSpending > 0)
+    : report.strategies;
+  const hiddenCount = report.strategies.length - shown.length;
 
   return (
     <div>
@@ -73,6 +81,18 @@ export function StrategyExplorer({ inputs, config, onApply }: OptimizeCardProps)
           ))}
         </ul>
       </div>
+
+      <label className="mb-2 flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+        <input
+          type="checkbox"
+          checked={onlyGains}
+          onChange={e => setOnlyGains(e.target.checked)}
+        />
+        {t('optimizer.onlyGains')}
+        {onlyGains && hiddenCount > 0 && (
+          <span className="text-[11px] text-slate-400">{t('optimizer.hidingLosers', { count: hiddenCount })}</span>
+        )}
+      </label>
 
       {/* Strategy table */}
       <div className="overflow-x-auto">
@@ -90,7 +110,7 @@ export function StrategyExplorer({ inputs, config, onApply }: OptimizeCardProps)
           </thead>
           <tbody>
             <StrategyRow r={report.baseline} isBaseline onApply={onApply} />
-            {report.strategies.map(s => (
+            {shown.map(s => (
               <StrategyRow key={s.id} r={s} onApply={onApply} />
             ))}
           </tbody>

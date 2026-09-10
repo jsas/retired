@@ -2,8 +2,9 @@
 // The beta page wrappers: the Data page is ONE home — the share surface
 // (SharingPage) and the full backup/restore/projection-export surface
 // (DataPage) stacked — so nothing lives on a side route. Issue #162 split the
-// old combined Insights page into the five Tools-menu surfaces, each featuring
-// the shared projection timeline. See BETA-MAP §3b.
+// old combined Insights page into the Tools-menu surfaces, each featuring
+// the shared projection timeline (Compare later joined that menu and draws
+// every saved plan instead). See BETA-MAP §3b.
 // jsdom (not node) because SharingPage builds a share URL from window.location.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
@@ -13,7 +14,7 @@ import { baseInputs, testConfig } from '../../../packages/engine-core/test/helpe
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
   BetaDataPage, BetaSchedulePage, BetaSteeringPage, BetaOptimizerPage,
-  BetaMonteCarloPage, BetaBacktestPage, BetaSolverPage, BetaPlansPage,
+  BetaMonteCarloPage, BetaBacktestPage, BetaSolverPage, BetaComparePage, BetaPlansPage,
 } from './pages';
 import { DEFAULT_PROJECTION_EXPORT } from '../../lib/projectionExport';
 import { runBacktest } from '../../lib/historicalReturns';
@@ -71,6 +72,7 @@ describe('The Tools menu pages each feature the projection timeline', () => {
     expect(html).toContain('Optimizer');
     expect(html).toContain(TIMELINE_MARK);
     expect(html).toContain('Suggested course of action');
+    expect(html).toContain('Only show things that add money');
   });
 
   it('Monte Carlo: the fan under the timeline (needs a request)', () => {
@@ -118,7 +120,7 @@ describe('The Tools menu pages each feature the projection timeline', () => {
 });
 
 describe('BetaPlansPage — list plus this plan\'s numbers', () => {
-  it('stacks the plan list, the current-plan editor, and compare — no Details menu leftover', () => {
+  it('stacks the plan list and the current-plan editor — compare lives under Tools', () => {
     const html = renderToStaticMarkup(
       createElement(BetaPlansPage, {
         chip,
@@ -127,17 +129,30 @@ describe('BetaPlansPage — list plus this plan\'s numbers', () => {
           onScenariosChange: () => {}, revisions: [], onRollback: () => {},
           onSelectScenario: () => {}, onCreateScenario: () => {},
         },
-        compareProps: { scenarios, activeScenarioId: 's1', config },
         detailsProps: { inputs, onChange: () => {}, section: null },
       }),
     );
     expect(html).toContain('Plans');
     expect(html).toContain('This plan');
-    expect(html).toContain('Compare plans');
+    expect(html).not.toContain('Compare plans');
     expect(html).toContain('details-profile');
     expect(html).toContain('Test plan');
     expect(html).not.toContain('>Details<');
     expect(html).not.toContain('>Profiles<');
+  });
+});
+
+describe('BetaComparePage — every saved plan on one chart', () => {
+  it('is its own Tools page, without a second projection strip', () => {
+    const html = renderToStaticMarkup(
+      createElement(BetaComparePage, {
+        chip,
+        compareProps: { scenarios, activeScenarioId: 's1', config },
+      }),
+    );
+    expect(html).toContain('Compare plans');
+    expect(html).toContain('Test plan');
+    expect(html).not.toContain('This plan');
   });
 });
 

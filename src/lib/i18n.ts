@@ -1,6 +1,6 @@
-// Site locale. Canadian English / French only. UI chrome, help, print and
-// settings copy live in src/locales/{en-CA,fr-CA}/*.json. The assistant's
-// prose still follows the same locale via the system-prompt line.
+// Site locale. Canadian English / French only. UI chrome, help, print,
+// settings, and the assistant's default system-prompt copy live in
+// src/locales/{en-CA,fr-CA}/*.json.
 
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -15,6 +15,7 @@ import enPages from '../locales/en-CA/pages.json';
 import enPrint from '../locales/en-CA/print.json';
 import enSettings from '../locales/en-CA/settings.json';
 import enDetails from '../locales/en-CA/details.json';
+import enPrompts from '../locales/en-CA/prompts.json';
 
 import frCommon from '../locales/fr-CA/common.json';
 import frNav from '../locales/fr-CA/nav.json';
@@ -24,19 +25,22 @@ import frPages from '../locales/fr-CA/pages.json';
 import frPrint from '../locales/fr-CA/print.json';
 import frSettings from '../locales/fr-CA/settings.json';
 import frDetails from '../locales/fr-CA/details.json';
+import frPrompts from '../locales/fr-CA/prompts.json';
 
 export const I18N_NAMESPACES = [
-  'common', 'nav', 'landing', 'help', 'pages', 'print', 'settings', 'details',
+  'common', 'nav', 'landing', 'help', 'pages', 'print', 'settings', 'details', 'prompts',
 ] as const;
 
 const resources = {
   'en-CA': {
     common: enCommon, nav: enNav, landing: enLanding, help: enHelp,
     pages: enPages, print: enPrint, settings: enSettings, details: enDetails,
+    prompts: enPrompts,
   },
   'fr-CA': {
     common: frCommon, nav: frNav, landing: frLanding, help: frHelp,
     pages: frPages, print: frPrint, settings: frSettings, details: frDetails,
+    prompts: frPrompts,
   },
 } as const;
 

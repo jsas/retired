@@ -176,7 +176,9 @@ export function toggleFavorite(settings: AiSettings, key: string): AiSettings {
 }
 
 /** What the dock dropdown lists: shortlisted keys, plus the in-use model so
- *  a pick never vanishes mid-chat. Empty shortlist → the recommended local. */
+ *  a pick never vanishes mid-chat. Empty shortlist → the recommended local as
+ *  a suggestion (not selected — the picker still shows "Choose a model"
+ *  until the user picks). */
 export function chatPickerEntries(
   entries: ModelCatalogEntry[],
   settings: AiSettings,

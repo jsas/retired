@@ -526,9 +526,11 @@
         "stratégies",
         "variantes",
         "appliquer",
-        "ce qui aide le plus"
+        "ce qui aide le plus",
+        "ajoute de l'argent",
+        "améliorations"
       ],
-      "body": "L'Optimiseur relance votre plan sous un menu d'alternatives nommées — moment RPC/SV, âges de début de pension, ordres de retrait, moment d'hypothèque inversée, travail à temps partiel — chacune notée selon les dépenses après impôt soutenables qu'elle appuie, avec un Appliquer en un clic. C'est déterministe : même plan en entrée, même réponse en sortie."
+      "body": "L'Optimiseur relance votre plan sous un menu d'alternatives nommées — moment RPC/SV, âges de début de pension, ordres de retrait, moment d'hypothèque inversée, travail à temps partiel — chacune notée selon les dépenses après impôt soutenables qu'elle appuie, avec un Appliquer en un clic. C'est déterministe : même plan en entrée, même réponse en sortie.\n\nPar défaut, le tableau n'affiche que les variantes qui **ajoutent de l'argent** par rapport au plan actuel (dépenses soutenables plus élevées). Décochez pour voir celles qui coûtent. Le plan actuel reste toujours la première rangée."
     },
     "optimize-spending": {
       "title": "Solveur : dépenses soutenables",
@@ -568,7 +570,7 @@
         "profil",
         "détails"
       ],
-      "body": "Un plan est un jeu complet de chiffres (en interne un « scénario » — même idée). L'icône de profil dans l'en-tête (en haut à droite, à côté de la pastille de verdict) ouvre **Plans** (#/plan) — la liste des plans enregistrés, puis les chiffres derrière le plan courant (ce qui était Détails), puis une comparaison côte à côte. Créez, renommez, dupliquez, supprimez, ou ramenez un plan dans son historique. Les modifications s'enregistrent d'elles-mêmes un instant après les avoir appliquées; l'icône d'annulation à côté de l'icône de profil recule d'un enregistrement à la fois. Faites-en plusieurs — « retraite à 60 ans » vs « 65 » — et basculez ou comparez-les."
+      "body": "Un plan est un jeu complet de chiffres (en interne un « scénario » — même idée). L'icône de profil dans l'en-tête (en haut à droite, à côté de la pastille de verdict) ouvre **Plans** (#/plan) — la liste des plans enregistrés, puis les chiffres derrière le plan courant (ce qui était Détails). Créez, renommez, dupliquez, supprimez, ou ramenez un plan dans son historique. Les modifications s'enregistrent d'elles-mêmes un instant après les avoir appliquées; l'icône d'annulation à côté de l'icône de profil recule d'un enregistrement à la fois. Faites-en plusieurs — « retraite à 60 ans » vs « 65 » — et basculez entre eux, ou ouvrez **Comparer les plans** dans Outils pour les aligner."
     },
     "autosave-undo": {
       "title": "Enregistrement auto et annulation",
@@ -586,14 +588,19 @@
     },
     "compare": {
       "title": "Comparer des plans",
-      "section": "Plans",
+      "section": "Analysis",
       "keywords": [
         "côte à côte",
         "comparer des scénarios",
         "lequel est mieux",
-        "profils"
+        "profils",
+        "légende",
+        "basculer",
+        "ménage",
+        "conjoint",
+        "outils"
       ],
-      "body": "La carte Comparer de la page Plans met vos plans enregistrés côte à côte — verdict, l'argent-dure-jusqu'à, dépenses, impôt et richesse finale — pour voir quelle version tient le mieux. Chacun est noté avec son conjoint résolu : un plan dont le conjoint est un plan lié est comparé comme le ménage complet."
+      "body": "**Comparer les plans** vit dans le menu Outils (#/compare). Il met vos plans enregistrés côte à côte — verdict, l'argent-dure-jusqu'à, dépenses, impôt et richesse finale — pour voir quelle version tient le mieux. Un plan avec un conjoint s'affiche comme un **ménage** (nommé d'après le plan lié s'il y en a un). Masquez le conjoint pour cette comparaison seulement — le plan enregistré n'est pas modifié; afficher le conjoint ramène le ménage.\n\nCliquez un nom dans la légende pour cacher sa ligne (et sa rangée dans le tableau); cliquez le nom estompé pour la ramener. La légende garde toujours chaque plan, donc il y a toujours un moyen de restaurer une ligne."
     },
     "assistant": {
       "title": "L’assistant",
@@ -672,7 +679,7 @@
         "français",
         "french"
       ],
-      "body": "Paramètres → Général choisit la langue du site : suivre le navigateur, anglais (Canada) ou français (Canada). Toute l'appli — chrome, aide, impression et l'assistant — suit ce choix. Un navigateur français se met par défaut en français jusqu'à ce que vous choisissiez autrement. L'assistant reçoit aussi une instruction extra seulement pour le français — l'anglais est le défaut et n'a pas besoin de ligne extra.\n\nParamètres → Assistant contrôle chaque morceau de la requête : la persona, les instructions d'outils, les règles du programme en direct, la ligne de page courante, le nom du plan, le catalogue d'outils du modèle local et le résumé du plan, et si les outils sont annoncés du tout. Décochez un morceau pour le retirer du prochain message. Modifiez une invite pour remplacer le texte intégré; vide rétablit le défaut.\n\nChaque modèle local a un défaut de catalogue pour les outils (Qwen3.5 2B et Bonsai 1,7B désactivés; 4B et plus activés). Forcez un modèle Activé ou Désactivé sur cette page pour tester; Auto rétablit le catalogue. Les modèles infonuagiques utilisent toujours les outils sauf si vous décochez Envoyer les outils.\n\nLes petits modèles locaux suivent le dernier texte qu'ils voient — laissez « Persona en dernier » activé pour qu'une voix personnalisée (même « dis seulement oui ») ne soit pas noyée par le blurb d'outils. Les notes par clavardage vivent encore sur le compositeur et se basculent séparément.\n\nDécocher chaque morceau n'envoie aucun message système du tout (pas un message vide). L'onglet Assistant montre le système assemblé pour que vous puissiez confirmer qu'il est vide. Changer ces drapeaux vide aussi le cache restant du modèle local pour que le prochain message ne garde pas les instructions précédentes. Les modèles questions seulement (et Envoyer les outils désactivé) lancent encore une passe de clavardage ordinaire avec ce système vide — ils ne tombent pas dans une clôture qui reconstruirait la persona par défaut."
+      "body": "Paramètres → Général choisit la langue du site : suivre le navigateur, anglais (Canada) ou français (Canada). Toute l'appli — chrome, aide, impression et l'assistant — suit ce choix. Un navigateur français se met par défaut en français jusqu'à ce que vous choisissiez autrement. Chaque requête peut nommer la langue de la page (Paramètres → Assistant → Langue de la page, activé par défaut) pour que l'assistant réfléchisse et réponde dans cette langue. Un salut comme « hi » n'est pas un changement de langue — seulement une phrase complète dans une autre langue l'est. La persona intégrée, les blurbs d'outils, la ligne de page, le nom du plan, les règles du programme et le texte de clôture suivent cette langue. Le catalogue d'appels d'outils reste en anglais pour que le protocole ne dérive pas.\n\nParamètres → Assistant contrôle chaque morceau de la requête : la persona, les instructions d'outils, les règles du programme en direct, la ligne de page courante, le nom du plan, le catalogue d'outils du modèle local et le résumé du plan, et si les outils sont annoncés du tout. Décochez un morceau pour le retirer du prochain message. Modifiez une invite pour remplacer le texte intégré; vide rétablit le défaut pour la langue actuelle.\n\nChaque modèle local a un défaut de catalogue pour les outils (Qwen3.5 2B et Bonsai 1,7B désactivés; 4B et plus activés). Forcez un modèle Activé ou Désactivé sur cette page pour tester; Auto rétablit le catalogue. Les modèles infonuagiques utilisent toujours les outils sauf si vous décochez Envoyer les outils.\n\nLes petits modèles locaux suivent le dernier texte qu'ils voient — laissez « Persona en dernier » activé pour qu'une voix personnalisée (même « dis seulement oui ») ne soit pas noyée par le blurb d'outils. Les notes par clavardage vivent encore sur le compositeur et se basculent séparément.\n\nDécocher chaque morceau n'envoie aucun message système du tout (pas un message vide). L'onglet Assistant montre le système assemblé pour que vous puissiez confirmer qu'il est vide. Changer ces drapeaux vide aussi le cache restant du modèle local pour que le prochain message ne garde pas les instructions précédentes. Les modèles questions seulement (et Envoyer les outils désactivé) lancent encore une passe de clavardage ordinaire avec ce système vide — ils ne tombent pas dans une clôture qui reconstruirait la persona par défaut."
     },
     "data-backup-restore": {
       "title": "Sauvegarde / restauration",
@@ -707,7 +714,7 @@
         "csv",
         "télécharger le tableau"
       ],
-      "body": "La page Impression choisit ce que l'imprimé inclut — le résumé d'une page (profil, épargne, verdict) plus n'importe lequel de : le graphique de frise, un éventail Monte Carlo frais, et un tableau des jalons majeurs. Imprimer ouvre ensuite le dialogue du navigateur; choisissez « Enregistrer au format PDF » pour le classer ou l'envoyer. Le lien CSV télécharge le tableau de projection année par année pour un tableur."
+      "body": "La page Impression choisit ce que l'imprimé inclut — le résumé d'une page (profil, épargne, verdict) plus n'importe lequel de : le graphique de frise, un éventail Monte Carlo frais, et un tableau des jalons majeurs. La feuille suit la langue du site (anglais ou français). Imprimer ouvre ensuite le dialogue du navigateur; choisissez « Enregistrer au format PDF » pour le classer ou l'envoyer. Le lien CSV télécharge le tableau de projection année par année pour un tableur."
     },
     "inflation": {
       "title": "Inflation",

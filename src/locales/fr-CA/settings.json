@@ -167,7 +167,7 @@
     "on": "Activé",
     "off": "Désactivé",
     "personaTitle": "Persona (tous les clavardages)",
-    "personaHint": "Remplace la voix de planificateur intégrée si non vide. Laissez vide pour le défaut.",
+    "personaHint": "Remplace la voix de planificateur intégrée si non vide. Laissez vide pour le défaut de la langue de page actuelle.",
     "toolNativeTitle": "Instructions d’outils — natives (nuage)",
     "toolNativeHint": "Comment un modèle à appels de fonctions doit utiliser les outils. Envoyé seulement si Instructions d’outils est activé et que le modèle est infonuagique.",
     "toolPromptTitle": "Instructions d’outils — locales (protocole de prompt)",
@@ -180,6 +180,7 @@
     "send": {
       "includePersona": { "label": "Persona", "hint": "La voix de base (intégrée ou votre remplacement)." },
       "includePageLine": { "label": "Page actuelle", "hint": "Une ligne nommant la page où vous êtes." },
+      "includeLocale": { "label": "Langue de la page", "hint": "Dit au modèle de réfléchir et de répondre dans la langue du site (en-CA / fr-CA)." },
       "includeToolInstructions": { "label": "Instructions d’outils", "hint": "Comment utiliser les outils / que faire lorsqu’ils sont désactivés." },
       "includePromptCatalog": { "label": "Catalogue d’outils (local)", "hint": "La liste TOOL_CALL: de chaque outil. Modèles locaux seulement." },
       "includeProgramRules": { "label": "Règles de programmes", "hint": "Chiffres en direct RPC/SV/SRG/FERR/plafonds des paramètres du moteur." },

@@ -129,11 +129,28 @@
       ]
     },
     {
+      "view": "compare",
+      "route": "#/compare",
+      "url": "https://jsas.github.io/retired/#/compare",
+      "title": "Compare plans",
+      "description": "Side-by-side outcomes across all saved plans — each scored as a household when it has a spouse, with a compare-only toggle to hide the spouse on this page.",
+      "keywords": [
+        "compare",
+        "side-by-side",
+        "which plan",
+        "vs",
+        "household",
+        "spouse",
+        "partner",
+        "compare plans"
+      ]
+    },
+    {
       "view": "scenarios",
       "route": "#/plan",
       "url": "https://jsas.github.io/retired/#/plan",
       "title": "Plans",
-      "description": "Your saved plans and the numbers behind the current one: switch, rename, duplicate, roll back — then edit every input (accounts, income, benefits, spending, markets) in one scroll, and compare plans side by side.",
+      "description": "Your saved plans and the numbers behind the current one: switch, rename, duplicate, roll back — then edit every input (accounts, income, benefits, spending, markets) in one scroll.",
       "keywords": [
         "plans",
         "plan",
@@ -144,9 +161,6 @@
         "duplicate",
         "rename",
         "delete",
-        "compare",
-        "side-by-side",
-        "which plan",
         "revisions",
         "tfsa room",
         "rrsp room",

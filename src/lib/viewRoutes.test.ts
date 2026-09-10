@@ -60,11 +60,12 @@ describe('viewFromHash', () => {
 
 describe('hashForView', () => {
   it('round-trips every unfolded view', () => {
-    // Folded legacy views (compare/export/sharing/details) intentionally
-    // resolve to their destination page — the round-trip for those is covered
-    // by the fold tests below. Issue #162 unfurled the Tools surfaces into this list.
+    // Folded legacy views (export/sharing/details) intentionally resolve to
+    // their destination page — the round-trip for those is covered by the fold
+    // tests below. Issue #162 unfurled the Tools surfaces; Compare later joined
+    // that menu and is in this list too.
     const views: View[] = [
-      'projection', 'math', 'eq', 'optimize', 'montecarlo', 'backtest', 'solver',
+      'projection', 'math', 'eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare',
       'scenarios', 'data', 'print', 'donate',
       'welcome', 'help', 'settings', 'styleguide',
     ];
@@ -80,7 +81,7 @@ describe('hashForView', () => {
     expect(foldTarget('montecarlo')).toBe('montecarlo');
     expect(foldTarget('backtest')).toBe('backtest');
     expect(foldTarget('solver')).toBe('solver');
-    expect(foldTarget('compare')).toBe('scenarios');
+    expect(foldTarget('compare')).toBe('compare');
     expect(foldTarget('details')).toBe('scenarios');
     expect(foldTarget('legacyScenarios')).toBe('scenarios');
     expect(foldTarget('export')).toBe('data');
@@ -88,9 +89,9 @@ describe('hashForView', () => {
   });
 
   it('hashForView prints the destination hash for folded views', () => {
-    // A "Go to Compare" / "Go to Details" link the assistant prints must land
-    // on Plans — not on a dead folded route.
-    expect(hashForView('compare')).toBe('#/plan');
+    // A "Go to Details" link the assistant prints must land on Plans — not on
+    // a dead folded route. Compare is its own Tools page now.
+    expect(hashForView('compare')).toBe('#/compare');
     expect(hashForView('details')).toBe('#/plan');
     expect(hashForView('legacyScenarios')).toBe('#/plan');
     expect(hashForView('scenarios')).toBe('#/plan');
@@ -104,7 +105,7 @@ describe('hashForView', () => {
   });
 
   it('round-trips folded views through their fold', () => {
-    for (const v of ['compare', 'export', 'sharing', 'details', 'legacyScenarios'] as View[]) {
+    for (const v of ['export', 'sharing', 'details', 'legacyScenarios'] as View[]) {
       expect(viewFromHash(hashForView(v))).toBe(foldTarget(v));
     }
   });

@@ -502,9 +502,11 @@
         "strategies",
         "variants",
         "apply",
-        "what helps most"
+        "what helps most",
+        "add money",
+        "improvements"
       ],
-      "body": "The Optimizer re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out."
+      "body": "The Optimizer re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.\n\nBy default the table only lists variants that **add money** versus the current plan (higher sustainable spending). Untick that to see the ones that cost. The current plan always stays as the first row."
     },
     "optimize-spending": {
       "title": "Solver: sustainable spending",
@@ -544,7 +546,7 @@
         "profile",
         "details"
       ],
-      "body": "A plan is one complete set of numbers (internally a \"scenario\" — same idea). The profile icon in the header (top right, next to the verdict chip) opens **Plans** (#/plan) — the list of saved plans, then the numbers behind the current one (what used to be Details), then a side-by-side compare. Create, rename, duplicate, delete, or roll a plan back through its history. Edits save themselves a moment after you apply them; the undo icon next to the profile icon steps back one save at a time. Make several — \"retire at 60\" vs \"65\" — and flip or compare them."
+      "body": "A plan is one complete set of numbers (internally a \"scenario\" — same idea). The profile icon in the header (top right, next to the verdict chip) opens **Plans** (#/plan) — the list of saved plans, then the numbers behind the current one (what used to be Details). Create, rename, duplicate, delete, or roll a plan back through its history. Edits save themselves a moment after you apply them; the undo icon next to the profile icon steps back one save at a time. Make several — \"retire at 60\" vs \"65\" — and flip between them, or open **Compare plans** in Tools to line them up."
     },
     "autosave-undo": {
       "title": "Autosave and undo",
@@ -562,14 +564,19 @@
     },
     "compare": {
       "title": "Comparing plans",
-      "section": "Plans",
+      "section": "Analysis",
       "keywords": [
         "side by side",
         "compare scenarios",
         "which is better",
-        "profiles"
+        "profiles",
+        "legend",
+        "toggle",
+        "household",
+        "spouse",
+        "tools"
       ],
-      "body": "The Compare card on the Plans page puts your saved plans side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version holds up best. Each is scored with its own resolved spouse: a plan whose spouse is a linked plan is compared as the full household."
+      "body": "**Compare plans** lives in the Tools menu (#/compare). It puts your saved plans side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version holds up best. A plan with a partner shows as a **household** (named after the linked plan when there is one). Hide the spouse for that compare only — the saved plan is not patched; show spouse brings the household back.\n\nClick a name in the legend to hide its line (and its row in the table); click the faded name again to bring it back. The legend always keeps every plan, so there is always a way to restore a line."
     },
     "assistant": {
       "title": "The assistant",
@@ -648,7 +655,7 @@
         "français",
         "french"
       ],
-      "body": "Settings → General picks the site language: follow the browser, English (Canada), or Français (Canada). The whole app — chrome, help, print, and the assistant — follows that pick. A French browser defaults to français until you pick otherwise. The assistant also gets an extra instruction only for French — English is the default and needs no extra line.\n\nSettings → Assistant controls every piece of the request: the persona, tool instructions, the live program rules, the current-page line, the plan name, the local-model tool catalog and plan digest, and whether tools are advertised at all. Uncheck a piece to drop it from the next message. Edit a prompt to replace the built-in text; blank restores the default.\n\nEach local model has a catalog default for tools (Qwen3.5 2B and Bonsai 1.7B off; 4B and up on). Force a model On or Off on that page for testing; Auto restores the catalog. Cloud models always use tools unless you uncheck Send tools.\n\nSmall local models follow the last text they see — leave \"Persona last\" on so a custom voice (even \"say only yes\") is not drowned by the tool blurb. Per-chat notes still live on the composer and can be toggled separately.\n\nUnchecking every piece sends no system message at all (not a blank one). The Assistant tab shows the assembled system so you can confirm it is empty. Changing those flags also clears the local model's leftover cache so the next message does not keep the previous instructions. Questions-only models (and Send tools off) still run one ordinary chat pass with that empty system — they do not fall into a wrap-up that would rebuild the default persona."
+      "body": "Settings → General picks the site language: follow the browser, English (Canada), or Français (Canada). The whole app — chrome, help, print, and the assistant — follows that pick. A French browser defaults to français until you pick otherwise. Every request can name the page language (Settings → Assistant → Page language, on by default) so the assistant thinks and answers in it. A greeting like \"hi\" is not a language switch — only a full sentence in another language is. The built-in persona, tool blurbs, page line, plan name, program rules, and wrap-up copy follow that language. The tool-call catalog stays in English so the protocol does not drift.\n\nSettings → Assistant controls every piece of the request: the persona, tool instructions, the live program rules, the current-page line, the plan name, the local-model tool catalog and plan digest, and whether tools are advertised at all. Uncheck a piece to drop it from the next message. Edit a prompt to replace the built-in text; blank restores the default for the current language.\n\nEach local model has a catalog default for tools (Qwen3.5 2B and Bonsai 1.7B off; 4B and up on). Force a model On or Off on that page for testing; Auto restores the catalog. Cloud models always use tools unless you uncheck Send tools.\n\nSmall local models follow the last text they see — leave \"Persona last\" on so a custom voice (even \"say only yes\") is not drowned by the tool blurb. Per-chat notes still live on the composer and can be toggled separately.\n\nUnchecking every piece sends no system message at all (not a blank one). The Assistant tab shows the assembled system so you can confirm it is empty. Changing those flags also clears the local model's leftover cache so the next message does not keep the previous instructions. Questions-only models (and Send tools off) still run one ordinary chat pass with that empty system — they do not fall into a wrap-up that would rebuild the default persona."
     },
     "data-backup-restore": {
       "title": "Backup / restore",
@@ -683,7 +690,7 @@
         "csv",
         "download table"
       ],
-      "body": "The Print page chooses what the printout includes — the one-page summary (profile, savings, verdict) plus any of: the timeline chart, a fresh Monte Carlo fan, and a table of major milestones. Print then opens the browser dialog; choose \"Save as PDF\" to file or email it. The CSV link downloads the year-by-year projection table for a spreadsheet."
+      "body": "The Print page chooses what the printout includes — the one-page summary (profile, savings, verdict) plus any of: the timeline chart, a fresh Monte Carlo fan, and a table of major milestones. The sheet follows the site language (English or French). Print then opens the browser dialog; choose \"Save as PDF\" to file or email it. The CSV link downloads the year-by-year projection table for a spreadsheet."
     },
     "inflation": {
       "title": "Inflation",

@@ -50,6 +50,7 @@ export interface AiPromptPreset {
 export interface AiPromptSend {
   includePersona?: boolean;
   includePageLine?: boolean;
+  includeLocale?: boolean;
   includeToolInstructions?: boolean;
   includePromptCatalog?: boolean;
   includeProgramRules?: boolean;
@@ -66,6 +67,7 @@ export interface AiPromptSend {
 export const DEFAULT_AI_PROMPT_SEND: Required<AiPromptSend> = {
   includePersona: true,
   includePageLine: true,
+  includeLocale: true,
   includeToolInstructions: true,
   includePromptCatalog: true,
   includeProgramRules: true,
@@ -134,6 +136,7 @@ const promptSchema = z.object({
 const promptSendSchema = z.object({
   includePersona: z.boolean().optional(),
   includePageLine: z.boolean().optional(),
+  includeLocale: z.boolean().optional(),
   includeToolInstructions: z.boolean().optional(),
   includePromptCatalog: z.boolean().optional(),
   includeProgramRules: z.boolean().optional(),

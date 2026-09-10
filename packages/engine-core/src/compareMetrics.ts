@@ -58,20 +58,52 @@ export function metricsFromResults(id: string, name: string, results: Retirement
   };
 }
 
+/**
+ * Inputs for one compare pass. Linked spouses (`spouseSource.kind === 'scenario'`)
+ * are materialized against `scenarios` first so a host that stores only the
+ * link still scores as a household. `includeSpouse: false` is the compare-only
+ * overlay: the spouse stays on the saved plan, but this pass runs the primary
+ * alone (`enabled: false` so `enabledPeople` skips them).
+ */
+export function inputsForCompare(
+  scenario: Scenario,
+  scenarios?: Array<{ id: string; name?: string; inputs: RetirementInputs }>,
+  includeSpouse = true,
+): RetirementInputs {
+  let inputs = scenario.inputs;
+  if (scenarios && inputs.spouseSource?.kind === 'scenario') {
+    const res = resolveSpouseSource(inputs, scenarios, scenario.id);
+    if (res.spouse) inputs = { ...inputs, spouse: res.spouse };
+  }
+  if (!includeSpouse && inputs.spouse) {
+    return { ...inputs, spouse: { ...inputs.spouse, enabled: false } };
+  }
+  return inputs;
+}
+
+/** The linked partner's saved-plan name, when this scenario's spouse is
+ *  another plan. Undefined for singles and for an unresolved / builtin spouse. */
+export function linkedSpouseName(
+  scenario: Scenario,
+  scenarios: Array<{ id: string; name: string }>,
+): string | undefined {
+  if (scenario.inputs.spouseSource?.kind !== 'scenario') return undefined;
+  const id = scenario.inputs.spouseSource.scenarioId;
+  return scenarios.find(s => s.id === id)?.name;
+}
+
 /** Run one scenario's inputs through the engine and extract its metrics. A
  *  scenario that LINKS its spouse to another saved plan is resolved against the
  *  same scenario list first, so the comparison uses the linked plan's person —
- *  not the stale embedded spouse the link replaced. */
+ *  not the stale embedded spouse the link replaced. `includeSpouse` is the
+ *  compare-only overlay (default on); it never writes back to the scenario. */
 export function computeScenarioMetrics(
   scenario: Scenario,
   config: AppConfig,
   scenarios?: Array<{ id: string; inputs: RetirementInputs }>,
+  includeSpouse = true,
 ): ScenarioMetrics {
-  let inputs = scenario.inputs;
-  if (scenarios && inputs.spouseSource?.kind === 'scenario' && inputs.spouse?.enabled) {
-    const res = resolveSpouseSource(inputs, scenarios, scenario.id);
-    if (res.spouse) inputs = { ...inputs, spouse: res.spouse };
-  }
+  const inputs = inputsForCompare(scenario, scenarios, includeSpouse);
   const results = calculateHousehold(inputs, config);
   return metricsFromResults(scenario.id, scenario.name, results, inputs);
 }
