@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { PrintOptions } from '../lib/printOptions';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import { Panel, Check } from '../design/primitives';
@@ -19,6 +20,7 @@ interface PrintOptionsCardProps {
 export function PrintOptionsCard({
   options, onChange, onPrint, mcPending, mcResults
 }: PrintOptionsCardProps) {
+  const { t } = useTranslation('print');
   const set = (patch: Partial<PrintOptions>) => onChange({ ...options, ...patch });
 
   // Block printing until the MC worker has delivered the chart data.
@@ -26,36 +28,35 @@ export function PrintOptionsCard({
   const canPrint = mcReady && !mcPending;
 
   return (
-    <Panel label="Build the printout">
+    <Panel label={t('build')}>
       <p className="max-w-lg text-[13px] leading-relaxed text-slate-600">
-        The one-page summary — profile, savings, verdict — is always included.
-        Add any of these sections:
+        {t('lead')}
       </p>
 
       <div className="mt-5 max-w-lg space-y-4">
           <OptionRow
             checked={options.includeTimeline}
             onChange={v => set({ includeTimeline: v })}
-            title="Projection timeline chart"
-            note="Portfolio balance by age with the retirement-age marker."
+            title={t('timeline')}
+            note={t('timelineNote')}
           />
           <OptionRow
             checked={options.includeMonteCarlo}
             onChange={v => set({ includeMonteCarlo: v })}
-            title="Monte Carlo fan chart"
-            note="Percentile bands (10th–90th) and success rate from a fresh 500-run simulation. Takes a moment to compute."
+            title={t('monteCarlo')}
+            note={t('monteCarloNote')}
           />
           <OptionRow
             checked={options.includeMilestones}
             onChange={v => set({ includeMilestones: v })}
-            title="Major spending milestones & changes"
-            note="Retirement, CPP/OAS start, RRIF conversion, spending-phase changes and one-time cash events, in age order."
+            title={t('milestones')}
+            note={t('milestonesNote')}
           />
           <OptionRow
             checked={options.includeDetailedTable}
             onChange={v => set({ includeDetailedTable: v })}
-            title="Detailed year-by-year table"
-            note="Every year with balances, withdrawals, tax and benefits — plus the per-year drill-down (withdrawal sources, growth per account, reverse mortgage, events). Prints several pages."
+            title={t('table')}
+            note={t('tableNote')}
           />
       </div>
 
@@ -64,15 +65,15 @@ export function PrintOptionsCard({
           onClick={onPrint}
           disabled={!canPrint}
           className={canPrint ? cls.primaryBtn : 'border border-slate-200 px-4 py-2 text-sm font-medium text-slate-400'}
-          title={canPrint ? 'Open the print dialog' : 'Waiting for the Monte Carlo simulation…'}
+          title={canPrint ? t('printTitle') : t('waitingMc')}
         >
-          {mcPending ? 'Preparing chart…' : 'Print summary'}
+          {mcPending ? t('preparing') : t('printSummary')}
         </button>
         {options.includeMonteCarlo && !mcResults && !mcPending && (
-          <span className="text-[11px] text-slate-400">The simulation runs when the chart is needed.</span>
+          <span className="text-[11px] text-slate-400">{t('simWhenNeeded')}</span>
         )}
         {mcPending && (
-          <span className="text-[11px] text-slate-400">Running 500 simulations for the fan chart…</span>
+          <span className="text-[11px] text-slate-400">{t('running500')}</span>
         )}
       </div>
     </Panel>

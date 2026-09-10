@@ -353,7 +353,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
     propose_patch: { description:      'PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.', schema: proposePatchArgs },
     propose_spouse: { description:      'PROPOSE linking a partner (another saved plan), creating a new partner plan then linking it, or unlinking. Partner numbers live on that plan, not inline. User confirms.', schema: proposeSpouseArgs },
     propose_income: { description:      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.', schema: proposeIncomeArgs },
-    propose_spending_bands: { description:      'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.', schema: proposeSpendingBandsArgs },
+    propose_spending_bands: { description:      'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age; dollar amounts are desiredSpending × pctOfBase). User confirms.', schema: proposeSpendingBandsArgs },
     propose_market_periods: { description:      'PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.', schema: proposeMarketPeriodsArgs },
     propose_cash_event: { description:      'PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.', schema: proposeCashEventArgs },
     propose_reverse_mortgage: { description:      'PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.', schema: proposeReverseMortgageArgs },
@@ -428,6 +428,9 @@ export interface ToolContext {
    *  there's no view to switch. The flag only GATES the card; switching
    *  itself happens in the host after the user approves (see MutationProposal). */
   canNavigate?: boolean;
+  /** Assistant language (Canadian English / French). Optional — hosts that
+   *  omit it get English replies. UI chrome stays English either way. */
+  locale?: 'en-CA' | 'fr-CA';
 }
 
 export type ToolOutcome =
@@ -637,7 +640,8 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
   };
   const spending = {
     desiredSpending: i.desiredSpending,
-    bands: (i.spendingBands ?? []).map(b => `${(b.pctOfBase * 100).toFixed(0)}% from age ${b.fromAge}`),
+    bands: (i.spendingBands ?? []).map(b =>
+      `${(b.pctOfBase * 100).toFixed(0)}% (${money(i.desiredSpending * b.pctOfBase)}/yr) from age ${b.fromAge}`),
     events: (i.events ?? []).map(e => `${e.label}: ${money(e.amount)} ${e.direction} at age ${e.age}${e.endAge != null ? `–${e.endAge}` : ''}`),
     debts: describeDebts(i.debts),
   };
@@ -972,7 +976,7 @@ function proposeElement(
 
 /** Replace the whole spending-band set. */
 function proposeSpendingBands(
-  _ctx: ToolContext,
+  ctx: ToolContext,
   args: { bands: Array<{ fromAge: number; pctOfBase: number }>; rationale?: string },
 ): ToolOutcome {
   const band = z.object({ fromAge: z.number(), pctOfBase: z.number().min(0).max(3) });
@@ -981,12 +985,14 @@ function proposeSpendingBands(
     return { kind: 'error', content: `Invalid spending bands: ${zodIssues(res.error)}` };
   }
   const sorted = [...res.data].sort((a, b) => a.fromAge - b.fromAge);
+  const base = ctx.inputs.desiredSpending;
   return {
     kind: 'mutation',
     patch: { spendingBands: sorted },
     label: 'Set spending phases',
     rationale: args.rationale,
-    preview: { bands: sorted.map(b => `${(b.pctOfBase * 100).toFixed(0)}% from age ${b.fromAge}`) },
+    preview: { bands: sorted.map(b =>
+      `${(b.pctOfBase * 100).toFixed(0)}% (${money(base * b.pctOfBase)}/yr) from age ${b.fromAge}`) },
   };
 }
 

@@ -8,6 +8,8 @@
 // the life timeline, and the evidence row — all recomputing together off one
 // engine run.
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { BETA_COOKIE_NAME } from '../lib/betaSkin';
@@ -21,6 +23,7 @@ import { MarketDial } from './beta/MarketDial';
 import { DownMarketCheck } from './beta/DownMarketCheck';
 import { EvidenceRow } from './beta/EvidenceRow';
 import { firstEmptyAge, potDisplay } from '../lib/planDisplay';
+import { useAppLocale } from '../lib/localeContext';
 
 // The map's axis window defaults — retire age × spending. The spending axis
 // reads the Settings lever-range pref (spendingMax) when set; age bounds stay
@@ -48,23 +51,27 @@ interface BetaAppProps {
   assistant?: ReactNode;
 }
 
-function verdict(inputs: RetirementInputs, results: RetirementResults) {
+function verdict(inputs: RetirementInputs, results: RetirementResults, t: TFunction) {
   const pot = potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge);
   if (pot.holds) {
-    return { text: `Your money lasts to ${inputs.maxAge}.`, holds: true };
+    return { text: t('dash.verdictHolds', { age: inputs.maxAge }), holds: true };
   }
   const runsTo = pot.lastsTo ?? '?';
   const short = inputs.maxAge - (pot.lastsTo ?? inputs.maxAge);
   if (typeof runsTo === 'number' && short <= 0) {
-    return { text: `Your money lasts to ${runsTo}.`, holds: false };
+    return { text: t('dash.verdictLastsTo', { runsTo }), holds: false };
   }
-  return { text: `Your money runs out at ${runsTo} — ${short} years short of ${inputs.maxAge}.`, holds: false };
+  return { text: t('dash.verdictShort', { runsTo, short, age: inputs.maxAge }), holds: false };
 }
 
 export function BetaApp({
   inputs, onInputsChange, results, config, assistant,
 }: BetaAppProps) {
-  const v = verdict(inputs, results);
+  const { t } = useTranslation('pages');
+  const { t: tHelp } = useTranslation('help');
+  const { locale } = useAppLocale();
+  const money = (v: number) => fmtMoney(v, locale);
+  const v = verdict(inputs, results, t);
   const breakdown = results.yearlyBreakdown ?? [];
   const pot = potDisplay(breakdown, inputs.maxAge);
   // Where the investable pot hits $0 (null = leftover at the horizon).
@@ -73,19 +80,19 @@ export function BetaApp({
   const chip: VerdictChip = {
     tone: pot.holds ? 'holds' : (pot.emptyAge != null && inputs.maxAge - pot.emptyAge <= 6) ? 'borderline' : 'short',
     age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
-    label: pot.holds ? 'the plan holds' : 'runs short',
+    label: pot.holds ? t('holds') : t('short'),
   };
   return (
     <BetaPage chip={chip} assistant={assistant}>
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="min-w-0 flex-1">
             <VerdictHero
-              eyebrow={<>The verdict <HelpHint topic="verdict" /></>}
+              eyebrow={<>{tHelp('verdict')} <HelpHint topic="verdict" /></>}
               verdict={v.text}
               sub={
                 v.holds
-                  ? `Spending ${fmtMoney(inputs.desiredSpending)} a year from ${inputs.retirementAge}.`
-                  : `Cut spending or work longer below. Currently: ${fmtMoney(inputs.desiredSpending)} a year from ${inputs.retirementAge}.`
+                  ? t('dash.subHolds', { spend: money(inputs.desiredSpending), age: inputs.retirementAge })
+                  : t('dash.subShort', { spend: money(inputs.desiredSpending), age: inputs.retirementAge })
               }
             />
           </div>
@@ -97,8 +104,8 @@ export function BetaApp({
           </div>
         </div>
 
-        <Panel label="The ground your plan stands on" hint="contour-map" action={
-          <span className="text-[11px] text-slate-400">drag the dot, or use the faders</span>
+        <Panel label={t('dash.ground')} hint="contour-map" action={
+          <span className="text-[11px] text-slate-400">{t('dash.dragDot')}</span>
         }>
           <div className="grid gap-8 lg:grid-cols-[1.6fr_1fr]">
             <ContourMap
@@ -110,17 +117,17 @@ export function BetaApp({
 
             <div className="space-y-7">
               <Fader
-                label="Start Drawing"
+                label={t('dash.startDrawing')}
                 value={inputs.retirementAge}
                 min={window.ageMin} max={window.ageMax} step={1}
                 format={(val) => `${val}`}
                 onChange={(val) => onInputsChange({ ...inputs, retirementAge: val })}
               />
               <Fader
-                label="After Tax Spending"
+                label={t('dash.afterTaxSpending')}
                 value={inputs.desiredSpending}
                 min={window.spendBottom} max={window.spendTop} step={1000}
-                format={fmtMoney}
+                format={money}
                 onChange={(val) => onInputsChange({ ...inputs, desiredSpending: val })}
               />
               <DownMarketCheck inputs={inputs} config={config} />
@@ -128,15 +135,15 @@ export function BetaApp({
           </div>
         </Panel>
 
-        <Panel label="Your life on one line — this exact plan" hint="life-timeline">
+        <Panel label={t('dash.lifeLine')} hint="life-timeline">
           <ProjectionTimeline
-            series={[{ id: 'plan', label: 'portfolio', color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
+            series={[{ id: 'plan', label: t('portfolio'), color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
             pins={[
-              { age: inputs.currentAge, label: `you · ${inputs.currentAge}`, place: 'below', anchor: 'start', color: INK },
-              { age: inputs.retirementAge, label: `start drawing · ${inputs.retirementAge}`, color: '#475569',
+              { age: inputs.currentAge, label: t('youPin', { age: inputs.currentAge }), place: 'below', anchor: 'start', color: INK },
+              { age: inputs.retirementAge, label: t('startDrawingPin', { age: inputs.retirementAge }), color: '#475569',
                 onDragAge: (age) => onInputsChange({ ...inputs, retirementAge: Math.max(inputs.currentAge + 1, Math.min(inputs.maxAge - 1, age)) }) },
               ...(lifeDepletion != null
-                ? [{ age: lifeDepletion, label: `money runs out · ${lifeDepletion}`, color: RED_DOT }]
+                ? [{ age: lifeDepletion, label: t('runsOutPin', { age: lifeDepletion }), color: RED_DOT }]
                 : []),
             ]}
             /* The interactive layers (old-site parity, restyled): the spend
@@ -152,17 +159,20 @@ export function BetaApp({
           />
         </Panel>
 
-        <Panel label="The receipts" hint="evidence-row">
+        <Panel label={t('dash.receipts')} hint="evidence-row">
           <EvidenceRow inputs={inputs} results={results} breakdown={breakdown} />
         </Panel>
 
         <Footnote>
-          Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, the levers, the odds, the history and the solver live under the Tools menu. · The old site stays up as a reference for a while — <a className="underline" href="?beta">open it</a> ({BETA_COOKIE_NAME} cookie remembers; <a className="underline" href="?beta=off">back to the app</a>)
+          {t('dash.footnote')}{' '}
+          <a className="underline" href="?beta">{t('dash.openOld')}</a>{' '}
+          {t('dash.cookieRemembers', { cookie: BETA_COOKIE_NAME })}{' '}
+          <a className="underline" href="?beta=off">{t('dash.backToApp')}</a>)
         </Footnote>
     </BetaPage>
   );
 }
 
-function fmtMoney(v: number) {
-  return '$' + Math.round(v).toLocaleString('en-CA');
+function fmtMoney(v: number, locale = 'en-CA') {
+  return '$' + Math.round(v).toLocaleString(locale);
 }

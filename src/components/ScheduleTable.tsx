@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useAppLocale } from '../lib/localeContext';
 import { ChevronRight, ChevronDown, Columns3, GripVertical } from 'lucide-react';
 import type { YearlyBreakdown, YearDetail } from '@retired/engine-core/retirementEngine';
 import { prefKV } from '../lib/prefKv';
@@ -29,8 +31,8 @@ interface ScheduleTableProps {
   spouseAgeOffset?: number; // inputs.currentAge - spouse.currentAge
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-CA', {
+function formatCurrency(value: number, locale: string = 'en-CA'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'CAD',
     minimumFractionDigits: 0,
@@ -62,6 +64,7 @@ function readVisibleCols(): Set<string> {
 // Age and Ending Balance are the row's identity and its bottom line, so they
 // stay on; everything else is a toggle, persisted via prefKV.
 function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (next: Set<string>) => void }) {
+  const { t } = useTranslation('pages');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -95,10 +98,10 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
         type="button"
           onClick={() => setOpen((o) => !o)}
         className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-600 border border-slate-300 hover:border-slate-900 hover:text-slate-900"
-        title="Choose which columns the table shows"
+        title={t('schedule.columnsTitle')}
       >
         <Columns3 size={13} />
-        Columns
+        {t('schedule.columns')}
       </button>
       {open && (
         <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 p-2">
@@ -106,9 +109,9 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
             type="button"
             onClick={reset}
             className="w-full text-left px-2 py-1 text-[11px] font-semibold text-slate-900 hover:bg-slate-50"
-            title="Cycle the topical column sets — money flow, accounts, tax, income"
+            title={t('schedule.resetTitle')}
           >
-            Reset
+            {t('schedule.reset')}
           </button>
           <div className="my-1 border-t border-slate-100" />
           {toggleable.map((c) => (
@@ -121,7 +124,7 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
                   if (on) next.add(c.id); else next.delete(c.id);
                   onChange(next);
                 }}
-                label={<span className="text-[11px] text-slate-700">{c.label}</span>}
+                label={<span className="text-[11px] text-slate-700">{t(`schedule.cols.${c.id}`)}</span>}
               />
             </div>
           ))}
@@ -132,8 +135,8 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
 }
 
 // A single labelled money line inside the drill-down panel.
-function Line({ label, value, hint, strong, indent }: {
-  label: string; value: number; hint?: string; strong?: boolean; indent?: boolean;
+function Line({ label, value, hint, strong, indent, locale }: {
+  label: string; value: number; hint?: string; strong?: boolean; indent?: boolean; locale: string;
 }) {
   if (Math.abs(value) < 0.5) return null; // hide zero lines to reduce noise
   return (
@@ -142,7 +145,7 @@ function Line({ label, value, hint, strong, indent }: {
         {label}
       </span>
       <span className={`text-[11px] font-mono ${strong ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-        {formatCurrency(value)}
+        {formatCurrency(value, locale)}
       </span>
     </div>
   );
@@ -160,6 +163,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // The expanded per-year drill-down: withdrawal provenance, growth, tax, RM,
 // benefits and cash events.
 function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreakdown }) {
+  const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   const w = detail.withdraw;
   const totalWithdrawn = row.withdrawals;
   const registeredTotal = w.rrifMin + w.rrif + w.rrsp;
@@ -174,69 +179,67 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
   return (
     <div className="flex flex-wrap gap-x-8 gap-y-4 px-2 py-1">
       {hasWithdrawals && (
-        <Section title={`Where the ${formatCurrency(totalWithdrawn)} came from`}>
-          {w.rrifMin > 0.5 && <Line label={`RRIF minimum${pct(w.rrifMin)}`} value={w.rrifMin} hint="Mandatory RRIF minimum, forced out first. Taxed as income." />}
-          {w.rrif > 0.5 && <Line label={`RRIF draw${pct(w.rrif)}`} value={w.rrif} hint="Discretionary RRIF withdrawal. Taxed as income; grossed up so after-tax covers the need." />}
-          {w.rrsp > 0.5 && <Line label={`RRSP draw${pct(w.rrsp)}`} value={w.rrsp} hint="RRSP withdrawal (before RRIF conversion). Taxed as income; grossed up." />}
-          {w.tfsa > 0.5 && <Line label={`TFSA${pct(w.tfsa)}`} value={w.tfsa} hint="Tax-free: $1 withdrawn = $1 of spending." />}
+        <Section title={t('yearDetail.whereFrom', { amount: formatCurrency(totalWithdrawn, locale) })}>
+          {w.rrifMin > 0.5 && <Line locale={locale} label={t('yearDetail.rrifMin', { pct: pct(w.rrifMin) })} value={w.rrifMin} hint={t('yearDetail.rrifMinHint')} />}
+          {w.rrif > 0.5 && <Line locale={locale} label={t('yearDetail.rrifDraw', { pct: pct(w.rrif) })} value={w.rrif} hint={t('yearDetail.rrifDrawHint')} />}
+          {w.rrsp > 0.5 && <Line locale={locale} label={t('yearDetail.rrspDraw', { pct: pct(w.rrsp) })} value={w.rrsp} hint={t('yearDetail.rrspDrawHint')} />}
+          {w.tfsa > 0.5 && <Line locale={locale} label={t('yearDetail.tfsa', { pct: pct(w.tfsa) })} value={w.tfsa} hint={t('yearDetail.tfsaHint')} />}
           {w.taxable > 0.5 && (
             <>
-              <Line label={`Taxable${pct(w.taxable)}`} value={w.taxable} hint="Non-registered. Only the embedded-gain fraction is taxed." />
-              {detail.tax.capitalGains > 0.5 && (
-                <Line label="↳ taxable gain portion" value={detail.tax.capitalGains} indent hint="The embedded-gain part of this draw, taxed at the inclusion rate. The rest is return of capital (tax-free)." />
-              )}
+              <Line locale={locale} label={t('yearDetail.taxable', { pct: pct(w.taxable) })} value={w.taxable} hint={t('yearDetail.taxableHint')} />
+              {detail.tax.capitalGains > 0.5 &&
+                <Line locale={locale} label={t('yearDetail.taxableGain')} value={detail.tax.capitalGains} indent hint={t('yearDetail.taxableGainHint')} />}
             </>
           )}
-          {w.cash > 0.5 && <Line label={`Cash cushion${pct(w.cash)}`} value={w.cash} hint="After-tax cash reserve, used as a last resort." />}
+          {w.cash > 0.5 && <Line locale={locale} label={t('yearDetail.cash', { pct: pct(w.cash) })} value={w.cash} hint={t('yearDetail.cashHint')} />}
           {(w.rdsp ?? 0) > 0.5 && (
             <>
-              <Line label={`RDSP${pct(w.rdsp ?? 0)}`} value={w.rdsp ?? 0} hint="Disability-plan withdrawal. The grant/bond/growth portion is taxable; the contribution principal is a tax-free return of capital." />
-              {(detail.rdsp?.taxablePortion ?? 0) > 0.5 && (
-                <Line label="↳ taxable portion" value={detail.rdsp!.taxablePortion ?? 0} indent hint="The grant/bond/growth part of this draw, added to taxable income. The rest is tax-free contribution principal." />
-              )}
+              <Line locale={locale} label={t('yearDetail.rdsp', { pct: pct(w.rdsp ?? 0) })} value={w.rdsp ?? 0} hint={t('yearDetail.rdspHint')} />
+              {(detail.rdsp?.taxablePortion ?? 0) > 0.5 &&
+                <Line locale={locale} label={t('yearDetail.rdspTaxable')} value={detail.rdsp!.taxablePortion ?? 0} indent hint={t('yearDetail.rdspTaxableHint')} />}
             </>
           )}
-          {w.rmDraw > 0.5 && <Line label={`Reverse mortgage${pct(w.rmDraw)}`} value={w.rmDraw} hint="Tax-free borrowing against home equity; the loan grows by this amount." />}
+          {w.rmDraw > 0.5 && <Line locale={locale} label={t('yearDetail.rmDraw', { pct: pct(w.rmDraw) })} value={w.rmDraw} hint={t('yearDetail.rmDrawHint')} />}
           {registeredTotal > 0.5 && (
-            <div className="pt-1 text-[10px] text-slate-400">Registered draws are grossed up for tax.</div>
+            <div className="pt-1 text-[10px] text-slate-400">{t('yearDetail.registeredNote')}</div>
           )}
         </Section>
       )}
 
       {hasContrib && (
-        <Section title="Contributions">
-          <Line label="RRSP" value={detail.contrib!.rrsp} />
-          <Line label="TFSA" value={detail.contrib!.tfsa} />
-          <Line label="Taxable" value={detail.contrib!.taxable} />
-          {(detail.contrib!.rdsp ?? 0) > 0.5 && <Line label="RDSP" value={detail.contrib!.rdsp ?? 0} hint="Not deductible (like a TFSA); attracts grants/bonds at lower incomes." />}
-          {(detail.contrib!.fhsa ?? 0) > 0.5 && <Line label="FHSA" value={detail.contrib!.fhsa ?? 0} hint="Deductible (like an RRSP); capped by the annual and lifetime limits." />}
+        <Section title={t('yearDetail.contributions')}>
+          <Line locale={locale} label={t('yearDetail.rrsp')} value={detail.contrib!.rrsp} />
+          <Line locale={locale} label={t('yearDetail.tfsaPlain')} value={detail.contrib!.tfsa} />
+          <Line locale={locale} label={t('yearDetail.taxablePlain')} value={detail.contrib!.taxable} />
+          {(detail.contrib!.rdsp ?? 0) > 0.5 && <Line locale={locale} label={t('yearDetail.rdspPlain')} value={detail.contrib!.rdsp ?? 0} hint={t('yearDetail.rdspContribHint')} />}
+          {(detail.contrib!.fhsa ?? 0) > 0.5 && <Line locale={locale} label={t('yearDetail.fhsa')} value={detail.contrib!.fhsa ?? 0} hint={t('yearDetail.fhsaContribHint')} />}
         </Section>
       )}
 
-      <Section title="Growth / interest earned">
-        <Line label="RRSP" value={detail.growth.rrsp} />
-        <Line label="RRIF" value={detail.growth.rrif} />
-        <Line label="TFSA" value={detail.growth.tfsa} />
-        <Line label="Taxable" value={detail.growth.taxable} />
-        <Line label="Cash cushion" value={detail.growth.cash} hint="Cash earns the lower cushion rate." />
-        {(detail.growth.rdsp ?? 0) > 0.5 && <Line label="RDSP" value={detail.growth.rdsp ?? 0} hint="Tax-sheltered growth; taxable only when withdrawn." />}
-        {(detail.growth.fhsa ?? 0) > 0.5 && <Line label="FHSA" value={detail.growth.fhsa ?? 0} hint="Tax-sheltered growth; transfers to the RRSP at retirement (tax-free there too)." />}
+      <Section title={t('yearDetail.growth')}>
+        <Line locale={locale} label={t('yearDetail.rrsp')} value={detail.growth.rrsp} />
+        <Line locale={locale} label={t('yearDetail.rrif')} value={detail.growth.rrif} />
+        <Line locale={locale} label={t('yearDetail.tfsaPlain')} value={detail.growth.tfsa} />
+        <Line locale={locale} label={t('yearDetail.taxablePlain')} value={detail.growth.taxable} />
+        <Line locale={locale} label={t('yearDetail.cashPlain')} value={detail.growth.cash} hint={t('yearDetail.cashGrowthHint')} />
+        {(detail.growth.rdsp ?? 0) > 0.5 && <Line locale={locale} label={t('yearDetail.rdspPlain')} value={detail.growth.rdsp ?? 0} hint={t('yearDetail.rdspGrowthHint')} />}
+        {(detail.growth.fhsa ?? 0) > 0.5 && <Line locale={locale} label={t('yearDetail.fhsa')} value={detail.growth.fhsa ?? 0} hint={t('yearDetail.fhsaGrowthHint')} />}
       </Section>
 
       {detail.rdsp && (detail.rdsp.contribution > 0.5 || detail.rdsp.grant > 0.5 || detail.rdsp.bond > 0.5) && (
-        <Section title="RDSP grants & bonds">
-          {detail.rdsp.contribution > 0.5 && <Line label="Your contribution" value={detail.rdsp.contribution} />}
-          {detail.rdsp.grant > 0.5 && <Line label="CDSG (grant)" value={detail.rdsp.grant} hint="Canada Disability Savings Grant — matches contributions up to 300%/200% at lower incomes." />}
-          {detail.rdsp.bond > 0.5 && <Line label="CDSB (bond)" value={detail.rdsp.bond} hint="Canada Disability Savings Bond — income-tested; no contribution needed." />}
-          <Line label="Balance" value={detail.rdsp.balance} strong />
+        <Section title={t('yearDetail.rdspGrants')}>
+          {detail.rdsp.contribution > 0.5 && <Line locale={locale} label={t('yearDetail.yourContrib')} value={detail.rdsp.contribution} />}
+          {detail.rdsp.grant > 0.5 && <Line locale={locale} label={t('yearDetail.cdsg')} value={detail.rdsp.grant} hint={t('yearDetail.cdsgHint')} />}
+          {detail.rdsp.bond > 0.5 && <Line locale={locale} label={t('yearDetail.cdsb')} value={detail.rdsp.bond} hint={t('yearDetail.cdsbHint')} />}
+          <Line locale={locale} label={t('yearDetail.balance')} value={detail.rdsp.balance} strong />
         </Section>
       )}
 
       {detail.fhsa && detail.fhsa.contribution > 0.5 && (
-        <Section title="FHSA">
-          <Line label="Contribution (deductible)" value={detail.fhsa.contribution} hint="Reduces this year's taxable income like an RRSP contribution." />
-          <Line label="Contributed to date" value={detail.fhsa.contributionBasis} hint={`Toward the lifetime limit.`} />
-          <Line label="Balance" value={detail.fhsa.balance} strong />
+        <Section title={t('yearDetail.fhsaTitle')}>
+          <Line locale={locale} label={t('yearDetail.fhsaDeductible')} value={detail.fhsa.contribution} hint={t('yearDetail.fhsaDeductibleHint')} />
+          <Line locale={locale} label={t('yearDetail.fhsaToDate')} value={detail.fhsa.contributionBasis} hint={t('yearDetail.fhsaToDateHint')} />
+          <Line locale={locale} label={t('yearDetail.balance')} value={detail.fhsa.balance} strong />
         </Section>
       )}
 
@@ -244,67 +247,67 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
           end for each tracked account, plus any over-contribution that overflowed
           to taxable this year. Shown only when room tracking is on. */}
       {detail.roomRemaining && (
-        <Section title="Contribution room">
+        <Section title={t('yearDetail.room')}>
           {detail.roomRemaining.tfsa !== undefined && (
-            <Line label="TFSA room left" value={detail.roomRemaining.tfsa} strong hint="Remaining TFSA contribution room at year end (after this year's accrual and deposits)." />
+            <Line locale={locale} label={t('yearDetail.tfsaRoom')} value={detail.roomRemaining.tfsa} strong hint={t('yearDetail.tfsaRoomHint')} />
           )}
           {detail.roomRemaining.rrsp !== undefined && (
-            <Line label="RRSP room left" value={detail.roomRemaining.rrsp} strong hint="Remaining RRSP contribution room at year end (after this year's accrual and deposits)." />
+            <Line locale={locale} label={t('yearDetail.rrspRoom')} value={detail.roomRemaining.rrsp} strong hint={t('yearDetail.rrspRoomHint')} />
           )}
           {(detail.overflow?.tfsa ?? 0) > 0.5 && (
-            <Line label="TFSA over-contribution" value={detail.overflow!.tfsa} hint="This much would have gone into the TFSA but ran out of room, so it was redirected to the taxable account." />
+            <Line locale={locale} label={t('yearDetail.tfsaOver')} value={detail.overflow!.tfsa} hint={t('yearDetail.tfsaOverHint')} />
           )}
           {(detail.overflow?.rrsp ?? 0) > 0.5 && (
-            <Line label="RRSP over-contribution" value={detail.overflow!.rrsp} hint="This much would have gone into the RRSP but ran out of room, so it was redirected to the taxable account." />
+            <Line locale={locale} label={t('yearDetail.rrspOver')} value={detail.overflow!.rrsp} hint={t('yearDetail.rrspOverHint')} />
           )}
         </Section>
       )}
 
       {hasBenefits && (
-        <Section title="Benefits (gross)">
-          <Line label="CPP" value={row.cppIncome} />
-          <Line label="OAS" value={row.oasIncome} />
-          <Line label="GIS" value={row.gisIncome} hint="Tax-free." />
-          <Line label="Pension" value={row.pensionIncome} />
+        <Section title={t('yearDetail.benefits')}>
+          <Line locale={locale} label={t('yearDetail.cpp')} value={row.cppIncome} />
+          <Line locale={locale} label={t('yearDetail.oas')} value={row.oasIncome} />
+          <Line locale={locale} label={t('yearDetail.gis')} value={row.gisIncome} hint={t('yearDetail.gisHint')} />
+          <Line locale={locale} label={t('yearDetail.pension')} value={row.pensionIncome} />
         </Section>
       )}
 
       {hasEmployment && (
-        <Section title="Employment income">
-          <Line label="Gross pay" value={row.employmentGross ?? 0} hint="Earned income — stacks on benefits for tax, OAS clawback and GIS." />
-          <Line label="Tax on it" value={row.employmentTax ?? 0} hint="The marginal tax on this pay, on top of the tax on benefits alone." />
-          <Line label="After-tax (net)" value={row.employmentNet ?? 0} strong hint="Saved into the job's account, or used to top up spending first." />
+        <Section title={t('yearDetail.employment')}>
+          <Line locale={locale} label={t('yearDetail.grossPay')} value={row.employmentGross ?? 0} hint={t('yearDetail.grossPayHint')} />
+          <Line locale={locale} label={t('yearDetail.taxOnIt')} value={row.employmentTax ?? 0} hint={t('yearDetail.taxOnItHint')} />
+          <Line locale={locale} label={t('yearDetail.afterTax')} value={row.employmentNet ?? 0} strong hint={t('yearDetail.afterTaxHint')} />
         </Section>
       )}
 
       {hasTax && (
-        <Section title="Tax on withdrawals">
-          <Line label="Income tax" value={row.incomeTax} strong hint="Tax on registered draws and realized gains beyond the tax on benefits alone, plus OAS clawback." />
-          <Line label="Total tax (all income)" value={row.totalTaxPaid ?? 0} hint="Tax on the year's ENTIRE income (benefits + employment + withdrawals + gains) plus OAS clawback — what a tax return would show. Charged every year taxable income is received." />
-          {detail.tax.oasClawback > 0.5 && <Line label="↳ OAS clawback" value={detail.tax.oasClawback} indent hint="OAS recovery tax: net income above the threshold is clawed back at 15¢/$." />}
-          <Line label="Cumulative tax" value={row.cumulativeTax} hint="Total income tax since retirement." />
+        <Section title={t('yearDetail.taxOnWithdrawals')}>
+          <Line locale={locale} label={t('yearDetail.incomeTax')} value={row.incomeTax} strong hint={t('yearDetail.incomeTaxHint')} />
+          <Line locale={locale} label={t('yearDetail.totalTax')} value={row.totalTaxPaid ?? 0} hint={t('yearDetail.totalTaxHint')} />
+          {detail.tax.oasClawback > 0.5 && <Line locale={locale} label={t('yearDetail.oasClawback')} value={detail.tax.oasClawback} indent hint={t('yearDetail.oasClawbackHint')} />}
+          <Line locale={locale} label={t('yearDetail.cumulativeTax')} value={row.cumulativeTax} hint={t('yearDetail.cumulativeTaxHint')} />
         </Section>
       )}
 
       {rm && (
-        <Section title="Reverse mortgage">
-          <Line label="Interest accrued" value={rm.interestAccrued} hint="Compounds onto the loan even after the LTV ceiling stops new draws." />
-          {rm.scheduledDraw > 0.5 && <Line label="Scheduled draw" value={rm.scheduledDraw} hint="Planned draw, CPI-indexed, capped by LTV headroom." />}
-          {rm.topUpDraw > 0.5 && <Line label="Top-up draw" value={rm.topUpDraw} hint="Last-resort borrowing to cover the year's shortfall." />}
-          <Line label="Loan balance" value={rm.loanBalance} strong />
-          <Line label="Home value" value={rm.homeValue} />
+        <Section title={t('yearDetail.rm')}>
+          <Line locale={locale} label={t('yearDetail.interestAccrued')} value={rm.interestAccrued} hint={t('yearDetail.interestAccruedHint')} />
+          {rm.scheduledDraw > 0.5 && <Line locale={locale} label={t('yearDetail.scheduledDraw')} value={rm.scheduledDraw} hint={t('yearDetail.scheduledDrawHint')} />}
+          {rm.topUpDraw > 0.5 && <Line locale={locale} label={t('yearDetail.topUpDraw')} value={rm.topUpDraw} hint={t('yearDetail.topUpDrawHint')} />}
+          <Line locale={locale} label={t('yearDetail.loanBalance')} value={rm.loanBalance} strong />
+          <Line locale={locale} label={t('yearDetail.homeValue')} value={rm.homeValue} />
         </Section>
       )}
 
       {detail.debts && detail.debts.some(d => d.interestAccrued > 0.5 || d.payment > 0.5 || d.balanceEnd > 0.5) && (
-        <Section title="Debts">
+        <Section title={t('yearDetail.debts')}>
           {detail.debts.map((d, i) => (
             <div key={i}>
               <div className="text-[11px] font-medium text-slate-600 mt-1 first:mt-0">{d.label}</div>
               <div className="pl-2">
-                <Line label="Interest accrued" value={d.interestAccrued} hint="This year's interest charge, compounded onto the balance before the payment." />
-                {d.payment > 0.5 && <Line label="Payment" value={d.payment} hint="Serviced out of cash flow (funded from your accounts like any other expense)." />}
-                <Line label="Balance" value={d.balanceEnd} strong />
+                <Line locale={locale} label={t('yearDetail.interestAccrued')} value={d.interestAccrued} hint={t('yearDetail.debtInterestHint')} />
+                {d.payment > 0.5 && <Line locale={locale} label={t('yearDetail.payment')} value={d.payment} hint={t('yearDetail.paymentHint')} />}
+                <Line locale={locale} label={t('yearDetail.balance')} value={d.balanceEnd} strong />
               </div>
             </div>
           ))}
@@ -312,12 +315,12 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
       )}
 
       {detail.events.length > 0 && (
-        <Section title="Cash events">
+        <Section title={t('yearDetail.events')}>
           {detail.events.map((ev, i) => (
             <div key={i} className="flex items-baseline justify-between gap-3">
               <span className="text-[11px] text-slate-600">{ev.label}</span>
               <span className={`text-[11px] font-mono ${ev.direction === 'in' ? 'text-emerald-700' : 'text-red-700'}`}>
-                {ev.direction === 'in' ? '+' : '−'}{formatCurrency(ev.amount)}
+                {ev.direction === 'in' ? '+' : '−'}{formatCurrency(ev.amount, locale)}
               </span>
             </div>
           ))}
@@ -328,6 +331,8 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
 }
 
 export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, onRetirementAgeChange, primaryBreakdown, spouseBreakdown, spouseAgeOffset = 0 }: ScheduleTableProps) {
+  const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const toggle = (age: number) =>
     setExpanded(prev => {
@@ -461,14 +466,14 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
             canDragRetire
               ? <span
                   role="slider"
-                  aria-label={`Start drawing — drag to change (now ${effectiveRetirement})`}
+                  aria-label={t('schedule.dragNow', { age: effectiveRetirement })}
                   aria-valuemin={dragLo} aria-valuemax={dragHi} aria-valuenow={effectiveRetirement}
                   onPointerDown={beginRetireDrag}
-                  title={`Drag to change the retirement age (now ${effectiveRetirement})`}
+                  title={t('schedule.dragTitle', { age: effectiveRetirement })}
                   className="ml-1.5 inline-flex cursor-grab touch-none select-none items-center gap-1 align-middle text-blue-500 active:cursor-grabbing"
                 >
                   <GripVertical size={12} aria-hidden="true" />
-                  <span className="text-[10px] font-semibold">{dragAge != null ? `→ ${dragAge}` : 'drag'}</span>
+                  <span className="text-[10px] font-semibold">{dragAge != null ? `→ ${dragAge}` : t('schedule.drag')}</span>
                 </span>
               : ' 🎯'
           )}
@@ -482,7 +487,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
         : TONE_CLASS[col.tone];
     return (
       <td key={col.id} className={`px-3 py-1.5 text-right font-mono ${cls}`}>
-        {v === undefined ? '—' : formatCurrency(v)}
+        {v === undefined ? '—' : formatCurrency(v, locale)}
       </td>
     );
   };
@@ -496,27 +501,27 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
         <table className="w-full text-xs" ref={tableRef}>
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              {anyDetail && <th className="w-6 px-1 py-2" title="Expand a year to see where the money came from" />}
+              {anyDetail && <th className="w-6 px-1 py-2" title={t('schedule.expandTitle')} />}
               {shownColumns.map((c) => (
                 <th
                   key={c.id}
                   className={`${c.align === 'left' ? 'text-left' : 'text-right'} px-3 py-2 font-semibold text-slate-700`}
-                  title={c.title}
+                  title={c.title ? t(`schedule.colTitles.${c.id}`) : undefined}
                 >
-                  {c.label}
+                  {t(`schedule.cols.${c.id}`)}
                 </th>
               ))}
               {hasRdsp && (
-                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).">RDSP</th>
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.rdsp')}>{t('schedule.cols.rdsp')}</th>
               )}
               {hasFhsa && (
-                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="First Home Savings Account. Contributions are deductible; growth is tax-sheltered. Transfers to the RRSP at retirement (never drawn directly).">FHSA</th>
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.fhsa')}>{t('schedule.cols.fhsa')}</th>
               )}
               {hasRm && (
-                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Home value minus reverse-mortgage loan balance. The loan compounds with interest and draws, eroding equity over time.">Home Equity</th>
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.home')}>{t('schedule.cols.home')}</th>
               )}
               {hasDebts && (
-                <th className="text-right px-3 py-2 font-semibold text-slate-700" title="Total outstanding debt balance (mortgage, credit cards, loans, lines of credit). Interest accrues each year; payments are funded from spending.">Debts</th>
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.debts')}>{t('schedule.cols.debts')}</th>
               )}
             </tr>
           </thead>
@@ -525,7 +530,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
               const isRetirement = row.age === effectiveRetirement;
               const isOpen = expanded.has(row.age);
               const personRows = household
-                ? ([['You', primaryByAge.get(row.age)], ['Spouse', spouseByAge.get(row.age)]] as Array<[string, YearlyBreakdown | undefined]>)
+                ? ([[t('schedule.you'), primaryByAge.get(row.age)], [t('schedule.spouse'), spouseByAge.get(row.age)]] as Array<[string, YearlyBreakdown | undefined]>)
                     .filter((x): x is [string, YearlyBreakdown] => !!x[1]?.detail)
                 : [];
               const canExpand = household ? personRows.length > 0 : !!row.detail;
@@ -536,7 +541,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
                     data-age={row.age}
                     className={`${rowBg} ${isRetirement ? 'border-t-2 border-blue-500' : ''} ${canExpand ? 'cursor-pointer hover:bg-blue-50/40' : ''}`}
                     onClick={canExpand ? () => toggle(row.age) : undefined}
-                    title={canExpand ? (isOpen ? 'Collapse year detail' : 'Expand year detail') : undefined}
+                    title={canExpand ? (isOpen ? t('schedule.collapseYear') : t('schedule.expandYear')) : undefined}
                   >
                     {anyDetail && (
                       <td className="px-1 py-1.5 text-slate-400">
@@ -546,26 +551,26 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
                     {shownColumns.map((c) => renderCell(c, row, isRetirement, dragAge))}
                     {hasRdsp && (
                       <td className="px-3 py-1.5 text-right font-mono text-slate-600"
-                        title={row.detail?.rdsp ? `Contribution basis ${formatCurrency(row.detail.rdsp.contributionBasis)} (tax-free); the rest is taxable on withdrawal` : undefined}>
-                        {row.rdspBalance !== undefined ? formatCurrency(row.rdspBalance) : '—'}
+                        title={row.detail?.rdsp ? t('yearDetail.rdspBasisTitle', { amount: formatCurrency(row.detail.rdsp.contributionBasis, locale) }) : undefined}>
+                        {row.rdspBalance !== undefined ? formatCurrency(row.rdspBalance, locale) : '—'}
                       </td>
                     )}
                     {hasFhsa && (
                       <td className="px-3 py-1.5 text-right font-mono text-slate-600"
-                        title={row.detail?.fhsa ? `Contributed to date ${formatCurrency(row.detail.fhsa.contributionBasis)}; transfers to the RRSP at retirement` : undefined}>
-                        {row.fhsaBalance !== undefined ? formatCurrency(row.fhsaBalance) : '—'}
+                        title={row.detail?.fhsa ? t('yearDetail.fhsaBalanceTitle', { amount: formatCurrency(row.detail.fhsa.contributionBasis, locale) }) : undefined}>
+                        {row.fhsaBalance !== undefined ? formatCurrency(row.fhsaBalance, locale) : '—'}
                       </td>
                     )}
                     {hasRm && (
                       <td className={`px-3 py-1.5 text-right font-mono ${(row.netHomeEquity ?? 0) < 0 ? 'font-semibold text-rose-700' : 'text-slate-600'}`}
-                        title={row.homeValue !== undefined ? `Home ${formatCurrency(row.homeValue)} − loan ${formatCurrency(row.loanBalance ?? 0)}` : undefined}>
-                        {row.netHomeEquity !== undefined ? formatCurrency(row.netHomeEquity) : '—'}
+                        title={row.homeValue !== undefined ? t('yearDetail.homeLoanTitle', { home: formatCurrency(row.homeValue, locale), loan: formatCurrency(row.loanBalance ?? 0, locale) }) : undefined}>
+                        {row.netHomeEquity !== undefined ? formatCurrency(row.netHomeEquity, locale) : '—'}
                       </td>
                     )}
                     {hasDebts && (
                       <td className={`px-3 py-1.5 text-right font-mono ${(row.debtBalance ?? 0) > 0.5 ? 'text-rose-700' : 'text-slate-600'}`}
-                        title={(row.debtPayments ?? 0) > 0.5 ? `Paid ${formatCurrency(row.debtPayments ?? 0)} this year` : undefined}>
-                        {row.debtBalance !== undefined ? formatCurrency(row.debtBalance) : '—'}
+                        title={(row.debtPayments ?? 0) > 0.5 ? t('yearDetail.paidThisYear', { amount: formatCurrency(row.debtPayments ?? 0, locale) }) : undefined}>
+                        {row.debtBalance !== undefined ? formatCurrency(row.debtBalance, locale) : '—'}
                       </td>
                     )}
                   </tr>
@@ -577,7 +582,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
                             {personRows.map(([label, personRow]) => (
                               <div key={label}>
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700 mb-1.5">
-                                  {label}{personRow.age !== row.age ? ` (age ${personRow.age})` : ''}
+                                  {label}{personRow.age !== row.age ? t('schedule.ageOf', { age: personRow.age }) : ''}
                                 </div>
                                 <YearDetailPanel detail={personRow.detail!} row={personRow} />
                               </div>
@@ -596,11 +601,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
         </table>
       </div>
       <p className="px-3 py-2 text-[10px] text-slate-400 border-t border-slate-100">
-        Click a year to expand its inner workings — withdrawal sources, growth, tax, benefits and reverse
-        mortgage.{canDragRetire && ' Drag the blue "start drawing" row up or down to move the retirement age.'} Amounts
-        are in nominal (future) dollars of each year: the spending target and contributions
-        grow with inflation, while balances, gains and benefits are the actual dollars that year. CPP/OAS are
-        shown at 2026 values unless "Index tax tables, OAS and CPP" is on in Settings → Engine.
+        {t('schedule.foot')}{canDragRetire && t('schedule.footDrag')}{t('schedule.footAmounts')}
       </p>
     </div>
   );

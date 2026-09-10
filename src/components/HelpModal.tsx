@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, X } from 'lucide-react';
 import { HELP_SECTIONS, helpTopic, searchHelpTopics, type HelpTopic } from '../help/topics';
 
@@ -48,11 +49,13 @@ function topicFromHash(): string | null {
 }
 
 export function HelpModal() {
+  const { t, i18n } = useTranslation('help');
   const [query, setQuery] = useState('');
   const [flashId, setFlashId] = useState<string | null>(null);
   const q = query.trim();
+  const sectionLabel = (section: string) => t(`sections.${section}`, { defaultValue: section });
 
-  const filtered = useMemo(() => searchHelpTopics(q), [q]);
+  const filtered = useMemo(() => searchHelpTopics(q), [q, i18n.language]);
   const bySection = useMemo(() => {
     const map = new Map<string, HelpTopic[]>();
     for (const s of HELP_SECTIONS) map.set(s, []);
@@ -88,10 +91,10 @@ export function HelpModal() {
         className="group mb-5 flex items-baseline gap-3 border-b border-slate-200 pb-4 text-[13px] text-slate-600 hover:text-slate-900"
       >
         <span className="flex-1">
-          <span className="font-semibold text-slate-900">Walk through your first scenario</span>
-          {' '}— a 5-step guided setup (ages, savings, benefits, spending).
+          <span className="font-semibold text-slate-900">{t('walkTitle')}</span>
+          {' '}{t('walkBody')}
         </span>
-        <span className="shrink-0 text-[11px] font-medium group-hover:underline">Open →</span>
+        <span className="shrink-0 text-[11px] font-medium group-hover:underline">{t('open')}</span>
       </a>
 
       {/* Search */}
@@ -101,14 +104,14 @@ export function HelpModal() {
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search help — try “clawback”, “TFSA”, “share link”…"
+          placeholder={t('searchPlaceholder')}
           className="w-full border border-slate-300 py-1.5 pl-8 pr-8 text-xs focus:border-slate-900 focus:outline-none"
         />
         {q && (
           <button
             onClick={() => setQuery('')}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700"
-            title="Clear search"
+            title={t('clearSearch')}
           >
             <X size={13} />
           </button>
@@ -118,21 +121,21 @@ export function HelpModal() {
       {/* Table of contents — sections, grouped */}
       <nav className="mb-5 pb-4 border-b border-slate-200">
         <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-          Contents
+          {t('contents')}
           {matchCount != null && (
             <span className="ml-2 normal-case font-normal text-slate-400">
-              {matchCount} {matchCount === 1 ? 'topic' : 'topics'} match{matchCount === 1 ? 'es' : ''}
+              {matchCount === 1 ? t('matchOne', { count: matchCount }) : t('matchOther', { count: matchCount })}
             </span>
           )}
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {bySection.map(([section]) => (
             <a key={section} href={`#section-${section.replace(/\s+/g, '-').toLowerCase()}`} className="text-xs text-slate-600 hover:text-slate-900 hover:underline">
-              {section}
+              {sectionLabel(section)}
             </a>
           ))}
           {bySection.length === 0 && (
-            <span className="text-xs text-slate-500">No matches — try a shorter or different term.</span>
+            <span className="text-xs text-slate-500">{t('noMatches')}</span>
           )}
         </div>
       </nav>
@@ -146,27 +149,27 @@ export function HelpModal() {
             className="mb-6 scroll-mt-4"
           >
             <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1 mb-2">
-              {highlight(section, q)}
+              {highlight(sectionLabel(section), q)}
             </h2>
-            {topics.map((t) => (
+            {topics.map((topic) => (
               <div
-                key={t.id}
-                id={`topic-${t.id}`}
+                key={topic.id}
+                id={`topic-${topic.id}`}
                 className={`py-1.5 border-b border-slate-100 last:border-0 scroll-mt-4 ${
-                  flashId === t.id ? 'bg-slate-100' : ''
+                  flashId === topic.id ? 'bg-slate-100' : ''
                 }`}
               >
                 <div className="flex items-baseline gap-2">
-                  <div className="text-xs font-medium text-slate-800">{highlight(t.title, q)}</div>
+                  <div className="text-xs font-medium text-slate-800">{highlight(topic.title, q)}</div>
                   <a
-                    href={`#/help?topic=${t.id}`}
-                    title="Link to this topic"
+                    href={`#/help?topic=${topic.id}`}
+                    title={t('linkTopic')}
                     className="text-[10px] text-slate-300 hover:text-slate-900"
                   >
                     #
                   </a>
                 </div>
-                <div className="mt-0.5">{highlight(t.body, q)}</div>
+                <div className="mt-0.5">{highlight(topic.body, q)}</div>
               </div>
             ))}
           </section>

@@ -66,6 +66,21 @@ describe('searchHelpTopics', () => {
     expect(hits.some((t) => t.id === 'rrif-conversion')).toBe(true);
   });
 
+  it('french search matches french bodies', async () => {
+    const { setAppLanguage } = await import('../lib/i18n');
+    await setAppLanguage('fr-CA');
+    try {
+      const hits = searchHelpTopics('facteurs prescrits');
+      expect(hits.some((t) => t.id === 'rrif-conversion')).toBe(true);
+      expect(helpTopic('assistant')?.title).toMatch(/assistant/i);
+      const html = renderToStaticMarkup(<>{helpTopic('assistant')!.body}</>);
+      expect(html).toContain('clavardage');
+      expect(html).not.toContain('The assistant is a chat');
+    } finally {
+      await setAppLanguage('en-CA');
+    }
+  });
+
   it('is case-insensitive and returns [] for nonsense', () => {
     expect(searchHelpTopics('CLAWBACK').length).toBeGreaterThan(0);
     expect(searchHelpTopics('zzqxj')).toEqual([]);

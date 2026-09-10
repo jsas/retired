@@ -22,6 +22,8 @@ import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } fr
 import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { HelpHint } from '../design/primitives';
+import { detectLocale } from '../lib/locale';
+import { useTranslation } from 'react-i18next';
 
 interface SettingsModalProps {
   config: AppConfig;
@@ -85,6 +87,7 @@ const PROVINCE_NAMES: Record<string, string> = {
 };
 
 export function SettingsModal({ config, onSave }: SettingsModalProps) {
+  const { t } = useTranslation('settings');
   const [draft, setDraft] = useState<AppConfig>(() => structuredClone(config));
   const [section, setSection] = useState<Section>('federal');
   const [selectedProvince, setSelectedProvince] = useState<string>('ONT');
@@ -113,14 +116,14 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
 
   const handleSave = () => {
     if (!validateAppConfig(draft)) {
-      setError('Invalid configuration: check that every bracket has a rate (rates = brackets + 1) and all values are numbers.');
+      setError(t('invalid'));
       return;
     }
     onSave(draft);
   };
 
   const handleReset = () => {
-    if (!window.confirm('Reset all settings to the built-in defaults?')) return;
+    if (!window.confirm(t('resetConfirm'))) return;
     const defaults = defaultAppConfig();
     setDraft(structuredClone(defaults));
     setError(null);
@@ -130,8 +133,8 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   // removal is; the reload only fires once the bytes are gone so the app
   // can't boot from the old database.
   const handleEraseAll = async () => {
-    if (!window.confirm('Erase EVERYTHING — all scenarios, engine settings, agent memories, AI chats and model connections — from this browser? This cannot be undone.')) return;
-    if (!window.confirm('Really erase everything? Nothing is kept; the app restarts with factory defaults.')) return;
+    if (!window.confirm(t('eraseConfirm1'))) return;
+    if (!window.confirm(t('eraseConfirm2'))) return;
     try {
       const backend = await AsyncOpfsBackend.open();
       await backend?.clear();
@@ -156,7 +159,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   : 'border-transparent text-slate-400 hover:text-slate-900'
               }`}
             >
-              {s.label}
+              {t(`sections.${s.id}`)}
             </button>
           ))}
         </div>
@@ -166,22 +169,36 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
           {section === 'general' && (
             <div className="space-y-4 max-w-lg">
               <div>
-                <h3 className="text-xs font-semibold text-slate-700 mb-1">Help</h3>
-                <p className="text-xs text-slate-600 leading-snug">
-                  RE: tired projects a Canadian retirement drawdown year by year: growth while you
-                  contribute, then withdrawals across TFSA / taxable / RRSP-RRIF with federal and
-                  provincial tax, CPP, OAS (clawback + GIS) and RRIF minimums. Every input in the
-                  sidebar is documented on the <span className="font-medium">Help</span> page
-                  (top-right <span className="font-medium">?</span> button), and the sections below
-                  let you edit the tax tables and engine assumptions themselves.
-                </p>
-                <p className="text-xs text-slate-600 leading-snug mt-1.5">
-                  All profiles and settings are stored only in this browser's local storage — nothing
-                  is sent to a server. Use the sidebar's Export to back them up.
-                </p>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('language.title')}</h3>
+                <p className="text-xs text-slate-600 leading-snug mb-2">{t('language.lead')}</p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {([
+                    { value: undefined, label: t('language.followBrowser') },
+                    { value: 'en-CA' as const, label: t('language.en') },
+                    { value: 'fr-CA' as const, label: t('language.fr') },
+                  ]).map(opt => (
+                    <label key={opt.label} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="site-locale"
+                        checked={(draft.general.locale ?? undefined) === opt.value}
+                        onChange={() => update(c => {
+                          if (opt.value === undefined) delete c.general.locale;
+                          else c.general.locale = opt.value;
+                        })}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('helpHeading')}</h3>
+                <p className="text-xs text-slate-600 leading-snug">{t('helpBody1')}</p>
+                <p className="text-xs text-slate-600 leading-snug mt-1.5">{t('helpBody2')}</p>
               </div>
               <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">Welcome section</h3>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('welcome')}</h3>
                 <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
@@ -190,17 +207,16 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                     className="mt-0.5"
                   />
                   <span>
-                    Show the welcome section when the site loads
+                    {t('welcomeShow')}
                     <span className="block text-[11px] text-slate-500 mt-0.5">
-                      The getting-started card reappears at the top of the main page on every visit.
-                      Dismissing it still hides it for the rest of the current session.
+                      {t('welcomeHint')}
                     </span>
                   </span>
                 </label>
               </div>
 
               <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">Unsaved changes</h3>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('unsaved')}</h3>
                 <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
@@ -209,10 +225,9 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                     className="mt-0.5"
                   />
                   <span>
-                    Ask before switching away from a scenario with unsaved edits
+                    {t('unsavedAsk')}
                     <span className="block text-[11px] text-slate-500 mt-0.5">
-                      When on, changing scenarios with unsaved edits asks whether to save first —
-                      with a "don't ask again" box that turns this off. Off = switch silently.
+                      {t('unsavedHint')}
                     </span>
                   </span>
                 </label>
@@ -223,18 +238,15 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   Kept out of the draft/save flow — it acts immediately, on the
                   stored data itself. */}
               <div className="border border-rose-200 p-3">
-                <h3 className="mb-1 text-xs font-semibold text-rose-800">Danger zone</h3>
+                <h3 className="mb-1 text-xs font-semibold text-rose-800">{t('danger')}</h3>
                 <p className="mb-2 text-[11.5px] leading-relaxed text-rose-700">
-                  Erase it all: every scenario, engine setting, agent memory, AI chat, model
-                  connection, panel layout and dismissal is permanently deleted from this browser —
-                  including the database file itself — and the app restarts with factory defaults.
-                  Nothing is kept. Export a backup first if you might want any of it back.
+                  {t('dangerBody')}
                 </p>
                 <button
                   onClick={handleEraseAll}
                   className="flex items-center gap-1.5 border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
                 >
-                  <Trash2 size={13} /> Erase everything and reset
+                  <Trash2 size={13} /> {t('erase')}
                 </button>
               </div>
             </div>
@@ -247,35 +259,31 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
           {section === 'levers' && (
             <div className="space-y-4 max-w-lg">
               <div>
-                <h3 className="text-xs font-semibold text-slate-700 mb-1">Lever ranges<HelpHint topic="lever-ranges" /></h3>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('levers.title')}<HelpHint topic="lever-ranges" /></h3>
                 <p className="text-xs text-slate-600 leading-snug">
-                  The sliders for spending, savings, expected return and volatility only span the
-                  range below. Widen one if your plan lives past the default edge — these are
-                  preferences, not engine settings, so they save the moment you change them.
-                  Retirement age, plan-to age, CPP and OAS start ages keep fixed spans; a fixed
-                  span is part of their meaning.
+                  {t('levers.lead')}
                 </p>
               </div>
-              <RangeNum label="Spending slider max" value={ranges.spendingMax} step={10000}
-                hint={`Default ${DEFAULT_RANGE_PREFS.spendingMax.toLocaleString('en-CA')}`}
+              <RangeNum label={t('levers.spendingMax')} value={ranges.spendingMax} step={10000}
+                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.spendingMax.toLocaleString() })}
                 onChange={(v) => updateRanges({ spendingMax: v })} money />
-              <RangeNum label="Annual savings slider max" value={ranges.savingsMax} step={10000}
-                hint={`Default ${DEFAULT_RANGE_PREFS.savingsMax.toLocaleString('en-CA')}`}
+              <RangeNum label={t('levers.savingsMax')} value={ranges.savingsMax} step={10000}
+                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.savingsMax.toLocaleString() })}
                 onChange={(v) => updateRanges({ savingsMax: v })} money />
-              <RangeNum label="Expected return slider min" value={+(ranges.returnMin * 100).toFixed(2)} step={0.25}
-                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.returnMin * 100).toFixed(1)}%`}
+              <RangeNum label={t('levers.returnMin')} value={+(ranges.returnMin * 100).toFixed(2)} step={0.25}
+                hint={t('levers.defaultPct', { value: (DEFAULT_RANGE_PREFS.returnMin * 100).toFixed(1) })}
                 onChange={(v) => updateRanges({ returnMin: Math.max(0, v) / 100 })} />
-              <RangeNum label="Expected return slider max" value={+(ranges.returnMax * 100).toFixed(2)} step={0.25}
-                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.returnMax * 100).toFixed(1)}%`}
+              <RangeNum label={t('levers.returnMax')} value={+(ranges.returnMax * 100).toFixed(2)} step={0.25}
+                hint={t('levers.defaultPct', { value: (DEFAULT_RANGE_PREFS.returnMax * 100).toFixed(1) })}
                 onChange={(v) => updateRanges({ returnMax: Math.max(0.01, v) / 100 })} />
-              <RangeNum label="Volatility slider max" value={+(ranges.volatilityMax * 100).toFixed(1)} step={1}
-                hint={`% a year · default ${(DEFAULT_RANGE_PREFS.volatilityMax * 100).toFixed(0)}%`}
+              <RangeNum label={t('levers.volMax')} value={+(ranges.volatilityMax * 100).toFixed(1)} step={1}
+                hint={t('levers.defaultPct', { value: (DEFAULT_RANGE_PREFS.volatilityMax * 100).toFixed(0) })}
                 onChange={(v) => updateRanges({ volatilityMax: Math.max(0.01, v) / 100 })} />
               <button
                 onClick={() => setRanges(setRangePrefs({ ...DEFAULT_RANGE_PREFS }))}
                 className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
               >
-                <RotateCcw size={13} /> Back to the default ranges
+                <RotateCcw size={13} /> {t('levers.back')}
               </button>
             </div>
           )}
@@ -291,19 +299,19 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
             <div className="flex gap-4">
               <div className="w-48 shrink-0">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-700">Provinces</span>
+                  <span className="text-xs font-semibold text-slate-700">{t('provinces.title')}</span>
                   <button
                     onClick={() => {
-                      const code = window.prompt('Province code (e.g. ONT):')?.trim().toUpperCase();
+                      const code = window.prompt(t('provinces.addCode'))?.trim().toUpperCase();
                       if (!code) return;
-                      if (draft.provinces[code]) { setError(`Province ${code} already exists`); return; }
+                      if (draft.provinces[code]) { setError(t('provinces.exists', { code })); return; }
                       update(c => {
                         c.provinces[code] = { brackets: [50000], rates: [0.05, 0.1], exemption: 10000 };
                       });
                       setSelectedProvince(code);
                       setError(null);
                     }}
-                    className="p-1 hover:bg-slate-100" title="Add province"
+                    className="p-1 hover:bg-slate-100" title={t('provinces.add')}
                   >
                     <Plus size={14} />
                   </button>
@@ -317,18 +325,18 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                           selectedProvince === code ? 'font-semibold text-slate-900' : 'text-slate-600 hover:bg-slate-50'
                         }`}
                       >
-                        {code}{PROVINCE_NAMES[code] ? ` — ${PROVINCE_NAMES[code]}` : ''}
+                        {code}{PROVINCE_NAMES[code] ? ` — ${t(`provinces.names.${code}`, { defaultValue: PROVINCE_NAMES[code] })}` : ''}
                       </button>
                       <button
                         onClick={() => {
-                          if (!window.confirm(`Remove province ${code}?`)) return;
+                          if (!window.confirm(t('provinces.removeConfirm', { code }))) return;
                           update(c => { delete c.provinces[code]; });
                           if (selectedProvince === code) {
                             setSelectedProvince(Object.keys(draft.provinces).find(k => k !== code) ?? '');
                           }
                         }}
                         className="p-1 text-slate-400 hover:text-rose-700 opacity-0 group-hover:opacity-100"
-                        title="Remove province"
+                        title={t('provinces.remove')}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -345,25 +353,25 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                     />
                     {selectedProvince === 'QC' && (
                       <div className="mt-3 max-w-sm border-t border-slate-200 pt-3">
-                        <PercentField label="Federal abatement (% of federal tax)" value={draft.qcFederalAbatement}
+                        <PercentField label={t('provinces.abatement')} value={draft.qcFederalAbatement}
                           onChange={v => update(c => { c.qcFederalAbatement = v; })} />
                       </div>
                     )}
                     {selectedProvince === 'ONT' && (
                       <div className="mt-3 max-w-sm space-y-2 border-t border-slate-200 pt-3">
-                        <NumberField label="Surtax threshold 1 ($ of ON tax)" value={draft.ontarioSurtax.threshold1}
+                        <NumberField label={t('provinces.surtaxT1')} value={draft.ontarioSurtax.threshold1}
                           onChange={v => update(c => { c.ontarioSurtax.threshold1 = v; })} />
-                        <PercentField label="Surtax rate 1 (%)" value={draft.ontarioSurtax.rate1}
+                        <PercentField label={t('provinces.surtaxR1')} value={draft.ontarioSurtax.rate1}
                           onChange={v => update(c => { c.ontarioSurtax.rate1 = v; })} />
-                        <NumberField label="Surtax threshold 2 ($ of ON tax)" value={draft.ontarioSurtax.threshold2}
+                        <NumberField label={t('provinces.surtaxT2')} value={draft.ontarioSurtax.threshold2}
                           onChange={v => update(c => { c.ontarioSurtax.threshold2 = v; })} />
-                        <PercentField label="Surtax rate 2 (%)" value={draft.ontarioSurtax.rate2}
+                        <PercentField label={t('provinces.surtaxR2')} value={draft.ontarioSurtax.rate2}
                           onChange={v => update(c => { c.ontarioSurtax.rate2 = v; })} />
                       </div>
                     )}
                   </>
                 ) : (
-                  <p className="text-xs text-slate-500">Select a province to edit.</p>
+                  <p className="text-xs text-slate-500">{t('provinces.select')}</p>
                 )}
               </div>
             </div>
@@ -372,7 +380,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
           {section === 'rrif' && (
             <div>
               <p className="text-xs text-slate-600 mb-3">
-                CRA minimum withdrawal rate by age (applied to the RRIF balance each year).
+                {t('rrifLead')}
               </p>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {Object.keys(draft.rrifRates)
@@ -400,56 +408,55 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
 
           {section === 'oas' && (
             <div className="space-y-3 max-w-sm">
-              <NumberField label="Base monthly (age 65–74)" value={draft.oas.baseMonthly65to74}
+              <NumberField label={t('oas.base6574')} value={draft.oas.baseMonthly65to74}
                 onChange={v => update(c => { c.oas.baseMonthly65to74 = v; })} step="0.01" />
-              <NumberField label="Base monthly (75+, after 10% bump)" value={draft.oas.baseMonthly75plus}
+              <NumberField label={t('oas.base75')} value={draft.oas.baseMonthly75plus}
                 onChange={v => update(c => { c.oas.baseMonthly75plus = v; })} step="0.01" />
-              <NumberField label="Deferral bonus per month past 65" value={draft.oas.deferralBonusPerMonth}
+              <NumberField label={t('oas.deferral')} value={draft.oas.deferralBonusPerMonth}
                 onChange={v => update(c => { c.oas.deferralBonusPerMonth = v; })} step="0.001" />
-              <NumberField label="Eligible age" value={draft.oas.eligibleAge}
+              <NumberField label={t('oas.eligible')} value={draft.oas.eligibleAge}
                 onChange={v => update(c => { c.oas.eligibleAge = v; })} />
-              <NumberField label="Max deferral age" value={draft.oas.maxDeferralAge}
+              <NumberField label={t('oas.maxDeferral')} value={draft.oas.maxDeferralAge}
                 onChange={v => update(c => { c.oas.maxDeferralAge = v; })} />
-              <NumberField label="Min residency years" value={draft.oas.minResidencyYears}
+              <NumberField label={t('oas.minResidency')} value={draft.oas.minResidencyYears}
                 onChange={v => update(c => { c.oas.minResidencyYears = v; })} />
-              <NumberField label="Full-pension residency years" value={draft.oas.fullPensionResidencyYears}
+              <NumberField label={t('oas.fullResidency')} value={draft.oas.fullPensionResidencyYears}
                 onChange={v => update(c => { c.oas.fullPensionResidencyYears = v; })} />
-              <PercentField label="Clawback rate (%)" value={draft.oas.clawbackRate}
+              <PercentField label={t('oas.clawbackRate')} value={draft.oas.clawbackRate}
                 onChange={v => update(c => { c.oas.clawbackRate = v; })} />
-              <NumberField label="Clawback income threshold ($/yr)" value={draft.oas.clawbackThreshold}
+              <NumberField label={t('oas.clawbackThreshold')} value={draft.oas.clawbackThreshold}
                 onChange={v => update(c => { c.oas.clawbackThreshold = v; })} step="1000" />
-              <NumberField label="GIS max annual — single ($/yr)" value={draft.oas.gisMaxAnnualSingle}
+              <NumberField label={t('oas.gisSingle')} value={draft.oas.gisMaxAnnualSingle}
                 onChange={v => update(c => { c.oas.gisMaxAnnualSingle = v; })} step="1000" />
-              <NumberField label="GIS max annual — couple, per spouse ($/yr)" value={draft.oas.gisMaxAnnualCouple}
+              <NumberField label={t('oas.gisCouple')} value={draft.oas.gisMaxAnnualCouple}
                 onChange={v => update(c => { c.oas.gisMaxAnnualCouple = v; })} step="1000" />
-              <PercentField label="GIS reduction rate (% per $ of non-OAS income)" value={draft.oas.gisReductionRate}
+              <PercentField label={t('oas.gisReduction')} value={draft.oas.gisReductionRate}
                 onChange={v => update(c => { c.oas.gisReductionRate = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug">
-                With a spouse enabled, each spouse's GIS is assessed on <em>combined</em> non-OAS income at the
-                couple rate when both receive OAS (single rate when only one does) — CRA's couple rules.
+                {t('oas.gisNote')}
               </p>
             </div>
           )}
 
           {section === 'cpp' && (
             <div className="space-y-3 max-w-sm">
-              <NumberField label="Standard (unadjusted) age" value={draft.cpp.standardAge}
+              <NumberField label={t('cpp.standard')} value={draft.cpp.standardAge}
                 onChange={v => update(c => { c.cpp.standardAge = v; })} />
-              <NumberField label="Earliest start age" value={draft.cpp.earliestAge}
+              <NumberField label={t('cpp.earliest')} value={draft.cpp.earliestAge}
                 onChange={v => update(c => { c.cpp.earliestAge = v; })} />
-              <NumberField label="Latest start age" value={draft.cpp.maxDeferralAge}
+              <NumberField label={t('cpp.latest')} value={draft.cpp.maxDeferralAge}
                 onChange={v => update(c => { c.cpp.maxDeferralAge = v; })} />
-              <PercentField label="Early penalty (%/month before standard age)" value={draft.cpp.earlyPenaltyPerMonth}
+              <PercentField label={t('cpp.earlyPenalty')} value={draft.cpp.earlyPenaltyPerMonth}
                 onChange={v => update(c => { c.cpp.earlyPenaltyPerMonth = v; })} />
-              <PercentField label="Deferral bonus (%/month after standard age)" value={draft.cpp.deferralBonusPerMonth}
+              <PercentField label={t('cpp.deferralBonus')} value={draft.cpp.deferralBonusPerMonth}
                 onChange={v => update(c => { c.cpp.deferralBonusPerMonth = v; })} />
               <div className="pt-2 border-t border-slate-700">
-                <p className="text-[11px] text-slate-500 mb-2">Self-employed CPP contribution (both sides) — a deduction from taxable self-employment income.</p>
-                <PercentField label="Combined employee+employer rate" value={draft.cpp.selfEmployedRate}
+                <p className="text-[11px] text-slate-500 mb-2">{t('cpp.selfEmployedLead')}</p>
+                <PercentField label={t('cpp.selfEmployedRate')} value={draft.cpp.selfEmployedRate}
                   onChange={v => update(c => { c.cpp.selfEmployedRate = v; })} />
-                <NumberField label="YMPE (max pensionable earnings)" value={draft.cpp.ympe}
+                <NumberField label={t('cpp.ympe')} value={draft.cpp.ympe}
                   onChange={v => update(c => { c.cpp.ympe = v; })} />
-                <NumberField label="Basic exemption" value={draft.cpp.basicExemption}
+                <NumberField label={t('cpp.exemption')} value={draft.cpp.basicExemption}
                   onChange={v => update(c => { c.cpp.basicExemption = v; })} />
               </div>
             </div>
@@ -457,14 +464,12 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
 
           {section === 'gains' && (
             <div className="space-y-3 max-w-sm">
-              <PercentField label="Capital gains inclusion rate (%)" value={draft.engine.capitalGainsInclusion}
+              <PercentField label={t('gains.inclusion')} value={draft.engine.capitalGainsInclusion}
                 onChange={v => update(c => { c.engine.capitalGainsInclusion = v; })} />
-              <PercentField label="Taxable account starting ACB (% of balance)" value={draft.engine.taxableAcbRatio}
+              <PercentField label={t('gains.acb')} value={draft.engine.taxableAcbRatio}
                 onChange={v => update(c => { c.engine.taxableAcbRatio = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug">
-                100% = the whole taxable balance is principal (no embedded gains). Lower it if the
-                account has grown — e.g. 60% means 40¢ of every dollar withdrawn is a taxable gain.
-                Contributions raise the ACB; growth does not.
+                {t('gains.note')}
               </p>
             </div>
           )}
@@ -472,81 +477,67 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
           {section === 'rdsp' && (
             <div className="space-y-3 max-w-sm">
               <p className="text-[11px] text-slate-500 leading-snug">
-                Canada Disability Savings Grant (CDSG) matches contributions; the Bond (CDSB) is
-                income-tested and needs no contribution. Both stop at the end-age; contributions have a
-                lifetime cap. On withdrawal the grant/bond/growth portion is taxable. 2026 values.
+                {t('rdsp.lead')}
               </p>
-              <NumberField label="Grant income threshold ($/yr)" value={draft.rdsp.grantThreshold}
+              <NumberField label={t('rdsp.grantThreshold')} value={draft.rdsp.grantThreshold}
                 onChange={v => update(c => { c.rdsp.grantThreshold = v; })} step="1000" />
-              <NumberField label="Grant annual max ($)" value={draft.rdsp.grantAnnualMax}
+              <NumberField label={t('rdsp.grantAnnual')} value={draft.rdsp.grantAnnualMax}
                 onChange={v => update(c => { c.rdsp.grantAnnualMax = v; })} step="100" />
-              <NumberField label="Grant lifetime max ($)" value={draft.rdsp.grantLifetimeMax}
+              <NumberField label={t('rdsp.grantLifetime')} value={draft.rdsp.grantLifetimeMax}
                 onChange={v => update(c => { c.rdsp.grantLifetimeMax = v; })} step="1000" />
-              <NumberField label="Grant/bond end age" value={draft.rdsp.grantEndAge}
+              <NumberField label={t('rdsp.grantEnd')} value={draft.rdsp.grantEndAge}
                 onChange={v => update(c => { c.rdsp.grantEndAge = v; })} />
-              <NumberField label="Bond lower threshold ($)" value={draft.rdsp.bondThresholdLower}
+              <NumberField label={t('rdsp.bondLower')} value={draft.rdsp.bondThresholdLower}
                 onChange={v => update(c => { c.rdsp.bondThresholdLower = v; })} step="500" />
-              <NumberField label="Bond upper threshold ($)" value={draft.rdsp.bondThresholdUpper}
+              <NumberField label={t('rdsp.bondUpper')} value={draft.rdsp.bondThresholdUpper}
                 onChange={v => update(c => { c.rdsp.bondThresholdUpper = v; })} step="500" />
-              <NumberField label="Bond annual max ($)" value={draft.rdsp.bondAnnualMax}
+              <NumberField label={t('rdsp.bondAnnual')} value={draft.rdsp.bondAnnualMax}
                 onChange={v => update(c => { c.rdsp.bondAnnualMax = v; })} step="100" />
-              <NumberField label="Bond lifetime max ($)" value={draft.rdsp.bondLifetimeMax}
+              <NumberField label={t('rdsp.bondLifetime')} value={draft.rdsp.bondLifetimeMax}
                 onChange={v => update(c => { c.rdsp.bondLifetimeMax = v; })} step="1000" />
-              <NumberField label="Contribution lifetime max ($)" value={draft.rdsp.contributionLifetimeMax}
+              <NumberField label={t('rdsp.contribLifetime')} value={draft.rdsp.contributionLifetimeMax}
                 onChange={v => update(c => { c.rdsp.contributionLifetimeMax = v; })} step="5000" />
-              <NumberField label="Contribution end age" value={draft.rdsp.contributionEndAge}
+              <NumberField label={t('rdsp.contribEnd')} value={draft.rdsp.contributionEndAge}
                 onChange={v => update(c => { c.rdsp.contributionEndAge = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug border-t border-slate-200 pt-2">
-                Family income at/below the grant threshold earns 300% on the first $500 + 200% on the next
-                $1,000 contributed; above it, 100% on the first $1,000. The bond pays in full at/below the
-                lower threshold, phases out linearly to $0 at the upper. The 10-year AHA clawback and the
-                grant/bond carry-forward are not modelled.
+                {t('rdsp.note')}
               </p>
             </div>
           )}
 
           {section === 'fhsa' && (
             <div className="space-y-3 max-w-sm">
-              <NumberField label="Annual contribution limit ($/yr)" value={draft.fhsa.annualLimit}
+              <NumberField label={t('fhsa.annual')} value={draft.fhsa.annualLimit}
                 onChange={v => update(c => { c.fhsa.annualLimit = v; })} step="1000" />
-              <NumberField label="Lifetime contribution limit ($)" value={draft.fhsa.lifetimeLimit}
+              <NumberField label={t('fhsa.lifetime')} value={draft.fhsa.lifetimeLimit}
                 onChange={v => update(c => { c.fhsa.lifetimeLimit = v; })} step="5000" />
-              <NumberField label="Plan life (years)" value={draft.fhsa.maxYears}
+              <NumberField label={t('fhsa.years')} value={draft.fhsa.maxYears}
                 onChange={v => update(c => { c.fhsa.maxYears = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug border-t border-slate-200 pt-2">
-                FHSA contributions are deductible (like an RRSP), grow tax-sheltered, and are capped by
-                the annual and lifetime limits. The plan can stay open for a limited number of years
-                from when it was opened. On retirement the balance transfers to the RRSP (no RRSP room
-                needed). A qualifying first-home withdrawal (tax-free) is not modelled.
+                {t('fhsa.note')}
               </p>
             </div>
           )}
 
           {section === 'engine' && (
             <div className="space-y-3 max-w-sm">
-              <PercentField label="Cash cushion annual rate (%)" value={draft.engine.cashCushionRate}
+              <PercentField label={t('engine.cashCushion')} value={draft.engine.cashCushionRate}
                 onChange={v => update(c => { c.engine.cashCushionRate = v; })} />
-              <NumberField label="RRIF conversion age" value={draft.engine.rrifConversionAge}
+              <NumberField label={t('engine.rrifAge')} value={draft.engine.rrifConversionAge}
                 onChange={v => update(c => { c.engine.rrifConversionAge = v; })} />
-              <PercentField label="Inflation rate / CPI (%)" value={draft.engine.inflationRate}
+              <PercentField label={t('engine.inflation')} value={draft.engine.inflationRate}
                 onChange={v => update(c => { c.engine.inflationRate = v; })} />
-              <NumberField label="TFSA annual limit ($/yr)" value={draft.engine.tfsaAnnualLimit} step="500"
+              <NumberField label={t('engine.tfsaLimit')} value={draft.engine.tfsaAnnualLimit} step="500"
                 onChange={v => update(c => { c.engine.tfsaAnnualLimit = v; })} />
-              <NumberField label="RRSP annual maximum ($/yr)" value={draft.engine.rrspAnnualMax} step="500"
+              <NumberField label={t('engine.rrspMax')} value={draft.engine.rrspAnnualMax} step="500"
                 onChange={v => update(c => { c.engine.rrspAnnualMax = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug -mt-1">
-                Used only when a scenario tracks contribution room (TFSA/RRSP room set on the sidebar).
-                Each year TFSA room grows by this limit; RRSP room grows by 18% of earned income up to
-                this maximum (minus any pension adjustment). When "Index tax tables" is on, both grow
-                with CPI like the real CRA limits.
+                {t('engine.roomNote')}
               </p>
-              <PercentField label="Max pension income split (%)" value={draft.engine.pensionSplitMaxRate}
+              <PercentField label={t('engine.pensionSplit')} value={draft.engine.pensionSplitMaxRate}
                 onChange={v => update(c => { c.engine.pensionSplitMaxRate = v; })} />
               <p className="text-[11px] text-slate-500 leading-snug -mt-1">
-                Couples only: up to this share of each spouse's eligible pension income (RRIF/RRSP draws
-                and DB pensions — not CPP/OAS) is reallocated to the lower-taxed spouse to cut household
-                tax. CRA's maximum is 50%; set 0 to disable. Only reported tax changes — GIS and the
-                withdrawal plan are unaffected.
+                {t('engine.pensionSplitNote')}
               </p>
               <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
                 <input
@@ -556,11 +547,9 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   className="mt-0.5"
                 />
                 <span>
-                  Grow spending with inflation each year
+                  {t('engine.growSpend')}
                   <span className="block text-[11px] text-slate-500 mt-0.5">
-                    On: the Spending Target column rises with CPI — a $60k lifestyle entered today needs
-                    ~$89k of income 20 years out at 2%. Off: the target stays flat in today's dollars
-                    (a level-spending / real-terms plan).
+                    {t('engine.growSpendHint')}
                   </span>
                 </span>
               </label>
@@ -572,19 +561,14 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                   className="mt-0.5"
                 />
                 <span>
-                  Index tax tables, OAS and CPP to inflation each year
+                  {t('engine.indexTax')}
                   <span className="block text-[11px] text-slate-500 mt-0.5">
-                    Brackets, basic personal amounts, the OAS clawback threshold and benefit amounts all
-                    grow with CPI — closer to reality (CRA indexes them), but results are then in
-                    inflated future dollars.
+                    {t('engine.indexTaxHint')}
                   </span>
                 </span>
               </label>
               <p className="text-[11px] text-slate-500 leading-snug border-t border-slate-200 pt-2">
-                These two toggles are independent. <strong>Grow spending</strong> controls whether your
-                spending target inflates; <strong>Index tax tables</strong> controls whether the tax system
-                and benefits inflate. The CPI rate above drives both. For a fully "today's dollars"
-                (real-terms) plan, turn spending growth off; for nominal, leave it on.
+                {t('engine.togglesNote')}
               </p>
             </div>
           )}
@@ -596,7 +580,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
             onClick={handleReset}
             className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
           >
-            <RotateCcw size={13} /> Reset to defaults
+            <RotateCcw size={13} /> {t('reset')}
           </button>
           <div className="flex items-center gap-2">
             {error && <span className="text-xs text-rose-700">{error}</span>}
@@ -604,7 +588,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               onClick={handleSave}
               className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
             >
-              <Save size={13} /> Save settings
+              <Save size={13} /> {t('save')}
             </button>
           </div>
         </div>
@@ -612,17 +596,10 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   );
 }
 
-const SEND_TOGGLES: Array<{ key: keyof Required<AiPromptSend>; label: string; hint: string }> = [
-  { key: 'includePersona', label: 'Persona', hint: 'The base voice (built-in or your override).' },
-  { key: 'includePageLine', label: 'Current page', hint: 'One line naming the page you are on.' },
-  { key: 'includeToolInstructions', label: 'Tool instructions', hint: 'How to use tools / what to do when tools are off.' },
-  { key: 'includePromptCatalog', label: 'Tool catalog (local)', hint: 'The TOOL_CALL: list of every tool. Local models only.' },
-  { key: 'includeProgramRules', label: 'Program rules', hint: 'Live CPP/OAS/GIS/RRIF/limit figures from engine settings.' },
-  { key: 'includeScenarioName', label: 'Active plan name', hint: 'The active scenario is "…".' },
-  { key: 'includePlanDigest', label: 'Plan digest (local)', hint: 'Pinned summary of ages, balances, projection. Local models only.' },
-  { key: 'includeChatNote', label: 'Per-chat note', hint: '“Additional instructions for this chat” from the composer.' },
-  { key: 'sendTools', label: 'Send tools', hint: 'Advertise and execute tools. Off = chat only, even on a capable model.' },
-  { key: 'personaLast', label: 'Persona last', hint: 'Put the persona after the mechanics so a small model honors a custom override.' },
+const SEND_TOGGLE_KEYS: Array<keyof Required<AiPromptSend>> = [
+  'includePersona', 'includePageLine', 'includeToolInstructions', 'includePromptCatalog',
+  'includeProgramRules', 'includeScenarioName', 'includePlanDigest', 'includeChatNote',
+  'sendTools', 'personaLast',
 ];
 
 function AssistantSettings({ ai, patchAi, config }: {
@@ -630,6 +607,7 @@ function AssistantSettings({ ai, patchAi, config }: {
   patchAi: (mutate: (s: AiSettings) => void) => void;
   config: AppConfig;
 }) {
+  const { t } = useTranslation('settings');
   const send = resolveAiPromptSend(ai.promptSend);
   const connection = ai.connections.find(c => c.id === ai.activeConnectionId);
   const isLocal = connection != null && isLocalProvider(connection.provider);
@@ -655,6 +633,7 @@ function AssistantSettings({ ai, patchAi, config }: {
     send,
     basePrompt: ai.systemPromptOverride,
     config,
+    locale: config.general.locale ?? detectLocale(),
     toolInstructions: toolOverride,
   });
   const setSend = (key: keyof Required<AiPromptSend>, value: boolean) => {
@@ -668,27 +647,25 @@ function AssistantSettings({ ai, patchAi, config }: {
     <div className="space-y-5 max-w-2xl">
       <div>
         <h3 className="text-xs font-semibold text-slate-700 mb-1">
-          What is sent<HelpHint topic="assistant-prompts" />
+          {t('assistant.whatIsSent')}<HelpHint topic="assistant-prompts" />
         </h3>
         <p className="text-xs text-slate-600 leading-snug">
-          Every request to the model is assembled from the pieces below. Uncheck one to drop
-          it. Edits save immediately (same as lever ranges) and apply to the next message in
-          every chat. Per-chat notes still live on the composer.
+          {t('assistant.whatIsSentLead')}
         </p>
       </div>
 
       <div className="space-y-2">
-        {SEND_TOGGLES.map(t => (
-          <label key={t.key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+        {SEND_TOGGLE_KEYS.map(key => (
+          <label key={key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
             <input
               type="checkbox"
-              checked={send[t.key]}
-              onChange={e => setSend(t.key, e.target.checked)}
+              checked={send[key]}
+              onChange={e => setSend(key, e.target.checked)}
               className="mt-0.5"
             />
             <span>
-              {t.label}
-              <span className="block text-[11px] text-slate-500 mt-0.5">{t.hint}</span>
+              {t(`assistant.send.${key}.label`)}
+              <span className="block text-[11px] text-slate-500 mt-0.5">{t(`assistant.send.${key}.hint`)}</span>
             </span>
           </label>
         ))}
@@ -696,30 +673,26 @@ function AssistantSettings({ ai, patchAi, config }: {
           onClick={resetSend}
           className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
         >
-          <RotateCcw size={13} /> Back to default send flags
+          <RotateCcw size={13} /> {t('assistant.resetSend')}
         </button>
       </div>
 
       <div className="border border-slate-200 bg-slate-50 p-3">
-        <h3 className="text-xs font-semibold text-slate-700 mb-1">Assembled system (this request)</h3>
+        <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('assistant.assembled')}</h3>
         <p className="text-[11px] text-slate-500 leading-snug mb-2">
-          Exactly what the next message will put in the system slot. Empty means
-          nothing — no blank system role, and the local engine drops its previous
-          system from cache. Chat history still goes as user/assistant turns.
+          {t('assistant.assembledLead')}
         </p>
         {assembled.trim()
           ? <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-slate-700">{assembled}</pre>
-          : <p className="text-xs font-medium text-slate-800">(empty — no system message)</p>}
+          : <p className="text-xs font-medium text-slate-800">{t('assistant.emptySystem')}</p>}
       </div>
 
       <div className="border-t border-slate-200 pt-3">
         <h3 className="text-xs font-semibold text-slate-700 mb-1">
-          Tools per local model<HelpHint topic="assistant-prompts" />
+          {t('assistant.toolsPerModel')}<HelpHint topic="assistant-prompts" />
         </h3>
         <p className="text-xs text-slate-600 leading-snug mb-2">
-          The catalog decides the default: Qwen 1.7B and Bonsai 1.7B are questions-only; 4B and up run tools.
-          Force a model on or off here for testing — Auto restores the catalog. Cloud
-          models always use tools unless Send tools is unchecked above.
+          {t('assistant.toolsPerModelLead')}
         </p>
         <div className="space-y-1.5">
           {[...visibleWebLlmModels(), ...BONSAI_MODELS].map(m => {
@@ -730,7 +703,7 @@ function AssistantSettings({ ai, patchAi, config }: {
                 <span className="text-xs text-slate-800 min-w-[10rem]">
                   {m.label}
                   <span className="block text-[10px] text-slate-400">
-                    catalog default: tools {catalog}
+                    {t('assistant.catalogDefault', { catalog })}
                   </span>
                 </span>
                 {(['auto', 'on', 'off'] as const).map(opt => (
@@ -746,7 +719,7 @@ function AssistantSettings({ ai, patchAi, config }: {
                         s.toolCapableByModel = Object.keys(next).length ? next : undefined;
                       })}
                     />
-                    {opt === 'auto' ? 'Auto' : opt === 'on' ? 'On' : 'Off'}
+                    {t(`assistant.${opt}`)}
                   </label>
                 ))}
               </div>
@@ -756,29 +729,29 @@ function AssistantSettings({ ai, patchAi, config }: {
       </div>
 
       <PromptEditor
-        title="Persona (all chats)"
-        hint="Replaces the built-in planner voice when non-empty. Leave blank to use the default."
+        title={t('assistant.personaTitle')}
+        hint={t('assistant.personaHint')}
         value={ai.systemPromptOverride ?? ''}
         fallback={DEFAULT_SYSTEM_PROMPT}
         onChange={text => patchAi(s => { s.systemPromptOverride = text || undefined; })}
       />
       <PromptEditor
-        title="Tool instructions — native (cloud)"
-        hint="How a function-calling model should use the tools. Sent only when Tool instructions is on and the model is cloud."
+        title={t('assistant.toolNativeTitle')}
+        hint={t('assistant.toolNativeHint')}
         value={ai.toolInstructionsNative ?? ''}
         fallback={DEFAULT_TOOL_INSTRUCTIONS_NATIVE}
         onChange={text => patchAi(s => { s.toolInstructionsNative = text || undefined; })}
       />
       <PromptEditor
-        title="Tool instructions — local (prompt protocol)"
-        hint="How a chat-only local model should use TOOL_CALL. The catalog of tools is a separate toggle."
+        title={t('assistant.toolPromptTitle')}
+        hint={t('assistant.toolPromptHint')}
         value={ai.toolInstructionsPrompt ?? ''}
         fallback={DEFAULT_TOOL_INSTRUCTIONS_PROMPT}
         onChange={text => patchAi(s => { s.toolInstructionsPrompt = text || undefined; })}
       />
       <PromptEditor
-        title="Instructions when tools are off"
-        hint="Used when this model’s tools are off (catalog default or your override), or when Send tools is unchecked."
+        title={t('assistant.toolOffTitle')}
+        hint={t('assistant.toolOffHint')}
         value={ai.toolInstructionsOff ?? ''}
         fallback={DEFAULT_TOOL_INSTRUCTIONS_OFF}
         onChange={text => patchAi(s => { s.toolInstructionsOff = text || undefined; })}
@@ -794,6 +767,7 @@ function PromptEditor({ title, hint, value, fallback, onChange }: {
   fallback: string;
   onChange: (text: string) => void;
 }) {
+  const { t } = useTranslation('settings');
   const customized = value.trim().length > 0;
   const shown = customized ? value : fallback;
   return (
@@ -810,12 +784,12 @@ function PromptEditor({ title, hint, value, fallback, onChange }: {
         <button
           onClick={() => onChange('')}
           className="text-[10px] font-semibold text-slate-400 hover:text-slate-900"
-          title="Restore the built-in default"
+          title={t('assistant.resetPromptTitle')}
         >
-          Reset to default
+          {t('assistant.resetPrompt')}
         </button>
         {customized && (
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">customized</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">{t('assistant.customized')}</span>
         )}
       </div>
     </div>
@@ -895,6 +869,7 @@ function TaxTableEditor({ table, onChange }: {
   table: TaxTable;
   onChange: (t: TaxTable) => void;
 }) {
+  const { t } = useTranslation('settings');
   const setBracket = (i: number, v: number) => {
     const brackets = [...table.brackets];
     brackets[i] = v;
@@ -923,7 +898,7 @@ function TaxTableEditor({ table, onChange }: {
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-xs font-semibold text-slate-700">Basic personal exemption</span>
+        <span className="text-xs font-semibold text-slate-700">{t('tax.exemption')}</span>
         <input
           type="number"
           step="1000"
@@ -935,8 +910,8 @@ function TaxTableEditor({ table, onChange }: {
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left text-slate-500 border-b border-slate-200">
-            <th className="py-1 font-medium">Bracket threshold</th>
-            <th className="py-1 font-medium">Rate above threshold</th>
+            <th className="py-1 font-medium">{t('tax.bracket')}</th>
+            <th className="py-1 font-medium">{t('tax.rate')}</th>
             <th className="w-8"></th>
           </tr>
         </thead>
@@ -972,7 +947,7 @@ function TaxTableEditor({ table, onChange }: {
                 />
               </td>
               <td>
-                <button onClick={() => removeRow(i)} className="p-1 text-slate-400 hover:text-rose-700" title="Remove bracket">
+                <button onClick={() => removeRow(i)} className="p-1 text-slate-400 hover:text-rose-700" title={t('tax.remove')}>
                   <Trash2 size={12} />
                 </button>
               </td>
@@ -984,7 +959,7 @@ function TaxTableEditor({ table, onChange }: {
         onClick={addRow}
         className="mt-2 flex items-center gap-1 px-1 py-1 text-xs font-medium text-slate-500 hover:text-slate-900"
       >
-        <Plus size={12} /> Add bracket
+        <Plus size={12} /> {t('tax.add')}
       </button>
     </div>
   );

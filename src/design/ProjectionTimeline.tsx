@@ -19,6 +19,7 @@
  * read-only surfaces (Compare, print) are untouched.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { INK, FAINT, HAIRLINE, RED_DOT, AMBER_DOT } from './tokens';
 
 export interface TimelineSeries {
@@ -157,6 +158,7 @@ export function ProjectionTimeline({
   /** Called with today's-dollar spending when the base handle drags. */
   onSpendChange?: (todayDollars: number) => void;
 }) {
+  const { t } = useTranslation('pages');
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const isOn = (id: string) => !hidden.has(id);
   const toggle = (id: string) => {
@@ -348,7 +350,7 @@ export function ProjectionTimeline({
           return (
             <button key={s.id} type="button" onClick={() => toggle(s.id)}
               className={`inline-flex items-center gap-1.5 text-[11px] ${on ? 'text-slate-700' : 'text-slate-400 line-through'}`}
-              title={on ? `Hide ${s.label}` : `Show ${s.label}`}>
+              title={on ? t('dash.hideSeries', { label: s.label }) : t('dash.showSeries', { label: s.label })}>
               <span className="inline-block h-2 w-4" style={{ background: s.color, opacity: on ? 1 : 0.3 }} />
               {s.label}
             </button>
@@ -356,18 +358,18 @@ export function ProjectionTimeline({
         })}
         {spend && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-0.5 w-4" style={{ background: '#059669' }} /> spend
+            <span className="inline-block h-0.5 w-4" style={{ background: '#059669' }} /> {t('dash.spend')}
           </span>
         )}
         {onEventChange != null && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
             <span className="inline-block h-2 w-2 rotate-45" style={{ background: '#0ea5e9' }} />
-            <span className="inline-block h-2 w-2 rotate-45" style={{ background: RED_DOT }} /> events
+            <span className="inline-block h-2 w-2 rotate-45" style={{ background: RED_DOT }} /> {t('dash.events')}
           </span>
         )}
         {onAnchorsChange != null && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-2 w-4" style={{ background: '#7c3aed' }} /> market
+            <span className="inline-block h-2 w-4" style={{ background: '#7c3aed' }} /> {t('dash.market')}
           </span>
         )}
       </div>
@@ -377,7 +379,7 @@ export function ProjectionTimeline({
         viewBox={`0 0 ${W} ${showStrips ? TOTAL_H : H}`}
         className="block w-full select-none"
         role="img"
-        aria-label={`Projection from age ${minAge} to ${maxAge}`}
+        aria-label={t('dash.projectionAria', { from: minAge, to: maxAge })}
         onDoubleClick={(e) => {
           if (!onAnchorsChange) return;
           const rect = svgRef.current?.getBoundingClientRect();
@@ -399,7 +401,7 @@ export function ProjectionTimeline({
       >
         {!hasAnything && (
           <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="13" fill={FAINT} fontFamily="inherit">
-            Nothing to draw — the plan has no savings yet. Add balances on the Plans page.
+            {t('dash.emptyTimeline')}
           </text>
         )}
         {hasAnything && (
@@ -459,7 +461,7 @@ export function ProjectionTimeline({
           return (
             <g key={i} className={draggable ? 'cursor-ew-resize' : undefined}
               onPointerDown={draggable ? pinPointerDown(i) : undefined}>
-              <title>Start drawing — drag to change</title>
+              <title>{t('dash.startDrawingDrag')}</title>
               <line x1={px} y1={AXIS} x2={px} y2={above ? ly + 4 : AXIS + 30} stroke={HAIRLINE} strokeWidth="1" />
               {/* a wider invisible grab strip over the rule so the drag is
                   easy to catch (the 1px line alone is a sub-pixel target) */}
@@ -476,7 +478,7 @@ export function ProjectionTimeline({
         {/* ── Spend strip (interactive when handlers arrive) ─────────────── */}
         {showStrips && (
           <g>
-            <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="9" fill={FAINT}>spend</text>
+            <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="9" fill={FAINT}>{t('dash.spend')}</text>
             <rect x={LL} y={SPEND_TOP} width={LR - LL} height={STRIP_H} fill="none" stroke={HAIRLINE} strokeWidth="1" />
             {spend && spend.points.length > 0 && (
               <>
@@ -511,7 +513,7 @@ export function ProjectionTimeline({
                       window.addEventListener('pointerup', up);
                     }}
                   >
-                    <title>Desired spending — drag to adjust</title>
+                    <title>{t('dash.desiredSpendDrag')}</title>
                   </circle>
                 )}
                 {/* cash-event diamonds (draggable age + amount) */}
@@ -524,7 +526,7 @@ export function ProjectionTimeline({
                     className="cursor-move"
                     onPointerDown={onStripPointerDown('event', ev.id)}
                   >
-                    <title>{ev.label}: {ev.direction === 'in' ? '+' : '−'}{fmtAxis(ev.amount)} at age {ev.age} — drag to move/resize</title>
+                    <title>{t('dash.eventTitle', { label: ev.label, sign: ev.direction === 'in' ? '+' : '−', amount: fmtAxis(ev.amount), age: ev.age })}</title>
                   </rect>
                 ))}
               </>
@@ -535,7 +537,7 @@ export function ProjectionTimeline({
         {/* ── Market strip (interactive when onAnchorsChange arrives) ────── */}
         {showStrips && (
           <g>
-            <text x={LL - 4} y={MKT_TOP + 10} textAnchor="end" fontSize="9" fill={FAINT}>market</text>
+            <text x={LL - 4} y={MKT_TOP + 10} textAnchor="end" fontSize="9" fill={FAINT}>{t('dash.market')}</text>
             <rect x={LL} y={MKT_TOP} width={LR - LL} height={STRIP_H} fill="none" stroke={HAIRLINE} strokeWidth="1"
               className={onAnchorsChange ? 'cursor-crosshair' : undefined} />
             {/* zero-return reference */}
@@ -561,7 +563,7 @@ export function ProjectionTimeline({
                         onPointerDown={onStripPointerDown('mkt', a.id, 'volatility')}
                         onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
                       >
-                        <title>Age {a.age}: σ {(a.volatility! * 100).toFixed(0)}% — drag to adjust; click to select</title>
+                        <title>{t('dash.volTitle', { age: a.age, pct: (a.volatility! * 100).toFixed(0) })}</title>
                       </rect>
                       {/* the value, readable without hovering */}
                       <text x={x(a.age) + 7} y={yVol(a.volatility!) + 3} fontSize="8" fill="#b45309"
@@ -589,7 +591,7 @@ export function ProjectionTimeline({
                   onPointerDown={onStripPointerDown('mkt', a.id, 'return')}
                   onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
                 >
-                  <title>Age {a.age}: {(a.return * 100).toFixed(1)}% — drag to adjust; click to select</title>
+                  <title>{t('dash.retTitle', { age: a.age, pct: (a.return * 100).toFixed(1) })}</title>
                 </circle>
                 {/* the value, readable without hovering */}
                 <text x={x(a.age) + 8} y={yRet(a.return) - 5} fontSize="8" fill="#5b21b6"
@@ -612,7 +614,7 @@ export function ProjectionTimeline({
                   }}>
                   <rect x={x(a.age) + 8} y={yRet(a.return) - 20} width="15" height="15" fill={RED_DOT} />
                   <text x={x(a.age) + 15.5} y={yRet(a.return) - 8.5} textAnchor="middle" fontSize="10" fill="#fff" className="pointer-events-none">×</text>
-                  <title>Delete this anchor</title>
+                  <title>{t('dash.deleteAnchor')}</title>
                 </g>
               );
             })()}

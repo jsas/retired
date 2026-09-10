@@ -35,6 +35,10 @@ import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
 import { AI_SETTINGS_STORAGE_KEY, reloadAiSettingsFromStorage } from './lib/aiSettings';
 import { OptimizeCard } from './components/OptimizeCard';
 import { AgentPage } from './components/AgentPage';
+import { detectLocale, parseLocale, type Locale } from './lib/locale';
+import { setAppLanguage } from './lib/i18n';
+import { LocaleContext } from './lib/localeContext';
+import { useTranslation } from 'react-i18next';
 import { ConnectionsPage } from './components/ConnectionsPage';
 import { CompareCard } from './components/CompareCard';
 import { WelcomeCard } from './components/WelcomeCard';
@@ -102,6 +106,14 @@ function App() {
   // (setConfig(state.config) below). No legacy config read — issue #21.
   const [config, setConfig] = useState<AppConfig>(() => structuredClone(DEFAULT_APP_CONFIG));
   const [store, setStore] = useState<AppStore | null>(null);
+  // Site language: Settings / header pick wins; otherwise the browser (fr-* → fr-CA).
+  const [detected] = useState<Locale>(detectLocale);
+  const locale = parseLocale(config.general.locale) ?? detected;
+  const { t: tPages } = useTranslation('pages');
+  useEffect(() => { void setAppLanguage(locale); }, [locale]);
+  const setLocale = (next: Locale) => {
+    setConfig(prev => ({ ...prev, general: { ...prev.general, locale: next } }));
+  };
   // First-run gate (issue #153): the landing is a DRAFT-UNTIL-DOOR first-run
   // surface — an explicit hash route (deep link / back-forward) always wins;
   // without a hash, scenarios saved ⇒ the dashboard; nothing saved ⇒ the
@@ -824,7 +836,7 @@ function App() {
       return {
         tone: pot.holds ? 'holds' : borderline ? 'borderline' : 'short',
         age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
-        label: pot.holds ? 'the plan holds' : borderline ? 'borderline' : 'runs short',
+        label: pot.holds ? tPages('holds') : borderline ? tPages('borderline') : tPages('short'),
       };
     })();
 
@@ -854,6 +866,7 @@ function App() {
         onSaveScenarioAs={agentSaveScenarioAs}
         currentView={view}
         onNavigate={(target) => setView(target)}
+        locale={locale}
       />
     );
 
@@ -1038,7 +1051,7 @@ function App() {
   // Print: the on-screen beta UI hides (.no-print) and the summary sheet
   // shows (.print-only) — the same contract as the stable app's return.
   return (
-    <>
+    <LocaleContext.Provider value={{ locale, setLocale }}>
       {/* Print-only one-page summary (hidden on screen; see index.css) */}
       <PrintSummary
         scenarioName={activeScenario.name}
@@ -1054,11 +1067,12 @@ function App() {
           {betaPage}
         </PlanUndoContext.Provider>
       </div>
-    </>
+    </LocaleContext.Provider>
   );
 }
 
   return (
+    <LocaleContext.Provider value={{ locale, setLocale }}>
     <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
       {/* Print-only one-page summary (hidden on screen; see index.css) */}
       <PrintSummary
@@ -1341,6 +1355,7 @@ function App() {
                 // turn's finally block (see pendingNavigation in AgentPage).
                 currentView={view}
                 onNavigate={(target) => setView(target)}
+                locale={locale}
               />
             )}
 
@@ -1495,6 +1510,7 @@ function App() {
         />
       )}
     </div>
+    </LocaleContext.Provider>
   );
 }
 

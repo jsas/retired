@@ -16,6 +16,7 @@ import { buildPromptToolInstructions, extractPromptToolCalls, formatPromptToolRe
 import { buildProgramRules } from './programRules';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import type { Locale } from '../locale';
 
 export type AgentEvent =
   | { type: 'text'; text: string }
@@ -245,6 +246,8 @@ export function buildSystemPrompt(
     /** The view the host page is on. Ambient (one line); when the prop is
      *  absent (tests / MCP server), the line falls out. */
     currentView?: View;
+    /** Assistant language. A line is added only for non-default `fr-CA`. */
+    locale?: Locale;
     send?: PromptSendFlags;
     /** Replacement for the mode-specific tool-instruction blurb. */
     toolInstructions?: string;
@@ -259,6 +262,9 @@ export function buildSystemPrompt(
   const pageLine = send.includePageLine && opts?.currentView
     ? `The user is currently on the ${pageTitleLine(opts.currentView)} page.`
     : null;
+  const localeLine = opts?.locale && opts.locale !== 'en-CA'
+    ? `The user's browser locale is ${opts.locale}. Answer in that language unless the user writes in English.`
+    : null;
   const toolBlurb = send.includeToolInstructions
     ? ((opts?.toolInstructions?.trim()) || defaultToolInstructionsFor(mode))
     : '';
@@ -268,6 +274,7 @@ export function buildSystemPrompt(
 
   const mechanics = [
     ...(pageLine ? [pageLine] : []),
+    ...(localeLine ? [localeLine] : []),
     ...(toolBlurb ? ['', toolBlurb] : []),
     ...(rules ? ['', rules] : []),
     ...(scenarioLine ? ['', scenarioLine] : []),
@@ -292,6 +299,7 @@ export function assembleSystemPrompt(opts: {
   basePrompt?: string;
   config?: AppConfig;
   currentView?: View;
+  locale?: Locale;
   toolInstructions?: string;
   /** Per-chat composer note; omitted unless includeChatNote is on. */
   chatNote?: string;
@@ -302,6 +310,7 @@ export function assembleSystemPrompt(opts: {
     basePrompt: opts.basePrompt,
     config: opts.config,
     currentView: opts.currentView,
+    locale: opts.locale,
     send,
     toolInstructions: opts.toolInstructions,
   });
@@ -548,6 +557,7 @@ async function* finalizeWithoutTools(
     basePrompt: undefined, // default persona — the override lives on the full prompt
     config: opts.config ?? opts.context.config,
     currentView: opts.context.currentView,
+    locale: opts.context.locale,
   });
   const finalSystem = [
     base,
