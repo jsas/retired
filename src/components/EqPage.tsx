@@ -9,7 +9,9 @@
 // worker (runEqSolver), scored against one seeded batch of futures so they
 // stay stable while dragging.
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
+import { useAppLocale } from '../lib/localeContext';
 import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { ProjectionTimeline } from '../design/ProjectionTimeline';
 import { Fader } from '../design/primitives';
@@ -22,8 +24,8 @@ import {
   type EqAxis, type Band,
 } from '@retired/engine-core/eqConstraints';
 
-const fmtMoney = (v: number) =>
-  new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
+const fmtMoney = (v: number, locale: string) =>
+  new Intl.NumberFormat(locale, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
 
 /** Readout + shading handed down from App (from the EQ worker). */
 export interface EqSolvedState {
@@ -59,6 +61,7 @@ function RangeFader({ axis, inputs, band, onChange }: {
   band: Band;
   onChange: (inputs: RetirementInputs) => void;
 }) {
+  const { t } = useTranslation('pages');
   const spec = AXES[axis];
   const value = axisValue(inputs, axis);
   // Reconcile for DISPLAY so a stale crop (edges outside the track, or framing
@@ -75,7 +78,7 @@ function RangeFader({ axis, inputs, band, onChange }: {
 
   return (
     <Fader
-      label={spec.label}
+      label={t(`eq.axes.${axis}`)}
       value={value}
       min={range.min} max={range.max} step={spec.step}
       format={spec.format}
@@ -100,6 +103,7 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, solved, onChange }
   solved: EqSolvedState;
   onChange: (inputs: RetirementInputs) => void;
 }) {
+  const { t } = useTranslation('pages');
   const xSpec = AXES[xAxis];
   const ySpec = AXES[yAxis];
   const G = solved.gridSize;
@@ -185,7 +189,7 @@ function XyPad({ xAxis, yAxis, xLabel, yLabel, inputs, bands, solved, onChange }
 
         {/* corner spinner while the grid re-solves */}
         {solved.solving && (
-          <Loader2 size={14} className="absolute right-1.5 top-1.5 animate-spin text-slate-400" aria-label="recalculating" />
+          <Loader2 size={14} className="absolute right-1.5 top-1.5 animate-spin text-slate-400" aria-label={t('eq.recalculating')} />
         )}
       </div>
     </div>
@@ -278,6 +282,7 @@ function ReadoutCard({ label, value, tone, solving }: {
   tone: 'good' | 'warn' | 'bad' | 'neutral';
   solving?: boolean;
 }) {
+  const { t } = useTranslation('pages');
   const edge = tone === 'good' ? 'border-l-blue-700'
     : tone === 'warn' ? 'border-l-amber-500'
     : tone === 'bad' ? 'border-l-rose-500'
@@ -291,7 +296,7 @@ function ReadoutCard({ label, value, tone, solving }: {
     <div className={`border border-slate-200 border-l-2 px-2.5 py-1.5 ${edge}`}>
       <div className="text-[9px] uppercase tracking-[0.16em] text-slate-400">{label}</div>
       <div className={`num flex items-center gap-1 text-[13px] font-semibold ${valueColor}`}>
-        {solving && <Loader2 size={12} className="animate-spin text-slate-400" aria-label="calculating" />}
+        {solving && <Loader2 size={12} className="animate-spin text-slate-400" aria-label={t('eq.calculating')} />}
         {value}
       </div>
     </div>
@@ -302,6 +307,8 @@ function ReadoutCard({ label, value, tone, solving }: {
 // The page
 // ---------------------------------------------------------------------------
 export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved, projection }: EqPageProps) {
+  const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   const o = deterministicOutcome(inputs, config);
 
   // RECONCILE every control to a sane state (crop edges inside the rendered
@@ -325,7 +332,7 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
   return (
     <div>
       <p className="text-xs text-slate-500 mb-3 leading-snug max-w-2xl">
-        Push the sliders or drag the pad to explore your plan — the readouts update live.
+        {t('eq.lead')}
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start mb-3">
@@ -343,21 +350,21 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
         <div className="space-y-3">
           <XyPad
             xAxis="retirementAge" yAxis="desiredSpending"
-            xLabel="Retirement age" yLabel="spending"
+            xLabel={t('eq.padX')} yLabel={t('eq.padY')}
             inputs={inputs} bands={bands}
             solved={solved} onChange={onChange}
           />
           {/* live outcome readouts — pure readouts, no goals/steppers */}
           <div className="grid grid-cols-2 gap-2">
-            <ReadoutCard label="Status" value={o.status === 'ON_TRACK' ? 'On track' : 'Shortfall'} tone={o.status === 'ON_TRACK' ? 'good' : 'bad'} />
-            <ReadoutCard label="Money lasts to" value={`${o.depletionAge ?? inputs.maxAge}${o.depletionAge === null ? '+' : ''}`} tone={o.depletionAge === null ? 'good' : 'bad'} />
+            <ReadoutCard label={t('eq.status')} value={o.status === 'ON_TRACK' ? t('eq.onTrack') : t('eq.shortfall')} tone={o.status === 'ON_TRACK' ? 'good' : 'bad'} />
+            <ReadoutCard label={t('eq.moneyLastsTo')} value={`${o.depletionAge ?? inputs.maxAge}${o.depletionAge === null ? '+' : ''}`} tone={o.depletionAge === null ? 'good' : 'bad'} />
             <ReadoutCard
-              label="Success rate"
+              label={t('eq.successRate')}
               value={solved.successRate == null ? '—' : `${(solved.successRate * 100).toFixed(0)}%`}
               solving={solved.solving}
               tone={solved.successRate == null ? 'neutral' : solved.successRate >= 0.9 ? 'good' : solved.successRate >= 0.75 ? 'warn' : 'bad'}
             />
-            <ReadoutCard label="Left at end" value={fmtMoney(o.endingBalance)} tone={o.endingBalance > 0 ? 'good' : 'neutral'} />
+            <ReadoutCard label={t('eq.leftAtEnd')} value={fmtMoney(o.endingBalance, locale)} tone={o.endingBalance > 0 ? 'good' : 'neutral'} />
           </div>
         </div>
       </div>
@@ -367,10 +374,10 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
           later?"); the spend strip rides along for context. */}
       {projection && (
         <div className="mt-3 bg-white border border-slate-200 p-3">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Projection timeline</div>
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">{t('eq.timeline')}</div>
           <ProjectionTimeline
-            series={[{ id: 'plan', label: 'portfolio', area: true, points: projection.breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
-            pins={[{ age: inputs.retirementAge, label: `start drawing · ${inputs.retirementAge}`,
+            series={[{ id: 'plan', label: t('portfolio'), area: true, points: projection.breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
+            pins={[{ age: inputs.retirementAge, label: t('startDrawingPin', { age: inputs.retirementAge }),
               onDragAge: (age) => onChange({ ...inputs, retirementAge: Math.max(inputs.currentAge + 1, Math.min(inputs.maxAge - 1, age)) }) }]}
             spend={{ points: projection.breakdown.map(r => ({ age: r.age, value: r.spendingTarget })), baseSpend: baseSpendAtRetirement(inputs, config.engine.inflationRate, inputs.retirementAge) }}
             onSpendChange={(today) => onChange({ ...inputs, desiredSpending: Math.max(0, today) })}

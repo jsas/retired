@@ -15,6 +15,7 @@
 // focused on chatting. Keys never leave this browser.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   Plus, Trash2, X, Check, ChevronDown, ChevronRight, Loader2, RefreshCw,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ import {
 const MAX_LOCAL_CONTEXT = 32768;
 
 export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
+  const { t } = useTranslation('pages');
   const settings = useSyncExternalStore(subscribeAiSettings, getAiSettings, getAiSettings);
 
   const updateSettings = (mutate: (s: AiSettings) => void) => {
@@ -76,19 +78,18 @@ export function ConnectionsPage({ onClose }: { onClose?: () => void }) {
       {onClose && (
         <button
           onClick={onClose}
-          title="Back to the assistant"
+          title={t('models.back')}
           className="float-right p-1 text-slate-400 hover:text-slate-900"
         >
           <X size={16} />
         </button>
       )}
       <p className="mb-5 text-[12.5px] leading-relaxed text-slate-500">
-        Tick the models you want on the chat dropdown — Local, Free, and Remote below. The dock
-        only lists those (plus whatever is in use). Download a local pack, or paste a key, then tick.
+        {t('models.lead')}
       </p>
       {(settings.favoriteModels?.length ?? 0) > 0 && (
         <p className="mb-4 text-[12px] text-slate-600">
-          Chat list: <span className="font-semibold text-slate-800">{settings.favoriteModels!.length}</span> selected.
+          {t('models.chatList', { n: settings.favoriteModels!.length })}
         </p>
       )}
 
@@ -131,6 +132,8 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
   bonsaiConn: AiConnection | null;
   activeConnectionId: string | null;
 }) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
   const [guide, setGuide] = useState<MachineGuide | null>(null);
   const [open, setOpen] = useState(true);
   const [showAll, setShowAll] = useState(false);
@@ -208,18 +211,18 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
     abortRef.current = abort;
     setDownloading(id);
     setError(null);
-    setProgress({ progress: 0, text: 'Downloading the model…' });
+    setProgress({ progress: 0, text: t('models.downloading') });
     try {
       const isBonsai = BONSAI_MODELS.some(m => m.id === id);
       if (isBonsai) {
         const { loadBonsaiEngine } = await import('../lib/ai/bonsaiProvider');
         await loadBonsaiEngine(id, p => {
-          setProgress(p.progress >= 1 ? { progress: 1, text: 'Compiling Bonsai for your GPU…' } : p);
+          setProgress(p.progress >= 1 ? { progress: 1, text: t('models.compilingBonsai') } : p);
         }, abort.signal);
       } else {
         const { loadWebLlmEngine } = await import('../lib/ai/webLlmProvider');
         await loadWebLlmEngine(id, p => {
-          setProgress(p.progress >= 1 ? { progress: 1, text: 'Compiling the model for your GPU…' } : p);
+          setProgress(p.progress >= 1 ? { progress: 1, text: t('models.compiling') } : p);
         }, abort.signal);
       }
       setModelCached(id, true);
@@ -286,10 +289,10 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
     return (
       <section className="border-b border-slate-200 pb-5">
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-          Models on this computer
+          {t('models.localTitle')}
         </div>
         <p className="flex items-center gap-1.5 text-[12px] text-slate-500">
-          <Loader2 size={11} className="animate-spin" /> Checking whether this browser can run local models…
+          <Loader2 size={11} className="animate-spin" /> {t('models.checking')}
         </p>
       </section>
     );
@@ -298,7 +301,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
     return (
       <section className="border-b border-slate-200 pb-5">
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-          Models on this computer — not available in this browser
+          {t('models.notAvailable')}
         </div>
         <div className="text-[12px]">
           <div className="font-semibold text-rose-700">{guide.headline}</div>
@@ -318,24 +321,24 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
         className="mb-1.5 flex w-full items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 hover:text-slate-700"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        Local — on this computer
-        {localFav > 0 && <span className="ml-auto font-medium normal-case tracking-normal text-slate-500">{localFav} on chat list</span>}
+        {t('models.local')}
+        {localFav > 0 && <span className="ml-auto font-medium normal-case tracking-normal text-slate-500">{t('models.onChatList', { n: localFav })}</span>}
       </button>
       {open && (
       <>
       <p className="text-[12.5px] leading-relaxed text-slate-600">
-        Tick to put a model on the chat dropdown. Download once, then it runs here and nothing you type leaves the device.
-        <> We suggest <strong className="text-slate-900">{guide.recommended.label}</strong> for this computer.</>
+        {t('models.localLead')}{' '}
+        <Trans i18nKey="models.suggest" ns="pages" values={{ label: guide.recommended.label }} components={{ strong: <strong className="text-slate-900" /> }} />
       </p>
       {probed && (
         <p className="mt-1 text-[12px] text-slate-500">
           {catalogCached === 0 && unknownExtras === 0
-            ? 'Nothing downloaded yet — sizes next to each name are what a download will take.'
+            ? t('models.nothingDl')
             : catalogCached === 0
-              ? `${unknownExtras} unlisted download${unknownExtras === 1 ? '' : 's'} on this computer (size unknown).`
+              ? t(unknownExtras === 1 ? 'models.unlistedOne' : 'models.unlistedOther', { n: unknownExtras })
               : unknownExtras > 0
-                ? `About ${fmtSize(usedGB)} on this computer (${catalogCached} download${catalogCached === 1 ? '' : 's'}), plus ${unknownExtras} unlisted.`
-                : `About ${fmtSize(usedGB)} on this computer (${catalogCached} download${catalogCached === 1 ? '' : 's'}).`}
+                ? t('models.aboutPlus', { size: fmtSize(usedGB), n: catalogCached, extra: unknownExtras })
+                : t('models.about', { size: fmtSize(usedGB), n: catalogCached })}
         </p>
       )}
 
@@ -356,12 +359,12 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                 type="checkbox"
                 checked={(settings.favoriteModels ?? []).includes(`local:${m.id}`)}
                 onChange={() => updateAiSettings(prev => toggleFavorite(prev, `local:${m.id}`))}
-                title="Show on the chat dropdown"
+                title={t('models.showOnChat')}
                 className="shrink-0"
               />
               <button
                 onClick={() => pick(m.id)}
-                title="Use this model"
+                title={t('models.useThis')}
                 className={`h-3.5 w-3.5 shrink-0 border-2 ${
                   isChosen ? 'border-slate-900 bg-slate-900' : 'border-slate-300'
                 }`}
@@ -370,10 +373,10 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                 <span className="font-semibold text-slate-800">{m.label}</span>
                 <span className="text-slate-400"> · {fmtSize(m.sizeGB)}</span>
                 {recommended === m.id && (
-                  <span className="ml-1.5 border border-slate-200 px-1 py-0.5 text-[9px] font-semibold text-slate-500">BEST FOR YOU</span>
+                  <span className="ml-1.5 border border-slate-200 px-1 py-0.5 text-[9px] font-semibold text-slate-500">{t('models.bestForYou')}</span>
                 )}
                 {isChosen && (
-                  <span className="ml-1.5 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">IN USE</span>
+                  <span className="ml-1.5 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">{t('models.inUse')}</span>
                 )}
                 <span className="block text-[10px] text-slate-500 truncate">{m.blurb}</span>
               </span>
@@ -385,8 +388,8 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
               ) : isCached ? (
                 <CachedActions id={m.id} sizeGB={m.sizeGB} onDelete={() => void remove(m.id)} />
               ) : m.localDevOnly && !localWeightsReady ? (
-                <span className="shrink-0 text-[10px] text-slate-400" title="The weights folder (public/models/) isn't served by this instance — it exists only on a dev machine.">
-                  weights not on this server
+                <span className="shrink-0 text-[10px] text-slate-400" title={t('models.weightsTitle')}>
+                  {t('models.weightsMissing')}
                 </span>
               ) : (
                 <button
@@ -394,7 +397,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                   disabled={downloading != null}
                   className="shrink-0 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
                 >
-                  Download
+                  {tc('download')}
                 </button>
               )}
             </div>
@@ -402,7 +405,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
         })}
         {!showAll && offered.length > visible.length && (
           <button onClick={() => setShowAll(true)} className="pl-1 text-[11px] text-slate-500 hover:text-slate-900 hover:underline">
-            Show all {offered.length} models…
+            {t('models.showAll', { n: offered.length })}
           </button>
         )}
       </div>
@@ -417,7 +420,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
               onClick={() => abortRef.current?.abort()}
               className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-rose-700"
             >
-              <X size={12} /> Cancel
+              <X size={12} /> {tc('cancel')}
             </button>
           </div>
         </div>
@@ -446,7 +449,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
           <div className="mt-4 border-t border-slate-100 pt-3">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <label htmlFor="local-ctx" className="text-[12px] font-medium text-slate-700">
-                How much the model reads at once
+                {t('models.ctxLabel')}
               </label>
               <input
                 id="local-ctx"
@@ -463,7 +466,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                     ? Math.min(MAX_LOCAL_CONTEXT, Math.max(2048, Math.round(Number(e.target.value))))
                     : undefined;
                 })}
-                placeholder={isAuto ? 'Auto' : String(defaultContextSize(localConn.provider))}
+                placeholder={isAuto ? t('models.auto') : String(defaultContextSize(localConn.provider))}
                 className="num w-24 border border-slate-300 bg-white px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
               />
               <CheckBox size={12} checked={isAuto}
@@ -473,23 +476,12 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                   // Auto = unset; unchecking seeds the current target as a manual value.
                   c.contextSize = on ? undefined : tokens;
                 })}
-                label={<span className="text-[12px] text-slate-700">Auto (as big as your GPU allows)</span>} />
+                label={<span className="text-[12px] text-slate-700">{t('models.autoGpu')}</span>} />
             </div>
             <div className="mt-1 text-[10.5px] leading-relaxed text-slate-400">
-              {isAuto ? (
-                <>
-                  Auto tries the model's largest window{modelMeta ? ` (${modelMeta.maxWindow.toLocaleString()} tokens)` : ''} and
-                  steps down if your graphics memory can't hold it — no setting to tune.
-                </>
-              ) : (
-                fit && (
-                  <>
-                    Needs ≈{fmtMB(fit.neededMB)} of graphics memory at this setting
-                    ({fmtMB(modelMeta!.vramMB)} for the model + ≈{fmtMB(fit.cacheMB)} for the window).
-                    If loading fails, lower the number or switch back to Auto.
-                  </>
-                )
-              )}
+              {isAuto
+                ? t('models.autoHint', { window: modelMeta ? t('models.autoWindow', { n: modelMeta.maxWindow.toLocaleString() }) : '' })
+                : fit && t('models.fitHint', { needed: fmtMB(fit.neededMB), model: fmtMB(modelMeta!.vramMB), cache: fmtMB(fit.cacheMB) })}
             </div>
             <div className="mt-3 border-t border-slate-100 pt-3">
               <GenerationFields
@@ -510,14 +502,14 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
       {extraIds.length > 0 && (
         <div className="mt-4 border-t border-slate-100 pt-3">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Also on this device
+            {t('models.alsoOnDevice')}
           </div>
           <div className="space-y-1">
             {extraIds.map(id => (
               <div key={id} className="flex items-center gap-2 border border-slate-200 bg-white px-2.5 py-1.5 text-[11px]">
                 <span className="num min-w-0 flex-1 truncate font-mono text-slate-600">{id}</span>
                 {id === chosenId && (
-                  <span className="shrink-0 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">IN USE</span>
+                  <span className="shrink-0 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">{t('models.inUse')}</span>
                 )}
                 <CachedActions id={id} onDelete={() => void remove(id)} />
               </div>
@@ -540,6 +532,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
   isLocal: boolean;
   compact?: boolean;
 }) {
+  const { t } = useTranslation('pages');
   const gen = conn.generation ?? {};
   const setGen = (p: Partial<AiGenerationSettings>) =>
     onPatch({ generation: { ...gen, ...p } });
@@ -565,12 +558,12 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
     <div className={compact ? '' : 'mt-3 pt-2 border-t border-slate-100'}>
       {!compact && (
         <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-          Generation — how the model writes
+          {t('models.generation')}
         </div>
       )}
       <div className={`grid gap-2 ${isLocal ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2'}`}>
         <label className="block">
-          <span className={`block ${label}`}>Max tokens per reply</span>
+          <span className={`block ${label}`}>{t('models.maxTokens')}</span>
           <input
             type="number" min={256} step={512}
             value={num(gen.maxTokens)}
@@ -580,19 +573,19 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
           />
         </label>
         <label className="block">
-          <span className={`block ${label}`}>Temperature</span>
+          <span className={`block ${label}`}>{t('models.temperature')}</span>
           <input
             type="number" min={0} max={2} step={0.1}
             value={num(gen.temperature)}
             onChange={e => setGen({ temperature: parse(e.target.value, 0, 2) })}
-            placeholder={isLocal ? String(tempDefault) : 'provider'}
+            placeholder={isLocal ? String(tempDefault) : t('models.providerPh')}
             className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
           />
         </label>
         {isLocal && (
           <>
             <label className="block">
-              <span className={`block ${label}`}>Repeat penalty</span>
+              <span className={`block ${label}`}>{t('models.repeatPenalty')}</span>
               <input
                 type="number" min={0} max={2} step={0.05}
                 value={num(gen.repetitionPenalty)}
@@ -602,7 +595,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
               />
             </label>
             <label className="block">
-              <span className={`block ${label}`}>Presence penalty</span>
+              <span className={`block ${label}`}>{t('models.presencePenalty')}</span>
               <input
                 type="number" min={-2} max={2} step={0.1}
                 value={num(gen.presencePenalty)}
@@ -612,7 +605,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
               />
             </label>
             <label className="block">
-              <span className={`block ${label}`}>Frequency penalty</span>
+              <span className={`block ${label}`}>{t('models.frequencyPenalty')}</span>
               <input
                 type="number" min={-2} max={2} step={0.1}
                 value={num(gen.frequencyPenalty)}
@@ -625,10 +618,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
         )}
       </div>
       <p className="text-[9px] text-slate-400 mt-1 leading-snug">
-        Blank = the default shown. <strong>Max tokens</strong> is the reply budget —
-        reasoning models spend it on thinking <em>and</em> the answer, so a small
-        value cuts long answers off mid-thought. Higher temperature = more creative,
-        lower = more literal.
+        {t('models.genHint')}
       </p>
     </div>
   );
@@ -637,6 +627,8 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
 /** The per-model affordance once it's downloaded: a "downloaded" marker plus a
  *  delete (two-step) to reclaim disk space. */
 function CachedActions({ id, sizeGB, onDelete }: { id: string; sizeGB?: number; onDelete: () => void }) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -654,11 +646,11 @@ function CachedActions({ id, sizeGB, onDelete }: { id: string; sizeGB?: number; 
     return (
       <span className="flex items-center gap-2 shrink-0">
         <span className="flex items-center gap-1 text-[10px] font-semibold text-blue-700">
-          <Check size={11} /> Downloaded
+          <Check size={11} /> {t('models.downloaded')}
         </span>
         <button
           onClick={() => setConfirming(true)}
-          title={`Delete this download${sizeGB ? ` (frees ~${fmtSize(sizeGB)})` : ''}`}
+          title={sizeGB ? t('models.deleteDlSize', { size: fmtSize(sizeGB) }) : t('models.deleteDl')}
           className="text-slate-400 hover:text-rose-700"
         >
           <Trash2 size={12} />
@@ -673,10 +665,10 @@ function CachedActions({ id, sizeGB, onDelete }: { id: string; sizeGB?: number; 
         disabled={deleting}
         className="border border-rose-300 px-2 py-0.5 font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
       >
-        {deleting ? 'Deleting…' : 'Delete'}
+        {deleting ? t('models.deleting') : tc('delete')}
       </button>
       <button onClick={() => setConfirming(false)} disabled={deleting} className="text-slate-500 hover:underline">
-        Keep
+        {tc('keep')}
       </button>
     </span>
   );
@@ -691,6 +683,8 @@ function CloudModelsSection({ settings, catalog, onPick }: {
   catalog: ReturnType<typeof useModelCatalog>;
   onPick: (entry: ModelCatalogEntry) => void;
 }) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const { entries, loading, errors, refresh } = catalog;
   const clouds = entries.filter(e => !e.local);
@@ -716,13 +710,13 @@ function CloudModelsSection({ settings, catalog, onPick }: {
         className="mb-1.5 flex w-full items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 hover:text-slate-700"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        Remote — from your keys
-        {remoteFav > 0 && <span className="ml-auto font-medium normal-case tracking-normal text-slate-500">{remoteFav} on chat list</span>}
+        {t('models.remote')}
+        {remoteFav > 0 && <span className="ml-auto font-medium normal-case tracking-normal text-slate-500">{t('models.onChatList', { n: remoteFav })}</span>}
       </button>
       {open && (
       <>
       <p className="flex flex-wrap items-baseline gap-x-3 text-[12.5px] leading-relaxed text-slate-600">
-        <span>Tick to put a model on the chat dropdown. Listed from each connection.</span>
+        <span>{t('models.remoteLead')}</span>
         <button
           type="button"
           onClick={refresh}
@@ -730,7 +724,7 @@ function CloudModelsSection({ settings, catalog, onPick }: {
           className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 disabled:text-slate-400"
         >
           <RefreshCw size={11} className={loading ? 'animate-spin' : undefined} />
-          {loading ? 'Refreshing…' : 'Refresh'}
+          {loading ? t('models.refreshing') : tc('refresh')}
         </button>
       </p>
       <div className="mt-2 space-y-3">
@@ -748,7 +742,7 @@ function CloudModelsSection({ settings, catalog, onPick }: {
                   disabled={loading}
                   className="font-medium text-rose-800 underline decoration-rose-300 hover:decoration-rose-800 disabled:no-underline disabled:opacity-50"
                 >
-                  Retry
+                  {tc('retry')}
                 </button>
               </p>
             )}
@@ -772,6 +766,7 @@ function ModelPickList({ list, active, onPick, favorites = [] }: {
   onPick: (entry: ModelCatalogEntry) => void;
   favorites?: string[];
 }) {
+  const { t } = useTranslation('pages');
   const fav = new Set(favorites);
   return (
     <div className="space-y-1">
@@ -789,23 +784,23 @@ function ModelPickList({ list, active, onPick, favorites = [] }: {
               type="checkbox"
               checked={fav.has(e.key)}
               onChange={() => updateAiSettings(prev => toggleFavorite(prev, e.key))}
-              title="Show on the chat dropdown"
+              title={t('models.showOnChat')}
               className="shrink-0"
             />
             <button
               type="button"
               onClick={() => onPick(e)}
-              title="Use this model"
+              title={t('models.useThis')}
               className={`h-3.5 w-3.5 shrink-0 border-2 ${isChosen ? 'border-slate-900 bg-slate-900' : 'border-slate-300'}`}
             />
             <button type="button" onClick={() => onPick(e)} className="min-w-0 flex-1 truncate text-left font-semibold text-slate-800">
               {e.label}
             </button>
             {free && (
-              <span className="shrink-0 border border-slate-200 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500">free</span>
+              <span className="shrink-0 border border-slate-200 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500">{t('models.free')}</span>
             )}
             {isChosen && (
-              <span className="shrink-0 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">IN USE</span>
+              <span className="shrink-0 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">{t('models.inUse')}</span>
             )}
           </div>
         );
@@ -820,19 +815,20 @@ function OpenRouterModelGroups({ list, active, onPick, favorites }: {
   onPick: (entry: ModelCatalogEntry) => void;
   favorites?: string[];
 }) {
+  const { t } = useTranslation('pages');
   const free = list.filter(e => isOpenRouterFreeId(e.modelId));
   const paid = list.filter(e => !isOpenRouterFreeId(e.modelId));
   return (
     <div className="space-y-3">
       {free.length > 0 && (
         <div>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Free</div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{t('models.free')}</div>
           <ModelPickList list={free} active={active} onPick={onPick} favorites={favorites} />
         </div>
       )}
       {paid.length > 0 && (
         <div>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Paid</div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{t('models.paid')}</div>
           <ModelPickList list={paid} active={active} onPick={onPick} favorites={favorites} />
         </div>
       )}
@@ -849,6 +845,7 @@ function OpenRouterFreeSection({ settings, catalog, onPick }: {
   catalog: ReturnType<typeof useModelCatalog>;
   onPick: (entry: ModelCatalogEntry) => void;
 }) {
+  const { t } = useTranslation('pages');
   const conn = openRouterConnection(settings);
   const ready = conn ? connectionReady(conn) : false;
   const freeRows = catalog.entries.filter(e =>
@@ -883,41 +880,38 @@ function OpenRouterFreeSection({ settings, catalog, onPick }: {
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 hover:text-slate-700"
         >
           {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          Free — OpenRouter
+          {t('models.freeOr')}
         </button>
         <HelpHint topic="openrouter-free" />
       </div>
       {open && (
       <>
       <p className="text-[12.5px] leading-relaxed text-slate-600">
-        Cloud chat with no token charge. OpenRouter&apos;s{' '}
+        {t('models.freeLead1')}{' '}
         <a href={OPENROUTER_FREE_PAGE_URL} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
-          free router
+          {t('models.freeRouter')}
         </a>
-        {' '}picks a <span className="num">:free</span> model for each request (tools and vision when the prompt needs them).
-        Rate-limited.
+        {' '}{t('models.freeLead2')}
       </p>
       <p className="mt-2 border border-amber-200 bg-amber-50 px-2.5 py-2 text-[12px] leading-snug text-amber-900">
-        Free is not private. Your prompt (and any plan details in it) leaves this device.
-        OpenRouter and the model that answers may log it and use it for training. Don&apos;t paste
-        anything you wouldn&apos;t send to a third party — use an on-computer model for that.
+        {t('models.freeWarn')}
       </p>
 
       <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-[12.5px] leading-relaxed text-slate-600">
         <li>
           <a href={OPENROUTER_SIGNUP_URL} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
-            Create an OpenRouter account
+            {t('models.createAccount')}
           </a>
-          {' '}(email or GitHub).
+          {' '}{t('models.emailGithub')}
         </li>
         <li>
-          Open{' '}
+          {t('models.open')}{' '}
           <a href={OPENROUTER_KEYS_URL} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
-            Keys
+            {t('models.keys')}
           </a>
-          {' '}→ Create key. Copy it. It stays in this browser and is sent only to OpenRouter.
+          {' '}{t('models.createKey')}
         </li>
-        <li>Paste the key here, then tick the free router (or any listed :free model) to put it on the chat list.</li>
+        <li>{t('models.pasteTick')}</li>
       </ol>
 
       {!conn ? (
@@ -926,12 +920,12 @@ function OpenRouterFreeSection({ settings, catalog, onPick }: {
           onClick={startSetup}
           className="mt-3 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
         >
-          Set up OpenRouter free
+          {t('models.setupFree')}
         </button>
       ) : (
         <div className="mt-3 space-y-3">
           <label className="block max-w-md">
-            <span className="mb-0.5 block text-[10px] text-slate-500">OpenRouter API key (stored locally only)</span>
+            <span className="mb-0.5 block text-[10px] text-slate-500">{t('models.orKey')}</span>
             <input
               type="password"
               value={conn.apiKey}
@@ -942,7 +936,7 @@ function OpenRouterFreeSection({ settings, catalog, onPick }: {
             />
           </label>
           {!ready && (
-            <p className="text-[11px] text-amber-700">Paste the key to list free models.</p>
+            <p className="text-[11px] text-amber-700">{t('models.pasteToList')}</p>
           )}
           {ready && catalog.errors[conn.id] && (
             <p className="text-[11px] text-rose-700">{catalog.errors[conn.id]}</p>
@@ -950,8 +944,8 @@ function OpenRouterFreeSection({ settings, catalog, onPick }: {
           {ready && (
             <>
               <p className="text-[11px] text-slate-500">
-                Default model is <span className="num font-semibold text-slate-700">{OPENROUTER_FREE_ROUTER}</span>
-                {usingFree ? ' — in use.' : '.'}
+                {t('models.defaultModel', { id: OPENROUTER_FREE_ROUTER })}
+                {usingFree ? t('models.inUseDot') : '.'}
               </p>
               {freeRows.length > 0 && (
                 <ModelPickList list={freeRows} active={active} onPick={onPick} favorites={settings.favoriteModels} />
@@ -975,6 +969,7 @@ function ConnectionsSection({ settings, onChange }: {
   settings: AiSettings;
   onChange: (mutate: (s: AiSettings) => void) => void;
 }) {
+  const { t } = useTranslation('pages');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [addingProvider, setAddingProvider] = useState<(typeof AI_PROVIDERS)[number]>('gemini');
 
@@ -1006,7 +1001,7 @@ function ConnectionsSection({ settings, onChange }: {
 
   return (
     <section className="mt-8">
-      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Keys</div>
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('models.keysTitle')}</div>
 
       {/* The on-computer engine is always available from the catalog above —
           picking a local model creates the connection. Keys here are only
@@ -1018,14 +1013,13 @@ function ConnectionsSection({ settings, onChange }: {
         className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800"
       >
         {advancedOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        Add an online provider (needs an API key)
+        {t('models.addOnline')}
       </button>
 
       {advancedOpen && (
         <div className="mt-2 border border-slate-200 bg-white p-3">
           <p className="mb-3 text-[12px] leading-relaxed text-slate-500">
-            For stronger models. You sign up with the provider, copy an API key, and paste it here —
-            the key is stored only in this browser and sent only to that provider when you chat.
+            {t('models.onlineLead')}
           </p>
 
           <div className="space-y-3">
@@ -1033,7 +1027,7 @@ function ConnectionsSection({ settings, onChange }: {
               <CloudConnectionCard key={c.id} conn={c} onPatch={patch} onDelete={() => deleteConnection(c.id)} />
             ))}
             {cloudConns.length === 0 && (
-              <p className="text-[11px] text-slate-400">No online providers yet.</p>
+              <p className="text-[11px] text-slate-400">{t('models.noOnline')}</p>
             )}
           </div>
 
@@ -1044,14 +1038,14 @@ function ConnectionsSection({ settings, onChange }: {
               className="border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-slate-900 focus:outline-none"
             >
               {AI_PROVIDERS.filter(p => !isLocalProvider(p)).map(p => (
-                <option key={p} value={p}>{PROVIDER_HELP[p]?.name ?? p}</option>
+                <option key={p} value={p}>{t(`models.providers.${p}.name`, { defaultValue: PROVIDER_HELP[p]?.name ?? p })}</option>
               ))}
             </select>
             <button
               onClick={addCloud}
               className="flex items-center gap-1 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
             >
-              <Plus size={13} /> Add provider
+              <Plus size={13} /> {t('models.addProvider')}
             </button>
           </div>
         </div>
@@ -1065,7 +1059,11 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
   onPatch: (id: string, p: Partial<AiConnection>) => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation('pages');
   const help = PROVIDER_HELP[c.provider];
+  const helpName = t(`models.providers.${c.provider}.name`, { defaultValue: help?.name ?? c.provider });
+  const helpHow = t(`models.providers.${c.provider}.howTo`, { defaultValue: help?.howTo ?? '' });
+  const helpCost = t(`models.providers.${c.provider}.cost`, { defaultValue: help?.cost ?? '' });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -1074,7 +1072,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
     setTestResult(null);
     try {
       await testConnection(c);
-      setTestResult({ ok: true, message: 'Connection works.' });
+      setTestResult({ ok: true, message: t('models.works') });
     } catch (err) {
       setTestResult({ ok: false, message: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -1086,21 +1084,21 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
     <div className="border border-slate-200 bg-white p-2.5">
       <div className="mb-2 flex items-center gap-2">
         <span className="border border-slate-300 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-          {help?.name ?? c.provider}
+          {helpName}
         </span>
         {help?.easiest && (
-          <span className="border border-slate-200 px-1 py-0.5 text-[9px] font-semibold text-slate-500">EASIEST</span>
+          <span className="border border-slate-200 px-1 py-0.5 text-[9px] font-semibold text-slate-500">{t('models.easiest')}</span>
         )}
         <input
           value={c.label}
           onChange={e => onPatch(c.id, { label: e.target.value })}
-          placeholder="Label (e.g. My key)"
+          placeholder={t('models.labelPh')}
           className="min-w-0 flex-1 border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none"
         />
         <button
           onClick={onDelete}
           className="text-slate-400 hover:text-rose-700"
-          title="Delete this connection (the key is removed from this browser)"
+          title={t('models.deleteConn')}
         >
           <Trash2 size={13} />
         </button>
@@ -1108,22 +1106,22 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
 
       {help && (
         <div className="mb-2 text-[11px] text-slate-500 leading-snug">
-          {help.howTo}
+          {helpHow}
           {help.keyUrl && (
             <> {' '}
               <a href={help.keyUrl} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
-                Get a key here ↗
+                {t('models.getKey')}
               </a>
             </>
           )}
-          <span className="block text-[10px] text-slate-400 mt-0.5">{help.cost}</span>
+          <span className="block text-[10px] text-slate-400 mt-0.5">{helpCost}</span>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {c.provider !== 'ollama' && (
           <label className="block">
-            <span className="block text-[10px] text-slate-500 mb-0.5">API key (stored locally only)</span>
+            <span className="block text-[10px] text-slate-500 mb-0.5">{t('models.apiKey')}</span>
             <input
               type="password"
               value={c.apiKey}
@@ -1135,7 +1133,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
           </label>
         )}
         <label className="block">
-          <span className="block text-[10px] text-slate-500 mb-0.5">Default model (optional)</span>
+          <span className="block text-[10px] text-slate-500 mb-0.5">{t('models.defaultModelOpt')}</span>
           <input
             value={c.model}
             onChange={e => onPatch(c.id, { model: e.target.value })}
@@ -1143,12 +1141,12 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
             className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
           />
           <span className="mt-0.5 block text-[9px] text-slate-400">
-            The list above fills itself once the key works. This is just the fallback.
+            {t('models.fallback')}
           </span>
         </label>
         {(c.provider === 'ollama' || c.provider === 'openai-compatible' || c.provider === 'openrouter' || c.provider === 'openai') && (
           <label className="block sm:col-span-2">
-            <span className="block text-[10px] text-slate-500 mb-0.5">Base URL</span>
+            <span className="block text-[10px] text-slate-500 mb-0.5">{t('models.baseUrl')}</span>
             <input
               value={c.baseUrl ?? ''}
               onChange={e => onPatch(c.id, { baseUrl: e.target.value })}
@@ -1158,7 +1156,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
           </label>
         )}
         <label className="block">
-          <span className="block text-[10px] text-slate-500 mb-0.5">Context window (tokens, optional)</span>
+          <span className="block text-[10px] text-slate-500 mb-0.5">{t('models.ctxWindow')}</span>
           <input
             type="number"
             min={1024}
@@ -1168,7 +1166,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
             className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
           />
           <span className="block text-[9px] text-slate-400 mt-0.5">
-            Drives the usage meter + auto-compaction. Default is small for local models.
+            {t('models.ctxHint')}
           </span>
         </label>
       </div>
@@ -1183,7 +1181,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
           className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
         >
           {testing ? <Loader2 size={11} className="animate-spin" /> : null}
-          Test connection
+          {t('models.test')}
         </button>
         {testResult && (
           <span className={`flex items-center gap-1 text-[11px] ${testResult.ok ? 'text-blue-700' : 'text-rose-700'}`}>
@@ -1195,9 +1193,9 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
 
       {!connectionReady(c) && (
         <div className="mt-1.5 text-[10.5px] text-amber-700">
-          Incomplete: {c.provider === 'ollama' || c.provider === 'openai-compatible'
-            ? 'needs a base URL and a model'
-            : 'needs an API key and a model'}.
+          {c.provider === 'ollama' || c.provider === 'openai-compatible'
+            ? t('models.incompleteUrl')
+            : t('models.incompleteKey')}
         </div>
       )}
     </div>

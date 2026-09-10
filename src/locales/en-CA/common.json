@@ -9,5 +9,16 @@
   },
   "dismiss": "Dismiss",
   "dismissWarning": "Dismiss this warning",
-  "dismissSettingsWarning": "Dismiss settings warning"
+  "dismissSettingsWarning": "Dismiss settings warning",
+  "copy": "Copy",
+  "copied": "Copied",
+  "cancel": "Cancel",
+  "save": "Save",
+  "apply": "Apply",
+  "delete": "Delete",
+  "close": "Close",
+  "retry": "Retry",
+  "refresh": "Refresh",
+  "download": "Download",
+  "keep": "Keep"
 }

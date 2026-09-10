@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import type { Scenario } from '@retired/engine-core/types';
 import { computeScenarioMetrics, type ScenarioMetrics } from '@retired/engine-core/compareMetrics';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { ProjectionTimeline, type TimelineSeries } from '../design/ProjectionTimeline';
+import { useAppLocale } from '../lib/localeContext';
 
-function fmtMoney(v: number): string {
-  return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
+function fmtMoney(v: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
 }
 function fmtPct(v: number): string {
   return `${(v * 100).toFixed(1)}%`;
@@ -29,6 +31,8 @@ interface Row extends ScenarioMetrics {
  * underneath. No scenario cap, no "baseline" ritual — the numbers stand alone.
  */
 export function CompareCard({ scenarios, activeScenarioId, config }: CompareCardProps) {
+  const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   // All scenarios on by default; the legend toggles lines, the table follows.
   const [onIds, setOnIds] = useState<Set<string>>(() => new Set(scenarios.map(s => s.id)));
 
@@ -64,17 +68,17 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
   };
 
   if (scenarios.length === 0) {
-    return <p className="text-xs text-slate-500">Save a couple of scenarios first, then compare them here.</p>;
+    return <p className="text-xs text-slate-500">{t('compare.empty')}</p>;
   }
 
   return (
     <div>
       <div className="mb-3">
-        <span className="text-[11px] text-slate-400">toggle lines in the legend · numbers below</span>
+        <span className="text-[11px] text-slate-400">{t('compare.toggleHint')}</span>
       </div>
 
       {activeSeries.length === 0 ? (
-        <p className="py-2 text-xs text-slate-500">All lines are off — toggle one back on in the legend above.</p>
+        <p className="py-2 text-xs text-slate-500">{t('compare.allOff')}</p>
       ) : (
         <ProjectionTimeline series={activeSeries} onToggleSeries={toggleLine} />
       )}
@@ -84,12 +88,12 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
         <table className="w-full text-[12px]">
           <thead>
             <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-[0.16em] text-slate-400">
-              <th className="py-1.5 pr-3 font-semibold">Scenario</th>
-              <th className="py-1.5 pr-3 font-semibold text-right">Wealth at retirement</th>
-              <th className="py-1.5 pr-3 font-semibold text-right">Depletion age</th>
-              <th className="py-1.5 pr-3 font-semibold text-right">Withdrawal rate</th>
-              <th className="py-1.5 pr-3 font-semibold text-right">Lifetime tax</th>
-              <th className="py-1.5 font-semibold text-right">Ending balance</th>
+              <th className="py-1.5 pr-3 font-semibold">{t('compare.scenario')}</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">{t('compare.wealth')}</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">{t('compare.depletion')}</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">{t('compare.withdrawal')}</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">{t('compare.lifetimeTax')}</th>
+              <th className="py-1.5 font-semibold text-right">{t('compare.ending')}</th>
             </tr>
           </thead>
           <tbody>
@@ -97,21 +101,21 @@ export function CompareCard({ scenarios, activeScenarioId, config }: CompareCard
               <tr key={r.id} className={`border-b border-slate-100 ${r.id === activeScenarioId ? 'bg-slate-50' : ''}`}>
                 <td className="py-1.5 pr-3">
                   <span className="font-medium text-slate-900">{r.name}</span>
-                  <span className="ml-1.5 text-[10px] text-slate-400">{r.isCouple ? 'couple' : 'single'}</span>
+                  <span className="ml-1.5 text-[10px] text-slate-400">{r.isCouple ? t('compare.couple') : t('compare.single')}</span>
                 </td>
-                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtMoney(r.householdWorth)}</td>
+                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtMoney(r.householdWorth, locale)}</td>
                 <td className={`num py-1.5 pr-3 text-right ${r.depletionAge ? 'font-medium text-rose-700' : 'text-slate-800'}`}>
-                  {r.depletionAge ?? 'Never'}
+                  {r.depletionAge ?? t('compare.never')}
                 </td>
                 <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtPct(r.withdrawalRate)}</td>
-                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtMoney(r.lifetimeTax)}</td>
-                <td className="num py-1.5 text-right text-slate-800">{fmtMoney(r.endingBalance)}</td>
+                <td className="num py-1.5 pr-3 text-right text-slate-800">{fmtMoney(r.lifetimeTax, locale)}</td>
+                <td className="num py-1.5 text-right text-slate-800">{fmtMoney(r.endingBalance, locale)}</td>
               </tr>
             ))}
           </tbody>
         </table>
         {activeRows.length === 0 && (
-          <p className="text-xs text-slate-500 py-2">Nothing to show — all lines are toggled off.</p>
+          <p className="text-xs text-slate-500 py-2">{t('compare.nothingToShow')}</p>
         )}
       </div>
     </div>
