@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { History } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { BacktestResult } from '../lib/historicalReturns';
 import { HISTORICAL_REAL_RETURNS } from '../lib/historicalReturns';
+import { useAppLocale } from '../lib/localeContext';
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-CA', {
+function formatCurrency(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'CAD',
     maximumFractionDigits: 0,
@@ -18,6 +19,8 @@ interface BacktestPanelProps {
 
 // GCP-console style page: header row, KPI chips, a bar per rolling window.
 export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
+  const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   // Let the parent scroll this panel into view once it's actually in the DOM.
   useEffect(() => { onMounted?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -36,83 +39,77 @@ export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3">
-        <History size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Historical Backtest</h2>
+      <div className="mb-3">
         <span className="text-[11px] text-slate-500">
-          {result.windowCount} rolling {result.windowYears}-yr windows · Canadian real returns {startYear}–{endYear}
+          {t('backtestUi.windows', { count: result.windowCount, years: result.windowYears, from: startYear, to: endYear })}
         </span>
       </div>
 
       <div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <div className="border border-slate-200 rounded p-3">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Success Rate</div>
-            <div className={`text-lg font-semibold ${pct >= 90 ? 'text-emerald-600' : pct >= 70 ? 'text-amber-600' : 'text-red-600'}`}>
+        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="border-t-2 border-slate-900 pt-2">
+            <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">{t('backtestUi.successRate')}</div>
+            <div className={`num text-lg font-semibold ${pct >= 90 ? 'text-blue-700' : pct >= 70 ? 'text-amber-700' : 'text-rose-700'}`}>
               {pct}%
             </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">{result.successCount}/{result.windowCount} windows never depleted</div>
+            <div className="mt-0.5 text-[10px] text-slate-500">{t('backtestUi.neverDepleted', { ok: result.successCount, total: result.windowCount })}</div>
           </div>
-          <div className="border border-slate-200 rounded p-3">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Worst Window</div>
-            <div className="text-lg font-semibold text-slate-900">{worstWindow ? worstWindow.startYear : '—'}</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">
-              {worstWindow ? (worstWindow.depleted ? `depleted at ${worstWindow.depletionAge}` : `ends ${formatCurrency(worstWindow.finalBalance)}`) : 'no windows'}
+          <div className="border-t-2 border-slate-900 pt-2">
+            <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">{t('backtestUi.worst')}</div>
+            <div className="num text-lg font-semibold text-slate-900">{worstWindow ? worstWindow.startYear : '—'}</div>
+            <div className="mt-0.5 text-[10px] text-slate-500">
+              {worstWindow ? (worstWindow.depleted ? t('backtestUi.depletedAt', { age: worstWindow.depletionAge }) : t('backtestUi.ends', { amount: formatCurrency(worstWindow.finalBalance, locale) })) : t('backtestUi.noWindows')}
             </div>
           </div>
-          <div className="border border-slate-200 rounded p-3">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Median Ending</div>
-            <div className="text-lg font-semibold text-slate-900">{formatCurrency(result.medianFinalBalance)}</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">real (today's) dollars</div>
+          <div className="border-t-2 border-slate-900 pt-2">
+            <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">{t('backtestUi.medianEnding')}</div>
+            <div className="num text-lg font-semibold text-slate-900">{formatCurrency(result.medianFinalBalance, locale)}</div>
+            <div className="mt-0.5 text-[10px] text-slate-500">{t('backtestUi.realDollars')}</div>
           </div>
-          <div className="border border-slate-200 rounded p-3">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Best Window</div>
-            <div className="text-lg font-semibold text-slate-900">{bestWindow ? bestWindow.startYear : '—'}</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">{bestWindow ? `ends ${formatCurrency(bestWindow.finalBalance)}` : 'no windows'}</div>
+          <div className="border-t-2 border-slate-900 pt-2">
+            <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">{t('backtestUi.best')}</div>
+            <div className="num text-lg font-semibold text-slate-900">{bestWindow ? bestWindow.startYear : '—'}</div>
+            <div className="mt-0.5 text-[10px] text-slate-500">{bestWindow ? t('backtestUi.ends', { amount: formatCurrency(bestWindow.finalBalance, locale) }) : t('backtestUi.noWindows')}</div>
           </div>
         </div>
 
-        {/* Window bars: height = ending balance, red if depleted */}
+        {/* Window bars: height = ending balance, rose if depleted */}
         <div>
-          <div className="flex items-baseline justify-between mb-1.5">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">Ending balance by window start year</div>
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{t('backtestUi.endingByStart')}</div>
             <div className="text-[10px] text-slate-400">
-              each {result.windowYears}-yr window · coverage {firstStart}–{lastStart + result.windowYears - 1}
+              {t('backtestUi.eachWindow', { years: result.windowYears, from: firstStart, to: lastStart + result.windowYears - 1 })}
             </div>
           </div>
-          <div className="flex items-end gap-px h-28">
+          <div className="flex h-28 items-end gap-px">
             {result.windows.map((w) => {
               const h = Math.max(2, Math.round((Math.max(0, w.finalBalance) / maxAbs) * 100));
               return (
                 <div
                   key={w.startYear}
-                  title={`${w.startYear}–${w.startYear + result.windowYears - 1}: ${w.depleted ? `depleted at ${w.depletionAge}` : formatCurrency(w.finalBalance)}`}
-                  className={`flex-1 rounded-sm ${w.depleted ? 'bg-red-400' : 'bg-blue-400 hover:bg-blue-500'}`}
+                  title={w.depleted
+                    ? t('backtestUi.barTitleDepleted', { from: w.startYear, to: w.startYear + result.windowYears - 1, age: w.depletionAge })
+                    : t('backtestUi.barTitleOk', { from: w.startYear, to: w.startYear + result.windowYears - 1, amount: formatCurrency(w.finalBalance, locale) })}
+                  className={`flex-1 ${w.depleted ? 'bg-rose-300' : 'bg-blue-200 hover:bg-blue-400'}`}
                   style={{ height: `${h}%` }}
                 />
               );
             })}
           </div>
           {/* Axis: window start on the left, window END (= data coverage) on the right */}
-          <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-            <span>{firstStart} start</span>
-            <span>last window ends {lastStart + result.windowYears - 1}</span>
+          <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+            <span>{t('backtestUi.start', { year: firstStart })}</span>
+            <span>{t('backtestUi.lastEnds', { year: lastStart + result.windowYears - 1 })}</span>
           </div>
         </div>
 
         {result.truncated && (
-          <p className="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 leading-snug">
-            Your plan's horizon is longer than the {endYear - startYear + 1}-year historical record,
-            so each window was capped at {result.windowYears} years — the backtest doesn't reach your
-            full horizon. A very early retirement age is the usual cause.
+          <p className="mt-3 border-l-2 border-amber-500 px-2.5 py-1 text-[11px] leading-snug text-amber-800">
+            {t('backtestUi.truncated', { years: endYear - startYear + 1, window: result.windowYears })}
           </p>
         )}
-        <p className="mt-3 text-[11px] text-slate-500 leading-snug">
-          Each bar replays the plan against one {result.windowYears}-year historical sequence of real
-          (after-inflation) returns, with spending held in today's dollars. Bars sit at each window's
-          start year; the last window ends in {lastStart + result.windowYears - 1}, so all{' '}
-          {endYear - startYear + 1} years of data are used. Red bars ran out of money before max age.
-          60% S&P/TSX total return + 40% GoC long bond, deflated by CPI.
+        <p className="mt-3 text-[11px] leading-snug text-slate-500">
+          {t('backtestUi.foot', { years: result.windowYears, end: lastStart + result.windowYears - 1, record: endYear - startYear + 1 })}
         </p>
       </div>
     </div>

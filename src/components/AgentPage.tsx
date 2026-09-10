@@ -7,7 +7,9 @@
 // auto-scroll, and the composer. Connecting/switching models lives on the
 // separate Connections page.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useAppLocale } from '../lib/localeContext';
 import {
   AssistantRuntimeProvider,
   ThreadPrimitive,
@@ -21,24 +23,28 @@ import {
 import {
   Bot, Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench,
   Copy, ClipboardPaste, Download, RotateCcw, Settings2, Brain, ChevronDown,
-  ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle,
+  ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle, Info,
 } from 'lucide-react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
-  connectionReady, loadAiSettings, saveAiSettings, type AiConnection, type AiSettings,
+  connectionReady, getAiSettings, subscribeAiSettings, updateAiSettings,
+  resolveAiPromptSend, resolveLocalToolCapable, isLocalProvider,
+  type AiConnection, type AiSettings,
 } from '../lib/aiSettings';
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { createBridge, type Bridge, type ChatMessage } from '@retired/ai-bridge';
-import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { Progress } from '../design/primitives';
+import { assembleSystemPrompt, DEFAULT_SYSTEM_PROMPT, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
+import type { View } from '../lib/viewRoutes';
+import type { Locale } from '../lib/locale';
 import {
   defaultContextSize, estimateTokens, planCompaction, summaryNote, COMPACT_AT,
 } from '../lib/ai/context';
 import { reasoningTail } from '../lib/ai/reasoningPreview';
-import { buildPromptToolInstructions, PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
-import { toolSpecs } from '@retired/mcp-tools/tools';
+import { PROMPT_TOOL_MAX_CALLS } from '../lib/ai/promptTools';
 import type { ToolContext } from '@retired/mcp-tools/tools';
 import type { MemoryStore } from '@retired/mcp-tools/memoryStore';
 import {
@@ -46,13 +52,21 @@ import {
   type PlanCheckpoint,
 } from '@retired/mcp-tools/checkpoints';
 import { WEBLLM_MODELS } from '../lib/ai/webLlmModels';
+import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
+import { activeCatalogKey, chatPickerEntries, pickModel, useModelCatalog } from '../lib/modelCatalog';
+import { provenanceLine } from '../lib/ai/modelProvenance';
 import { buildPlanDigest } from '../lib/agentQA';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
-  loadChats, saveChats, newThread, titleFromFirstMessage,
+  getChats, subscribeChats, updateChats, newThread, titleFromFirstMessage,
   type ChatThread,
 } from '../lib/ai/chatStore';
+import {
+  subscribeRuns, getRunsVersion, getRun, hasActiveRun, runSnapshot, startRun, setRunPhase, setRunProgress,
+  setRunDecision, takeRunDecision, abortRun, endRun,
+} from '../lib/ai/chatRuns';
 import { resetWebLlmChat, loadedWebLlmModel } from '../lib/ai/webLlmProvider';
+import { resetBonsaiChat, loadedBonsaiModel } from '../lib/ai/bonsaiProvider';
 import { Markdown } from './Markdown';
 
 interface AgentPageProps {
@@ -65,6 +79,8 @@ interface AgentPageProps {
   /** Saved inputs of any scenario by id (list_scenarios withDetails). */
   scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
+  /** Mint a partner plan and link the current plan to it (propose_spouse create). */
+  onCreateSpousePlan?: (name?: string, inputs?: RetirementInputs) => string;
   onOpenConnections: () => void;
   /** Agent memory (scenario + global); absent only if the store failed to open. */
   memory?: MemoryStore;
@@ -73,6 +89,23 @@ interface AgentPageProps {
   /** Agent scenario navigation: switch active scenario / save-current-as-new. */
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
+  /** Docked mode: render just the conversation column in the beta's
+   *  right rail — no page header, no chat-list sidebar (a slim strip handles
+   *  chat switching so the rail can stay at its 340px floor). */
+  docked?: boolean;
+  /** Hide the inner "AI Assistant" title (the beta page chrome already says
+   *  Assistant — an inner h2 would be a second header). Controls and the
+   *  connection badge stay. */
+  hideTitle?: boolean;
+  /** The view the host page is on when AgentPage mounts — for the ambient
+   *  prompt line and find_page's "already here" tag. */
+  currentView?: View;
+  /** Route the host to a view (the action behind an approved propose_navigate
+   *  card). Its presence also advertises `canNavigate` to the tools: no prop,
+   *  and the card degrades to a shareable #/hash result. */
+  onNavigate?: (view: View) => void;
+  /** Assistant language (Canadian English / French). */
+  locale?: Locale;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,10 +150,19 @@ interface Turn {
    *  is actively replying) so a reload doesn't leave the bubble looking busy
    *  forever, and so the spinner clears while the card waits. */
   state?: 'streaming' | 'done' | 'aborted' | 'truncated' | 'error' | 'needs-decision';
+  /** Catalog / connection model the user had selected. */
+  askedModel?: string;
+  /** Provider-reported model that actually answered (OpenRouter free router). */
+  servedModel?: string;
 }
 
 let turnSeq = 0;
 const newTurnId = () => `turn-${++turnSeq}`;
+
+/** Store titles keep the English sentinel `'New chat'` (patchTurnsOf compares it). Translate at display. */
+function displayThreadTitle(title: string, t: (key: string) => string): string {
+  return title === 'New chat' ? t('assistant.newChat') : title;
+}
 
 /** The context window to plan around for a connection. An explicit setting
  *  wins. For a LOCAL model on auto (no setting), plan against the model's own
@@ -131,6 +173,9 @@ function effectiveContextLimit(connection: AiConnection): number {
   if (connection.contextSize) return connection.contextSize;
   if (connection.provider === 'webllm') {
     return WEBLLM_MODELS.find(m => m.id === connection.model)?.maxWindow ?? defaultContextSize('webllm');
+  }
+  if (connection.provider === 'bonsai') {
+    return BONSAI_MODELS.find(m => m.id === connection.model)?.maxWindow ?? defaultContextSize('bonsai');
   }
   return defaultContextSize(connection.provider);
 }
@@ -223,14 +268,122 @@ function turnToMessage(t: Turn): ThreadMessageLike {
 // Page
 // ---------------------------------------------------------------------------
 
-export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: AgentPageProps) {
-  const [settings, setSettings] = useState<AiSettings>(loadAiSettings);
-  const [chatState, setChatState] = useState(() => loadChats());
+/* The docked chat picker: a clickable icon in a slim strip that drops down to
+   select, start, or delete a chat. The rail's width stays for the conversation —
+   no permanent chat list. Flat, hairline, f7. */
+export function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDelete, modelPicker }: {
+  threads: ChatThread[];
+  activeThreadId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
+  /** The model picker rides this strip in docked mode — the dock has no full
+   *  header, and without it there'd be no way to switch models once one is
+   *  connected (the offline CTA that links to Connections only shows before). */
+  modelPicker?: ReactNode;
+}) {
+  const { t } = useTranslation('pages');
+  // Runs are keyed by thread id in the registry; a chat that is thinking
+  // elsewhere shows the same spinner the conversation bubble shows.
+  const runsVersion = useSyncExternalStore(subscribeRuns, getRunsVersion, getRunsVersion);
+  const runStates = useMemo(() => runSnapshot(), [runsVersion]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const active = threads.find(t => t.id === activeThreadId);
+  const activeRunning = active != null && runStates.has(active.id);
+
+  return (
+    <div ref={ref} className="relative flex items-center gap-1 border-b border-slate-200 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-label={t('assistant.chooseChat')}
+        title={t('assistant.chooseChat')}
+        className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[12px] text-slate-700 hover:text-slate-900"
+      >
+        <MessageSquare size={13} className="shrink-0 text-slate-400" />
+        <span className="min-w-0 flex-1 truncate">{active ? displayThreadTitle(active.title, t) : t('assistant.noChat')}</span>
+        {activeRunning && <Loader2 size={12} className="shrink-0 animate-spin text-slate-400" aria-label={t('assistant.thisChatAnswering')} />}
+        <ChevronDown size={13} className="shrink-0 text-slate-400" />
+      </button>
+      <button
+        type="button"
+        onClick={onNew}
+        aria-label={t('assistant.newTitle')}
+        title={t('assistant.newTitle')}
+        className="shrink-0 p-1 text-slate-500 hover:text-slate-900"
+      >
+        <Plus size={14} />
+      </button>
+      {modelPicker && <div className="shrink-0">{modelPicker}</div>}
+      {open && (
+        <div className="absolute left-0 top-full z-50 w-full border border-slate-200 bg-white">
+          {threads.length === 0 && (
+            <p className="px-2.5 py-2 text-[11px] text-slate-400">{t('assistant.noChats')}</p>
+          )}
+          {threads.map(thread => {
+            const run = runStates.get(thread.id);
+            return (
+              <div
+                key={thread.id}
+                className={`group flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[12px] ${
+                  thread.id === activeThreadId ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-50'
+                }`}
+                onClick={() => { onSelect(thread.id); setOpen(false); }}
+              >
+                {run
+                  ? <Loader2 size={12} className="shrink-0 animate-spin text-slate-500" aria-label={run.phase === 'parked' ? t('assistant.waiting') : t('assistant.answering')} />
+                  : <MessageSquare size={12} className="shrink-0 text-slate-400" />}
+                <span className="min-w-0 flex-1 truncate">{displayThreadTitle(thread.title, t)}</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDelete(thread.id); }}
+                  aria-label={t('assistant.deleteChat')}
+                  className="shrink-0 text-slate-300 opacity-0 hover:text-rose-600 group-hover:opacity-100"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AgentPage({ inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onCreateSpousePlan, onOpenConnections, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, docked, hideTitle, currentView, onNavigate, locale }: AgentPageProps) {
+  const { t } = useTranslation('pages');
+  const settings = useSyncExternalStore(subscribeAiSettings, getAiSettings, getAiSettings);
+  const setSettings = (next: AiSettings) => updateAiSettings(() => next);
+  // The chat store is MODULE-level (chatStore.ts): a background run keeps
+  // appending turns after this component unmounts (page navigation, thread
+  // switch), so the transcript can't live in React state. Read + write go
+  // through the store; useSyncExternalStore re-renders on change.
+  const chatState = useSyncExternalStore(subscribeChats, getChats, getChats);
+  // The run registry (chatRuns.ts) — who is currently thinking, parked on a
+  // confirm card, or loading a local model, keyed by thread id. The thread
+  // lists read it to show the thinking spinner next to a running chat.
+  const runsVersion = useSyncExternalStore(subscribeRuns, getRunsVersion, getRunsVersion);
+  const runStates = useMemo(() => runSnapshot(), [runsVersion]);
   // Chat list: pinned open (default) or collapsed to a slim strip. Session-
   // only — not worth persisting.
   const [chatsPinned, setChatsPinned] = useState(true);
-  useEffect(() => { saveAiSettings(settings); }, [settings]);
-  useEffect(() => { saveChats(chatState); }, [chatState]);
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
@@ -249,13 +402,20 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   }, [settings.connections, settings.activeConnectionId]);
 
   const ready = connection != null && connectionReady(connection);
-  const isLocal = connection?.provider === 'webllm';
-  // A local model flagged too weak for the tool protocol drops to 'off': it
-  // answers from the plan summary instead of mangling fenced-JSON tool calls.
-  // Since #118 no curated model is weak, so this only bites if a future
-  // entry opts in; free-text models are assumed capable.
-  const localMeta = isLocal ? WEBLLM_MODELS.find(m => m.id === connection?.model) : undefined;
-  const toolCapable = !isLocal || (localMeta?.toolCapable ?? true);
+  const isLocal = connection != null && isLocalProvider(connection.provider);
+  // Local tool mode: catalog `toolCapable` is the default (1.7B off, 4B+ on).
+  // Settings → Assistant can force a model on or off for testing without
+  // editing the catalog. Cloud connections always use native tools (until
+  // Send tools is unchecked).
+  const localMeta = !isLocal || !connection
+    ? undefined
+    : connection.provider === 'bonsai'
+      ? BONSAI_MODELS.find(m => m.id === connection.model)
+      : WEBLLM_MODELS.find(m => m.id === connection.model);
+  const toolCapable = !isLocal || resolveLocalToolCapable(
+    localMeta?.toolCapable,
+    connection ? settings.toolCapableByModel?.[connection.model] : undefined,
+  );
   const toolMode: 'native' | 'prompt' | 'off' = !isLocal ? 'native' : toolCapable ? 'prompt' : 'off';
 
   // The active thread object (creating one lazily if the store is empty).
@@ -263,12 +423,18 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     chatState.threads.find(t => t.id === chatState.activeThreadId) ?? null;
 
   const setActiveThread = (id: string | null) =>
-    setChatState(prev => {
+    updateChats(prev => {
       // Switching threads must not carry the local engine's KV cache over:
       // the engine reuses it when the next request happens to match its last
       // conversation, so a different chat could inherit this one's context
-      // (the "new chat sees the same window" bug). Reset before the switch.
-      if (id !== prev.activeThreadId) void resetWebLlmChat();
+      // (the "new chat sees the same window" bug). Reset before the switch —
+      // but NEVER while a run is in flight on either side: the engine is one
+      // shared resource and a mid-stream reset would corrupt the background
+      // reply. A thread switch away from a running chat just leaves it running.
+      if (id !== prev.activeThreadId && !hasActiveRun()) {
+        void resetWebLlmChat();
+        void resetBonsaiChat();
+      }
       return { ...prev, activeThreadId: id };
     });
 
@@ -276,12 +442,19 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     const t = newThread(scenarioName, Date.now());
     // A fresh thread starts from an EMPTY context — never the last chat's
     // KV cache (see setActiveThread).
-    void resetWebLlmChat();
-    setChatState(prev => ({ threads: [t, ...prev.threads], activeThreadId: t.id }));
+    if (!hasActiveRun()) {
+      void resetWebLlmChat();
+      void resetBonsaiChat();
+    }
+    updateChats(prev => ({ threads: [t, ...prev.threads], activeThreadId: t.id }));
   };
 
   const deleteChat = (id: string) => {
-    setChatState(prev => {
+    // A running chat can't be deleted — its run would keep writing into a
+    // thread that no longer exists (and the user would lose the stop button).
+    // Stop it first, then the delete lands on a quiet thread.
+    if (getRun(id)) abortRun(id);
+    updateChats(prev => {
       const threads = prev.threads.filter(t => t.id !== id);
       return {
         threads,
@@ -290,120 +463,126 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     });
   };
 
-  /** Switch the active connection (and implicitly its model) from the header
-   *  picker. */
-  const chooseConnection = (id: string) =>
-    setSettings(prev => ({ ...prev, activeConnectionId: id }));
-
-  /** Patch the active thread's turns (and bump updatedAt / title). */
-  const patchTurns = (mutate: (turns: Turn[]) => Turn[]) => {
-    setChatState(prev => {
-      const id = prev.activeThreadId;
-      if (!id) return prev;
-      return {
-        ...prev,
-        threads: prev.threads.map(t => {
-          if (t.id !== id) return t;
-          const turns = mutate(t.turns as Turn[]);
-          // Title the chat from the first user message once it exists.
-          const firstUser = turns.find(x => x.role === 'user');
-          const title = t.title === 'New chat' && firstUser ? titleFromFirstMessage(firstUser.text) : t.title;
-          return { ...t, turns, title, updatedAt: Date.now() };
-        }),
-      };
-    });
+  /** Patch ONE thread's turns (and bump updatedAt / title). Runs target their
+   *  own thread by id — the active thread can switch mid-run, so the run may
+   *  be writing to a thread that isn't the one on screen. */
+  const patchTurnsOf = (threadId: string) => (mutate: (turns: Turn[]) => Turn[]) => {
+    updateChats(prev => ({
+      ...prev,
+      threads: prev.threads.map(t => {
+        if (t.id !== threadId) return t;
+        const turns = mutate(t.turns as Turn[]);
+        // Title the chat from the first user message once it exists.
+        const firstUser = turns.find(x => x.role === 'user');
+        const title = t.title === 'New chat' && firstUser ? titleFromFirstMessage(firstUser.text) : t.title;
+        return { ...t, turns, title, updatedAt: Date.now() };
+      }),
+    }));
   };
 
-  /** Patch non-turn fields of the active thread (e.g. its system note). */
-  const patchThread = (patch: Partial<ChatThread>) => {
-    setChatState(prev => {
-      const id = prev.activeThreadId;
-      if (!id) return prev;
-      return {
-        ...prev,
-        threads: prev.threads.map(t => (t.id === id ? { ...t, ...patch } : t)),
-      };
-    });
+  /** Patch non-turn fields of one thread (e.g. its system note or digest). */
+  const patchThreadOf = (threadId: string) => (patch: Partial<ChatThread>) => {
+    updateChats(prev => ({
+      ...prev,
+      threads: prev.threads.map(t => (t.id === threadId ? { ...t, ...patch } : t)),
+    }));
   };
 
-  /** Record an automatic checkpoint for the active thread: the plan as it was
-   *  JUST BEFORE an approved change landed. Ring-buffered per thread; kept in
-   *  the chat store so revert history survives a reload. */
-  const recordCheckpoint = (label: string, inputsBefore: RetirementInputs) => {
-    setChatState(prev => {
-      const id = prev.activeThreadId;
-      if (!id) return prev;
-      return {
-        ...prev,
-        threads: prev.threads.map(t => (t.id === id
-          ? { ...t, checkpoints: appendCheckpoint(t.checkpoints ?? [], captureCheckpoint(label, inputsBefore)) }
-          : t)),
-      };
-    });
+  /** Record an automatic checkpoint on one thread: the plan as it was JUST
+   *  BEFORE an approved change landed. Ring-buffered per thread; kept in the
+   *  chat store so revert history survives a reload. */
+  const recordCheckpointOn = (threadId: string) => (label: string, inputsBefore: RetirementInputs) => {
+    updateChats(prev => ({
+      ...prev,
+      threads: prev.threads.map(t => (t.id === threadId
+        ? { ...t, checkpoints: appendCheckpoint(t.checkpoints ?? [], captureCheckpoint(label, inputsBefore)) }
+        : t)),
+    }));
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-11rem)] min-h-[30rem]">
+    <div className={`flex flex-col ${docked ? 'h-full min-h-0' : 'h-[calc(100vh-11rem)] min-h-[30rem]'}`}>
       {/* Header: title + model picker + connections link. Lives on the page so
-          it's visible in chat, empty, and copy/paste modes alike. */}
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        <Bot size={16} className="text-violet-600" />
-        <h2 className="text-sm font-bold text-slate-900">AI Assistant</h2>
-        <span
-          className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
-          title="Experimental: the assistant is new and still being tuned. It proposes changes for you to approve — it never edits your plan on its own."
-        >
-          Experimental
-        </span>
-        <div className="flex items-center gap-2 ml-auto">
-          <ModelPicker
-            settings={settings}
-            activeId={settings.activeConnectionId}
-            onChoose={chooseConnection}
-            onLoadModel={onOpenConnections}
-          />
-          {connection && (
-            <span
-              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold ${
-                isLocal ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-              }`}
-              title={isLocal
-                ? 'Runs entirely on this device: no account, no key, nothing you type leaves the computer.'
-                : 'Chats go directly from this browser to the provider; the key is stored only in this browser.'}
-            >
-              {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
-              {isLocal ? 'On this device · private' : 'Direct browser → provider'}
-            </span>
-          )}
-          {isLocal && !toolCapable && (
-            <span
-              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"
-              title="This model is too small to read your plan or propose changes reliably, so tools are off: it answers questions from a summary of your plan. Pick a larger model (Connections) to let it edit."
-            >
-              Answers only · can't edit plan
-            </span>
-          )}
+          it's visible in chat, empty, and copy/paste modes alike. Docked mode
+          drops it — the rail is too narrow and the beta chrome owns the
+          assistant's on/off. */}
+      {!docked && (
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          {!hideTitle && <h2 className="text-sm font-bold text-slate-900">{t('assistant.title')}</h2>}
+          <span
+            className="border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700"
+            title={t('assistant.experimentalTitle')}
+          >
+            {t('assistant.experimental')}
+          </span>
+          <div className="flex items-center gap-2 ml-auto">
+            <ModelPicker
+              settings={settings}
+              onChange={setSettings}
+              onLoadModel={onOpenConnections}
+            />
+            {connection && (
+              <span
+                className={`flex items-center gap-1 px-2 py-1 text-[10px] font-semibold ${
+                  isLocal ? 'border border-slate-900 text-slate-900' : 'bg-slate-100 text-slate-600'
+                }`}
+                title={isLocal ? t('assistant.onDeviceTitle') : t('assistant.cloudTitle')}
+              >
+                {isLocal ? <Lock size={11} /> : <Cloud size={11} />}
+                {isLocal ? t('assistant.onDevice') : t('assistant.cloud')}
+              </span>
+            )}
+            {isLocal && !toolCapable && (
+              <span
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold bg-amber-50 text-amber-800"
+                title={t('assistant.answersOnlyTitle')}
+              >
+                {t('assistant.answersOnly')}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex gap-3 flex-1 min-h-0">
-        {/* ---- Chat list: pinned open, or collapsed to a slim strip ---- */}
-        {chatsPinned ? (
-          <aside className="w-52 shrink-0 flex flex-col border border-slate-200 rounded bg-white">
+      <div className={`flex gap-3 flex-1 min-h-0 ${docked ? 'gap-0 flex-col' : ''}`}>
+        {/* Docked: a slim header strip — the chat picker is a clickable icon
+            that drops down to select a chat, so the rail keeps its width for
+            the conversation instead of a permanent list. */}
+        {docked && (
+          <DockChatPicker
+            threads={chatState.threads}
+            activeThreadId={chatState.activeThreadId}
+            onSelect={setActiveThread}
+            onNew={newChat}
+            onDelete={deleteChat}
+            modelPicker={
+              <ModelPicker
+                settings={settings}
+                onChange={setSettings}
+                onLoadModel={onOpenConnections}
+              />
+            }
+          />
+        )}
+        {/* ---- Chat list (full page only): pinned open, or a slim strip. ----
+            Both variants show the thinking spinner on a running chat — the
+            registry re-renders them the moment any thread's run state moves. */}
+        {docked ? null : chatsPinned ? (
+          <aside className="w-52 shrink-0 flex flex-col border border-slate-200 bg-white">
             <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Chats</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('assistant.chats')}</span>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={newChat}
-                  className="flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-900 font-semibold"
-                  title="Start a new chat"
+                  className="flex items-center gap-1 font-semibold text-slate-900 text-[11px] hover:text-slate-600"
+                  title={t('assistant.newTitle')}
                 >
-                  <Plus size={13} /> New
+                  <Plus size={13} /> {t('assistant.new')}
                 </button>
                 <button
                   onClick={() => setChatsPinned(false)}
-                  className="text-slate-400 hover:text-slate-700"
-                  title="Collapse the chat list to the left"
+                  className="text-slate-400 hover:text-slate-900"
+                  title={t('assistant.collapseList')}
                 >
                   <ChevronsLeft size={13} />
                 </button>
@@ -411,58 +590,69 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
             </div>
             <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
               {chatState.threads.length === 0 && (
-                <p className="text-[11px] text-slate-400 px-1.5 py-2">No chats yet. Start a new one.</p>
+                <p className="text-[11px] text-slate-400 px-1.5 py-2">{t('assistant.noChats')}</p>
               )}
-              {chatState.threads.map(t => (
-                <div
-                  key={t.id}
-                  className={`group flex items-center gap-1.5 rounded px-2 py-1.5 cursor-pointer text-[11px] ${
-                    t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-900' : 'hover:bg-slate-50 text-slate-700'
-                  }`}
-                  onClick={() => setActiveThread(t.id)}
-                >
-                  <MessageSquare size={12} className="shrink-0 text-slate-400" />
-                  <span className="flex-1 min-w-0 truncate">{t.title}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteChat(t.id); }}
-                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 shrink-0"
-                    title="Delete this chat"
+              {chatState.threads.map(thread => {
+                const run = runStates.get(thread.id);
+                return (
+                  <div
+                    key={thread.id}
+                    className={`group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer text-[11px] ${
+                      thread.id === chatState.activeThreadId ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                    onClick={() => setActiveThread(thread.id)}
                   >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
+                    {run
+                      ? <Loader2 size={12} className="shrink-0 animate-spin text-slate-500" aria-label={run.phase === 'parked' ? t('assistant.waiting') : t('assistant.answering')} />
+                      : <MessageSquare size={12} className="shrink-0 text-slate-400" />}
+                    <span className="flex-1 min-w-0 truncate">{displayThreadTitle(thread.title, t)}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteChat(thread.id); }}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-700 shrink-0"
+                      title={t('assistant.deleteChat')}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </aside>
         ) : (
-          <aside className="w-9 shrink-0 flex flex-col items-center gap-2 border border-slate-200 rounded bg-white py-2">
+          <aside className="w-9 shrink-0 flex flex-col items-center gap-2 border border-slate-200 bg-white py-2">
             <button
               onClick={() => setChatsPinned(true)}
-              className="text-slate-400 hover:text-slate-700"
-              title="Show the chat list"
+              className="text-slate-400 hover:text-slate-900"
+              title={t('assistant.showList')}
             >
               <ChevronsRight size={14} />
             </button>
             <button
               onClick={newChat}
-              className="text-violet-700 hover:text-violet-900"
-              title="Start a new chat"
+              className="text-slate-900 hover:text-slate-600"
+              title={t('assistant.newTitle')}
             >
               <Plus size={14} />
             </button>
             <div className="flex-1 overflow-y-auto flex flex-col items-center gap-1.5 w-full px-1">
-              {chatState.threads.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => { setActiveThread(t.id); setChatsPinned(true); }}
-                  title={t.title}
-                  className={`flex items-center justify-center w-6 h-6 rounded ${
-                    t.id === chatState.activeThreadId ? 'bg-violet-100 text-violet-700' : 'text-slate-400 hover:bg-slate-50'
-                  }`}
-                >
-                  <MessageSquare size={13} />
-                </button>
-              ))}
+              {chatState.threads.map(thread => {
+                const run = runStates.get(thread.id);
+                const shown = displayThreadTitle(thread.title, t);
+                return (
+                  <button
+                    key={thread.id}
+                    onClick={() => { setActiveThread(thread.id); setChatsPinned(true); }}
+                    title={run ? (run.phase === 'parked' ? t('assistant.waitingTitle', { title: shown }) : t('assistant.answeringTitle', { title: shown })) : shown}
+                    className={`flex items-center justify-center w-6 h-6 ${
+                      thread.id === chatState.activeThreadId ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    {run
+                      ? <Loader2 size={13} className="animate-spin" aria-label={run.phase === 'parked' ? t('assistant.waiting') : t('assistant.answering')} />
+                      : <MessageSquare size={13} />}
+                  </button>
+                );
+              })}
             </div>
           </aside>
         )}
@@ -476,6 +666,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               hasConnections={settings.connections.length > 0}
               onApply={onApply}
               onConnect={onOpenConnections}
+              compact={docked}
             />
           ) : !activeThread ? (
             <EmptyChatState onNew={newChat} />
@@ -488,7 +679,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               toolMode={toolMode}
               bridge={bridge}
               settings={settings}
-              onSettingsChange={setSettings}
+              onSettingsChange={updateAiSettings}
               inputs={inputs}
               config={config}
               scenarioName={scenarioName}
@@ -496,10 +687,13 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
               activeScenarioId={activeScenarioId}
               scenarioInputsById={scenarioInputsById}
               onApply={onApply}
-              patchTurns={patchTurns}
-              patchThread={patchThread}
-              recordCheckpoint={recordCheckpoint}
-              checkpoints={activeThread.checkpoints ?? []}
+              onCreateSpousePlan={onCreateSpousePlan}
+              patchTurns={patchTurnsOf(activeThread.id)}
+              patchThread={patchThreadOf(activeThread.id)}
+              recordCheckpoint={recordCheckpointOn(activeThread.id)}
+              currentView={currentView}
+              onNavigate={onNavigate}
+              locale={locale}
               memory={memory}
               memoryScenarioId={memoryScenarioId}
               onOpenScenario={onOpenScenario}
@@ -512,39 +706,59 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
   );
 }
 
-/** Model picker in the header: every configured connection's model, plus a
- *  "Load model…" escape hatch that opens the Connections page. Choosing an
- *  entry makes that connection (and its model) active. */
-export function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
-  settings: AiSettings;
-  activeId: string | null;
-  onChoose: (id: string) => void;
+/** The select itself, fed a pre-built catalog so node tests can render it
+ *  without the hook (cache probe / listModels). */
+export function ModelPickerSelect({ entries, activeKey, onPick, onLoadModel }: {
+  entries: import('../lib/modelCatalog').ModelCatalogEntry[];
+  activeKey: string | null;
+  onPick: (key: string) => void;
   onLoadModel: () => void;
 }) {
-  if (settings.connections.length === 0) {
-    // No connection configured: the OfflineAssistant body renders the same
-    // "Load a model" CTA, so render nothing here to avoid a duplicate button.
-    return null;
-  }
+  const { t } = useTranslation('pages');
+  const value = entries.some(e => e.key === activeKey) ? (activeKey ?? '') : '';
   return (
     <div className="flex items-center gap-1.5">
       <select
-        value={activeId ?? ''}
+        value={value}
         onChange={e => {
           if (e.target.value === '__load__') onLoadModel();
-          else if (e.target.value) onChoose(e.target.value);
+          else if (e.target.value) onPick(e.target.value);
         }}
-        className="px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-violet-500 max-w-56"
-        title="Pick which model answers. Add or download models on the Connections page."
+        className="max-w-56 border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-slate-900 focus:outline-none"
+        title={t('assistant.pickerTitle')}
       >
-        {settings.connections.map(c => (
-          <option key={c.id} value={c.id}>
-            {c.label || c.provider} · {c.model}
+        {entries.length === 0 && <option value="">{t('assistant.noModels')}</option>}
+        {entries.map(e => (
+          <option key={e.key} value={e.key}>
+            {e.local
+              ? `${e.label}${e.cached === false ? t('assistant.downloadSuffix') : ''}`
+              : `${e.label}${e.connectionLabel ? ` · ${e.connectionLabel}` : ''}`}
           </option>
         ))}
-        <option value="__load__">Load a model…</option>
+        <option value="__load__">{t('assistant.moreModels')}</option>
       </select>
     </div>
+  );
+}
+
+/** Chat-dock picker: shortlisted models only (plus the one in use). Full
+ *  catalog lives on the Models page behind "More models…". */
+export function ModelPicker({ settings, onChange, onLoadModel }: {
+  settings: AiSettings;
+  onChange: (next: AiSettings) => void;
+  onLoadModel: () => void;
+}) {
+  const { entries } = useModelCatalog(settings);
+  return (
+    <ModelPickerSelect
+      entries={chatPickerEntries(entries, settings)}
+      activeKey={activeCatalogKey(settings)}
+      onPick={key => {
+        const entry = entries.find(x => x.key === key);
+        if (entry) onChange(pickModel(settings, entry));
+      }}
+      onLoadModel={onLoadModel}
+    />
   );
 }
 
@@ -552,26 +766,35 @@ export function ModelPicker({ settings, activeId, onChoose, onLoadModel }: {
 // One conversation (assistant-ui runtime around our agent loop)
 // ---------------------------------------------------------------------------
 
-/** Assemble the system prompt body for a turn, by tool mode. 'prompt' adds
- *  the fenced-JSON tool catalog; 'off' leaves it out so a weak model isn't
- *  tempted to emit tool calls it can't form; 'native' relies on the provider's
- *  function-calling. The live plan digest for chat-only modes is NOT here — it
- *  rides as a pinned leading history message (see planContextMessage) so a
- *  plan edit doesn't invalidate the engine's cached system prefix. */
+/** Assemble the system prompt body for a turn. Shared with Settings so the
+ *  Assistant preview matches the wire. The live plan digest for chat-only
+ *  modes is NOT here — it rides as a pinned leading history message (see
+ *  planContextMessage) so a plan edit doesn't invalidate the engine's cached
+ *  system prefix. */
 function buildSystemBody(
   toolMode: 'native' | 'prompt' | 'off',
   scenarioName: string,
-  basePrompt: string | undefined,
+  settings: AiSettings,
   config: AppConfig,
+  currentView?: View,
+  chatNote?: string,
+  locale?: Locale,
 ): string {
-  if (toolMode === 'prompt') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'prompt', basePrompt, config }) + '\n\n' +
-      buildPromptToolInstructions(toolSpecs());
-  }
-  if (toolMode === 'off') {
-    return buildSystemPrompt(scenarioName, { toolMode: 'off', basePrompt, config });
-  }
-  return buildSystemPrompt(scenarioName, { basePrompt, config });
+  const send = resolveAiPromptSend(settings.promptSend);
+  const toolOverride = toolMode === 'native' ? settings.toolInstructionsNative
+    : toolMode === 'prompt' ? settings.toolInstructionsPrompt
+    : settings.toolInstructionsOff;
+  return assembleSystemPrompt({
+    scenarioName,
+    toolMode,
+    send,
+    basePrompt: settings.systemPromptOverride,
+    config,
+    currentView,
+    locale,
+    toolInstructions: toolOverride,
+    chatNote,
+  });
 }
 
 /** The live plan digest for chat-only local models ('prompt' and 'off'
@@ -589,15 +812,39 @@ function planContextMessage(
   toolMode: 'native' | 'prompt' | 'off',
   inputs: RetirementInputs,
   config: AppConfig,
+  includePlanDigest: boolean,
 ): ChatMessage | null {
-  if (toolMode === 'native') return null;
+  if (!includePlanDigest || toolMode === 'native') return null;
   return {
     role: 'user',
     content: buildPlanDigest(inputs, { results: calculateHousehold(inputs, config) }),
   };
 }
 
-function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, patchTurns, patchThread, recordCheckpoint, checkpoints, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs }: {
+// The LIVE plan bindings a run's tools read through. A run can outlive the
+// Conversation that started it (thread switch, page navigation unmounts the
+// dock), and its tool calls must see the plan as it is NOW — not frozen at
+// the unmounted component's last render. The mounted Conversation writes
+// these on every render; the getters in toolContext read them at tool-
+// execution time. One AgentPage is mounted at a time (App guarantees it), so
+// module-level is correct, not a leak.
+const livePlan: {
+  inputs: RetirementInputs | null;
+  config: AppConfig | null;
+  memory: MemoryStore | undefined;
+  memoryScenarioId: string | undefined;
+  currentView: View | undefined;
+  locale: Locale | undefined;
+} = {
+  inputs: null,
+  config: null,
+  memory: undefined,
+  memoryScenarioId: undefined,
+  currentView: undefined,
+  locale: undefined,
+};
+
+function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSettingsChange, inputs, config, scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onApply, onCreateSpousePlan, patchTurns, patchThread, recordCheckpoint, memory, memoryScenarioId, onOpenScenario, onSaveScenarioAs, currentView, onNavigate, locale }: {
   thread: ChatThread;
   ready: boolean;
   isLocal: boolean;
@@ -612,34 +859,54 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   activeScenarioId?: string;
   scenarioInputsById?: (id: string) => RetirementInputs | undefined;
   onApply: (patch: Partial<RetirementInputs>) => void;
+  onCreateSpousePlan?: (name?: string, inputs?: RetirementInputs) => string;
   patchTurns: (mutate: (turns: Turn[]) => Turn[]) => void;
   patchThread: (patch: Partial<ChatThread>) => void;
   recordCheckpoint: (label: string, inputsBefore: RetirementInputs) => void;
-  checkpoints: PlanCheckpoint[];
   memory?: MemoryStore;
   memoryScenarioId?: string;
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
+  currentView?: View;
+  onNavigate?: (view: View) => void;
+  locale?: Locale;
 }) {
+  const { t } = useTranslation('pages');
+  const threadId = thread.id;
   const turns = thread.turns as Turn[];
-  const [running, setRunning] = useState(false);
-  const [loadProgress, setLoadProgress] = useState<{ progress: number; text: string } | null>(null);
+  // Run state lives in the registry (chatRuns.ts), keyed by THIS thread id —
+  // not in component state — so a run survives unmount (thread switch, page
+  // navigation) and the thread lists can show who's thinking. Subscribe to
+  // the registry; `run` is this thread's record (null = idle).
+  useSyncExternalStore(subscribeRuns, getRunsVersion, getRunsVersion);
+  const run = getRun(threadId);
+  /** This chat has a live or parked run (Stop button, send/delete guards). */
+  const running = run != null;
+  // Local-model load/compile progress rides the run record, so the bar
+  // survives thread switches too (component state died with the chat).
+  const loadProgress = run?.progress ?? null;
+  // The local engine is one shared resource: while ANY chat runs, no other
+  // chat can ask the local model anything (the engine would interleave two
+  // conversations into one KV cache). Cloud providers parallelize fine.
+  const localEngineBusy = isLocal && hasActiveRun() && run == null;
   // Speed of the current/last reply, measured while it streams. Tokens are
   // estimated from characters (~4 chars/token) since prompt-mode streams give
   // us no provider counts.
   const [tps, setTps] = useState<number | null>(null);
   const statsRef = useRef<{ start: number; first: number | null; chars: number } | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const downloadDoneRef = useRef(false);
-  const pendingDecisions = useRef(new Map<string, (d: { approved: boolean; note?: string }) => void>());
+  // Approved propose_navigate cards queue their destination here instead of
+  // routing on the spot: routing immediately would unmount the dock mid-
+  // stream and kill the assistant's own acknowledgment. runTurn's finally
+  // flushes the queue once the turn is over — but ONLY while this chat is
+  // still the active one (a background chat finishing must not yank the user
+  // to another page; the route waits until they come back and it's still last).
+  const pendingNavigation = useRef<View[]>([]);
   // Filled in by SnapToBottomOnSend (inside the viewport) with the store's
   // scrollToBottom. send() calls it so a new user message snaps the reply into
   // view — the ONE auto-jump we keep now that the library's own triggers are
   // off (they re-pinned on every streaming update and blocked scrolling up).
   const snapToBottomRef = useRef<(() => void) | null>(null);
-
-  // Cancel any in-flight request on unmount.
-  useEffect(() => () => abortRef.current?.abort(), []);
 
   /** Like patchTurns but lets the mutator also RETURN a value computed from
    *  the up-to-date turns (avoids acting on a stale `turns` closure, and keeps
@@ -655,30 +922,39 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     return result;
   };
 
-  // The loop runs async across renders, and approving a change updates `inputs`
-  // in the PARENT — so a memoized snapshot would leave a resumed turn reading
-  // the pre-approval plan (the model then thinks the change never landed and
-  // re-proposes it). Keep a ref to the live inputs, updated every render, and
-  // hand the loop a context whose `inputs` reads through it at tool-execution
-  // time. The rest of the context (config/name/list) only changes with the
-  // scenario, so a plain memo is fine for those.
-  const inputsRef = useRef(inputs);
-  inputsRef.current = inputs;
-  // Same trick for checkpoints: the loop is long-lived across renders, and a
-  // revert proposal must read the checkpoint list AS OF execution time (it
-  // grows as changes are approved mid-conversation).
-  const checkpointsRef = useRef(checkpoints);
-  checkpointsRef.current = checkpoints;
-  const memoryScenarioIdRef = useRef(memoryScenarioId);
-  memoryScenarioIdRef.current = memoryScenarioId;
+  // Publish the live plan bindings for tool execution. Runs outlive this
+  // component (thread switch / page navigation), so a module-level holder —
+  // not a ref that dies with the unmount — is what a background run's tools
+  // read through. The props are current on every render of the mounted chat.
+  livePlan.inputs = inputs;
+  livePlan.config = config;
+  livePlan.memory = memory;
+  livePlan.memoryScenarioId = memoryScenarioId;
+  livePlan.currentView = currentView;
+  livePlan.locale = locale;
+
+  // Checkpoints live in the chat store (per thread) — read them through the
+  // store at tool-execution time so a revert proposal sees the list as it is
+  // NOW (it grows as changes are approved, including by background runs).
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
   const toolContext: ToolContext = useMemo(() => ({
-    get inputs() { return inputsRef.current; },
-    get checkpoints() { return checkpointsRef.current; },
-    config, scenarioName, scenarioList, memory,
-    get memoryScenarioId() { return memoryScenarioIdRef.current; },
-    activeScenarioId, scenarioInputsById,
+    get inputs() { return livePlan.inputs!; },
+    get config() { return livePlan.config!; },
+    get checkpoints() {
+      const t = getChats().threads.find(x => x.id === threadIdRef.current);
+      return (t?.checkpoints ?? []) as PlanCheckpoint[];
+    },
+    get memory() { return livePlan.memory; },
+    get memoryScenarioId() { return livePlan.memoryScenarioId; },
+    get currentView() { return livePlan.currentView; },
+    get locale() { return livePlan.locale; },
+    scenarioName, scenarioList, activeScenarioId, scenarioInputsById,
     onOpenScenario, onSaveScenarioAs,
-  }), [config, scenarioName, scenarioList, memory, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs]);
+    // Advertise the card path only if the host can actually route (see
+    // ToolContext.canNavigate); the routing itself happens on approval.
+    canNavigate: onNavigate != null,
+  }), [scenarioName, scenarioList, activeScenarioId, scenarioInputsById, onOpenScenario, onSaveScenarioAs, onNavigate]);
 
   // The MCP-backed tool executor. The server re-resolves the LIVE context on
   // every call, so the executor closes over the memoized context object (its
@@ -690,6 +966,24 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
 
   const connection = settings.connections.find(c => c.id === settings.activeConnectionId) ?? null;
 
+  // Unchecking send flags must actually take effect on the NEXT message. The
+  // local engine reuses its KV cache when the next request "matches" the last
+  // conversation — so a previous persona/tool blurb stays in GPU memory even
+  // after the app stops sending it. Reset whenever the assembled system (or
+  // the digest/tools flags that ride beside it) changes. Skip mid-run: a
+  // reset would corrupt the in-flight reply.
+  const sendForReset = resolveAiPromptSend(settings.promptSend);
+  const systemFingerprint = `${buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale)}|digest:${sendForReset.includePlanDigest}|tools:${sendForReset.sendTools}|mode:${toolMode}`;
+  const fingerprintRef = useRef(systemFingerprint);
+  useEffect(() => {
+    if (fingerprintRef.current === systemFingerprint) return;
+    fingerprintRef.current = systemFingerprint;
+    if (isLocal && !hasActiveRun()) {
+      void resetWebLlmChat();
+      void resetBonsaiChat();
+    }
+  }, [systemFingerprint, isLocal]);
+
   // Estimated context usage for the meter. Mirror what runTurn actually sends:
   // prompt-mode (local) prepends the tool catalog AND the computed plan digest
   // to the system prompt — that's the bulk of a local model's small window, so
@@ -698,17 +992,16 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   // honest about what the local model must fit.
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
-    const basePrompt = settings.systemPromptOverride;
-    const base = buildSystemBody(toolMode, scenarioName, basePrompt, config);
-    const system = thread.systemNote?.trim() ? `${base}\n\n${thread.systemNote.trim()}` : base;
-    const planContext = planContextMessage(toolMode, inputs, config);
+    const send = resolveAiPromptSend(settings.promptSend);
+    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale);
+    const planContext = planContextMessage(toolMode, inputs, config, send.includePlanDigest);
     const history = toHistory(turns);
     const full = planContext ? [planContext, ...history] : history;
     if (thread.contextSummary) {
       return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...full]);
     }
     return estimateTokens(system, full);
-  }, [connection, settings.systemPromptOverride, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config]);
+  }, [connection, settings, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config, currentView]);
 
   /**
    * Run one assistant turn: append (or replace) a streaming assistant bubble
@@ -722,8 +1015,12 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
    * after that proposal rather than start a fresh turn that would re-propose.
    */
   const runTurn = async (priorTurns: Turn[], content: string, appendUser: boolean, resumeTurnId?: string) => {
-    if (!content || running || !connection) return;
-    setRunning(true);
+    if (!content || running || !connection || localEngineBusy) return;
+    // Register the run BEFORE any patch: the registry record is what keeps
+    // this run alive across the Conversation unmounting (thread switch, page
+    // navigation) — the loop below closes over threadId and the registry, not
+    // over component state.
+    const abort = startRun(threadId);
     statsRef.current = { start: Date.now(), first: null, chars: 0 };
     setTps(null);
 
@@ -733,7 +1030,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       : null;
     const assistantTurn: Turn = resuming
       ? priorTurns.find(t => t.id === resumeTurnId)!
-      : { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming' };
+      : { id: newTurnId(), role: 'assistant', text: '', tools: [], changes: [], state: 'streaming', askedModel: connection.model };
     if (!resuming) {
       patchTurns(prev => userTurn ? [...prev, userTurn, assistantTurn] : [...prev, assistantTurn]);
     } else {
@@ -743,12 +1040,9 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       // in place makes the continued reply append on top — re-sending the old
       // answer and stacking a duplicate Applied card next to the decided one.
       patchTurns(prev => prev.map(t => (t.id === resumeTurnId
-        ? { ...t, text: '', reasoning: undefined, tools: [], changes: [], state: 'streaming' }
+        ? { ...t, text: '', reasoning: undefined, tools: [], changes: [], state: 'streaming', askedModel: connection.model, servedModel: undefined }
         : t)));
     }
-
-    const abort = new AbortController();
-    abortRef.current = abort;
 
     const patchAssistant = (mutate: (t: Turn) => void) => {
       patchTurns(prev => prev.map(t => (t.id === assistantTurn.id
@@ -756,13 +1050,8 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
         : t)));
     };
 
-    const basePrompt = settings.systemPromptOverride;
-    const baseSystem = buildSystemBody(toolMode, scenarioName, basePrompt, config);
-    // The chat's standing instructions go last so they read as the user's own
-    // voice; they can steer tone/focus but the base prompt's rules come first.
-    const system = thread.systemNote?.trim()
-      ? `${baseSystem}\n\nAdditional instructions for this chat:\n${thread.systemNote.trim()}`
-      : baseSystem;
+    const send = resolveAiPromptSend(settings.promptSend);
+    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale);
 
     // Fit the conversation into the model's context window: when the estimated
     // usage crosses the trigger, the oldest turns are folded away and replaced
@@ -776,7 +1065,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     // message instead ("I accepted/declined the change you proposed…").
     const historyTurns = resuming ? priorTurns.filter(t => t.id !== resumeTurnId) : priorTurns;
     const contextSize = effectiveContextLimit(connection);
-    const planContext = planContextMessage(toolMode, inputs, config);
+    const planContext = planContextMessage(toolMode, inputs, config, send.includePlanDigest);
     const fullHistory = toHistory(historyTurns);
     // The plan digest message must never be a compaction victim: a tool-less
     // local model that loses it can no longer see the plan at all. Plan the
@@ -810,28 +1099,30 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
           '"How much the model reads at once" (if your GPU has the memory), pick a model compiled for a larger ' +
           'window, or switch to a cloud provider (Advanced), which offers a much bigger window.';
       });
-      setRunning(false);
-      setLoadProgress(null);
-      abortRef.current = null;
+      setRunProgress(threadId, null);
+      endRun(threadId);
       return;
     }
 
-    if (isLocal && loadedWebLlmModel() !== connection.model) {
+    const loadedLocal = connection.provider === 'bonsai' ? loadedBonsaiModel() : loadedWebLlmModel();
+    if (isLocal && loadedLocal !== connection.model) {
       // Only a turn that might actually DOWNLOAD/COMPILE the model shows the
       // progress bar. When the engine is already resident, streamWebLlm reuses
       // it and never calls onProgress — the bar would sit at 0% for the whole
       // reply (the "Preparing the local model… on every chat" bug).
       downloadDoneRef.current = false;
-      setLoadProgress({ progress: 0, text: 'Preparing the local model…' });
+      setRunProgress(threadId, { progress: 0, text: 'Preparing the local model…' });
     }
     const reportLoad = (p: { progress: number; text: string }) => {
+      // progress 1 means the engine is loaded (web-llm and Bonsai both report
+      // Ready at 1). Leaving a "Compiling…" bar after that is the stuck
+      // overlay you get once the model is already thinking. First token also
+      // clears it, but reasoning-only openings never emit text.
       if (p.progress >= 1) {
-        if (!downloadDoneRef.current) {
-          downloadDoneRef.current = true;
-          setLoadProgress({ progress: 1, text: 'Compiling the model for your GPU — this can take a minute…' });
-        }
+        downloadDoneRef.current = true;
+        setRunProgress(threadId, null);
       } else {
-        setLoadProgress(p);
+        setRunProgress(threadId, p);
       }
     };
 
@@ -851,8 +1142,13 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
           yield* bridge.streamChat({ ...req, signal: abort.signal }, reportLoad);
         },
         signal: abort.signal,
-        toolMode,
-        maxRounds: toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS : toolMode === 'off' ? 0 : undefined,
+        // sendTools off (or a questions-only local model) = chat only:
+        // maxRounds 0 is one generation with the assembled system, not the
+        // wrap-up pass that would rebuild a default persona.
+        toolMode: send.sendTools ? toolMode : 'off',
+        maxRounds: !send.sendTools || toolMode === 'off' ? 0
+          : toolMode === 'prompt' ? PROMPT_TOOL_MAX_CALLS
+          : undefined,
         config,
         onMutation: proposal =>
           new Promise(resolve => {
@@ -863,11 +1159,16 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
               // decision instead of losing the loop.
               t.state = 'needs-decision';
             });
-            pendingDecisions.current.set(proposal.callId, resolve);
+            // The resolver lives in the REGISTRY, not a component ref: the
+            // user can switch threads while this run is parked, and the card
+            // must still resume the loop when they come back and click it.
+            setRunPhase(threadId, 'parked');
+            setRunDecision(threadId, proposal.callId, resolve);
           }),
       })) {
         switch (evt.type) {
           case 'text':
+            setRunProgress(threadId, null);
             patchAssistant(t => { t.text += evt.text; });
             if (statsRef.current) {
               statsRef.current.chars += evt.text.length;
@@ -877,9 +1178,30 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
             }
             break;
           case 'reasoning':
+            setRunProgress(threadId, null);
             patchAssistant(t => { t.reasoning = (t.reasoning ?? '') + evt.text; });
             break;
+          case 'promote_reasoning':
+            // Untagged CoT was shown live as thinking; this round is the
+            // answer. Peel just this round's live tokens off the thinking
+            // block (earlier tool-round thoughts stay) and put them in the
+            // reply.
+            patchAssistant(t => {
+              if (t.reasoning) {
+                const i = t.reasoning.lastIndexOf(evt.text);
+                t.reasoning = i >= 0
+                  ? (t.reasoning.slice(0, i) + t.reasoning.slice(i + evt.text.length)).trim() || undefined
+                  : t.reasoning;
+              }
+              t.text += evt.text;
+            });
+            if (statsRef.current) {
+              statsRef.current.chars += evt.text.length;
+              statsRef.current.first ??= Date.now();
+            }
+            break;
           case 'tool_start':
+            setRunProgress(threadId, null);
             patchAssistant(t => { t.tools.push({ id: evt.call.id, name: evt.call.name, state: 'running', args: evt.call.args }); });
             break;
           case 'tool_result':
@@ -898,6 +1220,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
             break;
           case 'done':
             patchAssistant(t => {
+              if (evt.servedModel) t.servedModel = evt.servedModel;
               if (t.state !== 'error') {
                 t.state = evt.stopReason === 'max_tokens'
                   ? 'truncated'
@@ -920,9 +1243,26 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
         // here means the generator ended without a 'done' (usually an abort).
         if (t.state === 'streaming') t.state = abort.signal.aborted ? 'aborted' : 'done';
       });
-      setRunning(false);
-      setLoadProgress(null);
-      abortRef.current = null;
+      setRunProgress(threadId, null);
+      // The run is over (or parked waiting on a decision) — the registry
+      // record must go so the lists stop spinning and the thread can be
+      // deleted. A PARKED run: the turn state says 'needs-decision', the
+      // resolver is dead (the loop generator returned), and the resume path
+      // below (decideChange's no-live-loop fallback) starts a NEW run on
+      // decision. So ending the registry record here is correct for both.
+      endRun(threadId);
+      // Turn fully over (reply persisted, run unregistered) — NOW it's safe
+      // to honor any approved propose_navigate. Last queued destination
+      // wins: mid-turn re-proposals mean the user's real destination was the
+      // later one, and routing through both would double-jump. A run that
+      // finished in the BACKGROUND never navigates — yanking the user off
+      // whatever they're reading to serve a chat they left is hostile; the
+      // route is only honored if this chat is still the one on screen.
+      if (pendingNavigation.current.length > 0 && getChats().activeThreadId === threadId) {
+        const target = pendingNavigation.current[pendingNavigation.current.length - 1];
+        pendingNavigation.current = [];
+        onNavigate?.(target);
+      }
     }
 
     // Write (or extend) the running digest after a compacted turn, so the next
@@ -942,17 +1282,30 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       changes: t.changes.map(c => c.callId === change.callId ? { ...c, resolved: approved ? 'approved' : 'rejected' } : c),
     })));
     if (approved) {
-      // Snapshot the plan BEFORE the patch lands — the automatic checkpoint
-      // propose_revert rolls back to. The label is the card's, so the model
-      // (and the user) can name the checkpoint later.
-      recordCheckpoint(change.label ?? 'Plan change', inputs);
-      // Revert patches carry encoded undefined-removals; decode them here so
-      // the spread in App's onApply actually deletes the keys.
-      const raw = changePatch(change);
-      const decoded = change.revert ? decodeRevertPatch(raw) : raw;
-      onApply(decoded as Partial<RetirementInputs>);
+      if (change.navigate != null) {
+        // Page-navigation card: no plan change to checkpoint and nothing to
+        // merge into inputs (the patch is empty by design). Queue the route —
+        // the host unmounts this chat when the view leaves 'agent', so moving
+        // now would abort the assistant's reply mid-stream (see
+        // pendingNavigation). runTurn's finally navigates once the turn is over.
+        pendingNavigation.current.push(change.navigate);
+      } else {
+        // Snapshot the plan BEFORE the patch lands — the automatic checkpoint
+        // propose_revert rolls back to. The label is the card's, so the model
+        // (and the user) can name the checkpoint later.
+        recordCheckpoint(change.label ?? 'Plan change', inputs);
+        if (change.createPartner) {
+          onCreateSpousePlan?.(change.createPartner.name, change.createPartner.inputs);
+        } else {
+          // Revert patches carry encoded undefined-removals; decode them here so
+          // the spread in App's onApply actually deletes the keys.
+          const raw = changePatch(change);
+          const decoded = change.revert ? decodeRevertPatch(raw) : raw;
+          onApply(decoded as Partial<RetirementInputs>);
+        }
+      }
     }
-    const live = pendingDecisions.current.get(change.callId);
+    const live = takeRunDecision(threadId, change.callId);
     if (live) {
       // The loop that proposed this is parked on the promise — resolve it and
       // it continues on its own. Flip the turn back to 'streaming' so the state
@@ -962,13 +1315,15 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       patchTurns(prev => prev.map(t => (t.changes.some(c => c.callId === change.callId) && t.state === 'needs-decision'
         ? { ...t, state: 'streaming' }
         : t)));
+      // The run leaves 'parked' and goes back to actively streaming.
+      setRunPhase(threadId, 'streaming');
       live({ approved });
-      pendingDecisions.current.delete(change.callId);
       return;
     }
-    // No live loop (page reloaded, or the turn was cancelled while parked):
-    // resume the paused turn with the decision so the assistant acknowledges
-    // it instead of the card just going quiet.
+    // No live loop (page reloaded, the turn was cancelled while parked, or
+    // the run's finally already ended the registry record): resume the paused
+    // turn with the decision so the assistant acknowledges it instead of the
+    // card just going quiet.
     const turn = turns.find(t => t.changes.some(c => c.callId === change.callId));
     if (turn && !running) {
       void runTurn(
@@ -981,33 +1336,6 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       );
     }
   };
-
-  // After a reload the in-memory decision map is empty but a paused turn is
-  // still persisted as 'needs-decision' with an unresolved card. Re-bind a
-  // resolver for it: decideChange looks the map up FIRST, so it finds this,
-  // resolves it (resuming the paused turn with the decision), and returns
-  // before its own no-live-loop fallback — exactly one resume, not two.
-  useEffect(() => {
-    if (running) return;
-    for (const t of turns) {
-      if (t.state !== 'needs-decision') continue;
-      for (const c of t.changes) {
-        if (!c.resolved && !pendingDecisions.current.has(c.callId)) {
-          pendingDecisions.current.set(c.callId, ({ approved }) => {
-            void runTurn(
-              turns,
-              approved
-                ? `I accepted the change you proposed (${c.label ?? 'plan update'}). Continue.`
-                : `I declined the change you proposed (${c.label ?? 'plan update'}). Don't apply it — answer with that in mind.`,
-              false,
-              t.id,
-            );
-          });
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turns, running]);
 
   const send = async (message: AppendMessage) => {
     const textPart = message.content.find(p => p.type === 'text');
@@ -1050,7 +1378,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     });
   };
 
-  const cancel = async () => { abortRef.current?.abort(); };
+  const cancel = async () => { abortRun(threadId); };
 
   const runtime = useExternalStoreRuntime<Turn>({
     messages: turns,
@@ -1070,7 +1398,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex flex-col h-full">
         {/* Thread */}
-        <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded bg-white">
+        <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0 border border-slate-200 bg-white">
           {/* All four auto-scroll triggers OFF. The defaults re-pin to the
               bottom on content growth (autoScroll), on run start, on
               initialize, and on the store's selectionChanged event — and in an
@@ -1102,7 +1430,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                             one — otherwise there's nothing to regenerate and
                             nothing to send. */}
                         {message.isLast && !running && (
-                          <MessageActionButton onClick={() => void reload(message.id)} title="Generate a response to this message">
+                          <MessageActionButton onClick={() => void reload(message.id)} title={t('assistant.generate')}>
                             <Bot size={12} />
                           </MessageActionButton>
                         )}
@@ -1112,7 +1440,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                           message part — the bubble must never depend on the
                           runtime's content conversion, so it can't vanish
                           while the assistant reply streams below it. */}
-                      <div className="max-w-[85%] min-w-0 px-3 py-2 rounded-lg bg-violet-600 text-white text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
+                      <div className="max-w-[85%] min-w-0 bg-slate-900 px-3 py-2 text-xs text-white whitespace-pre-wrap [overflow-wrap:anywhere]">
                         {turn?.text ?? <MessagePrimitive.Content />}
                       </div>
                     </div>
@@ -1179,7 +1507,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                         />
                       )}
                       {showBubble && (
-                        <div className="relative px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
+                        <div className="relative px-3 py-2 bg-slate-100 text-slate-800 text-xs leading-relaxed [overflow-wrap:anywhere]">
                           {/* Activity spinner in the bubble's top-right corner
                               while it's a placeholder (thinking / working) —
                               same treatment as the reasoning block. */}
@@ -1187,9 +1515,9 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                             <Loader2 size={11} className="animate-spin absolute top-1.5 right-1.5 text-slate-400 pointer-events-none" />
                           )}
                           {thinking ? (
-                            <span className="text-slate-400 italic">Thinking…</span>
+                            <span className="text-slate-400 italic">{t('assistant.thinkingEllipsis')}</span>
                           ) : working ? (
-                            <span className="text-slate-400 italic">Working…</span>
+                            <span className="text-slate-400 italic">{t('assistant.working')}</span>
                           ) : (
                             // Assistant prose renders as markdown (headings,
                             // lists, tables, code fences) — parsed by `marked`
@@ -1200,9 +1528,8 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                         </div>
                       )}
                       {stuckPaused && (
-                        <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-snug">
-                          This reply stopped while it was waiting for you. Use the
-                          regenerate button to run it again.
+                        <div className="px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-snug">
+                          {t('assistant.stuck')}
                         </div>
                       )}
                       {turn && (
@@ -1214,8 +1541,9 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                         can be regenerated or deleted. */}
                     {(!streaming || needsDecision) && (
                       <div className="flex flex-col gap-0.5 pt-1.5">
+                        {turn && <ProvenanceButton asked={turn.askedModel} served={turn.servedModel} />}
                         {message.isLast && (
-                          <MessageActionButton onClick={() => void reload(message.parentId)} title="Regenerate this response">
+                          <MessageActionButton onClick={() => void reload(message.parentId)} title={t('assistant.regenerate')}>
                             <RotateCcw size={12} />
                           </MessageActionButton>
                         )}
@@ -1239,14 +1567,12 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
               <div className="max-w-md">
                 <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                   <Loader2 size={13} className="animate-spin" />
-                  <span className="truncate">{loadProgress.text || 'Loading the local model…'}</span>
+                  <span className="truncate">{loadProgress.text || t('assistant.loadingLocal')}</span>
                   {loadProgress.progress < 1 && (
                     <span className="ml-auto shrink-0">{Math.round(loadProgress.progress * 100)}%</span>
                   )}
                 </div>
-                <div className="h-1.5 bg-slate-200 rounded overflow-hidden">
-                  <div className="h-full bg-violet-500 transition-all" style={{ width: `${Math.round(loadProgress.progress * 100)}%` }} />
-                </div>
+                <Progress pct={loadProgress.progress * 100} className="h-1.5" />
               </div>
             )}
           </ThreadPrimitive.Viewport>
@@ -1272,24 +1598,27 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
             </div>
             <ComposerPrimitive.Root className="flex items-end gap-2">
               <ComposerPrimitive.Input
-                placeholder={ready ? 'Ask about your plan, or describe your situation…' : 'Connect a provider first (Connections page)'}
-                disabled={!ready}
+                placeholder={
+                  !ready ? t('assistant.placeholderOffline')
+                  : localEngineBusy ? t('assistant.placeholderBusy')
+                  : t('assistant.placeholderAsk')}
+                disabled={!ready || localEngineBusy}
                 rows={2}
-                className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-violet-500 disabled:bg-slate-50 disabled:text-slate-400 resize-none"
+                className="flex-1 border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-slate-900 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400 resize-none"
               />
               {running ? (
                 <ComposerPrimitive.Cancel asChild>
-                  <button className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 text-slate-600 text-xs font-semibold rounded hover:bg-slate-50">
-                    <X size={13} /> Stop
+                  <button className="flex items-center gap-1.5 border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900">
+                    <X size={13} /> {t('assistant.stop')}
                   </button>
                 </ComposerPrimitive.Cancel>
               ) : (
                 <ComposerPrimitive.Send asChild>
                   <button
                     disabled={!ready}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700 disabled:opacity-40"
+                    className="flex items-center gap-1.5 bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
                   >
-                    Send
+                    {t('assistant.send')}
                   </button>
                 </ComposerPrimitive.Send>
               )}
@@ -1311,6 +1640,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
  *  (SCROLL_UP_SHOW_PX) keeps it out of the way during normal reading. */
 const SCROLL_UP_SHOW_PX = 240;
 function ScrollControls({ register }: { register: React.MutableRefObject<(() => void) | null> }) {
+  const { t } = useTranslation('pages');
   const store = useThreadViewportStore();
   const [showJump, setShowJump] = useState(false);
 
@@ -1382,10 +1712,10 @@ function ScrollControls({ register }: { register: React.MutableRefObject<(() => 
   return (
     <button
       onClick={() => store.getState().scrollToBottom({ behavior: 'smooth' })}
-      className="self-center mb-1 flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 border border-slate-200 text-slate-400 text-[10px] shadow-sm hover:text-slate-600 hover:border-slate-300"
-      title="Jump to the latest message"
+      className="self-center mb-1 flex items-center gap-1 px-2 py-0.5 bg-white/90 border border-slate-200 text-slate-400 text-[10px] hover:text-slate-600 hover:border-slate-300"
+      title={t('assistant.latestTitle')}
     >
-      <ChevronDown size={10} /> Latest
+      <ChevronDown size={10} /> {t('assistant.latest')}
     </button>
   );
 }
@@ -1491,6 +1821,7 @@ function useStickToBottom() {
  *  block's top-right corner either way. The body sticks to the bottom the
  *  same way the thread does. */
 function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
+  const { t } = useTranslation('pages');
   const [open, setOpen] = useState(true);
   const { elRef, pin } = useStickToBottom();
   // The tail of the reasoning for the COLLAPSED header: the LAST ~90 chars of
@@ -1505,8 +1836,8 @@ function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming
   // Header text: EXPANDED shows the static label only (the body carries the
   // content); COLLAPSED appends the live last line while streaming.
   const headerText = streaming
-    ? open ? 'Thinking' : lastLine ? `Thinking — ${lastLine}` : 'Thinking…'
-    : 'Reasoning';
+    ? open ? t('assistant.thinking') : lastLine ? t('assistant.thinkingDash', { line: lastLine }) : t('assistant.thinkingEllipsis')
+    : t('assistant.reasoning');
   // Re-pin ONLY on a real (re)open — a freshly expanded body starts at the
   // latest line. NOT on the streaming flip: that re-pins mid-conversation
   // after the user has deliberately scrolled up, yanking them back down.
@@ -1514,15 +1845,15 @@ function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming
   // (whose pin state now survives re-renders — see elRef there).
   useEffect(() => { if (open) pin(); }, [open]);
   return (
-    <div className="relative border border-violet-200 rounded bg-violet-50/60 min-w-0">
+    <div className="relative min-w-0 border border-slate-200 bg-slate-50">
       {/* Activity spinner pinned to the block's top-right corner while the
           stream is live — visible whether the body is open or collapsed. */}
       {streaming && (
-        <Loader2 size={10} className="animate-spin absolute top-1.5 right-1.5 text-violet-500 pointer-events-none" />
+        <Loader2 size={10} className="animate-spin absolute top-1.5 right-1.5 text-slate-400 pointer-events-none" />
       )}
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 w-full px-2 py-1 pr-6 text-[10px] font-semibold text-violet-700 hover:text-violet-900 text-left"
+        className="flex items-center gap-1.5 w-full px-2 py-1 pr-6 text-[10px] font-semibold text-slate-500 hover:text-slate-900 text-left"
       >
         {open ? <ChevronDown size={11} className="shrink-0" /> : <ChevronRight size={11} className="shrink-0" />}
         <Brain size={11} className="shrink-0" />
@@ -1553,6 +1884,7 @@ function AssistantExtras({ turn, onDecide, tokensPerSecond, hideResolvedCards = 
    *  them here so they don't appear twice. */
   hideResolvedCards?: boolean;
 }) {
+  const { t } = useTranslation('pages');
   const cards = hideResolvedCards ? turn.changes.filter(c => !c.resolved) : turn.changes;
   return (
     <>
@@ -1567,15 +1899,15 @@ function AssistantExtras({ turn, onDecide, tokensPerSecond, hideResolvedCards = 
         <ChangeCard key={change.callId} change={change} onDecide={onDecide} />
       ))}
       {turn.state === 'truncated' && (
-        <div className="flex items-start gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[10px] leading-snug">
+        <div className="flex items-start gap-1.5 border-l-2 border-amber-500 px-2 py-1.5 text-[11px] leading-snug text-amber-800">
           <AlertTriangle size={11} className="mt-px shrink-0" />
           <span>
-            This answer was cut short (token limit).{turn.text ? ' Regenerate to retry it.' : ' It spent the whole budget thinking and produced no answer — regenerate to retry.'}
+            {turn.text ? t('assistant.truncatedRetry') : t('assistant.truncatedNone')}
           </span>
         </div>
       )}
       {tokensPerSecond != null && turn.state !== 'streaming' && (
-        <div className="text-[10px] text-slate-400">~{tokensPerSecond.toFixed(1)} tok/s</div>
+        <div className="text-[10px] text-slate-400">{t('assistant.toks', { n: tokensPerSecond.toFixed(1) })}</div>
       )}
     </>
   );
@@ -1586,6 +1918,7 @@ function AssistantExtras({ turn, onDecide, tokensPerSecond, hideResolvedCards = 
  *  to keep open while moving to the text) into its inputs and output. Same
  *  collapsed size as the old plain chips; click again to fold it back. */
 function ToolChip({ tool }: { tool: ToolActivity }) {
+  const { t } = useTranslation('pages');
   const [open, setOpen] = useState(false);
   const hasDetail = tool.args != null || tool.summary != null;
   return (
@@ -1593,31 +1926,32 @@ function ToolChip({ tool }: { tool: ToolActivity }) {
       <button
         onClick={() => hasDetail && setOpen(o => !o)}
         disabled={!hasDetail}
-        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-          tool.state === 'running' ? 'bg-violet-100 text-violet-700'
-          : tool.state === 'error' ? 'bg-red-100 text-red-700'
-          : 'bg-slate-200 text-slate-600'
-        } ${hasDetail ? 'hover:brightness-95 cursor-pointer' : 'cursor-default'}`}
-        title={hasDetail ? 'Click to see the call details' : undefined}
+        className={`flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-medium ${
+          tool.state === 'running' ? 'border-slate-900 bg-slate-900 text-white'
+          : tool.state === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700'
+          : 'border-slate-200 bg-slate-100 text-slate-600'
+        } ${hasDetail ? 'hover:border-slate-900 hover:text-slate-900 cursor-pointer' : 'cursor-default'}
+        ${tool.state === 'running' ? 'hover:border-slate-700 hover:bg-slate-700 hover:text-white' : ''}`}
+        title={hasDetail ? t('assistant.toolDetails') : undefined}
       >
         {tool.state === 'running' ? <Loader2 size={9} className="animate-spin" /> : <Wrench size={9} />}
         {tool.name}
         {hasDetail && (open ? <ChevronDown size={9} className="shrink-0" /> : <ChevronRight size={9} className="shrink-0" />)}
       </button>
       {open && (
-        <div className="mt-1 p-2 rounded bg-slate-50 border border-slate-200 text-[10px] leading-snug space-y-1.5 max-h-64 overflow-y-auto [overflow-wrap:anywhere]">
+        <div className="mt-1 border border-slate-200 bg-slate-50 p-2 text-[10px] leading-snug space-y-1.5 max-h-64 overflow-y-auto [overflow-wrap:anywhere]">
           {tool.args != null && (
             <div>
-              <div className="font-semibold text-slate-500 uppercase tracking-wide text-[9px] mb-0.5">Input</div>
+              <div className="font-semibold text-slate-500 uppercase tracking-wide text-[9px] mb-0.5">{t('assistant.input')}</div>
               <pre className="text-slate-700 whitespace-pre-wrap font-mono">{JSON.stringify(tool.args, null, 2)}</pre>
             </div>
           )}
           {tool.summary != null && (
             <div>
               <div className="font-semibold text-slate-500 uppercase tracking-wide text-[9px] mb-0.5">
-                {tool.state === 'error' ? 'Error' : 'Output'}
+                {tool.state === 'error' ? t('assistant.error') : t('assistant.output')}
               </div>
-              <pre className={`whitespace-pre-wrap font-mono ${tool.state === 'error' ? 'text-red-700' : 'text-slate-700'}`}>{tool.summary}</pre>
+              <pre className={`whitespace-pre-wrap font-mono ${tool.state === 'error' ? 'text-rose-700' : 'text-slate-700'}`}>{tool.summary}</pre>
             </div>
           )}
         </div>
@@ -1629,30 +1963,32 @@ function ToolChip({ tool }: { tool: ToolActivity }) {
 /** Per-chat standing instructions, appended to the built system prompt. A
  *  collapsed one-line button by default; opens into a small editor. */
 function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: string) => void }) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(note);
   if (!open) {
     return (
       <button
         onClick={() => { setDraft(note); setOpen(true); }}
-        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
-        title="Add standing instructions for this chat (appended to the system prompt)"
+        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-slate-900"
+        title={t('assistant.customTitle')}
       >
         <Settings2 size={11} />
-        {note.trim() ? 'Custom instructions: on' : 'Custom instructions'}
+        {note.trim() ? t('assistant.customOn') : t('assistant.custom')}
       </button>
     );
   }
   return (
-    <div className="mb-2 border border-slate-200 rounded p-2 bg-slate-50">
+    <div className="mb-2 border border-slate-200 bg-slate-50 p-2">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-          Custom instructions for this chat
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          {t('assistant.customHeading')}
         </span>
         <button
           onClick={() => setOpen(false)}
-          className="text-slate-400 hover:text-slate-700"
-          title="Close"
+          className="text-slate-400 hover:text-slate-900"
+          title={tc('close')}
         >
           <X size={12} />
         </button>
@@ -1661,15 +1997,15 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
         value={draft}
         onChange={e => setDraft(e.target.value)}
         rows={2}
-        placeholder='e.g. "Keep answers short" or "Focus on the TFSA vs RRSP trade-off".'
-        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500 resize-none"
+        placeholder={t('assistant.customPlaceholder')}
+        className="w-full border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-none"
       />
       <div className="flex justify-end gap-2 mt-1">
         <button
           onClick={() => { onChange(draft.trim()); setOpen(false); }}
-          className="px-2.5 py-1 bg-violet-600 text-white text-[11px] font-semibold rounded hover:bg-violet-700"
+          className="bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700"
         >
-          Save
+          {tc('save')}
         </button>
       </div>
     </div>
@@ -1679,31 +2015,21 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
 /** Estimated context-window usage as a small bar. Amber near the compaction
  *  trigger, red past it; the tooltip explains the estimate and compaction. */
 function ContextMeter({ used, limit, compacted }: { used: number; limit: number; compacted: boolean }) {
+  const { t } = useTranslation('pages');
   const pct = Math.min(100, Math.round((used / limit) * 100));
   const over = used > limit * COMPACT_AT;
   const hard = used > limit;
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+  const titleKey = hard ? 'assistant.ctxHard' : compacted ? 'assistant.ctxCompacted' : 'assistant.ctxOk';
   return (
     <span
       className="flex items-center gap-1.5 ml-auto"
-      title={
-        `Estimated context usage: ~${fmt(used)} of ${fmt(limit)} tokens (~4 chars/token). ` +
-        (hard
-          ? 'Over the model\'s context window — raise "Context window" for this connection on the Connections page, or older messages will be summarized aggressively.'
-          : compacted
-            ? 'Older messages have been compacted into a summary to fit.'
-            : `Past ${Math.round(COMPACT_AT * 100)}% the oldest messages are summarized to fit.`)
-      }
+      title={t(titleKey, { used: fmt(used), limit: fmt(limit), pct: Math.round(COMPACT_AT * 100) })}
     >
-      <span className={`text-[10px] font-semibold ${hard ? 'text-red-600' : over ? 'text-amber-600' : 'text-slate-400'}`}>
+      <span className={`text-[10px] font-semibold ${hard ? 'text-rose-700' : over ? 'text-amber-700' : 'text-slate-400'}`}>
         ~{fmt(used)}/{fmt(limit)}
       </span>
-      <span className="w-16 h-1.5 bg-slate-200 rounded overflow-hidden">
-        <span
-          className={`block h-full transition-all ${hard ? 'bg-red-500' : over ? 'bg-amber-500' : 'bg-violet-400'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </span>
+      <Progress pct={pct} className={`w-16 h-1.5 ${hard ? '[&>div]:bg-rose-500' : over ? '[&>div]:bg-amber-500' : ''}`} />
     </span>
   );
 }
@@ -1713,6 +2039,8 @@ function ContextMeter({ used, limit, compacted }: { used: number; limit: number;
  *  is currently in effect (the user's override, or the built-in default they
  *  can use as a starting point). Clearing it restores the default. */
 function BasePromptEditor({ override, onChange }: { override: string; onChange: (text: string) => void }) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(override);
   const customized = override.trim().length > 0;
@@ -1720,21 +2048,21 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
     return (
       <button
         onClick={() => { setDraft(customized ? override : DEFAULT_SYSTEM_PROMPT); setOpen(true); }}
-        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-violet-700"
-        title="View and edit the assistant's base persona prompt (applies to every chat)"
+        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-slate-900"
+        title={t('assistant.basePromptTitle')}
       >
         <Bot size={11} />
-        {customized ? 'Base prompt: customized' : 'Base prompt'}
+        {customized ? t('assistant.basePromptCustom') : t('assistant.basePrompt')}
       </button>
     );
   }
   return (
-    <div className="mb-2 border border-slate-200 rounded p-2 bg-slate-50 w-full">
+    <div className="mb-2 w-full border border-slate-200 bg-slate-50 p-2">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-          Base persona prompt (all chats)
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          {t('assistant.baseHeading')}
         </span>
-        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700" title="Close">
+        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-900" title={tc('close')}>
           <X size={12} />
         </button>
       </div>
@@ -1742,31 +2070,31 @@ function BasePromptEditor({ override, onChange }: { override: string; onChange: 
         value={draft}
         onChange={e => setDraft(e.target.value)}
         rows={10}
-        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500 resize-y font-mono"
+        className="w-full border border-slate-300 bg-white px-2 py-1.5 font-mono text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-y"
       />
       <div className="flex items-center justify-between gap-2 mt-1">
         <button
           onClick={() => { setDraft(DEFAULT_SYSTEM_PROMPT); }}
-          className="text-[10px] font-semibold text-slate-400 hover:text-violet-700"
-          title="Restore the built-in default persona"
+          className="text-[10px] font-semibold text-slate-400 hover:text-slate-900"
+          title={t('assistant.resetDefaultTitle')}
         >
-          Reset to default
+          {t('assistant.resetDefault')}
         </button>
         <div className="flex gap-2">
           {customized && (
             <button
               onClick={() => { onChange(''); setOpen(false); }}
-              className="px-2.5 py-1 border border-slate-300 text-slate-600 text-[11px] font-semibold rounded hover:bg-slate-100"
-              title="Stop customizing and use the built-in default"
+              className="border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900"
+              title={t('assistant.useDefaultTitle')}
             >
-              Use default
+              {t('assistant.useDefault')}
             </button>
           )}
           <button
             onClick={() => { onChange(draft.trim() === DEFAULT_SYSTEM_PROMPT.trim() ? '' : draft.trim()); setOpen(false); }}
-            className="px-2.5 py-1 bg-violet-600 text-white text-[11px] font-semibold rounded hover:bg-violet-700"
+            className="bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700"
           >
-            Save
+            {tc('save')}
           </button>
         </div>
       </div>
@@ -1784,18 +2112,42 @@ function MessageActionButton({ onClick, title, children }: {
     <button
       onClick={onClick}
       title={title}
-      className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity"
+      className="p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity"
     >
       {children}
     </button>
   );
 }
 
+/** Per-reply who-answered icon. OpenRouter's free router hides the real model
+ *  unless we stash the served id from the stream. Always visible (not hover-only)
+ *  so the user can see it without hunting. */
+function ProvenanceButton({ asked, served }: { asked?: string; served?: string }) {
+  const { t } = useTranslation('pages');
+  const line = provenanceLine(asked, served);
+  if (!line) return null;
+  const routed = Boolean(asked && served && asked !== served);
+  const title = routed
+    ? t('assistant.askedServed', { asked, served })
+    : t('assistant.answeredBy', { line });
+  return (
+    <button
+      type="button"
+      title={title}
+      className="p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+      aria-label={title}
+    >
+      <Info size={12} />
+    </button>
+  );
+}
+
 /** Per-message delete; hidden while a reply is streaming. */
 function DeleteButton({ running, onDelete }: { running: boolean; onDelete: () => void }) {
+  const { t } = useTranslation('pages');
   if (running) return null;
   return (
-    <MessageActionButton onClick={onDelete} title="Delete this message">
+    <MessageActionButton onClick={onDelete} title={t('assistant.deleteMsg')}>
       <Trash2 size={12} />
     </MessageActionButton>
   );
@@ -1807,31 +2159,32 @@ function ChangeCard({ change, onDecide }: {
   change: PendingChange;
   onDecide: (change: PendingChange, approved: boolean) => void;
 }) {
+  const { t } = useTranslation('pages');
   return (
-    <div className="border border-violet-200 bg-violet-50 rounded-lg p-2.5 text-xs min-w-0">
-      <div className="font-semibold text-violet-900 mb-1">{change.label ?? (change.field ? `Set ${change.field}` : 'Proposed change')}</div>
-      {change.rationale && <div className="text-violet-800/80 mb-1 [overflow-wrap:anywhere]">{change.rationale}</div>}
-      <div className="text-slate-600 mb-2 space-y-0.5 [overflow-wrap:anywhere]">
+    <div className="min-w-0 border border-slate-300 bg-white p-2.5 text-xs">
+      <div className="mb-1 font-semibold text-slate-900">{change.label ?? (change.field ? t('assistant.setField', { field: change.field }) : t('assistant.proposed'))}</div>
+      {change.rationale && <div className="mb-1 text-slate-500 [overflow-wrap:anywhere]">{change.rationale}</div>}
+      <div className="mb-2 space-y-0.5 text-slate-600 [overflow-wrap:anywhere]">
         <PreviewLines preview={change.preview} />
       </div>
       {change.resolved ? (
-        <div className={`flex items-center gap-1 font-semibold ${change.resolved === 'approved' ? 'text-emerald-700' : 'text-slate-500'}`}>
+        <div className={`flex items-center gap-1 font-semibold ${change.resolved === 'approved' ? 'text-blue-700' : 'text-slate-400'}`}>
           {change.resolved === 'approved' ? <Check size={12} /> : <X size={12} />}
-          {change.resolved === 'approved' ? 'Applied' : 'Declined'}
+          {change.resolved === 'approved' ? t('assistant.applied') : t('assistant.declined')}
         </div>
       ) : (
         <div className="flex gap-2">
           <button
             onClick={() => onDecide(change, true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 text-white font-semibold rounded hover:bg-emerald-700"
+            className="flex items-center gap-1 bg-slate-900 px-2.5 py-1 font-semibold text-white hover:bg-slate-700"
           >
-            <Check size={12} /> Accept
+            <Check size={12} /> {t('assistant.accept')}
           </button>
           <button
             onClick={() => onDecide(change, false)}
-            className="flex items-center gap-1 px-2.5 py-1 border border-slate-300 text-slate-600 font-semibold rounded hover:bg-slate-100"
+            className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 font-semibold text-slate-600 hover:border-slate-900 hover:text-slate-900"
           >
-            <X size={12} /> Decline
+            <X size={12} /> {t('assistant.decline')}
           </button>
         </div>
       )}
@@ -1839,9 +2192,9 @@ function ChangeCard({ change, onDecide }: {
   );
 }
 
-function fmtValue(v: unknown): string {
+function fmtValue(v: unknown, locale: string): string {
   if (v == null) return '—';
-  if (typeof v === 'number') return v.toLocaleString('en-CA');
+  if (typeof v === 'number') return v.toLocaleString(locale);
   return String(v);
 }
 
@@ -1849,64 +2202,66 @@ function fmtValue(v: unknown): string {
  *  compact line per entry for structural proposals (objects/arrays are
  *  JSON-compacted so a spouse/reverse-mortgage block stays readable). */
 function PreviewLines({ preview }: { preview: Record<string, unknown> }) {
+  const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   const entries = Object.entries(preview);
   const isFromTo = (v: unknown): v is { from: unknown; to: unknown } =>
     !!v && typeof v === 'object' && 'from' in (v as object) && 'to' in (v as object);
+  const compactVal = (v: unknown): string =>
+    typeof v === 'object' && v !== null ? JSON.stringify(v) : fmtValue(v, locale);
   return (
     <>
       {entries.map(([key, value]) => {
         if (isFromTo(value)) {
           return (
             <div key={key}>
-              {key}: <span className="line-through">{fmtValue(value.from)}</span>{' '}
-              → <span className="font-semibold">{fmtValue(value.to)}</span>
+              {key}: <span className="line-through">{fmtValue(value.from, locale)}</span>{' '}
+              → <span className="font-semibold">{fmtValue(value.to, locale)}</span>
             </div>
           );
         }
         if (key === 'add') {
-          return <div key={key}>adds <span className="font-semibold">{compact(value)}</span></div>;
+          return <div key={key}>{t('assistant.adds', { value: compactVal(value) })}</div>;
         }
         if (Array.isArray(value)) {
           return <div key={key}>{key}: <span className="font-semibold">{value.join('; ')}</span></div>;
         }
-        return <div key={key}>{key}: <span className="font-semibold">{compact(value)}</span></div>;
+        return <div key={key}>{key}: <span className="font-semibold">{compactVal(value)}</span></div>;
       })}
     </>
   );
 }
-
-const compact = (v: unknown): string =>
-  typeof v === 'object' && v !== null ? JSON.stringify(v) : fmtValue(v);
 
 // ---------------------------------------------------------------------------
 // Empty states
 // ---------------------------------------------------------------------------
 
 function EmptyChatState({ onNew }: { onNew: () => void }) {
+  const { t } = useTranslation('pages');
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center border border-slate-200 rounded bg-white py-12">
-      <Bot size={32} className="text-violet-300 mb-3" />
-      <p className="text-sm font-medium text-slate-700 mb-1">Start a conversation</p>
-      <p className="text-xs text-slate-500 max-w-md mb-4">
-        Each chat is saved on this device so you can come back to it.
+    <div className="h-full flex flex-col items-center justify-center border border-slate-200 bg-white py-12 text-center">
+      <Bot size={32} className="mb-3 text-slate-300" />
+      <p className="mb-1 text-sm font-medium text-slate-700">{t('assistant.emptyTitle')}</p>
+      <p className="mb-4 max-w-md text-xs text-slate-500">
+        {t('assistant.emptyLead')}
       </p>
       <button
         onClick={onNew}
-        className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+        className="flex items-center gap-1.5 bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700"
       >
-        <Plus size={13} /> New chat
+        <Plus size={13} /> {t('assistant.newChat')}
       </button>
     </div>
   );
 }
 
 function EmptyThread() {
+  const { t } = useTranslation('pages');
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center py-8">
-      <Bot size={28} className="text-violet-300 mb-3" />
+    <div className="h-full flex flex-col items-center justify-center py-8 text-center">
+      <Bot size={28} className="mb-3 text-slate-300" />
       <p className="text-xs text-slate-500 max-w-md">
-        Ask about your plan, or describe your situation. The assistant reads your scenario and runs
-        the real engine before answering; every change it proposes needs your approval.
+        {t('assistant.emptyThread')}
       </p>
     </div>
   );
@@ -1918,50 +2273,68 @@ function EmptyThread() {
 // paste the JSON reply back through the local validation/apply path.
 // ---------------------------------------------------------------------------
 
-function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect }: {
+function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect, compact = false }: {
   inputs: RetirementInputs;
   config: AppConfig;
   hasConnections: boolean;
   onApply: (patch: Partial<RetirementInputs>) => void;
   onConnect: () => void;
+  /** Docked rail: keep the empty state to a short stack, not a two-column copy-prompt desk. */
+  compact?: boolean;
 }) {
+  const { t } = useTranslation('pages');
   const [tab, setTab] = useState<'ask' | 'tune'>('ask');
+  const [showCopy, setShowCopy] = useState(!compact);
   const results = useMemo(() => calculateHousehold(inputs, config), [inputs, config]);
 
   return (
-    <div className="h-full overflow-y-auto border border-slate-200 rounded bg-white">
-      <div className="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-52">
-          <p className="text-sm font-semibold text-slate-800">No model connected</p>
-          <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-            Copy a self-contained prompt into any AI (ChatGPT, Claude, …) below — or connect a model
-            (even one that runs privately on this device) to chat right here.
+    <div className="h-full overflow-y-auto border border-slate-200 bg-white">
+      <div className={`border-b border-slate-100 ${compact ? 'space-y-2 p-3' : 'flex flex-wrap items-center gap-3 p-4'}`}>
+        <div className={compact ? '' : 'min-w-52 flex-1'}>
+          <p className={`font-semibold text-slate-800 ${compact ? 'text-xs' : 'text-sm'}`}>{t('assistant.noModel')}</p>
+          <p className={`mt-0.5 leading-snug text-slate-500 ${compact ? 'text-[10.5px]' : 'text-[11px]'}`}>
+            {compact ? t('assistant.offlineCompact') : t('assistant.offlineLead')}
           </p>
         </div>
         <button
           onClick={onConnect}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 shrink-0"
+          className={`flex items-center gap-1.5 bg-slate-900 text-xs font-semibold text-white hover:bg-slate-700 ${compact ? 'w-full justify-center px-3 py-2' : 'shrink-0 px-3 py-1.5'}`}
         >
-          <Download size={13} /> {hasConnections ? 'Set up a connection' : 'Load a model'}
+          <Download size={13} /> {hasConnections ? t('assistant.setupConn') : t('assistant.loadModel')}
         </button>
-      </div>
-
-      <div className="flex gap-1 px-4 pt-3">
-        {(['ask', 'tune'] as const).map(t => (
+        {compact && (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-2.5 py-1 text-xs font-medium rounded ${tab === t ? 'bg-violet-50 text-violet-700' : 'text-slate-600 hover:bg-slate-100'}`}
+            type="button"
+            onClick={() => setShowCopy(v => !v)}
+            className="w-full border border-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
           >
-            {t === 'ask' ? 'Ask a question' : 'Tune inputs'}
+            {showCopy ? t('assistant.hideCopy') : t('assistant.copyInstead')}
           </button>
-        ))}
+        )}
       </div>
 
-      {tab === 'ask' ? (
-        <AskQuestionPanel inputs={inputs} results={results} />
-      ) : (
-        <TuneInputsPanel inputs={inputs} onApply={onApply} />
+      {showCopy && (
+        <>
+          <div className={`flex gap-4 ${compact ? 'px-3 pt-2' : 'px-4 pt-3'}`}>
+            {(['ask', 'tune'] as const).map(tabKey => (
+              <button
+                key={tabKey}
+                onClick={() => setTab(tabKey)}
+                className={`-mb-px border-b-2 px-1 pb-2 text-xs font-medium ${tab === tabKey
+                  ? 'border-slate-900 text-slate-900'
+                  : 'border-transparent text-slate-400 hover:text-slate-900'}`}
+              >
+                {tabKey === 'ask' ? t('assistant.askQuestion') : t('assistant.tuneInputs')}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'ask' ? (
+            <AskQuestionPanel inputs={inputs} results={results} compact={compact} />
+          ) : (
+            <TuneInputsPanel inputs={inputs} onApply={onApply} />
+          )}
+        </>
       )}
     </div>
   );
@@ -1969,10 +2342,14 @@ function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect }
 
 /** Copy a question prompt (plan + computed results + question) to paste into
  *  any external AI. Nothing is ingested back. */
-function AskQuestionPanel({ inputs, results }: {
+function AskQuestionPanel({ inputs, results, compact = false }: {
   inputs: RetirementInputs;
   results: ReturnType<typeof calculateHousehold>;
+  compact?: boolean;
 }) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
+  const { locale } = useAppLocale();
   const [presetId, setPresetId] = useState(QA_PRESETS[0].id);
   const [customQuestion, setCustomQuestion] = useState('');
   const [copied, setCopied] = useState(false);
@@ -1989,57 +2366,58 @@ function AskQuestionPanel({ inputs, results }: {
     );
   };
 
+  const presetTitle = t(`assistant.qa.${preset.id}.title`);
+
   return (
-    <div className="p-4 grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-4">
+    <div className={`p-4 grid grid-cols-1 gap-4 ${compact ? '' : 'sm:grid-cols-[240px_1fr]'}`}>
       <div className="space-y-1">
         {QA_PRESETS.map(p => (
           <button
             key={p.id}
             onClick={() => setPresetId(p.id)}
-            className={`w-full text-left px-2.5 py-1.5 rounded border text-xs ${presetId === p.id
-              ? 'border-violet-300 bg-violet-50 text-violet-800'
-              : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            className={`w-full border px-2.5 py-1.5 text-left text-xs ${presetId === p.id
+              ? 'border-slate-900 bg-slate-50 font-medium text-slate-900'
+              : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'}`}
           >
-            <div className="font-medium">{p.title}</div>
-            <div className={`text-[10px] ${presetId === p.id ? 'text-violet-600' : 'text-slate-500'}`}>{p.blurb}</div>
+            <div className="font-medium">{t(`assistant.qa.${p.id}.title`)}</div>
+            <div className={`text-[10px] ${presetId === p.id ? 'text-slate-600' : 'text-slate-400'}`}>{t(`assistant.qa.${p.id}.blurb`)}</div>
           </button>
         ))}
         <div>
-          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-2 mb-1">
-            …or your own question
+          <label className="mb-1 mt-2 block text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            {t('assistant.ownQuestion')}
           </label>
           <textarea
             value={customQuestion}
             onChange={e => setCustomQuestion(e.target.value)}
-            placeholder="Type a custom question; it replaces the preset."
-            className="w-full h-16 px-2 py-1.5 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:outline-none focus:border-violet-500"
+            placeholder={t('assistant.customQPlaceholder')}
+            className="h-16 w-full border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none"
           />
         </div>
       </div>
 
       <div>
-        <div className="text-xs font-semibold text-slate-800 mb-1.5">
-          Prompt{customQuestion.trim() ? ' (custom question)' : ` — ${preset.title}`}
+        <div className="mb-1.5 text-xs font-semibold text-slate-800">
+          {customQuestion.trim() ? t('assistant.promptCustom') : t('assistant.promptPreset', { title: presetTitle })}
         </div>
-        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
-          Embeds your plan <em>and the computed results</em>, so the AI answers from the real numbers.
-          Once you paste, that AI provider reads your plan under its own privacy policy.
+        <p className="mb-2 text-[11px] leading-snug text-slate-500">
+          {t('assistant.askLead')}
         </p>
         <textarea
           readOnly
           value={prompt}
           onFocus={e => e.target.select()}
-          className="w-full h-64 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded text-[10px] font-mono text-slate-600 focus:outline-none"
+          className="h-64 w-full border border-slate-300 bg-slate-50 px-2.5 py-2 font-mono text-[10px] text-slate-600 focus:outline-none"
         />
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={copy}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+            className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? 'Copied' : 'Copy prompt'}
+            {copied ? tc('copied') : t('assistant.copyPrompt')}
           </button>
-          <span className="text-[10px] text-slate-400">~{Math.round(prompt.length / 4).toLocaleString()} tokens</span>
+          <span className="num text-[10px] text-slate-400">{t('assistant.tokens', { n: Math.round(prompt.length / 4).toLocaleString(locale) })}</span>
         </div>
       </div>
     </div>
@@ -2053,6 +2431,8 @@ function TuneInputsPanel({ inputs, onApply }: {
   inputs: RetirementInputs;
   onApply: (patch: Partial<RetirementInputs>) => void;
 }) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
   const [copied, setCopied] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [ingest, setIngest] = useState<ReturnType<typeof parseAgentResult> | null>(null);
@@ -2076,62 +2456,59 @@ function TuneInputsPanel({ inputs, onApply }: {
   return (
     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
-        <div className="text-xs font-semibold text-slate-800 mb-1.5">1 · Copy the prompt</div>
-        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
-          A self-contained prompt describing your plan, the levers, and the exact JSON format to reply
-          with. Paste it into any AI. <strong className="text-slate-700">Heads up:</strong> once you paste,
-          that provider reads your full plan under its own privacy policy.
+        <div className="mb-1.5 text-xs font-semibold text-slate-800">{t('assistant.copyPromptTitle')}</div>
+        <p className="mb-2 text-[11px] leading-snug text-slate-500">
+          {t('assistant.tuneLead')}
         </p>
         <textarea
           readOnly
           value={prompt}
           onFocus={e => e.target.select()}
-          className="w-full h-56 px-2.5 py-2 bg-slate-50 border border-slate-300 rounded text-[10px] font-mono text-slate-600 focus:outline-none"
+          className="h-56 w-full border border-slate-300 bg-slate-50 px-2.5 py-2 font-mono text-[10px] text-slate-600 focus:outline-none"
         />
         <button
           onClick={copy}
-          className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded hover:bg-violet-700"
+          className="mt-2 flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? 'Copied' : 'Copy prompt'}
+          {copied ? tc('copied') : t('assistant.copyPrompt')}
         </button>
       </div>
 
       <div>
-        <div className="text-xs font-semibold text-slate-800 mb-1.5">2 · Paste the AI's JSON reply</div>
-        <p className="text-[11px] text-slate-500 mb-2 leading-snug">
-          Paste the model's JSON below. It's validated field-by-field — unknown fields ignored,
-          out-of-range values rejected with reasons — then applied to your inputs.
+        <div className="mb-1.5 text-xs font-semibold text-slate-800">{t('assistant.pasteJson')}</div>
+        <p className="mb-2 text-[11px] leading-snug text-slate-500">
+          {t('assistant.pasteLead')}
         </p>
         <textarea
           value={pasteText}
           onChange={e => { setPasteText(e.target.value); setIngest(null); }}
           placeholder='{"cppStartAge":70, "oasStartAge":70, ...}'
-          className="w-full h-56 px-2.5 py-2 bg-white border border-slate-300 rounded text-[10px] font-mono text-slate-700 focus:outline-none focus:border-violet-500"
+          className="h-56 w-full border border-slate-300 bg-white px-2.5 py-2 font-mono text-[10px] text-slate-700 focus:border-slate-900 focus:outline-none"
         />
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => setIngest(parseAgentResult(pasteText, inputs))}
             disabled={!pasteText.trim()}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 text-slate-700 text-xs font-semibold rounded hover:bg-slate-50 disabled:opacity-40"
+            className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
           >
-            <ClipboardPaste size={13} /> Validate
+            <ClipboardPaste size={13} /> {t('assistant.validate')}
           </button>
           {ingest?.ok && (
             <button
               onClick={apply}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700"
+              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
             >
-              <Check size={13} /> Apply {ingest.applied.length} change{ingest.applied.length === 1 ? '' : 's'}
+              <Check size={13} /> {t('assistant.applyN', { count: ingest.applied.length })}
             </button>
           )}
         </div>
 
         {ingest && (
           <div className="mt-3 text-[11px] leading-snug space-y-1">
-            {ingest.error && <div className="text-red-600">✕ {ingest.error}</div>}
+            {ingest.error && <div className="text-rose-700">✕ {ingest.error}</div>}
             {ingest.applied.length > 0 && (
-              <div className="text-emerald-700">✓ Will apply: {ingest.applied.join('; ')}</div>
+              <div className="text-blue-700">✓ {t('assistant.willApply', { list: ingest.applied.join('; ') })}</div>
             )}
             {ingest.warnings.map((w, i) => (
               <div key={i} className="text-amber-700">⚠ {w}</div>

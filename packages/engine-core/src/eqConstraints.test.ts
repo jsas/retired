@@ -232,6 +232,35 @@ describe('renderRange — adapting the axis to the plan', () => {
     expect(renderRange('desiredSpending', -5000).min).toBe(0);
     expect(renderRange('cppStartAge', 30).min).toBe(60);
   });
+
+  it('obeys a user-preferred span (Settings lever ranges) on the axes it names', () => {
+    // Spending capped at $300k (the default pref) — the track narrows.
+    expect(renderRange('desiredSpending', 100000, undefined, { desiredSpending: { min: 0, max: 300000 } }))
+      .toEqual({ min: 0, max: 300000 });
+    // Return max from the prefs; the axis floor (0) beats any lower pref min —
+    // Settings itself clamps returnMin at 0, so this is belt-and-suspenders.
+    expect(renderRange('investmentReturn', 0.05, undefined, { investmentReturn: { min: -0.05, max: 0.15 } }))
+      .toEqual({ min: 0, max: 0.15 });
+    // An override never touches axes it omits.
+    expect(renderRange('retirementAge', 65, undefined, { desiredSpending: { min: 0, max: 300000 } }))
+      .toEqual({ min: 40, max: 75 });
+  });
+
+  it('the override never excludes the plan value — the range grows instead', () => {
+    // Spending typed to $677k with the $300k pref: the track grows in whole
+    // override-axis steps (2 × $300k) until it fits.
+    expect(renderRange('desiredSpending', 677000, undefined, { desiredSpending: { min: 0, max: 300000 } }))
+      .toEqual({ min: 0, max: 900000 });
+    // A hand-edited pref can't invert the axis (max < min falls back up).
+    expect(renderRange('desiredSpending', 50000, undefined, { desiredSpending: { min: 200000, max: 100000 } }).max)
+      .toBeGreaterThan(50000);
+  });
+
+  it('reconcileControl threads the override into the rendered range', () => {
+    const rc = reconcileControl('desiredSpending', baseInputs({ desiredSpending: 100000 }), fullBand('desiredSpending'),
+      { desiredSpending: { min: 0, max: 300000 } });
+    expect(rc.range).toEqual({ min: 0, max: 300000 });
+  });
 });
 
 describe('bandWithValue — the crop frames the value', () => {

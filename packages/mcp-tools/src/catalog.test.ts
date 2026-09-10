@@ -41,6 +41,7 @@ describe('tool catalog surface', () => {
       'propose_rdsp', 'propose_fhsa', 'propose_revert',
       'manage_cash_event', 'manage_income', 'propose_debt', 'manage_debt',
       'remember', 'recall', 'open_scenario', 'save_scenario_as', 'list_scenarios',
+      'find_page', 'get_sitemap', 'propose_navigate',
     ];
     expect(Object.keys(TOOL_CATALOG).sort()).toEqual([...expected].sort());
     expect(toolSpecs().map(s => s.name).sort()).toEqual([...expected].sort());

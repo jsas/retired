@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import * as T from './tokens';
 import {
   VerdictHero, Panel, Fader, Chip, Stat, AccountBars, Legend, Dropdown, Footnote, AppHeader,
+  HelpHint, HelpHintPopup, Check,
 } from './primitives';
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -43,11 +44,11 @@ describe('primitives render', () => {
 
   it('Fader renders a labelled range input with tabular value', () => {
     const html = render(
-      <Fader label="Spend a year" value={85000} min={40000} max={160000} step={1000}
+      <Fader label="After Tax Spending" value={85000} min={40000} max={160000} step={1000}
         format={(v) => '$' + v.toLocaleString()} onChange={() => {}} />,
     );
     expect(html).toContain('type="range"');
-    expect(html).toContain('Spend a year');
+    expect(html).toContain('After Tax Spending');
     expect(html).toContain('fader');
     expect(html).toContain('num');
   });
@@ -93,5 +94,70 @@ describe('primitives render', () => {
   it('Footnote and AppHeader render', () => {
     expect(render(<Footnote>not advice</Footnote>)).toContain('not advice');
     expect(render(<AppHeader><span>x</span></AppHeader>)).toContain('RE:');
+  });
+
+  it('HelpHint renders a ? button labelled by its topic', () => {
+    const html = render(<HelpHint topic="rrsp" />);
+    expect(html).toContain('?');
+    expect(html).toContain('aria-label="Help: RRSP"');
+    // popup is closed until tapped — the body text stays out of the DOM
+    expect(html).not.toContain('More in Help');
+  });
+
+  it('HelpHintPopup body does not inherit an uppercase section label', () => {
+    // The hint usually mounts inside `cls.sectionLabel` (uppercase +
+    // wide tracking); the popup must reset both or the topic body
+    // renders ALL-CAPS.
+    const html = render(
+      <p className={T.cls.sectionLabel}>
+        Assistant<HelpHintPopup topic={{ id: 'assistant', title: 'The assistant', body: 'plain body text' }} />
+      </p>
+    );
+    expect(html).toContain('normal-case');
+    expect(html).toContain('tracking-normal');
+    expect(html).toContain('plain body text');
+  });
+
+  it('HelpHintPopup deep-links into Help', () => {
+    const html = render(
+      <HelpHintPopup topic={{ id: 'assistant', title: 't', body: 'b' }} />
+    );
+    expect(html).toContain('href="#/help?topic=assistant"');
+    expect(html).toContain('More in Help');
+  });
+
+  it('HelpHint returns null for an unknown topic id', () => {
+    expect(render(<HelpHint topic="nope-not-a-topic" />)).toBe('');
+  });
+
+  it('Check is ink when on, hairline when off — never blue', () => {
+    const on = render(<Check checked onChange={() => {}} label="include" />);
+    expect(on).toContain('bg-slate-900');
+    expect(on).toContain('border-slate-900');
+    expect(on).toContain('include');
+    expect(on).toContain('type="checkbox"');
+    // no blue anywhere — a control is not a verdict
+    expect(on).not.toContain('blue');
+
+    const off = render(<Check checked={false} onChange={() => {}} />);
+    expect(off).toContain('border-slate-300');
+    expect(off).toContain('bg-white');
+    expect(off).not.toContain('bg-slate-900');
+    expect(off).not.toContain('blue');
+  });
+
+  it('Check scales the box by size', () => {
+    expect(render(<Check checked={false} onChange={() => {}} size={12} />)).toContain('width:12px');
+    expect(render(<Check checked={false} onChange={() => {}} size={20} />)).toContain('width:20px');
+  });
+
+  it('Check prefers children over label for rich rows', () => {
+    const html = render(
+      <Check checked onChange={() => {}} label="plain">
+        <span>rich title</span>
+      </Check>,
+    );
+    expect(html).toContain('rich title');
+    expect(html).not.toContain('plain');
   });
 });

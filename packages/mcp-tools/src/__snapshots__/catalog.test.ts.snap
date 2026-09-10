@@ -280,19 +280,28 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
       "properties": {
         "changes": {
           "additionalProperties": {},
-          "description": "Spouse fields to set. Use {"enabled":true,...} to add a spouse (fill the key fields), or {"enabled":false} to remove. Any SpouseInputs scalar field is allowed.",
+          "description": "Person fields for a NEW partner plan (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending). Ignored when scenarioId is set. Use {"enabled":false} or enabled:false to unlink.",
           "propertyNames": {
             "type": "string",
           },
           "type": "object",
         },
+        "enabled": {
+          "description": "false unlinks the partner (this plan becomes single). true with changes mints a new partner plan and links it.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Name for a newly created partner plan (default "Partner").",
+          "type": "string",
+        },
         "rationale": {
           "type": "string",
         },
+        "scenarioId": {
+          "description": "Id of an existing saved plan to link as the partner. Preferred when the partner already has a plan.",
+          "type": "string",
+        },
       },
-      "required": [
-        "changes",
-      ],
       "type": "object",
     },
     "name": "propose_spouse",
@@ -1052,6 +1061,60 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
     },
     "name": "list_scenarios",
   },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Match is deterministic; the catalog has the right keywords in it — re-case freely.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "find_page",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "get_sitemap",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "description": "Confirm-card label, e.g. "Open the Monte Carlo page".",
+          "minLength": 1,
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "view": {
+          "description": "View id, from find_page or get_sitemap (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "view",
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "propose_navigate",
+  },
 ]
 `;
 
@@ -1338,26 +1401,35 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "propose_patch",
   },
   {
-    "description": "PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.",
+    "description": "PROPOSE linking a partner (another saved plan), creating a new partner plan then linking it, or unlinking. Partner numbers live on that plan, not inline. User confirms.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "changes": {
           "additionalProperties": {},
-          "description": "Spouse fields to set. Use {"enabled":true,...} to add a spouse (fill the key fields), or {"enabled":false} to remove. Any SpouseInputs scalar field is allowed.",
+          "description": "Person fields for a NEW partner plan (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending). Ignored when scenarioId is set. Use {"enabled":false} or enabled:false to unlink.",
           "propertyNames": {
             "type": "string",
           },
           "type": "object",
         },
+        "enabled": {
+          "description": "false unlinks the partner (this plan becomes single). true with changes mints a new partner plan and links it.",
+          "type": "boolean",
+        },
+        "name": {
+          "description": "Name for a newly created partner plan (default "Partner").",
+          "type": "string",
+        },
         "rationale": {
           "type": "string",
         },
+        "scenarioId": {
+          "description": "Id of an existing saved plan to link as the partner. Preferred when the partner already has a plan.",
+          "type": "string",
+        },
       },
-      "required": [
-        "changes",
-      ],
       "type": "object",
     },
     "name": "propose_spouse",
@@ -1440,7 +1512,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "propose_income",
   },
   {
-    "description": "PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.",
+    "description": "PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age; dollar amounts are desiredSpending × pctOfBase). User confirms.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -2133,6 +2205,63 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       "type": "object",
     },
     "name": "list_scenarios",
+  },
+  {
+    "description": "Search the site's page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Use whenever the user asks WHERE something lives.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Match is deterministic; the catalog has the right keywords in it — re-case freely.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "find_page",
+  },
+  {
+    "description": "The full site map: every page (view), its route (#/hash), and one-line purpose. Use for "what can this app do?", "what pages exist?", or before guessing where something lives.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "get_sitemap",
+  },
+  {
+    "description": "PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → montecarlo, "solver" → solver — name it from find_page or get_sitemap. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "description": "Confirm-card label, e.g. "Open the Monte Carlo page".",
+          "minLength": 1,
+          "type": "string",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "view": {
+          "description": "View id, from find_page or get_sitemap (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "view",
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "propose_navigate",
   },
 ]
 `;

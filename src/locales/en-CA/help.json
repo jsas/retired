@@ -1,0 +1,864 @@
+{
+  "walkTitle": "Walk through your first scenario",
+  "walkBody": "— a 5-step guided setup (ages, savings, benefits, spending).",
+  "open": "Open →",
+  "searchPlaceholder": "Search help — try “clawback”, “TFSA”, “share link”…",
+  "clearSearch": "Clear search",
+  "contents": "Contents",
+  "matchOne": "{{count}} topic matches",
+  "matchOther": "{{count}} topics match",
+  "noMatches": "No matches — try a shorter or different term.",
+  "linkTopic": "Link to this topic",
+  "moreInHelp": "More in Help →",
+  "verdict": "The verdict",
+  "sections": {
+    "People": "People",
+    "Accounts": "Accounts",
+    "Income": "Income",
+    "Spending": "Spending",
+    "Property": "Property",
+    "Levers": "Levers",
+    "Reading the answer": "Reading the answer",
+    "Analysis": "Analysis",
+    "Schedule": "Schedule",
+    "Plans": "Plans",
+    "Assistant": "Assistant",
+    "Data": "Data",
+    "Assumptions": "Assumptions",
+    "Glossary": "Glossary",
+    "Legal": "Legal"
+  },
+  "topics": {
+    "current-retirement-max-age": {
+      "title": "Current / retirement / max age",
+      "section": "People",
+      "keywords": [
+        "ages",
+        "horizon",
+        "planning horizon",
+        "how long"
+      ],
+      "body": "Accumulation runs from current age until the year before retirement age. Drawdown runs from retirement age through max age. Max age is your planning horizon — the plan must stay funded through it."
+    },
+    "province": {
+      "title": "Province",
+      "section": "People",
+      "keywords": [
+        "tax table",
+        "provincial",
+        "ontario",
+        "quebec"
+      ],
+      "body": "Sets which provincial tax table is stacked on top of the federal one. Tables are editable under Settings."
+    },
+    "include-spouse": {
+      "title": "Include spouse",
+      "section": "People",
+      "keywords": [
+        "partner",
+        "couple",
+        "household"
+      ],
+      "body": "A partner is another saved plan, linked from this one. Their ages, balances, contributions, CPP/OAS and spending live on that plan — open it to edit. The two plans combine into a household verdict: the household is SHORTFALL if either plan runs out, and the metric cards show household wealth at retirement with per-person detail."
+    },
+    "built-in-vs-linked-spouse": {
+      "title": "Linked spouse",
+      "section": "People",
+      "keywords": [
+        "link a plan",
+        "shared spouse",
+        "one source of truth",
+        "built-in"
+      ],
+      "body": "A partner is always another saved plan. This plan stores only the link; their numbers live on that plan and are edited there. Creating a partner plan (wizard, Plans, or the assistant) mints a new saved plan and links it.\n\nA household shares one province, one market assumption and one planning horizon, so a linked spouse's own values for those are overridden by this plan."
+    },
+    "spouse-approximation": {
+      "title": "Spouse approximation",
+      "section": "People",
+      "keywords": [
+        "pension splitting",
+        "income splitting",
+        "gis couple"
+      ],
+      "body": "Each spouse is drawn down independently; pension income splitting *is* modelled — up to 50% of eligible pension income (DB pensions, plus RRIF/RRSP draws **from age 65** — not CPP/OAS) is reallocated to the lower-taxed spouse each year (affects reported tax only). Spousal RRSPs are not modelled. Couple-based GIS *is* modelled (combined non-OAS income, couple rate when both receive OAS)."
+    },
+    "rrsp": {
+      "title": "RRSP",
+      "section": "Accounts",
+      "keywords": [
+        "registered",
+        "rrif",
+        "pre-tax"
+      ],
+      "body": "Pre-tax registered savings. Every dollar withdrawn is taxed as income."
+    },
+    "tfsa": {
+      "title": "TFSA",
+      "section": "Accounts",
+      "keywords": [
+        "tax-free",
+        "after-tax savings"
+      ],
+      "body": "After-tax savings. Withdrawals are completely tax-free."
+    },
+    "taxable": {
+      "title": "Taxable (non-registered)",
+      "section": "Accounts",
+      "keywords": [
+        "non-registered",
+        "acb",
+        "capital gains",
+        "embedded gain"
+      ],
+      "body": "Non-registered investments. The principal comes out tax-free; the embedded-gain fraction of each withdrawal is taxed at the capital-gains inclusion rate (Settings → Capital Gains sets the starting ACB share)."
+    },
+    "cash-cushion": {
+      "title": "Cash cushion",
+      "section": "Accounts",
+      "keywords": [
+        "reserve",
+        "emergency fund",
+        "low yield"
+      ],
+      "body": "A low-yield reserve (rate set in Settings → Engine, default 0.5%). Always drawn last, as the final backstop before the plan runs dry."
+    },
+    "contributions": {
+      "title": "Contributions ($/yr)",
+      "section": "Accounts",
+      "keywords": [
+        "annual savings",
+        "deposit",
+        "rrsp tfsa contribution"
+      ],
+      "body": "Added to each account every year during accumulation, after that year's growth. The engine does not model RRSP tax refunds on contributions. Set TFSA/RRSP room to cap each year's registered deposits at the room you have left, spilling any excess into the non-registered account; leave room blank to skip enforcement."
+    },
+    "contribution-room": {
+      "title": "Contribution room",
+      "section": "Accounts",
+      "keywords": [
+        "tfsa room",
+        "rrsp room",
+        "notice of assessment",
+        "over-contribute",
+        "meltdown"
+      ],
+      "body": "Your available room from your CRA notice of assessment. Blank means \"no limit\". Enter a number and room is tracked: each year TFSA room grows by the annual limit ($7,000/yr) and RRSP room by 18% of employment income up to the maximum, minus any pension adjustment. A TFSA withdrawal re-adds room the *following* year; an RRSP withdrawal never does. Deposits beyond your remaining room overflow into non-registered, so an RRSP→TFSA meltdown is capped at your TFSA room. The schedule's expandable **Contribution room** panel shows room left and any overflow per year."
+    },
+    "rdsp": {
+      "title": "RDSP (disability savings)",
+      "section": "Accounts",
+      "keywords": [
+        "disability",
+        "dtc",
+        "grant",
+        "bond"
+      ],
+      "body": "A Registered Disability Savings Plan for a DTC-eligible person. Contributions are **not deductible**, grow tax-sheltered, and attract Canada Disability Savings **Grants** and **Bonds** (paid to age 49, contributions to age 59, lifetime caps). On withdrawal, the contribution portion is **tax-free** while the grant/bond/growth portion is **taxable income**; the app tracks your contribution basis and splits every draw. Thresholds and caps are editable under Settings → RDSP. **Not modelled:** the 10-year assistance holdback clawback and grant/bond carry-forward — check canada.ca for your exact amounts."
+    },
+    "fhsa": {
+      "title": "FHSA (first home savings)",
+      "section": "Accounts",
+      "keywords": [
+        "first home",
+        "house down payment",
+        "deductible"
+      ],
+      "body": "A First Home Savings Account. Contributions are **deductible** (like an RRSP), grow **tax-sheltered**, capped at **$8,000/yr** and a **$40,000 lifetime** total; the plan can stay open 15 years. Because this app models retirement, the FHSA is **accumulation-only**: at retirement the balance **transfers to your RRSP** (no RRSP room needed) and draws down like any other RRSP money. Limits editable under Settings → FHSA. **Not modelled:** a qualifying first-home **withdrawal** (which would be tax-free)."
+    },
+    "income": {
+      "title": "Income (pensions & work)",
+      "section": "Income",
+      "keywords": [
+        "pension",
+        "employment",
+        "self-employment",
+        "rental",
+        "bridge",
+        "db",
+        "t4"
+      ],
+      "body": "The Income section is one register of everything you earn besides CPP/OAS. Each source has a **kind**, a gross $/yr, a start age, and an *indexed* flag. Four kinds are modelled:\n\n- **Pension (DB / bridge)** — a fixed $/yr from the start age, taxed as ordinary income. Leave the end age blank for lifetime, or set one for a **bridge** benefit. Counts toward GIS/OAS clawbacks and is pension-split-eligible.\n- **Employment** — wages, earned income: taxed at your marginal rate, builds RRSP room. Before retirement the after-tax pay is saved into the destination account; the **saves …% of net** field sets how much.\n- **Self-employment** — net income, earned like a job but pays **both halves of CPP** (deducted), and is not pension-split-eligible.\n- **Rental** — net rental income: taxable investment income, builds no RRSP room, not split-eligible. The after-tax net lands in Taxable.\n\nRegistered destinations default to Taxable; with contribution room set, TFSA/RRSP deposits cap at remaining room and spill to Taxable. A pension can carry a **pension adjustment** that reduces the RRSP room you accrue."
+    },
+    "cpp-start-age": {
+      "title": "CPP start age & amount",
+      "section": "Income",
+      "keywords": [
+        "cpp",
+        "canada pension plan",
+        "defer",
+        "take early",
+        "60 65 70"
+      ],
+      "body": "Your expected CPP pension at the standard age of 65. The engine applies the early/deferral adjustment itself: −0.6% per month before 65 (−36% at 60), +0.7% per month after 65 (+42% at 70). If the checkbox is ticked, the amount you entered is used verbatim (already adjusted). CPP is taxable income."
+    },
+    "oas-start-age": {
+      "title": "OAS start age",
+      "section": "Income",
+      "keywords": [
+        "oas",
+        "old age security",
+        "clawback",
+        "defer"
+      ],
+      "body": "OAS normally starts at 65; deferring to 70 adds 0.6% per month (+36% at 70) — the engine applies this automatically. At 75 the benefit steps up 10%. OAS is taxable and subject to the clawback (see the Assumptions section)."
+    },
+    "years-in-canada": {
+      "title": "Years in Canada (OAS)",
+      "section": "Income",
+      "keywords": [
+        "residency",
+        "oas eligibility",
+        "40 years"
+      ],
+      "body": "Post-age-18 residency. Full OAS needs 40 years; fewer years scale the pension proportionally. Under 10 years pays nothing."
+    },
+    "gis": {
+      "title": "GIS (Guaranteed Income Supplement)",
+      "section": "Income",
+      "keywords": [
+        "guaranteed income supplement",
+        "low income",
+        "supplement"
+      ],
+      "body": "The Guaranteed Income Supplement — tax-free, reduced 50¢ per dollar of income excluding OAS (CPP, registered draws, taxable gains). It lowers the portfolio's share of the spending target. With a spouse, CRA's couple rules apply: each entitlement is assessed on *combined* non-OAS income, at the lower couple rate when both receive OAS. Approximated annually; Service Canada recalculates quarterly."
+    },
+    "cash-events": {
+      "title": "Cash events (inflow / outflow)",
+      "section": "Income",
+      "keywords": [
+        "inheritance",
+        "house sale",
+        "gift",
+        "big purchase",
+        "lump sum",
+        "one-time",
+        "money in",
+        "money out"
+      ],
+      "body": "**Inflow** — a lump sum landing in the chosen account at the chosen age; it appears in that year's balances and grows thereafter. **Outflow** — an extra expense at the chosen age, on top of that year's spending target; the portfolio must fund both.\n\nSwitch an event to *Yearly* with a start–end age range to repeat the same amount every year (rental income for a few years, or a recurring cost)."
+    },
+    "desired-spending": {
+      "title": "Desired spending",
+      "section": "Spending",
+      "keywords": [
+        "spending",
+        "income goal",
+        "how much a year",
+        "lifestyle"
+      ],
+      "body": "The after-tax income you want each retirement year, in today's dollars — the base the phases scale. When Settings → Engine → \"Grow spending with inflation\" is on, the engine inflates it by CPI each year from your current age, so the schedule's Spending Target column shows nominal dollars; when off, the target stays flat. The engine grosses up registered withdrawals so benefits + portfolio income, after tax, equal that target."
+    },
+    "spending-phases": {
+      "title": "Go-go / slow-go / no-go (spending phases)",
+      "section": "Spending",
+      "keywords": [
+        "phases",
+        "bands",
+        "slow down",
+        "spend less later",
+        "dollars",
+        "percent"
+      ],
+      "body": "From each \"from age\", spending is that phase's share of desired spending (still inflation-adjusted) — shown as both dollars per year and percent, so you can edit either. E.g. 100% ($50,000) to 74, 85% ($42,500) from 75, 70% ($35,000) from 85, if base spending is $50,000."
+    },
+    "withdrawal-order": {
+      "title": "Withdrawal order",
+      "section": "Spending",
+      "keywords": [
+        "which account first",
+        "tfsa first",
+        "rrsp meltdown",
+        "drawdown order"
+      ],
+      "body": "Spending TFSA first preserves taxed-later RRSP room but lets the RRIF minimum problem grow; spending RRSP first prepays tax at today's (possibly lower) brackets and shrinks future forced minimums. Try both orders and compare the Tax Burden column and the ending balance. Each retirement year runs: CPP/OAS paid, then the RRIF minimum (if past conversion age), then the remaining need drawn in your configured order, the cash cushion last; whatever remains grows at the expected return."
+    },
+    "rrif-conversion": {
+      "title": "RRIF conversion",
+      "section": "Spending",
+      "keywords": [
+        "rrif",
+        "minimum withdrawal",
+        "71",
+        "prescribed factors"
+      ],
+      "body": "At the conversion age (default 71) the entire RRSP becomes a RRIF. Minimum withdrawals follow the CRA prescribed factors — 5.28% at 71 rising to 20% at 95 — applied to the start-of-year balance, and come out first even if you don't need them (after-tax excess is redeposited to the taxable account). Rates are editable in Settings → RRIF Rates."
+    },
+    "negative-balance-mid-year": {
+      "title": "When the balance goes negative mid-year",
+      "section": "Spending",
+      "keywords": [
+        "depletion",
+        "runs out",
+        "negative balance"
+      ],
+      "body": "Growth is applied after withdrawals to whatever remains. In the year the last account is drained, nothing remains to grow — so the balance can dip slightly negative at year-end when the growth rate is high. Depletion is recorded at that age and the display floors the balance at $0."
+    },
+    "debts": {
+      "title": "Debts (mortgage & consumer)",
+      "section": "Spending",
+      "keywords": [
+        "mortgage",
+        "credit card",
+        "loan",
+        "line of credit",
+        "payment"
+      ],
+      "body": "The Debts section tracks money you **owe**. Each debt has a balance, an annual interest rate, and a monthly payment. Each year the balance first grows by that year's interest, then the payment (12 × monthly) is applied, capped so you never overpay. The payment is **funded from your spending** and drawn from your accounts like any other expense, before or after retirement, with after-tax money.\n\nWhile a debt is outstanding the portfolio must fund both living spending *and* the payments — carrying debt into retirement raises withdrawals and can flip a plan from **on track** to **shortfall**. The payoff age is shown next to each debt. **Not modelled:** any payoff *strategy* — the app shows the consequence of the payments you enter."
+    },
+    "home-equity": {
+      "title": "Home equity & reverse mortgage",
+      "section": "Property",
+      "keywords": [
+        "house",
+        "reverse mortgage",
+        "equity",
+        "net equity",
+        "loan-to-value"
+      ],
+      "body": "Borrowing against home equity — proceeds are tax-free, so they don't count as income and don't touch GIS or the OAS clawback. Two ways to draw, alone or together: **scheduled draws** (a set $/yr from an age, CPI-indexed) and **top-up** (once every account is drained, borrow just enough to cover spending — the true last resort). The loan compounds against the home, so net equity (home value − loan) erodes over time; borrowing stops at the **max loan-to-value** ceiling (lenders typically cap near 55%), and the plan is \"depleted\" once accounts *and* that headroom are both exhausted."
+    },
+    "heloc": {
+      "title": "HELOC (interest-only)",
+      "section": "Property",
+      "keywords": [
+        "home equity line of credit",
+        "interest only",
+        "line of credit"
+      ],
+      "body": "Choose **Product type → HELOC** in the Home Equity section to model a home-equity line of credit instead of a compounding reverse mortgage. A HELOC services its interest *out of cash flow* (added to that year's spending) rather than rolling it into the balance, so the loan only grows when you actually draw; lenders typically allow a higher ceiling (~65% LTV). Reverse-mortgage mode instead compounds the interest and enforces the ~55% no-negative-equity guarantee. Draws are tax-free in both modes."
+    },
+    "expected-return": {
+      "title": "Expected return",
+      "section": "Levers",
+      "keywords": [
+        "return",
+        "growth rate",
+        "market",
+        "assumption",
+        "%"
+      ],
+      "body": "Constant annual return applied to RRSP, TFSA and taxable balances (growth lands after withdrawals each year). The deterministic table uses exactly this rate every year. Move the Markets dial to stress it — the map's terrain reshapes live because the ground depends on it."
+    },
+    "volatility": {
+      "title": "Volatility",
+      "section": "Levers",
+      "keywords": [
+        "standard deviation",
+        "risk",
+        "monte carlo",
+        "swing"
+      ],
+      "body": "Standard deviation of annual returns, used only by Monte Carlo. 0% means \"every year equals the expected return\" (the simulation collapses to the deterministic answer); 15–20% is a typical equity-heavy portfolio. Returns are not mean-reverting and sequence risk is real: a crash early in retirement hurts far more than one late."
+    },
+    "market-hypothesis": {
+      "title": "Market hypothesis (periods)",
+      "section": "Levers",
+      "keywords": [
+        "crash",
+        "boom",
+        "bear market",
+        "sequence",
+        "market periods",
+        "return anchors",
+        "choppy"
+      ],
+      "body": "The Markets dial assumes one average return every year. To model a **crash, a boom, or a choppy stretch**, shape a curve with **return anchors** — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.\n\nThe projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.\n\nOn the dashboard's life timeline you can shape the curve directly: **double-click the market strip** (below the balance line) to drop an anchor at that age, **drag** it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples."
+    },
+    "lever-ranges": {
+      "title": "Lever ranges (Settings pref)",
+      "section": "Levers",
+      "keywords": [
+        "slider range",
+        "min max",
+        "limits",
+        "spending max",
+        "return max"
+      ],
+      "body": "The sliders for spending, savings, expected return and volatility only span a range — widen one if your plan lives past the default edge. Set under Settings → Lever Ranges; they're preferences (not engine settings), saved the moment you change them. Retirement age, plan-to age, CPP and OAS start ages keep fixed spans; a fixed span is part of their meaning."
+    },
+    "verdict": {
+      "title": "The ON TRACK / SHORTFALL verdict",
+      "section": "Reading the answer",
+      "keywords": [
+        "on track",
+        "shortfall",
+        "depletion",
+        "answer",
+        "will it last"
+      ],
+      "body": "The number on the dashboard is leftover in the pot: **Money lasts to** is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the life-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.\n\nThe engine's ON TRACK / SHORTFALL flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The receipts, chip, and chart pin all follow the pot so they cannot disagree.\n\nFor a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined life line."
+    },
+    "rescore": {
+      "title": "The Re:score",
+      "section": "Reading the answer",
+      "keywords": [
+        "rescore",
+        "re score",
+        "retirement score",
+        "health check"
+      ],
+      "body": "The Re:score is a 0–100 summary of your plan's health: how close you are to your max age before money runs out. **0** = the plan fails immediately (depletion before retirement). **50** = the plan fails halfway through the retirement horizon. **100** = the plan holds to the max age.\n\nIt's computed as **depletionAge ÷ maxAge × 100**. A couple's household Re:score uses the combined depletion age (the age when BOTH partners' money runs out together).\n\nUse it as a quick snapshot: if your Re:score is below 60, the plan needs attention — move retirement later, spend less, or increase savings."
+    },
+    "contour-map": {
+      "title": "The contour map",
+      "section": "Reading the answer",
+      "keywords": [
+        "map",
+        "boundary",
+        "terrain",
+        "dot",
+        "holds region"
+      ],
+      "body": "The map is retirement age (x) × spending (y). The blue line is the boundary — the spending where the plan stops holding at each age. Below it (blue wash) the money lasts; above it (rose) it runs out early. The dot is your plan: drag it, or use the faders, and the verdict, map and assistant recompute together. The boundary re-runs the real engine at each point, so it always agrees with the table."
+    },
+    "down-market-check": {
+      "title": "The down-market check",
+      "section": "Reading the answer",
+      "keywords": [
+        "stress test",
+        "pessimistic",
+        "low return",
+        "bear market"
+      ],
+      "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo in the Tools menu."
+    },
+    "life-timeline": {
+      "title": "The life timeline",
+      "section": "Reading the answer",
+      "keywords": [
+        "timeline",
+        "balance over time",
+        "start drawing",
+        "retirement age",
+        "money runs out"
+      ],
+      "body": "Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when you **start drawing** (the transition into retirement — drag it to change the age), and when the money runs out (or that it outlasts the plan). Below the line: the **spend strip** (what the plan targets spending each year — drag its handle to change today's spending) and, when your plan has them, **event diamonds** (drag to move/resize a cash event) and the **market strip** (double-click to drop a return anchor — see Market hypothesis)."
+    },
+    "evidence-row": {
+      "title": "The evidence row",
+      "section": "Reading the answer",
+      "keywords": [
+        "account bars",
+        "money lasts to",
+        "left at",
+        "stats",
+        "proof"
+      ],
+      "body": "The numbers behind the verdict: the account mix at any age you pick (RRSP+RRIF, TFSA, Taxable+cash), plus how long the money lasts (first empty year of the pot — the same age as the life-timeline pin), what's left at max age, the pot at work's end, and when CPP+OAS start. \"90+ / past the plan\" only prints when leftover is still there."
+    },
+    "stress-test": {
+      "title": "How to stress-test the plan",
+      "section": "Reading the answer",
+      "keywords": [
+        "robust",
+        "what could go wrong",
+        "sensitivity"
+      ],
+      "body": "The verdict uses your expected return every year. To see how robust the plan really is:\n\n- **Lower the expected return** (the Markets dial) for a pessimistic case.\n- **Run Monte Carlo** — it randomizes returns around your assumption and reports the share of runs that never deplete; that success rate is the most honest single number.\n- **Run a Backtest** — replays your plan through actual historical market sequences."
+    },
+    "monte-carlo": {
+      "title": "Monte Carlo",
+      "section": "Analysis",
+      "keywords": [
+        "simulation",
+        "random",
+        "success rate",
+        "fan chart",
+        "probability"
+      ],
+      "body": "Runs the full projection 500 times, each with a randomized sequence of annual returns (geometric Brownian motion around your expected return, with Student-t shocks so crashes are more common than a normal distribution predicts).\n\n- The dark band is the middle 50% of outcomes (p25–p75); the light band is p10–p90. The blue line is the median.\n- **Success rate** — the share of runs that stayed funded through max age. 90%+ is conventionally comfortable; below 75% the plan is fragile.\n- The width of the fan is driven by Volatility. A crash early in retirement hurts far more than one late."
+    },
+    "backtest": {
+      "title": "Backtest",
+      "section": "Analysis",
+      "keywords": [
+        "historical",
+        "sequence risk",
+        "1970",
+        "real returns",
+        "crash"
+      ],
+      "body": "Monte Carlo invents random futures; the backtest replays real pasts. It runs the plan against every rolling window of a Canadian real (after-inflation) balanced-portfolio series from 1970 to today, each window as long as your horizon, and reports how often the plan survived.\n\nSequence-of-returns risk is the biggest threat to a drawdown plan: retiring into the 1973–74 crash, 2000–02 or 2008 is far worse than the same average return with the crash at the end. A high backtest success rate has historically withstood every bad sequence on record."
+    },
+    "levers-ranked": {
+      "title": "Steering (the equalizer)",
+      "section": "Analysis",
+      "keywords": [
+        "eq",
+        "equalizer",
+        "sliders",
+        "drag pad",
+        "strategy ranking",
+        "crops",
+        "steering"
+      ],
+      "body": "Steering is a goals-level surface over your whole plan: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast. The projection timeline under the controls redraws with every drag."
+    },
+    "strategy-explorer": {
+      "title": "Optimizer (strategy explorer)",
+      "section": "Analysis",
+      "keywords": [
+        "optimize",
+        "strategies",
+        "variants",
+        "apply",
+        "what helps most"
+      ],
+      "body": "The Optimizer re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out."
+    },
+    "optimize-spending": {
+      "title": "Solver: sustainable spending",
+      "section": "Analysis",
+      "keywords": [
+        "how much can i spend",
+        "solve",
+        "solver",
+        "maximum spending",
+        "safe withdrawal"
+      ],
+      "body": "The Solver answers \"how much could I spend?\" instead of \"will my spending last?\" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures."
+    },
+    "schedule-columns": {
+      "title": "The Projection page columns",
+      "section": "Schedule",
+      "keywords": [
+        "projection",
+        "year by year",
+        "table",
+        "column picker",
+        "show all",
+        "balances"
+      ],
+      "body": "The Projection page's year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The **Columns** button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one \"show all\" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail."
+    },
+    "scenarios": {
+      "title": "Plans",
+      "section": "Plans",
+      "keywords": [
+        "what-if",
+        "save",
+        "switch",
+        "new plan",
+        "duplicate",
+        "scenario",
+        "profile",
+        "details"
+      ],
+      "body": "A plan is one complete set of numbers (internally a \"scenario\" — same idea). The profile icon in the header (top right, next to the verdict chip) opens **Plans** (#/plan) — the list of saved plans, then the numbers behind the current one (what used to be Details), then a side-by-side compare. Create, rename, duplicate, delete, or roll a plan back through its history. Edits save themselves a moment after you apply them; the undo icon next to the profile icon steps back one save at a time. Make several — \"retire at 60\" vs \"65\" — and flip or compare them."
+    },
+    "autosave-undo": {
+      "title": "Autosave and undo",
+      "section": "Plans",
+      "keywords": [
+        "undo",
+        "save",
+        "autosave",
+        "rollback",
+        "revision",
+        "history",
+        "profile icon"
+      ],
+      "body": "Every change you apply (a fader, a details field, an assistant proposal you confirm) saves itself after a short pause. There is no Save button to remember — the plan on screen is the plan on disk.\n\n- **Profile icon** (top right, next to the coloured age chip) — opens Plans, the current plan: switch, edit numbers, or inspect history.\n- **Undo icon** (right of the profile icon) — discards unsaved edits, or steps back one saved version. Repeated taps walk the history; newer saves after that point are dropped.\n- **History on Plans** — the same revisions, listed, if you want to jump further back than one step."
+    },
+    "compare": {
+      "title": "Comparing plans",
+      "section": "Plans",
+      "keywords": [
+        "side by side",
+        "compare scenarios",
+        "which is better",
+        "profiles"
+      ],
+      "body": "The Compare card on the Plans page puts your saved plans side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version holds up best. Each is scored with its own resolved spouse: a plan whose spouse is a linked plan is compared as the full household."
+    },
+    "assistant": {
+      "title": "The assistant",
+      "section": "Assistant",
+      "keywords": [
+        "chat",
+        "ai",
+        "ask",
+        "what can it do"
+      ],
+      "body": "The assistant is a chat that can read your plan and run the projection engine itself — so it answers with your real numbers, not generic advice. Ask \"when does my RRSP run out?\", \"what if I retire at 62?\", or \"compare CPP at 60 vs 65\".\n\n- **Read** — ages, balances, benefits, spending, the year-by-year projection.\n- **What-if** — it re-runs the engine with changed inputs and quotes the result.\n- **Propose changes** — shown as a review card; nothing is applied until you confirm.\n\nOpen or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The small arrows on the Assistant button grow it to fullscreen; the shrink arrows bring it back to the side rail."
+    },
+    "assistant-navigation": {
+      "title": "Finding pages with the assistant",
+      "section": "Assistant",
+      "keywords": [
+        "where",
+        "find page",
+        "navigate",
+        "take me to",
+        "site map",
+        "sitemap",
+        "which page",
+        "go to"
+      ],
+      "body": "The assistant knows every page in the app and what each one is for — so you can ask it *where* something lives instead of hunting the menu. Ask things like \"where do I enter my TFSA room?\", \"what can this app do?\", or \"take me to the print summary\".\n\n- **Find** — it searches the page map in plain words and names the page (and the link to it) where your question lives.\n- **Already here** — it knows which page you're on, so if the answer is \"that's the page in front of you\", it says so instead of moving you.\n- **Open a page for you** — ask it to take you somewhere and it shows a confirm card with the destination; the app only moves when you approve it."
+    },
+    "assistant-local-vs-online": {
+      "title": "Local vs online models",
+      "section": "Assistant",
+      "keywords": [
+        "model",
+        "local",
+        "online",
+        "download",
+        "api key",
+        "provider"
+      ],
+      "body": "The assistant can run a model **entirely on this computer** (free, private, works offline — download once from the Models list) or use an **online provider** like Google, Anthropic, or OpenRouter (generally smarter, but your plan details travel to that provider). The Models page groups Local / Free / Remote; tick the ones you want. The chat dropdown only lists that shortlist (plus whatever is in use) — not every model the provider offers. An on-computer model that isn't downloaded yet shows as downloadable. The smallest packs are fine for short questions; a 4B is the smallest that can still run the plan tools. 1-bit Bonsai (Prism, via Transformers.js WebGPU) is a separate on-computer engine from the MLC packs. The in-browser Bonsai path only reliably loads 1.7B. Open the Models page from the dropdown's \"More models…\". Local models are smaller, so keep questions focused."
+    },
+    "openrouter-free": {
+      "title": "OpenRouter free models",
+      "section": "Assistant",
+      "keywords": [
+        "openrouter",
+        "free models",
+        ":free",
+        "api key",
+        "cloud",
+        "no charge"
+      ],
+      "body": "OpenRouter is a one-key gateway to many cloud models. Their **free** pool has no token charge: the model id `openrouter/free` is a router that picks a matching `:free` variant (including tools when the request needs them). Named free models end in `:free`.\n\n- **Sign up** at openrouter.ai (email or GitHub).\n- **Create a key** under Keys, paste it on the Models page in the OpenRouter free section. The key stays in this browser and is sent only to OpenRouter.\n- **Tick** the free router, or any listed :free row, to put it on the chat dropdown. Paid OpenRouter models stay under Remote.\n\nFree inference is rate-limited and the pool changes. Your question still goes to OpenRouter — they (and the model that answers) may log it and use it for training. Unlike an on-computer model. After a reply, the info icon next to regenerate shows which model actually answered (the free router picks one per request)."
+    },
+    "assistant-privacy": {
+      "title": "AI privacy",
+      "section": "Assistant",
+      "keywords": [
+        "privacy",
+        "read by the ai",
+        "data sent",
+        "local model"
+      ],
+      "body": "A local model never sends anything anywhere — inference happens on your machine. An online connection sends your question (and the plan details in it) to that provider under its privacy policy; your API key is stored only in this browser and sent only to that provider. Chats are saved on this computer only, and the Data page's backup includes them only if you opt in."
+    },
+    "assistant-prompts": {
+      "title": "What the assistant is sent",
+      "section": "Assistant",
+      "keywords": [
+        "system prompt",
+        "persona",
+        "tool instructions",
+        "settings",
+        "override",
+        "language",
+        "locale",
+        "français",
+        "french"
+      ],
+      "body": "Settings → General picks the site language: follow the browser, English (Canada), or Français (Canada). The whole app — chrome, help, print, and the assistant — follows that pick. A French browser defaults to français until you pick otherwise. The assistant also gets an extra instruction only for French — English is the default and needs no extra line.\n\nSettings → Assistant controls every piece of the request: the persona, tool instructions, the live program rules, the current-page line, the plan name, the local-model tool catalog and plan digest, and whether tools are advertised at all. Uncheck a piece to drop it from the next message. Edit a prompt to replace the built-in text; blank restores the default.\n\nEach local model has a catalog default for tools (Qwen3.5 2B and Bonsai 1.7B off; 4B and up on). Force a model On or Off on that page for testing; Auto restores the catalog. Cloud models always use tools unless you uncheck Send tools.\n\nSmall local models follow the last text they see — leave \"Persona last\" on so a custom voice (even \"say only yes\") is not drowned by the tool blurb. Per-chat notes still live on the composer and can be toggled separately.\n\nUnchecking every piece sends no system message at all (not a blank one). The Assistant tab shows the assembled system so you can confirm it is empty. Changing those flags also clears the local model's leftover cache so the next message does not keep the previous instructions. Questions-only models (and Send tools off) still run one ordinary chat pass with that empty system — they do not fall into a wrap-up that would rebuild the default persona."
+    },
+    "data-backup-restore": {
+      "title": "Backup / restore",
+      "section": "Data",
+      "keywords": [
+        "export",
+        "import",
+        "sqlite",
+        "download",
+        "where data lives",
+        "opfs"
+      ],
+      "body": "Your plans live in a real SQLite database (running as WebAssembly) in this browser's origin-private file system, mirrored to localStorage — nothing leaves your machine, but clearing site data can still erase it. The Data page's Export downloads the chosen scenarios (+ optionally engine settings) as a .sqlite file (openable by any SQLite tool; older JSON backups still import); Import reads it back and lets you pick which scenarios to apply. Keep backups — there's no server-side copy."
+    },
+    "share-link": {
+      "title": "Share link",
+      "section": "Data",
+      "keywords": [
+        "share",
+        "link",
+        "send plan",
+        "url"
+      ],
+      "body": "Opens a card with a link that encodes the active plan's inputs in the URL itself (base64 in the fragment, after the #). Send it to someone — opening it imports a copy as a new \"Shared plan\" scenario. Nothing is uploaded to a server, and the fragment never travels with the HTTP request."
+    },
+    "print-export": {
+      "title": "Print / export",
+      "section": "Data",
+      "keywords": [
+        "print",
+        "pdf",
+        "csv",
+        "download table"
+      ],
+      "body": "The Print page chooses what the printout includes — the one-page summary (profile, savings, verdict) plus any of: the timeline chart, a fresh Monte Carlo fan, and a table of major milestones. Print then opens the browser dialog; choose \"Save as PDF\" to file or email it. The CSV link downloads the year-by-year projection table for a spreadsheet."
+    },
+    "inflation": {
+      "title": "Inflation",
+      "section": "Assumptions",
+      "keywords": [],
+      "body": "Settings → Engine has an inflation (CPI) rate, default 2%, driving two independent switches. **Grow spending with inflation** (on by default) inflates your today's-dollars spending by CPI each year. **Index tax tables, OAS and CPP to inflation** inflates brackets, basic amounts, the OAS clawback threshold and benefit amounts, mirroring CRA indexation. With both on, results are effectively in today's purchasing power."
+    },
+    "approximations": {
+      "title": "Approximations to know",
+      "section": "Assumptions",
+      "keywords": [
+        "limits",
+        "accuracy",
+        "not modelled",
+        "tax model",
+        "surtax",
+        "credits"
+      ],
+      "body": "The model is a careful simplification. Capital gains use an adjusted cost base (only the embedded-gain fraction of each withdrawal is taxed, at 50% inclusion); dividend gross-up/credits and deemed disposition at death are not modelled. Beyond Ontario's surtax, other provinces' low-income reductions and credits are not included. The $2,000 pension-amount credit and the age amount are not modelled. No RRSP contribution refunds. Quebec's federal abatement is modelled.\n\nThe tax tables default to 2026 figures and go stale — update them in Settings when CRA publishes new indexation."
+    },
+    "glossary-scenario": {
+      "title": "Scenario",
+      "section": "Glossary",
+      "keywords": [
+        "what-if",
+        "plan"
+      ],
+      "body": "One complete \"what-if\" plan: ages, balances, benefits, spending goal and strategy choices, saved under a name. Make several and flip or compare them."
+    },
+    "glossary-sqlite": {
+      "title": "SQLite / .sqlite file",
+      "section": "Glossary",
+      "keywords": [
+        "database",
+        "file",
+        "db browser"
+      ],
+      "body": "A database kept in a single ordinary file. Your plans live in one inside the browser, and Export downloads a copy of that very file. Free tools like \"DB Browser for SQLite\" can look inside — it's the app's filing cabinet."
+    },
+    "glossary-opfs": {
+      "title": "OPFS / origin-private file system",
+      "section": "Glossary",
+      "keywords": [
+        "storage",
+        "site data",
+        "private folder"
+      ],
+      "body": "A private folder your browser gives each website, invisible to other sites. That's where the database file lives, which is why plans survive closing the browser — and why clearing \"site data\" erases them."
+    },
+    "glossary-localstorage": {
+      "title": "localStorage",
+      "section": "Glossary",
+      "keywords": [
+        "storage",
+        "backup copy"
+      ],
+      "body": "The browser's older, smaller storage cubby (~5 MB). The app keeps a backup copy of the database there in case the newer OPFS storage isn't available (some private-browsing modes)."
+    },
+    "glossary-csv": {
+      "title": "CSV",
+      "section": "Glossary",
+      "keywords": [
+        "spreadsheet",
+        "excel",
+        "comma separated"
+      ],
+      "body": "\"Comma-separated values\" — the simplest spreadsheet format. The projection export and the import template use it so numbers move freely between this app and Excel or Google Sheets."
+    },
+    "glossary-json": {
+      "title": "JSON",
+      "section": "Glossary",
+      "keywords": [
+        "format",
+        "structured data"
+      ],
+      "body": "A text format for structured data. Some exports use it because it preserves detail a spreadsheet can't. You don't need to read it — just know it's one of ours and imports back."
+    },
+    "glossary-one-tab": {
+      "title": "One tab at a time",
+      "section": "Glossary",
+      "keywords": [
+        "browser tab",
+        "multi-tab",
+        "overwrite"
+      ],
+      "body": "Use the app in a single browser tab. Two tabs each keep their own in-memory copy, and whichever saves last silently overwrites the other's work. If a second opens by accident, close it without saving."
+    },
+    "glossary-wasm": {
+      "title": "WebAssembly / wasm",
+      "section": "Glossary",
+      "keywords": [
+        "wasm",
+        "database engine"
+      ],
+      "body": "The technology that lets a real database engine run inside your browser tab. It's on your machine doing the work; nothing is sent anywhere."
+    },
+    "glossary-tokens": {
+      "title": "Tokens & context window",
+      "section": "Glossary",
+      "keywords": [
+        "tokens",
+        "context",
+        "how much the model reads"
+      ],
+      "body": "Tokens are how AI models measure text (~¾ of a word each). The context window is how many the model can hold at once — your plan, the conversation and its answer all have to fit; long chats with a small window lose earlier details."
+    },
+    "glossary-api-key": {
+      "title": "API key",
+      "section": "Glossary",
+      "keywords": [
+        "password",
+        "online provider",
+        "key"
+      ],
+      "body": "A password from an online AI provider to use their models. Paste it on the Connections page — it's stored only in this browser and sent only to that provider. Local models never need one."
+    },
+    "not-financial-advice": {
+      "title": "Not financial advice",
+      "section": "Legal",
+      "keywords": [
+        "disclaimer",
+        "advice",
+        "estimate"
+      ],
+      "body": "RE: tired is an educational and exploratory tool. It produces **estimates** from a simplified model of Canadian tax and benefit rules — it is **not** financial, investment, tax, or legal advice, and it does not consider your complete circumstances. Before making retirement, withdrawal, or benefit-timing decisions, verify the numbers and consult a qualified financial planner or tax professional."
+    },
+    "data-responsibility": {
+      "title": "Your data, your backups",
+      "section": "Legal",
+      "keywords": [
+        "responsibility",
+        "lost data",
+        "backup"
+      ],
+      "body": "Your plans live only in this browser's local storage — there is no server-side copy, no account, no way for anyone to recover them for you. Keeping a backup is entirely your responsibility: use the Data page's Export regularly. The authors accept no liability for lost, corrupted, or inaccessible data."
+    },
+    "ai-may-be-wrong": {
+      "title": "AI output may be wrong",
+      "section": "Legal",
+      "keywords": [
+        "ai wrong",
+        "hallucinate",
+        "not advice"
+      ],
+      "body": "The Assistant and the copy-a-prompt AI are powered by large language models, which can misread numbers, miscalculate, and state false things confidently. AI replies are general educational commentary, never personalized advice. Always check an AI answer against the app's own computed tables (which are deterministic); when the two disagree, trust the tables."
+    },
+    "no-warranty": {
+      "title": "No warranty — use at your own risk",
+      "section": "Legal",
+      "keywords": [
+        "warranty",
+        "as is",
+        "liability"
+      ],
+      "body": "This software is provided \"as is\", free of charge, without warranty of any kind. The authors are not liable for any loss or damage arising from its use. Using it means accepting these terms in full — if you don't agree, don't use it."
+    },
+    "credits": {
+      "title": "Credits",
+      "section": "Legal",
+      "keywords": [
+        "danielabar",
+        "original",
+        "thanks"
+      ],
+      "body": "The drawdown engine was originally built on [retirement_drawdown_simulator_canada](https://github.com/danielabar/retirement_drawdown_simulator_canada) by **danielabar** — thank you to the original author for publishing it. The upstream repository did not carry a LICENSE file when incorporated (checked 2026-08-23); RE: tired's own code is MIT-licensed below."
+    },
+    "mit-license": {
+      "title": "MIT License (full text)",
+      "section": "Legal",
+      "keywords": [
+        "license",
+        "mit",
+        "open source"
+      ],
+      "body": "```\nMIT License\n\nCopyright (c) 2026 RE: tired contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n```"
+    }
+  }
+}

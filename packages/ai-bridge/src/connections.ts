@@ -14,9 +14,15 @@ export const AI_PROVIDERS = [
   'ollama',
   'openai-compatible',
   'webllm',
+  'bonsai',
 ] as const;
 
 export type AiProviderId = (typeof AI_PROVIDERS)[number];
+
+/** In-browser WebGPU engines (web-llm MLC packs and Transformers.js Bonsai). */
+export function isLocalProvider(p: AiProviderId): boolean {
+  return p === 'webllm' || p === 'bonsai';
+}
 
 /** Per-connection generation tuning. Every field is optional — when omitted
  *  the provider's DEFAULT_* constant applies, so a connection the user never
@@ -61,22 +67,10 @@ export const MODEL_SAMPLER_DEFAULTS: Record<string, {
   presencePenalty?: number;
   frequencyPenalty?: number;
 }> = {
-  // Phi-4-mini's failure mode is the diverse word-salad: hundreds of
-  // mostly-unique jargon tokens at a runaway pace. The generic defaults don't
-  // restrain it — and web-llm zeroes an unpaired presence penalty. Give this
-  // model a stronger, frequency-backed anti-repeat profile.
-  'Phi-4-mini-instruct-q4f16_1-MLC': {
-    temperature: 0.6,
-    repetitionPenalty: 1.3,
-    presencePenalty: 0.5,
-    frequencyPenalty: 0.5,
-  },
+  // Per-model sampler overrides. Empty now that Phi-4 Mini is off the
+  // catalog; keep the table so a future loop-prone local can opt in.
 };
 
-/** Resolve a connection's effective generation settings: the user's override
- *  when present, then the MODEL's own sampler defaults, then the generic
- *  provider default. Cloud temperature stays undefined (the provider's own
- *  default applies — omitting the field is different from sending one). */
 export function effectiveGeneration(c: AiConnection): {
   maxTokens: number;
   temperature: number | undefined;
@@ -84,7 +78,7 @@ export function effectiveGeneration(c: AiConnection): {
   presencePenalty: number;
   frequencyPenalty: number;
 } {
-  const sampler = c.provider === 'webllm' ? MODEL_SAMPLER_DEFAULTS[c.model] : undefined;
+  const sampler = isLocalProvider(c.provider) ? MODEL_SAMPLER_DEFAULTS[c.model] : undefined;
   return {
     maxTokens: c.generation?.maxTokens ?? DEFAULT_MAX_TOKENS,
     temperature: c.generation?.temperature ?? sampler?.temperature,
@@ -103,12 +97,13 @@ export function defaultModelFor(provider: AiProviderId): string {
   switch (provider) {
     case 'anthropic': return 'claude-sonnet-4-20250514';
     case 'openai': return 'gpt-4o-mini';
-    case 'openrouter': return 'anthropic/claude-sonnet-4';
+    case 'openrouter': return 'openrouter/free';
     case 'gemini': return 'gemini-2.0-flash';
     case 'ollama': return 'llama3.1';
     // Newest 4B all-rounder — strong instruction-following at a size most GPUs
     // hold. Weaker models derail on the tool protocol.
     case 'webllm': return 'Qwen3.5-4B-q4f16_1-MLC';
+    case 'bonsai': return 'onnx-community/Bonsai-1.7B-ONNX';
     case 'openai-compatible': return '';
   }
 }
@@ -127,7 +122,7 @@ export function defaultBaseUrlFor(provider: AiProviderId): string | undefined {
  *  generic compatible endpoint needs a URL. */
 export function connectionReady(c: AiConnection): boolean {
   if (!c.model.trim()) return false;
-  if (c.provider === 'webllm') return true; // in-browser: a model id is enough
+  if (isLocalProvider(c.provider)) return true; // in-browser: a model id is enough
   if (c.provider === 'ollama') return (c.baseUrl ?? '').trim().length > 0;
   if (c.provider === 'openai-compatible') {
     return (c.baseUrl ?? '').trim().length > 0 && c.apiKey.trim().length > 0;

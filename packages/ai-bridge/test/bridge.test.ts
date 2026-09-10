@@ -28,7 +28,8 @@ describe('ai-bridge registry', () => {
     const remote = BUILTIN_MODELS.filter((m) => !m.local)
     expect(local.length).toBeGreaterThan(0)
     expect(remote.length).toBeGreaterThan(0)
-    expect(local.every((m) => m.provider === 'webllm')).toBe(true)
+    expect(local.every((m) => m.provider === 'webllm' || m.provider === 'bonsai')).toBe(true)
+    expect(local.some((m) => m.provider === 'bonsai')).toBe(true)
   })
 
   it('marks exactly one recommended model', () => {
@@ -59,8 +60,8 @@ describe('createBridge', () => {
 
   it('select switches the active model and rejects unknown ids', () => {
     const bridge = createBridge({ connections: [localConn, remoteConn] })
-    bridge.select('local:phi4-mini')
-    expect(bridge.selected().id).toBe('local:phi4-mini')
+    bridge.select('local:qwen3.5-2b')
+    expect(bridge.selected().id).toBe('local:qwen3.5-2b')
     expect(() => bridge.select('nope')).toThrow(/unknown model/)
   })
 

@@ -1,0 +1,18 @@
+{
+  "build": "Composer l’impression",
+  "lead": "Le résumé d’une page — profil, épargne, verdict — est toujours inclus. Ajoutez n’importe laquelle de ces sections :",
+  "timeline": "Graphique de la projection dans le temps",
+  "timelineNote": "Solde du portefeuille selon l’âge, avec le marqueur de l’âge de retraite.",
+  "monteCarlo": "Éventail Monte-Carlo",
+  "monteCarloNote": "Bandes de percentiles (10e–90e) et taux de succès d’une simulation fraîche de 500 parcours. Prend un moment.",
+  "milestones": "Jalons et changements de dépenses importants",
+  "milestonesNote": "Retraite, début RPC/SV, conversion FERR, changements de phases de dépenses et événements de trésorerie ponctuels, par âge.",
+  "table": "Tableau détaillé année par année",
+  "tableNote": "Chaque année avec soldes, retraits, impôt et prestations — plus le détail par année (sources de retrait, croissance par compte, hypothèque inversée, événements). Plusieurs pages.",
+  "printSummary": "Imprimer le résumé",
+  "preparing": "Préparation du graphique…",
+  "printTitle": "Ouvrir la boîte de dialogue d’impression",
+  "waitingMc": "En attente de la simulation Monte-Carlo…",
+  "simWhenNeeded": "La simulation s’exécute lorsque le graphique est nécessaire.",
+  "running500": "Exécution de 500 simulations pour l’éventail…"
+}

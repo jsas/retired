@@ -154,32 +154,30 @@ describe('SetupWizard — spouse pass', () => {
     expect(d.desiredSpending).toBe(26000); // half the host's goal
     expect(d.rrspBalance).toBe(0);
     expect(d.cppStartAge).toBe(65);
+    expect(d.scenarioName).toBe('Partner');
   });
 
-  it('applySpouseWizardData writes the spouse block, enables it, and keeps the host untouched', () => {
-    const host = baseInputs({ currentAge: 55, desiredSpending: 52000, spouse: undefined });
+  it('applySpouseWizardData builds a standalone partner plan and leaves no inline spouse', () => {
+    const host = baseInputs({ currentAge: 55, desiredSpending: 52000, spouse: undefined, provinceCode: 'BC', investmentReturn: 0.06 });
     const d = spouseWizardDataFrom(host);
     d.currentAge = 57;
     d.rrspBalance = 180000;
     d.cppMonthlyAmount = 820;
     d.desiredSpending = 22000;
     const out = applySpouseWizardData(host, d);
-    expect(out.spouse?.enabled).toBe(true);
-    expect(out.spouse?.currentAge).toBe(57);
-    expect(out.spouse?.rrspBalance).toBe(180000);
-    expect(out.spouse?.cppMonthlyAmount).toBe(820);
-    expect(out.spouse?.desiredSpending).toBe(22000);
-    expect(out.spouseSource).toEqual({ kind: 'builtin' });
-    // Host fields are untouched.
-    expect(out.currentAge).toBe(55);
-    expect(out.desiredSpending).toBe(52000);
-    expect(out.rrspBalance).toBe(host.rrspBalance);
+    expect(out.spouse).toBeUndefined();
+    expect(out.spouseSource).toBeUndefined();
+    expect(out.currentAge).toBe(57);
+    expect(out.rrspBalance).toBe(180000);
+    expect(out.cppMonthlyAmount).toBe(820);
+    expect(out.desiredSpending).toBe(22000);
+    // Shared household fields come from the host.
+    expect(out.provinceCode).toBe('BC');
+    expect(out.investmentReturn).toBe(0.06);
+    expect(out.maxAge).toBe(host.maxAge);
   });
 
-  it('applySpouseWizardData preserves spouse fields the wizard never asks about', () => {
-    // Income sources, events, bands and a withdrawal order set earlier must
-    // survive a spouse-wizard re-run (the pass edits the basics, not the whole
-    // person).
+  it('applySpouseWizardData preserves person fields the wizard never asks about', () => {
     const host = baseInputs({
       spouse: {
         enabled: true, currentAge: 58, retirementAge: 63,
@@ -195,9 +193,10 @@ describe('SetupWizard — spouse pass', () => {
     const d = spouseWizardDataFrom(host);
     d.rrspBalance = 150000;
     const out = applySpouseWizardData(host, d);
-    expect(out.spouse?.rrspBalance).toBe(150000);
-    expect(out.spouse?.withdrawalOrder).toEqual(['rrsp', 'tfsa', 'taxable']);
-    expect(out.spouse?.income).toHaveLength(1);
-    expect(out.spouse?.events).toHaveLength(1);
+    expect(out.rrspBalance).toBe(150000);
+    expect(out.withdrawalOrder).toEqual(['rrsp', 'tfsa', 'taxable']);
+    expect(out.income).toHaveLength(1);
+    expect(out.events).toHaveLength(1);
+    expect(out.spouse).toBeUndefined();
   });
 });

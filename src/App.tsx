@@ -2,6 +2,14 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { BetaApp } from './components/BetaApp';
 import { StyleGuide } from './design/StyleGuide';
 import { applyBetaAtBoot } from './lib/betaSkin';
+import { BetaPage, PlanUndoContext } from './components/beta/BetaPage';
+import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/beta/LandingPage';
+import {
+  BetaSchedulePage, BetaSteeringPage, BetaOptimizerPage, BetaMonteCarloPage,
+  BetaBacktestPage, BetaSolverPage, BetaPlansPage, BetaDataPage,
+  BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
+  BetaPrintPage, BetaDonatePage,
+} from './components/beta/pages';
 import { Share2, Printer, Sparkles, Calculator, GitCompareArrows, SlidersHorizontal, LineChart, Bot, AlertTriangle, X } from 'lucide-react';
 import { TopHeader } from './components/TopHeader';
 import { SidebarForm } from './components/SidebarForm';
@@ -9,7 +17,7 @@ import { MetricCards } from './components/MetricCards';
 import { ScheduleTable } from './components/ScheduleTable';
 import { ScenarioManager } from './components/ScenarioManager';
 import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from '@retired/engine-core/retirementEngine';
-import { resolveSpouseSource, baselineSpouse, legacySpouseToPerson, toHousehold } from '@retired/engine-core/householdTypes';
+import { resolveSpouseSource, baselineSpouse, personPlanFromSpouse, promoteEmbeddedSpouses, toHousehold } from '@retired/engine-core/householdTypes';
 import type { Scenario } from '@retired/engine-core/types';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { AppStore } from './data/store';
@@ -18,19 +26,22 @@ import { SettingsModal } from './components/SettingsModal';
 import { SavePromptModal } from './components/SavePromptModal';
 import { HelpModal } from './components/HelpModal';
 import { MonteCarloChart } from './components/MonteCarloChart';
-import { TimelineChart } from './components/TimelineChart';
+import { ProjectionTimeline } from './design/ProjectionTimeline';
 import { BacktestPanel } from './components/BacktestPanel';
 import { CollapsiblePanel } from './components/CollapsiblePanel';
 import { SharingPage, type SharingImportRequest } from './components/SharingPage';
 import { DataPage, type FullBackupSelection, type ProjectionImportRequest, type AiBackupInclude } from './components/DataPage';
 import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
-import { AI_SETTINGS_STORAGE_KEY, loadAiSettings } from './lib/aiSettings';
-import { MarkupOverlay } from './components/MarkupOverlay';
+import { AI_SETTINGS_STORAGE_KEY, reloadAiSettingsFromStorage } from './lib/aiSettings';
 import { OptimizeCard } from './components/OptimizeCard';
 import { AgentPage } from './components/AgentPage';
+import { detectLocale, parseLocale, type Locale } from './lib/locale';
+import { setAppLanguage } from './lib/i18n';
+import { LocaleContext } from './lib/localeContext';
+import { useTranslation } from 'react-i18next';
 import { ConnectionsPage } from './components/ConnectionsPage';
 import { CompareCard } from './components/CompareCard';
-import { WelcomeCard, isWelcomeDismissed } from './components/WelcomeCard';
+import { WelcomeCard } from './components/WelcomeCard';
 import { SetupWizard, wizardDataFrom, applyWizardData, spouseWizardDataFrom, applySpouseWizardData, type WizardData } from './components/SetupWizard';
 import { PrintOptionsCard } from './components/PrintOptionsCard';
 import { DonateCard } from './components/DonateCard';
@@ -44,6 +55,7 @@ import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
+import { potDisplay } from './lib/planDisplay';
 import { consumePlanFromHash } from './lib/shareLink';
 import { buildDefaultScenarios } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
@@ -67,7 +79,12 @@ import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
 const getSyncSeed = () => {
   const stored = readSeedScenariosFromMirror();
   if (stored) {
-    return { scenarios: stored.scenarios, activeScenarioId: stored.activeScenarioId };
+    // Mirror may still hold leftover in-plan spouses from before link-only.
+    const promoted = promoteEmbeddedSpouses(stored.scenarios);
+    const active = stored.activeScenarioId && promoted.scenarios.some(s => s.id === stored.activeScenarioId)
+      ? stored.activeScenarioId
+      : promoted.scenarios[0].id;
+    return { scenarios: promoted.scenarios, activeScenarioId: active };
   }
   const scenarios = buildDefaultScenarios();
   return { scenarios, activeScenarioId: scenarios[0].id };
@@ -75,11 +92,12 @@ const getSyncSeed = () => {
 
 function App() {
   const [initialState] = useState(getSyncSeed);
-  // Beta reskin channel (?beta → beta-version cookie; see lib/betaSkin). The
-  // flag is resolved once, synchronously, on the very first render — writing
-  // the cookie is a side effect React must not replay, so it lives in the
-  // useState initializer, not an effect. The whole hook set below stays
-  // unconditional; only the render output branches.
+  // Skin gate (see lib/betaSkin): the f7 design is the app; `?beta` opts back
+  // into the old UI, kept alive as a reference. The flag is resolved once,
+  // synchronously, on the very first render — writing the cookie is a side
+  // effect React must not replay, so it lives in the useState initializer,
+  // not an effect. The whole hook set below stays unconditional; only the
+  // render output branches.
   const [beta] = useState(applyBetaAtBoot);
 
   const [scenarios, setScenarios] = useState<Scenario[]>(initialState.scenarios);
@@ -88,20 +106,39 @@ function App() {
   // (setConfig(state.config) below). No legacy config read — issue #21.
   const [config, setConfig] = useState<AppConfig>(() => structuredClone(DEFAULT_APP_CONFIG));
   const [store, setStore] = useState<AppStore | null>(null);
-  // Default landing: the Welcome page unless the user checked "don't show this
-  // again" (or General settings forces it on every load); otherwise the
-  // projection dashboard. An explicit hash route always wins.
+  // Site language: Settings / header pick wins; otherwise the browser (fr-* → fr-CA).
+  const [detected] = useState<Locale>(detectLocale);
+  const locale = parseLocale(config.general.locale) ?? detected;
+  const { t: tPages } = useTranslation('pages');
+  useEffect(() => { void setAppLanguage(locale); }, [locale]);
+  const setLocale = (next: Locale) => {
+    setConfig(prev => ({ ...prev, general: { ...prev.general, locale: next } }));
+  };
+  // First-run gate (issue #153): the landing is a DRAFT-UNTIL-DOOR first-run
+  // surface — an explicit hash route (deep link / back-forward) always wins;
+  // without a hash, scenarios saved ⇒ the dashboard; nothing saved ⇒ the
+  // landing. The landing's onBuild creates the scenario at door-pick (below).
   const [view, setView] = useState<View>(() =>
-    viewFromHash(window.location.hash)
-    ?? (config.general.showWelcomeOnLoad || !isWelcomeDismissed() ? 'welcome' : 'projection')
+    welcomeLandingGate(viewFromHash(window.location.hash), scenarios.length > 0)
   );
 
   // Keep the URL hash in sync with the current view (push a history entry per
   // navigation), and follow hash changes so back/forward and pasted links work.
+  // Plans carries a ?section=… deep-link (scrolls to a details section) and
+  // Help a ?topic=… one (the ? hints deep-link into Help); preserve the current
+  // page's param across the sync so it isn't stripped. Legacy #/details still
+  // parses as view `details` (foldedInto Plans) — keep its section too.
   useEffect(() => {
     const route = hashForView(view);
-    if (window.location.hash !== route) {
-      window.history.pushState(null, '', window.location.pathname + window.location.search + route);
+    const current = window.location.hash;
+    const paramMatch = current.match(/\?([a-z]+=[a-z0-9-]+)$/);
+    const onPlans = view === 'scenarios' || view === 'details' || view === 'compare' || view === 'legacyScenarios';
+    const param = paramMatch && (
+      (onPlans && paramMatch[1].startsWith('section='))
+      || (view === 'help' && paramMatch[1].startsWith('topic='))
+    ) ? `?${paramMatch[1]}` : '';
+    if (current !== route + param) {
+      window.history.pushState(null, '', window.location.pathname + window.location.search + route + param);
     }
   }, [view]);
 
@@ -117,9 +154,6 @@ function App() {
   // montecarlo route is active. backtestResult is built while backtest is.
   const [mcRequest, setMcRequest] = useState<MonteCarloRequest | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
-  // Markup-overlay opt-in (AI settings). Read once at mount; toggling it on the
-  // Connections page takes effect on next load, same as connection edits.
-  const [markupSettings] = useState(loadAiSettings);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const cancelEqSolveRef = useRef<(() => void) | null>(null);
 
@@ -161,13 +195,11 @@ function App() {
   );
   const resolvedInputs = useMemo<RetirementInputs>(
     () => {
-      // Only materialize a linked scenario spouse when the spouse is actually
-      // ENABLED. The enabled flag is the user's explicit on/off and must win:
-      // otherwise unchecking a linked spouse would be silently overridden by
-      // the resolver re-injecting the referenced plan.
-      const linked = inputs.spouseSource?.kind === 'scenario';
-      if (!linked) return inputs;
-      if (!inputs.spouse?.enabled) return { ...inputs, spouse: undefined };
+      // A partner is always another saved plan. Unlinked (no scenario source)
+      // means a single-person household — drop any leftover embedded cache.
+      if (inputs.spouseSource?.kind !== 'scenario') {
+        return inputs.spouse ? { ...inputs, spouse: undefined } : inputs;
+      }
       return { ...inputs, spouse: spouseResolution.spouse };
     },
     [inputs, spouseResolution],
@@ -345,7 +377,10 @@ function App() {
     // the Data page only as parseable JSON, so a malformed payload can still
     // fail those pages' own loaders — they fall back to empty, never crash.
     if (sel.aiChats !== undefined) localStorage.setItem(AI_CHATS_STORAGE_KEY, JSON.stringify(sel.aiChats));
-    if (sel.aiSettings !== undefined) localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(sel.aiSettings));
+    if (sel.aiSettings !== undefined) {
+      localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(sel.aiSettings));
+      reloadAiSettingsFromStorage();
+    }
     setHasUnsavedChanges(false);
     setView('projection');
   };
@@ -374,17 +409,6 @@ function App() {
     setHasUnsavedChanges(false);
   };
 
-  // Update inputs when scenario changes. If the current scenario has unsaved
-  // edits and the user hasn't opted out, ask whether to save before switching.
-  const handleScenarioChange = (id: string) => {
-    if (id === activeScenarioId) return;
-    if (hasUnsavedChanges && config.general.promptToSaveOnSwitch) {
-      setPendingSwitch(id);
-      return;
-    }
-    applyScenarioSwitch(id);
-  };
-
   // Update scenario when inputs change - with save button
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -401,6 +425,102 @@ function App() {
     ));
     setHasUnsavedChanges(false);
   };
+
+  // Issue #165 — autosave: in the beta UI every applied edit saves itself a
+  // moment after the last keystroke, so the plan on disk IS the plan on
+  // screen and each save lands in the revision ring (the persist effect
+  // records it). The header's undo icon steps back through those saves. The
+  // debounce groups a burst of fader drags / chip clicks into one save; a
+  // scenario switch or unmount saves immediately so nothing mid-flight is
+  // lost to the timer.
+  const saveTimer = useRef<number | null>(null);
+  const pendingSaveRef = useRef(false);
+  const cancelPendingSave = () => {
+    if (saveTimer.current != null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    pendingSaveRef.current = false;
+  };
+  useEffect(() => {
+    if (!beta) return; // the stable skin keeps its explicit Save button
+    if (!hasUnsavedChanges) {
+      pendingSaveRef.current = false;
+      return;
+    }
+    pendingSaveRef.current = true;
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      if (pendingSaveRef.current) {
+        pendingSaveRef.current = false;
+        handleSaveScenario();
+      }
+    }, 1200);
+    return () => {
+      if (saveTimer.current != null) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beta, hasUnsavedChanges, inputs]);
+
+  // Persist a pending autosave into the *current* scenario. Used on switch
+  // and unmount so the timer never drops the last edit. Does the write in
+  // the same setScenarios as the caller when `into` is provided.
+  const flushPendingSave = () => {
+    const pending = pendingSaveRef.current;
+    cancelPendingSave();
+    if (pending) handleSaveScenario();
+    return pending;
+  };
+  useEffect(() => () => { flushPendingSave(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update inputs when scenario changes. If the current scenario has unsaved
+  // edits and the user hasn't opted out, ask whether to save before switching.
+  const handleScenarioChange = (id: string) => {
+    if (id === activeScenarioId) return;
+    // Beta autosaves on apply, so a switch just flushes the pending save
+    // (no "save first?" prompt — the plan on screen is already the plan).
+    if (beta) {
+      flushPendingSave();
+      applyScenarioSwitch(id);
+      return;
+    }
+    if (hasUnsavedChanges && config.general.promptToSaveOnSwitch) {
+      setPendingSwitch(id);
+      return;
+    }
+    applyScenarioSwitch(id);
+  };
+
+  // The header's undo icon: step back one saved plan. Rolling back rewinds
+  // the live plan AND deletes the revisions newer than the target (history
+  // doesn't branch), so repeated taps walk backwards one save at a time.
+  //
+  //   • with unsaved edits pending: discard them (restore the last saved
+  //     inputs). Do NOT flush-then-rollback — persist is async, so the
+  //     just-saved revision isn't in the store yet, and flushing would
+  //     write the thing we're trying to undo.
+  //   • otherwise: roll back to the SECOND-newest revision, which deletes
+  //     the newest and restores the state before it.
+  const handleUndoSave = () => {
+    cancelPendingSave();
+    if (hasUnsavedChanges) {
+      const saved = scenarios.find(s => s.id === activeScenarioId);
+      if (!saved) return;
+      setInputs(JSON.parse(JSON.stringify(saved.inputs)));
+      setHasUnsavedChanges(false);
+      return;
+    }
+    const mine = (store?.allRevisions() ?? []).filter(r => r.scenarioId === activeScenarioId);
+    const target = mine[mine.length - 2];
+    if (!target) return;
+    handleRollback(target.id);
+  };
+  const canUndo = hasUnsavedChanges
+    || (store?.allRevisions() ?? []).filter(r => r.scenarioId === activeScenarioId).length >= 2;
+  const undoState = { canUndo, onUndo: handleUndoSave };
 
   // Agent scenario tools (open_scenario / save_scenario_as). Both mirror the
   // sidebar paths: open saves the current plan first (nothing the user typed
@@ -476,17 +596,7 @@ function App() {
   // and a second, limited wizard pass opens to collect the partner's numbers.
   const [spouseWizardOpen, setSpouseWizardOpen] = useState(false);
   const handleWizardComplete = (data: WizardData, opts: { addSpouse: boolean }) => {
-    let next = applyWizardData(inputs, data);
-    // "Add a spouse" on the review step: enable a baseline spouse (starting at
-    // the same ages) so the household runs as a couple — then the spouse pass
-    // below replaces the baseline with the partner's real numbers.
-    if (opts.addSpouse && !next.spouse?.enabled) {
-      next = {
-        ...next,
-        spouseSource: { kind: 'builtin' },
-        spouse: baselineSpouse(next),
-      };
-    }
+    const next = applyWizardData(inputs, data);
     const finalInputs = consistentAges(JSON.parse(JSON.stringify(next)));
     setInputs(finalInputs);
     // Persist inputs AND the chosen name straight into the active scenario so
@@ -500,62 +610,41 @@ function App() {
     setHasUnsavedChanges(false);
     setWizardOpen(false);
     if (opts.addSpouse) {
-      // Run the partner through their own limited wizard rather than dropping
-      // the user into the sidebar's Spouse section cold.
+      // Partner numbers live on their own plan. The second wizard pass mints
+      // that plan and links it; stay on the host.
       setSpouseWizardOpen(true);
     } else {
       setView('projection');
     }
   };
 
-  // Spouse pass done: write the partner's numbers into the (already saved)
-  // scenario's spouse block and persist again.
+  // Spouse pass done: mint a standalone partner plan from the collected
+  // numbers, link this plan to it, stay on the host.
   const handleSpouseWizardComplete = (data: WizardData) => {
-    const next = consistentAges(applySpouseWizardData(inputs, data));
-    setInputs(next);
-    setScenarios(prev => prev.map(s =>
-      s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(next)) } : s
-    ));
+    const name = data.scenarioName.trim() || `${activeScenario.name} — Partner`;
+    handleCreateSpousePlan(name, consistentAges(applySpouseWizardData(inputs, data)));
     setHasUnsavedChanges(false);
     setSpouseWizardOpen(false);
     setView('projection');
   };
 
-  // Sidebar "Save to linked plan": patch person fields on another saved
-  // scenario (the linked spouse) without switching to it. The resolution memo
-  // picks the change up on the next render, so the household updates in place.
-  const handleUpdateScenarioInputs = (scenarioId: string, patch: Partial<RetirementInputs>) => {
-    setScenarios(prev => prev.map(s =>
-      s.id === scenarioId ? { ...s, inputs: { ...s.inputs, ...patch } } : s
-    ));
-  };
-
-  // Sidebar "Save spouse as its own plan": promote the embedded spouse to a
-  // standalone scenario. Person fields come from the spouse block; the shared
-  // household fields (horizon, market, province) are inherited from the host —
-  // the same split legacyToShared/legacySpouseToPerson make for the engine.
-  // The new plan gets engine-typical defaults for fields a spouse block
-  // doesn't carry (annualWithdrawal is recomputed by the engine anyway).
-  const handleSaveSpouseAsScenario = (name: string) => {
-    if (!inputs.spouse) return;
-    const person = legacySpouseToPerson(inputs.spouse);
-    const spouseInputs: RetirementInputs = {
-      ...person,
-      maxAge: inputs.maxAge,
-      investmentReturn: inputs.investmentReturn,
-      returnVolatility: inputs.returnVolatility,
-      provinceCode: inputs.provinceCode,
-      annualWithdrawal: 0,
-      cppAdjustedAmount: false,
-      withdrawalOrder: person.withdrawalOrder ?? ['tfsa', 'taxable', 'rrsp'],
-      spouse: undefined,
-      spouseSource: undefined,
-    };
-    setScenarios(prev => [...prev, {
-      id: `scenario-${Date.now()}`,
-      name,
-      inputs: spouseInputs,
-    }]);
+  // Mint a blank partner plan from the host's ages/spending and link it.
+  // Used by Details / Sidebar when the user has no other plan to link yet.
+  const handleCreateSpousePlan = (name?: string, partnerInputs?: RetirementInputs) => {
+    const id = `scenario-${Date.now()}`;
+    const planName = (name ?? '').trim() || `${activeScenario.name} — Partner`;
+    const minted = partnerInputs ?? personPlanFromSpouse(baselineSpouse(inputs), inputs);
+    minted.spouse = undefined;
+    minted.spouseSource = undefined;
+    const hostNext = { ...inputs, spouse: undefined, spouseSource: { kind: 'scenario' as const, scenarioId: id } };
+    setInputs(hostNext);
+    setScenarios(prev => [
+      ...prev.map(s =>
+        s.id === activeScenarioId ? { ...s, inputs: JSON.parse(JSON.stringify(hostNext)) } : s
+      ),
+      { id, name: planName, inputs: minted },
+    ]);
+    return id;
   };
 
   // The runnable household derived once from the resolved inputs — the engine
@@ -684,10 +773,11 @@ function App() {
     [results.spouse, resolvedInputs],
   );
 
-  // Monte Carlo is its own page now: build the request while the route is
-  // active, refreshing when inputs/config change (debounced so dragging a
-  // slider doesn't fire a 500-run batch per pixel). MonteCarloChart re-runs
-  // whenever request changes. mcRefreshNonce forces an immediate re-run.
+  // Monte Carlo has its own page again (issue #162 — the Tools menu unfurled
+  // it from the old Insights). Build the request while the route is active,
+  // refreshing when inputs/config change (debounced so dragging a slider
+  // doesn't fire a 500-run batch per pixel). MonteCarloChart re-runs whenever
+  // request changes. mcRefreshNonce forces an immediate re-run.
   const [mcRefreshNonce, setMcRefreshNonce] = useState(0);
   const mcNonceSeen = useRef(0);
   useEffect(() => {
@@ -712,9 +802,10 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resolvedInputs, config, mcRefreshNonce]);
 
-  // Backtest is its own page too. It's fast and synchronous, so recompute on
-  // the route whenever inputs/config change — no debounce needed. Real-return
-  // series: inflation off so historical multipliers match today's-dollar spending.
+  // Backtest has its own page too (issue #162). It's fast and synchronous, so
+  // recompute whenever the route is active — no debounce needed. Real-return
+  // series: inflation off so historical multipliers match today's-dollar
+  // spending.
   useEffect(() => {
     if (view !== 'backtest') { setBacktestResult(null); return; }
     const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
@@ -725,8 +816,8 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resolvedInputs, config]);
 
-  // The beta skin replaces the whole view; every hook above has already run
-  // unconditionally, so toggling ?beta off just re-renders the stable UI.
+  // The app skin (f7) replaces the whole view; every hook above has already
+  // run unconditionally, so ?beta (the reference UI) just re-renders the old one.
   // `inputs` here is the RAW plan (like SidebarForm) — the two levers touch
   // host-won household fields, so it matches the resolved numbers on screen.
   if (beta) {
@@ -737,24 +828,251 @@ function App() {
     if (view === 'styleguide') {
       return <StyleGuide />;
     }
-    return (
-      <>
-        <BetaApp
-          scenarios={scenarios}
-          activeScenarioId={activeScenarioId}
-          onScenarioChange={handleScenarioChange}
-          inputs={inputs}
-          onInputsChange={handleInputsChange}
-          results={results}
-          hasUnsavedChanges={hasUnsavedChanges}
-          onSave={handleSaveScenario}
-        />
-        {markupSettings.markupOverlay && <MarkupOverlay settings={markupSettings} />}
-      </>
+
+    // The persistent verdict chip — the answer, always top-right.
+    const chip: import('./components/beta/BetaPage').VerdictChip = (() => {
+      const pot = potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge);
+      const borderline = !pot.holds && pot.emptyAge != null && (inputs.maxAge - pot.emptyAge) <= 6;
+      return {
+        tone: pot.holds ? 'holds' : borderline ? 'borderline' : 'short',
+        age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
+        label: pot.holds ? tPages('holds') : borderline ? tPages('borderline') : tPages('short'),
+      };
+    })();
+
+    // The section deep-link for the Plans page (#/plan?section=…, or the
+    // legacy #/details?section=… which folds here).
+    const detailsSection = (() => {
+      const m = window.location.hash.match(/[?&]section=([a-z]+)/);
+      return m ? m[1] : null;
+    })();
+
+    // The assistant dock — one conversation, docked on the right of every beta
+    // page (f7's star). Passing it through BetaPage turns the Assistant
+    // button + rail on everywhere.
+    const assistantDock = (
+      <AgentPage
+        docked
+        inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
+        scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
+        activeScenarioId={activeScenarioId}
+        scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
+        onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+        onCreateSpousePlan={handleCreateSpousePlan}
+        onOpenConnections={() => setView('connections')}
+        memory={store?.memory}
+        memoryScenarioId={activeScenarioId}
+        onOpenScenario={agentOpenScenario}
+        onSaveScenarioAs={agentSaveScenarioAs}
+        currentView={view}
+        onNavigate={(target) => setView(target)}
+        locale={locale}
+      />
     );
-  }
+
+    // The beta page for this view. The print machinery (the .print-only
+    // summary sheet + marking the app .no-print) wraps it below — same as the
+    // stable path's return, so Ctrl+P prints the summary, not the chrome.
+    const betaPage = (() => { switch (view) {
+      case 'math':
+        return (
+          <BetaSchedulePage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
+            breakdown={householdBreakdown}
+            retirementAge={results.retirementAge}
+            currentAge={inputs.currentAge}
+            maxAge={inputs.maxAge}
+            onRetirementAgeChange={(age) => handleInputsChange({ ...inputs, retirementAge: age })}
+            primaryBreakdown={results.spouse ? results.yearlyBreakdown : undefined}
+            spouseBreakdown={results.spouse?.yearlyBreakdown}
+            spouseAgeOffset={spouseAgeOffset}
+          />
+        );
+      // The Tools menu (issue #162): five surfaces, five pages. Each features
+      // the projection timeline (Steering through EqPage's own strip).
+      case 'eq':
+        return (
+          <BetaSteeringPage chip={chip} assistant={assistantDock}
+            eqProps={{ inputs: resolvedInputs, config, onChange: handleInputsChange, bands: eqBands, onBandsChange: setEqBands, solved: eqSolved, projection: { results, breakdown: householdBreakdown } }}
+          />
+        );
+      case 'optimize':
+        return (
+          <BetaOptimizerPage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
+            optimizeProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
+          />
+        );
+      case 'solver':
+        return (
+          <BetaSolverPage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
+            solverProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
+          />
+        );
+      case 'montecarlo':
+        return (
+          <BetaMonteCarloPage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
+            mcProps={mcRequest ? { request: mcRequest, retirementAge: results.retirementAge, onRefresh: () => setMcRefreshNonce(n => n + 1) } : null}
+          />
+        );
+      case 'backtest':
+        return (
+          <BetaBacktestPage chip={chip} assistant={assistantDock}
+            timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
+            edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
+            backtestProps={backtestResult ? { result: backtestResult } : null}
+          />
+        );
+      case 'scenarios':
+      case 'details': // legacy — details now live under Plans
+      case 'compare': // legacy — compare folds into Plans
+      case 'legacyScenarios': // legacy #/scenarios URL
+        return (
+          <BetaPlansPage chip={chip} assistant={assistantDock}
+            managerProps={{
+              scenarios, activeScenarioId, onScenariosChange: setScenarios, revisions, onRollback: handleRollback,
+              onSelectScenario: (id) => { handleScenarioChange(id); },
+              onCreateScenario: (scenario) => {
+                setScenarios(prev => [...prev, scenario]);
+                setActiveScenarioId(scenario.id);
+                setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
+                setHasUnsavedChanges(false);
+              },
+            }}
+            compareProps={{ scenarios, activeScenarioId, config }}
+            detailsProps={{
+              inputs, onChange: handleInputsChange, section: detailsSection,
+              provinceCodes: Object.keys(config.provinces).sort(),
+              scenarios, activeScenarioId,
+              spouseWarnings: spouseResolution.warnings,
+              onCreateSpousePlan: handleCreateSpousePlan,
+              onOpenPlan: (id) => { handleScenarioChange(id); },
+            }}
+          />
+        );
+      case 'data':
+      case 'export': // legacy route — the backup/restore surface now lives on Data
+      case 'sharing':
+        // One Data home: share a plan (link/code) plus the full backup /
+        // restore / projection-export surface — nothing lives on a side route.
+        return (
+          <BetaDataPage chip={chip} assistant={assistantDock}
+            inputs={inputs} scenarioName={activeScenario.name} onImport={handleSharingImport}
+            exportOptions={exportOptions} onExportOptionsChange={updateExportOptions}
+            hasSpouse={!!exportResults.spouse}
+            results={exportResults} config={config}
+            scenarios={scenarios} activeScenarioId={activeScenarioId}
+            onExportFull={handleExportFull} onImportFull={handleImportFull}
+            onImportProjection={handleProjectionImport} />);
+      case 'print':
+        return (
+          <BetaPrintPage chip={chip} assistant={assistantDock}
+            options={printOptions} onChange={updatePrintOptions}
+            onPrint={() => window.print()} mcPending={printMcPending} mcResults={printMc} />
+        );
+      case 'donate':
+        return <BetaDonatePage chip={chip} assistant={assistantDock} />;
+      case 'settings':
+        return <BetaSettingsPage chip={chip} assistant={assistantDock} config={config} onSave={setConfig} />;
+      case 'connections':
+        return <BetaConnectionsPage chip={chip} assistant={assistantDock} onClose={() => setView('projection')} />;
+      case 'help':
+        return <BetaHelpPage chip={chip} assistant={assistantDock} />;
+      case 'agent':
+        // The assistant's own route: the SAME docked conversation as every
+        // other page (one AgentPage in the tree — mounting a second one here
+        // would fork the chat state). The route just opens the dock and lets
+        // BetaPage lay it out; deep links and back/forward keep working.
+        return (
+          <BetaPage title="Assistant" hint="assistant" chip={chip} assistant={assistantDock}>
+            <div className="pt-6 max-w-xl space-y-3 text-[13px] text-slate-500">
+              <p className="text-[15px] font-semibold text-slate-900">The conversation is open beside you.</p>
+              <p>Ask about your plan, or ask it to change something — every edit is a card you approve. This page holds the same chat as the dock on every other page; the expand button in the dock's header gives it the full screen.</p>
+            </div>
+          </BetaPage>
+        );
+      case 'welcome':
+        // With saved plans the landing isn't a front door — a 'come back later'
+        // link from the welcome header would silently overwrite the plan. With
+        // any scenarios saved, the welcome hash opens the dashboard straight.
+        if (scenarios.length > 0) {
+          return (
+            <BetaApp
+              inputs={inputs}
+              onInputsChange={handleInputsChange}
+              results={results}
+              config={config}
+              assistant={assistantDock}
+            />
+          );
+        }
+        // The landing's first-run story: five questions build a starter PLAN —
+        // a draft only until a door is picked. "Go to dashboard" / "Keep
+        // chatting" both save the draft as the first scenario; the footer link
+        // without a plan isn't reachable here (there's nothing behind it).
+        return (
+          <LandingPage
+            config={config}
+            onBuild={(plan, opts) => {
+              const scenario = landingScenarioFromPlan(JSON.parse(JSON.stringify(plan)), Date.now());
+              setScenarios(prev => [...prev, scenario]);
+              setActiveScenarioId(scenario.id);
+              setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
+              setHasUnsavedChanges(false);
+              // "keep chatting" arrives with the assistant dock open; "go to
+              // dashboard" with it closed. The dock reads this pref on mount.
+              if (opts?.openAssistant !== undefined) {
+                try { prefKV().setItem('wealthconsole_dock_open', opts.openAssistant ? '1' : '0'); } catch { /* storage blocked */ }
+              }
+              setView('projection');
+            }}
+          />
+        );
+      default:
+        // projection / welcome / everything else → the dashboard
+        return (
+          <BetaApp
+            inputs={inputs}
+            onInputsChange={handleInputsChange}
+            results={results}
+            config={config}
+            assistant={assistantDock}
+          />
+        );
+    }
+    })();
+
+  // Print: the on-screen beta UI hides (.no-print) and the summary sheet
+  // shows (.print-only) — the same contract as the stable app's return.
+  return (
+    <LocaleContext.Provider value={{ locale, setLocale }}>
+      {/* Print-only one-page summary (hidden on screen; see index.css) */}
+      <PrintSummary
+        scenarioName={activeScenario.name}
+        inputs={resolvedInputs}
+        results={results}
+        householdBreakdown={householdBreakdown}
+        options={printOptions}
+        mcResults={printMc}
+        rrifConversionAge={config.engine.rrifConversionAge}
+      />
+      <div className="no-print">
+        <PlanUndoContext.Provider value={undoState}>
+          {betaPage}
+        </PlanUndoContext.Provider>
+      </div>
+    </LocaleContext.Provider>
+  );
+}
 
   return (
+    <LocaleContext.Provider value={{ locale, setLocale }}>
     <div className="min-h-screen md:h-screen flex flex-col bg-slate-50">
       {/* Print-only one-page summary (hidden on screen; see index.css) */}
       <PrintSummary
@@ -865,8 +1183,8 @@ function App() {
             scenarios={scenarios}
             activeScenarioId={activeScenarioId}
             spouseWarnings={spouseResolution.warnings}
-            onUpdateScenarioInputs={handleUpdateScenarioInputs}
-            onSaveSpouseAsScenario={handleSaveSpouseAsScenario}
+            onCreateSpousePlan={handleCreateSpousePlan}
+            onOpenPlan={(id) => { handleScenarioChange(id); }}
           />
         </div>
 
@@ -981,12 +1299,16 @@ function App() {
               <>
                 {/* KPI Cards */}
                 <CollapsiblePanel id="summary" title="Projection Summary">
-                  <MetricCards results={results} household={household} />
+                  <MetricCards results={results} household={household} inputs={resolvedInputs} />
                 </CollapsiblePanel>
 
-                {/* Interactive projection timeline (household when a spouse is enabled) */}
+                {/* Projection timeline (household when a spouse is enabled) — the
+                    shared component; drag-to-edit lives on the steering page. */}
                 <CollapsiblePanel id="timeline" title="Projection Timeline">
-                  <TimelineChart inputs={inputs} results={{ ...results, yearlyBreakdown: householdBreakdown }} config={config} onChange={handleInputsChange} />
+                  <ProjectionTimeline
+                    series={[{ id: 'plan', label: 'portfolio', area: true, points: householdBreakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
+                    pins={[{ age: inputs.retirementAge, label: `start drawing · ${inputs.retirementAge}` }]}
+                  />
                 </CollapsiblePanel>
 
                 {/* Schedule Table (household when a spouse is enabled); the drill-down
@@ -1020,11 +1342,20 @@ function App() {
                 activeScenarioId={activeScenarioId}
                 scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
                 onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
+                onCreateSpousePlan={handleCreateSpousePlan}
                 onOpenConnections={() => setView('connections')}
                 memory={store?.memory}
                 memoryScenarioId={activeScenarioId}
                 onOpenScenario={agentOpenScenario}
                 onSaveScenarioAs={agentSaveScenarioAs}
+                // The page the user is on when the chat mounts — powers the
+                // ambient "current page" prompt line + find_page's "already here".
+                // On approval of a propose_navigate card the app switches views;
+                // the chat unmounting with it is why the route is queued to the
+                // turn's finally block (see pendingNavigation in AgentPage).
+                currentView={view}
+                onNavigate={(target) => setView(target)}
+                locale={locale}
               />
             )}
 
@@ -1178,9 +1509,8 @@ function App() {
           onCancel={() => resolvePendingSwitch('cancel', false)}
         />
       )}
-
-      {markupSettings.markupOverlay && <MarkupOverlay settings={markupSettings} />}
     </div>
+    </LocaleContext.Provider>
   );
 }
 

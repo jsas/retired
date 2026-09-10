@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Dices, Loader2, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Loader2, RefreshCw } from 'lucide-react';
 import type { MonteCarloRequest, MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import { runMonteCarloAuto } from '../lib/runMonteCarlo';
+import { BLUE } from '../design/tokens';
+import { useAppLocale } from '../lib/localeContext';
 
 interface MonteCarloChartProps {
   request: MonteCarloRequest;
@@ -20,11 +23,13 @@ function formatMoney(v: number): string {
   return `$${Math.round(v)}`;
 }
 
-function formatMoneyFull(v: number): string {
-  return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
+function formatMoneyFull(v: number, locale: string): string {
+  return v.toLocaleString(locale, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
 }
 
 export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }: MonteCarloChartProps) {
+  const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   const [results, setResults] = useState<MonteCarloResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoverAge, setHoverAge] = useState<number | null>(null);
@@ -76,24 +81,20 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
 
   const successPct = results ? (results.successRate * 100).toFixed(1) : null;
   const successColor = results
-    ? results.successRate >= 0.9 ? 'text-emerald-700' : results.successRate >= 0.75 ? 'text-amber-700' : 'text-red-700'
+    ? results.successRate >= 0.9 ? 'text-blue-700' : results.successRate >= 0.75 ? 'text-amber-700' : 'text-rose-700'
     : '';
 
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Dices size={18} className="text-blue-600" />
-          <h2 className="text-lg font-bold text-slate-900">Monte Carlo Simulation</h2>
-          <span className="text-xs text-slate-500">
-            {request.runs} runs · {(request.volatility * 100).toFixed(1)}% volatility · fat-tailed (Student-t)
-          </span>
-        </div>
+        <span className="text-xs text-slate-500">
+          {t('monteCarloUi.runsVol', { runs: request.runs, vol: (request.volatility * 100).toFixed(1) })}
+        </span>
         <div className="flex items-center gap-1">
           {onRefresh && (
-            <button onClick={onRefresh} className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100" title="Re-run the simulation with the current plan">
-              <RefreshCw size={13} /> Re-run
+            <button onClick={onRefresh} className="flex items-center gap-1.5 border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-900 hover:text-slate-900" title={t('monteCarloUi.rerunTitle')}>
+              <RefreshCw size={13} /> {t('monteCarloUi.rerun')}
             </button>
           )}
         </div>
@@ -104,37 +105,37 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
         {!results && !error && (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-500 text-sm">
             <Loader2 size={16} className="animate-spin" />
-            Running {request.runs} simulations…
+            {t('monteCarloUi.running', { runs: request.runs })}
           </div>
         )}
         {error && (
-          <div className="py-8 text-center text-sm text-red-600">Simulation failed: {error}</div>
+          <div className="py-8 text-center text-sm text-rose-700">{t('monteCarloUi.failed', { error })}</div>
         )}
         {results && chart && (
           <>
-            {/* Summary cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-              <div className="bg-slate-50 rounded p-3">
-                <div className="text-[11px] text-slate-500 uppercase tracking-wide">Success rate</div>
-                <div className={`text-xl font-bold ${successColor}`}>{successPct}%</div>
+            {/* Summary stats — hairline top rules, not cards */}
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="border-t-2 border-slate-900 pt-2">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">{t('monteCarloUi.successRate')}</div>
+                <div className={`num text-xl font-bold ${successColor}`}>{successPct}%</div>
                 <div className="text-[11px] text-slate-500">
-                  {results.successCount} of {results.runs} runs funded to age {request.inputs.maxAge}
+                  {t('monteCarloUi.ofRuns', { count: results.successCount, runs: results.runs, age: request.inputs.maxAge })}
                 </div>
               </div>
-              <div className="bg-slate-50 rounded p-3">
-                <div className="text-[11px] text-slate-500 uppercase tracking-wide">Median final balance</div>
-                <div className="text-xl font-bold text-slate-900">{formatMoney(results.medianFinalBalance)}</div>
-                <div className="text-[11px] text-slate-500">portfolio value at age {request.inputs.maxAge}</div>
+              <div className="border-t-2 border-slate-900 pt-2">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">{t('monteCarloUi.medianFinal')}</div>
+                <div className="num text-xl font-bold text-slate-900">{formatMoney(results.medianFinalBalance)}</div>
+                <div className="text-[11px] text-slate-500">{t('monteCarloUi.portfolioAt', { age: request.inputs.maxAge })}</div>
               </div>
-              <div className="bg-slate-50 rounded p-3">
-                <div className="text-[11px] text-slate-500 uppercase tracking-wide">Depletion risk</div>
-                <div className="text-xl font-bold text-slate-900">
+              <div className="border-t-2 border-slate-900 pt-2">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">{t('monteCarloUi.depletionRisk')}</div>
+                <div className="num text-xl font-bold text-slate-900">
                   {((1 - results.successRate) * 100).toFixed(1)}%
                 </div>
                 <div className="text-[11px] text-slate-500">
                   {results.depletionHistogram.length > 0
-                    ? `earliest depletion at age ${results.depletionHistogram[0].age}`
-                    : 'no run depleted'}
+                    ? t('monteCarloUi.earliest', { age: results.depletionHistogram[0].age })
+                    : t('monteCarloUi.noDepleted')}
                 </div>
               </div>
             </div>
@@ -153,11 +154,11 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
                 onMouseLeave={() => setHoverAge(null)}
               >
                 {/* Y gridlines + labels */}
-                {chart.yTicks.map((t, i) => (
+                {chart.yTicks.map((tick, i) => (
                   <g key={i}>
-                    <line x1={PAD.left} x2={W - PAD.right} y1={chart.y(t)} y2={chart.y(t)} stroke="#e2e8f0" strokeWidth="1" />
-                    <text x={PAD.left - 6} y={chart.y(t) + 3} textAnchor="end" fontSize="10" fill="#64748b">
-                      {formatMoney(t)}
+                    <line x1={PAD.left} x2={W - PAD.right} y1={chart.y(tick)} y2={chart.y(tick)} stroke="#e2e8f0" strokeWidth="1" />
+                    <text x={PAD.left - 6} y={chart.y(tick) + 3} textAnchor="end" fontSize="10" fill="#64748b">
+                      {formatMoney(tick)}
                     </text>
                   </g>
                 ))}
@@ -180,7 +181,7 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
                   stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3"
                 />
                 <text x={chart.x(retirementAge) + 4} y={PAD.top + 10} fontSize="10" fill="#64748b">
-                  retire
+                  {t('monteCarloUi.retire')}
                 </text>
 
                 {/* Hover crosshair */}
@@ -195,45 +196,45 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
 
               {/* Hover tooltip */}
               {hoverBand && (
-                <div className="absolute top-2 right-2 bg-white/95 border border-slate-200 rounded shadow px-3 py-2 text-[11px] font-mono pointer-events-none">
-                  <div className="font-semibold text-slate-900 mb-1">Age {hoverBand.age}</div>
-                  <div className="text-slate-600">90th: {formatMoneyFull(hoverBand.p90)}</div>
-                  <div className="text-slate-600">75th: {formatMoneyFull(hoverBand.p75)}</div>
-                  <div className="text-blue-700 font-semibold">median: {formatMoneyFull(hoverBand.p50)}</div>
-                  <div className="text-slate-600">25th: {formatMoneyFull(hoverBand.p25)}</div>
-                  <div className="text-slate-600">10th: {formatMoneyFull(hoverBand.p10)}</div>
+                <div className="absolute top-2 right-2 border border-slate-200 bg-white px-3 py-2 font-mono text-[11px] pointer-events-none">
+                  <div className="font-semibold text-slate-900 mb-1">{t('monteCarloUi.age', { age: hoverBand.age })}</div>
+                  <div className="text-slate-600">{t('monteCarloUi.p90')}: {formatMoneyFull(hoverBand.p90, locale)}</div>
+                  <div className="text-slate-600">{t('monteCarloUi.p75')}: {formatMoneyFull(hoverBand.p75, locale)}</div>
+                  <div className="text-blue-700 font-semibold">{t('monteCarloUi.median')}: {formatMoneyFull(hoverBand.p50, locale)}</div>
+                  <div className="text-slate-600">{t('monteCarloUi.p25')}: {formatMoneyFull(hoverBand.p25, locale)}</div>
+                  <div className="text-slate-600">{t('monteCarloUi.p10')}: {formatMoneyFull(hoverBand.p10, locale)}</div>
                 </div>
               )}
             </div>
 
-            {/* Legend */}
+            {/* Legend — square swatches, the design-token blue (no raw hex). */}
             <div className="flex items-center gap-4 mt-2 text-[11px] text-slate-600">
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm" style={{ background: '#3b82f6', opacity: 0.12 }} /> 10th–90th percentile
+                <span className="w-3 h-3 inline-block" style={{ background: BLUE, opacity: 0.12 }} /> {t('monteCarloUi.band1090')}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm" style={{ background: '#3b82f6', opacity: 0.3 }} /> 25th–75th percentile
+                <span className="w-3 h-3 inline-block" style={{ background: BLUE, opacity: 0.3 }} /> {t('monteCarloUi.band2575')}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-4 h-0.5 bg-blue-700 inline-block" /> median
+                <span className="w-4 h-0.5 bg-blue-700 inline-block" /> {t('monteCarloUi.median')}
               </span>
             </div>
 
             {/* Depletion histogram */}
             {results.depletionHistogram.length > 0 && (
               <div className="mt-4">
-                <div className="text-[11px] text-slate-500 uppercase tracking-wide mb-1.5">
-                  When failed runs ran out of money
+                <div className="mb-1.5 text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                  {t('monteCarloUi.failedWhen')}
                 </div>
-                <div className="flex items-end gap-px h-16">
+                <div className="flex h-16 items-end gap-px">
                   {results.depletionHistogram.map(({ age, count }) => {
                     const maxCount = Math.max(...results.depletionHistogram.map(d => d.count));
                     return (
                       <div
                         key={age}
-                        className="flex-1 bg-red-400/80 hover:bg-red-500 rounded-t-sm"
+                        className="flex-1 bg-rose-300 hover:bg-rose-500"
                         style={{ height: `${Math.max(4, (count / maxCount) * 100)}%` }}
-                        title={`Age ${age}: ${count} run${count === 1 ? '' : 's'} depleted`}
+                        title={t('monteCarloUi.depletedTitle', { count, age })}
                       />
                     );
                   })}

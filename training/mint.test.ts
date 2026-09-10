@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mintCorpus, mintGuardrailRecords, mintMutationRecords, mintOptionFramingRecords, mintReadRecords, toJsonl } from './mint';
+import { NAV_SPECS, mintCorpus, mintGuardrailRecords, mintMutationRecords, mintNavRecords, mintOptionFramingRecords, mintReadRecords, toJsonl } from './mint';
+import { canonicalView, pageForView, rankPages } from '@retired/mcp-tools/navigation';
 import { mintDomainKnowledgeRecords } from './domain';
 import { scoreToolReply, TOOL_NAMES } from './protocol';
 import { SCENARIOS } from './scenarios';
@@ -133,13 +134,91 @@ describe('guardrail records', () => {
     }
   });
 
-  it('the full corpus combines engine-grounded, mutation, guardrail, option, and domain records', () => {
+  it('the full corpus combines engine-grounded, mutation, guardrail, option, domain, and nav records', () => {
     const full = mintCorpus();
     expect(full.length).toBe(
       mintReadRecords().length + mintMutationRecords().length + guard.length
-      + mintOptionFramingRecords().length + mintDomainKnowledgeRecords().length,
+      + mintOptionFramingRecords().length + mintDomainKnowledgeRecords().length
+      + mintNavRecords().length,
     );
   }, 120000);
+});
+
+describe('navigation records (issue #141)', () => {
+  const nav = mintNavRecords();
+
+  it('mints find_page / propose_navigate / get_sitemap coverage with both confirm outcomes', () => {
+    const tools = new Set(nav.map((r) => r.expect.toolName));
+    expect(tools.has('find_page')).toBe(true);
+    expect(tools.has('propose_navigate')).toBe(true);
+    expect(tools.has('get_sitemap')).toBe(true);
+    // Every nav tool is in the live catalog (auto-pickup, protocol.ts SPECS).
+    for (const t of tools) expect(TOOL_NAMES.has(t!)).toBe(true);
+    // Approve AND reject records exist for every go-ask.
+    const ids = nav.filter((r) => r.expect.toolName === 'propose_navigate').map((r) => r.id);
+    expect(ids.some((id) => id.endsWith(':approved'))).toBe(true);
+    expect(ids.some((id) => id.endsWith(':rejected'))).toBe(true);
+  });
+
+  it('the NAV_SPECS query↔page mapping matches the live catalog (drift guard)', () => {
+    // The mint specs claim "this query finds this page" — prove it against the
+    // live catalog so a keyword rename that moves the ranking fails here, not
+    // in the training run.
+    expect(NAV_SPECS.length).toBeGreaterThanOrEqual(4);
+    for (const spec of NAV_SPECS) {
+      const target = canonicalView(spec.view);
+      const ranked = rankPages(spec.query);
+      expect(ranked[0]?.viewId, `find_page("${spec.query}") must rank ${spec.view} first`).toBe(target);
+    }
+  });
+
+  it('find_page follow-ups name the destination page title (real executor output)', () => {
+    const pairs = nav.filter((r) => r.expect.toolName === 'find_page' && r.messages.length === 5 && !r.id.includes('-here'));
+    expect(pairs.length).toBeGreaterThan(0);
+    for (const r of pairs) {
+      const query = (JSON.parse(r.messages[2].content.replace(/^TOOL_CALL: /, '')).args as { query: string }).query;
+      const spec = NAV_SPECS.find((s) => s.query === query)!;
+      const title = pageForView(canonicalView(spec.view))!.title;
+      // The reply must quote the real match-#1 title, and must NOT contain a
+      // second tool call (the follow-up is prose).
+      expect(r.messages[4].content).toContain(title);
+      expect(r.messages[4].content).not.toContain('TOOL_CALL');
+    }
+  });
+
+  it('the already-on-the-page records answer "already here", never re-navigate', () => {
+    const here = nav.filter((r) => r.id.includes('find_page-here') && r.messages.length === 5);
+    expect(here.length).toBeGreaterThan(0);
+    for (const r of here) {
+      const reply = r.messages[4].content;
+      expect(reply.toLowerCase()).toContain('already on');
+      expect(reply).not.toContain('TOOL_CALL');
+      expect(r.expect.mustContain).toContain('already on');
+    }
+  });
+
+  it('nav calls satisfy the live Zod executor (no schema drift)', () => {
+    for (const r of nav.filter((x) => x.messages.length === 3 || x.messages.length === 2)) {
+      const callLine = r.messages.find((m) => m.role === 'assistant')!.content;
+      const v = scoreToolReply(callLine);
+      if (v.kind !== 'valid') throw new Error(`${r.id} not valid`);
+      const sc = SCENARIOS.find((x) => x.id === r.scenarioId)!;
+      const ctx: ToolContext = {
+        inputs: sc.inputs, config: testConfig(), scenarioName: sc.name,
+        scenarioList: [], activeScenarioId: sc.id, canNavigate: true, currentView: 'projection',
+      };
+      const outcome = executeToolCall(ctx, { id: 't', name: v.name, args: v.args });
+      expect(outcome.kind, `${r.id} args must satisfy schema`).not.toBe('error');
+    }
+  }, 120000);
+
+  it('approved/rejected continuations never re-propose (mutation discipline)', () => {
+    const confirms = nav.filter((r) => r.expect.toolName === 'propose_navigate' && r.messages.length === 5);
+    expect(confirms.length).toBeGreaterThan(0);
+    for (const r of confirms) {
+      expect(r.messages[4].content).not.toContain('TOOL_CALL');
+    }
+  });
 });
 
 describe('mutation records', () => {

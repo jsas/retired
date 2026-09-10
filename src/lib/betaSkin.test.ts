@@ -28,29 +28,34 @@ describe('readBetaCookie', () => {
   });
 });
 
-describe('decideBeta', () => {
-  it('?beta turns the skin on and writes the cookie', () => {
-    const d = decideBeta('?beta', '');
+describe('decideBeta — the app is the default; ?beta asks for the old reference UI', () => {
+  it('no param, no cookie → the app, nothing written', () => {
+    const d = decideBeta('', '');
     expect(d.beta).toBe(true);
+    expect(d.set).toBeNull();
+  });
+  it('?beta switches to the reference UI and writes the cookie', () => {
+    const d = decideBeta('?beta', '');
+    expect(d.beta).toBe(false);
     expect(d.set).toContain(`${BETA_COOKIE_NAME}=1`);
     expect(d.set).toContain('max-age=');
   });
-  it('any non-off value counts as on', () => {
-    expect(decideBeta('?beta=on', '').beta).toBe(true);
-    expect(decideBeta('?beta=whatever', '').beta).toBe(true);
+  it('any non-off value asks for the reference', () => {
+    expect(decideBeta('?beta=on', '').beta).toBe(false);
+    expect(decideBeta('?beta=whatever', '').beta).toBe(false);
   });
-  it('?beta=off (and 0/false/no) turns it off and expires the cookie', () => {
+  it('?beta=off (and 0/false/no) returns to the app and expires the cookie', () => {
     const d = decideBeta('?beta=off', `${BETA_COOKIE_NAME}=1`);
-    expect(d.beta).toBe(false);
+    expect(d.beta).toBe(true);
     expect(d.set).toContain(`${BETA_COOKIE_NAME}=0`);
     expect(d.set).toContain('max-age=0');
-    expect(decideBeta('?beta=0', '').beta).toBe(false);
-    expect(decideBeta('?beta=FALSE', '').beta).toBe(false);
+    expect(decideBeta('?beta=0', '').beta).toBe(true);
+    expect(decideBeta('?beta=FALSE', '').beta).toBe(true);
   });
   it('without the param the cookie alone decides', () => {
-    expect(decideBeta('', `${BETA_COOKIE_NAME}=1`).beta).toBe(true);
-    expect(decideBeta('', `${BETA_COOKIE_NAME}=0`).beta).toBe(false);
-    expect(decideBeta('', '').beta).toBe(false);
+    expect(decideBeta('', `${BETA_COOKIE_NAME}=1`).beta).toBe(false);
+    expect(decideBeta('', `${BETA_COOKIE_NAME}=0`).beta).toBe(true);
+    expect(decideBeta('', '').beta).toBe(true);
   });
   it('writes nothing when the URL makes no claim', () => {
     expect(decideBeta('', `${BETA_COOKIE_NAME}=1`).set).toBeNull();
