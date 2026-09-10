@@ -255,9 +255,11 @@
         "phases",
         "bands",
         "slow down",
-        "spend less later"
+        "spend less later",
+        "dollars",
+        "percent"
       ],
-      "body": "From each \"from age\", spending drops to the given share of desired spending (still inflation-adjusted). E.g. 100% to 74, 85% from 75, 70% from 85."
+      "body": "From each \"from age\", spending is that phase's share of desired spending (still inflation-adjusted) — shown as both dollars per year and percent, so you can edit either. E.g. 100% ($50,000) to 74, 85% ($42,500) from 75, 70% ($35,000) from 85, if base spending is $50,000."
     },
     "withdrawal-order": {
       "title": "Withdrawal order",

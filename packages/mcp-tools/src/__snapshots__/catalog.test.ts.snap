@@ -1512,7 +1512,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "propose_income",
   },
   {
-    "description": "PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.",
+    "description": "PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age; dollar amounts are desiredSpending × pctOfBase). User confirms.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,

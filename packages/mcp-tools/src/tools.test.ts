@@ -527,6 +527,22 @@ describe('propose_debt / manage_debt', () => {
       expect(out.content).toContain('funded from spending');
     }
   });
+
+  it('surfaces spending phases as percent and dollars', () => {
+    const c = ctx({
+      inputs: baseInputs({
+        desiredSpending: 50000,
+        spendingBands: [{ fromAge: 70, pctOfBase: 0.8 }],
+      }),
+    });
+    const out = executeToolCall(c, { id: '1', name: 'get_scenario', args: { section: 'spending' } });
+    expect(out.kind).toBe('result');
+    if (out.kind === 'result') {
+      expect(out.content).toContain('80%');
+      expect(out.content).toContain('$40,000/yr');
+      expect(out.content).toContain('from age 70');
+    }
+  });
 });
 
 describe('propose_spending_bands', () => {
@@ -537,6 +553,9 @@ describe('propose_spending_bands', () => {
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
     expect(out.patch.spendingBands).toEqual([{ fromAge: 65, pctOfBase: 1 }, { fromAge: 80, pctOfBase: 0.7 }]);
+    expect(out.preview).toEqual({
+      bands: ['100% ($20,000/yr) from age 65', '70% ($14,000/yr) from age 80'],
+    });
   });
 
   it('rejects an out-of-range pctOfBase', () => {

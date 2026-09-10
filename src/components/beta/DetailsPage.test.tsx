@@ -167,4 +167,16 @@ describe('DetailsPage inline editors', () => {
     expect(html).toContain('Scheduled draws');
     expect(html).not.toContain('Draw $/yr');
   });
+
+  it('shows spending phases as both dollars and percent of base', () => {
+    const html = render({
+      desiredSpending: 50000,
+      spendingBands: [{ fromAge: 70, pctOfBase: 0.8 }],
+    });
+    expect(html).toContain('$ / yr');
+    expect(html).toContain('% of base');
+    expect(html).toContain('value="70"');
+    expect(html).toContain('value="40000"');
+    expect(html).toContain('value="80"');
+  });
 });

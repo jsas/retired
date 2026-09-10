@@ -375,18 +375,28 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           <p className="text-[12px] text-slate-500">{t('spendingLead')}</p>
           {bands.length === 0 && <p className="text-[12.5px] text-slate-400">{t('noPhases')}</p>}
           <div className="space-y-2">
-            {bands.map((b, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Num label={t('fromAge')} value={b.fromAge} step={1} onChange={(v) => {
-                  const next = [...bands]; next[i] = { ...b, fromAge: v }; set({ spendingBands: next });
-                }} />
-                <Num label={t('pctOfBase')} value={Math.round(b.pctOfBase * 100)} step={5} onChange={(v) => {
-                  const next = [...bands]; next[i] = { ...b, pctOfBase: v / 100 }; set({ spendingBands: next });
-                }} />
-                <button className="mt-4 text-slate-400 hover:text-rose-600" aria-label={t('removePhase')}
-                  onClick={() => set({ spendingBands: bands.filter((_, j) => j !== i) })}>×</button>
-              </div>
-            ))}
+            {bands.map((b, i) => {
+              const base = inp.desiredSpending;
+              const dollars = Math.round(base * b.pctOfBase);
+              const setBand = (patch: Partial<SpendingBand>) => {
+                const next = [...bands]; next[i] = { ...b, ...patch }; set({ spendingBands: next });
+              };
+              return (
+                <div key={i} className="flex items-end gap-2">
+                  <Num label={t('fromAge')} value={b.fromAge} step={1} onChange={(v) => setBand({ fromAge: v })} />
+                  <Num label={t('amountOfBase')} value={dollars} step={1000} min={0} onChange={(v) => {
+                    if (!Number.isFinite(v) || !(base > 0)) return;
+                    setBand({ pctOfBase: v / base });
+                  }} />
+                  <Num label={t('pctOfBase')} value={Math.round(b.pctOfBase * 100)} step={5} min={0} onChange={(v) => {
+                    if (!Number.isFinite(v)) return;
+                    setBand({ pctOfBase: v / 100 });
+                  }} />
+                  <button className="mb-1.5 text-slate-400 hover:text-rose-600" aria-label={t('removePhase')}
+                    onClick={() => set({ spendingBands: bands.filter((_, j) => j !== i) })}>×</button>
+                </div>
+              );
+            })}
           </div>
           <button className="mt-1 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
             onClick={() => set({ spendingBands: [...bands, { fromAge: (bands[bands.length - 1]?.fromAge ?? inp.retirementAge) + 10, pctOfBase: 0.8 }] })}>

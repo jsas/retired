@@ -274,9 +274,11 @@
         "tranches",
         "ralentir",
         "dépenser moins plus tard",
-        "go-go"
+        "go-go",
+        "dollars",
+        "pourcent"
       ],
-      "body": "À partir de chaque « à partir de l'âge », les dépenses tombent à la part indiquée des dépenses souhaitées (toujours indexées à l'inflation). Ex. 100 % jusqu'à 74 ans, 85 % à partir de 75 ans, 70 % à partir de 85 ans."
+      "body": "À partir de chaque « à partir de l'âge », les dépenses sont la part de cette phase des dépenses souhaitées (toujours indexées à l'inflation) — affichées à la fois en dollars par année et en pourcentage, pour que vous puissiez modifier l'un ou l'autre. Ex. 100 % (50 000 $) jusqu'à 74 ans, 85 % (42 500 $) à partir de 75 ans, 70 % (35 000 $) à partir de 85 ans, si les dépenses de base sont de 50 000 $."
     },
     "withdrawal-order": {
       "title": "Ordre de retrait",
