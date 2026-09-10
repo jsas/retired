@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { diffRevisions, MAX_REVISIONS, type ScenarioRevision } from '../lib/scenarioRevisions';
 import { Dot } from '../design/primitives';
 import { BLUE, cls } from '../design/tokens';
+import { useAppLocale } from '../lib/localeContext';
 
 interface Scenario {
   id: string;
@@ -35,6 +37,7 @@ interface ScenarioManagerProps {
 // hairline list: the active plan reads by weight and its blue dot, the rest
 // sit quiet until hovered. Every save keeps a revision you can roll back to.
 export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, revisions, onRollback, onSelectScenario, onCreateScenario }: ScenarioManagerProps) {
+  const { t } = useTranslation('pages');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   /** Which scenario's history is expanded (one at a time keeps it readable). */
@@ -52,7 +55,7 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
   const handleCreateNew = () => {
     onCreateScenario({
       id: `scenario-${Date.now()}`,
-      name: `New Scenario ${scenarios.length + 1}`,
+      name: t('plansUi.newName', { n: scenarios.length + 1 }),
       inputs: baselineInputs(),
       isFresh: true,
     });
@@ -63,7 +66,7 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
     if (!scenario) return;
     onCreateScenario({
       id: `scenario-${Date.now()}`,
-      name: `${scenario.name} Copy`,
+      name: t('plansUi.copyName', { name: scenario.name }),
       inputs: JSON.parse(JSON.stringify(scenario.inputs)),
       isFresh: false,
     });
@@ -87,11 +90,10 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
     <div>
       <div className="flex items-start justify-between gap-4">
         <p className="max-w-lg text-[12.5px] leading-relaxed text-slate-500">
-          Click a plan to load it. Duplicate branches a what-if; each save keeps a
-          revision (last {MAX_REVISIONS} per plan) you can roll back to.
+          {t('plansUi.lead', { n: MAX_REVISIONS })}
         </p>
         <button onClick={handleCreateNew} className={`${cls.primaryBtn} shrink-0`}>
-          New plan
+          {t('plansUi.newPlan')}
         </button>
       </div>
 
@@ -115,34 +117,34 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
                         if (e.key === 'Escape') setEditingId(null);
                       }}
                     />
-                    <button onClick={handleRename} className={cls.hairlineBtn} title="Save name">Save</button>
-                    <button onClick={() => setEditingId(null)} className={cls.hairlineBtn} title="Cancel">Cancel</button>
+                    <button onClick={handleRename} className={cls.hairlineBtn} title={t('plansUi.saveNameTitle')}>{t('plansUi.saveName')}</button>
+                    <button onClick={() => setEditingId(null)} className={cls.hairlineBtn} title={t('plansUi.cancel')}>{t('plansUi.cancel')}</button>
                   </div>
                 ) : (
                   <>
                     <button onClick={() => onSelectScenario(scenario.id)} className="min-w-0 flex-1 text-left">
                       <div className="flex items-center gap-2">
-                        {isActive && <Dot color={BLUE} title="the active plan" />}
+                        {isActive && <Dot color={BLUE} title={t('plansUi.activeDot')} />}
                         <span className={`truncate text-[14px] ${isActive ? 'font-semibold text-slate-900' : 'font-medium text-slate-600'}`}>
                           {scenario.name}
                         </span>
                       </div>
                       <div className="mt-0.5 text-[11px] text-slate-400">
-                        {isActive ? 'Active — the dashboard shows this plan' : 'Click to load'}
+                        {isActive ? t('plansUi.activeHint') : t('plansUi.clickToLoad')}
                       </div>
                     </button>
                     <div className="flex shrink-0 items-center gap-1 text-[11px]">
                       <RowAction onClick={() => setHistoryFor(historyFor === scenario.id ? null : scenario.id)}>
-                        {historyFor === scenario.id ? 'Hide history' : 'History'}
+                        {historyFor === scenario.id ? t('plansUi.hideHistory') : t('plansUi.history')}
                       </RowAction>
-                      <RowAction onClick={() => handleDuplicate(scenario.id)}>Duplicate</RowAction>
-                      <RowAction onClick={() => setEditingId(scenario.id)}>Rename</RowAction>
+                      <RowAction onClick={() => handleDuplicate(scenario.id)}>{t('plansUi.duplicate')}</RowAction>
+                      <RowAction onClick={() => setEditingId(scenario.id)}>{t('plansUi.rename')}</RowAction>
                       <RowAction
                         onClick={() => handleDelete(scenario.id)}
                         disabled={scenarios.length <= 1}
-                        title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete this scenario'}
+                        title={scenarios.length <= 1 ? t('plansUi.keepOne') : t('plansUi.deleteThis')}
                       >
-                        <span className="text-rose-700">Delete</span>
+                        <span className="text-rose-700">{t('plansUi.delete')}</span>
                       </RowAction>
                     </div>
                   </>
@@ -199,6 +201,7 @@ function RevisionList({ scenarioId, revisions, currentInputs, canRollback, onRol
   canRollback: boolean;
   onRollback: (revisionId: string) => void;
 }) {
+  const { t } = useTranslation('pages');
   const mine = useMemo(
     () => revisions
       .filter(r => r.scenarioId === scenarioId)
@@ -209,7 +212,7 @@ function RevisionList({ scenarioId, revisions, currentInputs, canRollback, onRol
   if (mine.length === 0) {
     return (
       <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
-        No revisions yet. Every save of this scenario keeps one here (last {MAX_REVISIONS}).
+        {t('plansUi.noRevisions', { n: MAX_REVISIONS })}
       </div>
     );
   }
@@ -239,6 +242,8 @@ function RevisionRow({ rev, baseline, canRollback, onRollback }: {
   canRollback: boolean;
   onRollback: (revisionId: string) => void;
 }) {
+  const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   const [open, setOpen] = useState(false);
   /** What this revision changed relative to the state just after it —
    *  recomputed when the baseline changes (i.e. after any save/rollback). */
@@ -247,11 +252,11 @@ function RevisionRow({ rev, baseline, canRollback, onRollback }: {
     [rev, baseline],
   );
 
-  const when = new Date(rev.at).toLocaleString('en-CA', {
+  const when = new Date(rev.at).toLocaleString(locale, {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });
-  const source = rev.source === 'agent' ? 'agent change'
-    : rev.source === 'revert' ? 'rollback' : 'save';
+  const source = rev.source === 'agent' ? t('plansUi.sourceAgent')
+    : rev.source === 'revert' ? t('plansUi.sourceRevert') : t('plansUi.sourceSave');
 
   return (
     <div className="flex items-start gap-2 text-[11px]">
@@ -263,15 +268,15 @@ function RevisionRow({ rev, baseline, canRollback, onRollback }: {
         <span className="text-slate-300"> · </span>
         <span className="text-slate-500">{source}</span>
         <span className="text-slate-300"> · </span>
-        <span className="text-slate-500">{diffs.length === 0 ? 'no changes from previous' : `${diffs.length} change${diffs.length === 1 ? '' : 's'}`}</span>
+        <span className="text-slate-500">{diffs.length === 0 ? t('plansUi.noChanges') : diffs.length === 1 ? t('plansUi.changeOne', { count: diffs.length }) : t('plansUi.changeOther', { count: diffs.length })}</span>
         {open && diffs.length > 0 && (
           <div className="num mt-1 break-all font-mono text-[10px] text-slate-600">
             {diffs.map(d => (
               <div key={d.field}>
                 <span className="text-slate-400">{d.field}:</span>{' '}
-                <span className="text-rose-700">{fmt(d.from)}</span>
+                <span className="text-rose-700">{fmt(d.from, t)}</span>
                 {' → '}
-                <span className="text-emerald-700">{fmt(d.to)}</span>
+                <span className="text-emerald-700">{fmt(d.to, t)}</span>
               </div>
             ))}
           </div>
@@ -283,9 +288,9 @@ function RevisionRow({ rev, baseline, canRollback, onRollback }: {
           // history immediately — no confirm, the row title says what it does.
           onClick={() => onRollback(rev.id)}
           className="shrink-0 px-1 py-1 text-slate-400 hover:text-slate-900"
-          title="Roll back to this revision (deletes newer revisions)"
+          title={t('plansUi.undoTitle')}
         >
-          undo
+          {t('plansUi.undo')}
         </button>
       )}
     </div>
@@ -293,8 +298,8 @@ function RevisionRow({ rev, baseline, canRollback, onRollback }: {
 }
 
 /** Compact value formatting for diffs (structural blocks collapse to a tag). */
-function fmt(v: unknown): string {
-  if (v === undefined) return '(absent)';
+function fmt(v: unknown, t: (key: string) => string): string {
+  if (v === undefined) return t('plansUi.absent');
   if (v === null) return 'null';
   if (typeof v === 'number') return String(Math.round(v * 100) / 100);
   if (typeof v === 'boolean') return String(v);
