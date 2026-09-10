@@ -49,13 +49,13 @@ function topicFromHash(): string | null {
 }
 
 export function HelpModal() {
-  const { t } = useTranslation('help');
+  const { t, i18n } = useTranslation('help');
   const [query, setQuery] = useState('');
   const [flashId, setFlashId] = useState<string | null>(null);
   const q = query.trim();
   const sectionLabel = (section: string) => t(`sections.${section}`, { defaultValue: section });
 
-  const filtered = useMemo(() => searchHelpTopics(q), [q]);
+  const filtered = useMemo(() => searchHelpTopics(q), [q, i18n.language]);
   const bySection = useMemo(() => {
     const map = new Map<string, HelpTopic[]>();
     for (const s of HELP_SECTIONS) map.set(s, []);

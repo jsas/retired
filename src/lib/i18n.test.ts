@@ -30,6 +30,20 @@ describe('i18n catalogs', () => {
     }
   });
 
+  it('fr-CA help topic bodies are translated (MIT license stays English)', () => {
+    const en = i18n.getResourceBundle('en-CA', 'help') as {
+      topics: Record<string, { body: string }>;
+    };
+    const fr = i18n.getResourceBundle('fr-CA', 'help') as {
+      topics: Record<string, { body: string }>;
+    };
+    const leftover = Object.entries(en.topics)
+      .filter(([id, topic]) => id !== 'mit-license' && fr.topics[id].body === topic.body)
+      .map(([id]) => id);
+    expect(leftover).toEqual([]);
+    expect(fr.topics['mit-license'].body).toBe(en.topics['mit-license'].body);
+  });
+
   it('en-CA values are not empty strings', () => {
     for (const ns of I18N_NAMESPACES) {
       const bundle = i18n.getResourceBundle('en-CA', ns) as Record<string, unknown>;

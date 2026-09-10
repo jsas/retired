@@ -70,9 +70,11 @@ export function HelpHint({ topic: topicId, place = 'bottom', className = '' }: {
   place?: 'bottom' | 'top';
   className?: string;
 }) {
+  const { i18n } = useTranslation('help');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   const topic = helpTopic(topicId);
+  void i18n.language;
 
   useEffect(() => {
     if (!open) return;

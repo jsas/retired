@@ -33,358 +33,382 @@
       "title": "Âge actuel / retraite / âge max",
       "section": "People",
       "keywords": [
-        "ages",
+        "âges",
         "horizon",
-        "planning horizon",
-        "how long"
+        "horizon de planification",
+        "combien de temps"
       ],
-      "body": "Accumulation runs from current age until the year before retirement age. Drawdown runs from retirement age through max age. Max age is your planning horizon — the plan must stay funded through it."
+      "body": "L'accumulation va de l'âge actuel jusqu'à l'année précédant l'âge de retraite. Le décaissement va de l'âge de retraite jusqu'à l'âge max. L'âge max est votre horizon de planification — le plan doit rester financé jusqu'à cet âge."
     },
     "province": {
       "title": "Province",
       "section": "People",
       "keywords": [
-        "tax table",
+        "table d'impôt",
         "provincial",
         "ontario",
+        "québec",
         "quebec"
       ],
-      "body": "Sets which provincial tax table is stacked on top of the federal one. Tables are editable under Settings."
+      "body": "Détermine quelle table d'impôt provinciale s'ajoute à la table fédérale. Les tables se modifient dans Paramètres."
     },
     "include-spouse": {
       "title": "Inclure un conjoint",
       "section": "People",
       "keywords": [
-        "partner",
+        "conjoint",
+        "partenaire",
         "couple",
-        "household"
+        "ménage"
       ],
-      "body": "A partner is another saved plan, linked from this one. Their ages, balances, contributions, CPP/OAS and spending live on that plan — open it to edit. The two plans combine into a household verdict: the household is SHORTFALL if either plan runs out, and the metric cards show household wealth at retirement with per-person detail."
+      "body": "Un conjoint est un autre plan enregistré, lié à celui-ci. Ses âges, soldes, cotisations, RPC/SV et dépenses vivent sur ce plan — ouvrez-le pour les modifier. Les deux plans se combinent en un verdict de ménage : le ménage est en DÉFICIT si l'un ou l'autre plan s'épuise, et les cartes d'indicateurs montrent la richesse du ménage à la retraite, avec le détail par personne."
     },
     "built-in-vs-linked-spouse": {
       "title": "Conjoint lié",
       "section": "People",
       "keywords": [
-        "link a plan",
-        "shared spouse",
-        "one source of truth",
-        "built-in"
+        "lier un plan",
+        "conjoint partagé",
+        "une seule source de vérité",
+        "intégré"
       ],
-      "body": "A partner is always another saved plan. This plan stores only the link; their numbers live on that plan and are edited there. Creating a partner plan (wizard, Plans, or the assistant) mints a new saved plan and links it.\n\nA household shares one province, one market assumption and one planning horizon, so a linked spouse's own values for those are overridden by this plan."
+      "body": "Un conjoint est toujours un autre plan enregistré. Ce plan ne stocke que le lien; ses chiffres vivent sur ce plan et s'y modifient. Créer un plan conjoint (assistant de configuration, Plans ou l'assistant) crée un nouveau plan enregistré et le lie.\n\nUn ménage partage une province, une hypothèse de marché et un horizon de planification; les valeurs propres du conjoint lié pour ces champs sont donc remplacées par celles de ce plan."
     },
     "spouse-approximation": {
       "title": "Approximation du conjoint",
       "section": "People",
       "keywords": [
-        "pension splitting",
-        "income splitting",
-        "gis couple"
+        "fractionnement de pension",
+        "fractionnement du revenu",
+        "srg couple"
       ],
-      "body": "Each spouse is drawn down independently; pension income splitting *is* modelled — up to 50% of eligible pension income (DB pensions, plus RRIF/RRSP draws **from age 65** — not CPP/OAS) is reallocated to the lower-taxed spouse each year (affects reported tax only). Spousal RRSPs are not modelled. Couple-based GIS *is* modelled (combined non-OAS income, couple rate when both receive OAS)."
+      "body": "Chaque conjoint est décaissé indépendamment; le *fractionnement du revenu de pension* **est** modélisé — jusqu'à 50 % du revenu de pension admissible (pensions à prestations déterminées, plus les retraits FERR/REER **à partir de 65 ans** — pas le RPC/SV) est réaffecté chaque année au conjoint moins imposé (n'affecte que l'impôt déclaré). Les REER de conjoint ne sont pas modélisés. Le SRG pour couple **est** modélisé (revenu combiné hors SV, taux de couple lorsque les deux reçoivent la SV)."
     },
     "rrsp": {
       "title": "REER",
       "section": "Accounts",
       "keywords": [
-        "registered",
-        "rrif",
-        "pre-tax"
+        "enregistré",
+        "ferr",
+        "avant impôt",
+        "reer",
+        "rrsp"
       ],
-      "body": "Pre-tax registered savings. Every dollar withdrawn is taxed as income."
+      "body": "Épargne enregistrée avant impôt. Chaque dollar retiré est imposé comme un revenu."
     },
     "tfsa": {
       "title": "CELI",
       "section": "Accounts",
       "keywords": [
-        "tax-free",
-        "after-tax savings"
+        "exempt d'impôt",
+        "épargne après impôt",
+        "celi",
+        "tfsa"
       ],
-      "body": "After-tax savings. Withdrawals are completely tax-free."
+      "body": "Épargne après impôt. Les retraits sont entièrement libres d'impôt."
     },
     "taxable": {
       "title": "Imposable (non enregistré)",
       "section": "Accounts",
       "keywords": [
-        "non-registered",
-        "acb",
-        "capital gains",
-        "embedded gain"
+        "non enregistré",
+        "pbr",
+        "gains en capital",
+        "gain latent",
+        "acb"
       ],
-      "body": "Non-registered investments. The principal comes out tax-free; the embedded-gain fraction of each withdrawal is taxed at the capital-gains inclusion rate (Settings → Capital Gains sets the starting ACB share)."
+      "body": "Placements non enregistrés. Le capital sort libre d'impôt; la fraction de gain latent de chaque retrait est imposée au taux d'inclusion des gains en capital (Paramètres → Gains en capital fixe la part de PBR de départ)."
     },
     "cash-cushion": {
       "title": "Coussin de liquidités",
       "section": "Accounts",
       "keywords": [
-        "reserve",
-        "emergency fund",
-        "low yield"
+        "réserve",
+        "fonds d'urgence",
+        "faible rendement"
       ],
-      "body": "A low-yield reserve (rate set in Settings → Engine, default 0.5%). Always drawn last, as the final backstop before the plan runs dry."
+      "body": "Une réserve à faible rendement (taux fixé dans Paramètres → Moteur, 0,5 % par défaut). Toujours retirée en dernier, comme ultime filet avant que le plan ne tarisse."
     },
     "contributions": {
       "title": "Cotisations ($/an)",
       "section": "Accounts",
       "keywords": [
-        "annual savings",
-        "deposit",
-        "rrsp tfsa contribution"
+        "épargne annuelle",
+        "dépôt",
+        "cotisation reer celi"
       ],
-      "body": "Added to each account every year during accumulation, after that year's growth. The engine does not model RRSP tax refunds on contributions. Set TFSA/RRSP room to cap each year's registered deposits at the room you have left, spilling any excess into the non-registered account; leave room blank to skip enforcement."
+      "body": "Ajoutées à chaque compte chaque année pendant l'accumulation, après la croissance de cette année. Le moteur ne modélise pas les remboursements d'impôt REER sur les cotisations. Fixez les droits CELI/REER pour plafonner les dépôts enregistrés de chaque année au droit restant, le surplus se déversant dans le compte non enregistré; laissez les droits vides pour ne pas les appliquer."
     },
     "contribution-room": {
       "title": "Droits de cotisation",
       "section": "Accounts",
       "keywords": [
-        "tfsa room",
-        "rrsp room",
-        "notice of assessment",
-        "over-contribute",
-        "meltdown"
+        "droits celi",
+        "droits reer",
+        "avis de cotisation",
+        "surcotiser",
+        "fonte",
+        "room"
       ],
-      "body": "Your available room from your CRA notice of assessment. Blank means \"no limit\". Enter a number and room is tracked: each year TFSA room grows by the annual limit ($7,000/yr) and RRSP room by 18% of employment income up to the maximum, minus any pension adjustment. A TFSA withdrawal re-adds room the *following* year; an RRSP withdrawal never does. Deposits beyond your remaining room overflow into non-registered, so an RRSP→TFSA meltdown is capped at your TFSA room. The schedule's expandable **Contribution room** panel shows room left and any overflow per year."
+      "body": "Vos droits disponibles selon votre avis de cotisation de l'ARC. Vide signifie « aucune limite ». Entrez un montant et les droits sont suivis : chaque année, les droits CELI croissent du plafond annuel (7 000 $/an) et les droits REER de 18 % du revenu d'emploi jusqu'au maximum, moins tout facteur d'équivalence. Un retrait CELI **rajoute** des droits l'année *suivante*; un retrait REER ne le fait jamais. Les dépôts au-delà des droits restants débordent vers le non enregistré, donc une fonte REER→CELI est plafonnée à vos droits CELI. Le panneau **Droits de cotisation** du calendrier (dépliable) montre les droits restants et tout débordement par année."
     },
     "rdsp": {
       "title": "REEI (épargne-invalidité)",
       "section": "Accounts",
       "keywords": [
-        "disability",
-        "dtc",
-        "grant",
-        "bond"
+        "invalidité",
+        "ciph",
+        "subvention",
+        "bon",
+        "reei",
+        "rdsp",
+        "dtc"
       ],
-      "body": "A Registered Disability Savings Plan for a DTC-eligible person. Contributions are **not deductible**, grow tax-sheltered, and attract Canada Disability Savings **Grants** and **Bonds** (paid to age 49, contributions to age 59, lifetime caps). On withdrawal, the contribution portion is **tax-free** while the grant/bond/growth portion is **taxable income**; the app tracks your contribution basis and splits every draw. Thresholds and caps are editable under Settings → RDSP. **Not modelled:** the 10-year assistance holdback clawback and grant/bond carry-forward — check canada.ca for your exact amounts."
+      "body": "Un régime enregistré d'épargne-invalidité pour une personne admissible au crédit d'impôt pour personnes handicapées (CIPH). Les cotisations **ne sont pas déductibles**, croissent à l'abri de l'impôt et attirent les **subventions** et **bons** canadiens pour l'épargne-invalidité (versés jusqu'à 49 ans, cotisations jusqu'à 59 ans, plafonds à vie). Au retrait, la portion cotisations est **libre d'impôt** tandis que la portion subvention/bon/croissance est un **revenu imposable**; l'appli suit votre base de cotisations et scinde chaque retrait. Seuils et plafonds se modifient dans Paramètres → REEI. **Non modélisé :** la retenue d'aide de 10 ans et le report de subvention/bon — consultez canada.ca pour vos montants exacts."
     },
     "fhsa": {
       "title": "CELIAPP (épargne-logement)",
       "section": "Accounts",
       "keywords": [
-        "first home",
-        "house down payment",
-        "deductible"
+        "première maison",
+        "mise de fonds",
+        "déductible",
+        "celiapp",
+        "fhsa"
       ],
-      "body": "A First Home Savings Account. Contributions are **deductible** (like an RRSP), grow **tax-sheltered**, capped at **$8,000/yr** and a **$40,000 lifetime** total; the plan can stay open 15 years. Because this app models retirement, the FHSA is **accumulation-only**: at retirement the balance **transfers to your RRSP** (no RRSP room needed) and draws down like any other RRSP money. Limits editable under Settings → FHSA. **Not modelled:** a qualifying first-home **withdrawal** (which would be tax-free)."
+      "body": "Un compte d'épargne libre d'impôt pour l'achat d'une première propriété. Les cotisations sont **déductibles** (comme un REER), croissent **à l'abri de l'impôt**, plafonnées à **8 000 $/an** et **40 000 $ à vie**; le compte peut rester ouvert 15 ans. Comme cette appli modélise la retraite, le CELIAPP est **accumulation seulement** : à la retraite, le solde **est transféré dans votre REER** (sans droits REER requis) et se décaisse comme tout autre argent REER. Plafonds modifiables dans Paramètres → CELIAPP. **Non modélisé :** un **retrait admissible** pour une première maison (qui serait libre d'impôt)."
     },
     "income": {
       "title": "Revenu (pensions et travail)",
       "section": "Income",
       "keywords": [
         "pension",
-        "employment",
-        "self-employment",
-        "rental",
-        "bridge",
-        "db",
+        "emploi",
+        "travail autonome",
+        "location",
+        "pont",
+        "pd",
         "t4"
       ],
-      "body": "The Income section is one register of everything you earn besides CPP/OAS. Each source has a **kind**, a gross $/yr, a start age, and an *indexed* flag. Four kinds are modelled:\n\n- **Pension (DB / bridge)** — a fixed $/yr from the start age, taxed as ordinary income. Leave the end age blank for lifetime, or set one for a **bridge** benefit. Counts toward GIS/OAS clawbacks and is pension-split-eligible.\n- **Employment** — wages, earned income: taxed at your marginal rate, builds RRSP room. Before retirement the after-tax pay is saved into the destination account; the **saves …% of net** field sets how much.\n- **Self-employment** — net income, earned like a job but pays **both halves of CPP** (deducted), and is not pension-split-eligible.\n- **Rental** — net rental income: taxable investment income, builds no RRSP room, not split-eligible. The after-tax net lands in Taxable.\n\nRegistered destinations default to Taxable; with contribution room set, TFSA/RRSP deposits cap at remaining room and spill to Taxable. A pension can carry a **pension adjustment** that reduces the RRSP room you accrue."
+      "body": "La section Revenu est le registre de tout ce que vous gagnez hors RPC/SV. Chaque source a un **type**, un montant brut $/an, un âge de début et un indicateur *indexé*. Quatre types sont modélisés :\n\n- **Pension (PD / pont)** — un montant fixe $/an à partir de l'âge de début, imposé comme un revenu ordinaire. Laissez l'âge de fin vide pour une rente à vie, ou fixez-en un pour une prestation **pont**. Compte pour les récupérations SRG/SV et est admissible au fractionnement de pension.\n- **Emploi** — salaires, revenu gagné : imposé à votre taux marginal, accumule des droits REER. Avant la retraite, le net après impôt est épargné dans le compte de destination; le champ **épargne … % du net** fixe la part.\n- **Travail autonome** — revenu net, gagné comme un emploi mais paie **les deux parts du RPC** (déduites), et n'est pas admissible au fractionnement de pension.\n- **Location** — revenu net de location : revenu de placement imposable, n'accumule pas de droits REER, non admissible au fractionnement. Le net après impôt atterrit dans Non enregistré.\n\nLes destinations enregistrées vont par défaut vers Non enregistré; avec des droits de cotisation fixés, les dépôts CELI/REER sont plafonnés aux droits restants et débordent vers Non enregistré. Une pension peut porter un **facteur d'équivalence** qui réduit les droits REER que vous accumulez."
     },
     "cpp-start-age": {
       "title": "Âge de début et montant du RPC",
       "section": "Income",
       "keywords": [
+        "rpc",
         "cpp",
-        "canada pension plan",
-        "defer",
-        "take early",
+        "régime de pensions du canada",
+        "reporter",
+        "prendre tôt",
         "60 65 70"
       ],
-      "body": "Your expected CPP pension at the standard age of 65. The engine applies the early/deferral adjustment itself: −0.6% per month before 65 (−36% at 60), +0.7% per month after 65 (+42% at 70). If the checkbox is ticked, the amount you entered is used verbatim (already adjusted). CPP is taxable income."
+      "body": "Votre pension RPC prévue à l'âge standard de 65 ans. Le moteur applique lui-même l'ajustement d'anticipation/report : −0,6 % par mois avant 65 ans (−36 % à 60 ans), +0,7 % par mois après 65 ans (+42 % à 70 ans). Si la case est cochée, le montant saisi est utilisé tel quel (déjà ajusté). Le RPC est un revenu imposable."
     },
     "oas-start-age": {
       "title": "Âge de début de la SV",
       "section": "Income",
       "keywords": [
+        "sv",
         "oas",
-        "old age security",
-        "clawback",
-        "defer"
+        "sécurité de la vieillesse",
+        "récupération",
+        "reporter",
+        "clawback"
       ],
-      "body": "OAS normally starts at 65; deferring to 70 adds 0.6% per month (+36% at 70) — the engine applies this automatically. At 75 the benefit steps up 10%. OAS is taxable and subject to the clawback (see the Assumptions section)."
+      "body": "La SV commence normalement à 65 ans; un report jusqu'à 70 ans ajoute 0,6 % par mois (+36 % à 70 ans) — le moteur l'applique automatiquement. À 75 ans, la prestation augmente de 10 %. La SV est imposable et assujettie à la récupération (voir la section Hypothèses)."
     },
     "years-in-canada": {
       "title": "Années au Canada (SV)",
       "section": "Income",
       "keywords": [
-        "residency",
-        "oas eligibility",
-        "40 years"
+        "résidence",
+        "admissibilité sv",
+        "40 ans"
       ],
-      "body": "Post-age-18 residency. Full OAS needs 40 years; fewer years scale the pension proportionally. Under 10 years pays nothing."
+      "body": "Résidence après 18 ans. La SV pleine exige 40 ans; moins d'années réduit la pension proportionnellement. Moins de 10 ans ne verse rien."
     },
     "gis": {
       "title": "SRG (Supplément de revenu garanti)",
       "section": "Income",
       "keywords": [
-        "guaranteed income supplement",
-        "low income",
-        "supplement"
+        "supplément de revenu garanti",
+        "faible revenu",
+        "supplément",
+        "srg",
+        "gis"
       ],
-      "body": "The Guaranteed Income Supplement — tax-free, reduced 50¢ per dollar of income excluding OAS (CPP, registered draws, taxable gains). It lowers the portfolio's share of the spending target. With a spouse, CRA's couple rules apply: each entitlement is assessed on *combined* non-OAS income, at the lower couple rate when both receive OAS. Approximated annually; Service Canada recalculates quarterly."
+      "body": "Le Supplément de revenu garanti — libre d'impôt, réduit de 50 ¢ par dollar de revenu excluant la SV (RPC, retraits enregistrés, gains imposables). Il diminue la part du portefeuille dans la cible de dépenses. Avec un conjoint, les règles de couple de l'ARC s'appliquent : chaque droit est évalué sur le revenu *combiné* hors SV, au taux de couple plus bas lorsque les deux reçoivent la SV. Approximé annuellement; Service Canada recalcule chaque trimestre."
     },
     "cash-events": {
       "title": "Événements de trésorerie (entrée / sortie)",
       "section": "Income",
       "keywords": [
-        "inheritance",
-        "house sale",
-        "gift",
-        "big purchase",
-        "lump sum",
-        "one-time",
-        "money in",
-        "money out"
+        "héritage",
+        "vente de maison",
+        "don",
+        "gros achat",
+        "somme forfaitaire",
+        "ponctuel",
+        "argent entrant",
+        "argent sortant"
       ],
-      "body": "**Inflow** — a lump sum landing in the chosen account at the chosen age; it appears in that year's balances and grows thereafter. **Outflow** — an extra expense at the chosen age, on top of that year's spending target; the portfolio must fund both.\n\nSwitch an event to *Yearly* with a start–end age range to repeat the same amount every year (rental income for a few years, or a recurring cost)."
+      "body": "**Entrée** — une somme forfaitaire qui atterrit dans le compte choisi à l'âge choisi; elle apparaît dans les soldes de cette année et croît ensuite. **Sortie** — une dépense extra à l'âge choisi, en plus de la cible de dépenses de l'année; le portefeuille doit financer les deux.\n\nPassez un événement en *Annuel* avec une plage d'âges début–fin pour répéter le même montant chaque année (revenu de location pendant quelques années, ou un coût récurrent)."
     },
     "desired-spending": {
       "title": "Dépenses souhaitées",
       "section": "Spending",
       "keywords": [
-        "spending",
-        "income goal",
-        "how much a year",
-        "lifestyle"
+        "dépenses",
+        "objectif de revenu",
+        "combien par an",
+        "style de vie"
       ],
-      "body": "The after-tax income you want each retirement year, in today's dollars — the base the phases scale. When Settings → Engine → \"Grow spending with inflation\" is on, the engine inflates it by CPI each year from your current age, so the schedule's Spending Target column shows nominal dollars; when off, the target stays flat. The engine grosses up registered withdrawals so benefits + portfolio income, after tax, equal that target."
+      "body": "Le revenu après impôt que vous voulez chaque année de retraite, en dollars d'aujourd'hui — la base que les phases mettent à l'échelle. Lorsque Paramètres → Moteur → « Faire croître les dépenses avec l'inflation » est activé, le moteur l'indexe à l'IPC chaque année à partir de votre âge actuel, donc la colonne Cible de dépenses du calendrier affiche des dollars nominaux; désactivé, la cible reste plate. Le moteur majore les retraits enregistrés pour que prestations + revenu du portefeuille, après impôt, égalent cette cible."
     },
     "spending-phases": {
       "title": "Go-go / slow-go / no-go (phases de dépenses)",
       "section": "Spending",
       "keywords": [
         "phases",
-        "bands",
-        "slow down",
-        "spend less later"
+        "tranches",
+        "ralentir",
+        "dépenser moins plus tard",
+        "go-go"
       ],
-      "body": "From each \"from age\", spending drops to the given share of desired spending (still inflation-adjusted). E.g. 100% to 74, 85% from 75, 70% from 85."
+      "body": "À partir de chaque « à partir de l'âge », les dépenses tombent à la part indiquée des dépenses souhaitées (toujours indexées à l'inflation). Ex. 100 % jusqu'à 74 ans, 85 % à partir de 75 ans, 70 % à partir de 85 ans."
     },
     "withdrawal-order": {
       "title": "Ordre de retrait",
       "section": "Spending",
       "keywords": [
-        "which account first",
-        "tfsa first",
-        "rrsp meltdown",
-        "drawdown order"
+        "quel compte d'abord",
+        "celi d'abord",
+        "fonte reer",
+        "ordre de décaissement"
       ],
-      "body": "Spending TFSA first preserves taxed-later RRSP room but lets the RRIF minimum problem grow; spending RRSP first prepays tax at today's (possibly lower) brackets and shrinks future forced minimums. Try both orders and compare the Tax Burden column and the ending balance. Each retirement year runs: CPP/OAS paid, then the RRIF minimum (if past conversion age), then the remaining need drawn in your configured order, the cash cushion last; whatever remains grows at the expected return."
+      "body": "Dépenser le CELI d'abord préserve la salle REER imposable plus tard, mais laisse le problème du minimum FERR grandir; dépenser le REER d'abord paie l'impôt aux tranches d'aujourd'hui (peut-être plus basses) et réduit les minimums forcés futurs. Essayez les deux ordres et comparez la colonne Fardeau fiscal et le solde final. Chaque année de retraite se déroule ainsi : RPC/SV versés, puis le minimum FERR (si l'âge de conversion est passé), puis le besoin restant retiré dans l'ordre configuré, la réserve de liquidités en dernier; ce qui reste croît au rendement prévu."
     },
     "rrif-conversion": {
       "title": "Conversion FERR",
       "section": "Spending",
       "keywords": [
+        "ferr",
         "rrif",
-        "minimum withdrawal",
+        "retrait minimum",
         "71",
-        "prescribed factors"
+        "facteurs prescrits"
       ],
-      "body": "At the conversion age (default 71) the entire RRSP becomes a RRIF. Minimum withdrawals follow the CRA prescribed factors — 5.28% at 71 rising to 20% at 95 — applied to the start-of-year balance, and come out first even if you don't need them (after-tax excess is redeposited to the taxable account). Rates are editable in Settings → RRIF Rates."
+      "body": "À l'âge de conversion (71 ans par défaut), tout le REER devient un FERR. Les retraits minimums suivent les facteurs prescrits de l'ARC — 5,28 % à 71 ans jusqu'à 20 % à 95 ans — appliqués au solde de début d'année, et sortent en premier même si vous n'en avez pas besoin (l'excédent après impôt est redéposé dans le compte imposable). Les taux se modifient dans Paramètres → Taux FERR."
     },
     "negative-balance-mid-year": {
       "title": "Quand le solde devient négatif en cours d’année",
       "section": "Spending",
       "keywords": [
-        "depletion",
-        "runs out",
-        "negative balance"
+        "épuisement",
+        "s'épuise",
+        "solde négatif"
       ],
-      "body": "Growth is applied after withdrawals to whatever remains. In the year the last account is drained, nothing remains to grow — so the balance can dip slightly negative at year-end when the growth rate is high. Depletion is recorded at that age and the display floors the balance at $0."
+      "body": "La croissance s'applique après les retraits, sur ce qui reste. L'année où le dernier compte est vidé, il ne reste rien à faire croître — le solde peut donc légèrement plonger en négatif en fin d'année lorsque le taux de croissance est élevé. L'épuisement est enregistré à cet âge et l'affichage plafonne le solde à 0 $."
     },
     "debts": {
       "title": "Dettes (hypothèque et consommation)",
       "section": "Spending",
       "keywords": [
-        "mortgage",
-        "credit card",
-        "loan",
-        "line of credit",
-        "payment"
+        "hypothèque",
+        "carte de crédit",
+        "prêt",
+        "marge de crédit",
+        "paiement"
       ],
-      "body": "The Debts section tracks money you **owe**. Each debt has a balance, an annual interest rate, and a monthly payment. Each year the balance first grows by that year's interest, then the payment (12 × monthly) is applied, capped so you never overpay. The payment is **funded from your spending** and drawn from your accounts like any other expense, before or after retirement, with after-tax money.\n\nWhile a debt is outstanding the portfolio must fund both living spending *and* the payments — carrying debt into retirement raises withdrawals and can flip a plan from **on track** to **shortfall**. The payoff age is shown next to each debt. **Not modelled:** any payoff *strategy* — the app shows the consequence of the payments you enter."
+      "body": "La section Dettes suit l'argent que vous **devez**. Chaque dette a un solde, un taux d'intérêt annuel et un paiement mensuel. Chaque année, le solde croît d'abord de l'intérêt de l'année, puis le paiement (12 × mensuel) s'applique, plafonné pour ne jamais trop payer. Le paiement est **financé à partir de vos dépenses** et retiré de vos comptes comme toute autre dépense, avant ou après la retraite, avec de l'argent après impôt.\n\nTant qu'une dette est en cours, le portefeuille doit financer à la fois les dépenses de vie *et* les paiements — porter une dette à la retraite augmente les retraits et peut faire basculer un plan de **en bonne voie** à **déficit**. L'âge de remboursement s'affiche à côté de chaque dette. **Non modélisé :** toute *stratégie* de remboursement — l'appli montre la conséquence des paiements que vous saisissez."
     },
     "home-equity": {
       "title": "Valeur nette de la maison et hypothèque inversée",
       "section": "Property",
       "keywords": [
-        "house",
-        "reverse mortgage",
-        "equity",
-        "net equity",
-        "loan-to-value"
+        "maison",
+        "hypothèque inversée",
+        "avoir propre",
+        "avoir net",
+        "ratio prêt-valeur"
       ],
-      "body": "Borrowing against home equity — proceeds are tax-free, so they don't count as income and don't touch GIS or the OAS clawback. Two ways to draw, alone or together: **scheduled draws** (a set $/yr from an age, CPI-indexed) and **top-up** (once every account is drained, borrow just enough to cover spending — the true last resort). The loan compounds against the home, so net equity (home value − loan) erodes over time; borrowing stops at the **max loan-to-value** ceiling (lenders typically cap near 55%), and the plan is \"depleted\" once accounts *and* that headroom are both exhausted."
+      "body": "Emprunter sur l'avoir propre de la maison — le produit est libre d'impôt, donc ne compte pas comme un revenu et ne touche ni le SRG ni la récupération de la SV. Deux façons de puiser, seules ou ensemble : **retraits planifiés** (un montant $/an à partir d'un âge, indexé à l'IPC) et **complément** (une fois tous les comptes vidés, emprunter juste assez pour couvrir les dépenses — le vrai dernier recours). Le prêt se capitalise contre la maison, donc l'avoir net (valeur de la maison − prêt) s'érode avec le temps; l'emprunt s'arrête au plafond **ratio prêt-valeur max** (les prêteurs plafonnent souvent près de 55 %), et le plan est « épuisé » une fois les comptes *et* cette marge tous deux épuisés."
     },
     "heloc": {
       "title": "Marge de crédit hypothécaire (intérêts seulement)",
       "section": "Property",
       "keywords": [
-        "home equity line of credit",
-        "interest only",
-        "line of credit"
+        "marge de crédit hypothécaire",
+        "intérêt seulement",
+        "marge de crédit",
+        "mfc",
+        "heloc"
       ],
-      "body": "Choose **Product type → HELOC** in the Home Equity section to model a home-equity line of credit instead of a compounding reverse mortgage. A HELOC services its interest *out of cash flow* (added to that year's spending) rather than rolling it into the balance, so the loan only grows when you actually draw; lenders typically allow a higher ceiling (~65% LTV). Reverse-mortgage mode instead compounds the interest and enforces the ~55% no-negative-equity guarantee. Draws are tax-free in both modes."
+      "body": "Choisissez **Type de produit → MFC** dans la section Avoir propre pour modéliser une marge de crédit hypothécaire plutôt qu'une hypothèque inversée à intérêts composés. Une MFC paie ses intérêts *à même les flux de trésorerie* (ajoutés aux dépenses de l'année) plutôt que de les capitaliser dans le solde, donc le prêt ne croît que lorsque vous puisez vraiment; les prêteurs autorisent souvent un plafond plus élevé (~65 % RPV). Le mode hypothèque inversée capitalise plutôt l'intérêt et applique la garantie d'absence de solde négatif (~55 %). Les retraits sont libres d'impôt dans les deux modes."
     },
     "expected-return": {
       "title": "Rendement attendu",
       "section": "Levers",
       "keywords": [
-        "return",
-        "growth rate",
-        "market",
-        "assumption",
+        "rendement",
+        "taux de croissance",
+        "marché",
+        "hypothèse",
         "%"
       ],
-      "body": "Constant annual return applied to RRSP, TFSA and taxable balances (growth lands after withdrawals each year). The deterministic table uses exactly this rate every year. Move the Markets dial to stress it — the map's terrain reshapes live because the ground depends on it."
+      "body": "Rendement annuel constant appliqué aux soldes REER, CELI et non enregistrés (la croissance atterrit après les retraits chaque année). Le tableau déterministe utilise exactement ce taux chaque année. Bougez le cadran Marchés pour le stresser — le relief de la carte se redessine en direct parce que le terrain en dépend."
     },
     "volatility": {
       "title": "Volatilité",
       "section": "Levers",
       "keywords": [
-        "standard deviation",
-        "risk",
+        "écart-type",
+        "risque",
         "monte carlo",
-        "swing"
+        "oscillation"
       ],
-      "body": "Standard deviation of annual returns, used only by Monte Carlo. 0% means \"every year equals the expected return\" (the simulation collapses to the deterministic answer); 15–20% is a typical equity-heavy portfolio. Returns are not mean-reverting and sequence risk is real: a crash early in retirement hurts far more than one late."
+      "body": "Écart-type des rendements annuels, utilisé seulement par Monte Carlo. 0 % signifie « chaque année égale le rendement prévu » (la simulation s'effondre sur la réponse déterministe); 15–20 % est un portefeuille typique à forte pondération d'actions. Les rendements ne reviennent pas vers la moyenne et le risque de séquence est réel : un krach tôt à la retraite fait beaucoup plus mal qu'un krach tardif."
     },
     "market-hypothesis": {
       "title": "Hypothèse de marché (périodes)",
       "section": "Levers",
       "keywords": [
-        "crash",
+        "krach",
         "boom",
-        "bear market",
-        "sequence",
-        "market periods",
-        "return anchors",
-        "choppy"
+        "marché baissier",
+        "séquence",
+        "périodes de marché",
+        "ancres de rendement",
+        "instable"
       ],
-      "body": "The Markets dial assumes one average return every year. To model a **crash, a boom, or a choppy stretch**, shape a curve with **return anchors** — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.\n\nThe projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.\n\nOn the dashboard's life timeline you can shape the curve directly: **double-click the market strip** (below the balance line) to drop an anchor at that age, **drag** it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples."
+      "body": "Le cadran Marchés suppose un rendement moyen unique chaque année. Pour modéliser un **krach, un boom ou une période instable**, façonnez une courbe avec des **ancres de rendement** — rendements prévus par âge entre lesquels le moteur interpolera, en revenant à l'hypothèse plate un an avant la première ancre et un an après la dernière, de sorte qu'une hypothèse qui ne couvre qu'une partie de l'horizon (disons un krach à 68–70 ans) laisse le reste intact.\n\nLa projection suit la courbe de rendement — la ligne de solde plonge dans un krach puis se rétablit — tandis qu'une courbe de volatilité ne façonne que Monte Carlo, élargissant ou rétrécissant l'éventail aléatoire âge par âge. Effacez toutes les ancres pour revenir aux constantes plates.\n\nSur la frise de vie du tableau de bord, vous pouvez façonner la courbe directement : **double-cliquez la bande marché** (sous la ligne de solde) pour déposer une ancre à cet âge, **glissez-la** haut/bas pour la valeur et latéralement pour l'âge, et cliquez-la pour le × qui la supprime. Les cercles violets tiennent les rendements; les carrés ambre tiennent la volatilité échantillonnée par Monte Carlo."
     },
     "lever-ranges": {
       "title": "Plages des leviers (préférence Paramètres)",
       "section": "Levers",
       "keywords": [
-        "slider range",
+        "plage de curseur",
         "min max",
-        "limits",
-        "spending max",
-        "return max"
+        "limites",
+        "dépenses max",
+        "rendement max"
       ],
-      "body": "The sliders for spending, savings, expected return and volatility only span a range — widen one if your plan lives past the default edge. Set under Settings → Lever Ranges; they're preferences (not engine settings), saved the moment you change them. Retirement age, plan-to age, CPP and OAS start ages keep fixed spans; a fixed span is part of their meaning."
+      "body": "Les curseurs de dépenses, d'épargne, de rendement prévu et de volatilité ne couvrent qu'une plage — élargissez-en une si votre plan vit au-delà du bord par défaut. Réglage dans Paramètres → Plages des leviers; ce sont des préférences (pas des réglages du moteur), enregistrées dès que vous les changez. L'âge de retraite, l'âge planifié, les âges de début RPC et SV gardent des plages fixes; une plage fixe fait partie de leur sens."
     },
     "verdict": {
       "title": "Le verdict EN VOIE / DÉFICIT",
       "section": "Reading the answer",
       "keywords": [
+        "en bonne voie",
+        "déficit",
+        "épuisement",
+        "réponse",
+        "est-ce que ça dure",
         "on track",
-        "shortfall",
-        "depletion",
-        "answer",
-        "will it last"
+        "shortfall"
       ],
-      "body": "The number on the dashboard is leftover in the pot: **Money lasts to** is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the life-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.\n\nThe engine's ON TRACK / SHORTFALL flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The receipts, chip, and chart pin all follow the pot so they cannot disagree.\n\nFor a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined life line."
+      "body": "Le chiffre du tableau de bord est ce qui reste dans le pot : **L'argent dure jusqu'à** n'est votre âge max que s'il reste un solde à l'horizon. Si les comptes investissables tombent à 0 $ plus tôt — l'épingle de la frise de vie — c'est cet âge que nous imprimons, même si une hypothèque inversée peut encore emprunter sur la maison.\n\nLe drapeau EN BONNE VOIE / DÉFICIT du moteur est plus strict sur les dépenses non financées (il reste en bonne voie tant qu'une hypothèque inversée a de la marge). Les reçus, la pastille et l'épingle du graphique suivent tous le pot pour ne pas se contredire.\n\nPour un couple, le verdict moteur du ménage est les comptes combinés; le tableau de bord suit encore le reste sur la ligne de vie combinée."
     },
     "rescore": {
       "title": "Le Re:score",
@@ -392,451 +416,455 @@
       "keywords": [
         "rescore",
         "re score",
-        "retirement score",
-        "health check"
+        "score de retraite",
+        "bilan de santé"
       ],
-      "body": "The Re:score is a 0–100 summary of your plan's health: how close you are to your max age before money runs out. **0** = the plan fails immediately (depletion before retirement). **50** = the plan fails halfway through the retirement horizon. **100** = the plan holds to the max age.\n\nIt's computed as **depletionAge ÷ maxAge × 100**. A couple's household Re:score uses the combined depletion age (the age when BOTH partners' money runs out together).\n\nUse it as a quick snapshot: if your Re:score is below 60, the plan needs attention — move retirement later, spend less, or increase savings."
+      "body": "Le Re:score est un résumé 0–100 de la santé de votre plan : à quel point vous êtes proche de votre âge max avant que l'argent s'épuise. **0** = le plan échoue immédiatement (épuisement avant la retraite). **50** = le plan échoue à mi-chemin de l'horizon de retraite. **100** = le plan tient jusqu'à l'âge max.\n\nIl se calcule **âgeD'épuisement ÷ âgeMax × 100**. Le Re:score ménage d'un couple utilise l'âge d'épuisement combiné (l'âge où l'argent des DEUX partenaires s'épuise ensemble).\n\nServez-vous-en comme cliché rapide : si votre Re:score est sous 60, le plan a besoin d'attention — reculez la retraite, dépensez moins, ou augmentez l'épargne."
     },
     "contour-map": {
       "title": "La carte de contour",
       "section": "Reading the answer",
       "keywords": [
-        "map",
-        "boundary",
-        "terrain",
-        "dot",
-        "holds region"
+        "carte",
+        "frontière",
+        "relief",
+        "point",
+        "région qui tient"
       ],
-      "body": "The map is retirement age (x) × spending (y). The blue line is the boundary — the spending where the plan stops holding at each age. Below it (blue wash) the money lasts; above it (rose) it runs out early. The dot is your plan: drag it, or use the faders, and the verdict, map and assistant recompute together. The boundary re-runs the real engine at each point, so it always agrees with the table."
+      "body": "La carte est âge de retraite (x) × dépenses (y). La ligne bleue est la frontière — les dépenses où le plan cesse de tenir à chaque âge. En dessous (lavage bleu) l'argent dure; au-dessus (rose) il s'épuise tôt. Le point est votre plan : glissez-le, ou utilisez les faders, et le verdict, la carte et l'assistant se recalculent ensemble. La frontière relance le vrai moteur à chaque point, donc elle s'accorde toujours avec le tableau."
     },
     "down-market-check": {
       "title": "Le test de marché baissier",
       "section": "Reading the answer",
       "keywords": [
-        "stress test",
-        "pessimistic",
-        "low return",
-        "bear market"
+        "test de stress",
+        "pessimiste",
+        "faible rendement",
+        "marché baissier"
       ],
-      "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo in the Tools menu."
+      "body": "Relance tout votre plan à un rendement pessimiste unique (1,2 %) pour montrer comment il tient si les marchés déçoivent. Bleu signifie qu'il survit même alors; rose nomme l'âge où il s'épuise. C'est le cousin rapide, à un seul chiffre, du Monte Carlo complet dans le menu Outils."
     },
     "life-timeline": {
       "title": "La ligne de vie",
       "section": "Reading the answer",
       "keywords": [
-        "timeline",
-        "balance over time",
-        "start drawing",
-        "retirement age",
-        "money runs out"
+        "frise",
+        "solde dans le temps",
+        "commencer à retirer",
+        "âge de retraite",
+        "l'argent s'épuise"
       ],
-      "body": "Your balance across the whole plan, age by age. The solid line is the funded region; past the depletion age it turns dotted red. Pins mark you today, when you **start drawing** (the transition into retirement — drag it to change the age), and when the money runs out (or that it outlasts the plan). Below the line: the **spend strip** (what the plan targets spending each year — drag its handle to change today's spending) and, when your plan has them, **event diamonds** (drag to move/resize a cash event) and the **market strip** (double-click to drop a return anchor — see Market hypothesis)."
+      "body": "Votre solde sur tout le plan, âge par âge. La ligne pleine est la région financée; passé l'âge d'épuisement elle devient rouge pointillée. Des épingles marquent vous aujourd'hui, le moment où vous **commencez à retirer** (la transition vers la retraite — glissez-la pour changer l'âge), et le moment où l'argent s'épuise (ou qu'il survit au plan). Sous la ligne : la **bande dépenses** (ce que le plan vise à dépenser chaque année — glissez sa poignée pour changer les dépenses d'aujourd'hui) et, lorsque votre plan en a, des **losanges d'événements** (glissez pour déplacer/redimensionner un événement de trésorerie) et la **bande marché** (double-cliquez pour déposer une ancre de rendement — voir Hypothèse de marché)."
     },
     "evidence-row": {
       "title": "La rangée de preuves",
       "section": "Reading the answer",
       "keywords": [
-        "account bars",
-        "money lasts to",
-        "left at",
+        "barres de comptes",
+        "l'argent dure jusqu'à",
+        "reste à",
         "stats",
-        "proof"
+        "preuve"
       ],
-      "body": "The numbers behind the verdict: the account mix at any age you pick (RRSP+RRIF, TFSA, Taxable+cash), plus how long the money lasts (first empty year of the pot — the same age as the life-timeline pin), what's left at max age, the pot at work's end, and when CPP+OAS start. \"90+ / past the plan\" only prints when leftover is still there."
+      "body": "Les chiffres derrière le verdict : la composition des comptes à n'importe quel âge choisi (REER+FERR, CELI, Non enregistré+liquidités), plus combien de temps l'argent dure (première année vide du pot — le même âge que l'épingle de la frise), ce qui reste à l'âge max, le pot à la fin du travail, et quand RPC+SV commencent. « 90+ / au-delà du plan » ne s'imprime que s'il reste encore quelque chose."
     },
     "stress-test": {
       "title": "Comment tester le plan sous stress",
       "section": "Reading the answer",
       "keywords": [
-        "robust",
-        "what could go wrong",
-        "sensitivity"
+        "robuste",
+        "ce qui pourrait mal tourner",
+        "sensibilité"
       ],
-      "body": "The verdict uses your expected return every year. To see how robust the plan really is:\n\n- **Lower the expected return** (the Markets dial) for a pessimistic case.\n- **Run Monte Carlo** — it randomizes returns around your assumption and reports the share of runs that never deplete; that success rate is the most honest single number.\n- **Run a Backtest** — replays your plan through actual historical market sequences."
+      "body": "Le verdict utilise votre rendement prévu chaque année. Pour voir à quel point le plan est vraiment robuste :\n\n- **Baissez le rendement prévu** (le cadran Marchés) pour un cas pessimiste.\n- **Lancez Monte Carlo** — il randomise les rendements autour de votre hypothèse et rapporte la part des essais qui ne s'épuisent jamais; ce taux de réussite est le chiffre unique le plus honnête.\n- **Lancez un test historique** — rejoue votre plan à travers de vraies séquences de marché historiques."
     },
     "monte-carlo": {
       "title": "Monte-Carlo",
       "section": "Analysis",
       "keywords": [
         "simulation",
-        "random",
-        "success rate",
-        "fan chart",
-        "probability"
+        "aléatoire",
+        "taux de réussite",
+        "éventail",
+        "probabilité"
       ],
-      "body": "Runs the full projection 500 times, each with a randomized sequence of annual returns (geometric Brownian motion around your expected return, with Student-t shocks so crashes are more common than a normal distribution predicts).\n\n- The dark band is the middle 50% of outcomes (p25–p75); the light band is p10–p90. The blue line is the median.\n- **Success rate** — the share of runs that stayed funded through max age. 90%+ is conventionally comfortable; below 75% the plan is fragile.\n- The width of the fan is driven by Volatility. A crash early in retirement hurts far more than one late."
+      "body": "Lance la projection complète 500 fois, chacune avec une séquence randomisée de rendements annuels (mouvement brownien géométrique autour de votre rendement prévu, avec des chocs Student-t pour que les krachs soient plus fréquents qu'une normale ne le prévoit).\n\n- La bande foncée est le milieu 50 % des issues (p25–p75); la bande claire est p10–p90. La ligne bleue est la médiane.\n- **Taux de réussite** — la part des essais restés financés jusqu'à l'âge max. 90 %+ est conventionnellement confortable; sous 75 % le plan est fragile.\n- La largeur de l'éventail est menée par la Volatilité. Un krach tôt à la retraite fait beaucoup plus mal qu'un krach tardif."
     },
     "backtest": {
       "title": "Rétrosimulation",
       "section": "Analysis",
       "keywords": [
-        "historical",
-        "sequence risk",
+        "historique",
+        "risque de séquence",
         "1970",
-        "real returns",
-        "crash"
+        "rendements réels",
+        "krach"
       ],
-      "body": "Monte Carlo invents random futures; the backtest replays real pasts. It runs the plan against every rolling window of a Canadian real (after-inflation) balanced-portfolio series from 1970 to today, each window as long as your horizon, and reports how often the plan survived.\n\nSequence-of-returns risk is the biggest threat to a drawdown plan: retiring into the 1973–74 crash, 2000–02 or 2008 is far worse than the same average return with the crash at the end. A high backtest success rate has historically withstood every bad sequence on record."
+      "body": "Monte Carlo invente des futurs aléatoires; le test historique rejoue de vrais passés. Il lance le plan contre chaque fenêtre glissante d'une série canadienne de portefeuille équilibré en rendement réel (après inflation) de 1970 à aujourd'hui, chaque fenêtre aussi longue que votre horizon, et rapporte à quelle fréquence le plan a survécu.\n\nLe risque de séquence des rendements est la plus grande menace d'un plan de décaissement : prendre sa retraite dans le krach 1973–74, 2000–02 ou 2008 est bien pire que le même rendement moyen avec le krach à la fin. Un taux de réussite élevé au test historique a historiquement tenu bon face à chaque mauvaise séquence enregistrée."
     },
     "levers-ranked": {
       "title": "Pilotage (l’égaliseur)",
       "section": "Analysis",
       "keywords": [
-        "eq",
-        "equalizer",
-        "sliders",
-        "drag pad",
-        "strategy ranking",
-        "crops",
-        "steering"
+        "éq",
+        "égaliseur",
+        "curseurs",
+        "pavé",
+        "classement de stratégies",
+        "cultures",
+        "pilotage"
       ],
-      "body": "Steering is a goals-level surface over your whole plan: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast. The projection timeline under the controls redraws with every drag."
+      "body": "Le Pilotage est une surface au niveau des objectifs sur tout votre plan : poussez des curseurs et glissez un pavé pendant que le statut, l'argent-dure-jusqu'à et le taux de réussite se mettent à jour en direct. Le carré est âge de retraite × dépenses; le dégradé vert→rouge est le taux de réussite du plan à chaque combinaison, calculé en cherchant la frontière ligne par ligne par dichotomie pour qu'il s'affiche vite. La frise de projection sous les commandes se redessine à chaque glissement."
     },
     "strategy-explorer": {
       "title": "Optimiseur (explorateur de stratégies)",
       "section": "Analysis",
       "keywords": [
-        "optimize",
-        "strategies",
-        "variants",
-        "apply",
-        "what helps most"
+        "optimiser",
+        "stratégies",
+        "variantes",
+        "appliquer",
+        "ce qui aide le plus"
       ],
-      "body": "The Optimizer re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out."
+      "body": "L'Optimiseur relance votre plan sous un menu d'alternatives nommées — moment RPC/SV, âges de début de pension, ordres de retrait, moment d'hypothèque inversée, travail à temps partiel — chacune notée selon les dépenses après impôt soutenables qu'elle appuie, avec un Appliquer en un clic. C'est déterministe : même plan en entrée, même réponse en sortie."
     },
     "optimize-spending": {
       "title": "Solveur : dépenses soutenables",
       "section": "Analysis",
       "keywords": [
-        "how much can i spend",
-        "solve",
-        "solver",
-        "maximum spending",
-        "safe withdrawal"
+        "combien puis-je dépenser",
+        "résoudre",
+        "solveur",
+        "dépenses maximales",
+        "retrait sûr"
       ],
-      "body": "The Solver answers \"how much could I spend?\" instead of \"will my spending last?\" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures."
+      "body": "Le Solveur répond « combien pourrais-je dépenser ? » plutôt que « mes dépenses tiendront-elles ? » — il cherche par dichotomie les dépenses après impôt qui gardent le plan financé jusqu'à l'âge max, au taux de réussite que vous choisissez, en utilisant des futurs Monte Carlo."
     },
     "schedule-columns": {
       "title": "Les colonnes de la page Projection",
       "section": "Schedule",
       "keywords": [
         "projection",
-        "year by year",
-        "table",
-        "column picker",
-        "show all",
-        "balances"
+        "année par année",
+        "tableau",
+        "sélecteur de colonnes",
+        "tout afficher",
+        "soldes"
       ],
-      "body": "The Projection page's year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The **Columns** button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one \"show all\" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail."
+      "body": "Le tableau année par année de la page Projection parcourt chaque année d'ici à l'âge max : solde de départ, cotisations, gains de marché, retraits, impôt, RPC/SV/SRG/pension, et solde de fin, plus les soldes par compte. Le bouton **Colonnes** choisit ce qui s'affiche — le jeu de départ garde l'histoire des flux d'argent à l'écran et le reste n'est qu'à un « tout afficher »; votre choix est mémorisé. Les colonnes REEI / CELIAPP / Avoir propre / Dettes n'apparaissent automatiquement que lorsque ces fonctions produisent des données. Touchez une année pour déplier tout son détail."
     },
     "scenarios": {
       "title": "Plans",
       "section": "Plans",
       "keywords": [
-        "what-if",
-        "save",
-        "switch",
-        "new plan",
-        "duplicate",
-        "scenario",
-        "profile",
-        "details"
+        "et si",
+        "enregistrer",
+        "changer",
+        "nouveau plan",
+        "dupliquer",
+        "scénario",
+        "profil",
+        "détails"
       ],
-      "body": "A plan is one complete set of numbers (internally a \"scenario\" — same idea). The profile icon in the header (top right, next to the verdict chip) opens **Plans** (#/plan) — the list of saved plans, then the numbers behind the current one (what used to be Details), then a side-by-side compare. Create, rename, duplicate, delete, or roll a plan back through its history. Edits save themselves a moment after you apply them; the undo icon next to the profile icon steps back one save at a time. Make several — \"retire at 60\" vs \"65\" — and flip or compare them."
+      "body": "Un plan est un jeu complet de chiffres (en interne un « scénario » — même idée). L'icône de profil dans l'en-tête (en haut à droite, à côté de la pastille de verdict) ouvre **Plans** (#/plan) — la liste des plans enregistrés, puis les chiffres derrière le plan courant (ce qui était Détails), puis une comparaison côte à côte. Créez, renommez, dupliquez, supprimez, ou ramenez un plan dans son historique. Les modifications s'enregistrent d'elles-mêmes un instant après les avoir appliquées; l'icône d'annulation à côté de l'icône de profil recule d'un enregistrement à la fois. Faites-en plusieurs — « retraite à 60 ans » vs « 65 » — et basculez ou comparez-les."
     },
     "autosave-undo": {
       "title": "Enregistrement auto et annulation",
       "section": "Plans",
       "keywords": [
-        "undo",
-        "save",
-        "autosave",
-        "rollback",
-        "revision",
-        "history",
-        "profile icon"
+        "annuler",
+        "enregistrer",
+        "enregistrement auto",
+        "revenir",
+        "révision",
+        "historique",
+        "icône de profil"
       ],
-      "body": "Every change you apply (a fader, a details field, an assistant proposal you confirm) saves itself after a short pause. There is no Save button to remember — the plan on screen is the plan on disk.\n\n- **Profile icon** (top right, next to the coloured age chip) — opens Plans, the current plan: switch, edit numbers, or inspect history.\n- **Undo icon** (right of the profile icon) — discards unsaved edits, or steps back one saved version. Repeated taps walk the history; newer saves after that point are dropped.\n- **History on Plans** — the same revisions, listed, if you want to jump further back than one step."
+      "body": "Chaque changement que vous appliquez (un fader, un champ de détails, une proposition d'assistant que vous confirmez) s'enregistre après une courte pause. Il n'y a pas de bouton Enregistrer à retenir — le plan à l'écran est le plan sur disque.\n\n- **Icône de profil** (en haut à droite, à côté de la pastille d'âge colorée) — ouvre Plans, le plan courant : changer, modifier les chiffres, ou inspecter l'historique.\n- **Icône d'annulation** (à droite de l'icône de profil) — jette les modifications non enregistrées, ou recule d'une version enregistrée. Des tapotements répétés parcourent l'historique; les enregistrements plus récents après ce point sont abandonnés.\n- **Historique sur Plans** — les mêmes révisions, listées, si vous voulez sauter plus loin qu'un pas."
     },
     "compare": {
       "title": "Comparer des plans",
       "section": "Plans",
       "keywords": [
-        "side by side",
-        "compare scenarios",
-        "which is better",
-        "profiles"
+        "côte à côte",
+        "comparer des scénarios",
+        "lequel est mieux",
+        "profils"
       ],
-      "body": "The Compare card on the Plans page puts your saved plans side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version holds up best. Each is scored with its own resolved spouse: a plan whose spouse is a linked plan is compared as the full household."
+      "body": "La carte Comparer de la page Plans met vos plans enregistrés côte à côte — verdict, l'argent-dure-jusqu'à, dépenses, impôt et richesse finale — pour voir quelle version tient le mieux. Chacun est noté avec son conjoint résolu : un plan dont le conjoint est un plan lié est comparé comme le ménage complet."
     },
     "assistant": {
       "title": "L’assistant",
       "section": "Assistant",
       "keywords": [
-        "chat",
-        "ai",
-        "ask",
-        "what can it do"
+        "clavardage",
+        "ia",
+        "demander",
+        "que peut-il faire",
+        "chat"
       ],
-      "body": "The assistant is a chat that can read your plan and run the projection engine itself — so it answers with your real numbers, not generic advice. Ask \"when does my RRSP run out?\", \"what if I retire at 62?\", or \"compare CPP at 60 vs 65\".\n\n- **Read** — ages, balances, benefits, spending, the year-by-year projection.\n- **What-if** — it re-runs the engine with changed inputs and quotes the result.\n- **Propose changes** — shown as a review card; nothing is applied until you confirm.\n\nOpen or close it with the Assistant button in the header — it's on every page, and the conversation follows you (a reply keeps streaming even while the dock is closed or you move on). The small arrows on the Assistant button grow it to fullscreen; the shrink arrows bring it back to the side rail."
+      "body": "L'assistant est un clavardage qui peut lire votre plan et lancer lui-même le moteur de projection — il répond donc avec vos vrais chiffres, pas des conseils génériques. Demandez « quand mon REER s'épuise-t-il ? », « et si je prends ma retraite à 62 ans ? », ou « comparer le RPC à 60 vs 65 ».\n\n- **Lire** — âges, soldes, prestations, dépenses, la projection année par année.\n- **Et si** — il relance le moteur avec des entrées changées et cite le résultat.\n- **Proposer des changements** — affichés comme une carte de révision; rien n'est appliqué tant que vous ne confirmez pas.\n\nOuvrez-le ou fermez-le avec le bouton Assistant dans l'en-tête — il est sur chaque page, et la conversation vous suit (une réponse continue de s'écrire même si le dock est fermé ou que vous changez de page). Les petites flèches du bouton Assistant l'agrandissent en plein écran; les flèches de réduction le ramènent au rail latéral."
     },
     "assistant-navigation": {
       "title": "Trouver des pages avec l’assistant",
       "section": "Assistant",
       "keywords": [
-        "where",
-        "find page",
-        "navigate",
-        "take me to",
-        "site map",
-        "sitemap",
-        "which page",
-        "go to"
+        "où",
+        "trouver une page",
+        "naviguer",
+        "emmène-moi",
+        "plan du site",
+        "quelle page",
+        "aller à"
       ],
-      "body": "The assistant knows every page in the app and what each one is for — so you can ask it *where* something lives instead of hunting the menu. Ask things like \"where do I enter my TFSA room?\", \"what can this app do?\", or \"take me to the print summary\".\n\n- **Find** — it searches the page map in plain words and names the page (and the link to it) where your question lives.\n- **Already here** — it knows which page you're on, so if the answer is \"that's the page in front of you\", it says so instead of moving you.\n- **Open a page for you** — ask it to take you somewhere and it shows a confirm card with the destination; the app only moves when you approve it."
+      "body": "L'assistant connaît chaque page de l'appli et à quoi elle sert — vous pouvez donc lui demander *où* quelque chose se trouve plutôt que de fouiller le menu. Posez des questions comme « où entrer mes droits CELI ? », « que peut faire cette appli ? », ou « emmène-moi au résumé d'impression ».\n\n- **Trouver** — il cherche la carte des pages en mots simples et nomme la page (et le lien) où vit votre question.\n- **Déjà ici** — il sait sur quelle page vous êtes, donc si la réponse est « c'est la page devant vous », il le dit au lieu de vous déplacer.\n- **Ouvrir une page pour vous** — demandez-lui de vous emmener quelque part et il affiche une carte de confirmation avec la destination; l'appli ne bouge que lorsque vous l'approuvez."
     },
     "assistant-local-vs-online": {
       "title": "Modèles locaux vs en ligne",
       "section": "Assistant",
       "keywords": [
-        "model",
+        "modèle",
         "local",
-        "online",
-        "download",
-        "api key",
-        "provider"
+        "en ligne",
+        "télécharger",
+        "clé api",
+        "fournisseur"
       ],
-      "body": "The assistant can run a model **entirely on this computer** (free, private, works offline — download once from the Models list) or use an **online provider** like Google, Anthropic, or OpenRouter (generally smarter, but your plan details travel to that provider). The Models page groups Local / Free / Remote; tick the ones you want. The chat dropdown only lists that shortlist (plus whatever is in use) — not every model the provider offers. An on-computer model that isn't downloaded yet shows as downloadable. The smallest packs are fine for short questions; a 4B is the smallest that can still run the plan tools. 1-bit Bonsai (Prism, via Transformers.js WebGPU) is a separate on-computer engine from the MLC packs. The in-browser Bonsai path only reliably loads 1.7B. Open the Models page from the dropdown's \"More models…\". Local models are smaller, so keep questions focused."
+      "body": "L'assistant peut faire tourner un modèle **entièrement sur cet ordinateur** (gratuit, privé, fonctionne hors ligne — téléchargez une fois depuis la liste Modèles) ou utiliser un **fournisseur en ligne** comme Google, Anthropic ou OpenRouter (généralement plus intelligent, mais les détails de votre plan voyagent vers ce fournisseur). La page Modèles groupe Local / Gratuit / Distant; cochez ceux que vous voulez. Le menu déroulant du clavardage n'affiche que cette liste courte (plus ce qui est en cours d'utilisation) — pas tous les modèles que le fournisseur offre. Un modèle sur ordinateur pas encore téléchargé s'affiche comme téléchargeable. Les plus petits paquets suffisent pour de courtes questions; un 4B est le plus petit qui peut encore lancer les outils du plan. Bonsai 1 bit (Prism, via Transformers.js WebGPU) est un moteur sur ordinateur distinct des paquets MLC. Le chemin Bonsai dans le navigateur ne charge de façon fiable que le 1,7B. Ouvrez la page Modèles depuis « Plus de modèles… » du menu. Les modèles locaux sont plus petits, donc gardez les questions ciblées."
     },
     "openrouter-free": {
       "title": "Modèles gratuits OpenRouter",
       "section": "Assistant",
       "keywords": [
         "openrouter",
-        "free models",
+        "modèles gratuits",
         ":free",
-        "api key",
-        "cloud",
-        "no charge"
+        "clé api",
+        "nuage",
+        "sans frais"
       ],
-      "body": "OpenRouter is a one-key gateway to many cloud models. Their **free** pool has no token charge: the model id `openrouter/free` is a router that picks a matching `:free` variant (including tools when the request needs them). Named free models end in `:free`.\n\n- **Sign up** at openrouter.ai (email or GitHub).\n- **Create a key** under Keys, paste it on the Models page in the OpenRouter free section. The key stays in this browser and is sent only to OpenRouter.\n- **Tick** the free router, or any listed :free row, to put it on the chat dropdown. Paid OpenRouter models stay under Remote.\n\nFree inference is rate-limited and the pool changes. Your question still goes to OpenRouter — they (and the model that answers) may log it and use it for training. Unlike an on-computer model. After a reply, the info icon next to regenerate shows which model actually answered (the free router picks one per request)."
+      "body": "OpenRouter est une passerelle à une clé vers de nombreux modèles infonuagiques. Leur bassin **gratuit** n'a pas de frais de jetons : l'identifiant `openrouter/free` est un routeur qui choisit une variante `:free` correspondante (y compris les outils lorsque la requête en a besoin). Les modèles gratuits nommés se terminent par `:free`.\n\n- **Inscrivez-vous** sur openrouter.ai (courriel ou GitHub).\n- **Créez une clé** sous Keys, collez-la sur la page Modèles dans la section OpenRouter gratuit. La clé reste dans ce navigateur et n'est envoyée qu'à OpenRouter.\n- **Cochez** le routeur gratuit, ou toute rangée :free listée, pour le mettre dans le menu du clavardage. Les modèles OpenRouter payants restent sous Distant.\n\nL'inférence gratuite est limitée en débit et le bassin change. Votre question va quand même à OpenRouter — eux (et le modèle qui répond) peuvent l'enregistrer et l'utiliser pour l'entraînement. Contrairement à un modèle sur ordinateur. Après une réponse, l'icône d'info à côté de régénérer montre quel modèle a réellement répondu (le routeur gratuit en choisit un par requête)."
     },
     "assistant-privacy": {
       "title": "Confidentialité de l’IA",
       "section": "Assistant",
       "keywords": [
-        "privacy",
-        "read by the ai",
-        "data sent",
-        "local model"
+        "confidentialité",
+        "lu par l'ia",
+        "données envoyées",
+        "modèle local"
       ],
-      "body": "A local model never sends anything anywhere — inference happens on your machine. An online connection sends your question (and the plan details in it) to that provider under its privacy policy; your API key is stored only in this browser and sent only to that provider. Chats are saved on this computer only, and the Data page's backup includes them only if you opt in."
+      "body": "Un modèle local n'envoie jamais rien nulle part — l'inférence se fait sur votre machine. Une connexion en ligne envoie votre question (et les détails du plan qu'elle contient) à ce fournisseur selon sa politique de confidentialité; votre clé API n'est stockée que dans ce navigateur et n'est envoyée qu'à ce fournisseur. Les clavardages ne sont enregistrés que sur cet ordinateur, et la sauvegarde de la page Données ne les inclut que si vous le choisissez."
     },
     "assistant-prompts": {
       "title": "Ce qui est envoyé à l’assistant",
       "section": "Assistant",
       "keywords": [
-        "system prompt",
+        "invite système",
         "persona",
-        "tool instructions",
-        "settings",
-        "override",
-        "language",
+        "instructions d'outils",
+        "paramètres",
+        "remplacer",
+        "langue",
         "locale",
         "français",
         "french"
       ],
-      "body": "Settings → General picks the site language: follow the browser, English (Canada), or Français (Canada). The whole app — chrome, help, print, and the assistant — follows that pick. A French browser defaults to français until you pick otherwise. The assistant also gets an extra instruction only for French — English is the default and needs no extra line.\n\nSettings → Assistant controls every piece of the request: the persona, tool instructions, the live program rules, the current-page line, the plan name, the local-model tool catalog and plan digest, and whether tools are advertised at all. Uncheck a piece to drop it from the next message. Edit a prompt to replace the built-in text; blank restores the default.\n\nEach local model has a catalog default for tools (Qwen3.5 2B and Bonsai 1.7B off; 4B and up on). Force a model On or Off on that page for testing; Auto restores the catalog. Cloud models always use tools unless you uncheck Send tools.\n\nSmall local models follow the last text they see — leave \"Persona last\" on so a custom voice (even \"say only yes\") is not drowned by the tool blurb. Per-chat notes still live on the composer and can be toggled separately.\n\nUnchecking every piece sends no system message at all (not a blank one). The Assistant tab shows the assembled system so you can confirm it is empty. Changing those flags also clears the local model's leftover cache so the next message does not keep the previous instructions. Questions-only models (and Send tools off) still run one ordinary chat pass with that empty system — they do not fall into a wrap-up that would rebuild the default persona."
+      "body": "Paramètres → Général choisit la langue du site : suivre le navigateur, anglais (Canada) ou français (Canada). Toute l'appli — chrome, aide, impression et l'assistant — suit ce choix. Un navigateur français se met par défaut en français jusqu'à ce que vous choisissiez autrement. L'assistant reçoit aussi une instruction extra seulement pour le français — l'anglais est le défaut et n'a pas besoin de ligne extra.\n\nParamètres → Assistant contrôle chaque morceau de la requête : la persona, les instructions d'outils, les règles du programme en direct, la ligne de page courante, le nom du plan, le catalogue d'outils du modèle local et le résumé du plan, et si les outils sont annoncés du tout. Décochez un morceau pour le retirer du prochain message. Modifiez une invite pour remplacer le texte intégré; vide rétablit le défaut.\n\nChaque modèle local a un défaut de catalogue pour les outils (Qwen3.5 2B et Bonsai 1,7B désactivés; 4B et plus activés). Forcez un modèle Activé ou Désactivé sur cette page pour tester; Auto rétablit le catalogue. Les modèles infonuagiques utilisent toujours les outils sauf si vous décochez Envoyer les outils.\n\nLes petits modèles locaux suivent le dernier texte qu'ils voient — laissez « Persona en dernier » activé pour qu'une voix personnalisée (même « dis seulement oui ») ne soit pas noyée par le blurb d'outils. Les notes par clavardage vivent encore sur le compositeur et se basculent séparément.\n\nDécocher chaque morceau n'envoie aucun message système du tout (pas un message vide). L'onglet Assistant montre le système assemblé pour que vous puissiez confirmer qu'il est vide. Changer ces drapeaux vide aussi le cache restant du modèle local pour que le prochain message ne garde pas les instructions précédentes. Les modèles questions seulement (et Envoyer les outils désactivé) lancent encore une passe de clavardage ordinaire avec ce système vide — ils ne tombent pas dans une clôture qui reconstruirait la persona par défaut."
     },
     "data-backup-restore": {
       "title": "Sauvegarde / restauration",
       "section": "Data",
       "keywords": [
-        "export",
-        "import",
+        "exporter",
+        "importer",
         "sqlite",
-        "download",
-        "where data lives",
+        "télécharger",
+        "où vivent les données",
         "opfs"
       ],
-      "body": "Your plans live in a real SQLite database (running as WebAssembly) in this browser's origin-private file system, mirrored to localStorage — nothing leaves your machine, but clearing site data can still erase it. The Data page's Export downloads the chosen scenarios (+ optionally engine settings) as a .sqlite file (openable by any SQLite tool; older JSON backups still import); Import reads it back and lets you pick which scenarios to apply. Keep backups — there's no server-side copy."
+      "body": "Vos plans vivent dans une vraie base SQLite (en WebAssembly) dans le système de fichiers privé d'origine de ce navigateur, miroir vers localStorage — rien ne quitte votre machine, mais vider les données du site peut encore les effacer. L'Export de la page Données télécharge les scénarios choisis (+ éventuellement les réglages du moteur) en fichier .sqlite (ouvrable par n'importe quel outil SQLite; les anciennes sauvegardes JSON s'importent encore); Importer le relit et vous laisse choisir quels scénarios appliquer. Conservez des sauvegardes — il n'y a pas de copie côté serveur."
     },
     "share-link": {
       "title": "Lien de partage",
       "section": "Data",
       "keywords": [
-        "share",
-        "link",
-        "send plan",
+        "partager",
+        "lien",
+        "envoyer un plan",
         "url"
       ],
-      "body": "Opens a card with a link that encodes the active plan's inputs in the URL itself (base64 in the fragment, after the #). Send it to someone — opening it imports a copy as a new \"Shared plan\" scenario. Nothing is uploaded to a server, and the fragment never travels with the HTTP request."
+      "body": "Ouvre une carte avec un lien qui encode les entrées du plan actif dans l'URL elle-même (base64 dans le fragment, après le #). Envoyez-le à quelqu'un — l'ouvrir importe une copie comme nouveau scénario « Plan partagé ». Rien n'est téléversé vers un serveur, et le fragment ne voyage jamais avec la requête HTTP."
     },
     "print-export": {
       "title": "Imprimer / exporter",
       "section": "Data",
       "keywords": [
-        "print",
+        "imprimer",
         "pdf",
         "csv",
-        "download table"
+        "télécharger le tableau"
       ],
-      "body": "The Print page chooses what the printout includes — the one-page summary (profile, savings, verdict) plus any of: the timeline chart, a fresh Monte Carlo fan, and a table of major milestones. Print then opens the browser dialog; choose \"Save as PDF\" to file or email it. The CSV link downloads the year-by-year projection table for a spreadsheet."
+      "body": "La page Impression choisit ce que l'imprimé inclut — le résumé d'une page (profil, épargne, verdict) plus n'importe lequel de : le graphique de frise, un éventail Monte Carlo frais, et un tableau des jalons majeurs. Imprimer ouvre ensuite le dialogue du navigateur; choisissez « Enregistrer au format PDF » pour le classer ou l'envoyer. Le lien CSV télécharge le tableau de projection année par année pour un tableur."
     },
     "inflation": {
       "title": "Inflation",
       "section": "Assumptions",
-      "keywords": [],
-      "body": "Settings → Engine has an inflation (CPI) rate, default 2%, driving two independent switches. **Grow spending with inflation** (on by default) inflates your today's-dollars spending by CPI each year. **Index tax tables, OAS and CPP to inflation** inflates brackets, basic amounts, the OAS clawback threshold and benefit amounts, mirroring CRA indexation. With both on, results are effectively in today's purchasing power."
+      "keywords": [
+        "inflation",
+        "ipc",
+        "cpi"
+      ],
+      "body": "Paramètres → Moteur a un taux d'inflation (IPC), 2 % par défaut, qui mène deux interrupteurs indépendants. **Faire croître les dépenses avec l'inflation** (activé par défaut) indexe vos dépenses en dollars d'aujourd'hui à l'IPC chaque année. **Indexer les tables d'impôt, la SV et le RPC à l'inflation** indexe les tranches, les montants de base, le seuil de récupération de la SV et les montants de prestations, en miroir de l'indexation de l'ARC. Avec les deux activés, les résultats sont effectivement en pouvoir d'achat d'aujourd'hui."
     },
     "approximations": {
       "title": "Approximations à connaître",
       "section": "Assumptions",
       "keywords": [
-        "limits",
-        "accuracy",
-        "not modelled",
-        "tax model",
-        "surtax",
-        "credits"
+        "limites",
+        "exactitude",
+        "non modélisé",
+        "modèle fiscal",
+        "surtaxe",
+        "crédits"
       ],
-      "body": "The model is a careful simplification. Capital gains use an adjusted cost base (only the embedded-gain fraction of each withdrawal is taxed, at 50% inclusion); dividend gross-up/credits and deemed disposition at death are not modelled. Beyond Ontario's surtax, other provinces' low-income reductions and credits are not included. The $2,000 pension-amount credit and the age amount are not modelled. No RRSP contribution refunds. Quebec's federal abatement is modelled.\n\nThe tax tables default to 2026 figures and go stale — update them in Settings when CRA publishes new indexation."
+      "body": "Le modèle est une simplification soignée. Les gains en capital utilisent un prix de base rajusté (seule la fraction de gain latent de chaque retrait est imposée, à 50 % d'inclusion); la majoration/crédits de dividendes et la disposition réputée au décès ne sont pas modélisés. Au-delà de la surtaxe de l'Ontario, les réductions et crédits de faible revenu des autres provinces ne sont pas inclus. Le crédit de 2 000 $ pour revenu de pension et le montant en raison de l'âge ne sont pas modélisés. Pas de remboursements de cotisation REER. L'abattement fédéral du Québec est modélisé.\n\nLes tables d'impôt par défaut sont les chiffres 2026 et vieillissent — mettez-les à jour dans Paramètres lorsque l'ARC publie la nouvelle indexation."
     },
     "glossary-scenario": {
       "title": "Scénario",
       "section": "Glossary",
       "keywords": [
-        "what-if",
+        "et si",
         "plan"
       ],
-      "body": "One complete \"what-if\" plan: ages, balances, benefits, spending goal and strategy choices, saved under a name. Make several and flip or compare them."
+      "body": "Un plan « et si » complet : âges, soldes, prestations, objectif de dépenses et choix de stratégie, enregistré sous un nom. Faites-en plusieurs et basculez ou comparez-les."
     },
     "glossary-sqlite": {
       "title": "SQLite / fichier .sqlite",
       "section": "Glossary",
       "keywords": [
-        "database",
-        "file",
+        "base de données",
+        "fichier",
         "db browser"
       ],
-      "body": "A database kept in a single ordinary file. Your plans live in one inside the browser, and Export downloads a copy of that very file. Free tools like \"DB Browser for SQLite\" can look inside — it's the app's filing cabinet."
+      "body": "Une base de données tenue dans un seul fichier ordinaire. Vos plans vivent dans un tel fichier à l'intérieur du navigateur, et Exporter télécharge une copie de ce fichier même. Des outils gratuits comme « DB Browser for SQLite » peuvent regarder dedans — c'est le classeur de l'appli."
     },
     "glossary-opfs": {
       "title": "OPFS / système de fichiers privé d’origine",
       "section": "Glossary",
       "keywords": [
-        "storage",
-        "site data",
-        "private folder"
+        "stockage",
+        "données du site",
+        "dossier privé"
       ],
-      "body": "A private folder your browser gives each website, invisible to other sites. That's where the database file lives, which is why plans survive closing the browser — and why clearing \"site data\" erases them."
+      "body": "Un dossier privé que votre navigateur donne à chaque site, invisible aux autres sites. C'est là que vit le fichier de base, ce qui explique pourquoi les plans survivent à la fermeture du navigateur — et pourquoi vider les « données du site » les efface."
     },
     "glossary-localstorage": {
       "title": "localStorage",
       "section": "Glossary",
       "keywords": [
-        "storage",
-        "backup copy"
+        "stockage",
+        "copie de sauvegarde"
       ],
-      "body": "The browser's older, smaller storage cubby (~5 MB). The app keeps a backup copy of the database there in case the newer OPFS storage isn't available (some private-browsing modes)."
+      "body": "Le petit casier de stockage plus ancien du navigateur (~5 Mo). L'appli y garde une copie de sauvegarde de la base au cas où le stockage OPFS plus récent n'est pas disponible (certains modes de navigation privée)."
     },
     "glossary-csv": {
       "title": "CSV",
       "section": "Glossary",
       "keywords": [
-        "spreadsheet",
+        "tableur",
         "excel",
-        "comma separated"
+        "séparé par des virgules"
       ],
-      "body": "\"Comma-separated values\" — the simplest spreadsheet format. The projection export and the import template use it so numbers move freely between this app and Excel or Google Sheets."
+      "body": "« Valeurs séparées par des virgules » — le format de tableur le plus simple. L'export de projection et le modèle d'import l'utilisent pour que les chiffres circulent librement entre cette appli et Excel ou Google Sheets."
     },
     "glossary-json": {
       "title": "JSON",
       "section": "Glossary",
       "keywords": [
         "format",
-        "structured data"
+        "données structurées"
       ],
-      "body": "A text format for structured data. Some exports use it because it preserves detail a spreadsheet can't. You don't need to read it — just know it's one of ours and imports back."
+      "body": "Un format texte pour des données structurées. Certains exports l'utilisent parce qu'il préserve un détail qu'un tableur ne peut pas. Vous n'avez pas besoin de le lire — sachez seulement que c'est l'un des nôtres et qu'il s'importe en retour."
     },
     "glossary-one-tab": {
       "title": "Un onglet à la fois",
       "section": "Glossary",
       "keywords": [
-        "browser tab",
-        "multi-tab",
-        "overwrite"
+        "onglet de navigateur",
+        "multi-onglets",
+        "écraser"
       ],
-      "body": "Use the app in a single browser tab. Two tabs each keep their own in-memory copy, and whichever saves last silently overwrites the other's work. If a second opens by accident, close it without saving."
+      "body": "Utilisez l'appli dans un seul onglet de navigateur. Deux onglets gardent chacun leur propre copie en mémoire, et celui qui enregistre en dernier écrase silencieusement le travail de l'autre. Si un second s'ouvre par accident, fermez-le sans enregistrer."
     },
     "glossary-wasm": {
       "title": "WebAssembly / wasm",
       "section": "Glossary",
       "keywords": [
         "wasm",
-        "database engine"
+        "moteur de base de données"
       ],
-      "body": "The technology that lets a real database engine run inside your browser tab. It's on your machine doing the work; nothing is sent anywhere."
+      "body": "La technologie qui permet à un vrai moteur de base de données de tourner dans votre onglet de navigateur. C'est sur votre machine que le travail se fait; rien n'est envoyé nulle part."
     },
     "glossary-tokens": {
       "title": "Jetons et fenêtre de contexte",
       "section": "Glossary",
       "keywords": [
-        "tokens",
-        "context",
-        "how much the model reads"
+        "jetons",
+        "contexte",
+        "combien le modèle lit"
       ],
-      "body": "Tokens are how AI models measure text (~¾ of a word each). The context window is how many the model can hold at once — your plan, the conversation and its answer all have to fit; long chats with a small window lose earlier details."
+      "body": "Les jetons sont la façon dont les modèles d'IA mesurent le texte (~¾ d'un mot chacun). La fenêtre de contexte est combien le modèle peut tenir à la fois — votre plan, la conversation et sa réponse doivent tous y entrer; de longs clavardages avec une petite fenêtre perdent les détails plus anciens."
     },
     "glossary-api-key": {
       "title": "Clé API",
       "section": "Glossary",
       "keywords": [
-        "password",
-        "online provider",
-        "key"
+        "mot de passe",
+        "fournisseur en ligne",
+        "clé"
       ],
-      "body": "A password from an online AI provider to use their models. Paste it on the Connections page — it's stored only in this browser and sent only to that provider. Local models never need one."
+      "body": "Un mot de passe d'un fournisseur d'IA en ligne pour utiliser ses modèles. Collez-le sur la page Connexions — il n'est stocké que dans ce navigateur et n'est envoyé qu'à ce fournisseur. Les modèles locaux n'en ont jamais besoin."
     },
     "not-financial-advice": {
       "title": "Pas un conseil financier",
       "section": "Legal",
       "keywords": [
-        "disclaimer",
-        "advice",
-        "estimate"
+        "avertissement",
+        "conseil",
+        "estimation"
       ],
-      "body": "RE: tired is an educational and exploratory tool. It produces **estimates** from a simplified model of Canadian tax and benefit rules — it is **not** financial, investment, tax, or legal advice, and it does not consider your complete circumstances. Before making retirement, withdrawal, or benefit-timing decisions, verify the numbers and consult a qualified financial planner or tax professional."
+      "body": "RE: tired est un outil éducatif et exploratoire. Il produit des **estimations** à partir d'un modèle simplifié des règles fiscales et de prestations canadiennes — ce n'est **pas** un conseil financier, de placement, fiscal ou juridique, et il ne tient pas compte de l'ensemble de votre situation. Avant de prendre des décisions de retraite, de retrait ou de moment de prestations, vérifiez les chiffres et consultez un planificateur financier ou un fiscaliste qualifié."
     },
     "data-responsibility": {
       "title": "Vos données, vos sauvegardes",
       "section": "Legal",
       "keywords": [
-        "responsibility",
-        "lost data",
-        "backup"
+        "responsabilité",
+        "données perdues",
+        "sauvegarde"
       ],
-      "body": "Your plans live only in this browser's local storage — there is no server-side copy, no account, no way for anyone to recover them for you. Keeping a backup is entirely your responsibility: use the Data page's Export regularly. The authors accept no liability for lost, corrupted, or inaccessible data."
+      "body": "Vos plans ne vivent que dans le stockage local de ce navigateur — il n'y a pas de copie côté serveur, pas de compte, pas de moyen pour quiconque de les récupérer pour vous. Conserver une sauvegarde est entièrement votre responsabilité : utilisez régulièrement l'Export de la page Données. Les auteurs n'acceptent aucune responsabilité pour des données perdues, corrompues ou inaccessibles."
     },
     "ai-may-be-wrong": {
       "title": "Les réponses de l’IA peuvent être fausses",
       "section": "Legal",
       "keywords": [
-        "ai wrong",
-        "hallucinate",
-        "not advice"
+        "ia fausse",
+        "halluciner",
+        "pas un conseil"
       ],
-      "body": "The Assistant and the copy-a-prompt AI are powered by large language models, which can misread numbers, miscalculate, and state false things confidently. AI replies are general educational commentary, never personalized advice. Always check an AI answer against the app's own computed tables (which are deterministic); when the two disagree, trust the tables."
+      "body": "L'Assistant et l'IA copier-une-invite sont alimentés par de grands modèles de langage, qui peuvent mal lire des chiffres, mal calculer, et affirmer des choses fausses avec assurance. Les réponses de l'IA sont un commentaire éducatif général, jamais un conseil personnalisé. Vérifiez toujours une réponse d'IA contre les tableaux calculés de l'appli (qui sont déterministes); lorsque les deux divergent, faites confiance aux tableaux."
     },
     "no-warranty": {
       "title": "Aucune garantie — à vos risques",
       "section": "Legal",
       "keywords": [
-        "warranty",
-        "as is",
-        "liability"
+        "garantie",
+        "tel quel",
+        "responsabilité"
       ],
-      "body": "This software is provided \"as is\", free of charge, without warranty of any kind. The authors are not liable for any loss or damage arising from its use. Using it means accepting these terms in full — if you don't agree, don't use it."
+      "body": "Ce logiciel est fourni « tel quel », gratuitement, sans garantie d'aucune sorte. Les auteurs ne sont pas responsables de toute perte ou tout dommage découlant de son utilisation. L'utiliser signifie accepter ces conditions en entier — si vous n'êtes pas d'accord, ne l'utilisez pas."
     },
     "credits": {
       "title": "Crédits",
@@ -844,17 +872,18 @@
       "keywords": [
         "danielabar",
         "original",
-        "thanks"
+        "merci"
       ],
-      "body": "The drawdown engine was originally built on{' '}\n[retirement_drawdown_simulator_canada\n](https://github.com/danielabar/retirement_drawdown_simulator_canada){' '}\nby **danielabar** — thank you to the original author for publishing it. The upstream repository did not carry a LICENSE file when incorporated (checked 2026-08-23); RE: tired's own code is MIT-licensed below."
+      "body": "Le moteur de décaissement s'est d'abord appuyé sur\n[retirement_drawdown_simulator_canada](https://github.com/danielabar/retirement_drawdown_simulator_canada)\npar **danielabar** — merci à l'auteur original de l'avoir publié. Le dépôt en amont n'avait pas de fichier LICENSE au moment de l'incorporation (vérifié le 2026-08-23); le code propre de RE: tired est sous licence MIT ci-dessous."
     },
     "mit-license": {
       "title": "Licence MIT (texte intégral)",
       "section": "Legal",
       "keywords": [
-        "license",
+        "licence",
         "mit",
-        "open source"
+        "open source",
+        "license"
       ],
       "body": "```\nMIT License\n\nCopyright (c) 2026 RE: tired contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n```"
     }
