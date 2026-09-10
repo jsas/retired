@@ -38,6 +38,7 @@ import { AgentPage } from './components/AgentPage';
 import { detectLocale, parseLocale, type Locale } from './lib/locale';
 import { setAppLanguage } from './lib/i18n';
 import { LocaleContext } from './lib/localeContext';
+import { useTranslation } from 'react-i18next';
 import { ConnectionsPage } from './components/ConnectionsPage';
 import { CompareCard } from './components/CompareCard';
 import { WelcomeCard } from './components/WelcomeCard';
@@ -108,6 +109,7 @@ function App() {
   // Site language: Settings / header pick wins; otherwise the browser (fr-* → fr-CA).
   const [detected] = useState<Locale>(detectLocale);
   const locale = parseLocale(config.general.locale) ?? detected;
+  const { t: tPages } = useTranslation('pages');
   useEffect(() => { void setAppLanguage(locale); }, [locale]);
   const setLocale = (next: Locale) => {
     setConfig(prev => ({ ...prev, general: { ...prev.general, locale: next } }));
@@ -834,7 +836,7 @@ function App() {
       return {
         tone: pot.holds ? 'holds' : borderline ? 'borderline' : 'short',
         age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
-        label: pot.holds ? 'the plan holds' : borderline ? 'borderline' : 'runs short',
+        label: pot.holds ? tPages('holds') : borderline ? tPages('borderline') : tPages('short'),
       };
     })();
 

@@ -4,6 +4,7 @@
 // doesn't. The map above uses your market dial — move it and the bands change;
 // this line is the fixed pessimistic floor under it.
 import { useMemo } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
@@ -14,6 +15,7 @@ import { HelpHint } from '../../design/primitives';
 export const DOWN_MARKET_RETURN = 0.012;
 
 export function DownMarketCheck({ inputs, config }: { inputs: RetirementInputs; config: AppConfig }) {
+  const { t } = useTranslation('pages');
   const check = useMemo(() => {
     const r = calculateHousehold({ ...inputs, investmentReturn: DOWN_MARKET_RETURN }, config);
     const holds = r.status === 'ON_TRACK';
@@ -22,6 +24,7 @@ export function DownMarketCheck({ inputs, config }: { inputs: RetirementInputs; 
   }, [inputs, config]);
 
   const pct = (DOWN_MARKET_RETURN * 100).toFixed(1);
+  const dial = (inputs.investmentReturn * 100).toFixed(1);
   const dot = check.holds ? BLUE : RED_DOT;
 
   return (
@@ -29,14 +32,14 @@ export function DownMarketCheck({ inputs, config }: { inputs: RetirementInputs; 
       <div className="flex items-center gap-2">
         <span className="inline-block h-2 w-2" style={{ backgroundColor: dot }} />
         <span className="text-[13px] font-medium text-slate-700">
-          {check.holds ? 'Down-market check' : 'Down-market warning'}
+          {check.holds ? t('dash.downCheck') : t('dash.downWarn')}
         </span>
         <HelpHint topic="down-market-check" />
       </div>
       <p className="num mt-1.5 text-[11.5px] leading-relaxed text-slate-500">
         {check.holds
-          ? <>Even at a <b>{pct}%</b> return this plan holds to <b>{inputs.maxAge}</b>.</>
-          : <>At a <b>{pct}%</b> return the money runs out at <b>{check.depletionAge ?? '—'}</b>. The map uses your <b>{(inputs.investmentReturn * 100).toFixed(1)}%</b> dial — move it and the bands change.</>}
+          ? <Trans i18nKey="dash.downHolds" ns="pages" values={{ pct, age: inputs.maxAge }} components={{ b: <b /> }} />
+          : <Trans i18nKey="dash.downFails" ns="pages" values={{ pct, runsTo: check.depletionAge ?? '—', dial }} components={{ b: <b /> }} />}
       </p>
     </div>
   );

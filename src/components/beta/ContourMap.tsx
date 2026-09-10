@@ -11,6 +11,7 @@
 // only recomputed when a ground input (market, balances, benefits…) changes —
 // dragging the dot never re-runs the engine.
 import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
@@ -46,6 +47,7 @@ function statusOf(inputs: RetirementInputs, bands: { green: number[] }, win: Ter
 }
 
 export function ContourMap({ inputs, config, window: win, onChange }: ContourMapProps) {
+  const { t } = useTranslation('pages');
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -118,7 +120,7 @@ export function ContourMap({ inputs, config, window: win, onChange }: ContourMap
         className="block w-full touch-none select-none border bg-white"
         style={{ borderColor: HAIRLINE, cursor: dragging ? 'grabbing' : 'crosshair' }}
         role="img"
-        aria-label="Contour map of plan success over retirement age and yearly spending"
+        aria-label={t('dash.mapAria')}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -158,23 +160,23 @@ export function ContourMap({ inputs, config, window: win, onChange }: ContourMap
           {hTicks.map(s => (
             <text key={`hl${s}`} x={BOX.left - 8} y={BOX.top + yFrac(s, win) * (BOX.bottom - BOX.top) + 4} textAnchor="end">{fmtK(s)}</text>
           ))}
-          <text x={(BOX.left + BOX.right) / 2} y={VH - 8} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569">the age you start drawing →</text>
-          <text x="16" y={(BOX.top + BOX.bottom) / 2} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569" transform={`rotate(-90 16 ${(BOX.top + BOX.bottom) / 2})`}>what you spend each year →</text>
+          <text x={(BOX.left + BOX.right) / 2} y={VH - 8} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569">{t('dash.ageAxis')}</text>
+          <text x="16" y={(BOX.top + BOX.bottom) / 2} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569" transform={`rotate(-90 16 ${(BOX.top + BOX.bottom) / 2})`}>{t('dash.spendAxis')}</text>
         </g>
 
         {/* you are here — halo + dot + square tag */}
         <g>
           <circle cx={dotX} cy={dotY} r="24" fill={dotColor} opacity="0.12" />
           <circle cx={dotX} cy={dotY} r="11" fill={dotColor} stroke="#fff" strokeWidth="3" style={{ cursor: 'grab' }} />
-          <DotTag x={dotX} y={dotY} text={`you are here · ${inputs.retirementAge}, ${fmtK(inputs.desiredSpending)}`} />
+          <DotTag x={dotX} y={dotY} text={t('dash.youAreHere', { age: inputs.retirementAge, spend: fmtK(inputs.desiredSpending) })} />
         </g>
       </svg>
 
       <div className="mt-3">
         <Legend items={[
-          { swatch: 'line-blue', label: 'the boundary — the curve where the plan stops holding' },
-          { swatch: 'box-blue', label: `below it, the money lasts past ${inputs.maxAge}` },
-          { swatch: 'box-rose', label: 'above it, it runs out early' },
+          { swatch: 'line-blue', label: t('dash.legendBoundary') },
+          { swatch: 'box-blue', label: t('dash.legendBelow', { age: inputs.maxAge }) },
+          { swatch: 'box-rose', label: t('dash.legendAbove') },
         ]} />
       </div>
     </div>

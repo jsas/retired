@@ -3,11 +3,11 @@
 // money lasts to, left at the plan-to age, in the pot at work's end, and the
 // CPP+OAS that arrives every year. Everything reads the same engine breakdown.
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { potDisplay } from '../../lib/planDisplay';
 import { AccountBars, Stat } from '../../design/primitives';
-
-const fmt = (v: number) => '$' + Math.round(v).toLocaleString('en-CA');
+import { useAppLocale } from '../../lib/localeContext';
 
 export function EvidenceRow({ inputs, breakdown }: {
   inputs: RetirementInputs;
@@ -15,6 +15,10 @@ export function EvidenceRow({ inputs, breakdown }: {
   results?: RetirementResults;
   breakdown: YearlyBreakdown[];
 }) {
+  const { t } = useTranslation('pages');
+  const { t: td } = useTranslation('details');
+  const { locale } = useAppLocale();
+  const fmt = (v: number) => '$' + Math.round(v).toLocaleString(locale);
   const { currentAge, retirementAge, maxAge } = inputs;
   const [age, setAge] = useState(retirementAge);
 
@@ -23,9 +27,9 @@ export function EvidenceRow({ inputs, breakdown }: {
 
   const acc = rowAt(age);
   const accounts = acc ? [
-    { label: 'RRSP', value: acc.rrspBalance + (acc.rrifBalance ?? 0) },
-    { label: 'TFSA', value: acc.tfsaBalance, active: true },
-    { label: 'Taxable', value: acc.taxableBalance + (acc.cashCushionBalance ?? 0) },
+    { label: td('rrsp'), value: acc.rrspBalance + (acc.rrifBalance ?? 0) },
+    { label: td('tfsa'), value: acc.tfsaBalance, active: true },
+    { label: td('taxable'), value: acc.taxableBalance + (acc.cashCushionBalance ?? 0) },
   ] : [];
   const accTotal = accounts.reduce((s, a) => s + a.value, 0);
 
@@ -50,15 +54,15 @@ export function EvidenceRow({ inputs, breakdown }: {
       {/* per-account balances at a chosen age */}
       <div>
         <div className="mb-3 flex items-baseline gap-2">
-          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Where it sits, over time</h3>
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('dash.whereItSits')}</h3>
           <select
             className="num cursor-pointer appearance-none border-b border-transparent bg-transparent text-[12px] text-slate-600 hover:border-slate-300"
             value={age}
             onChange={(e) => setAge(Number(e.target.value))}
-            aria-label="Balance at age"
+            aria-label={t('dash.balanceAtAge')}
           >
             {Array.from({ length: maxAge - currentAge + 1 }, (_, i) => currentAge + i).map(a => (
-              <option key={a} value={a}>at age {a}</option>
+              <option key={a} value={a}>{t('dash.atAge', { age: a })}</option>
             ))}
           </select>
         </div>
@@ -68,25 +72,25 @@ export function EvidenceRow({ inputs, breakdown }: {
       {/* key numbers */}
       <div className="grid grid-cols-2 gap-x-6 gap-y-6">
         <Stat
-          label="Money lasts to"
+          label={t('dash.moneyLastsTo')}
           value={holds ? `${maxAge}+` : `${depletionAge ?? '—'}`}
           tone={lastsTone}
-          note={holds ? 'past the plan' : `before the ${maxAge} planned`}
+          note={holds ? t('dash.pastThePlan') : t('dash.beforePlanned', { age: maxAge })}
         />
         <Stat
-          label={`Left at ${maxAge}`}
-          value={leftAtMax > 0 ? fmt(leftAtMax) : 'nothing'}
-          note={leftAtMax > 0 ? 'still in the pot' : 'the pot is empty'}
+          label={t('dash.leftAt', { age: maxAge })}
+          value={leftAtMax > 0 ? fmt(leftAtMax) : t('dash.nothing')}
+          note={leftAtMax > 0 ? t('dash.stillInPot') : t('dash.potEmpty')}
         />
         <Stat
-          label="In the pot at work's end"
+          label={t('dash.inPotAtEnd')}
           value={fmt(atRet?.endingBalance ?? 0)}
-          note="after the saving years"
+          note={t('dash.afterSaving')}
         />
         <Stat
-          label={`CPP + OAS from ${benAge}`}
+          label={t('dash.cppOasFrom', { age: benAge })}
           value={benefits > 0 ? fmt(benefits) : '—'}
-          note="every year after that"
+          note={t('dash.everyYearAfter')}
         />
       </div>
     </div>
