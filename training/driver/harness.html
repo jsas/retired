@@ -22,25 +22,63 @@
     if (engine && loadedId === modelId) return { ok: true, cached: true, modelId };
     if (engine) { try { await engine.unload(); } catch {} engine = null; loadedId = null; }
     log('loading ' + modelId + ' …');
-    engine = await webllm.CreateMLCEngine(modelId, {
+    // Production tool instructions are ~4.3k tokens; web-llm's 4096 default
+    // overflows before the first question. 8192 fits the prompt + a 400-token
+    // reply. Gemma packs also need sliding_window_size: -1 or load throws.
+    const init = {
       initProgressCallback: (p) => { logEl.textContent = logEl.textContent.split('\n')[0] + '\n' + (p.text ?? ''); },
-    });
+    };
+    let ctxWindow = 8192;
+    try {
+      engine = await webllm.CreateMLCEngine(modelId, init, {
+        context_window_size: ctxWindow, sliding_window_size: -1,
+      });
+    } catch (err) {
+      const oom = /OOM|out of memory|device was lost|mapAsync/i.test(String(err?.message ?? err));
+      if (!oom) throw err;
+      ctxWindow = 4096;
+      log('OOM at 8192 — retrying at 4096');
+      engine = await webllm.CreateMLCEngine(modelId, init, {
+        context_window_size: ctxWindow, sliding_window_size: -1,
+      });
+    }
     loadedId = modelId;
-    log('loaded ' + modelId);
-    return { ok: true, modelId };
+    log('loaded ' + modelId + ' @ ' + ctxWindow);
+    return { ok: true, modelId, contextWindow: ctxWindow };
   }
 
   async function reply(systemPrompt, question) {
     if (!engine) throw new Error('no model loaded');
-    const out = await engine.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: question },
-      ],
-      temperature: 0,          // deterministic: the eval wants the model's best answer
-      max_tokens: 400,
-    });
-    return out.choices[0]?.message?.content ?? '';
+    // CDP's callFunctionOn timeout does NOT cancel the in-page generate — a
+    // stuck model (tiny packs looping, 7B thinking forever) would freeze the
+    // whole bake-off. Race a 90s timer against interruptGenerate.
+    const REPLY_MS = 90000;
+    let timer;
+    try {
+      const gen = engine.chat.completions.create({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: question },
+        ],
+        temperature: 0,          // deterministic: the eval wants the model's best answer
+        max_tokens: 400,
+      });
+      const timed = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('REPLY_TIMEOUT')), REPLY_MS);
+      });
+      const out = await Promise.race([gen, timed]);
+      return out.choices[0]?.message?.content ?? '';
+    } catch (err) {
+      const msg = String(err?.message ?? err);
+      if (/REPLY_TIMEOUT/i.test(msg)) {
+        try { await engine.interruptGenerate?.(); } catch {}
+        return 'REPLY_TIMEOUT';
+      }
+      if (/ContextWindowSizeExceeded/i.test(msg)) return 'CONTEXT_OVERFLOW';
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   async function hasWebGPU() {

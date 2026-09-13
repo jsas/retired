@@ -77,10 +77,10 @@ export interface VerdictChip {
 /** The Tools menu (issue #162, later Compare): each analytic surface is its own
  *  page. Desktop opens them from the header dropdown; the phone menu carries the
  *  same items flat (a dropdown inside a dropdown would close on the first tap). */
-const TOOLS_MENU_VIEWS: View[] = ['eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare'];
-const TOOLS_MENU_KEYS = ['steering', 'optimizer', 'monteCarlo', 'backtest', 'solver', 'compare'] as const;
+const TOOLS_MENU_VIEWS: View[] = ['eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare', 'math'];
+const TOOLS_MENU_KEYS = ['steering', 'optimizer', 'monteCarlo', 'backtest', 'solver', 'compare', 'yearMath'] as const;
 const MOBILE_MENU_VIEWS: View[] = [
-  'projection', 'math', ...TOOLS_MENU_VIEWS,
+  'dashboard', 'projection', ...TOOLS_MENU_VIEWS,
   'scenarios', 'data', 'print', 'settings', 'connections', 'help',
 ];
 const MOBILE_MENU_KEYS = [
@@ -97,14 +97,15 @@ export const TOOLS_MENU_ITEMS: Array<{ view: View; label: string }> = [
   { view: 'backtest', label: 'Backtest' },
   { view: 'solver', label: 'Solver' },
   { view: 'compare', label: 'Compare plans' },
+  { view: 'math', label: 'Year Math' },
 ];
 
 /** The phone menu's contents — the same named homes the desktop row shows
  *  (plus Dashboard/Help, which desktop reaches other ways). Exported so tests
  *  can prove nothing was dropped on phones. Details lives on Plans now. */
 export const MOBILE_MENU_ITEMS: Array<{ view: View; label: string }> = [
-  { view: 'projection', label: 'Dashboard' },
-  { view: 'math', label: 'Projection' },
+  { view: 'dashboard', label: 'Dashboard' },
+  { view: 'projection', label: 'Projection' },
   // Tools ▾ flattened: every tool one tap away on phones.
   ...TOOLS_MENU_ITEMS,
   { view: 'scenarios', label: 'Plans' },
@@ -183,8 +184,8 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
           <Link view="welcome" className="flex h-6 w-6 shrink-0 items-center justify-center bg-slate-900 text-[10px] font-bold text-white" aria-label={t('home')}>
             RE:
           </Link>
-          <Link view="projection" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">{t('dashboard')}</Link>
-          <Link view="math" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('projection')}</Link>
+          <Link view="dashboard" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">{t('dashboard')}</Link>
+          <Link view="projection" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('projection')}</Link>
 
           {/* The Tools menu: each analytic surface is its own page. Steering
               through Solver share a projection strip; Compare draws every plan. */}
@@ -300,7 +301,7 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
             onChange={setLocale}
             className="hidden px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block"
           />
-          <Link view="projection" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label={t('verdictChip', { label: chip.label })}>
+          <Link view="dashboard" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label={t('verdictChip', { label: chip.label })}>
             <span title={chip.label} className="inline-block h-2.5 w-2.5" style={{ backgroundColor: chipDot(chip.tone) }} />
             <span className="num text-[14px] font-bold text-slate-900">{chip.age}</span>
           </Link>

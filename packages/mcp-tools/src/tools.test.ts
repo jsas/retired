@@ -78,6 +78,7 @@ describe('run_projection', () => {
     const out = executeToolCall(c, { id: '1', name: 'run_projection', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain(expected.status === 'ON_TRACK' ? 'ON TRACK' : 'SHORTFALL');
+    expect(out.content).toMatch(/Re:score \d+\/100/);
     expect(out.content).toContain('lifetime tax');
   });
 
@@ -133,6 +134,7 @@ describe('run_projection', () => {
     if (out.kind !== 'result') throw new Error('expected result');
     // Headline = household verdict…
     expect(out.content).toMatch(/Result: ON TRACK — household funded to age 90\+/);
+    expect(out.content).toContain('Re:score 100/100');
     // …and the per-person verdicts are demoted to a labeled detail line.
     expect(out.content).toContain('per-person (detail): you deplete at');
     expect(out.content).toContain('spouse on track');

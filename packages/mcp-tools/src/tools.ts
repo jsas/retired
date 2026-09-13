@@ -719,6 +719,7 @@ function summarizeResults(label: string, inputs: RetirementInputs, results: Reti
     (ho.depletionAge != null
       ? `household portfolio depletes at age ${ho.depletionAge}`
       : `household funded to age ${inputs.maxAge}+`),
+    `  Re:score ${ho.depletionAge == null ? 100 : Math.min(100, Math.max(0, Math.round((ho.depletionAge / inputs.maxAge) * 100)))}/100`,
     `  net worth at retirement ${money(results.totalNetWorthAtRetirement)}, ` +
     `withdrawal rate ${(results.withdrawalRate * 100).toFixed(1)}%, ` +
     `lifetime tax ${money(lifetimeTax)}, ending balance ${money(last?.endingBalance ?? 0)}`,

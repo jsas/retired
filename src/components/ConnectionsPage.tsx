@@ -137,7 +137,6 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
   const { t: tc } = useTranslation('common');
   const [guide, setGuide] = useState<MachineGuide | null>(null);
   const [open, setOpen] = useState(true);
-  const [showAll, setShowAll] = useState(false);
   // modelId -> downloaded? Re-probed on demand after a download/delete.
   const [cached, setCached] = useState<Record<string, boolean>>({});
   const [extraIds, setExtraIds] = useState<string[]>([]);
@@ -277,9 +276,6 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
   const catalogCached = offered.filter(m => cached[m.id]).length;
   const unknownExtras = extraIds.length;
   const recommended = guide?.recommended.id ?? null;
-  const visible = showAll
-    ? byVram
-    : byVram.filter(m => m.id === recommended || m.id === chosenId || byVram.indexOf(m) < 3);
 
   // The probe resolves after mount. While it's pending (guide === null) show a
   // brief placeholder rather than the full catalog; once it says this browser
@@ -345,7 +341,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
 
       {/* Catalog */}
       <div className="mt-2 space-y-1">
-        {visible.map(m => {
+        {byVram.map(m => {
           const isChosen = m.id === chosenId;
           const isCached = cached[m.id] === true;
           const isDownloading = downloading === m.id;
@@ -404,11 +400,6 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
             </div>
           );
         })}
-        {!showAll && offered.length > visible.length && (
-          <button onClick={() => setShowAll(true)} className="pl-1 text-[11px] text-slate-500 hover:text-slate-900 hover:underline">
-            {t('models.showAll', { n: offered.length })}
-          </button>
-        )}
       </div>
 
       {/* Active download progress */}

@@ -4,6 +4,7 @@ import { NAV_CATALOG } from '@retired/mcp-tools/navigation';
 
 describe('viewFromHash', () => {
   it('maps each canonical route to its view', () => {
+    expect(viewFromHash('#/dashboard')).toBe('dashboard');
     expect(viewFromHash('#/projection')).toBe('projection');
     expect(viewFromHash('#/year-math')).toBe('math');
     expect(viewFromHash('#/steering')).toBe('eq');
@@ -65,7 +66,7 @@ describe('hashForView', () => {
     // tests below. Issue #162 unfurled the Tools surfaces; Compare later joined
     // that menu and is in this list too.
     const views: View[] = [
-      'projection', 'math', 'eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare',
+      'dashboard', 'projection', 'math', 'eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare',
       'scenarios', 'data', 'print', 'donate',
       'welcome', 'help', 'settings', 'styleguide',
     ];

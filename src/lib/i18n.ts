@@ -16,6 +16,7 @@ import enPrint from '../locales/en-CA/print.json';
 import enSettings from '../locales/en-CA/settings.json';
 import enDetails from '../locales/en-CA/details.json';
 import enPrompts from '../locales/en-CA/prompts.json';
+import enMath from '../locales/en-CA/math.json';
 
 import frCommon from '../locales/fr-CA/common.json';
 import frNav from '../locales/fr-CA/nav.json';
@@ -26,21 +27,22 @@ import frPrint from '../locales/fr-CA/print.json';
 import frSettings from '../locales/fr-CA/settings.json';
 import frDetails from '../locales/fr-CA/details.json';
 import frPrompts from '../locales/fr-CA/prompts.json';
+import frMath from '../locales/fr-CA/math.json';
 
 export const I18N_NAMESPACES = [
-  'common', 'nav', 'landing', 'help', 'pages', 'print', 'settings', 'details', 'prompts',
+  'common', 'nav', 'landing', 'help', 'pages', 'print', 'settings', 'details', 'prompts', 'math',
 ] as const;
 
 const resources = {
   'en-CA': {
     common: enCommon, nav: enNav, landing: enLanding, help: enHelp,
     pages: enPages, print: enPrint, settings: enSettings, details: enDetails,
-    prompts: enPrompts,
+    prompts: enPrompts, math: enMath,
   },
   'fr-CA': {
     common: frCommon, nav: frNav, landing: frLanding, help: frHelp,
     pages: frPages, print: frPrint, settings: frSettings, details: frDetails,
-    prompts: frPrompts,
+    prompts: frPrompts, math: frMath,
   },
 } as const;
 
@@ -61,6 +63,13 @@ if (!i18n.isInitialized) {
       return key;
     },
   });
+} else {
+  // HMR / test re-import: pick up newly added namespaces (e.g. math).
+  for (const [lng, bundles] of Object.entries(resources)) {
+    for (const [ns, bundle] of Object.entries(bundles)) {
+      i18n.addResourceBundle(lng, ns, bundle, true, true);
+    }
+  }
 }
 
 export { i18n };

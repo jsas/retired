@@ -444,7 +444,7 @@
         "stats",
         "proof"
       ],
-      "body": "The numbers behind the verdict: the account mix at any age you pick (RRSP+RRIF, TFSA, Taxable+cash), plus how long the money lasts (first empty year of the pot — the same age as the life-timeline pin), what's left at max age, the pot at work's end, and when CPP+OAS start. \"90+ / past the plan\" only prints when leftover is still there."
+      "body": "The numbers behind the verdict: the account mix at any age you pick (RRSP+RRIF, TFSA, Taxable+cash), plus the Re:score (0–100, how close the household gets to max age before money runs out), how long the money lasts (first empty year of the pot — the same age as the life-timeline pin), what's left at max age, the pot at work's end, and when CPP+OAS start. \"90+ / past the plan\" only prints when leftover is still there."
     },
     "stress-test": {
       "title": "How to stress-test the plan",
@@ -532,6 +532,21 @@
         "balances"
       ],
       "body": "The Projection page's year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The **Columns** button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one \"show all\" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail."
+    },
+    "year-math": {
+      "title": "The Year Math worksheet",
+      "section": "Schedule",
+      "keywords": [
+        "year math",
+        "year-math",
+        "worksheet",
+        "breakdown",
+        "step by step",
+        "household year",
+        "per person",
+        "how the year works"
+      ],
+      "body": "Year Math is the step-by-step worksheet for one calendar year of the household — not the Projection schedule. Pick a year, then You / Spouse / Side by side, and walk from the spending target down through withdrawals, tax, benefits, and the ending balance. Every number is the same calc the engine already ran for that year; this page just shows the working."
     },
     "scenarios": {
       "title": "Plans",

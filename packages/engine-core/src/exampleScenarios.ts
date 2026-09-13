@@ -36,6 +36,19 @@ export function baselineInputs(): RetirementInputs {
   };
 }
 
+/** Stock first-run plans are named this way so the welcome gate can tell them
+ *  apart from a plan the user actually built. A new install seeds examples and
+ *  still opens on welcome; only a user-named plan auto-routes to the dashboard. */
+export const EXAMPLE_PLAN_PREFIX = 'Example - ';
+
+export function isExamplePlanName(name: string): boolean {
+  return name.startsWith(EXAMPLE_PLAN_PREFIX);
+}
+
+export function hasUserPlans(scenarios: ReadonlyArray<{ name: string }>): boolean {
+  return scenarios.some(s => !isExamplePlanName(s.name));
+}
+
 /**
  * First-run example scenarios: three realistic, mutually distinct starting
  * points that each exercise different engine features. Only used when

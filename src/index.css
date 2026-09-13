@@ -129,6 +129,8 @@ input[type="range"].fader:focus-visible {
   .print-only {
     display: block !important;
   }
+  /* The Print page's on-screen sheet is a preview; the print-only instance at
+     App root is the one that actually prints. */
   @page {
     margin: 14mm;
   }

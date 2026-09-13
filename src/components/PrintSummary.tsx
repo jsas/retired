@@ -181,6 +181,7 @@ function MonteCarloPrintChart({ results, retirementAge, maxAge, t, locale }: {
         <Trans
           i18nKey="sheet.mcFunded"
           ns="print"
+          t={t}
           values={{ pct: (results.successRate * 100).toFixed(1), runs: results.runs, age: maxAge }}
           components={{ strong: <strong /> }}
         />
@@ -451,7 +452,7 @@ function DetailedTablePrint({ results, spouseAgeOffset, t }: {
 // compact plan summary: inputs, verdict, depletion — plus optional sections
 // chosen in the print-options card (timeline chart, Monte Carlo fan,
 // milestones table).
-export function PrintSummary({ scenarioName, inputs, results, householdBreakdown, options, mcResults, rrifConversionAge }: {
+export function PrintSummary({ scenarioName, inputs, results, householdBreakdown, options, mcResults, rrifConversionAge, preview = false }: {
   scenarioName: string;
   inputs: RetirementInputs;
   results: RetirementResults;
@@ -459,9 +460,12 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
   options: PrintOptions;
   mcResults: MonteCarloResults | null;
   rrifConversionAge: number;
+  /** On-screen copy of the sheet (Print page). The print-only instance stays at App root. */
+  preview?: boolean;
 }) {
-  const { t } = useTranslation('print');
   const { locale } = useAppLocale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale, 'print');
   const spouseAgeOffset = inputs.currentAge - (inputs.spouse?.currentAge ?? inputs.currentAge);
   const spouse = results.spouse;
   const rmOn = inputs.reverseMortgage?.enabled === true;
@@ -475,7 +479,7 @@ export function PrintSummary({ scenarioName, inputs, results, householdBreakdown
   const statusLabel = results.status === 'ON_TRACK' ? t('sheet.onTrack') : t('sheet.shortfall');
 
   return (
-    <div className="print-only p-2 text-slate-900">
+    <div className={`${preview ? '' : 'print-only '}p-2 text-slate-900`} lang={locale}>
       {/* The wordmark: square ink block, same as the on-screen header. The
           rule under it is INK — structure, not the verdict accent. */}
       <div className="mb-3 flex items-center gap-2 border-b-2 border-slate-900 pb-1.5">

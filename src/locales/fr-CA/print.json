@@ -15,6 +15,7 @@
   "waitingMc": "En attente de la simulation Monte-Carlo…",
   "simWhenNeeded": "La simulation s’exécute lorsque le graphique est nécessaire.",
   "running500": "Exécution de 500 simulations pour l’éventail…",
+  "preview": "Aperçu de l’impression",
   "sheet": {
     "title": "RE: tired — Résumé du plan de retraite",
     "generated": "{{name}} · généré le {{date}}",

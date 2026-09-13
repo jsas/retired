@@ -41,19 +41,19 @@ const conn: AiConnection = {
 };
 
 describe('Bonsai catalog', () => {
-  it('ships onnx-community 1-bit packs, not MLC ids', () => {
-    expect(BONSAI_MODELS.length).toBeGreaterThanOrEqual(2);
+  it('ships the 1.7B 1-bit pack, not MLC ids', () => {
+    expect(BONSAI_MODELS.map(m => m.id)).toEqual(['onnx-community/Bonsai-1.7B-ONNX']);
     expect(BONSAI_MODELS.some(m => m.id.includes('8B'))).toBe(false);
+    expect(BONSAI_MODELS.some(m => m.id.includes('4B'))).toBe(false);
     for (const m of BONSAI_MODELS) {
       expect(m.id).toMatch(/^onnx-community\/Bonsai-/);
       expect(m.id).not.toMatch(/-MLC$/);
       expect(m.sizeGB).toBeGreaterThan(0);
+      expect(m.toolCapable).toBe(false);
     }
-    const tiny = BONSAI_MODELS.find(m => m.id.endsWith('1.7B-ONNX'));
-    expect(tiny?.toolCapable).toBe(false);
   });
 
-  it('keeps graph opt on for 1.7B (HF demo) and off for 4B (WASM heap)', () => {
+  it('keeps graph opt on for 1.7B (HF demo) and off for larger packs', () => {
     expect(bonsaiSessionOptions('onnx-community/Bonsai-1.7B-ONNX')).toBeUndefined();
     expect(bonsaiSessionOptions('onnx-community/Bonsai-4B-ONNX')).toEqual({ graphOptimizationLevel: 'disabled' });
   });

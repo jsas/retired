@@ -11,9 +11,10 @@
   "wrapUpSystem": "You have already gathered tool results in this conversation. Do NOT call\nany more tools. Answer the user's question NOW in plain prose, using the\nnumbers from the tool results above. If a needed number is missing, say so\nbriefly and give the best answer you can with what you have.",
   "wrapUpUser": "You have reached the tool-use limit. Do not call any more tools. Answer my question now in plain prose using the tool results above.",
   "pageTitle": {
-    "projection": "Dashboard",
+    "dashboard": "Dashboard",
+    "projection": "Projection",
     "details": "Plans",
-    "math": "Projection",
+    "math": "Year Math",
     "eq": "Steering",
     "optimize": "Optimizer",
     "montecarlo": "Monte Carlo",

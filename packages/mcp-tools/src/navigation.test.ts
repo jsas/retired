@@ -54,8 +54,10 @@ describe('rankPages', () => {
     expect(rankPages('tax tables')[0]?.viewId).toBe('settings');
     expect(rankPages('print')[0]?.viewId).toBe('print');
     expect(rankPages('compare')[0]?.viewId).toBe('compare');
-    expect(rankPages('schedule')[0]?.viewId).toBe('math');
-    expect(rankPages('projection')[0]?.viewId).toBe('math');
+    expect(rankPages('schedule')[0]?.viewId).toBe('projection');
+    expect(rankPages('projection')[0]?.viewId).toBe('projection');
+    expect(rankPages('dashboard')[0]?.viewId).toBe('dashboard');
+    expect(rankPages('year math')[0]?.viewId).toBe('math');
   });
 
   it('searches only the reachable pages — folded legacy views never surface', () => {
@@ -100,13 +102,15 @@ describe('canonicalView / pageTitleLine', () => {
     expect(canonicalView('optimize')).toBe('optimize');
     expect(canonicalView('eq')).toBe('eq');
     expect(canonicalView('projection')).toBe('projection');
+    expect(canonicalView('dashboard')).toBe('dashboard');
   });
 
   it('names pages by their UI title — folded pages report their destination', () => {
-    expect(pageTitleLine('projection')).toBe('Dashboard');
+    expect(pageTitleLine('dashboard')).toBe('Dashboard');
+    expect(pageTitleLine('projection')).toBe('Projection');
     expect(pageTitleLine('details')).toBe('Plans');
     expect(pageTitleLine('eq')).toBe('Steering');
-    expect(pageTitleLine('math')).toBe('Projection');
+    expect(pageTitleLine('math')).toBe('Year Math');
     expect(pageTitleLine('optimize')).toBe('Optimizer');
     expect(pageTitleLine('montecarlo')).toBe('Monte Carlo');
     expect(pageTitleLine('backtest')).toBe('Backtest');

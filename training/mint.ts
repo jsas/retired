@@ -778,8 +778,8 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
       const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
       const base = `find_page:${sc.id}:q${seqRef.n}`;
       // Ambient line: put the user on a DIFFERENT reachable page so the answer
-      // is a real redirect. projection (Dashboard) is always reachable.
-      const ambient = here === 'projection' ? 'settings' : 'projection';
+      // is a real redirect. dashboard is always reachable.
+      const ambient = here === 'dashboard' ? 'settings' : 'dashboard';
       records.push({
         id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
         messages: [

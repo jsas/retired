@@ -1,9 +1,9 @@
 {
   "pages": [
     {
-      "view": "projection",
-      "route": "#/projection",
-      "url": "https://jsas.github.io/retired/#/projection",
+      "view": "dashboard",
+      "route": "#/dashboard",
+      "url": "https://jsas.github.io/retired/#/dashboard",
       "title": "Dashboard",
       "description": "The plan at a glance: the verdict (funded or depleted, with age and shortfall), key metrics, and the doors to everything else.",
       "keywords": [
@@ -20,9 +20,9 @@
       ]
     },
     {
-      "view": "math",
-      "route": "#/year-math",
-      "url": "https://jsas.github.io/retired/#/year-math",
+      "view": "projection",
+      "route": "#/projection",
+      "url": "https://jsas.github.io/retired/#/projection",
       "title": "Projection",
       "description": "The projection: the money-over-age timeline plus the schedule table — one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.",
       "keywords": [
@@ -36,6 +36,24 @@
         "tax paid",
         "one year",
         "timeline"
+      ]
+    },
+    {
+      "view": "math",
+      "route": "#/year-math",
+      "url": "https://jsas.github.io/retired/#/year-math",
+      "title": "Year Math",
+      "description": "The year-math worksheet: one calendar year of the household, worked step by step — you, spouse, or side by side — from the spending target down to the ending balance.",
+      "keywords": [
+        "year math",
+        "year-math",
+        "worksheet",
+        "breakdown",
+        "step by step",
+        "calculation",
+        "household year",
+        "per person",
+        "how the year works"
       ]
     },
     {

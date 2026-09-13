@@ -1,5 +1,6 @@
 {
   "projection": "Projection",
+  "yearMath": "Mathématiques de l’année",
   "steering": "Pilotage",
   "optimizer": {
     "tabStrategies": "Explorateur de stratégies",
@@ -66,7 +67,6 @@
     "inUse": "EN COURS",
     "weightsMissing": "poids absents de ce serveur",
     "weightsTitle": "Le dossier des poids (public/models/) n’est pas servi par cette instance — il n’existe que sur une machine de développement.",
-    "showAll": "Afficher les {{n}} modèles…",
     "ctxLabel": "Combien le modèle lit à la fois",
     "auto": "Auto",
     "autoGpu": "Auto (aussi grand que le GPU le permet)",
@@ -165,6 +165,11 @@
   "help": "Aide",
   "print": "Imprimer et exporter",
   "support": "Soutenir cette appli",
+  "agentPage": {
+    "title": "Assistant",
+    "open": "La conversation est ouverte à côté de vous.",
+    "body": "Posez une question sur votre plan, ou demandez-lui de changer quelque chose — chaque modification est une carte à approuver. Cette page porte le même clavardage que le dock de chaque autre page; le bouton d’agrandissement dans l’en-tête du dock le met en plein écran."
+  },
   "thisPlanEndToEnd": "Ce plan, du début à la fin",
   "namedVariants": "Variantes nommées, notées",
   "acrossFutures": "Sur de nombreux futurs de marché",
@@ -222,10 +227,7 @@
     "afterTaxSpending": "Dépenses après impôt",
     "lifeLine": "Votre vie sur une ligne — ce plan exact",
     "receipts": "Les reçus",
-    "footnote": "Tout ici est en direct — glissez le point ou un curseur et le verdict, les bandes, la ligne de vie, les comptes et le test de marché baissier se recalculent ensemble. Les reçus année par année, les leviers, les chances, l’histoire et le solveur sont sous le menu Outils. · L’ancien site reste une référence un moment —",
-    "openOld": "l’ouvrir",
-    "cookieRemembers": "(le cookie {{cookie}} s’en souvient;",
-    "backToApp": "retour à l’appli",
+    "footnote": "Tout ici est en direct — glissez le point ou un curseur et le verdict, les bandes, la ligne de vie, les comptes et le test de marché baissier se recalculent ensemble. Le tableau année par année est Projection; la feuille étape par étape est Mathématiques de l’année sous Outils, avec les leviers, les chances, l’histoire et le solveur.",
     "markets": "Marchés",
     "marketsHint": "à la baisse ↔ à la hausse — le rendement annuel moyen que le plan suppose",
     "downCheck": "Test de marché baissier",
@@ -248,6 +250,8 @@
     "whereItSits": "Où ça se trouve, dans le temps",
     "atAge": "à {{age}} ans",
     "balanceAtAge": "Solde à l’âge",
+    "reScore": "Re:score",
+    "reScoreNote": "à quel point le plan se rapproche de {{age}} ans",
     "moneyLastsTo": "L’argent dure jusqu’à",
     "pastThePlan": "au-delà du plan",
     "beforePlanned": "avant les {{age}} ans prévus",

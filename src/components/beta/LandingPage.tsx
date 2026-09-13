@@ -109,12 +109,14 @@ function buildPlan(a: Answer): RetirementInputs {
   };
 }
 
-// The landing's first-run gate (issue #153): with any scenarios saved, the
-// welcome hash opens the dashboard — the landing can never overwrite a plan.
-// Pure so the behavior is testable without mounting App.
-export function welcomeLandingGate(hashView: View | null, hasScenarios: boolean): View {
+// The landing's first-run gate (issue #153): no hash + saved plans ⇒ dashboard.
+// An explicit hash — including #/welcome from the RE: mark — always wins, even
+// with a plan. Pure so the behavior is testable without mounting App.
+export function welcomeLandingGate(hashView: View | null, hasUserPlans: boolean): View {
   if (hashView) return hashView;
-  return hasScenarios ? 'projection' : 'welcome';
+  // Stock `Example - …` plans do not count. A new install always seeds those,
+  // and they must not skip the welcome.
+  return hasUserPlans ? 'dashboard' : 'welcome';
 }
 
 // The door-picked scenario (issue #153): onBuild drafts → one click saves the
@@ -286,7 +288,7 @@ export function LandingPage({ config, onBuild }: {
                 {t('goDashboardArrow')}
               </button>
             ) : (
-              <Link view="projection"
+              <Link view="dashboard"
                 className="ml-auto inline-flex items-center gap-1.5 bg-slate-900 px-4 py-2 text-white transition-colors hover:bg-slate-700">
                 {t('goDashboardArrow')}
               </Link>

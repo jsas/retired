@@ -1,5 +1,6 @@
 {
   "projection": "Projection",
+  "yearMath": "Year Math",
   "steering": "Steering",
   "optimizer": {
     "tabStrategies": "Strategy Explorer",
@@ -66,7 +67,6 @@
     "inUse": "IN USE",
     "weightsMissing": "weights not on this server",
     "weightsTitle": "The weights folder (public/models/) isn't served by this instance — it exists only on a dev machine.",
-    "showAll": "Show all {{n}} models…",
     "ctxLabel": "How much the model reads at once",
     "auto": "Auto",
     "autoGpu": "Auto (as big as your GPU allows)",
@@ -165,6 +165,11 @@
   "help": "Help",
   "print": "Print & export",
   "support": "Support this app",
+  "agentPage": {
+    "title": "Assistant",
+    "open": "The conversation is open beside you.",
+    "body": "Ask about your plan, or ask it to change something — every edit is a card you approve. This page holds the same chat as the dock on every other page; the expand button in the dock's header gives it the full screen."
+  },
   "thisPlanEndToEnd": "This plan, end to end",
   "namedVariants": "Named variants, scored",
   "acrossFutures": "Across many market futures",
@@ -222,10 +227,7 @@
     "afterTaxSpending": "After Tax Spending",
     "lifeLine": "Your life on one line — this exact plan",
     "receipts": "The receipts",
-    "footnote": "Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. Year-by-year receipts, the levers, the odds, the history and the solver live under the Tools menu. · The old site stays up as a reference for a while —",
-    "openOld": "open it",
-    "cookieRemembers": "({{cookie}} cookie remembers;",
-    "backToApp": "back to the app",
+    "footnote": "Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. The year-by-year schedule is Projection; the step-by-step worksheet is Year Math under Tools, with the levers, the odds, the history and the solver.",
     "markets": "Markets",
     "marketsHint": "down ↔ up — the average yearly return the plan assumes",
     "downCheck": "Down-market check",
@@ -248,6 +250,8 @@
     "whereItSits": "Where it sits, over time",
     "atAge": "at age {{age}}",
     "balanceAtAge": "Balance at age",
+    "reScore": "Re:score",
+    "reScoreNote": "how close the plan gets to {{age}}",
     "moneyLastsTo": "Money lasts to",
     "pastThePlan": "past the plan",
     "beforePlanned": "before the {{age}} planned",

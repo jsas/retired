@@ -11,9 +11,10 @@
   "wrapUpSystem": "Vous avez déjà rassemblé des résultats d'outils dans cette conversation. N'appelez\nPLUS d'outils. Répondez MAINTENANT à la question de l'utilisateur en prose simple,\navec les chiffres des résultats ci-dessus. S'il manque un chiffre nécessaire,\ndites-le brièvement et donnez la meilleure réponse possible avec ce que vous avez.",
   "wrapUpUser": "Vous avez atteint la limite d'utilisation d'outils. N'appelez plus d'outils. Répondez maintenant à ma question en prose simple en utilisant les résultats d'outils ci-dessus.",
   "pageTitle": {
-    "projection": "Tableau de bord",
+    "dashboard": "Tableau de bord",
+    "projection": "Projection",
     "details": "Plans",
-    "math": "Projection",
+    "math": "Mathématiques de l’année",
     "eq": "Pilotage",
     "optimize": "Optimiseur",
     "montecarlo": "Monte-Carlo",

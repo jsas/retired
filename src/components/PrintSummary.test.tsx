@@ -10,6 +10,8 @@ import { PrintSummary } from './PrintSummary';
 import { calculateHousehold, type RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { baseInputs, testConfig } from '../../packages/engine-core/test/helpers';
 import { DEFAULT_PRINT_OPTIONS } from '../lib/printOptions';
+import { LocaleContext } from '../lib/localeContext';
+import type { Locale } from '../lib/locale';
 
 const inputs: RetirementInputs = baseInputs({
   currentAge: 65,
@@ -23,8 +25,10 @@ const inputs: RetirementInputs = baseInputs({
 
 const results = calculateHousehold(inputs, testConfig());
 
-const render = (overrides: Partial<Parameters<typeof PrintSummary>[0]> = {}) =>
-  renderToStaticMarkup(createElement(PrintSummary, {
+const render = (overrides: Partial<Parameters<typeof PrintSummary>[0]> = {}, locale: Locale = 'en-CA') =>
+  renderToStaticMarkup(createElement(LocaleContext.Provider, {
+    value: { locale, setLocale: () => {} },
+  }, createElement(PrintSummary, {
     scenarioName: 'Test plan',
     inputs,
     results,
@@ -33,7 +37,7 @@ const render = (overrides: Partial<Parameters<typeof PrintSummary>[0]> = {}) =>
     mcResults: null,
     rrifConversionAge: 71,
     ...overrides,
-  }));
+  })));
 
 describe('PrintSummary (f7 tokens)', () => {
   it('renders the sheet: wordmark, verdict-first tables, milestones', () => {
@@ -81,20 +85,30 @@ describe('PrintSummary (f7 tokens)', () => {
     expect(html).toContain('Withdrawn');
   });
 
-  it('the sheet follows the site language', async () => {
-    const { setAppLanguage } = await import('../lib/i18n');
-    await setAppLanguage('fr-CA');
-    try {
-      const html = render();
-      expect(html).toContain('Résumé du plan de retraite');
-      expect(html).toContain('Verdict');
-      expect(html).toContain('Profil');
-      expect(html).toContain('Épargne');
-      expect(html).toContain('Jalons et changements de dépenses importants');
-      expect(html).not.toContain('Retirement Plan Summary');
-      expect(html).not.toContain('Major spending milestones');
-    } finally {
-      await setAppLanguage('en-CA');
-    }
+  it('the sheet follows the site language', () => {
+    const html = render({}, 'fr-CA');
+    expect(html).toContain('Résumé du plan de retraite');
+    expect(html).toContain('Verdict');
+    expect(html).toContain('Profil');
+    expect(html).toContain('Épargne');
+    expect(html).toContain('Jalons et changements de dépenses importants');
+    expect(html).toContain('Richesse à la retraite');
+    expect(html).toContain('L’argent dure jusqu’à');
+    expect(html).not.toContain('Retirement Plan Summary');
+    expect(html).not.toContain('Major spending milestones');
+    expect(html).not.toContain('Wealth at retirement');
+  });
+
+  it('the on-screen preview is visible (no print-only hide)', () => {
+    const html = render({ preview: true });
+    expect(html).not.toContain('print-only');
+    expect(html).toContain('lang="en-CA"');
+  });
+
+  it('the on-screen French preview is French, not English', () => {
+    const html = render({ preview: true }, 'fr-CA');
+    expect(html).toContain('lang="fr-CA"');
+    expect(html).toContain('Résumé du plan de retraite');
+    expect(html).not.toContain('Retirement Plan Summary');
   });
 });

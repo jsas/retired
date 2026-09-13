@@ -13,13 +13,15 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { YearlyBreakdown, RetirementInputs } from '@retired/engine-core/retirementEngine';
+import { useAppLocale } from '../../lib/localeContext';
 import { BetaPage, type VerdictChip } from './BetaPage';
 import { HelpHint } from '../../design/primitives';
 import { ProjectionTimeline, baseSpendAtRetirement } from '../../design/ProjectionTimeline';
 import type { TimelineEvent, TimelineMarketAnchor } from '../../design/ProjectionTimeline';
-import { INK, RED_DOT } from '../../design/tokens';
+import { INK, RED_DOT, cls } from '../../design/tokens';
 import { firstEmptyAge } from '../../lib/planDisplay';
 import { ScheduleTable } from '../ScheduleTable';
+import { MathPage } from '../MathPage';
 import { EqPage } from '../EqPage';
 import { StrategyExplorer, SpendingSolver } from '../OptimizeCard';
 import { BacktestPanel } from '../BacktestPanel';
@@ -32,6 +34,7 @@ import { SettingsModal } from '../SettingsModal';
 import { ConnectionsPage } from '../ConnectionsPage';
 import { HelpModal } from '../HelpModal';
 import { PrintOptionsCard } from '../PrintOptionsCard';
+import { PrintSummary } from '../PrintSummary';
 import { DonateCard } from '../DonateCard';
 import { DataPage } from '../DataPage';
 
@@ -113,6 +116,21 @@ export function BetaSchedulePage({ chip, assistant, timeline, ...props }: Compon
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <ScheduleTable {...props} />
+      </div>
+    </BetaPage>
+  );
+}
+
+/** Year Math — the old worksheet: one calendar year, you / spouse / side by side. */
+export function BetaMathPage({ chip, assistant, ...props }: ComponentProps<typeof MathPage> & {
+  chip: VerdictChip;
+  assistant?: ReactNode;
+}) {
+  const t = usePageT();
+  return (
+    <BetaPage title={t('yearMath')} hint="year-math" chip={chip} assistant={assistant}>
+      <div className="pt-6">
+        <MathPage {...props} />
       </div>
     </BetaPage>
   );
@@ -304,11 +322,24 @@ export function BetaHelpPage({ chip, assistant }: { chip: VerdictChip; assistant
   );
 }
 
-export function BetaPrintPage({ chip, assistant, ...props }: ComponentProps<typeof PrintOptionsCard> & { chip: VerdictChip; assistant?: ReactNode }) {
+export function BetaPrintPage({ chip, assistant, sheet, ...props }: ComponentProps<typeof PrintOptionsCard> & {
+  chip: VerdictChip;
+  assistant?: ReactNode;
+  sheet: ComponentProps<typeof PrintSummary>;
+}) {
   const t = usePageT();
+  const { locale } = useAppLocale();
+  const { i18n } = useTranslation();
+  const tPrint = i18n.getFixedT(locale, 'print');
   return (
     <BetaPage title={t('print')} hint="print-export" chip={chip} assistant={assistant}>
-      <div className="pt-6"><PrintOptionsCard {...props} /></div>
+      <div className="grid items-start gap-8 pt-6 xl:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]">
+        <PrintOptionsCard {...props} />
+        <div className="min-w-0 border border-slate-200 bg-white no-print">
+          <div className={`border-b border-slate-200 px-3 py-2 ${cls.sectionLabel}`}>{tPrint('preview')}</div>
+          <PrintSummary {...sheet} preview />
+        </div>
+      </div>
     </BetaPage>
   );
 }

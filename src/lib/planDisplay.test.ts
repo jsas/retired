@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstEmptyAge, potDisplay } from './planDisplay';
+import { firstEmptyAge, formatReScore, potDisplay } from './planDisplay';
 import type { YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 
 function row(age: number, endingBalance: number): YearlyBreakdown {
@@ -45,5 +45,21 @@ describe('potDisplay', () => {
     expect(d.lastsTo).toBe(86);
     expect(d.emptyAge).toBe(86);
     expect(d.leftover).toBe(0);
+  });
+});
+
+describe('formatReScore', () => {
+  it('is 100 when the plan never depletes', () => {
+    expect(formatReScore({ depletionAge: null }, 90)).toBe(100);
+  });
+
+  it('is 100 when depletion lands on maxAge', () => {
+    expect(formatReScore({ depletionAge: 90 }, 90)).toBe(100);
+  });
+
+  it('rounds depletionAge / maxAge × 100 and clamps 0–100', () => {
+    expect(formatReScore({ depletionAge: 45 }, 90)).toBe(50);
+    expect(formatReScore({ depletionAge: 0 }, 90)).toBe(0);
+    expect(formatReScore({ depletionAge: 180 }, 90)).toBe(100);
   });
 });

@@ -62,7 +62,7 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
 
 describe('curated web-llm model list', () => {
   it('ships only valid MLC prebuilt ids (or marked custom) with VRAM labels', () => {
-    expect(WEBLLM_MODELS.length).toBeGreaterThanOrEqual(5);
+    expect(WEBLLM_MODELS.length).toBe(4);
     for (const m of WEBLLM_MODELS) {
       // Custom (self-served fine-tune) entries carry their own weights URL and
       // are exempt from the prebuilt-id shape; everything else is a prebuild.
@@ -79,22 +79,28 @@ describe('curated web-llm model list', () => {
     }
   });
 
-  it('includes the public Qwen3.5 2B prebuild as a small, questions-only download', () => {
-    const tiny = WEBLLM_MODELS.find(m => m.id === 'Qwen3.5-2B-q4f16_1-MLC');
-    expect(tiny).toBeDefined();
-    expect(tiny!.toolCapable).toBe(false);
-    expect(tiny!.localDevOnly).toBeFalsy();
-    expect(tiny!.sizeGB).toBeLessThan(2);
+  it('ships four bake-off speakers, 4B first as the default', () => {
+    expect(WEBLLM_MODELS.map(m => m.id)).toEqual([
+      'Qwen3.5-4B-q4f16_1-MLC',
+      'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+      'Mistral-7B-Instruct-v0.3-q4f16_1-MLC',
+      'Qwen3-8B-q4f16_1-MLC',
+    ]);
+    expect(WEBLLM_MODELS.every(m => m.toolCapable)).toBe(true);
+    expect(WEBLLM_MODELS.every(m => m.maxWindow >= 32768)).toBe(true);
   });
 
-  it('hides the 0.6B fine-tune outside local Vite and never lists Phi-4', () => {
+  it('never lists Phi-4, sub-1.7B, or the dumped bake-off families', () => {
     expect(WEBLLM_MODELS.some(m => m.id.includes('Phi-4'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('0.6B') || m.id.includes('0.6b'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('1.5B'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('SmolLM'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('Ministral'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('Hermes-3'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('Hermes-2-Pro'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('DeepSeek-R1'))).toBe(false);
     const prod = visibleWebLlmModels(false);
     expect(prod.some(m => m.localDevOnly)).toBe(false);
-    expect(prod.some(m => m.id === 'Qwen3.5-2B-q4f16_1-MLC')).toBe(true);
-    expect(prod.some(m => m.id === 'retired-qwen3-0.6b-ft-q4f16_1')).toBe(false);
-    const dev = visibleWebLlmModels(true);
-    expect(dev.some(m => m.id === 'retired-qwen3-0.6b-ft-q4f16_1')).toBe(true);
   });
 
   it('contains only ids that exist in web-llm\'s prebuilt catalog — unless they carry their own appConfig', () => {
@@ -140,24 +146,18 @@ describe('curated web-llm model list', () => {
     expect(fmtVram(512)).toBe('512 MB VRAM');
   });
 
-  it('keeps the 4B+ catalog tool-capable; sub-4B stays questions-only', () => {
-    // Tiny public packs (Qwen3.5 2B, Llama 3B, …) are chat-only.
-    // Everything at 4B and up that we mark for tools still drives the plan —
-    // that's what the machine guide recommends. Sub-4B must stay off tools.
-    const tiny = WEBLLM_MODELS.find(m => m.id === 'Qwen3.5-2B-q4f16_1-MLC')!;
-    expect(tiny.toolCapable).toBe(false);
-    expect(WEBLLM_MODELS.filter(m => m.toolCapable && !m.localDevOnly).length).toBeGreaterThanOrEqual(4);
-    const minPublic = Math.min(...WEBLLM_MODELS.filter(m => !m.localDevOnly).map(m => m.sizeGB));
-    expect(minPublic).toBeLessThanOrEqual(1.2);
-    for (const m of WEBLLM_MODELS.filter(m => !m.localDevOnly && m.vramMB < 3000)) {
-      expect(m.toolCapable, `${m.id} is sub-4B and must stay questions-only`).toBe(false);
+  it('keeps every listed pack tool-capable with a 32k Auto ceiling', () => {
+    expect(WEBLLM_MODELS.filter(m => m.toolCapable && !m.localDevOnly).length).toBe(4);
+    for (const m of WEBLLM_MODELS) {
+      expect(m.toolCapable, `${m.id} must drive plan tools`).toBe(true);
+      expect(m.maxWindow, `${m.id} Auto must try 32k`).toBeGreaterThanOrEqual(32768);
     }
   });
 
-  it('covers the chat.webllm.ai families without Phi-4', () => {
+  it('does not list the dumped bake-off families', () => {
     const ids = WEBLLM_MODELS.map(m => m.id).join(' ');
-    for (const needle of ['Llama-3.2', 'Llama-3.1-8B', 'DeepSeek-R1', 'gemma-2', 'Mistral-7B', 'SmolLM2', 'WizardMath', 'Ministral-3']) {
-      expect(ids, `missing ${needle}`).toContain(needle);
+    for (const needle of ['Llama-3.1-8B', 'DeepSeek-R1', 'SmolLM2', 'WizardMath', 'Ministral-3', 'Hermes-3', 'Hermes-2-Pro', 'Qwen3-4B', 'Qwen2.5-7B', 'Qwen3.5-9B', 'gemma-2-9b']) {
+      expect(ids, `still listing ${needle}`).not.toContain(needle);
     }
     expect(ids).not.toContain('Phi-4');
   });
@@ -396,14 +396,16 @@ describe('streamWebLlm', () => {
     expect(lastRequest?.context_window_size).toBe(8192);
   });
 
-  it('pins sliding_window_size to -1 so Gemma MLC configs can load', async () => {
-    // Gemma packs ship context_window_size AND sliding_window_size: 512;
-    // web-llm throws unless one of them is -1.
+  it('pins sliding_window_size to -1 so Gemma-style MLC configs can load', async () => {
+    // Gemma packs (and a few others) ship context_window_size AND
+    // sliding_window_size: 512; web-llm throws unless one of them is -1.
+    // Unlisted ids still load via the free-text field, so the pin must
+    // apply even when the id is not in WEBLLM_MODELS (auto window = 32768).
     const { loadWebLlmEngine, unloadWebLlmEngine } = await import('./webLlmProvider');
     await unloadWebLlmEngine();
     loadAttempts = [];
     await loadWebLlmEngine('gemma-2-2b-it-q4f16_1-MLC');
-    expect(loadAttempts[0]).toEqual({ contextWindow: 4096, slidingWindow: -1 });
+    expect(loadAttempts[0]).toEqual({ contextWindow: 32768, slidingWindow: -1 });
   });
 
   it('splits <think>…</think> reasoning out of the visible stream', async () => {

@@ -95,13 +95,18 @@ export interface LoadProgress {
   text: string;
 }
 
+/** Auto (and the fallback for unlisted ids) aims here and halves on OOM.
+ *  32768 is what a manual 32k setting uses — MLC's 4096 is only the KV-cache
+ *  default, not a hard ceiling. */
+const AUTO_WINDOW = 32768;
+
 /**
  * The window an "auto" (unset `contextSize`) load should aim for: the model's
- * own compiled ceiling when we know it, else a sensible large default. Auto
- * mode means "as big as this GPU can hold" — we start here and halve on OOM.
+ * own ceiling when we know it, else AUTO_WINDOW. Auto means "as big as this
+ * GPU can hold" — we start here and halve on OOM.
  */
 function autoWindowFor(modelId: string): number {
-  return WEBLLM_MODELS.find(m => m.id === modelId)?.maxWindow ?? 16384;
+  return WEBLLM_MODELS.find(m => m.id === modelId)?.maxWindow ?? AUTO_WINDOW;
 }
 
 /** True when a load/generation failure looks like the GPU ran out of memory

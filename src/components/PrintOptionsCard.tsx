@@ -3,6 +3,7 @@ import type { PrintOptions } from '../lib/printOptions';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import { Panel, Check } from '../design/primitives';
 import { cls } from '../design/tokens';
+import { useAppLocale } from '../lib/localeContext';
 
 interface PrintOptionsCardProps {
   options: PrintOptions;
@@ -20,7 +21,9 @@ interface PrintOptionsCardProps {
 export function PrintOptionsCard({
   options, onChange, onPrint, mcPending, mcResults
 }: PrintOptionsCardProps) {
-  const { t } = useTranslation('print');
+  const { locale } = useAppLocale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale, 'print');
   const set = (patch: Partial<PrintOptions>) => onChange({ ...options, ...patch });
 
   // Block printing until the MC worker has delivered the chart data.

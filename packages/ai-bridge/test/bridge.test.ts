@@ -60,8 +60,8 @@ describe('createBridge', () => {
 
   it('select switches the active model and rejects unknown ids', () => {
     const bridge = createBridge({ connections: [localConn, remoteConn] })
-    bridge.select('local:qwen3.5-2b')
-    expect(bridge.selected().id).toBe('local:qwen3.5-2b')
+    bridge.select('local:qwen3-8b')
+    expect(bridge.selected().id).toBe('local:qwen3-8b')
     expect(() => bridge.select('nope')).toThrow(/unknown model/)
   })
 

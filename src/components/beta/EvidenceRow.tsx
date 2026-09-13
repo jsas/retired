@@ -1,17 +1,20 @@
 // The evidence row — the receipts under the map. Left: where the money sits
 // across accounts at a chosen age (flat bars). Right: the key numbers grid —
-// money lasts to, left at the plan-to age, in the pot at work's end, and the
-// CPP+OAS that arrives every year. Everything reads the same engine breakdown.
+// Re:score, money lasts to, left at the plan-to age, in the pot at work's
+// end, and the CPP+OAS that arrives every year. Everything reads the same
+// engine breakdown.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
-import { potDisplay } from '../../lib/planDisplay';
+import { householdOutcome } from '@retired/engine-core/retirementEngine';
+import { toHousehold } from '@retired/engine-core/householdTypes';
+import { potDisplay, formatReScore } from '../../lib/planDisplay';
 import { AccountBars, Stat } from '../../design/primitives';
 import { useAppLocale } from '../../lib/localeContext';
 
-export function EvidenceRow({ inputs, breakdown }: {
+export function EvidenceRow({ inputs, results, breakdown }: {
   inputs: RetirementInputs;
-  /** Unused — leftover is read from `breakdown` so it matches the life-timeline pin. */
+  /** Household Re:score reads the engine outcome; leftover still comes from `breakdown`. */
   results?: RetirementResults;
   breakdown: YearlyBreakdown[];
 }) {
@@ -48,6 +51,9 @@ export function EvidenceRow({ inputs, breakdown }: {
   const benAge = benRow?.age ?? inputs.cppStartAge ?? 65;
 
   const lastsTone = holds ? 'holds' : borderline ? 'borderline' : 'short';
+  const reScore = results
+    ? formatReScore(householdOutcome(results, toHousehold(inputs)), maxAge)
+    : null;
 
   return (
     <div className="grid gap-8 md:grid-cols-[1fr_1fr]">
@@ -71,6 +77,13 @@ export function EvidenceRow({ inputs, breakdown }: {
 
       {/* key numbers */}
       <div className="grid grid-cols-2 gap-x-6 gap-y-6">
+        {reScore != null && (
+          <Stat
+            label={t('dash.reScore')}
+            value={`${reScore}`}
+            note={t('dash.reScoreNote', { age: maxAge })}
+          />
+        )}
         <Stat
           label={t('dash.moneyLastsTo')}
           value={holds ? `${maxAge}+` : `${depletionAge ?? '—'}`}

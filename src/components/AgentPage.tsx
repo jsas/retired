@@ -66,7 +66,7 @@ import {
   subscribeRuns, getRunsVersion, getRun, hasActiveRun, runSnapshot, startRun, setRunPhase, setRunProgress,
   setRunDecision, takeRunDecision, abortRun, endRun,
 } from '../lib/ai/chatRuns';
-import { resetWebLlmChat, loadedWebLlmModel } from '../lib/ai/webLlmProvider';
+import { resetWebLlmChat, loadedWebLlmModel, loadedWebLlmWindow } from '../lib/ai/webLlmProvider';
 import { resetBonsaiChat, loadedBonsaiModel } from '../lib/ai/bonsaiProvider';
 import { Markdown } from './Markdown';
 
@@ -166,13 +166,15 @@ function displayThreadTitle(title: string, t: (key: string) => string): string {
 }
 
 /** The context window to plan around for a connection. An explicit setting
- *  wins. For a LOCAL model on auto (no setting), plan against the model's own
- *  ceiling rather than the small default — the engine loads as big as the GPU
- *  holds and the per-request window is clamped to what actually loaded, so a
- *  slightly-optimistic plan here just compacts a touch early on a weak GPU. */
+ *  wins. Once a local engine is loaded, plan against the window it actually
+ *  built (Auto may have backed off on OOM). Before that, Auto aims at the
+ *  model's ceiling — same 32k a manual setting uses — so a fresh chat is
+ *  not rejected against MLC's 4096 KV-cache default. */
 function effectiveContextLimit(connection: AiConnection): number {
   if (connection.contextSize) return connection.contextSize;
   if (connection.provider === 'webllm') {
+    const loaded = loadedWebLlmWindow();
+    if (loaded > 0 && loadedWebLlmModel() === connection.model) return loaded;
     return WEBLLM_MODELS.find(m => m.id === connection.model)?.maxWindow ?? defaultContextSize('webllm');
   }
   if (connection.provider === 'bonsai') {

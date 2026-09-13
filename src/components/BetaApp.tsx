@@ -1,18 +1,15 @@
-// The app's UI (built on the f7 design — the former beta, now the default).
-// The old site lives behind the `?beta` flag as a reference (see
-// src/lib/betaSkin.ts). Built from the design system in src/design/ — every
-// surface composes those primitives (per STYLEGUIDE.md / REQUIREMENTS §8.10)
-// so the vocabulary stays consistent as the skin grows toward f7. It renders
-// the REAL engine's verdict on the REAL active scenario: the verdict hero with
-// the Markets dial, the contour map + the two levers, the down-market check,
-// the life timeline, and the evidence row — all recomputing together off one
+// The app's UI (built on the f7 design). Built from the design system in
+// src/design/ — every surface composes those primitives (per STYLEGUIDE.md /
+// REQUIREMENTS §8.10) so the vocabulary stays consistent. It renders the REAL
+// engine's verdict on the REAL active scenario: the verdict hero with the
+// Markets dial, the contour map + the two levers, the down-market check, the
+// life timeline, and the evidence row — all recomputing together off one
 // engine run.
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { RetirementInputs, RetirementResults } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
-import { BETA_COOKIE_NAME } from '../lib/betaSkin';
 import { getRangePrefs } from '../lib/rangePrefs';
 import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
 import { INK, RED_DOT } from '../design/tokens';
@@ -164,10 +161,7 @@ export function BetaApp({
         </Panel>
 
         <Footnote>
-          {t('dash.footnote')}{' '}
-          <a className="underline" href="?beta">{t('dash.openOld')}</a>{' '}
-          {t('dash.cookieRemembers', { cookie: BETA_COOKIE_NAME })}{' '}
-          <a className="underline" href="?beta=off">{t('dash.backToApp')}</a>)
+          {t('dash.footnote')}
         </Footnote>
     </BetaPage>
   );

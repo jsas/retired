@@ -15,6 +15,7 @@
   "waitingMc": "Waiting for the Monte Carlo simulation…",
   "simWhenNeeded": "The simulation runs when the chart is needed.",
   "running500": "Running 500 simulations for the fan chart…",
+  "preview": "Print preview",
   "sheet": {
     "title": "RE: tired — Retirement Plan Summary",
     "generated": "{{name}} · generated {{date}}",

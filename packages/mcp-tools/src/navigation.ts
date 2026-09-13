@@ -20,6 +20,7 @@
 /** One navigable page (view) in the SPA. `viewId` must be importable by
  *  host-agnostic packages without depending on the app, so it lives here. */
 export type View =
+  | 'dashboard'
   | 'projection'
   | 'details'
   | 'math'
@@ -76,13 +77,18 @@ export interface NavEntry {
  *  this way and find_page ties break by catalog position, not alphabetically. */
 export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
-    viewId: 'projection',
-    route: 'projection',
+    viewId: 'dashboard',
+    route: 'dashboard',
     title: 'Dashboard',
     description: 'The plan at a glance: the verdict (funded or depleted, with age and shortfall), key metrics, and the doors to everything else.',
-    // 'projection' left this keyword list when the schedule page was renamed
-    // Projection (issue #162) — the word belongs to that page now.
     keywords: ['dashboard', 'home', 'verdict', 'funded', 'depleted', 'run out', 'shortfall', 'money run out', 'overview', 'main page'],
+  },
+  {
+    viewId: 'projection',
+    route: 'projection',
+    title: 'Projection',
+    description: 'The projection: the money-over-age timeline plus the schedule table — one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.',
+    keywords: ['projection', 'schedule', 'year-by-year', 'year by year', 'table', 'columns', 'withdrawals', 'tax paid', 'one year', 'timeline'],
   },
   {
     viewId: 'details',
@@ -95,9 +101,9 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'math',
     route: 'year-math',
-    title: 'Projection',
-    description: 'The projection: the money-over-age timeline plus the schedule table — one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.',
-    keywords: ['projection', 'schedule', 'year-by-year', 'year by year', 'table', 'columns', 'withdrawals', 'tax paid', 'one year', 'timeline'],
+    title: 'Year Math',
+    description: 'The year-math worksheet: one calendar year of the household, worked step by step — you, spouse, or side by side — from the spending target down to the ending balance.',
+    keywords: ['year math', 'year-math', 'worksheet', 'breakdown', 'step by step', 'calculation', 'household year', 'per person', 'how the year works'],
   },
   {
     viewId: 'eq',

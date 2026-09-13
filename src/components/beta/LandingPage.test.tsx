@@ -115,6 +115,13 @@ describe('LandingPage', () => {
     expect(onBuild).toHaveBeenCalled();
   });
 
+  it('before the questions, the footer "Go to dashboard" opens the dashboard, not the projection', () => {
+    act(() => { root.render(<LandingPage config={config} onBuild={() => {}} />); });
+    const footerLink = [...container.querySelectorAll('footer a')].find(a => a.textContent?.includes('Go to dashboard')) as HTMLAnchorElement | undefined;
+    expect(footerLink).toBeTruthy();
+    expect(footerLink!.getAttribute('href')).toBe('#/dashboard');
+  });
+
   it('carries the §8.8 footnotes at the very bottom — legal, open-source, privacy', () => {
     act(() => { root.render(<LandingPage config={config} onBuild={() => {}} />); });
     expect(container.textContent).toContain('Not advice.');
@@ -130,8 +137,12 @@ describe('LandingPage', () => {
       expect(welcomeLandingGate('details', false)).toBe('details');
     });
 
-    it('without a hash: scenarios ⇒ dashboard, no scenarios ⇒ landing', () => {
-      expect(welcomeLandingGate(null, true)).toBe('projection');
+    it('explicit welcome stays on the landing even with saved plans', () => {
+      expect(welcomeLandingGate('welcome', true)).toBe('welcome');
+    });
+
+    it('without a hash: user plans ⇒ dashboard, examples-only ⇒ landing', () => {
+      expect(welcomeLandingGate(null, true)).toBe('dashboard');
       expect(welcomeLandingGate(null, false)).toBe('welcome');
     });
   });

@@ -468,7 +468,7 @@
         "stats",
         "preuve"
       ],
-      "body": "Les chiffres derrière le verdict : la composition des comptes à n'importe quel âge choisi (REER+FERR, CELI, Non enregistré+liquidités), plus combien de temps l'argent dure (première année vide du pot — le même âge que l'épingle de la frise), ce qui reste à l'âge max, le pot à la fin du travail, et quand RPC+SV commencent. « 90+ / au-delà du plan » ne s'imprime que s'il reste encore quelque chose."
+      "body": "Les chiffres derrière le verdict : la composition des comptes à n'importe quel âge choisi (REER+FERR, CELI, Non enregistré+liquidités), plus le Re:score (0–100, à quel point le ménage se rapproche de l'âge max avant que l'argent s'épuise), combien de temps l'argent dure (première année vide du pot — le même âge que l'épingle de la frise), ce qui reste à l'âge max, le pot à la fin du travail, et quand RPC+SV commencent. « 90+ / au-delà du plan » ne s'imprime que s'il reste encore quelque chose."
     },
     "stress-test": {
       "title": "Comment tester le plan sous stress",
@@ -556,6 +556,22 @@
         "soldes"
       ],
       "body": "Le tableau année par année de la page Projection parcourt chaque année d'ici à l'âge max : solde de départ, cotisations, gains de marché, retraits, impôt, RPC/SV/SRG/pension, et solde de fin, plus les soldes par compte. Le bouton **Colonnes** choisit ce qui s'affiche — le jeu de départ garde l'histoire des flux d'argent à l'écran et le reste n'est qu'à un « tout afficher »; votre choix est mémorisé. Les colonnes REEI / CELIAPP / Avoir propre / Dettes n'apparaissent automatiquement que lorsque ces fonctions produisent des données. Touchez une année pour déplier tout son détail."
+    },
+    "year-math": {
+      "title": "La feuille Mathématiques de l’année",
+      "section": "Schedule",
+      "keywords": [
+        "mathématiques de l’année",
+        "year math",
+        "year-math",
+        "feuille",
+        "détail",
+        "étape par étape",
+        "année du ménage",
+        "par personne",
+        "comment l’année fonctionne"
+      ],
+      "body": "Mathématiques de l’année est la feuille étape par étape d'une année civile du ménage — pas le tableau Projection. Choisissez une année, puis Vous / Conjoint / Côte à côte, et parcourez de la cible de dépenses jusqu'aux retraits, l'impôt, les prestations et le solde de fin. Chaque chiffre est le même calcul que le moteur a déjà fait pour cette année; cette page montre simplement le travail."
     },
     "scenarios": {
       "title": "Plans",

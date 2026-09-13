@@ -34,16 +34,7 @@ export const BONSAI_MODELS: BonsaiModelChoice[] = [
     sizeGB: 0.4,
     toolCapable: false,
     maxWindow: 32768,
-    blurb: 'Prism 1-bit Bonsai via WebGPU — the size the in-browser demo actually ships. Questions only.',
-  },
-  {
-    id: 'onnx-community/Bonsai-4B-ONNX',
-    label: 'Bonsai 4B (1-bit)',
-    vramMB: 1800,
-    sizeGB: 0.8,
-    toolCapable: true,
-    maxWindow: 32768,
-    blurb: 'Larger 1-bit Bonsai. May still fail the browser ONNX compiler; 1.7B is the reliable pick.',
+    blurb: 'Tiny 1-bit download. Questions only — pick Qwen3.5 4B for plan tools.',
   },
 ];
 

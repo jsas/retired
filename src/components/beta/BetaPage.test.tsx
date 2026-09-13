@@ -60,8 +60,8 @@ describe('BetaPage assistant dock', () => {
     // pages hang off. (The Dropdown renders its children only when open, so
     // the static markup proves the trigger; the item list is proven against
     // the exported source of truth.)
-    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare']);
-    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Compare plans']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare', 'math']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Compare plans', 'Year Math']);
     const html = renderToStaticMarkup(
       createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
@@ -88,7 +88,7 @@ describe('BetaPage assistant dock', () => {
     );
     expect(html).toContain('Menu');
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    for (const label of ['Dashboard', 'Projection', 'Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Compare plans', 'Plans', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
+    for (const label of ['Dashboard', 'Projection', 'Steering', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Compare plans', 'Year Math', 'Plans', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
       expect(labels, label).toContain(label);
     }
     expect(labels).not.toContain('Details');

@@ -13,7 +13,7 @@ import type { Scenario } from '@retired/engine-core/types';
 import { baseInputs, testConfig } from '../../../packages/engine-core/test/helpers';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
-  BetaDataPage, BetaSchedulePage, BetaSteeringPage, BetaOptimizerPage,
+  BetaDataPage, BetaSchedulePage, BetaMathPage, BetaSteeringPage, BetaOptimizerPage,
   BetaMonteCarloPage, BetaBacktestPage, BetaSolverPage, BetaComparePage, BetaPlansPage,
 } from './pages';
 import { DEFAULT_PROJECTION_EXPORT } from '../../lib/projectionExport';
@@ -48,6 +48,28 @@ describe('The Projection page (was Schedule — issue #162)', () => {
     expect(html).toContain('Projection');
     expect(html).toContain(TIMELINE_MARK);
     expect(html).toContain('Ending Balance'); // the schedule table below it
+  });
+});
+
+describe('The Year Math page', () => {
+  it('wraps the household worksheet, not the projection schedule', () => {
+    const html = renderToStaticMarkup(
+      createElement(BetaMathPage, {
+        chip,
+        inputs,
+        results,
+        spouseAgeOffset: 0,
+      }),
+    );
+    expect(html).toContain('Year Math');
+    expect(html).not.toContain(TIMELINE_MARK);
+    // Hairline worksheet: ink step index + tabular figures, not the old-skin
+    // blue chips / boxed card / mono figures. (Don't grep the chrome's
+    // `border-slate-200 bg-white` — that's the sticky header.)
+    expect(html).not.toContain('bg-blue-100');
+    expect(html).not.toContain('text-blue-700');
+    expect(html).not.toContain('font-mono');
+    expect(html).toContain('num');
   });
 });
 

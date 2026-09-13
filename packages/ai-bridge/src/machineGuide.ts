@@ -24,14 +24,13 @@ export interface MachineGuide {
  * won't tell us how much graphics memory there really is.
  */
 export function buildMachineGuide(webgpu: boolean): MachineGuide {
-  const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
-  // Recommend the smallest model that can still drive the tool protocol (read
-  // the plan, propose edits). Tiny entries (Qwen3.5 2B) are questions-only and
-  // stay off this pick. Dev-only entries (local fine-tunes whose weights aren't
-  // deployed) never recommend — most visitors would be pointed at a download
-  // that can't work.
+  // Pin the 4B, not the smallest tool-capable pack. Llama 3.2 3B still
+  // speaks TOOL_CALL:, but the 4B is the better default on typical VRAM.
+  // Dev-only entries never recommend.
   const recommended =
-    byVram.find(m => m.toolCapable && !m.localDevOnly) ?? byVram[0];
+    WEBLLM_MODELS.find(m => m.id === 'Qwen3.5-4B-q4f16_1-MLC' && !m.localDevOnly)
+    ?? WEBLLM_MODELS.find(m => m.toolCapable && !m.localDevOnly)
+    ?? WEBLLM_MODELS[0];
 
   if (!webgpu) {
     const browser = detectBrowser();

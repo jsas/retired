@@ -37,3 +37,11 @@ export function potDisplay(breakdown: YearlyBreakdown[], maxAge: number): PotDis
     lastsTo: holds ? maxAge : emptyAge,
   };
 }
+
+/** 0–100 snapshot of how close the plan gets to maxAge before money runs out.
+ *  Never depletes → 100. Depletes at maxAge → 100. Earlier → round(age/maxAge×100). */
+export function formatReScore(ho: { depletionAge: number | null }, maxAge: number): number {
+  const { depletionAge } = ho;
+  if (depletionAge === null) return 100;
+  return Math.min(100, Math.max(0, Math.round((depletionAge / maxAge) * 100)));
+}
