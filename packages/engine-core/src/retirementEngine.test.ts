@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent, type IncomeSource, type RetirementInputs } from './retirementEngine';
 import { legacyToPerson, legacyToShared, legacySpouseToPerson, toHousehold } from './householdTypes';
 import { calculateTax } from './canadianTax';
-import { baselineInputs } from './exampleScenarios';
+import { baselineInputs, looksLikeUnsetPlan } from './exampleScenarios';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
 const config = testConfig();
@@ -1005,6 +1005,25 @@ describe('baseline plan (New Scenario defaults)', () => {
     const r = calculateHousehold(inputs, config);
     expect(r.spouse).toBeDefined();
     expect(r.spouse!.yearlyBreakdown.length).toBeGreaterThan(0);
+  });
+
+  it('looksLikeUnsetPlan is true for New-Scenario defaults, false once money is in', () => {
+    expect(looksLikeUnsetPlan(baselineInputs())).toBe(true);
+    expect(looksLikeUnsetPlan({ ...baselineInputs(), rrspBalance: 10_000 })).toBe(false);
+    expect(looksLikeUnsetPlan({
+      ...baselineInputs(),
+      income: [{ id: 'p1', label: 'DB', kind: 'pension', annualAmount: 12000, startAge: 65, endAge: null, indexedToCpi: false }],
+    })).toBe(false);
+    expect(looksLikeUnsetPlan({
+      ...baselineInputs(),
+      spouse: {
+        enabled: true, currentAge: 55, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: 65, cppMonthlyAmount: 900, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 20000,
+      },
+    })).toBe(false);
   });
 });
 

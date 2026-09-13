@@ -50,6 +50,38 @@ export function hasUserPlans(scenarios: ReadonlyArray<{ name: string }>): boolea
 }
 
 /**
+ * True when the plan still looks like a brand-new / New-Scenario starter:
+ * every account is empty, no contributions, and none of the optional
+ * registers (income, events, debts, spouse, RDSP, FHSA, reverse mortgage)
+ * have been filled in. Ages/spending/CPP on `baselineInputs()` are
+ * placeholders — the assistant should interview rather than treat them as
+ * the user's real situation.
+ *
+ * A $0-savings household matches this too; asking "what are your balances?"
+ * is still the right first step (they can confirm zero).
+ */
+export function looksLikeUnsetPlan(inputs: RetirementInputs): boolean {
+  if (
+    inputs.rrspBalance !== 0
+    || inputs.tfsaBalance !== 0
+    || inputs.taxableBalance !== 0
+    || inputs.cashCushionBalance !== 0
+    || inputs.rrspContribution !== 0
+    || inputs.tfsaContribution !== 0
+    || inputs.taxableContribution !== 0
+  ) return false;
+  if ((inputs.income?.length ?? 0) > 0) return false;
+  if ((inputs.events?.length ?? 0) > 0) return false;
+  if ((inputs.debts?.length ?? 0) > 0) return false;
+  if ((inputs.spendingBands?.length ?? 0) > 0) return false;
+  if (inputs.spouse?.enabled) return false;
+  if (inputs.rdsp?.enabled) return false;
+  if (inputs.fhsa?.enabled) return false;
+  if (inputs.reverseMortgage?.enabled) return false;
+  return true;
+}
+
+/**
  * First-run example scenarios: three realistic, mutually distinct starting
  * points that each exercise different engine features. Only used when
  * localStorage is empty (first launch or after a full reset) — the user's own

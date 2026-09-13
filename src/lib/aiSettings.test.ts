@@ -146,6 +146,14 @@ describe('generation settings', () => {
     expect(back.generation).toEqual({ maxTokens: 32768, temperature: 0.7 });
   });
 
+  it('persists generation.thinking through save/load', () => {
+    const kv = memoryKV();
+    const s = defaultAiSettings();
+    s.connections.push(conn({ generation: { thinking: 'off' } }));
+    saveAiSettings(s, kv);
+    expect(loadAiSettings(kv).connections[0].generation).toEqual({ thinking: 'off' });
+  });
+
   it('drops a malformed generation block to defaults rather than failing load', () => {
     const kv = memoryKV();
     // temperature above the schema's max (2) is invalid → whole payload falls

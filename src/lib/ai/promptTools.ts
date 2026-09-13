@@ -17,8 +17,8 @@
 // rejection) so the model gets a retry with feedback, and a per-reply call cap
 // breaks degenerate loops of repeated broken calls.
 //
-// The confirm-before-apply guarantee is unchanged: set_scenario_value still
-// produces a mutation proposal that pauses the loop for user approval.
+// The confirm-before-apply guarantee is unchanged: propose_plan / manage_* /
+// propose_* still produce a mutation proposal that pauses the loop for approval.
 
 import { z } from 'zod';
 import type { AgentToolCall, ToolSpec } from './providers';
@@ -275,7 +275,7 @@ export function buildPromptToolInstructions(specs: ToolSpec[]): string {
     '- Prefer run_projection/compare_scenarios numbers over guessing.',
     '- NEVER ask the user for balances, ages, or account values — they are in the plan',
     '  summary in the system prompt, and get_scenario/run_projection return them.',
-    '- Every propose_* and set_scenario_value tool only PROPOSES a change; the user confirms it.',
+    '- Every propose_* and manage_* tool only PROPOSES a change; the user confirms it.',
     '- When the user asks WHERE something lives, use find_page (it tags the page they are',
     '  already on); use propose_navigate to offer opening a page — the app moves only on the',
     '  card the user approves. Never claim a page opened unless the result says it did.',

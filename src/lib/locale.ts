@@ -4,6 +4,12 @@ export type Locale = 'en-CA' | 'fr-CA';
 
 export const LOCALES: readonly Locale[] = ['en-CA', 'fr-CA'];
 
+/** Tax-table key seeded on a brand-new plan. French UI defaults to Quebec;
+ *  English stays Ontario. Existing saved plans are never rewritten. */
+export function defaultProvinceCode(locale: Locale): 'ONT' | 'QC' {
+  return locale === 'fr-CA' ? 'QC' : 'ONT';
+}
+
 /** Narrow a raw string (stored config, tests) to a supported locale. */
 export function parseLocale(raw: unknown): Locale | undefined {
   if (typeof raw !== 'string') return undefined;

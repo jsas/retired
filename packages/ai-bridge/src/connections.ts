@@ -33,6 +33,9 @@ export interface AiGenerationSettings {
   repetitionPenalty?: number;
   presencePenalty?: number;
   frequencyPenalty?: number;
+  /** Thinking / reasoning: off, auto (provider default), or a depth level.
+   *  Ignored when the model has no thinking API. See thinkingCapability(). */
+  thinking?: 'off' | 'auto' | 'low' | 'medium' | 'high';
 }
 
 export interface AiConnection {

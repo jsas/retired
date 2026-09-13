@@ -21,22 +21,24 @@ import {
   type ThreadMessageLike,
 } from '@assistant-ui/react';
 import {
-  Bot, Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench,
+  Plus, Trash2, Lock, Cloud, MessageSquare, Check, X, Loader2, Wrench, Bot,
   Copy, ClipboardPaste, Download, RotateCcw, Settings2, Brain, ChevronDown,
   ChevronRight, ChevronsLeft, ChevronsRight, AlertTriangle, Info,
 } from 'lucide-react';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import { looksLikeUnsetPlan } from '@retired/engine-core/exampleScenarios';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import {
   connectionReady, getAiSettings, subscribeAiSettings, updateAiSettings,
   resolveAiPromptSend, resolveLocalToolCapable, isLocalProvider,
-  type AiConnection, type AiSettings,
+  thinkingCapability, resolveThinkingMode,
+  type AiConnection, type AiSettings, type ThinkingMode,
 } from '../lib/aiSettings';
 import { buildAgentPrompt, parseAgentResult } from '../lib/agentIngest';
 import { QA_PRESETS, buildQAPrompt } from '../lib/agentQA';
 import { createBridge, type Bridge, type ChatMessage } from '@retired/ai-bridge';
 import { Progress } from '../design/primitives';
-import { assembleSystemPrompt, defaultSystemPromptFor, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
+import { assembleSystemPrompt, runAgentTurn, type MutationProposal } from '../lib/ai/agentLoop';
 import { createMcpToolExecutor } from '../lib/ai/mcpClient';
 import type { View } from '../lib/viewRoutes';
 import type { Locale } from '../lib/locale';
@@ -802,6 +804,7 @@ function buildSystemBody(
   currentView?: View,
   chatNote?: string,
   locale?: Locale,
+  unsetPlan?: boolean,
 ): string {
   const send = resolveAiPromptSend(settings.promptSend);
   const toolOverride = toolMode === 'native' ? settings.toolInstructionsNative
@@ -817,6 +820,7 @@ function buildSystemBody(
     locale,
     toolInstructions: toolOverride,
     chatNote,
+    unsetPlan,
   });
 }
 
@@ -995,8 +999,9 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   // after the app stops sending it. Reset whenever the assembled system (or
   // the digest/tools flags that ride beside it) changes. Skip mid-run: a
   // reset would corrupt the in-flight reply.
+  const unsetPlan = looksLikeUnsetPlan(inputs);
   const sendForReset = resolveAiPromptSend(settings.promptSend);
-  const systemFingerprint = `${buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale)}|digest:${sendForReset.includePlanDigest}|tools:${sendForReset.sendTools}|mode:${toolMode}`;
+  const systemFingerprint = `${buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale, unsetPlan)}|digest:${sendForReset.includePlanDigest}|tools:${sendForReset.sendTools}|mode:${toolMode}`;
   const fingerprintRef = useRef(systemFingerprint);
   useEffect(() => {
     if (fingerprintRef.current === systemFingerprint) return;
@@ -1016,7 +1021,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
   const contextUsed = useMemo(() => {
     if (!connection) return 0;
     const send = resolveAiPromptSend(settings.promptSend);
-    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale);
+    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale, unsetPlan);
     const planContext = planContextMessage(toolMode, inputs, config, send.includePlanDigest);
     const history = toHistory(turns);
     const full = planContext ? [planContext, ...history] : history;
@@ -1024,7 +1029,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       return estimateTokens(system, [{ role: 'user', content: summaryNote(thread.contextSummary) }, ...full]);
     }
     return estimateTokens(system, full);
-  }, [connection, settings, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config, currentView]);
+  }, [connection, settings, thread.systemNote, thread.contextSummary, turns, toolMode, scenarioName, inputs, config, currentView, locale, unsetPlan]);
 
   /**
    * Run one assistant turn: append (or replace) a streaming assistant bubble
@@ -1074,7 +1079,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     };
 
     const send = resolveAiPromptSend(settings.promptSend);
-    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale);
+    const system = buildSystemBody(toolMode, scenarioName, settings, config, currentView, thread.systemNote, locale, unsetPlan);
 
     // Fit the conversation into the model's context window: when the estimated
     // usage crosses the trigger, the oldest turns are folded away and replaced
@@ -1443,7 +1448,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
             className="flex-1 overflow-y-auto p-3 space-y-3"
           >
             <ThreadPrimitive.Empty>
-              <EmptyThread />
+              <EmptyThread unsetPlan={unsetPlan} />
             </ThreadPrimitive.Empty>
             <ThreadPrimitive.Messages>
               {({ message }) => {
@@ -1481,7 +1486,13 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                 // bubble takes over: spinner only until SOMETHING (prose or
                 // chain-of-thought) arrives, then content. The spinner always
                 // clears the moment there's anything to read.
-                const thinking = !loadProgress && streaming && !turn?.text && !turn?.reasoning;
+                //
+                // Thinking Off: hide chain-of-thought even if the provider still
+                // streams reasoning tokens (or prompt-mode treats untagged CoT as
+                // thinking). Empty-stream busy label is Working…, not Thinking….
+                const thinkingOff = resolveThinkingMode(connection?.generation?.thinking) === 'off';
+                const visibleReasoning = thinkingOff ? '' : (turn?.reasoning ?? '');
+                const thinking = !loadProgress && streaming && !turn?.text && !visibleReasoning && !thinkingOff;
                 // The model proposed a change and is parked on the Accept /
                 // Decline card. NOT busy — the spinner and the ● bullet must
                 // both clear while the card waits.
@@ -1500,8 +1511,10 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                 // the Reasoning block below already shows "Thinking…", so the
                 // bubble must NOT also spin "Working…" — the two stacked labels
                 // read as if two things are running at once. The bubble only
-                // shows "Working…" for a tool-only reply with no reasoning yet.
-                const working = !thinking && !turn?.reasoning && streaming && !turn?.text && (turn?.tools.length ?? 0) > 0;
+                // shows "Working…" for a tool-only reply with no reasoning yet
+                // — or whenever thinking is Off (no Reasoning block at all).
+                const working = !thinking && !visibleReasoning && streaming && !turn?.text
+                  && (thinkingOff || (turn?.tools.length ?? 0) > 0);
                 const showBubble = thinking || working || turn?.text || turn?.state === 'error';
                 // A turn that RESUMED after a decision has resolved change cards
                 // in its history plus NEW text streaming in. Render the resolved
@@ -1520,16 +1533,17 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                       {historicalCards.map(change => (
                         <ChangeCard key={change.callId} change={change} onDecide={decideChange} />
                       ))}
-                      {turn?.reasoning && (
+                      {turn && visibleReasoning && (
                         // Reasoning sits ABOVE the answer (chronological: the
                         // model thought first). Keyed on the turn so each
                         // reply's block starts open while it streams and the
                         // user folds it once done. The spinner clears the
                         // moment the answer text arrives OR the turn pauses on
                         // an approval — not just when the whole turn ends.
+                        // Hidden entirely when the user turned thinking Off.
                         <ReasoningBlock
                           key={turn.id}
-                          reasoning={turn.reasoning}
+                          reasoning={visibleReasoning}
                           streaming={streaming && !turn.text && !needsDecision}
                         />
                       )}
@@ -1611,10 +1625,17 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                 note={thread.systemNote ?? ''}
                 onChange={note => patchThread({ systemNote: note || undefined })}
               />
-              <BasePromptEditor
-                override={settings.systemPromptOverride ?? ''}
-                onChange={text => onSettingsChange(prev => ({ ...prev, systemPromptOverride: text || undefined }))}
-              />
+              {connection && (
+                <ThinkingControl
+                  connection={connection}
+                  onChange={mode => onSettingsChange(prev => ({
+                    ...prev,
+                    connections: prev.connections.map(c =>
+                      c.id !== connection.id ? c
+                        : { ...c, generation: { ...c.generation, thinking: mode } }),
+                  }))}
+                />
+              )}
               {connection && (
                 <ContextMeter
                   used={contextUsed}
@@ -2061,73 +2082,41 @@ function ContextMeter({ used, limit, compacted }: { used: number; limit: number;
   );
 }
 
-/** The assistant's base persona prompt, editable across all chats. A collapsed
- *  one-line button by default; opens into an editor pre-filled with whatever
- *  is currently in effect (the user's override, or the built-in default they
- *  can use as a starting point). Clearing it restores the default. */
-function BasePromptEditor({ override, onChange }: { override: string; onChange: (text: string) => void }) {
+/** Thinking / reasoning depth for the active model. Hidden when the model has
+ *  no thinking API. Toggle models (Qwen3) get Off / Auto; effort models also
+ *  get Low / Medium / High. Persists on the connection. */
+function ThinkingControl({ connection, onChange }: {
+  connection: AiConnection;
+  onChange: (mode: ThinkingMode) => void;
+}) {
   const { t } = useTranslation('pages');
-  const { t: tc } = useTranslation('common');
-  const { locale } = useAppLocale();
-  const fallback = defaultSystemPromptFor(locale);
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(override);
-  const customized = override.trim().length > 0;
-  if (!open) {
-    return (
-      <button
-        onClick={() => { setDraft(customized ? override : fallback); setOpen(true); }}
-        className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 hover:text-slate-900"
-        title={t('assistant.basePromptTitle')}
-      >
-        <Bot size={11} />
-        {customized ? t('assistant.basePromptCustom') : t('assistant.basePrompt')}
-      </button>
-    );
-  }
+  const cap = thinkingCapability(connection.provider, connection.model);
+  if (cap.kind === 'none') return null;
+  const mode = resolveThinkingMode(connection.generation?.thinking);
+  const options: ThinkingMode[] = cap.kind === 'toggle' ? ['off', 'auto'] : cap.levels;
+  const label = mode === 'off' ? t('assistant.thinkingOff')
+    : mode === 'auto' ? t('assistant.thinkingAuto')
+    : t('assistant.thinkingLevel', { level: t(`assistant.thinking${mode[0].toUpperCase()}${mode.slice(1)}`) });
   return (
-    <div className="mb-2 w-full border border-slate-200 bg-slate-50 p-2">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-          {t('assistant.baseHeading')}
-        </span>
-        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-900" title={tc('close')}>
-          <X size={12} />
-        </button>
-      </div>
-      <textarea
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        rows={10}
-        className="w-full border border-slate-300 bg-white px-2 py-1.5 font-mono text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-y"
-      />
-      <div className="flex items-center justify-between gap-2 mt-1">
-        <button
-          onClick={() => { setDraft(fallback); }}
-          className="text-[10px] font-semibold text-slate-400 hover:text-slate-900"
-          title={t('assistant.resetDefaultTitle')}
-        >
-          {t('assistant.resetDefault')}
-        </button>
-        <div className="flex gap-2">
-          {customized && (
-            <button
-              onClick={() => { onChange(''); setOpen(false); }}
-              className="border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900"
-              title={t('assistant.useDefaultTitle')}
-            >
-              {t('assistant.useDefault')}
-            </button>
-          )}
-          <button
-            onClick={() => { onChange(draft.trim() === fallback.trim() ? '' : draft.trim()); setOpen(false); }}
-            className="bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700"
-          >
-            {tc('save')}
-          </button>
-        </div>
-      </div>
-    </div>
+    <label className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400" title={t('assistant.thinkingTitle')}>
+      <Brain size={11} />
+      <span className="sr-only">{t('assistant.thinking')}</span>
+      <select
+        value={options.includes(mode) ? mode : 'auto'}
+        onChange={e => onChange(e.target.value as ThinkingMode)}
+        className="border-0 bg-transparent p-0 text-[10px] font-semibold text-slate-400 hover:text-slate-900 focus:outline-none cursor-pointer"
+        aria-label={t('assistant.thinkingTitle')}
+      >
+        {options.map(opt => (
+          <option key={opt} value={opt}>
+            {opt === 'off' ? t('assistant.thinkingOff')
+              : opt === 'auto' ? t('assistant.thinkingAuto')
+              : t(`assistant.thinking${opt[0].toUpperCase()}${opt.slice(1)}`)}
+          </option>
+        ))}
+      </select>
+      <span className="hidden">{label}</span>
+    </label>
   );
 }
 
@@ -2284,14 +2273,36 @@ function EmptyChatState({ onNew }: { onNew: () => void }) {
   );
 }
 
-function EmptyThread() {
+const EMPTY_THREAD_SEEDS = ['onboard', 'on-track', 'cpp-oas-timing', 'compare-runs'] as const;
+
+function EmptyThread({ unsetPlan = false }: { unsetPlan?: boolean }) {
   const { t } = useTranslation('pages');
+  const { t: tp } = useTranslation('prompts');
+  const seeds = unsetPlan
+    ? EMPTY_THREAD_SEEDS
+    : (['on-track', 'cpp-oas-timing', 'compare-runs', 'onboard'] as const);
   return (
     <div className="h-full flex flex-col items-center justify-center py-8 text-center">
       <Bot size={28} className="mb-3 text-slate-300" />
       <p className="text-xs text-slate-500 max-w-md">
-        {t('assistant.emptyThread')}
+        {unsetPlan ? t('assistant.emptyThreadSetup') : t('assistant.emptyThread')}
       </p>
+      <div className="mt-4 flex max-w-md flex-wrap justify-center gap-1.5">
+        {seeds.map(id => (
+          <ThreadPrimitive.Suggestion
+            key={id}
+            prompt={tp(`seed.${id}.text`)}
+            send
+            className={
+              id === 'onboard' && unsetPlan
+                ? 'bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-700'
+                : 'border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:border-slate-900 hover:text-slate-900'
+            }
+          >
+            {tp(`seed.${id}.title`)}
+          </ThreadPrimitive.Suggestion>
+        ))}
+      </div>
     </div>
   );
 }

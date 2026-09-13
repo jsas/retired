@@ -478,7 +478,7 @@ function App() {
     || (store?.allRevisions() ?? []).filter(r => r.scenarioId === activeScenarioId).length >= 2;
   const undoState = { canUndo, onUndo: handleUndoSave };
 
-  // Agent scenario tools (open_scenario / save_scenario_as). Both mirror the
+  // Agent scenario tools (list_scenarios action open / save_as). Both mirror the
   // sidebar paths: open saves the current plan first (nothing the user typed
   // is lost), save-as snapshots the live inputs into a NEW scenario and
   // switches to it, leaving the original untouched.

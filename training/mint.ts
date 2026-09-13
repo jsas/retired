@@ -255,7 +255,7 @@ export function mintReadRecords(evalEvery = 5): CorpusRecord[] {
 }
 
 // ---------------------------------------------------------------------------
-// Mutation-tool records (propose_*/set_scenario_value/remember/recall/...).
+// Mutation-tool records (propose_*/manage_*/remember/recall/...).
 // These teach the model to emit the RIGHT proposal call for a change request,
 // and — after the user's confirm — to acknowledge without re-proposing. The
 // engine isn't needed for the call itself (a mutation pauses for confirm), so
@@ -274,26 +274,26 @@ interface MutationSpec {
 
 const MUTATION_SPECS: MutationSpec[] = [
   {
-    tool: 'set_scenario_value',
+    tool: 'propose_plan',
     questions: [
       (sc) => `Change my retirement age to ${sc.inputs.retirementAge + 2}.`,
       (sc) => `Set retirement at ${sc.inputs.retirementAge + 2}.`,
     ],
-    args: (sc) => ({ field: 'retirementAge', value: sc.inputs.retirementAge + 2 }),
+    args: (sc) => ({ changes: { retirementAge: sc.inputs.retirementAge + 2 } }),
     approvedReply: (sc) => `Done — retirement age updated to ${sc.inputs.retirementAge + 2}. Want me to re-run the projection on the new plan?`,
     rejectedReply: () => 'No problem — I\'ve left the plan unchanged.',
   },
   {
-    tool: 'set_scenario_value',
+    tool: 'propose_plan',
     questions: [
       (sc) => `Lower my spending to $${Math.round(sc.inputs.desiredSpending * 0.9).toLocaleString('en-CA')} a year.`,
     ],
-    args: (sc) => ({ field: 'desiredSpending', value: Math.round(sc.inputs.desiredSpending * 0.9) }),
+    args: (sc) => ({ changes: { desiredSpending: Math.round(sc.inputs.desiredSpending * 0.9) } }),
     approvedReply: () => 'Updated. I can run the projection to show what that does to the plan.',
     rejectedReply: () => 'Understood — no change made.',
   },
   {
-    tool: 'propose_patch',
+    tool: 'propose_plan',
     questions: [
       () => 'Delay both CPP and OAS to 70.',
       () => 'Push CPP and OAS out to age 70.',
@@ -303,53 +303,51 @@ const MUTATION_SPECS: MutationSpec[] = [
     rejectedReply: () => 'Okay — benefit timing left as is.',
   },
   {
-    tool: 'propose_income',
+    tool: 'manage_income',
     questions: [
       () => 'I have a small pension that pays $800 a month starting at 65.',
       () => 'Add my work pension of $800/month from age 65.',
     ],
-    args: () => ({ label: 'Work pension', kind: 'pension', annualAmount: 9600, startAge: 65, endAge: null, indexedToCpi: true }),
+    args: () => ({ action: 'add', label: 'Work pension', kind: 'pension', annualAmount: 9600, startAge: 65, endAge: null, indexedToCpi: true }),
     approvedReply: () => 'Pension added. I can show how it changes the drawdown.',
     rejectedReply: () => 'No problem — pension not added.',
   },
   {
-    tool: 'propose_cash_event',
+    tool: 'manage_cash_event',
     questions: [
       () => 'I expect a $50,000 inheritance around age 70.',
       () => 'Add a one-time $50k inflow when I\'m 70.',
     ],
-    args: () => ({ label: 'Inheritance', direction: 'inflow', amount: 50000, age: 70, account: 'taxable' }),
+    args: () => ({ action: 'add', label: 'Inheritance', direction: 'in', amount: 50000, age: 70, account: 'taxable' }),
     approvedReply: () => 'Inheritance added as a one-time inflow at 70. Want me to re-run the projection?',
     rejectedReply: () => 'Understood — inheritance not added.',
   },
   {
-    tool: 'propose_fhsa',
+    tool: 'propose_account',
     questions: [
       () => 'I want to start saving for a first home — set up an FHSA.',
       () => 'Open an FHSA and put in $8,000 a year.',
     ],
-    args: (sc) => ({ changes: { enabled: true, balance: 0, contribution: 8000, contributionBasis: 0, openAge: sc.inputs.currentAge } }),
+    args: (sc) => ({ kind: 'fhsa', changes: { enabled: true, balance: 0, contribution: 8000, contributionBasis: 0, openAge: sc.inputs.currentAge } }),
     approvedReply: () => 'FHSA set up — deductible in, tax-sheltered growth, and it transfers to your RRSP at retirement if you don\'t buy. Want me to show the effect on your plan?',
     rejectedReply: () => 'Okay — FHSA left off.',
   },
   {
-    tool: 'propose_debt',
+    tool: 'manage_debt',
     questions: [
       () => 'Add my mortgage — $400,000 left at 5.1% with a $2,400 monthly payment.',
       () => 'I still owe on the house. Model the mortgage in.',
     ],
-    // Debt args are the debt fields flat (the tool's schema omits only `id`).
-    // startAge omitted → payments start now; endAge omitted → until paid off.
-    args: () => ({ label: 'Mortgage', kind: 'mortgage', balance: 400000, interestRate: 0.051, monthlyPayment: 2400 }),
+    args: () => ({ action: 'add', label: 'Mortgage', kind: 'mortgage', balance: 400000, interestRate: 0.051, monthlyPayment: 2400 }),
     approvedReply: () => 'Mortgage added — the payments come out of your spending each year until it\'s paid off, so it drags on the plan until then. Want me to show what it does to your numbers?',
     rejectedReply: () => 'Okay — debt left out of the plan.',
   },
   {
-    tool: 'propose_debt',
+    tool: 'manage_debt',
     questions: [
       () => 'I carry a credit-card balance of $18,000 at 19.9%, paying $600 a month.',
     ],
-    args: () => ({ label: 'Credit card', kind: 'creditCard', balance: 18000, interestRate: 0.199, monthlyPayment: 600 }),
+    args: () => ({ action: 'add', label: 'Credit card', kind: 'creditCard', balance: 18000, interestRate: 0.199, monthlyPayment: 600 }),
     approvedReply: () => 'Credit-card debt added. At that rate the interest is a real drag — the payments are funded from spending until the balance is gone. I can run the projection to show the effect.',
     rejectedReply: () => 'Understood — card balance not added.',
   },
@@ -382,20 +380,20 @@ const MUTATION_SPECS: MutationSpec[] = [
     rejectedReply: () => 'Okay, I won\'t keep that.',
   },
   {
-    tool: 'open_scenario',
+    tool: 'list_scenarios',
     questions: [
       () => 'Switch to my other plan.',
     ],
-    args: (sc) => ({ name: sc.name }),
+    args: (sc) => ({ action: 'open', name: sc.name }),
     approvedReply: () => 'Switched. What would you like to look at?',
     rejectedReply: () => 'Staying on the current plan.',
   },
   {
-    tool: 'save_scenario_as',
+    tool: 'list_scenarios',
     questions: [
       () => 'Keep this variant as its own plan called "Early retirement".',
     ],
-    args: () => ({ name: 'Early retirement' }),
+    args: () => ({ action: 'save_as', name: 'Early retirement' }),
     approvedReply: () => 'Saved as a new scenario — the original is untouched.',
     rejectedReply: () => 'Okay, not saved.',
   },
@@ -674,7 +672,7 @@ export const NAV_SPECS: NavSpec[] = [
     ],
   },
   {
-    view: 'eq', query: 'monte carlo',
+    view: 'montecarlo', query: 'monte carlo',
     findAsks: [
       () => 'Where can I see the odds my money lasts?',
       () => 'Which page runs the simulation?',
@@ -879,7 +877,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
     }
   }
 
-  // (d) the "show me everything" ask → get_sitemap.
+  // (d) the "show me everything" ask → find_page with no query (site map).
   const sitemapArgs = {};
   for (const question of [
     'What can this app do?',
@@ -887,26 +885,26 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
     'Give me a tour of the app.',
   ]) {
     const split = ++seqRef.n % evalEvery === 0 ? 'eval' : 'train';
-    const base = `get_sitemap:${sc.id}:q${seqRef.n}`;
+    const base = `find_page_map:${sc.id}:q${seqRef.n}`;
     records.push({
       id: `${base}:call`, split, kind: 'navigation', scenarioId: sc.id,
       messages: [
         { role: 'user', content: question },
-        { role: 'assistant', content: emitToolCall('get_sitemap', sitemapArgs) },
+        { role: 'assistant', content: emitToolCall('find_page', sitemapArgs) },
       ],
-      expect: { toolName: 'get_sitemap' },
+      expect: { toolName: 'find_page' },
     });
-    const resultText = runNav(sc, 'get_sitemap', sitemapArgs);
+    const resultText = runNav(sc, 'find_page', sitemapArgs);
     records.push({
       id: `${base}:follow`, split, kind: 'navigation', scenarioId: sc.id,
       messages: [
         { role: 'user', content: question },
-        { role: 'assistant', content: emitToolCall('get_sitemap', sitemapArgs) },
+        { role: 'assistant', content: emitToolCall('find_page', sitemapArgs) },
         { role: 'user', content: wrapToolResult(resultText) },
         { role: 'assistant', content: explainSitemap(resultText) },
       ],
       expect: {
-        toolName: 'get_sitemap',
+        toolName: 'find_page',
         mustNotContain: ['you should', 'i recommend'],
       },
     });
@@ -914,7 +912,7 @@ function mintNavRecordsFor(sc: NamedScenario, seqRef: { n: number }, evalEvery: 
   return records;
 }
 
-/** Ground the get_sitemap follow-up: name a couple of the pages the result
+/** Ground the find_page (empty query) follow-up: name a couple of the pages the result
  *  lists, so the reply proves it READ the map rather than reciting a canned
  *  tour. Deterministic: the first two listed pages by catalog order. */
 function explainSitemap(resultText: string): string {

@@ -147,11 +147,11 @@ describe('guardrail records', () => {
 describe('navigation records (issue #141)', () => {
   const nav = mintNavRecords();
 
-  it('mints find_page / propose_navigate / get_sitemap coverage with both confirm outcomes', () => {
+  it('mints find_page / propose_navigate coverage with both confirm outcomes', () => {
     const tools = new Set(nav.map((r) => r.expect.toolName));
     expect(tools.has('find_page')).toBe(true);
     expect(tools.has('propose_navigate')).toBe(true);
-    expect(tools.has('get_sitemap')).toBe(true);
+    expect(tools.has('get_sitemap')).toBe(false);
     // Every nav tool is in the live catalog (auto-pickup, protocol.ts SPECS).
     for (const t of tools) expect(TOOL_NAMES.has(t!)).toBe(true);
     // Approve AND reject records exist for every go-ask.

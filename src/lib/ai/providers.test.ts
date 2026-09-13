@@ -111,6 +111,28 @@ describe('anthropic adapter', () => {
     await expect(collect(streamChat(anthropic, { system: 's', messages: userTurn },
       sseFetch(['x'], 401)))).rejects.toThrow(ProviderError);
   });
+
+  it('sends thinking: disabled when generation.thinking is off', async () => {
+    let body = '';
+    const conn = { ...anthropic, generation: { thinking: 'off' as const } };
+    await collect(streamChat(conn, { system: 's', messages: userTurn },
+      sseFetch([], 200, (_u, init) => { body = String(init.body); })));
+    expect(JSON.parse(body).thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('streams thinking_delta as reasoning events', async () => {
+    const events = await collect(streamChat(anthropic, { system: 's', messages: userTurn },
+      sseFetch([
+        JSON.stringify({ type: 'content_block_start', content_block: { type: 'thinking' } }),
+        JSON.stringify({ type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'age is 51. ' } }),
+        JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Got it.' } }),
+        JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn' } }),
+      ])));
+    expect(events.filter(e => e.type === 'reasoning').map(e => (e as { text: string }).text).join(''))
+      .toBe('age is 51. ');
+    expect(events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join(''))
+      .toBe('Got it.');
+  });
 });
 
 describe('openai-compatible adapter', () => {
@@ -230,6 +252,18 @@ describe('gemini adapter', () => {
       ])));
     expect(events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join('')).toBe('Hello!');
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'end_turn' });
+  });
+
+  it('streams thought parts as reasoning, separate from the answer', async () => {
+    const events = await collect(streamChat(gemini, { system: 's', messages: userTurn },
+      sseFetch([
+        JSON.stringify({ candidates: [{ content: { parts: [{ thought: true, text: 'age 51. ' }] } }] }),
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Got it.' }] }, finishReason: 'STOP' }] }),
+      ])));
+    expect(events.filter(e => e.type === 'reasoning').map(e => (e as { text: string }).text).join(''))
+      .toBe('age 51. ');
+    expect(events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join(''))
+      .toBe('Got it.');
   });
 
   it('maps functionCall parts to tool_use with the name as id', async () => {

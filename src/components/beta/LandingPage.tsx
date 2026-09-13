@@ -19,6 +19,7 @@ import { prefKV } from '../../lib/prefKv';
 import type { View } from '../../lib/viewRoutes';
 import { Link } from './nav';
 import { LanguageSwitch } from '../LanguageSwitch';
+import { defaultProvinceCode, type Locale } from '../../lib/locale';
 import { useAppLocale } from '../../lib/localeContext';
 import { i18n } from '../../lib/i18n';
 
@@ -88,8 +89,9 @@ function questions(t: (key: string, opts?: Record<string, unknown>) => string): 
   ];
 }
 
-// Build a real plan from the chat answers.
-function buildPlan(a: Answer): RetirementInputs {
+// Build a real plan from the chat answers. Province follows the page language
+// (Quebec in French, Ontario in English) — the landing never asks for it.
+function buildPlan(a: Answer, locale: Locale): RetirementInputs {
   const base = baselineInputs();
   const currentAge = a.currentAge ?? 55;
   const savings = a.savings ?? 0;
@@ -106,6 +108,7 @@ function buildPlan(a: Answer): RetirementInputs {
     cppMonthlyAmount: benefits === 'none' ? 0 : typeof benefits === 'number' ? benefits / 12 / 2 : 900,
     oasStartAge: benefits === 'none' ? null : 65,
     oasYearsInCanada: benefits === 'none' ? 0 : 40,
+    provinceCode: defaultProvinceCode(locale),
   };
 }
 
@@ -143,7 +146,7 @@ export function LandingPage({ config, onBuild }: {
   const [error, setError] = useState(false);
 
   const done = step >= QUESTIONS.length;
-  const plan = useMemo(() => (done ? buildPlan(answers) : null), [done, answers]);
+  const plan = useMemo(() => (done ? buildPlan(answers, locale) : null), [done, answers, locale]);
   const results = useMemo(() => (plan ? calculateHousehold(plan, config) : null), [plan, config]);
 
   const q = QUESTIONS[step];

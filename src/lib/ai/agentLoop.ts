@@ -3,7 +3,7 @@
 //
 // This module is provider-neutral — it takes a `chat` function (usually
 // streamChat bound to a connection) so tests drive it with scripted fakes.
-// Mutating tools (set_scenario_value) pause the loop: the proposal is handed
+// Mutating tools (propose_plan / manage_* / propose_*) pause the loop: the proposal is handed
 // to `onMutation`, and the loop only continues once the UI reports the user's
 // decision. That's the confirm-before-apply guarantee — no path from model
 // output to plan state bypasses it.
@@ -138,6 +138,16 @@ export const DEFAULT_SYSTEM_PROMPT = [
   '- When the user asks for a change — or one is clearly wanted — propose it with',
   '  a tool. Every change is confirmed by the user before it is applied; never',
   '  apply anything silently.',
+  '- When the user gives plan numbers (age, retirement age, spending, balances,',
+  '  province, CPP/OAS), call propose_plan immediately with those fields. Do not',
+  '  recap the numbers in prose first — the confirm card IS the recap.',
+  '- If this plan still looks like a blank starter (zero balances, no income,',
+  '  no spouse — New Scenario defaults), interview one question at a time and',
+  '  call propose_plan as numbers arrive. Ages, $40k spending, and Ontario on a',
+  '  blank plan are PLACEHOLDERS — ask; do not treat them as given. If the user',
+  '  says fill the rest, use defaults, or skip remaining questions, call',
+  '  propose_plan THIS TURN with remaining starter defaults. Never claim you',
+  '  filled the plan without that tool call — the confirm card IS the fill.',
   '- Be concrete: cite specific ages and dollar figures, and quantify the effect',
   '  of each option (depletion age, lifetime tax, ending balance, success rate).',
   '',
@@ -154,13 +164,16 @@ export const DEFAULT_TOOL_INSTRUCTIONS_NATIVE = [
   'Tools: use get_scenario to read the plan and run_projection / compare_scenarios /',
   'run_monte_carlo for numbers (all accept overrides for what-ifs). Use',
   'run_strategies to compare levers and solve_spending for "how much can I safely',
-  'spend?". Change the plan only through the propose_* / set_scenario_value tools —',
-  'the user confirms every one. For a batch of related scalar edits prefer',
-  'propose_patch; for a spouse, an income source (pension or work), spending phases,',
-  'a cash event, or a reverse mortgage use its dedicated propose_* tool. To change',
-  'or remove a cash event or income source that already exists use manage_cash_event /',
-  'manage_income. To undo a change the user approved earlier, propose_revert',
-  'restores the automatic snapshot taken just before it landed.',
+  'spend?". Change the plan only through propose_plan (scalars: ages, spending,',
+  'balances, contributions, province, CPP/OAS) and the manage_* / propose_* tools —',
+  'the user confirms every one. When the user gives several plan numbers at once',
+  '(age, retirement, spending, balances), call propose_plan immediately — never',
+  'narrate them first. If they say fill the rest / use defaults, call propose_plan',
+  'this turn with remaining starter defaults — do not only say you will. For a spouse use propose_spouse; for income, cash events, or',
+  'debts use manage_income / manage_cash_event / manage_debt (action add|update|remove).',
+  'For a reverse mortgage, RDSP, or FHSA use propose_account. To undo a change the',
+  'user approved earlier, propose_revert restores the automatic snapshot taken just',
+  'before it landed.',
   'Memory: at the START of a conversation, recall your memories so you know what',
   'the user told you before. When the user shares something durable and important',
   '(a decision, a constraint, a preference, a life plan), remember it — scope',
@@ -170,18 +183,25 @@ export const DEFAULT_TOOL_INSTRUCTIONS_NATIVE = [
   'recall query returns only "closest memories", those did NOT match; use them as',
   'a hint, and say honestly when nothing recorded covers the question. Never',
   'memorize numbers that are already in the plan.',
-  'Scenarios: open_scenario switches to another saved plan; save_scenario_as',
-  'keeps the current plan under a new name and opens the copy — use it when the',
-  'user wants to keep a variant ("save this as its own plan") before editing.',
+  'Scenarios: list_scenarios with action "open" switches to another saved plan;',
+  'action "save_as" keeps the current plan under a new name and opens the copy —',
+  'use it when the user wants to keep a variant ("save this as its own plan")',
+  'before editing.',
 ].join('\n');
 
 /** Prompt-mode tool blurb (local models; the TOOL_CALL catalog is appended separately). */
 export const DEFAULT_TOOL_INSTRUCTIONS_PROMPT = [
   'Tools: the plan inputs and computed projection are BELOW in this message. The',
-  'user\'s age, balances, benefits, and account values are ALREADY there — never',
-  'ask the user for them. Read them from the summary, and call get_scenario or',
-  'run_projection (with overrides) for any number you don\'t have. Answer with the',
-  'real figures; only use run_projection/compare_scenarios for what-ifs.',
+  'user\'s age, balances, benefits, and account values are in the summary. Read',
+  'them from there, and call get_scenario or run_projection (with overrides) for',
+  'any number you don\'t have. Answer with the real figures; only use',
+  'run_projection/compare_scenarios for what-ifs. When the user gives new plan',
+  'numbers, call propose_plan immediately — do not recap them. If they ask you to',
+  'fill remaining fields yourself, call propose_plan this turn with remaining',
+  'starter defaults; do not only say you will. If the summary marks this as a',
+  'blank starter (zero balances / New Scenario defaults), those ages and spending',
+  'are PLACEHOLDERS — interview one question at a time instead of treating them',
+  'as the user\'s real situation.',
 ].join('\n');
 
 /** Chat-only blurb when tools are off. */
@@ -276,6 +296,9 @@ function localeLineFor(locale: Locale | undefined): string | null {
  *  Settings). Tool-usage mechanics, live program rules, the current page, and
  *  the scenario name are each optional via `send`. Small local models follow
  *  the LAST system text, so the persona is last by default. */
+const SETUP_LINE_FALLBACK =
+  'SETUP: the active plan is an unfilled starter (all account balances $0). Interview one question at a time and call propose_plan as numbers arrive (changes: { currentAge, retirementAge, desiredSpending, rrspBalance, ... } — or the same fields at the top level). Do not treat its ages, spending, or province as the user\'s. If they say fill the rest, use defaults, or skip remaining questions: call propose_plan THIS TURN with remaining starter defaults. Never say you filled the plan without that tool call — the confirm card IS the fill.';
+
 export function buildSystemPrompt(
   scenarioName: string,
   opts?: {
@@ -293,6 +316,9 @@ export function buildSystemPrompt(
     send?: PromptSendFlags;
     /** Replacement for the mode-specific tool-instruction blurb. */
     toolInstructions?: string;
+    /** When true, append the blank-starter interview line (New Scenario /
+     *  Example plan / zero balances). */
+    unsetPlan?: boolean;
   },
 ): string {
   const mode = opts?.toolMode ?? (opts?.toolsEnabled === false ? 'off' : 'native');
@@ -333,6 +359,8 @@ export function buildSystemPrompt(
     ? [...mechanics, ...(persona ? ['', persona] : [])]
     : [...(persona ? [persona] : []), ...mechanics];
   if (localeLine) parts.push('', localeLine);
+  // Blank-starter interview last so a small model still sees it after persona.
+  if (opts?.unsetPlan) parts.push('', tPrompt('setupLine', locale, SETUP_LINE_FALLBACK));
 
   return parts.join('\n').replace(/^\n+/, '').replace(/\n+$/, '');
 }
@@ -353,6 +381,8 @@ export function assembleSystemPrompt(opts: {
   toolInstructions?: string;
   /** Per-chat composer note; omitted unless includeChatNote is on. */
   chatNote?: string;
+  /** When true, append the blank-starter interview line. */
+  unsetPlan?: boolean;
 }): string {
   const send = resolvePromptSend(opts.send);
   const body = buildSystemPrompt(opts.scenarioName, {
@@ -375,7 +405,12 @@ export function assembleSystemPrompt(opts: {
   // for native/off; when the catalog is present, re-append it after so a small
   // model doesn't treat the English TOOL_CALL list as the language to think in.
   const localeAgain = catalog && send.includeLocale ? (localeLineFor(opts.locale) ?? '') : '';
-  return [body, catalog, noteBlock, localeAgain].filter(Boolean).join('\n\n');
+  // Interview line last of all — after the English catalog — so a small local
+  // model still treats a blank plan as a setup, not as filled-in numbers.
+  const setupLine = opts.unsetPlan
+    ? tPrompt('setupLine', opts.locale, SETUP_LINE_FALLBACK)
+    : '';
+  return [body, catalog, noteBlock, localeAgain, setupLine].filter(Boolean).join('\n\n');
 }
 
 /**
@@ -396,7 +431,7 @@ export async function* runAgentTurn(opts: AgentLoopOptions): AsyncGenerator<Agen
   const mode = opts.toolMode ?? 'native';
   const tools = !chatOnly && mode === 'native' ? toolSpecs() : [];
   const messages: ChatMessage[] = [...opts.history, { role: 'user', content: opts.userMessage }];
-  const knownTools = new Set(toolSpecs().map(s => s.name));
+  const knownTools = new Set<string>(toolSpecs().map(s => s.name));
   // Track the last executed call so we can refuse an immediate identical
   // repeat — the classic small-model failure is ping-ponging the same two
   // tools (run_projection / compare_scenarios) with unchanged args forever.
@@ -604,7 +639,7 @@ async function* finalizeWithoutTools(
   messages: ChatMessage[],
   mode: 'native' | 'prompt' | 'off',
 ): AsyncGenerator<AgentEvent> {
-  const knownTools = new Set(toolSpecs().map(s => s.name));
+  const knownTools = new Set<string>(toolSpecs().map(s => s.name));
   // A fresh system prompt for the final pass: same persona/rules, but the
   // tool catalog is replaced by the instruction to stop and answer. Keeping
   // the full tool instructions would invite yet another tool call.

@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './LandingPage';
+import { LocaleContext } from '../../lib/localeContext';
 import { testConfig } from '../../../packages/engine-core/test/helpers';
 
 const config = testConfig();
@@ -106,6 +107,38 @@ describe('LandingPage', () => {
     expect(onBuild2).toHaveBeenCalledTimes(1);
     expect(onBuild2).toHaveBeenCalledWith(expect.anything(), { openAssistant: true });
     expect(store.get('wealthconsole_dock_open')).toBe('1');
+  });
+
+  it('seeds Ontario in English and Quebec in French', () => {
+    const onBuild = renderCompleted();
+    const go = [...container.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Go to dashboard');
+    act(() => { go!.click(); });
+    expect(onBuild.mock.calls[0][0].provinceCode).toBe('ONT');
+
+    act(() => { root.unmount(); });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const onBuildFr = vi.fn();
+    act(() => {
+      root.render(
+        <LocaleContext.Provider value={{ locale: 'fr-CA', setLocale: () => {} }}>
+          <LandingPage config={config} onBuild={onBuildFr} />
+        </LocaleContext.Provider>,
+      );
+    });
+    // i18n stays English in this harness; LocaleContext is what seeds the province.
+    const answers = ['55', '65', '$500k', '$60k', 'Yes, the usual'];
+    for (const a of answers) {
+      const chip = [...container.querySelectorAll('button')].find(b => b.textContent === a);
+      if (!chip) throw new Error(`no chip "${a}" — questions: ${container.textContent}`);
+      act(() => { chip.click(); });
+    }
+    const goFr = [...container.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Go to dashboard');
+    if (!goFr) throw new Error(`no exit — ${container.textContent}`);
+    act(() => { goFr.click(); });
+    expect(onBuildFr).toHaveBeenCalled();
+    expect(onBuildFr.mock.calls[0][0].provinceCode).toBe('QC');
   });
 
   it('the footer exit also builds the plan', () => {

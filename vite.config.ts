@@ -30,7 +30,7 @@ function appRevision(): string {
 }
 
 // The site map as a build artifact (issue #141): sitemap.{json,xml} generated
-// from the same NAV_CATALOG the find_page/get_sitemap tools read — so a
+// from the same NAV_CATALOG the find_page tool reads — so a
 // fetched artifact and a tool answer can never disagree. Multi-file (Pages)
 // builds only; the single-file artifact stays exactly one file, and a file://
 // copy has no origin to resolve #/ links against anyway. The serialization

@@ -9,6 +9,7 @@
 // free and private. Nothing is ingested back.
 
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
+import { looksLikeUnsetPlan } from '@retired/engine-core/exampleScenarios';
 import { householdOutcome } from '@retired/engine-core/retirementEngine';
 import { toHousehold } from '@retired/engine-core/householdTypes';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
@@ -154,7 +155,10 @@ export function buildPlanDigest(inputs: RetirementInputs, ctx: QAContext): strin
       `  success rate ${(ctx.mcResults.successRate * 100).toFixed(1)}%, ` +
       `median final balance ${money(ctx.mcResults.medianFinalBalance)}\n`;
   }
-  return `PLAN INPUTS (JSON):\n${JSON.stringify(inputs, null, 2)}\n\nCOMPUTED PROJECTION (summary):\n${digests.join('\n')}\n${mc}`;
+  const setup = looksLikeUnsetPlan(inputs)
+    ? 'SETUP: this plan is an unfilled starter (all account balances $0). Ages, spending, and province here are placeholders. If they say fill the rest / use defaults, call propose_plan this turn with remaining starter defaults.\n\n'
+    : '';
+  return `${setup}PLAN INPUTS (JSON):\n${JSON.stringify(inputs, null, 2)}\n\nCOMPUTED PROJECTION (summary):\n${digests.join('\n')}\n${mc}`;
 }
 
 /**

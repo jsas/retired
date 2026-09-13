@@ -108,7 +108,7 @@ describe('runAgentTurn', () => {
   it('pauses on a mutation proposal and reports the user decision to the model', async () => {
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'cppStartAge', value: 70 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'propose_plan', args: { changes: { cppStartAge: 70 } } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -122,9 +122,9 @@ describe('runAgentTurn', () => {
       system: 's', chat,
       onMutation: async (p) => { proposals.push(p); return { approved: true }; },
     }));
-    expect(proposals).toEqual([{
+    expect(proposals).toMatchObject([{
       callId: 'm1', patch: { cppStartAge: 70 }, label: 'Set cppStartAge',
-      rationale: undefined, preview: { field: 'cppStartAge', from: null, to: 70 },
+      preview: { cppStartAge: { from: null, to: 70 } },
     }]);
     expect(events.some(e => e.type === 'mutation')).toBe(true);
     const toolResultBack = requests[1].messages.at(-1)?.toolResults?.[0];
@@ -149,7 +149,7 @@ describe('runAgentTurn', () => {
     const { chat } = scripted([
       // Round 1: propose lowering spending.
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 42000 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'propose_plan', args: { changes: { desiredSpending: 42000 } } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       // Round 2 (after approval): the model re-reads the plan, then answers.
@@ -181,7 +181,7 @@ describe('runAgentTurn', () => {
   it('tells the model when the user rejects a change', async () => {
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 90000 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'propose_plan', args: { changes: { desiredSpending: 90000 } } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -280,7 +280,8 @@ describe('buildSystemPrompt', () => {
     // planner" guardrail made small models parrot "I'm not a planner" back.
     expect(s).toContain('planning assistant');
     expect(s).not.toContain('not a planner');
-    expect(s).toContain('set_scenario_value');
+    expect(s).toContain('propose_plan');
+    expect(s).toContain('blank starter');
   });
 
   it('uses a user-supplied base prompt in place of the default persona', () => {
@@ -289,9 +290,9 @@ describe('buildSystemPrompt', () => {
     expect(s).not.toContain('planning assistant');
     // Tool mechanics + scenario name still ride; persona is last by default so
     // a small model honors the override instead of the later tool blurb.
-    expect(s).toContain('set_scenario_value');
+    expect(s).toContain('propose_plan');
     expect(s).toContain('"My Plan"');
-    expect(s.indexOf('You are a terse actuary.')).toBeGreaterThan(s.indexOf('set_scenario_value'));
+    expect(s.indexOf('You are a terse actuary.')).toBeGreaterThan(s.indexOf('propose_plan'));
   });
 
   it('falls back to the default persona when the override is blank', () => {
@@ -348,6 +349,22 @@ describe('buildSystemPrompt', () => {
     expect(defaultToolInstructionsFor('off', 'fr-CA')).toContain('ne peut pas modifier le plan');
   });
 
+  it('adds a setup interview line only when the plan is unfilled', () => {
+    const s = buildSystemPrompt('New Plan', { unsetPlan: true });
+    expect(s).toContain('SETUP:');
+    expect(s).toContain('unfilled starter');
+    expect(s).toContain('fill the rest');
+    expect(s).toContain('THIS TURN');
+    expect(s.lastIndexOf('SETUP:')).toBeGreaterThan(s.indexOf('planning assistant'));
+    expect(buildSystemPrompt('New Plan')).not.toContain('SETUP:');
+    const fr = buildSystemPrompt('New Plan', { unsetPlan: true, locale: 'fr-CA' });
+    expect(fr).toContain('MISE EN PLACE');
+    const assembled = assembleSystemPrompt({
+      scenarioName: 'New Plan', toolMode: 'prompt', locale: 'fr-CA', unsetPlan: true,
+    });
+    expect(assembled.lastIndexOf('MISE EN PLACE')).toBeGreaterThan(assembled.lastIndexOf('TOOL_CALL'));
+  });
+
   it('drops the page-language line when that send flag is off', () => {
     const s = buildSystemPrompt('My Plan', { locale: 'fr-CA', send: { includeLocale: false } });
     expect(s).not.toContain('langue de la page');
@@ -363,7 +380,10 @@ describe('buildSystemPrompt', () => {
 
   it('drops tool instructions for chat-only providers', () => {
     const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
-    expect(s).not.toContain('set_scenario_value');
+    // Persona still names propose_plan (the confirm-card rule); the native
+    // tool blurb — manage_* / list_scenarios actions — must not ride.
+    expect(s).not.toContain('manage_income');
+    expect(s).not.toContain('list_scenarios with action');
     // Grounded in the plan summary, and honest that it can't change the plan.
     expect(s).toContain('plan summary');
     expect(s).toContain('can\'t change the plan');
@@ -454,7 +474,8 @@ describe('buildSystemPrompt', () => {
   it('uses a custom tool-instruction override', () => {
     const s = buildSystemPrompt('My Plan', { toolInstructions: 'Call only get_scenario.' });
     expect(s).toContain('Call only get_scenario.');
-    expect(s).not.toContain('set_scenario_value');
+    expect(s).not.toContain('manage_income');
+    expect(s).not.toContain('list_scenarios with action');
   });
 
   it('can put the persona first when personaLast is off', () => {
@@ -462,7 +483,7 @@ describe('buildSystemPrompt', () => {
       basePrompt: 'say only yes yes yes',
       send: { personaLast: false },
     });
-    expect(s.indexOf('say only yes yes yes')).toBeLessThan(s.indexOf('set_scenario_value'));
+    expect(s.indexOf('say only yes yes yes')).toBeLessThan(s.indexOf('propose_plan'));
   });
 });
 

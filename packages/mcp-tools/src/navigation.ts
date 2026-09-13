@@ -1,6 +1,6 @@
 // The site's page map as data: every view the SPA can render, its route, and
 // the plain-language words a user (or model) would use to find it. This is the
-// single source of truth for find_page / get_sitemap / propose_navigate, the
+// single source of truth for find_page / propose_navigate, the
 // Vite sitemap plugin (dist/sitemap.{json,xml}), and the training corpus —
 // keeping the map here means no copy can rot against the routes.
 //
@@ -60,12 +60,12 @@ export interface NavEntry {
   route: string;
   /** Human page title, echoed in find_page output and the sitemap artifacts. */
   title: string;
-  /** One-line purpose, plain words; appears in get_sitemap + sitemap.json. */
+  /** One-line purpose, plain words; appears in find_page (empty query) + sitemap.json. */
   description: string;
   /** Search terms a user might type (lowercase words/phrases), ranked best-first. */
   keywords: readonly string[];
   /** True if this view is only in the beta design-skin (style guide), so
-   *  find_page/get_sitemap can still name it without saying "beta". */
+   *  find_page can still name it without saying "beta". */
   betaOnly?: true;
   /** Set when the beta skin folds this legacy page into another one: the
    *  canonical destination view. Hidden from search/sitemap; a proposal that
@@ -73,8 +73,9 @@ export interface NavEntry {
   foldedInto?: View;
 }
 
-/** The page map in rail order (home first, misc last) — get_sitemap lists it
- *  this way and find_page ties break by catalog position, not alphabetically. */
+/** The page map in rail order (home first, misc last) — find_page (empty
+ *  query) lists it this way and ranked search ties break by catalog position,
+ *  not alphabetically. */
 export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'dashboard',
@@ -272,8 +273,9 @@ export function pageTitleLine(view: View): string {
 // emitted by the plugin contains the same editorializing once, not twice.
 
 /** The pages a user can actually reach on the current (beta) UI: the catalog
- *  minus the legacy surfaces folded into other pages. get_sitemap lists these,
- *  find_page searches these, and propose_navigate redirects anything else. */
+ *  minus the legacy surfaces folded into other pages. find_page lists these
+ *  (empty query) and searches them, and propose_navigate redirects anything
+ *  else. */
 export function searchablePages(): ReadonlyArray<NavEntry> {
   return NAV_CATALOG.filter((e) => e.foldedInto == null);
 }

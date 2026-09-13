@@ -5,6 +5,7 @@ import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { diffRevisions, MAX_REVISIONS, type ScenarioRevision } from '../lib/scenarioRevisions';
 import { Dot } from '../design/primitives';
 import { BLUE, cls } from '../design/tokens';
+import { defaultProvinceCode } from '../lib/locale';
 import { useAppLocale } from '../lib/localeContext';
 
 interface Scenario {
@@ -38,6 +39,7 @@ interface ScenarioManagerProps {
 // sit quiet until hovered. Every save keeps a revision you can roll back to.
 export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, revisions, onRollback, onSelectScenario, onCreateScenario }: ScenarioManagerProps) {
   const { t } = useTranslation('pages');
+  const { locale } = useAppLocale();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   /** Which scenario's history is expanded (one at a time keeps it readable). */
@@ -56,7 +58,7 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
     onCreateScenario({
       id: `scenario-${Date.now()}`,
       name: t('plansUi.newName', { n: scenarios.length + 1 }),
-      inputs: baselineInputs(),
+      inputs: { ...baselineInputs(), provinceCode: defaultProvinceCode(locale) },
       isFresh: true,
     });
   };

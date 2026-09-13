@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { QA_PRESETS, buildQAPrompt, buildPlanDigest } from './agentQA';
 import { calculateRetirement, calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { testConfig, baseInputs } from '@retired/engine-core/test/helpers';
+import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 
 const config = testConfig();
 
@@ -150,5 +151,12 @@ describe('buildQAPrompt', () => {
     const digest = buildPlanDigest(single, { results: r });
     expect(digest).toContain('HOUSEHOLD VERDICT:');
     expect(digest.indexOf('HOUSEHOLD VERDICT')).toBeLessThan(digest.indexOf('Plan:'));
+  });
+
+  it('flags a New-Scenario starter in the digest', () => {
+    const blank = baselineInputs();
+    const digest = buildPlanDigest(blank, { results: calculateRetirement(blank, config) });
+    expect(digest).toContain('SETUP:');
+    expect(digest).toContain('unfilled starter');
   });
 });

@@ -17,6 +17,7 @@
 // mixing it into the answer (gpt-oss, DeepSeek-R1, Qwen3 all emit one).
 
 import { effectiveGeneration, type AiConnection } from './connections.js';
+import { applyThinkingToRequest, resolveThinkingMode } from './thinking.js';
 
 export interface AgentToolCall {
   id: string;
@@ -274,6 +275,7 @@ async function* streamAnthropic(
     }));
   }
   if (gen.temperature !== undefined) body.temperature = gen.temperature;
+  applyThinkingToRequest(conn.provider, conn.model, resolveThinkingMode(conn.generation?.thinking), body);
 
   const res = await fetchFn('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -308,6 +310,10 @@ async function* streamAnthropic(
       const delta = evt.delta as Record<string, unknown> | undefined;
       if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
         yield { type: 'text', text: delta.text };
+      } else if ((delta?.type === 'thinking_delta' || delta?.type === 'reasoning_delta') && typeof delta.thinking === 'string') {
+        yield { type: 'reasoning', text: delta.thinking };
+      } else if (delta?.type === 'thinking_delta' && typeof delta.text === 'string') {
+        yield { type: 'reasoning', text: delta.text };
       } else if (delta?.type === 'input_json_delta' && tool && typeof delta.partial_json === 'string') {
         tool.json += delta.partial_json;
       }
@@ -385,6 +391,7 @@ async function* streamOpenAICompatible(
     }));
   }
   if (gen.temperature !== undefined) body.temperature = gen.temperature;
+  applyThinkingToRequest(conn.provider, conn.model, resolveThinkingMode(conn.generation?.thinking), body);
 
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (conn.apiKey) headers.authorization = `Bearer ${conn.apiKey}`;
@@ -492,6 +499,7 @@ async function* streamGemini(
       return [{ role: 'user', parts: [{ text: m.content }] }];
     }),
   };
+  applyThinkingToRequest(conn.provider, conn.model, resolveThinkingMode(conn.generation?.thinking), body);
   if (req.tools?.length) {
     body.tools = [{
       functionDeclarations: req.tools.map(t => ({
@@ -520,7 +528,9 @@ async function* streamGemini(
     const parts = ((cand.content as Record<string, unknown> | undefined)?.parts
       ?? []) as Array<Record<string, unknown>>;
     for (const p of parts) {
-      if (typeof p.text === 'string' && p.text) yield { type: 'text', text: p.text };
+      if (typeof p.text === 'string' && p.text) {
+        yield { type: p.thought === true ? 'reasoning' : 'text', text: p.text };
+      }
       const fc = p.functionCall as Record<string, unknown> | undefined;
       if (fc?.name) {
         callSeq += 1;

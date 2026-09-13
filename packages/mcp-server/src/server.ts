@@ -80,10 +80,7 @@ export function createRetirementMcpServer(
   >) {
     server.registerTool(
       name,
-      {
-        description: entry.description,
-        inputSchema: entry.schema,
-      },
+      { description: entry.description, inputSchema: entry.schema },
       (args) => {
         const outcome = executeToolCall(capabilities.getContext(), {
           // executeToolCall validates args against the same schema; the MCP

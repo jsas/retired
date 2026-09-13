@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { detectLocale, parseLocale } from './locale';
+import { defaultProvinceCode, detectLocale, parseLocale } from './locale';
 
 const realNavigator = globalThis.navigator;
 function setLanguage(language: string | undefined) {
@@ -51,5 +51,12 @@ describe('detectLocale', () => {
     setLanguage('en-US'); expect(detectLocale()).toBe('en-CA');
     setLanguage('es-ES'); expect(detectLocale()).toBe('en-CA');
     setLanguage(undefined); expect(detectLocale()).toBe('en-CA');
+  });
+});
+
+describe('defaultProvinceCode', () => {
+  it('seeds Quebec for French, Ontario for English', () => {
+    expect(defaultProvinceCode('fr-CA')).toBe('QC');
+    expect(defaultProvinceCode('en-CA')).toBe('ONT');
   });
 });

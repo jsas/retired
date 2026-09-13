@@ -19,6 +19,8 @@ import {
   type AiConnection,
   type AiGenerationSettings,
   type AiProviderId,
+  type ThinkingMode,
+  type ThinkingCapability,
 } from '@retired/ai-bridge';
 
 export {
@@ -34,8 +36,10 @@ export {
   defaultBaseUrlFor,
   connectionReady,
   isLocalProvider,
+  thinkingCapability,
+  resolveThinkingMode,
 } from '@retired/ai-bridge';
-export type { AiConnection, AiGenerationSettings, AiProviderId };
+export type { AiConnection, AiGenerationSettings, AiProviderId, ThinkingMode, ThinkingCapability };
 
 export interface AiPromptPreset {
   id: string;
@@ -113,6 +117,7 @@ const generationSchema = z.object({
   repetitionPenalty: z.number().min(0).max(2).optional(),
   presencePenalty: z.number().min(-2).max(2).optional(),
   frequencyPenalty: z.number().min(-2).max(2).optional(),
+  thinking: z.enum(['off', 'auto', 'low', 'medium', 'high']).optional(),
 });
 
 const connectionSchema = z.object({
@@ -184,12 +189,13 @@ export const SEED_PROMPTS: AiPromptPreset[] = [
     title: 'Get me started on a scenario',
     builtin: true,
     text:
-      'Help me build my retirement scenario from scratch. Interview me one question at a time about ' +
-      'my age, province, account balances (RRSP, TFSA, taxable, cash), annual contributions, pensions, ' +
-      'when I want to retire, and what I expect to spend. Ask about my spouse/partner too if I have one. ' +
-      'Use the get_scenario tool to see what is already filled in, and propose changes with ' +
-      'set_scenario_value as we go — never set anything without my agreement. When the basics are in ' +
-      'place, run the projection with run_projection and walk me through what it says.',
+      'Help me build my retirement scenario from scratch. If I already give numbers (age, retirement ' +
+      'age, spending, balances, province), call propose_plan immediately with those fields so I can ' +
+      'confirm them on a card — do not recap them in prose. Then ask one question at a time for ' +
+      'whatever is still missing: province, account balances (RRSP, TFSA, taxable, cash), annual ' +
+      'contributions, pensions, spouse/partner. Use get_scenario to see what is already filled in. ' +
+      'Never set anything without my agreement. When the basics are in place, run the projection ' +
+      'with run_projection and walk me through what it says.',
   },
   {
     id: 'on-track',

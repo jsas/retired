@@ -14,6 +14,7 @@
 // prompt instead — the model still answers from real numbers.
 
 import { DEFAULT_LOCAL_TEMPERATURE, effectiveGeneration, type AiConnection } from './connections.js';
+import { applyThinkingToRequest, resolveThinkingMode } from './thinking.js';
 import { isGpuOom, unloadSiblingLocalEngine } from './localGpu.js';
 import { ProviderError, type ChatMessage, type StreamEvent, type StreamChatRequest } from './providers.js';
 import { WEBLLM_MODELS, type WebLlmModelChoice } from './webLlmModels.js';
@@ -510,7 +511,7 @@ export async function* streamWebLlm(
   let stream: AsyncIterable<unknown>;
   try {
     const gen = effectiveGeneration(conn);
-    stream = await engine.chat.completions.create({
+    const createReq: Record<string, unknown> = {
       messages: toMessages(req.system, req.messages),
       stream: true,
       // Reasoning models (Qwen3 "thinking", DeepSeek-R1) spend their chain of
@@ -537,7 +538,9 @@ export async function* streamWebLlm(
       // web-llm pairs presence with frequency (an unpaired one is zeroed
       // upstream), so send both — a presence-only setting under-delivers.
       frequency_penalty: gen.frequencyPenalty,
-    });
+    };
+    applyThinkingToRequest(conn.provider, conn.model, resolveThinkingMode(conn.generation?.thinking), createReq);
+    stream = await engine.chat.completions.create(createReq);
   } catch (err) {
     throw translateLocalError(err);
   }
