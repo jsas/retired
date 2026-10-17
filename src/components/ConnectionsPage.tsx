@@ -384,7 +384,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                 </span>
               ) : isCached ? (
                 <CachedActions id={m.id} sizeGB={m.sizeGB} onDelete={() => void remove(m.id)} />
-              ) : m.localDevOnly && !localWeightsReady ? (
+              ) : 'localDevOnly' in m && m.localDevOnly && !localWeightsReady ? (
                 <span className="shrink-0 text-[10px] text-slate-400" title={t('models.weightsTitle')}>
                   {t('models.weightsMissing')}
                 </span>
@@ -618,7 +618,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
 
 /** The per-model affordance once it's downloaded: a "downloaded" marker plus a
  *  delete (two-step) to reclaim disk space. */
-function CachedActions({ id, sizeGB, onDelete }: { id: string; sizeGB?: number; onDelete: () => void }) {
+function CachedActions({ sizeGB, onDelete }: { id: string; sizeGB?: number; onDelete: () => void }) {
   const { t } = useTranslation('pages');
   const { t: tc } = useTranslation('common');
   const [confirming, setConfirming] = useState(false);

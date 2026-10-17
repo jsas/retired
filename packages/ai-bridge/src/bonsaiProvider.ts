@@ -30,7 +30,10 @@ interface CacheStorageLike {
 }
 
 function cacheStorage(): CacheStorageLike | undefined {
-  return (globalThis as { caches?: CacheStorageLike }).caches;
+  // `as unknown as`: the DOM lib's own `caches` (when present) returns
+  // readonly Request[] from keys(), which doesn't structurally overlap with
+  // the mutable {url}[] slice we consume here.
+  return (globalThis as unknown as { caches?: CacheStorageLike }).caches;
 }
 
 /** Session options for Bonsai ONNX. 1.7B matches the HF demo (graph opt ON —

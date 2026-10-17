@@ -123,24 +123,6 @@ const proposeMarketPeriodsArgs = z.object({
   rationale: z.string().optional(),
 });
 
-const proposeReverseMortgageArgs = z.object({
-  changes: reverseMortgageSchema.partial()
-    .describe('Reverse-mortgage fields to set. Use {"enabled":true,...} to turn it on (homeValue, interestRate, draws/top-up), {"enabled":false} to turn it off.'),
-  rationale: z.string().optional(),
-});
-
-const proposeRdspArgs = z.object({
-  changes: rdspSchema.partial()
-    .describe('RDSP fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, familyIncome, dtcEligible), {"enabled":false} to turn it off.'),
-  rationale: z.string().optional(),
-});
-
-const proposeFhsaArgs = z.object({
-  changes: fhsaSchema.partial()
-    .describe('FHSA fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, contributionBasis, openAge), {"enabled":false} to turn it off.'),
-  rationale: z.string().optional(),
-});
-
 const proposeRevertArgs = z.object({
   checkpoint: z.string().optional()
     .describe('Which checkpoint to revert to: its label, or omit for the most recent one. Labels come from the change cards the user approved ("Add pension").'),
