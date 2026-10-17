@@ -2215,13 +2215,26 @@ export function calculateHouseholdModel(
   const primaryCurrentAge = primaryPerson.currentAge;
   const spouseCurrentAge = sp?.currentAge ?? primaryCurrentAge;
 
-  const primaryCtx = sp ? {
+  // Couple-GIS contexts: a run's `spouseContext` describes the PARTNER, so
+  // the primary's run receives the spouse's fixed-income profile and the
+  // spouse's run receives the PRIMARY's. (Issue #174: the spouse's run used
+  // to receive the spouse's own profile, making the spouse's GIS blind to
+  // the primary's income — overstated for asymmetric couples.)
+  const ctxForPrimary = sp ? {
     cppStartAge: sp.cppStartAge,
     cppMonthlyAmount: sp.cppMonthlyAmount,
     oasStartAge: sp.oasStartAge,
     oasYearsInCanada: sp.oasYearsInCanada,
     currentAge: sp.currentAge,
     income: sp.income,
+  } : undefined;
+  const ctxForSpouse = sp ? {
+    cppStartAge: primaryPerson.cppStartAge,
+    cppMonthlyAmount: primaryPerson.cppMonthlyAmount,
+    oasStartAge: primaryPerson.oasStartAge,
+    oasYearsInCanada: primaryPerson.oasYearsInCanada,
+    currentAge: primaryPerson.currentAge,
+    income: primaryPerson.income,
   } : undefined;
 
   // --- Re-home mis-filed transfer events -----------------------------------
@@ -2278,7 +2291,7 @@ export function calculateHouseholdModel(
   const primary = calculatePerson(primaryRun, shared, config, {
     ...runOptions,
     personRef: 'primary',
-    ...(primaryCtx ? { spouseContext: primaryCtx } : {}),
+    ...(ctxForPrimary ? { spouseContext: ctxForPrimary } : {}),
   });
 
   if (sp) {
@@ -2316,7 +2329,7 @@ export function calculateHouseholdModel(
     let spouseResults = calculatePerson(spRun, shared, config, {
       ...runOptions,
       personRef: 'spouse',
-      ...(primaryCtx ? { spouseContext: { ...primaryCtx } } : {}),
+      ...(ctxForSpouse ? { spouseContext: { ...ctxForSpouse } } : {}),
       ...(translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge).length > 0
         ? { inboundDeposits: translate(finalPrimary.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge) }
         : {}),
@@ -2338,15 +2351,15 @@ export function calculateHouseholdModel(
         finalPrimary = calculatePerson(primaryRun, shared, config, {
           ...runOptions,
           personRef: 'primary',
-          ...(primaryCtx
-            ? { spouseContext: { ...primaryCtx, partnerDrawsAt: (a: number) => spouseResults.householdDraws?.[a] ?? 0 } }
+          ...(ctxForPrimary
+            ? { spouseContext: { ...ctxForPrimary, partnerDrawsAt: (a: number) => spouseResults.householdDraws?.[a] ?? 0 } }
             : {}),
           ...(sToP.length > 0 ? { inboundDeposits: sToP } : {}),
         });
         spouseResults = calculatePerson(spRun, shared, config, {
           ...runOptions,
           personRef: 'spouse',
-          spouseContext: { ...primaryCtx!, partnerDrawsAt: (a: number) => finalPrimary.householdDraws?.[a] ?? 0 },
+          spouseContext: { ...ctxForSpouse!, partnerDrawsAt: (a: number) => finalPrimary.householdDraws?.[a] ?? 0 },
           ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
         });
 

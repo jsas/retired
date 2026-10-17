@@ -1,4 +1,4 @@
-import { calculateHouseholdModel, householdOutcome, type RetirementInputs } from './retirementEngine';
+import { calculateHouseholdModel, combineHouseholdBreakdown, householdOutcome, type RetirementInputs } from './retirementEngine';
 import { toHousehold } from './householdTypes';
 import { buildVolatilitySequence } from './marketPeriods';
 
@@ -136,17 +136,25 @@ export function runMonteCarlo(request: MonteCarloRequest): MonteCarloResults {
       depletionAges.set(age, (depletionAges.get(age) ?? 0) + 1);
     }
 
-    let depletedSeen = false;
+    // Percentile bands read the COMBINED household balance — the same money
+    // the success verdict above is scored on. (Issue #175: they read the
+    // primary's silo, so a couple whose spouse's savings cover the household
+    // showed 100% success over a median band at $0 — the chart contradicted
+    // the verdict. Zeroing keys off the household depletion age, matching
+    // householdOutcome; a dip to zero that benefits cover is NOT depletion.)
+    const combined = combineHouseholdBreakdown(result, household);
     for (let age = inputs.currentAge; age <= inputs.maxAge; age++) {
-      const row = result.yearlyBreakdown.find(y => y.age === age);
-      const balance = row && !depletedSeen ? Math.max(0, row.endingBalance) : 0;
-      if (!row || row.endingBalance <= BALANCE_TOLERANCE) depletedSeen = true;
+      const row = combined.find(y => y.age === age);
+      const raw = row?.endingBalance ?? 0;
+      const pastDepletion = ho.depletionAge !== null && age >= ho.depletionAge;
+      const balance = pastDepletion || raw <= BALANCE_TOLERANCE ? 0 : raw;
       if (!balanceAtAge.has(age)) balanceAtAge.set(age, []);
       balanceAtAge.get(age)!.push(balance);
     }
 
-    const lastRow = result.yearlyBreakdown[result.yearlyBreakdown.length - 1];
-    finalBalances.push(depleted ? 0 : Math.max(0, lastRow?.endingBalance ?? 0));
+    // ho.endingBalance is the combined balance at max age (0 once depleted),
+    // so the median final balance agrees with the verdict too.
+    finalBalances.push(ho.endingBalance);
   }
 
   const percentileBands: PercentileBand[] = [];

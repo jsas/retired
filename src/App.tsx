@@ -711,8 +711,9 @@ function App() {
     if (view !== 'backtest') { setBacktestResult(null); return; }
     const realConfig: AppConfig = JSON.parse(JSON.stringify(config));
     realConfig.engine.inflationRate = 0;
-    // Backtest the RESOLVED plan so a linked spouse's balances/benefits are
-    // the ones being tested against history.
+    // Backtest the RESOLVED plan (a linked plan's data is inlined). Note:
+    // runBacktest strips the spouse — each window tests the PRIMARY's solo
+    // plan against history (documented limitation in historicalReturns).
     setBacktestResult(runBacktest(resolvedInputs, realConfig, calculateHousehold));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resolvedInputs, config]);

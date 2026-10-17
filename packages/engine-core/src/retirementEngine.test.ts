@@ -554,13 +554,23 @@ describe('household re-run convergence (E-02)', () => {
     const shared = legacyToShared(inputs);
     const primaryPerson = legacyToPerson(inputs);
     const sp = legacySpouseToPerson(inputs.spouse!);
-    const primaryCtx = {
+    // Each run's spouseContext describes the PARTNER (issue #174): P gets the
+    // spouse's profile, S gets the primary's.
+    const ctxForPrimary = {
       cppStartAge: sp.cppStartAge,
       cppMonthlyAmount: sp.cppMonthlyAmount,
       oasStartAge: sp.oasStartAge,
       oasYearsInCanada: sp.oasYearsInCanada,
       currentAge: sp.currentAge,
       income: sp.income,
+    };
+    const ctxForSpouse = {
+      cppStartAge: primaryPerson.cppStartAge,
+      cppMonthlyAmount: primaryPerson.cppMonthlyAmount,
+      oasStartAge: primaryPerson.oasStartAge,
+      oasYearsInCanada: primaryPerson.oasYearsInCanada,
+      currentAge: primaryPerson.currentAge,
+      income: primaryPerson.income,
     };
     const rehome = (
       ownerEvents: CashEvent[] | undefined,
@@ -593,10 +603,10 @@ describe('household re-run convergence (E-02)', () => {
     ) => deposits.map(d => ({ ...d, age: d.age - (fromCurrentAge - toCurrentAge) }));
 
     // Pass 0: primary runs cold; spouse runs on primary's first crossDeposits.
-    let P = calculatePerson(primaryRun, shared, config, { personRef: 'primary', spouseContext: { ...primaryCtx } });
+    let P = calculatePerson(primaryRun, shared, config, { personRef: 'primary', spouseContext: { ...ctxForPrimary } });
     let S = calculatePerson(spRun, shared, config, {
       personRef: 'spouse',
-      spouseContext: { ...primaryCtx },
+      spouseContext: { ...ctxForSpouse },
       ...(translate(P.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge).length > 0
         ? { inboundDeposits: translate(P.crossDeposits ?? [], primaryPerson.currentAge, sp.currentAge) }
         : {}),
@@ -615,12 +625,12 @@ describe('household re-run convergence (E-02)', () => {
       const sToP = translate(S.crossDeposits ?? [], sp.currentAge, primaryPerson.currentAge);
       P = calculatePerson(primaryRun, shared, config, {
         personRef: 'primary',
-        spouseContext: { ...primaryCtx, partnerDrawsAt: (a: number) => S.householdDraws?.[a] ?? 0 },
+        spouseContext: { ...ctxForPrimary, partnerDrawsAt: (a: number) => S.householdDraws?.[a] ?? 0 },
         ...(sToP.length > 0 ? { inboundDeposits: sToP } : {}),
       });
       S = calculatePerson(spRun, shared, config, {
         personRef: 'spouse',
-        spouseContext: { ...primaryCtx, partnerDrawsAt: (a: number) => P.householdDraws?.[a] ?? 0 },
+        spouseContext: { ...ctxForSpouse, partnerDrawsAt: (a: number) => P.householdDraws?.[a] ?? 0 },
         ...(pToS.length > 0 ? { inboundDeposits: pToS } : {}),
       });
       const key = pairKey(P, S);
@@ -1149,6 +1159,57 @@ describe('couple GIS', () => {
     const expected = config.oas.gisMaxAnnualCouple - 9600 * 0.5;
     expect(closeTo(yearAt(r.yearlyBreakdown, 65).gisIncome, expected, 1)).toBe(true);
     expect(closeTo(yearAt(r.spouse!.yearlyBreakdown, 65).gisIncome, expected, 1)).toBe(true);
+  });
+
+  it("asymmetric couple: the spouse's GIS is assessed on the PRIMARY's income (issue #174)", () => {
+    // Primary has CPP, the spouse has none. CRA assesses BOTH spouses' GIS on
+    // the same combined non-OAS income, so both must land on the same couple
+    // entitlement — the spouse's run must NOT be blind to the primary's CPP.
+    // (Bug: the spouse's run received the spouse's own profile as its partner
+    // context, so its GIS came out at the full couple max.)
+    const inputs = baseInputs({
+      tfsaBalance: 0, cppStartAge: 65, cppMonthlyAmount: 600, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: 65, oasYearsInCanada: 40,
+        desiredSpending: 20000,
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    // Combined non-OAS = primary CPP 7200 + spouse 0 → couple GIS each.
+    const expected = config.oas.gisMaxAnnualCouple - 7200 * 0.5;
+    expect(closeTo(yearAt(r.yearlyBreakdown, 66).gisIncome, expected, 1)).toBe(true);
+    expect(closeTo(yearAt(r.spouse!.yearlyBreakdown, 66).gisIncome, expected, 1)).toBe(true);
+    // Regression guard: the spouse's GIS must be strictly below the couple max
+    // (the buggy value) — the primary's CPP has to show up on the spouse's row.
+    expect(yearAt(r.spouse!.yearlyBreakdown, 66).gisIncome).toBeLessThan(config.oas.gisMaxAnnualCouple);
+  });
+
+  it('partner without OAS → the OAS recipient is assessed at the single rate on combined income', () => {
+    // Couple rate applies only when BOTH spouses receive OAS; with a non-OAS
+    // partner the recipient still gets the single rate — but on COMBINED
+    // income (issue #174: the spouse's run used to see the wrong partner, so
+    // a primary-only-OAS couple mis-flagged hasOas on both sides).
+    const inputs = baseInputs({
+      tfsaBalance: 0, cppStartAge: 65, cppMonthlyAmount: 600, oasStartAge: 65, oasYearsInCanada: 40,
+      desiredSpending: 20000,
+      spouse: {
+        enabled: true, currentAge: 65, retirementAge: 65,
+        rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+        rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+        cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+        desiredSpending: 20000,
+      },
+    });
+    const r = calculateHousehold(inputs, config);
+    // Primary: single rate on combined non-OAS (own CPP 7200, spouse 0).
+    const expected = config.oas.gisMaxAnnualSingle - 7200 * 0.5;
+    expect(closeTo(yearAt(r.yearlyBreakdown, 66).gisIncome, expected, 1)).toBe(true);
+    // Spouse has no OAS → no GIS at all.
+    expect(r.spouse!.yearlyBreakdown.every(y => y.gisIncome === 0)).toBe(true);
   });
 
   it('couple GIS is below the single-rule amount for the same incomes', () => {
