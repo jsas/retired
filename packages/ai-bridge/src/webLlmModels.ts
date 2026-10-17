@@ -10,15 +10,18 @@
 // LiteRT/MediaPipe collections (litert-community Gemma etc.) are a DIFFERENT
 // runtime and are intentionally absent here.
 //
-// The list is curated toward INSTRUCT/REASONING models that can follow the
-// tool protocol and stay grounded on a retirement projection, ordered
-// best-first for a typical laptop GPU. VRAM figures come straight from
-// web-llm's own metadata. The full prebuilt catalog (160+ general-chat and
-// vision models) stays available via the free-text model field; these are
-// just the good defaults.
+// Curated from a 20-q protocol bake-off (production TOOL_CALL: prompt).
+// Five speakers that actually emit the protocol, plus Bonsai on a different
+// runtime. Qwen3.5 4B stays the default (best fit of tools + VRAM). Auto
+// loads every pack at 32k and backs off on OOM — MLC's 4096 is only the
+// KV-cache default, not a compiled ceiling (a manual 32k window works).
+// Dumped: SmolLM, Gemma 2B, both Ministrals, Hermes 2 Pro, both R1 distills,
+// WizardMath, Qwen3.5 9B (not baked). Anything else stays on the free-text field.
 
 export interface WebLlmModelChoice {
-  /** The prebuilt model_id from web-llm's prebuiltAppConfig. */
+  /** The prebuilt model_id from web-llm's prebuiltAppConfig. For a `custom`
+   *  entry this is just the registry key — the engine looks it up in the custom
+   *  appConfig the provider builds, not in web-llm's prebuilt list. */
   id: string;
   /** Short display label. */
   label: string;
@@ -39,12 +42,29 @@ export interface WebLlmModelChoice {
   maxWindow: number;
   /** One-line "why this one" for the picker. */
   blurb: string;
+  /** Present for NON-prebuilt models — a fine-tune served from our own URL
+   *  rather than MLC's HuggingFace mirror. `weightsUrl` is the directory holding
+   *  mlc-chat-config.json + params_shard_*.bin (relative to the app origin);
+   *  `modelLib` is the MLC wasm to run it on (usually the matching prebuilt
+   *  lib for the base architecture + quantization). When set, the provider
+   *  builds a custom appConfig instead of relying on prebuiltAppConfig. */
+  custom?: {
+    weightsUrl: string;
+    /** wasm filename, e.g. 'Qwen3-0.6B-q4f16_1_cs1k-webgpu.wasm' — resolved
+     *  against web-llm's modelLibURLPrefix + modelVersion at load time. */
+    modelLib: string;
+  };
+  /** True for entries whose weights only exist on a DEVELOPMENT machine
+   *  (served from public/models/ by the dev server, never deployed). Excluded
+   *  from the machine-guide recommendation; the Connections page shows a
+   *  "weights not on this server" hint instead of a Download button when the
+   *  folder isn't being served. */
+  localDevOnly?: boolean;
 }
 
 export const WEBLLM_MODELS: WebLlmModelChoice[] = [
-  // NOTE: ordered best-first for a typical laptop GPU. Small ≠ good here —
-  // the weakest models can't follow the tool protocol, so the list starts at
-  // models that actually work and only goes down to genuinely usable ones.
+  // Default first so the machine guide / picker land here. Then the small
+  // 3B, then the 7B/8B upgrades. Tiny 1-bit lives in BONSAI_MODELS.
   {
     id: 'Qwen3.5-4B-q4f16_1-MLC',
     label: 'Qwen3.5 4B',
@@ -52,45 +72,34 @@ export const WEBLLM_MODELS: WebLlmModelChoice[] = [
     sizeGB: 2.8,
     toolCapable: true,
     maxWindow: 32768,
-    blurb: 'Newest all-rounder; strongest instruction-following in this size. Recommended for most.',
+    blurb: 'Default. Tools + a full plan in context, on most laptop GPUs.',
   },
   {
-    id: 'Qwen3-4B-q4f16_1-MLC',
-    label: 'Qwen3 4B (thinking)',
-    vramMB: 3432,
-    sizeGB: 2.5,
+    id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+    label: 'Llama 3.2 3B',
+    vramMB: 2264,
+    sizeGB: 1.7,
     toolCapable: true,
     maxWindow: 32768,
-    blurb: 'Reasoning mode for multi-step math; a touch smaller download than 3.5.',
+    blurb: 'Smaller download. Fine for questions on most laptops.',
   },
   {
-    id: 'Phi-4-mini-instruct-q4f16_1-MLC',
-    label: 'Phi-4 Mini 3.8B',
-    vramMB: 3438,
-    sizeGB: 2.5,
+    id: 'Mistral-7B-Instruct-v0.3-q4f16_1-MLC',
+    label: 'Mistral 7B Instruct',
+    vramMB: 4573,
+    sizeGB: 4.0,
     toolCapable: true,
-    maxWindow: 16384,
-    // Loop-prone: see MODEL_SAMPLER_DEFAULTS in connections for its stronger
-    // anti-repeat profile (diverse word-salad is its failure mode).
-    blurb: 'Microsoft\'s small instruct model; reliable at following formats.',
+    maxWindow: 32768,
+    blurb: 'Larger instruct model. Needs ~4.5 GB VRAM.',
   },
   {
     id: 'Qwen3-8B-q4f16_1-MLC',
-    label: 'Qwen3 8B (thinking)',
+    label: 'Qwen3 8B',
     vramMB: 5696,
     sizeGB: 5.0,
     toolCapable: true,
     maxWindow: 32768,
-    blurb: 'Biggest thinking Qwen most GPUs can hold; needs ~6 GB free VRAM.',
-  },
-  {
-    id: 'Qwen3.5-9B-q4f16_1-MLC',
-    label: 'Qwen3.5 9B',
-    vramMB: 6433,
-    sizeGB: 5.7,
-    toolCapable: true,
-    maxWindow: 32768,
-    blurb: 'Strongest model in the list, for GPUs with 8 GB+. Largest download.',
+    blurb: 'Larger Qwen with thinking. Needs ~6 GB free VRAM.',
   },
 ];
 
@@ -111,4 +120,18 @@ export function fmtVram(mb: number): string {
 /** Human-readable download size ("2.5 GB"). */
 export function fmtSize(gb: number): string {
   return `${gb.toFixed(1)} GB`;
+}
+
+/** Approximate disk used by cached catalog rows. Cache API bytes aren't
+ *  cheap to sum (every response blob), so we add the same sizeGB the picker
+ *  already shows. Rows without a size (unlisted extras) contribute 0. */
+export function sumCachedSizeGB(
+  rows: Array<{ id: string; sizeGB?: number }>,
+  cached: Record<string, boolean>,
+): number {
+  let n = 0;
+  for (const row of rows) {
+    if (cached[row.id] && row.sizeGB) n += row.sizeGB;
+  }
+  return n;
 }

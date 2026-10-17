@@ -55,6 +55,10 @@ const turnSchema = z.object({
    *  waiting for the user to Accept/Decline it (survives a page reload, where
    *  'streaming' would wrongly suggest it's still working). */
   state: z.enum(['streaming', 'done', 'aborted', 'truncated', 'error', 'needs-decision']).optional(),
+  /** Model id the user picked for this reply (e.g. openrouter/free). */
+  askedModel: z.string().optional(),
+  /** Model id the provider actually served (OpenRouter's free router rewrites). */
+  servedModel: z.string().optional(),
 });
 
 export type StoredTurn = z.infer<typeof turnSchema>;
@@ -116,6 +120,9 @@ function memoryKV(): KV {
     setItem: (k, v) => { m.set(k, String(v)); },
   };
 }
+
+/** Exposed for the live store's test seam. */
+export { memoryKV };
 
 function defaultKV(): KV {
   try {
@@ -191,4 +198,62 @@ export function newThread(scenarioName: string, now: number): ChatThread {
     updatedAt: now,
     turns: [],
   };
+}
+
+// ---------------------------------------------------------------------------
+// The LIVE store (module-level, so runs outlive the components that started
+// them)
+// ---------------------------------------------------------------------------
+
+// A background run keeps appending turns after the Conversation that started
+// it has unmounted (page navigation, thread switch). If the transcript lived
+// in React state, those writes would land nowhere — so the store lives HERE,
+// at module level, and components subscribe to it. Persistence is unchanged:
+// every mutation still saves to localStorage.
+
+let live: ChatStore = loadChats();
+// The KV the live store persists through, captured once: in the browser this
+// is localStorage (a singleton); in tests it's whatever KV the reset seam was
+// handed, so assertions can read the same store the mutations wrote.
+let liveKV: KV = defaultKV();
+const liveListeners = new Set<() => void>();
+
+function liveEmit(): void {
+  for (const l of liveListeners) l();
+}
+
+/** The current store snapshot. Components read this through the hook below;
+ *  background runs mutate it directly through the patch functions. */
+export function getChats(): ChatStore {
+  return live;
+}
+
+/** Subscribe to live-store changes (for useSyncExternalStore). */
+export function subscribeChats(fn: () => void): () => void {
+  liveListeners.add(fn);
+  return () => { liveListeners.delete(fn); };
+}
+
+/** Apply a mutation to one thread (or the store shape) and persist. The
+ *  mutator returns null to mean "no change" (e.g. the thread vanished). */
+export function updateChats(mutate: (prev: ChatStore) => ChatStore | null): void {
+  const next = mutate(live);
+  if (!next || next === live) return;
+  live = next;
+  saveChats(live, liveKV);
+  liveEmit();
+}
+
+/** Replace the whole live store (test seam / future restore flows). */
+export function setChats(store: ChatStore): void {
+  live = store;
+  saveChats(live, liveKV);
+  liveEmit();
+}
+
+/** Test seam: reset to freshly-loaded state, persisting through `kv`. */
+export function resetChatsForTests(kv: KV = memoryKV()): void {
+  liveKV = kv;
+  live = loadChats(kv);
+  liveEmit();
 }

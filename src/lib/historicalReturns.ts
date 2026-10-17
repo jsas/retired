@@ -67,7 +67,7 @@ interface BacktestInputsLike {
 
 interface BacktestResultsLike {
   depletionAge: number | null;
-  yearlyBreakdown: { age: number; endingBalance: number }[];
+  yearlyBreakdown: { age: number; endingBalance: number; shortfall?: number }[];
 }
 
 type EngineRun = (
@@ -121,11 +121,21 @@ export function runBacktest(
     };
     const result = engineRun(runInputs as never, realConfig as never, { returnSequence: seq });
     const last = result.yearlyBreakdown[result.yearlyBreakdown.length - 1];
+    // Household-first verdict (issue #176): a window FAILS when the plan has an
+    // unfunded gap — balance exhausted AND shortfall > 0 — the same criterion
+    // householdOutcome uses for the dashboard. The raw `depletionAge` fires
+    // whenever the PORTFOLIO hits zero even if CPP/OAS/GIS cover spending
+    // afterward, so a benefits-cover-spending plan read 0% backtest success
+    // while the dashboard said ON_TRACK. (The spouse is stripped above, so the
+    // primary's own rows ARE the combined breakdown here.)
+    const failedRow = result.yearlyBreakdown.find(
+      y => y.endingBalance <= 0 && (y.shortfall ?? 0) > 0,
+    );
     windows.push({
       startYear: startYear + w,
       finalBalance: last?.endingBalance ?? 0,
-      depleted: result.depletionAge != null,
-      depletionAge: result.depletionAge,
+      depleted: failedRow !== undefined,
+      depletionAge: failedRow?.age ?? null,
     });
   }
 

@@ -1,10 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { buildMachineGuide } from './machineGuide';
-import { WEBLLM_MODELS } from './webLlmModels';
-
-// The list is ordered best-first (not by size), so derive size facts here.
-const byVram = [...WEBLLM_MODELS].sort((a, b) => a.vramMB - b.vramMB);
-const smallestToolCapable = byVram.find(m => m.toolCapable)!;
 
 // Swap navigator.userAgent per test, then restore (the guide reads it via
 // browserDetect). jsdom exposes it as a getter, so redefine the property.
@@ -35,13 +30,13 @@ describe('buildMachineGuide', () => {
     expect(g.detail).toMatch(/WebGPU/);
   });
 
-  it('recommends the smallest TOOL-CAPABLE model', () => {
-    // Since #118 pruned the weak models, every catalog entry is tool-capable —
-    // the recommendation is the lightest download that can still drive the
-    // plan (never a questions-only assistant).
+  it('recommends Qwen3.5 4B, not the smallest tool-capable pack', () => {
+    // Llama 3.2 3B speaks TOOL_CALL: but the 4B is still the default —
+    // tools + a full plan on typical laptop VRAM.
     const g = buildMachineGuide(true);
-    expect(g.recommended).toBe(smallestToolCapable);
+    expect(g.recommended.id).toBe('Qwen3.5-4B-q4f16_1-MLC');
     expect(g.recommended.toolCapable).toBe(true);
+    expect(g.recommended.id).not.toContain('1.7B');
     expect(g.headline).toContain(g.recommended.label);
   });
 

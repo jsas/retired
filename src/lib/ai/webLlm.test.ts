@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { prebuiltAppConfig } from '@mlc-ai/web-llm';
-import { WEBLLM_MODELS, fmtVram, webGpuAvailable } from './webLlmModels';
+import { WEBLLM_MODELS, visibleWebLlmModels, fmtVram, sumCachedSizeGB, webGpuAvailable } from './webLlmModels';
 import { connectionReady, defaultModelFor, type AiConnection } from '../aiSettings';
 import { buildPlanDigest } from '../agentQA';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { baseInputs, testConfig } from '@retired/engine-core/test/helpers';
 import type { StreamEvent } from './providers';
+import { buildMachineGuide } from './machineGuide';
+import { customAppConfig } from '@retired/ai-bridge/webLlmProvider';
 
 // Fake the @mlc-ai/web-llm module: the real engine needs WebGPU and downloads
 // multi-GB weights, so tests drive a scripted engine instead. The mock engine
@@ -18,7 +20,7 @@ let crashWith: string | null = null; // the error message to throw (defaults to 
 const cachedModels = new Set<string>(); // models the fake cache reports as present
 let deletedModels: string[] = [];
 let lastRequest: Record<string, unknown> | null = null; // the completion request, captured
-let loadAttempts: Array<{ contextWindow: number | undefined }> = []; // CreateMLCEngine calls
+let loadAttempts: Array<{ contextWindow: number | undefined; slidingWindow: number | undefined }> = []; // CreateMLCEngine calls
 let oomFirstLoads = 0; // how many initial loads should throw OOM before succeeding
 
 vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
@@ -27,8 +29,8 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@mlc-ai/web-llm')>();
   return {
     ...actual,
-    CreateMLCEngine: async (_modelId: string, _init?: unknown, chatOpts?: { context_window_size?: number }) => {
-      loadAttempts.push({ contextWindow: chatOpts?.context_window_size });
+    CreateMLCEngine: async (_modelId: string, _init?: unknown, chatOpts?: { context_window_size?: number; sliding_window_size?: number }) => {
+      loadAttempts.push({ contextWindow: chatOpts?.context_window_size, slidingWindow: chatOpts?.sliding_window_size });
       if (oomFirstLoads > 0) {
         oomFirstLoads--;
         throw new Error('WebGPU device was lost while loading the model (OOM)');
@@ -59,25 +61,83 @@ vi.mock('@mlc-ai/web-llm', async (importOriginal) => {
 });
 
 describe('curated web-llm model list', () => {
-  it('ships only valid MLC prebuilt ids with VRAM labels', () => {
-    expect(WEBLLM_MODELS.length).toBeGreaterThanOrEqual(5);
+  it('ships only valid MLC prebuilt ids (or marked custom) with VRAM labels', () => {
+    expect(WEBLLM_MODELS.length).toBe(4);
     for (const m of WEBLLM_MODELS) {
-      expect(m.id).toMatch(/-MLC$/);
+      // Custom (self-served fine-tune) entries carry their own weights URL and
+      // are exempt from the prebuilt-id shape; everything else is a prebuild.
+      if (m.custom) {
+        expect(m.localDevOnly, `${m.id}: a custom (self-served) model must be localDevOnly — its weights aren't deployed`).toBe(true);
+        expect(m.custom.weightsUrl).toMatch(/^models\//);
+        expect(m.custom.modelLib).toMatch(/\.wasm$/);
+      } else {
+        expect(m.id).toMatch(/-MLC$/);
+      }
       expect(m.vramMB).toBeGreaterThan(0);
       expect(m.label.length).toBeGreaterThan(3);
       expect(m.blurb.length).toBeGreaterThan(10);
     }
   });
 
-  it('contains only ids that exist in web-llm\'s prebuilt catalog (else they won\'t load)', () => {
+  it('ships four bake-off speakers, 4B first as the default', () => {
+    expect(WEBLLM_MODELS.map(m => m.id)).toEqual([
+      'Qwen3.5-4B-q4f16_1-MLC',
+      'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+      'Mistral-7B-Instruct-v0.3-q4f16_1-MLC',
+      'Qwen3-8B-q4f16_1-MLC',
+    ]);
+    expect(WEBLLM_MODELS.every(m => m.toolCapable)).toBe(true);
+    expect(WEBLLM_MODELS.every(m => m.maxWindow >= 32768)).toBe(true);
+  });
+
+  it('never lists Phi-4, sub-1.7B, or the dumped bake-off families', () => {
+    expect(WEBLLM_MODELS.some(m => m.id.includes('Phi-4'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('0.6B') || m.id.includes('0.6b'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('1.5B'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('SmolLM'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('Ministral'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('Hermes-3'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('Hermes-2-Pro'))).toBe(false);
+    expect(WEBLLM_MODELS.some(m => m.id.includes('DeepSeek-R1'))).toBe(false);
+    const prod = visibleWebLlmModels(false);
+    expect(prod.some(m => m.localDevOnly)).toBe(false);
+  });
+
+  it('contains only ids that exist in web-llm\'s prebuilt catalog — unless they carry their own appConfig', () => {
     // A stale or hand-typed id fails at download time with a confusing error —
-    // verify every curated id is actually a known prebuild.
+    // verify every curated id is a known prebuild or a custom entry the
+    // provider resolves through its own appConfig.
     const prebuilt = new Set(
       (prebuiltAppConfig.model_list as Array<{ model_id: string }>).map(m => m.model_id),
     );
     for (const m of WEBLLM_MODELS) {
+      if (m.custom) continue;
       expect(prebuilt.has(m.id), `model ${m.id} is not in web-llm's prebuilt catalog`).toBe(true);
     }
+  });
+
+  it('never recommends a dev-only model (its weights are not deployed)', () => {
+    const g = buildMachineGuide(true);
+    expect(g.recommended.localDevOnly ?? false).toBe(false);
+  });
+
+  it("builds a custom appConfig whose model URL survives web-llm's cleanModelUrl", () => {
+    // Regression for the "Unexpected token '<'…" download failure: web-llm
+    // appends HuggingFace's "resolve/main/" to any model URL that lacks a
+    // /resolve/ segment. The dev server strips that suffix back for
+    // /models/ paths (src/lib/localModels.ts), so the record must point at
+    // the PLAIN folder — no /resolve/ of its own — and carry the wasm lib.
+    const cfg = customAppConfig(
+      'retired-qwen3-0.6b-ft-q4f16_1',
+      { weightsUrl: 'models/qwen3-0.6b-ft-q4f16_1-MLC', modelLib: 'Qwen3-0.6B-q4f16_1_cs1k-webgpu.wasm' },
+      { modelLibURLPrefix: 'https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/', modelVersion: 'v0_2_84/base' },
+    );
+    expect(cfg.model_list).toHaveLength(1);
+    const rec = cfg.model_list[0];
+    expect(rec.model_id).toBe('retired-qwen3-0.6b-ft-q4f16_1');
+    expect(rec.model).toMatch(/\/models\/qwen3-0\.6b-ft-q4f16_1-MLC\/?$/);
+    expect(rec.model).not.toContain('/resolve/');
+    expect(rec.model_lib).toContain('Qwen3-0.6B-q4f16_1_cs1k-webgpu.wasm');
   });
 
   it('formats VRAM for the picker', () => {
@@ -86,17 +146,31 @@ describe('curated web-llm model list', () => {
     expect(fmtVram(512)).toBe('512 MB VRAM');
   });
 
-  it('curates only tool-capable models — every listed model can drive the plan', () => {
-    // The tool-capability contract after #118: the probe sweep showed the two
-    // weak/low-value models (Gemma 2 2B, DeepSeek R1 7B) weren't earning their
-    // download, so the catalog is now all-tool-capable. A user who still wants
-    // a tiny Q&A-only model reaches it via the free-text field (assumed
-    // capable); the tools-off tier in AgentPage stays for that path.
-    const weak = WEBLLM_MODELS.filter(m => !m.toolCapable);
-    expect(weak).toEqual([]);
-    // And the smallest download is still modest, so "start small" is real.
-    const minSize = Math.min(...WEBLLM_MODELS.map(m => m.sizeGB));
-    expect(minSize).toBeLessThanOrEqual(2.5);
+  it('keeps every listed pack tool-capable with a 32k Auto ceiling', () => {
+    expect(WEBLLM_MODELS.filter(m => m.toolCapable && !m.localDevOnly).length).toBe(4);
+    for (const m of WEBLLM_MODELS) {
+      expect(m.toolCapable, `${m.id} must drive plan tools`).toBe(true);
+      expect(m.maxWindow, `${m.id} Auto must try 32k`).toBeGreaterThanOrEqual(32768);
+    }
+  });
+
+  it('does not list the dumped bake-off families', () => {
+    const ids = WEBLLM_MODELS.map(m => m.id).join(' ');
+    for (const needle of ['Llama-3.1-8B', 'DeepSeek-R1', 'SmolLM2', 'WizardMath', 'Ministral-3', 'Hermes-3', 'Hermes-2-Pro', 'Qwen3-4B', 'Qwen2.5-7B', 'Qwen3.5-9B', 'gemma-2-9b']) {
+      expect(ids, `still listing ${needle}`).not.toContain(needle);
+    }
+    expect(ids).not.toContain('Phi-4');
+  });
+
+  it('sums cached catalog sizes for the disk-used line', () => {
+    const rows = [
+      { id: 'a', sizeGB: 1.2 },
+      { id: 'b', sizeGB: 2.8 },
+      { id: 'c' },
+    ];
+    expect(sumCachedSizeGB(rows, { a: true, b: true })).toBeCloseTo(4.0);
+    expect(sumCachedSizeGB(rows, { a: false, b: true, c: true })).toBeCloseTo(2.8);
+    expect(sumCachedSizeGB(rows, {})).toBe(0);
   });
 
   it('webGpuAvailable reports a boolean without throwing', () => {
@@ -288,6 +362,7 @@ describe('streamWebLlm', () => {
       system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
     })) void _;
     expect(loadAttempts[0]?.contextWindow).toBe(32768);
+    expect(loadAttempts[0]?.slidingWindow).toBe(-1);
     expect(lastRequest?.context_window_size).toBe(32768);
   });
 
@@ -317,7 +392,20 @@ describe('streamWebLlm', () => {
       system: 's', messages: [{ role: 'user', content: 'hi' }], tools: [],
     })) void _;
     expect(loadAttempts[0]?.contextWindow).toBe(8192);
+    expect(loadAttempts[0]?.slidingWindow).toBe(-1);
     expect(lastRequest?.context_window_size).toBe(8192);
+  });
+
+  it('pins sliding_window_size to -1 so Gemma-style MLC configs can load', async () => {
+    // Gemma packs (and a few others) ship context_window_size AND
+    // sliding_window_size: 512; web-llm throws unless one of them is -1.
+    // Unlisted ids still load via the free-text field, so the pin must
+    // apply even when the id is not in WEBLLM_MODELS (auto window = 32768).
+    const { loadWebLlmEngine, unloadWebLlmEngine } = await import('./webLlmProvider');
+    await unloadWebLlmEngine();
+    loadAttempts = [];
+    await loadWebLlmEngine('gemma-2-2b-it-q4f16_1-MLC');
+    expect(loadAttempts[0]).toEqual({ contextWindow: 32768, slidingWindow: -1 });
   });
 
   it('splits <think>…</think> reasoning out of the visible stream', async () => {
@@ -536,6 +624,29 @@ describe('web-llm model cache management', () => {
     })) { /* drain to load */ }
     await resetWebLlmChat();
     expect(resetChatCalls).toBe(1);
+  });
+
+  it('omits an empty system role from the engine request', async () => {
+    // Regression: a blank {role:system} still occupies the chat template and
+    // small models treat it as leftover assistant protocol. Flags-all-off
+    // must send only the user turn.
+    const { streamWebLlm, unloadWebLlmEngine, toMessages } = await import('./webLlmProvider');
+    expect(toMessages('', [{ role: 'user', content: 'hi' }])).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(toMessages('   ', [{ role: 'user', content: 'hi' }])).toEqual([{ role: 'user', content: 'hi' }]);
+    expect(toMessages('you are a planner', [{ role: 'user', content: 'hi' }])[0]).toEqual({
+      role: 'system', content: 'you are a planner',
+    });
+    await unloadWebLlmEngine();
+    scriptedChunks = [{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }];
+    lastRequest = null;
+    for await (const _ of streamWebLlm(conn, {
+      system: '', messages: [{ role: 'user', content: 'say yes' }], tools: [],
+    })) { /* drain */ }
+    // Cast: the assignment above narrows lastRequest to null; the mocked
+    // engine reassigns it during the drain loop, which TS can't see.
+    const msgs = (lastRequest as Record<string, unknown> | null)?.messages as Array<{ role: string }>;
+    expect(msgs.some(m => m.role === 'system')).toBe(false);
+    expect(msgs[0]).toEqual({ role: 'user', content: 'say yes' });
   });
 
   it('unloads the live engine before deleting its model', async () => {

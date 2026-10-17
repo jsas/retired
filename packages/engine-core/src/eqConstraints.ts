@@ -228,17 +228,34 @@ export interface AxisRange { min: number; max: number }
  * of whatever is shown. Values are decoupled from ranges, so ranges are free
  * to adapt.
  */
-export function renderRange(axis: EqAxis, value: number, inputs?: RetirementInputs): AxisRange {
+export function renderRange(
+  axis: EqAxis,
+  value: number,
+  inputs?: RetirementInputs,
+  /** A user-preferred span (Settings lever ranges) — narrows the rendered
+   *  range on the axes it names. Axes the override leaves out (or a value
+   *  that won't fit inside it) fall back to the axis spec, so a partial or
+   *  stale pref can never break a control. */
+  override?: Partial<Record<EqAxis, { min: number; max: number }>>,
+): AxisRange {
   const s = AXES[axis];
   let min = s.min;
   if (inputs) {
     if (axis === 'retirementAge') min = Math.max(s.min, Math.round(inputs.currentAge));
     else if (axis === 'annualSavings') min = Math.max(s.min, inputs.rrspContribution + inputs.tfsaContribution);
   }
-  if (value <= s.max) return { min, max: Math.max(s.max, min) };
-  const base = s.max - s.min;
-  const multiples = Math.ceil((value - s.max) / base);
-  return { min, max: s.max + multiples * base };
+  const o = override?.[axis];
+  let max = s.max;
+  if (o) {
+    // The override can tighten either edge but never below the plan floor and
+    // never exclude the current value (the value grows the range like before).
+    min = Math.max(min, o.min);
+    max = Math.min(s.max, Math.max(o.max, min));
+  }
+  if (value <= max) return { min, max: Math.max(max, min) };
+  const base = max - min;
+  const multiples = Math.ceil((value - max) / base);
+  return { min, max: max + multiples * base };
 }
 
 /**
@@ -314,10 +331,16 @@ export interface ReconciledControl {
  * After reconcile, `range.min ≤ crop.min ≤ value ≤ crop.max ≤ range.max` always
  * holds, so the knob renders inside its crop and can drag to both edges.
  */
-export function reconcileControl(axis: EqAxis, inputs: RetirementInputs, band: Band): ReconciledControl {
+export function reconcileControl(
+  axis: EqAxis,
+  inputs: RetirementInputs,
+  band: Band,
+  /** The user-preferred span (see renderRange). */
+  override?: Partial<Record<EqAxis, { min: number; max: number }>>,
+): ReconciledControl {
   const round = (v: number) => (INT_AXES.has(axis) ? Math.round(v) : v);
   const raw = axisValue(inputs, axis);
-  const range = renderRange(axis, raw, inputs);
+  const range = renderRange(axis, raw, inputs, override);
   const clampR = (v: number) => Math.min(range.max, Math.max(range.min, round(v)));
   // (2) value into the range.
   const value = clampR(raw);

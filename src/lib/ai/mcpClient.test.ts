@@ -66,7 +66,7 @@ describe('agent loop over the in-page MCP server', () => {
   it('surfaces a mutation proposal from structuredContent and pauses for the decision', async () => {
     const proposals: MutationProposal[] = [];
     const chat = scripted([
-      [{ type: 'tool_use', call: { id: 'c2', name: 'set_scenario_value', args: { field: 'cppStartAge', value: 65 } } },
+      [{ type: 'tool_use', call: { id: 'c2', name: 'propose_plan', args: { changes: { cppStartAge: 65 } } } },
        { type: 'done', stopReason: 'tool_use' }],
       [{ type: 'text', text: 'Done.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);
@@ -89,7 +89,7 @@ describe('agent loop over the in-page MCP server', () => {
 
   it('maps a tool-level error (isError) into an error tool_result', async () => {
     const chat = scripted([
-      [{ type: 'tool_use', call: { id: 'c3', name: 'set_scenario_value', args: { field: 'events', value: [] } } },
+      [{ type: 'tool_use', call: { id: 'c3', name: 'propose_plan', args: { changes: { events: [] } } } },
        { type: 'done', stopReason: 'tool_use' }],
       [{ type: 'text', text: 'Understood.' }, { type: 'done', stopReason: 'end_turn' }],
     ]);
@@ -101,7 +101,7 @@ describe('agent loop over the in-page MCP server', () => {
 
     const result = events.find(e => e.type === 'tool_result') as Extract<AgentEvent, { type: 'tool_result' }>;
     expect(result.isError).toBe(true);
-    expect(result.content).toContain('not changeable');
+    expect(result.content).toContain('not a changeable');
     await closeSharedMcpSession();
   });
 });

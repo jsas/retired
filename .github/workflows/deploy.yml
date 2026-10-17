@@ -25,8 +25,22 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The vite config imports @retired/markup-assistant/node (dist/, gitignored
+      # — `predev` builds it locally but CI never runs dev). Without this step
+      # `npm run build` fails resolving that subpath.
+      - run: npm run build:markup
       - run: npm test             # engine/library tests gate the deploy
       - run: npm run build        # multi-file site -> dist/ (base /retired/)
+      # Sitemap drift gate (issue #141): dist/sitemap.json is emitted from the
+      # page catalog by the Vite plugin; the copy at the repo root is the
+      # committed artifact. A mismatch means the catalog changed without
+      # regenerating it — rebuild (`npm run build`) and commit dist/sitemap.json
+      # to the root, same discipline as the engine's golden master.
+      - name: Check committed sitemap.json matches the build
+        run: |
+          cp dist/sitemap.json sitemap.json
+          git --no-pager diff sitemap.json
+          git diff --exit-code sitemap.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -64,6 +78,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run build:markup  # vite config needs markup-assistant dist/ (see build job)
       - run: npm run build:single  # one self-contained HTML file -> dist-single/
       - name: Package single-file app
         run: |

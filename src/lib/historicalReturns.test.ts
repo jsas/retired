@@ -46,3 +46,32 @@ describe('runBacktest horizon clamping', () => {
     expect(r.windows[r.windows.length - 1].startYear).toBe(start + r.windowCount - 1);
   });
 });
+
+describe('runBacktest scoring (issue #176)', () => {
+  // A window fails only on an UNFUNDED gap — balance exhausted AND shortfall
+  // > 0 — the household-first criterion the dashboard uses. A portfolio that
+  // hits zero while benefits cover spending (shortfall 0) is NOT a failure.
+  const engineWith = (rowAt: (i: number) => { endingBalance: number; shortfall?: number }) =>
+    ((runInputs: { currentAge: number; maxAge: number }) => {
+      const years = Math.max(1, Math.round(runInputs.maxAge - runInputs.currentAge));
+      const rows = Array.from({ length: years }, (_, i) => ({ age: runInputs.currentAge + i, ...rowAt(i) }));
+      const firstZero = rows.findIndex(r => r.endingBalance <= 0);
+      return { yearlyBreakdown: rows, depletionAge: firstZero >= 0 ? rows[firstZero].age : null };
+    }) as never;
+
+  it('a portfolio that empties with benefits covering spending is a SUCCESS', () => {
+    // Balance hits 0 at year 5 but shortfall stays 0 (CPP/OAS/GIS cover it).
+    const r = runBacktest(base, {}, engineWith(i => ({ endingBalance: Math.max(0, 500 - i * 100), shortfall: 0 })));
+    expect(r.successRate).toBe(1);
+    expect(r.windows.every(w => !w.depleted)).toBe(true);
+  });
+
+  it('a portfolio that empties with an unfunded gap is a FAILURE', () => {
+    const r = runBacktest(base, {}, engineWith(i => ({
+      endingBalance: Math.max(0, 500 - i * 100),
+      shortfall: i >= 5 ? 5000 : 0,
+    })));
+    expect(r.successRate).toBe(0);
+    expect(r.windows.every(w => w.depleted && w.depletionAge !== null)).toBe(true);
+  });
+});

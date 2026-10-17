@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runAgentTurn, buildSystemPrompt, type AgentEvent, type MutationProposal } from './agentLoop';
+import { runAgentTurn, buildSystemPrompt, assembleSystemPrompt, liveReasoningDelta, defaultSystemPromptFor, defaultToolInstructionsFor, type AgentEvent, type MutationProposal } from './agentLoop';
 import type { ChatMessage, StreamEvent } from './providers';
 import type { ToolContext } from '@retired/mcp-tools/tools';
 import { baseInputs, testConfig } from '@retired/engine-core/test/helpers';
@@ -15,15 +15,15 @@ function ctx(): ToolContext {
 
 /** A scripted chat function: each entry is one assistant turn's events. */
 function scripted(turns: StreamEvent[][]): {
-  chat: (req: { messages: ChatMessage[]; tools?: unknown[] }) => AsyncGenerator<StreamEvent>;
-  requests: Array<{ messages: ChatMessage[]; tools?: unknown[] }>;
+  chat: (req: { system?: string; messages: ChatMessage[]; tools?: unknown[] }) => AsyncGenerator<StreamEvent>;
+  requests: Array<{ system?: string; messages: ChatMessage[]; tools?: unknown[] }>;
 } {
-  const requests: Array<{ messages: ChatMessage[]; tools?: unknown[] }> = [];
+  const requests: Array<{ system?: string; messages: ChatMessage[]; tools?: unknown[] }> = [];
   let i = 0;
   return {
     requests,
     chat: async function* (req) {
-      requests.push(JSON.parse(JSON.stringify({ messages: req.messages, tools: req.tools })));
+      requests.push(JSON.parse(JSON.stringify({ system: req.system, messages: req.messages, tools: req.tools })));
       const turn = turns[Math.min(i, turns.length - 1)];
       i += 1;
       for (const evt of turn) yield evt;
@@ -35,6 +35,15 @@ async function collect(gen: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]> {
   const out: AgentEvent[] = [];
   for await (const e of gen) out.push(e);
   return out;
+}
+
+/** Prompt-mode untagged CoT becomes the answer via promote_reasoning. */
+function answerText(events: AgentEvent[]): string {
+  return events
+    .filter((e): e is Extract<AgentEvent, { type: 'text' | 'promote_reasoning' }> =>
+      e.type === 'text' || e.type === 'promote_reasoning')
+    .map(e => e.text)
+    .join('');
 }
 
 describe('runAgentTurn', () => {
@@ -99,7 +108,7 @@ describe('runAgentTurn', () => {
   it('pauses on a mutation proposal and reports the user decision to the model', async () => {
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'cppStartAge', value: 70 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'propose_plan', args: { changes: { cppStartAge: 70 } } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -113,9 +122,9 @@ describe('runAgentTurn', () => {
       system: 's', chat,
       onMutation: async (p) => { proposals.push(p); return { approved: true }; },
     }));
-    expect(proposals).toEqual([{
+    expect(proposals).toMatchObject([{
       callId: 'm1', patch: { cppStartAge: 70 }, label: 'Set cppStartAge',
-      rationale: undefined, preview: { field: 'cppStartAge', from: null, to: 70 },
+      preview: { cppStartAge: { from: null, to: 70 } },
     }]);
     expect(events.some(e => e.type === 'mutation')).toBe(true);
     const toolResultBack = requests[1].messages.at(-1)?.toolResults?.[0];
@@ -140,7 +149,7 @@ describe('runAgentTurn', () => {
     const { chat } = scripted([
       // Round 1: propose lowering spending.
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 42000 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'propose_plan', args: { changes: { desiredSpending: 42000 } } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       // Round 2 (after approval): the model re-reads the plan, then answers.
@@ -172,7 +181,7 @@ describe('runAgentTurn', () => {
   it('tells the model when the user rejects a change', async () => {
     const { chat, requests } = scripted([
       [
-        { type: 'tool_use', call: { id: 'm1', name: 'set_scenario_value', args: { field: 'desiredSpending', value: 90000 } } },
+        { type: 'tool_use', call: { id: 'm1', name: 'propose_plan', args: { changes: { desiredSpending: 90000 } } } },
         { type: 'done', stopReason: 'tool_use' },
       ],
       [
@@ -244,6 +253,23 @@ describe('runAgentTurn', () => {
     expect(prose).toContain('on track');
     expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'end_turn' });
   });
+
+  it('maxRounds 0 is one chat pass with the given system, not wrap-up', async () => {
+    const { chat, requests } = scripted([[
+      { type: 'text', text: 'hi' },
+      { type: 'done', stopReason: 'end_turn' },
+    ]]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'say hi',
+      system: '', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'off', maxRounds: 0,
+    }));
+    expect(requests).toHaveLength(1);
+    expect(requests[0].system).toBe('');
+    expect(requests[0].tools).toEqual([]);
+    expect(events.filter(e => e.type === 'text')).toEqual([{ type: 'text', text: 'hi' }]);
+    expect(events.at(-1)).toEqual({ type: 'done', stopReason: 'end_turn' });
+  });
 });
 
 describe('buildSystemPrompt', () => {
@@ -254,16 +280,19 @@ describe('buildSystemPrompt', () => {
     // planner" guardrail made small models parrot "I'm not a planner" back.
     expect(s).toContain('planning assistant');
     expect(s).not.toContain('not a planner');
-    expect(s).toContain('set_scenario_value');
+    expect(s).toContain('propose_plan');
+    expect(s).toContain('blank starter');
   });
 
   it('uses a user-supplied base prompt in place of the default persona', () => {
     const s = buildSystemPrompt('My Plan', { basePrompt: 'You are a terse actuary.' });
     expect(s).toContain('You are a terse actuary.');
     expect(s).not.toContain('planning assistant');
-    // Tool mechanics + scenario name are still appended after the persona.
-    expect(s).toContain('set_scenario_value');
+    // Tool mechanics + scenario name still ride; persona is last by default so
+    // a small model honors the override instead of the later tool blurb.
+    expect(s).toContain('propose_plan');
     expect(s).toContain('"My Plan"');
+    expect(s.indexOf('You are a terse actuary.')).toBeGreaterThan(s.indexOf('propose_plan'));
   });
 
   it('falls back to the default persona when the override is blank', () => {
@@ -271,9 +300,90 @@ describe('buildSystemPrompt', () => {
     expect(s).toContain('planning assistant');
   });
 
+  it('adds the ambient current-page line when the host supplies a view', () => {
+    // The page titles come from the catalog — this is what find_page's
+    // "already here" tag and the ambient line share (issue #141).
+    const s = buildSystemPrompt('My Plan', { currentView: 'details' });
+    expect(s).toContain('The user is currently on the Plans page.');
+  });
+
+  it('names the destination page for a folded legacy view, and drops the line when absent', () => {
+    // Details still folds into Plans — the user is on Plans even at a
+    // legacy #/details route. Compare later joined Tools and names itself.
+    const folded = buildSystemPrompt('My Plan', { currentView: 'details' });
+    expect(folded).toContain('The user is currently on the Plans page.');
+    expect(buildSystemPrompt('My Plan', { currentView: 'compare' }))
+      .toContain('The user is currently on the Compare plans page.');
+    // An unfurled tool names its own page.
+    expect(buildSystemPrompt('My Plan', { currentView: 'montecarlo' }))
+      .toContain('The user is currently on the Monte Carlo page.');
+    // No currentView (tests / MCP hosts): the line simply falls out.
+    expect(buildSystemPrompt('My Plan')).not.toContain('currently on the');
+  });
+
+  it('names the page language for en-CA and fr-CA, and omits it when absent', () => {
+    const en = buildSystemPrompt('My Plan', { locale: 'en-CA' });
+    expect(en).toContain('The page language is English (Canada) (en-CA).');
+    expect(en).toContain('Think and answer in that language');
+    expect(en).toContain('planning assistant');
+    const fr = buildSystemPrompt('My Plan', { locale: 'fr-CA' });
+    expect(fr).toContain('La langue de la page est français (Canada) (fr-CA).');
+    expect(fr).toContain('Réfléchissez et répondez dans cette langue');
+    expect(fr).toContain("Vous êtes l'assistant de planification");
+    expect(fr).toContain('Le scénario actif est « My Plan ».');
+    expect(buildSystemPrompt('My Plan')).not.toContain('page language');
+    expect(buildSystemPrompt('My Plan')).not.toContain('langue de la page');
+  });
+
+  it('switches default persona and tool blurbs with the page language', () => {
+    // Settings shows these as the empty-override fallback. Switching the
+    // header from Français to English must replace the French copy, not leave
+    // the previous language sitting in the boxes.
+    expect(defaultSystemPromptFor('en-CA')).toContain('planning assistant');
+    expect(defaultSystemPromptFor('fr-CA')).toContain("Vous êtes l'assistant de planification");
+    expect(defaultToolInstructionsFor('native', 'en-CA')).toMatch(/^Tools:/);
+    expect(defaultToolInstructionsFor('native', 'fr-CA')).toMatch(/^Outils :/);
+    expect(defaultToolInstructionsFor('prompt', 'en-CA')).toContain('BELOW in this message');
+    expect(defaultToolInstructionsFor('prompt', 'fr-CA')).toContain('CI-DESSOUS dans ce message');
+    expect(defaultToolInstructionsFor('off', 'en-CA')).toContain("can't change the plan");
+    expect(defaultToolInstructionsFor('off', 'fr-CA')).toContain('ne peut pas modifier le plan');
+  });
+
+  it('adds a setup interview line only when the plan is unfilled', () => {
+    const s = buildSystemPrompt('New Plan', { unsetPlan: true });
+    expect(s).toContain('SETUP:');
+    expect(s).toContain('unfilled starter');
+    expect(s).toContain('fill the rest');
+    expect(s).toContain('THIS TURN');
+    expect(s.lastIndexOf('SETUP:')).toBeGreaterThan(s.indexOf('planning assistant'));
+    expect(buildSystemPrompt('New Plan')).not.toContain('SETUP:');
+    const fr = buildSystemPrompt('New Plan', { unsetPlan: true, locale: 'fr-CA' });
+    expect(fr).toContain('MISE EN PLACE');
+    const assembled = assembleSystemPrompt({
+      scenarioName: 'New Plan', toolMode: 'prompt', locale: 'fr-CA', unsetPlan: true,
+    });
+    expect(assembled.lastIndexOf('MISE EN PLACE')).toBeGreaterThan(assembled.lastIndexOf('TOOL_CALL'));
+  });
+
+  it('drops the page-language line when that send flag is off', () => {
+    const s = buildSystemPrompt('My Plan', { locale: 'fr-CA', send: { includeLocale: false } });
+    expect(s).not.toContain('langue de la page');
+    expect(s).toContain("Vous êtes l'assistant de planification");
+  });
+
+  it('localizes the current-page line', () => {
+    expect(buildSystemPrompt('My Plan', { currentView: 'montecarlo', locale: 'fr-CA' }))
+      .toContain("L'utilisateur est actuellement sur la page Monte-Carlo.");
+    expect(buildSystemPrompt('My Plan', { currentView: 'details', locale: 'fr-CA' }))
+      .toContain("L'utilisateur est actuellement sur la page Plans.");
+  });
+
   it('drops tool instructions for chat-only providers', () => {
     const s = buildSystemPrompt('My Plan', { toolMode: 'off' });
-    expect(s).not.toContain('set_scenario_value');
+    // Persona still names propose_plan (the confirm-card rule); the native
+    // tool blurb — manage_* / list_scenarios actions — must not ride.
+    expect(s).not.toContain('manage_income');
+    expect(s).not.toContain('list_scenarios with action');
     // Grounded in the plan summary, and honest that it can't change the plan.
     expect(s).toContain('plan summary');
     expect(s).toContain('can\'t change the plan');
@@ -303,6 +413,77 @@ describe('buildSystemPrompt', () => {
   it('omits the rules section when no config is given', () => {
     const s = buildSystemPrompt('My Plan');
     expect(s).not.toContain('Rules this program applies');
+  });
+
+  it('honors send flags that drop individual pieces', () => {
+    const s = buildSystemPrompt('My Plan', {
+      config: testConfig(),
+      currentView: 'details',
+      basePrompt: 'say only yes yes yes',
+      send: {
+        includePersona: true,
+        includePageLine: false,
+        includeLocale: false,
+        includeToolInstructions: false,
+        includeProgramRules: false,
+        includeScenarioName: false,
+      },
+    });
+    expect(s).toBe('say only yes yes yes');
+  });
+
+  it('is empty when every send piece is off', () => {
+    const s = assembleSystemPrompt({
+      scenarioName: 'My Plan',
+      toolMode: 'prompt',
+      config: testConfig(),
+      currentView: 'details',
+      basePrompt: 'say only yes yes yes',
+      chatNote: 'per-chat note',
+      locale: 'fr-CA',
+      send: {
+        includePersona: false,
+        includePageLine: false,
+        includeLocale: false,
+        includeToolInstructions: false,
+        includePromptCatalog: false,
+        includeProgramRules: false,
+        includeScenarioName: false,
+        includePlanDigest: false,
+        includeChatNote: false,
+        sendTools: false,
+      },
+    });
+    expect(s).toBe('');
+  });
+
+  it('keeps the TOOL_CALL catalog in English when the page is French', () => {
+    const s = assembleSystemPrompt({
+      scenarioName: 'My Plan',
+      toolMode: 'prompt',
+      locale: 'fr-CA',
+    });
+    expect(s).toContain('TOOL_CALL');
+    expect(s).toContain('TOOLS: to run local code');
+    expect(s).toContain("Vous êtes l'assistant de planification");
+    // Language instruction must come AFTER the English catalog so a small model
+    // still thinks in the page language.
+    expect(s.lastIndexOf('La langue de la page')).toBeGreaterThan(s.lastIndexOf('TOOL_CALL'));
+  });
+
+  it('uses a custom tool-instruction override', () => {
+    const s = buildSystemPrompt('My Plan', { toolInstructions: 'Call only get_scenario.' });
+    expect(s).toContain('Call only get_scenario.');
+    expect(s).not.toContain('manage_income');
+    expect(s).not.toContain('list_scenarios with action');
+  });
+
+  it('can put the persona first when personaLast is off', () => {
+    const s = buildSystemPrompt('My Plan', {
+      basePrompt: 'say only yes yes yes',
+      send: { personaLast: false },
+    });
+    expect(s.indexOf('say only yes yes yes')).toBeLessThan(s.indexOf('propose_plan'));
   });
 });
 
@@ -357,9 +538,13 @@ describe('prompt-protocol tools (local models)', () => {
     const result = events.find(e => e.type === 'tool_result');
     expect(result && !result.isError).toBe(true);
     expect((result as { content: string }).content).toContain('lifetime tax');
-    // The user saw prose with the tool line stripped, never the raw JSON.
-    const prose = events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join('');
-    expect(prose).toContain('Let me check.');
+    // Pre-tool narration ("Let me check.") is the model's thinking, not the
+    // answer — it belongs in the reasoning block. The actual reply is the
+    // post-tool prose. The TOOL_CALL JSON never reaches the user.
+    const thinking = events.filter(e => e.type === 'reasoning').map(e => (e as { text: string }).text).join('');
+    expect(thinking).toContain('Let me check.');
+    const prose = answerText(events);
+    expect(prose).not.toContain('Let me check.');
     expect(prose).toContain('funded to age 95.');
     expect(prose).not.toContain('TOOL_CALL:');
     expect(prose).not.toContain('"name"');
@@ -383,7 +568,7 @@ describe('prompt-protocol tools (local models)', () => {
       toolMode: 'prompt',
     }));
     // The loop survived the malformed block and the model got a second turn.
-    const prose = events.filter(e => e.type === 'text').map(e => (e as { text: string }).text).join('');
+    const prose = answerText(events);
     expect(prose).toContain('let me just answer');
   });
 
@@ -425,6 +610,142 @@ describe('prompt-protocol tools (local models)', () => {
     expect((err as { message: string }).message).toContain('GPU device lost');
     // The loop terminated (no infinite hang waiting for a done that never came).
     expect(events.some(e => e.type === 'done')).toBe(false);
+  });
+
+  it('finds the tool call when a thinking model emits it inside its reasoning', async () => {
+    // The local fine-tune "thinks" first: the provider splits <think>…</think>
+    // into the reasoning channel, and the TOOL_CALL line rides along in it —
+    // visible text stays empty. The loop must scan both channels or the call
+    // silently never runs (the "tool calls are not being surfaced" bug).
+    const { chat, requests } = scripted([
+      [
+        { type: 'reasoning', text: 'The user wants numbers. ' },
+        { type: 'reasoning', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+      [
+        { type: 'text', text: 'Your plan is funded to age 95.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'how am I doing?',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const result = events.find(e => e.type === 'tool_result');
+    expect(result && !result.isError).toBe(true);
+    expect((result as { content: string }).content).toContain('lifetime tax');
+    expect(requests.length).toBe(2);
+  });
+
+  it('does not double-execute a call that appears in BOTH the reasoning and the visible text', async () => {
+    // A model that repeats its call outside the <think> block must not get the
+    // tool run twice — the visible copy wins, the reasoning copy is ignored.
+    const { chat } = scripted([
+      [
+        { type: 'reasoning', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'text', text: 'TOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+      [
+        { type: 'text', text: 'Done — funded to age 95.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'check',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const results = events.filter(e => e.type === 'tool_result');
+    expect(results).toHaveLength(1);
+  });
+
+  it('puts pre-tool narration in the reasoning block, not the answer bubble', async () => {
+    // Bonsai (and small Qwen) write chain-of-thought as plain text, then a
+    // TOOL_CALL. That narration must not look like the reply.
+    const { chat } = scripted([
+      [
+        { type: 'text', text: 'The user wants to retire earlier.\nTOOL_CALL: {"name": "run_projection", "args": {}}' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+      [
+        { type: 'text', text: 'Your plan lasts to 95.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ],
+    ]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'help me retire earlier',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const thinking = events.filter(e => e.type === 'reasoning').map(e => (e as { text: string }).text).join('');
+    const prose = answerText(events);
+    expect(thinking).toContain('retire earlier');
+    expect(prose).toBe('Your plan lasts to 95.');
+    expect(prose).not.toContain('The user wants');
+    // Live stream, then tools — do not reprint the same narration.
+    const reasoningEvents = events.filter(e => e.type === 'reasoning');
+    expect(reasoningEvents.length).toBeGreaterThan(0);
+    expect(thinking).not.toMatch(/The user wants to retire earlier[\s\S]*The user wants to retire earlier/);
+  });
+
+  it('streams untagged CoT into the thinking block as tokens arrive', async () => {
+    // Bonsai has no <think> tags. Prompt mode used to buffer the whole turn,
+    // so the bubble sat on "Thinking…" until generate finished. Tokens must
+    // land on the reasoning channel live, like tagged Qwen thoughts.
+    const { chat } = scripted([[
+      { type: 'text', text: 'The user wants to ' },
+      { type: 'text', text: 'retire earlier so I should look at spending.' },
+      { type: 'text', text: '\nTOOL_CALL: {"name": "run_projection", "args": {}}' },
+      { type: 'done', stopReason: 'end_turn' },
+    ], [
+      { type: 'text', text: 'Cut spending.' },
+      { type: 'done', stopReason: 'end_turn' },
+    ]]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'help me retire earlier',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    const beforeTool = [];
+    for (const e of events) {
+      if (e.type === 'tool_start' || e.type === 'tool_result') break;
+      beforeTool.push(e);
+    }
+    expect(beforeTool.some(e => e.type === 'reasoning')).toBe(true);
+    const live = beforeTool.filter(e => e.type === 'reasoning').map(e => (e as { text: string }).text).join('');
+    expect(live).toContain('The user wants');
+    expect(live).not.toContain('TOOL_CALL');
+    expect(beforeTool.some(e => e.type === 'promote_reasoning')).toBe(false);
+    // The post-tool answer may promote its own live tokens into the bubble;
+    // the pre-tool thought must still have been a reasoning event.
+    const thinking = events.filter(e => e.type === 'reasoning').map(e => (e as { text: string }).text).join('');
+    expect(thinking).toContain('The user wants');
+  });
+
+  it('promotes a no-tool untagged reply into the answer bubble', async () => {
+    const { chat } = scripted([[
+      { type: 'text', text: 'You are on track through age ninety-five.' },
+      { type: 'done', stopReason: 'end_turn' },
+    ]]);
+    const events = await collect(runAgentTurn({
+      context: ctx(), history: [], userMessage: 'how am I doing?',
+      system: 's', chat, onMutation: async () => ({ approved: false }),
+      toolMode: 'prompt',
+    }));
+    expect(events.some(e => e.type === 'promote_reasoning')).toBe(true);
+    expect(answerText(events)).toBe('You are on track through age ninety-five.');
+  });
+
+  it('liveReasoningDelta holds a split tool marker and stops before TOOL_CALL', () => {
+    const a = liveReasoningDelta('Hello there this is thinking', 0, 12);
+    expect(a.chunk).toContain('Hello');
+    expect(a.chunk.endsWith('thinking')).toBe(false);
+    const withCall = liveReasoningDelta('Let me look.\nTOOL_CALL: {"name": "run_projection"}', 0, 12);
+    expect(withCall.chunk).toBe('Let me look.\n');
+    expect(withCall.chunk).not.toContain('TOOL_CALL');
   });
 
   it('refuses to re-run the identical tool+args back-to-back (loop guard)', async () => {

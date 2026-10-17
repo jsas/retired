@@ -151,6 +151,8 @@ export interface GeneralConfig {
   /** Ask to save before switching away from a scenario with unsaved edits.
    *  true (default) = prompt each time; false = switch silently (the opt-out). */
   promptToSaveOnSwitch: boolean;
+  /** Assistant language. Absent = follow the browser. UI chrome stays English. */
+  locale?: 'en-CA' | 'fr-CA';
 }
 
 // 2026 Canadian tax figures (CRA indexation 2.0% for 2026; Alberta's new 8%
@@ -352,6 +354,14 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   } else if (typeof g.promptToSaveOnSwitch !== 'boolean') {
     // promptToSaveOnSwitch was added after showWelcomeOnLoad — back-fill it.
     (c as AppConfig).general = { ...g, promptToSaveOnSwitch: true } as GeneralConfig;
+  }
+  // locale is optional: keep only the Canadian tags so the host can fall back
+  // to the browser when the field is missing or unknown.
+  const loc = (c as AppConfig).general.locale;
+  if (loc !== undefined && loc !== 'en-CA' && loc !== 'fr-CA') {
+    const next = { ...(c as AppConfig).general };
+    delete next.locale;
+    (c as AppConfig).general = next;
   }
 
   return c as AppConfig;

@@ -33,8 +33,52 @@ export function baselineInputs(): RetirementInputs {
     income: [],
     events: [],
     spendingBands: [],
-    spouseSource: { kind: 'builtin' },
   };
+}
+
+/** Stock first-run plans are named this way so the welcome gate can tell them
+ *  apart from a plan the user actually built. A new install seeds examples and
+ *  still opens on welcome; only a user-named plan auto-routes to the dashboard. */
+export const EXAMPLE_PLAN_PREFIX = 'Example - ';
+
+export function isExamplePlanName(name: string): boolean {
+  return name.startsWith(EXAMPLE_PLAN_PREFIX);
+}
+
+export function hasUserPlans(scenarios: ReadonlyArray<{ name: string }>): boolean {
+  return scenarios.some(s => !isExamplePlanName(s.name));
+}
+
+/**
+ * True when the plan still looks like a brand-new / New-Scenario starter:
+ * every account is empty, no contributions, and none of the optional
+ * registers (income, events, debts, spouse, RDSP, FHSA, reverse mortgage)
+ * have been filled in. Ages/spending/CPP on `baselineInputs()` are
+ * placeholders — the assistant should interview rather than treat them as
+ * the user's real situation.
+ *
+ * A $0-savings household matches this too; asking "what are your balances?"
+ * is still the right first step (they can confirm zero).
+ */
+export function looksLikeUnsetPlan(inputs: RetirementInputs): boolean {
+  if (
+    inputs.rrspBalance !== 0
+    || inputs.tfsaBalance !== 0
+    || inputs.taxableBalance !== 0
+    || inputs.cashCushionBalance !== 0
+    || inputs.rrspContribution !== 0
+    || inputs.tfsaContribution !== 0
+    || inputs.taxableContribution !== 0
+  ) return false;
+  if ((inputs.income?.length ?? 0) > 0) return false;
+  if ((inputs.events?.length ?? 0) > 0) return false;
+  if ((inputs.debts?.length ?? 0) > 0) return false;
+  if ((inputs.spendingBands?.length ?? 0) > 0) return false;
+  if (inputs.spouse?.enabled) return false;
+  if (inputs.rdsp?.enabled) return false;
+  if (inputs.fhsa?.enabled) return false;
+  if (inputs.reverseMortgage?.enabled) return false;
+  return true;
 }
 
 /**
@@ -43,7 +87,8 @@ export function baselineInputs(): RetirementInputs {
  * localStorage is empty (first launch or after a full reset) — the user's own
  * scenarios replace them permanently once saved.
  *
- *   Example - Early Couple ....... an embedded spouse plan + spending bands
+ *   Example - Early Couple ....... a household that LINKS Example - Partner
+ *                                  (scenario-1-spouse) + spending bands
  *   Example - Single at 60 ....... one-time cash events + CPP deferred to 70
  *   Example - Semi-retirement .... modest balances, spending bands, part-time
  *                                  style contributions into retirement
@@ -83,24 +128,34 @@ export const buildDefaultScenarios = (): Scenario[] => [
         { fromAge: 75, pctOfBase: 0.85 },
         { fromAge: 85, pctOfBase: 0.7 },
       ],
-      spouse: {
-        enabled: true,
-        currentAge: 43,
-        retirementAge: 55,
-        rrspBalance: 240000,
-        tfsaBalance: 110000,
-        taxableBalance: 40000,
-        cashCushionBalance: 20000,
-        rrspContribution: 18000,
-        tfsaContribution: 7000,
-        taxableContribution: 0,
-        cppStartAge: 65,
-        cppMonthlyAmount: 850,
-        oasStartAge: 65,
-        oasYearsInCanada: 40,
-        desiredSpending: 30000,
-        withdrawalOrder: ['taxable', 'rrsp', 'tfsa'],
-      },
+      spouseSource: { kind: 'scenario', scenarioId: 'scenario-1-spouse' },
+    },
+  },
+  {
+    id: 'scenario-1-spouse',
+    name: 'Example - Partner',
+    inputs: {
+      currentAge: 43,
+      retirementAge: 55,
+      maxAge: 95,
+      rrspBalance: 240000,
+      tfsaBalance: 110000,
+      taxableBalance: 40000,
+      cashCushionBalance: 20000,
+      rrspContribution: 18000,
+      tfsaContribution: 7000,
+      taxableContribution: 0,
+      annualWithdrawal: 0,
+      investmentReturn: 0.06,
+      returnVolatility: 0.15,
+      provinceCode: 'ONT',
+      cppStartAge: 65,
+      cppMonthlyAmount: 850,
+      cppAdjustedAmount: false,
+      oasStartAge: 65,
+      oasYearsInCanada: 40,
+      desiredSpending: 30000,
+      withdrawalOrder: ['taxable', 'rrsp', 'tfsa'],
     },
   },
   {

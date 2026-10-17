@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
-import {
-  Check, ClipboardCopy, Download, FileJson, FileSpreadsheet, FileText, Upload, Database,
-  ChevronDown, ChevronRight,
-} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Check, ClipboardCopy, Download, Upload, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check as CheckBox } from '../design/primitives';
+import { useAppLocale } from '../lib/localeContext';
 import {
   COLUMN_GROUPS, METADATA_SECTIONS, buildExport,
   type ProjectionExportOptions, type ExportFormat, type Subject, type ColumnGroup, type MetaSection,
@@ -83,23 +83,14 @@ export interface AiBackupInclude {
   settings: boolean;
 }
 
-const FORMATS: Array<{ key: ExportFormat; label: string; icon: typeof FileJson; hint: string }> = [
-  { key: 'csv', label: 'CSV', icon: FileSpreadsheet, hint: 'Flat spreadsheet — one row per person per year, detail flattened into columns' },
-  { key: 'json', label: 'JSON', icon: FileJson, hint: 'Nested rows with full per-year detail objects; re-importable as a scenario' },
-  { key: 'yaml', label: 'YAML', icon: FileText, hint: 'Same as JSON, human-readable YAML' },
-];
+const FORMAT_KEYS: ExportFormat[] = ['csv', 'json', 'yaml'];
 
 // Shared bits
-const SECTION = 'text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5';
+const SECTION = 'text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 mb-2';
 
 export function DataPage(props: DataPageProps) {
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3">
-        <Database size={18} className="text-blue-600" />
-        <h2 className="text-lg font-bold text-slate-900">Data</h2>
-      </div>
-
       <div className="space-y-10">
         <ProjectionExportSection {...props} />
         <FullBackupSection {...props} />
@@ -117,6 +108,9 @@ function ProjectionExportSection({
   exportOptions: options, onExportOptionsChange: onChange, hasSpouse,
   scenarioName, inputs, results, config,
 }: DataPageProps) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
+  const { locale } = useAppLocale();
   const set = (patch: Partial<ProjectionExportOptions>) => onChange({ ...options, ...patch });
   const toggleGroup = (g: ColumnGroup) =>
     set({ columnGroups: options.columnGroups.includes(g) ? options.columnGroups.filter(x => x !== g) : [...options.columnGroups, g] });
@@ -160,25 +154,24 @@ function ProjectionExportSection({
 
   return (
     <section>
-      <div className={SECTION}>Export projection</div>
+      <div className={SECTION}>{t('dataUi.exportProjection')}</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
-        The computed year-by-year numbers for <span className="font-medium text-slate-700">{scenarioName}</span>,
-        in the shape you choose below. JSON can be re-imported as a scenario further down this page.
+        {t('dataUi.exportLead', { name: scenarioName })}
       </p>
 
       <div className="space-y-4">
         {/* Format */}
         <div className="flex gap-2">
-          {FORMATS.map(f => (
+          {FORMAT_KEYS.map(key => (
             <button
-              key={f.key}
-              onClick={() => set({ format: f.key })}
-              title={f.hint}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border ${
-                options.format === f.key ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              key={key}
+              onClick={() => set({ format: key })}
+              title={t(`dataUi.formats.${key}Hint`)}
+              className={`border px-3 py-1.5 text-xs font-medium ${
+                options.format === key ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-slate-900 hover:text-slate-900'
               }`}
             >
-              <f.icon size={13} /> {f.label}
+              {t(`dataUi.formats.${key}`)}
             </button>
           ))}
         </div>
@@ -186,15 +179,15 @@ function ProjectionExportSection({
         {/* Subject (JSON/YAML, household only) */}
         {!isCsv && hasSpouse && (
           <div className="flex gap-2">
-            {([['household', 'Household (both)'], ['you', 'You only'], ['spouse', 'Spouse only']] as Array<[Subject, string]>).map(([key, label]) => (
+            {([['household', 'dataUi.household'], ['you', 'dataUi.youOnly'], ['spouse', 'dataUi.spouseOnly']] as Array<[Subject, string]>).map(([key, labelKey]) => (
               <button
                 key={key}
                 onClick={() => set({ subject: key })}
-                className={`px-3 py-1.5 text-xs font-medium rounded border ${
-                  options.subject === key ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                className={`border px-3 py-1.5 text-xs font-medium ${
+                  options.subject === key ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-slate-900 hover:text-slate-900'
                 }`}
               >
-                {label}
+                {t(labelKey)}
               </button>
             ))}
           </div>
@@ -203,16 +196,16 @@ function ProjectionExportSection({
         {/* CSV columns */}
         {isCsv && (
           <div>
-            <div className={SECTION}>Columns to include</div>
+            <div className={SECTION}>{t('dataUi.columnsToInclude')}</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 max-w-3xl">
               {COLUMN_GROUPS.map(g => (
-                <label key={g.key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer" title={g.hint}>
-                  <input type="checkbox" checked={options.columnGroups.includes(g.key)} onChange={() => toggleGroup(g.key)} className="mt-0.5" />
-                  <span>
-                    <span className="font-medium">{g.label}</span>
-                    <span className="block text-[10px] text-slate-400">{g.hint}</span>
+                <CheckBox key={g.key} size={12} className="items-start" checked={options.columnGroups.includes(g.key)}
+                  onChange={() => toggleGroup(g.key)}>
+                  <span className="text-xs text-slate-700" title={t(`dataUi.colGroups.${g.key}.hint`)}>
+                    <span className="font-medium">{t(`dataUi.colGroups.${g.key}.label`)}</span>
+                    <span className="block text-[10px] text-slate-400">{t(`dataUi.colGroups.${g.key}.hint`)}</span>
                   </span>
-                </label>
+                </CheckBox>
               ))}
             </div>
           </div>
@@ -221,30 +214,28 @@ function ProjectionExportSection({
         {/* JSON/YAML options */}
         {!isCsv && (
           <div className="space-y-2.5">
-            <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
-              <input type="checkbox" checked={options.includeDetail} onChange={e => set({ includeDetail: e.target.checked })} className="mt-0.5" />
-              <span>
-                <span className="font-medium">Include per-year drill-down detail</span>
-                <span className="block text-[11px] text-slate-500 mt-0.5">Withdrawal sources, per-account growth, tax decomposition, reverse mortgage and events on every year.</span>
+            <CheckBox className="items-start" checked={options.includeDetail} onChange={v => set({ includeDetail: v })}>
+              <span className="text-xs text-slate-700">
+                <span className="font-medium">{t('dataUi.includeDetail')}</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">{t('dataUi.includeDetailHint')}</span>
               </span>
-            </label>
-            <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
-              <input type="checkbox" checked={options.includeMetadata} onChange={e => set({ includeMetadata: e.target.checked })} className="mt-0.5" />
-              <span>
-                <span className="font-medium">Include metadata envelope</span>
-                <span className="block text-[11px] text-slate-500 mt-0.5">Scenario name, generation date and the sections below, next to the projection.</span>
+            </CheckBox>
+            <CheckBox className="items-start" checked={options.includeMetadata} onChange={v => set({ includeMetadata: v })}>
+              <span className="text-xs text-slate-700">
+                <span className="font-medium">{t('dataUi.includeMeta')}</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">{t('dataUi.includeMetaHint')}</span>
               </span>
-            </label>
+            </CheckBox>
             {options.includeMetadata && (
               <div className="ml-6 grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1.5">
                 {METADATA_SECTIONS.map(m => (
-                  <label key={m.key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer" title={m.hint}>
-                    <input type="checkbox" checked={options.metadataSections.includes(m.key)} onChange={() => toggleMeta(m.key)} className="mt-0.5" />
-                    <span>
-                      <span className="font-medium">{m.label}</span>
-                      <span className="block text-[10px] text-slate-400">{m.hint}</span>
+                  <CheckBox key={m.key} size={12} className="items-start" checked={options.metadataSections.includes(m.key)}
+                    onChange={() => toggleMeta(m.key)}>
+                    <span className="text-xs text-slate-700" title={t(`dataUi.meta.${m.key}.hint`)}>
+                      <span className="font-medium">{t(`dataUi.meta.${m.key}.label`)}</span>
+                      <span className="block text-[10px] text-slate-400">{t(`dataUi.meta.${m.key}.hint`)}</span>
                     </span>
-                  </label>
+                  </CheckBox>
                 ))}
               </div>
             )}
@@ -259,54 +250,53 @@ function ProjectionExportSection({
             <button
               onClick={() => setContentsOpen(o => !o)}
               className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-800"
-              title={contentsOpen ? 'Hide the file preview' : 'Show the file preview'}
+              title={contentsOpen ? t('dataUi.hidePreview') : t('dataUi.showPreview')}
             >
               {contentsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              File contents
+              {t('dataUi.fileContents')}
               {!contentsOpen && (
                 <span className="normal-case font-normal text-slate-400">
-                  ({payload.content.split('\n').length.toLocaleString()} lines)
+                  {t('dataUi.lines', { n: payload.content.split('\n').length.toLocaleString(locale) })}
                 </span>
               )}
             </button>
-            <button onClick={copy} className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline">
-              {copied ? <Check size={12} /> : <ClipboardCopy size={12} />}
-              {copied ? 'Copied' : 'Copy to clipboard'}
+            <button onClick={copy} className="text-[11px] text-slate-500 hover:text-slate-900 hover:underline">
+              {copied ? tc('copied') : t('dataUi.copyClipboard')}
             </button>
           </div>
           {contentsOpen && (
-            <pre className="max-h-[28rem] overflow-auto rounded border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre">{payload.content}</pre>
+            <pre className="num max-h-[28rem] overflow-auto border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre">{payload.content}</pre>
           )}
         </div>
 
         {/* Filename + actions */}
         <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
-          <label className="text-[11px] text-slate-500" htmlFor="export-filename">Filename</label>
+          <label className="text-[11px] text-slate-500" htmlFor="export-filename">{t('dataUi.filename')}</label>
           <input
             id="export-filename"
             value={fileBase}
             onChange={(e) => { setBaseName(e.target.value); setNameTouched(true); }}
-            className="w-72 max-w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-700 focus:outline-none focus:border-blue-500"
+            className="w-72 max-w-full border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none"
           />
           <span className="text-xs text-slate-400">.{payload.extension}</span>
           <div className="flex-1" />
           <button
             onClick={copy}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+            className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900"
           >
-            {copied ? <Check size={13} /> : <ClipboardCopy size={13} />} Copy
+            {copied ? <Check size={13} /> : <ClipboardCopy size={13} />} {tc('copy')}
           </button>
           <button
             onClick={download}
             disabled={!canExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={canExport ? `Download ${fileBase}.${payload.extension}` : 'Pick at least one column group'}
+            className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            title={canExport ? t('dataUi.downloadTitle', { file: `${fileBase}.${payload.extension}` }) : t('dataUi.pickColumns')}
           >
-            <Download size={13} /> Save
+            <Download size={13} /> {tc('save')}
           </button>
         </div>
         {isCsv && options.columnGroups.length === 0 && (
-          <p className="text-[11px] text-slate-500">Select at least one column group.</p>
+          <p className="text-[11px] text-slate-500">{t('dataUi.needGroup')}</p>
         )}
       </div>
     </section>
@@ -317,6 +307,7 @@ function ProjectionExportSection({
 // 2 · Full backup — every scenario (choose which) + engine settings, as JSON.
 // ---------------------------------------------------------------------------
 function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPageProps) {
+  const { t } = useTranslation('pages');
   const [checked, setChecked] = useState<Set<string>>(() => new Set(scenarios.map(s => s.id)));
   const [includeConfig, setIncludeConfig] = useState(true);
   const [includeChats, setIncludeChats] = useState(false);
@@ -330,43 +321,39 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
 
   return (
     <section>
-      <div className={SECTION}>Export full backup</div>
+      <div className={SECTION}>{t('dataUi.exportBackup')}</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
-        The raw scenario inputs (not computed numbers) — for moving your plans to another machine or
-        keeping a snapshot. Downloads a real <span className="font-medium text-slate-700">SQLite database
-        file</span> (.sqlite): the same format the app stores locally, openable by any SQLite tool. Choose
-        which scenarios to include; the active one is pre-selected.
+        {t('dataUi.exportBackupLead')}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 max-w-3xl mb-3">
         {scenarios.map(s => (
-          <label key={s.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={checked.has(s.id)} onChange={() => toggle(s.id)} />
-            <span className="font-medium truncate">{s.name}</span>
-            {s.id === activeScenarioId && <span className="text-[10px] text-blue-600">active</span>}
-          </label>
+          <CheckBox key={s.id} size={12} checked={checked.has(s.id)} onChange={() => toggle(s.id)}>
+            <span className="text-xs text-slate-700">
+              <span className="font-medium">{s.name}</span>
+              {s.id === activeScenarioId && <span className="ml-1.5 text-[10px] font-semibold text-slate-900">{t('dataUi.active')}</span>}
+            </span>
+          </CheckBox>
         ))}
-        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2 mt-1 pt-2 border-t border-slate-100">
-          <input type="checkbox" checked={includeConfig} onChange={e => setIncludeConfig(e.target.checked)} />
-          <span><span className="font-medium">Include engine settings</span>
-          <span className="block text-[10px] text-slate-400">Inflation, RRIF conversion age, tax tables and other engine config</span></span>
-        </label>
-        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-          <input type="checkbox" checked={includeChats} onChange={e => setIncludeChats(e.target.checked)} />
-          <span><span className="font-medium">Include AI chats</span>
-          <span className="block text-[10px] text-slate-400">The assistant conversation transcripts saved on this device</span></span>
-        </label>
-        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-          <input type="checkbox" checked={includeAiSettings} onChange={e => setIncludeAiSettings(e.target.checked)} />
-          <span><span className="font-medium">Include AI connections &amp; model settings</span>
-          <span className="block text-[10px] text-amber-600">Includes any API keys stored for cloud providers — pack this only into a backup you keep private</span></span>
-        </label>
+        <CheckBox size={12} className="sm:col-span-2 mt-1 pt-2 border-t border-slate-100"
+          checked={includeConfig} onChange={setIncludeConfig}>
+          <span className="text-xs text-slate-700"><span className="font-medium">{t('dataUi.includeEngine')}</span>
+          <span className="block text-[10px] text-slate-400">{t('dataUi.includeEngineHint')}</span></span>
+        </CheckBox>
+        <CheckBox size={12} className="sm:col-span-2" checked={includeChats} onChange={setIncludeChats}>
+          <span className="text-xs text-slate-700"><span className="font-medium">{t('dataUi.includeChats')}</span>
+          <span className="block text-[10px] text-slate-400">{t('dataUi.includeChatsHint')}</span></span>
+        </CheckBox>
+        <CheckBox size={12} className="sm:col-span-2" checked={includeAiSettings} onChange={setIncludeAiSettings}>
+          <span className="text-xs text-slate-700"><span className="font-medium">{t('dataUi.includeAi')}</span>
+          <span className="block text-[10px] text-amber-700">{t('dataUi.includeAiHint')}</span></span>
+        </CheckBox>
       </div>
       <button
         onClick={() => onExportFull([...checked], includeConfig, { chats: includeChats, settings: includeAiSettings })}
         disabled={checked.size === 0 && !includeConfig && !includeChats && !includeAiSettings}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Download size={13} /> Save backup
+        <Download size={13} /> {t('dataUi.saveBackup')}
       </button>
     </section>
   );
@@ -381,6 +368,9 @@ type ParsedFile =
   | { kind: 'projection'; name: string; inputs: RetirementInputs };
 
 function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
+  const { t } = useTranslation('pages');
+  const { t: tc } = useTranslation('common');
+  const { locale } = useAppLocale();
   const fileRef = useRef<HTMLInputElement>(null);
   const [parsed, setParsed] = useState<ParsedFile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -409,9 +399,9 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           const { name, inputs, warnings } = parseTemplateCsv(text);
           setParsed({ kind: 'projection', name, inputs });
           setProjName(name);
-          if (warnings.length > 0) setError(`Imported with notes: ${warnings.join(' ')}`);
+          if (warnings.length > 0) setError(t('dataUi.errCsvNotes', { notes: warnings.join(' ') }));
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'That CSV could not be read.');
+          setError(err instanceof Error ? err.message : t('dataUi.errCsv'));
           setParsed(null);
         }
       });
@@ -459,7 +449,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
               setApplyAiSettings(aiSettingsRaw !== null);
               setApplyPrefs(prefs !== undefined);
             } else {
-              setError('That SQLite file is not a RE: tired backup.');
+              setError(t('dataUi.errNotBackup'));
               setParsed(null);
             }
             return;
@@ -489,7 +479,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
           setApplyAiSettings(aiSettings !== undefined);
           setApplyPrefs(prefs !== undefined);
         } catch {
-          setError('That file could not be opened as a SQLite database.');
+          setError(t('dataUi.errSqlite'));
           setParsed(null);
         }
       });
@@ -497,8 +487,8 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
     }
     file.text().then(text => {
       let obj: unknown;
-      try { obj = JSON.parse(text); } catch { setError('That file is not valid JSON.'); setParsed(null); return; }
-      if (!obj || typeof obj !== 'object') { setError('That JSON is not a RE: tired file.'); setParsed(null); return; }
+      try { obj = JSON.parse(text); } catch { setError(t('dataUi.errJson')); setParsed(null); return; }
+      if (!obj || typeof obj !== 'object') { setError(t('dataUi.errNotFile')); setParsed(null); return; }
       const rec = obj as Record<string, unknown>;
 
       // Full backup: has a scenarios array. Migrate each scenario's inputs so
@@ -508,7 +498,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
         const scenarios = (rec.scenarios as Scenario[])
           .filter(s => s && typeof s.id === 'string' && typeof s.name === 'string' && s.inputs)
           .map(s => ({ ...s, inputs: migrateInputs(s.inputs as unknown as Record<string, unknown>) }));
-        if (scenarios.length === 0) { setError('That backup has no usable scenarios.'); setParsed(null); return; }
+        if (scenarios.length === 0) { setError(t('dataUi.errNoScenarios')); setParsed(null); return; }
         const db = rec as unknown as AppDb;
         const activeId = scenarios.some(s => s.id === db.activeScenarioId) ? db.activeScenarioId : scenarios[0].id;
         setParsed({ kind: 'backup', db: { ...db, scenarios, activeScenarioId: activeId } });
@@ -526,13 +516,13 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       if (profile && typeof profile.currentAge === 'number') {
         const opts = (meta?.options ?? {}) as Record<string, unknown>;
         const inputs = migrateInputs(profileToInputs(profile, opts) as unknown as Record<string, unknown>);
-        const name = typeof meta?.scenario === 'string' && meta.scenario.trim() ? meta.scenario.trim() : 'Imported projection';
+        const name = typeof meta?.scenario === 'string' && meta.scenario.trim() ? meta.scenario.trim() : t('dataUi.importedProjection');
         setParsed({ kind: 'projection', name, inputs });
         setProjName(name);
         return;
       }
 
-      setError('That JSON is neither a full backup nor a projection export from this app.');
+      setError(t('dataUi.errNeither'));
       setParsed(null);
     });
   };
@@ -635,14 +625,12 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
 
   return (
     <section>
-      <div className={SECTION}>Import</div>
+      <div className={SECTION}>{t('dataUi.import')}</div>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
-        Load a file from this app — a <span className="font-medium text-slate-700">SQLite backup</span> (.sqlite, or a
-        legacy JSON backup) with scenarios + settings, or a <span className="font-medium text-slate-700">projection
-        JSON</span> (re-imported as a scenario). You choose what gets applied before anything changes.
+        {t('dataUi.importLead')}
       </p>
       <p className="text-[11px] text-slate-500 leading-snug mb-3">
-        Bringing numbers in from a spreadsheet? Download the{' '}
+        {t('dataUi.csvTemplateLead')}{' '}
         <button
           onClick={() => {
             const blob = new Blob([buildTemplateCsv()], { type: 'text/csv' });
@@ -653,20 +641,19 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
             a.click();
             URL.revokeObjectURL(url);
           }}
-          className="text-blue-600 hover:underline font-medium"
+          className="font-medium text-blue-700 hover:underline"
         >
-          CSV import template
+          {t('dataUi.csvTemplate')}
         </button>
-        , fill in the value column (blank = default; leave all <code className="text-[10px]">spouse.*</code> rows
-        blank for a single plan), then choose the file below — it imports as a new scenario.
+        {t('dataUi.csvTemplateTail')}
       </p>
 
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+          className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900"
         >
-          <Upload size={13} /> Choose file…
+          <Upload size={13} /> {t('dataUi.chooseFile')}
         </button>
         <input
           ref={fileRef}
@@ -678,138 +665,137 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
         {fileName && <span className="text-[11px] text-slate-500">{fileName}</span>}
       </div>
 
-      {error && <p className="text-[11px] text-rose-600 mb-3">{error}</p>}
+      {error && <p className="mb-3 text-[11.5px] text-rose-700">{error}</p>}
 
       {/* Backup preview + chooser */}
       {parsed?.kind === 'backup' && (
-        <div className="rounded border border-slate-200 bg-white p-3 max-w-3xl">
+        <div className="max-w-3xl border border-slate-200 bg-white p-3">
           <div className="text-xs font-semibold text-slate-800 mb-2">
-            Full backup — {parsed.db.scenarios.length} scenario{parsed.db.scenarios.length === 1 ? '' : 's'}
-            {parsed.db.exportedAt ? ` · exported ${parsed.db.exportedAt.split('T')[0]}` : ''}
+            {t('dataUi.fullBackup', { count: parsed.db.scenarios.length })}
+            {parsed.db.exportedAt ? t('dataUi.exported', { date: parsed.db.exportedAt.split('T')[0] }) : ''}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 mb-3">
             {parsed.db.scenarios.map(s => (
-              <label key={s.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={checked.has(s.id)} onChange={() => toggle(s.id)} />
-                <span className="truncate">{s.name}</span>
-                {s.id === parsed.db.activeScenarioId && <span className="text-[10px] text-blue-600">active</span>}
-              </label>
+              <CheckBox key={s.id} size={12} checked={checked.has(s.id)} onChange={() => toggle(s.id)}>
+                <span className="text-xs text-slate-700">
+                  <span>{s.name}</span>
+                  {s.id === parsed.db.activeScenarioId && <span className="ml-1.5 text-[10px] font-semibold text-slate-900">{t('dataUi.active')}</span>}
+                </span>
+              </CheckBox>
             ))}
-            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2 mt-1 pt-2 border-t border-slate-100">
-              <input type="checkbox" checked={includeConfig} onChange={e => setIncludeConfig(e.target.checked)} />
-              <span className="font-medium">Also apply engine settings from the file</span>
-            </label>
+            <CheckBox size={12} className="sm:col-span-2 mt-1 pt-2 border-t border-slate-100"
+              checked={includeConfig} onChange={setIncludeConfig}>
+              <span className="text-xs font-medium text-slate-700">{t('dataUi.alsoEngine')}</span>
+            </CheckBox>
             {parsed.aiChats !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-                <input type="checkbox" checked={applyChats} onChange={e => setApplyChats(e.target.checked)} />
-                <span className="font-medium">Replace AI chats with the ones in the file</span>
-              </label>
+              <CheckBox size={12} className="sm:col-span-2" checked={applyChats} onChange={setApplyChats}>
+                <span className="text-xs font-medium text-slate-700">{t('dataUi.replaceChats')}</span>
+              </CheckBox>
             )}
             {parsed.aiSettings !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-                <input type="checkbox" checked={applyAiSettings} onChange={e => setApplyAiSettings(e.target.checked)} />
-                <span>
-                  <span className="font-medium">Replace AI connections &amp; model settings with the file's</span>
-                  <span className="block text-[10px] text-amber-600">This brings in the API keys saved in that backup</span>
+              <CheckBox size={12} className="sm:col-span-2" checked={applyAiSettings} onChange={setApplyAiSettings}>
+                <span className="text-xs text-slate-700">
+                  <span className="font-medium">{t('dataUi.replaceAi')}</span>
+                  <span className="block text-[10px] text-amber-700">{t('dataUi.replaceAiHint')}</span>
                 </span>
-              </label>
+              </CheckBox>
             )}
             {parsed.prefs !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer sm:col-span-2">
-                <input type="checkbox" checked={applyPrefs} onChange={e => setApplyPrefs(e.target.checked)} />
-                <span>
-                  <span className="font-medium">Also apply UI preferences from the file</span>
-                  <span className="block text-[10px] text-slate-400">Panel layout, print &amp; export options, welcome setting, steering crops</span>
+              <CheckBox size={12} className="sm:col-span-2" checked={applyPrefs} onChange={setApplyPrefs}>
+                <span className="text-xs text-slate-700">
+                  <span className="font-medium">{t('dataUi.alsoPrefs')}</span>
+                  <span className="block text-[10px] text-slate-400">{t('dataUi.alsoPrefsHint')}</span>
                 </span>
-              </label>
+              </CheckBox>
             )}
           </div>
-          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 mb-3">
-            Importing <span className="font-medium">replaces</span> your current scenarios{includeConfig ? ' and settings' : ''} with the ones selected above.
+          <p className="mb-3 border-l-2 border-amber-500 px-2.5 py-1 text-[11.5px] leading-relaxed text-amber-800">
+            {t('dataUi.replacesWarn', { andSettings: includeConfig ? t('dataUi.andSettings') : '' })}
           </p>
           <div className="flex gap-2">
             <button
               onClick={confirmBackup}
               disabled={checked.size === 0 && !includeConfig}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Check size={13} /> Apply import
+              <Check size={13} /> {t('dataUi.applyImport')}
             </button>
-            <button onClick={reset} className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded">Cancel</button>
+            <button onClick={reset} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-900">{tc('cancel')}</button>
           </div>
         </div>
       )}
 
       {/* Partial backup — no scenarios survived, settings/AI data did */}
       {parsed?.kind === 'partial' && (
-        <div className="rounded border border-slate-200 bg-white p-3 max-w-3xl">
-          <div className="text-xs font-semibold text-slate-800 mb-2">Partial backup — no scenarios inside</div>
+        <div className="max-w-3xl border border-slate-200 bg-white p-3">
+          <div className="text-xs font-semibold text-slate-800 mb-2">{t('dataUi.partialTitle')}</div>
           <p className="text-[11px] text-slate-500 leading-snug mb-3">
-            This backup's scenario list is empty (it was likely saved after the browser cleared the app's stored
-            plans — recovery tip: if an AI chat in this file discussed your numbers, its plan checkpoints may still
-            hold them). What's left can still be restored:
+            {t('dataUi.partialLead')}
           </p>
           <div className="grid grid-cols-1 gap-y-1.5 mb-3">
             {parsed.config !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={includeConfig} onChange={e => setIncludeConfig(e.target.checked)} />
-                <span className="font-medium">Apply engine settings from the file</span>
-              </label>
+              <CheckBox size={12} checked={includeConfig} onChange={setIncludeConfig}>
+                <span className="text-xs font-medium text-slate-700">{t('dataUi.applyEngine')}</span>
+              </CheckBox>
             )}
             {parsed.aiChats !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={applyChats} onChange={e => setApplyChats(e.target.checked)} />
-                <span className="font-medium">Replace AI chats with the ones in the file</span>
-              </label>
+              <CheckBox size={12} checked={applyChats} onChange={setApplyChats}>
+                <span className="text-xs font-medium text-slate-700">{t('dataUi.replaceChats')}</span>
+              </CheckBox>
             )}
             {parsed.aiSettings !== undefined && (
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={applyAiSettings} onChange={e => setApplyAiSettings(e.target.checked)} />
-                <span>
-                  <span className="font-medium">Replace AI connections &amp; model settings with the file's</span>
-                  <span className="block text-[10px] text-amber-600">This brings in the API keys saved in that backup</span>
+              <CheckBox size={12} checked={applyAiSettings} onChange={setApplyAiSettings}>
+                <span className="text-xs text-slate-700">
+                  <span className="font-medium">{t('dataUi.replaceAi')}</span>
+                  <span className="block text-[10px] text-amber-700">{t('dataUi.replaceAiHint')}</span>
                 </span>
-              </label>
+              </CheckBox>
             )}
           </div>
-          <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 mb-3">
-            Your current scenarios are <span className="font-medium">not touched</span> — only what you tick above is applied.
+          <p className="mb-3 border-l-2 border-slate-300 px-2.5 py-1 text-[11.5px] leading-relaxed text-slate-600">
+            {t('dataUi.notTouched')}
           </p>
           <div className="flex gap-2">
             <button
               onClick={confirmPartial}
               disabled={(!includeConfig || parsed.config === undefined) && !applyChats && !applyAiSettings}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Check size={13} /> Apply import
+              <Check size={13} /> {t('dataUi.applyImport')}
             </button>
-            <button onClick={reset} className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded">Cancel</button>
+            <button onClick={reset} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-900">{tc('cancel')}</button>
           </div>
         </div>
       )}
 
       {/* Projection preview + name */}
       {parsed?.kind === 'projection' && (
-        <div className="rounded border border-slate-200 bg-white p-3 max-w-3xl">
-          <div className="text-xs font-semibold text-slate-800 mb-1">Projection export — imports as a new scenario</div>
+        <div className="max-w-3xl border border-slate-200 bg-white p-3">
+          <div className="text-xs font-semibold text-slate-800 mb-1">{t('dataUi.projTitle')}</div>
           <p className="text-[11px] text-slate-500 mb-3">
-            Age {parsed.inputs.currentAge} → retire {parsed.inputs.retirementAge} · {parsed.inputs.provinceCode} ·
-            spending ${parsed.inputs.desiredSpending?.toLocaleString() ?? '—'}/yr{parsed.inputs.spouse?.enabled ? ' · with spouse' : ''}
+            {t('dataUi.projMeta', {
+              age: parsed.inputs.currentAge,
+              retire: parsed.inputs.retirementAge,
+              province: parsed.inputs.provinceCode,
+              spend: parsed.inputs.desiredSpending != null
+                ? `$${parsed.inputs.desiredSpending.toLocaleString(locale)}`
+                : '—',
+            })}{parsed.inputs.spouse?.enabled ? t('share.withSpouse') : ''}
           </p>
           <div className="flex items-center gap-2">
             <input
               value={projName}
               onChange={e => setProjName(e.target.value)}
-              placeholder="Name for the new scenario"
-              className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-700 focus:outline-none focus:border-blue-500"
+              placeholder={t('dataUi.projName')}
+              className="min-w-0 flex-1 border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none"
             />
             <button
               onClick={confirmProjection}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 shrink-0"
+              className="flex items-center gap-1.5 shrink-0 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
             >
-              <Check size={13} /> Import scenario
+              <Check size={13} /> {t('dataUi.importScenario')}
             </button>
-            <button onClick={reset} className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded">Cancel</button>
+            <button onClick={reset} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-900">{tc('cancel')}</button>
           </div>
         </div>
       )}

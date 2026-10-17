@@ -1,0 +1,49 @@
+{
+  "tagline": "— pour que votre argent dure aussi longtemps que vous",
+  "greeting": "Bonjour. Je suis RE — je veux vous aider à faire durer votre argent aussi longtemps que vous, en quelques questions. Rien de ce que vous dites ne quitte ce navigateur.",
+  "send": "envoyer",
+  "errorHint": "Un simple nombre suffit — essayez « {{example}} ».",
+  "privacyNote": "Rien n’est envoyé nulle part — tout se passe dans votre navigateur.",
+  "q": {
+    "currentAge": "D’abord — quel âge avez-vous en ce moment?",
+    "retirementAge": "À quel âge aimeriez-vous commencer à retirer? (Vous avez {{age}} ans maintenant.)",
+    "savings": "Environ combien avez-vous épargné en tout — REER, CELI, placements, le reste? Un chiffre rond suffit.",
+    "spending": "Une fois les retraits commencés, combien voulez-vous dépenser chaque année? Que coûterait une bonne année?",
+    "benefits": "Dernière question. Recevrez-vous le RPC et la SV — les prestations gouvernementales? La plupart des gens oui."
+  },
+  "placeholder": {
+    "currentAge": "ex. 55",
+    "retirementAge": "ex. 65",
+    "savings": "ex. 850k",
+    "spending": "ex. 85k",
+    "benefits": "oui / non / un montant"
+  },
+  "chips": {
+    "usual": "Oui, comme d’habitude",
+    "none": "Non"
+  },
+  "doneLead": "J’ai tout ce qu’il me faut. Voici votre réponse :",
+  "holds": "Votre argent dure jusqu’à {{age}} ans.",
+  "short": "Votre argent s’épuise à {{age}} ans — {{years}} ans trop tôt par rapport à {{maxAge}}.",
+  "holdsSub": "Avec ces chiffres, le plan tient — il reste de l’argent à {{maxAge}} ans.",
+  "shortSub": "Le tableau de bord vous laisse glisser les leviers et voir la réponse changer; l’assistant peut répondre aux questions sur le plan.",
+  "whatsNext": "La suite",
+  "next1": "Le tableau de bord est le plan en direct — glissez un curseur et la réponse se met à jour.",
+  "next2": "Les modifications s’enregistrent toutes seules. En haut à droite : l’icône de profil, ce sont vos plans; Annuler revient aux versions enregistrées.",
+  "next3": "Le bouton Assistant répond aux questions sur ce plan, à chaque page.",
+  "goDashboard": "Aller au tableau de bord",
+  "goDashboardArrow": "Aller au tableau de bord →",
+  "keepChatting": "Continuer à discuter",
+  "planName": "Mon plan",
+  "foot": {
+    "help": "Aide.",
+    "helpBody": "Répondez aux cinq questions et le plan se calcule. Dans le tableau de bord, chaque chiffre est en direct — glissez le point ou un curseur et la réponse change. Bloqué? L’assistant répond en langage simple aux questions sur votre plan.",
+    "about": "À propos.",
+    "aboutBody": "RE:tired est un modèle canadien de retraite à code ouvert — un seul moteur de projection du ménage, les mêmes chiffres derrière chaque écran, entièrement dans votre navigateur.",
+    "notAdvice": "Pas un conseil.",
+    "notAdviceBody": "RE:tired est un modèle éducatif, pas un conseil financier, fiscal ou de placement. Les règles fiscales et de prestations sont des approximations canadiennes — parlez à un professionnel avant d’agir.",
+    "private": "Privé par conception.",
+    "privateBody": "Pas de serveurs, pas de comptes, pas de suivi. Tout ce que vous tapez reste dans cet onglet.",
+    "legalLink": "Lire les documents juridiques et d’aide →"
+  }
+}

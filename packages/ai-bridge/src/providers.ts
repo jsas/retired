@@ -17,6 +17,7 @@
 // mixing it into the answer (gpt-oss, DeepSeek-R1, Qwen3 all emit one).
 
 import { effectiveGeneration, type AiConnection } from './connections.js';
+import { applyThinkingToRequest, resolveThinkingMode } from './thinking.js';
 
 export interface AgentToolCall {
   id: string;
@@ -29,7 +30,13 @@ export type StreamEvent =
   | { type: 'text'; text: string }
   | { type: 'reasoning'; text: string }
   | { type: 'tool_use'; call: AgentToolCall }
-  | { type: 'done'; stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'aborted' | 'unknown' };
+  | {
+      type: 'done';
+      stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'aborted' | 'unknown';
+      /** The model the provider actually served (OpenRouter's free router
+       *  rewrites `openrouter/free` to a concrete `:free` id). */
+      servedModel?: string;
+    };
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -96,6 +103,11 @@ export async function* streamChat(
       yield* streamWebLlm(conn, req);
       return;
     }
+    case 'bonsai': {
+      const { streamBonsai } = await import('./bonsaiProvider.js');
+      yield* streamBonsai(conn, req);
+      return;
+    }
     default:
       yield* streamOpenAICompatible(conn, req, fetchFn);
   }
@@ -125,6 +137,7 @@ export async function listModels(
 ): Promise<ModelInfo[]> {
   switch (conn.provider) {
     case 'webllm':
+    case 'bonsai':
       throw new ProviderError('On-computer models are managed from the Models section.');
     case 'gemini': {
       const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(conn.apiKey)}&pageSize=1000`;
@@ -192,7 +205,7 @@ export async function testConnection(
   conn: AiConnection,
   fetchFn: FetchFn = fetch,
 ): Promise<void> {
-  if (conn.provider === 'webllm') return;
+  if (conn.provider === 'webllm' || conn.provider === 'bonsai') return;
   if (conn.provider === 'ollama') {
     const base = (conn.baseUrl ?? '').replace(/\/+$/, '').replace(/\/v1$/, '');
     if (!base) throw new ProviderError('Set a base URL first.');
@@ -225,7 +238,6 @@ async function* streamAnthropic(
     // Anthropic REQUIRES max_tokens; the connection's setting (or the generous
     // default) applies unless the caller pinned a smaller budget for this call.
     max_tokens: req.maxTokens ?? gen.maxTokens,
-    system: req.system,
     stream: true,
     messages: req.messages.map(m => {
       if (m.role === 'user' && !m.toolResults?.length) {
@@ -252,6 +264,9 @@ async function* streamAnthropic(
       return { role: 'assistant', content };
     }),
   };
+  // Anthropic accepts an omitted system; an empty string still occupies the
+  // instruction slot and some models treat it as "stay in assistant mode".
+  if (req.system.trim()) body.system = req.system;
   if (req.tools?.length) {
     body.tools = req.tools.map(t => ({
       name: t.name,
@@ -260,6 +275,7 @@ async function* streamAnthropic(
     }));
   }
   if (gen.temperature !== undefined) body.temperature = gen.temperature;
+  applyThinkingToRequest(conn.provider, conn.model, resolveThinkingMode(conn.generation?.thinking), body);
 
   const res = await fetchFn('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -294,6 +310,10 @@ async function* streamAnthropic(
       const delta = evt.delta as Record<string, unknown> | undefined;
       if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
         yield { type: 'text', text: delta.text };
+      } else if ((delta?.type === 'thinking_delta' || delta?.type === 'reasoning_delta') && typeof delta.thinking === 'string') {
+        yield { type: 'reasoning', text: delta.thinking };
+      } else if (delta?.type === 'thinking_delta' && typeof delta.text === 'string') {
+        yield { type: 'reasoning', text: delta.text };
       } else if (delta?.type === 'input_json_delta' && tool && typeof delta.partial_json === 'string') {
         tool.json += delta.partial_json;
       }
@@ -337,7 +357,7 @@ async function* streamOpenAICompatible(
     // aren't cut off mid-thought) unless the caller pinned this call lower.
     max_tokens: req.maxTokens ?? gen.maxTokens,
     messages: [
-      { role: 'system', content: req.system },
+      ...(req.system.trim() ? [{ role: 'system', content: req.system }] : []),
       ...req.messages.flatMap((m): Array<Record<string, unknown>> => {
         if (m.role === 'assistant') {
           return [{
@@ -371,6 +391,7 @@ async function* streamOpenAICompatible(
     }));
   }
   if (gen.temperature !== undefined) body.temperature = gen.temperature;
+  applyThinkingToRequest(conn.provider, conn.model, resolveThinkingMode(conn.generation?.thinking), body);
 
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (conn.apiKey) headers.authorization = `Bearer ${conn.apiKey}`;
@@ -389,11 +410,13 @@ async function* streamOpenAICompatible(
 
   const tools = new Map<number, OaiToolBuf>();
   let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'unknown' = 'unknown';
+  let servedModel: string | undefined;
 
   for await (const data of sseLines(res)) {
     if (data === '[DONE]') break;
     let evt: Record<string, unknown>;
     try { evt = JSON.parse(data); } catch { continue; }
+    if (typeof evt.model === 'string' && evt.model) servedModel = evt.model;
     const choice = (evt.choices as Array<Record<string, unknown>> | undefined)?.[0];
     if (!choice) continue;
     const delta = choice.delta as Record<string, unknown> | undefined;
@@ -427,7 +450,7 @@ async function* streamOpenAICompatible(
     yield { type: 'tool_use', call: finishToolCall(buf) };
   }
   if (tools.size > 0 && stopReason === 'unknown') stopReason = 'tool_use';
-  yield { type: 'done', stopReason };
+  yield { type: 'done', stopReason, ...(servedModel ? { servedModel } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -445,7 +468,7 @@ async function* streamGemini(
 
   const gen = effectiveGeneration(conn);
   const body: Record<string, unknown> = {
-    systemInstruction: { parts: [{ text: req.system }] },
+    ...(req.system.trim() ? { systemInstruction: { parts: [{ text: req.system }] } } : {}),
     // Gemini defaults to a small output cap on some models — set it explicitly.
     generationConfig: {
       maxOutputTokens: req.maxTokens ?? gen.maxTokens,
@@ -476,6 +499,7 @@ async function* streamGemini(
       return [{ role: 'user', parts: [{ text: m.content }] }];
     }),
   };
+  applyThinkingToRequest(conn.provider, conn.model, resolveThinkingMode(conn.generation?.thinking), body);
   if (req.tools?.length) {
     body.tools = [{
       functionDeclarations: req.tools.map(t => ({
@@ -504,7 +528,9 @@ async function* streamGemini(
     const parts = ((cand.content as Record<string, unknown> | undefined)?.parts
       ?? []) as Array<Record<string, unknown>>;
     for (const p of parts) {
-      if (typeof p.text === 'string' && p.text) yield { type: 'text', text: p.text };
+      if (typeof p.text === 'string' && p.text) {
+        yield { type: p.thought === true ? 'reasoning' : 'text', text: p.text };
+      }
       const fc = p.functionCall as Record<string, unknown> | undefined;
       if (fc?.name) {
         callSeq += 1;

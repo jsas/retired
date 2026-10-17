@@ -19,6 +19,8 @@ import {
   type AiConnection,
   type AiGenerationSettings,
   type AiProviderId,
+  type ThinkingMode,
+  type ThinkingCapability,
 } from '@retired/ai-bridge';
 
 export {
@@ -33,14 +35,55 @@ export {
   defaultModelFor,
   defaultBaseUrlFor,
   connectionReady,
+  isLocalProvider,
+  thinkingCapability,
+  resolveThinkingMode,
 } from '@retired/ai-bridge';
-export type { AiConnection, AiGenerationSettings, AiProviderId };
+export type { AiConnection, AiGenerationSettings, AiProviderId, ThinkingMode, ThinkingCapability };
 
 export interface AiPromptPreset {
   id: string;
   title: string;
   text: string;
   builtin?: boolean;     // ships with the app; only user copies are deletable
+}
+
+/** What rides on each assistant request. Unset = send (historical default).
+ *  `personaLast` defaults on so a custom persona isn't drowned by later
+ *  tool/rules text on small local models. */
+export interface AiPromptSend {
+  includePersona?: boolean;
+  includePageLine?: boolean;
+  includeLocale?: boolean;
+  includeToolInstructions?: boolean;
+  includePromptCatalog?: boolean;
+  includeProgramRules?: boolean;
+  includeScenarioName?: boolean;
+  includePlanDigest?: boolean;
+  includeChatNote?: boolean;
+  /** Advertise native function-calling tools to the provider. Off = empty
+   *  tools array (the model still sees any tool-instruction text). */
+  sendTools?: boolean;
+  /** Put the persona AFTER mechanics so small models honor a custom override. */
+  personaLast?: boolean;
+}
+
+export const DEFAULT_AI_PROMPT_SEND: Required<AiPromptSend> = {
+  includePersona: true,
+  includePageLine: true,
+  includeLocale: true,
+  includeToolInstructions: true,
+  includePromptCatalog: true,
+  includeProgramRules: true,
+  includeScenarioName: true,
+  includePlanDigest: true,
+  includeChatNote: true,
+  sendTools: true,
+  personaLast: true,
+};
+
+export function resolveAiPromptSend(send?: AiPromptSend): Required<AiPromptSend> {
+  return { ...DEFAULT_AI_PROMPT_SEND, ...send };
 }
 
 export interface AiSettings {
@@ -50,9 +93,22 @@ export interface AiSettings {
   /** User-edited replacement for the assistant's base persona prompt. When
    *  unset the built-in DEFAULT_SYSTEM_PROMPT (agentLoop) is used. */
   systemPromptOverride?: string;
-  /** Opt-in: show the markup overlay (Ctrl+Shift+M) so you can draw / drag /
-   *  note on the app and have the assistant interpret it. Default off. */
-  markupOverlay?: boolean;
+  /** Replacement for the native-mode tool-instruction blurb. */
+  toolInstructionsNative?: string;
+  /** Replacement for the prompt-mode tool-instruction blurb. */
+  toolInstructionsPrompt?: string;
+  /** Replacement for the tools-off blurb. */
+  toolInstructionsOff?: string;
+  /** Per-piece send switches. Unset keys keep the default (send). */
+  promptSend?: AiPromptSend;
+  /** Per local-model tools override. Missing key = catalog default
+   *  (`toolCapable` on WEBLLM_MODELS). `'on'` / `'off'` force the mode for
+   *  testing without editing the catalog. Cloud connections ignore this. */
+  toolCapableByModel?: Record<string, 'on' | 'off'>;
+  /** Catalog keys (`local:<id>` or `<connectionId>:<model>`) the user put on
+   *  the chat picker. The Models page lists everything in Local / Free / Remote
+   *  dropdowns; only these show in the dock. */
+  favoriteModels?: string[];
 }
 
 const generationSchema = z.object({
@@ -61,6 +117,7 @@ const generationSchema = z.object({
   repetitionPenalty: z.number().min(0).max(2).optional(),
   presencePenalty: z.number().min(-2).max(2).optional(),
   frequencyPenalty: z.number().min(-2).max(2).optional(),
+  thinking: z.enum(['off', 'auto', 'low', 'medium', 'high']).optional(),
 });
 
 const connectionSchema = z.object({
@@ -81,13 +138,42 @@ const promptSchema = z.object({
   builtin: z.boolean().optional(),
 });
 
+const promptSendSchema = z.object({
+  includePersona: z.boolean().optional(),
+  includePageLine: z.boolean().optional(),
+  includeLocale: z.boolean().optional(),
+  includeToolInstructions: z.boolean().optional(),
+  includePromptCatalog: z.boolean().optional(),
+  includeProgramRules: z.boolean().optional(),
+  includeScenarioName: z.boolean().optional(),
+  includePlanDigest: z.boolean().optional(),
+  includeChatNote: z.boolean().optional(),
+  sendTools: z.boolean().optional(),
+  personaLast: z.boolean().optional(),
+});
+
 const settingsSchema = z.object({
   connections: z.array(connectionSchema),
   activeConnectionId: z.string().nullable(),
   prompts: z.array(promptSchema),
   systemPromptOverride: z.string().optional(),
-  markupOverlay: z.boolean().optional(),
+  toolInstructionsNative: z.string().optional(),
+  toolInstructionsPrompt: z.string().optional(),
+  toolInstructionsOff: z.string().optional(),
+  promptSend: promptSendSchema.optional(),
+  toolCapableByModel: z.record(z.string(), z.enum(['on', 'off'])).optional(),
+  favoriteModels: z.array(z.string()).optional(),
 });
+
+/** Catalog default unless the user forced this model on or off in Settings. */
+export function resolveLocalToolCapable(
+  catalogCapable: boolean | undefined,
+  override: 'on' | 'off' | undefined,
+): boolean {
+  if (override === 'on') return true;
+  if (override === 'off') return false;
+  return catalogCapable ?? true;
+}
 
 const STORAGE_KEY = 'retirement_ai_settings';
 /** Exported so the backup layer (db.ts / Data page) can carry AI settings in
@@ -103,12 +189,13 @@ export const SEED_PROMPTS: AiPromptPreset[] = [
     title: 'Get me started on a scenario',
     builtin: true,
     text:
-      'Help me build my retirement scenario from scratch. Interview me one question at a time about ' +
-      'my age, province, account balances (RRSP, TFSA, taxable, cash), annual contributions, pensions, ' +
-      'when I want to retire, and what I expect to spend. Ask about my spouse/partner too if I have one. ' +
-      'Use the get_scenario tool to see what is already filled in, and propose changes with ' +
-      'set_scenario_value as we go — never set anything without my agreement. When the basics are in ' +
-      'place, run the projection with run_projection and walk me through what it says.',
+      'Help me build my retirement scenario from scratch. If I already give numbers (age, retirement ' +
+      'age, spending, balances, province), call propose_plan immediately with those fields so I can ' +
+      'confirm them on a card — do not recap them in prose. Then ask one question at a time for ' +
+      'whatever is still missing: province, account balances (RRSP, TFSA, taxable, cash), annual ' +
+      'contributions, pensions, spouse/partner. Use get_scenario to see what is already filled in. ' +
+      'Never set anything without my agreement. When the basics are in place, run the projection ' +
+      'with run_projection and walk me through what it says.',
   },
   {
     id: 'on-track',
@@ -210,4 +297,55 @@ export function saveAiSettings(settings: AiSettings, kv: KV = defaultKV()): void
 
 export function newConnectionId(): string {
   return `conn-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+// ---------------------------------------------------------------------------
+// LIVE settings store
+// ---------------------------------------------------------------------------
+// AgentPage and ConnectionsPage used to each hold their own React copy of
+// loadAiSettings(). Editing the persona in Settings would then fight the
+// docked chat, and a backup restore would sit in localStorage until remount.
+// One module-level store (same pattern as chatStore) is the source of truth.
+
+let liveSettings: AiSettings = loadAiSettings();
+let liveSettingsKV: KV = defaultKV();
+const liveSettingsListeners = new Set<() => void>();
+
+function emitAiSettings(): void {
+  for (const l of liveSettingsListeners) l();
+}
+
+export function getAiSettings(): AiSettings {
+  return liveSettings;
+}
+
+export function subscribeAiSettings(fn: () => void): () => void {
+  liveSettingsListeners.add(fn);
+  return () => { liveSettingsListeners.delete(fn); };
+}
+
+/** Replace the whole live store and persist. */
+export function setAiSettings(next: AiSettings): void {
+  liveSettings = next;
+  saveAiSettings(liveSettings, liveSettingsKV);
+  emitAiSettings();
+}
+
+/** Functional update (AgentPage / Connections / Settings all share this). */
+export function updateAiSettings(mutate: (prev: AiSettings) => AiSettings): void {
+  setAiSettings(mutate(liveSettings));
+}
+
+/** Reload from storage (backup restore writes the key then calls this). */
+export function reloadAiSettingsFromStorage(kv: KV = liveSettingsKV): void {
+  liveSettingsKV = kv;
+  liveSettings = loadAiSettings(kv);
+  emitAiSettings();
+}
+
+/** Test seam. */
+export function resetAiSettingsForTests(kv: KV = memoryKV()): void {
+  liveSettingsKV = kv;
+  liveSettings = loadAiSettings(kv);
+  emitAiSettings();
 }

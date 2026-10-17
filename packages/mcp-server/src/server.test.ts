@@ -66,22 +66,38 @@ describe('retirement MCP server (in-memory round trip)', () => {
   it('reports tool-level errors as isError text, not a transport failure', async () => {
     const { client, server } = await connected(makeContext());
     const result = await client.callTool({
-      name: 'set_scenario_value',
-      arguments: { field: 'events', value: [] }, // structural field: refused
+      name: 'propose_plan',
+      arguments: { changes: { events: [] } }, // structural field: refused
     });
 
     expect(result.isError).toBe(true);
     const text = (result.content as Array<{ type: string; text: string }>)
       .filter(c => c.type === 'text').map(c => c.text).join('\n');
-    expect(text).toContain('not changeable');
+    expect(text).toContain('not a changeable');
+    await Promise.allSettled([client.close(), server.close()]);
+  });
+
+  it('accepts propose_plan with bare top-level fields (no changes wrapper)', async () => {
+    const { client, server } = await connected(makeContext());
+    const result = await client.callTool({
+      name: 'propose_plan',
+      arguments: { currentAge: 51, retirementAge: 54, rrspBalance: 1_000_000 },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const structured = result.structuredContent as Record<string, Record<string, unknown>>;
+    const mutation = structured[MUTATION_STRUCTURED_KEY];
+    expect((mutation.patch as Record<string, unknown>).currentAge).toBe(51);
+    expect((mutation.patch as Record<string, unknown>).retirementAge).toBe(54);
+    expect((mutation.patch as Record<string, unknown>).rrspBalance).toBe(1_000_000);
     await Promise.allSettled([client.close(), server.close()]);
   });
 
   it('carries a mutation proposal in structuredContent (confirm-before-apply survives MCP)', async () => {
     const { client, server } = await connected(makeContext());
     const result = await client.callTool({
-      name: 'set_scenario_value',
-      arguments: { field: 'cppStartAge', value: 65 },
+      name: 'propose_plan',
+      arguments: { changes: { cppStartAge: 65 } },
     });
 
     expect(result.isError).toBeFalsy();

@@ -43,14 +43,14 @@ function outcomeToCallToolResult(outcome: ToolOutcome): CallToolResult {
         isError: true,
       };
     case 'mutation': {
-      const { patch, label, preview, rationale, revert } = outcome;
+      const { patch, label, preview, rationale, revert, navigate, createPartner } = outcome;
       return {
         content: [{
           type: 'text',
           text: `${label} — proposal created; waiting for the user to confirm.`,
         }],
         structuredContent: {
-          [MUTATION_STRUCTURED_KEY]: { patch, label, preview, rationale, revert },
+          [MUTATION_STRUCTURED_KEY]: { patch, label, preview, rationale, revert, navigate, createPartner },
         },
       };
     }
@@ -80,10 +80,7 @@ export function createRetirementMcpServer(
   >) {
     server.registerTool(
       name,
-      {
-        description: entry.description,
-        inputSchema: entry.schema,
-      },
+      { description: entry.description, inputSchema: entry.schema },
       (args) => {
         const outcome = executeToolCall(capabilities.getContext(), {
           // executeToolCall validates args against the same schema; the MCP

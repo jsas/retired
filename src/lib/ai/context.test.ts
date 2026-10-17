@@ -35,6 +35,7 @@ describe('defaultContextSize', () => {
     // compacted into incoherence (the 8192 default caused word-salad rambles),
     // small enough to compile on a mid-range GPU. Cloud gets a large window.
     expect(defaultContextSize('webllm')).toBe(16384);
+    expect(defaultContextSize('bonsai')).toBe(16384);
     expect(defaultContextSize('openai')).toBeGreaterThan(16384);
   });
 });

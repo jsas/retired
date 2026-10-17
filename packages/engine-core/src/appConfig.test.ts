@@ -43,3 +43,30 @@ describe('validateAppConfig — general.promptToSaveOnSwitch', () => {
     expect(out?.general).toEqual(DEFAULT_APP_CONFIG.general);
   });
 });
+
+describe('validateAppConfig — general.locale', () => {
+  it('is absent in the shipped defaults (host falls back to the browser)', () => {
+    expect(DEFAULT_APP_CONFIG.general.locale).toBeUndefined();
+  });
+
+  it('round-trips a stored fr-CA', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
+    raw.general.locale = 'fr-CA';
+    const out = validateAppConfig(raw);
+    expect(out?.general.locale).toBe('fr-CA');
+  });
+
+  it('leaves a missing locale undefined so the host can detect', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
+    delete raw.general.locale;
+    const out = validateAppConfig(raw);
+    expect(out?.general.locale).toBeUndefined();
+  });
+
+  it('drops an unknown locale so the host can fall back to the browser', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
+    raw.general.locale = 'xx-XX';
+    const out = validateAppConfig(raw);
+    expect(out?.general.locale).toBeUndefined();
+  });
+});

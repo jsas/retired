@@ -105,14 +105,16 @@ function orderingsFor(inputs: RetirementInputs): WithdrawalAccount[][] {
 // unconstrained handling: return the ceiling itself rather than letting the
 // binary search run on a surviving `hi` (violating its lo-survives/hi-fails
 // invariant) and landing on the expansion overshoot, a value ABOVE the ceiling.
-// Exported for tests: the S-02 regression drives a runaway plan directly.
+// Exported for tests (the S-02 runaway-plan regression) and for the UI so it can
+// render the "no cap reached" case honestly instead of showing the $5M sentinel.
+export const SUSTAINABLE_SPENDING_CEILING = 5000000;
 export function sustainableSpending(inputs: RetirementInputs, config: AppConfig): number {
   const survives = (spend: number) => {
     const household = toHousehold({ ...inputs, desiredSpending: spend });
     return householdOutcome(calculateHouseholdModel(household, config), household).depletionAge === null;
   };
   if (!survives(0)) return 0; // runs out even at zero spending (huge fixed events)
-  const START_CEILING = 500000, ABSOLUTE_CEILING = 5000000;
+  const START_CEILING = 500000, ABSOLUTE_CEILING = SUSTAINABLE_SPENDING_CEILING;
   let lo = 0, hi = START_CEILING;
   // Expand hi until it fails (caps runaway plans) or we hit the absolute
   // ceiling. hiSurvives tracks the last probe so the ceiling case is detected

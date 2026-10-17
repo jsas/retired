@@ -8,4 +8,8 @@ export * from './toolTypes';
 export * from './schemas';
 export * from './checkpoints';
 export * from './memoryStore';
+// The page map (catalog of routes) the assistant's navigation tools and the
+// Vite sitemap plugin both draw from — exported here so host code and build
+// plugins import it once from this barrel.
+export * from './navigation';
 export * from './tools';

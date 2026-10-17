@@ -9,9 +9,12 @@
 // free and private. Nothing is ingested back.
 
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
+import { looksLikeUnsetPlan } from '@retired/engine-core/exampleScenarios';
 import { householdOutcome } from '@retired/engine-core/retirementEngine';
 import { toHousehold } from '@retired/engine-core/householdTypes';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
+import type { Locale } from './locale';
+import { i18n } from './i18n';
 
 export interface QAPreset {
   id: string;
@@ -152,7 +155,10 @@ export function buildPlanDigest(inputs: RetirementInputs, ctx: QAContext): strin
       `  success rate ${(ctx.mcResults.successRate * 100).toFixed(1)}%, ` +
       `median final balance ${money(ctx.mcResults.medianFinalBalance)}\n`;
   }
-  return `PLAN INPUTS (JSON):\n${JSON.stringify(inputs, null, 2)}\n\nCOMPUTED PROJECTION (summary):\n${digests.join('\n')}\n${mc}`;
+  const setup = looksLikeUnsetPlan(inputs)
+    ? 'SETUP: this plan is an unfilled starter (all account balances $0). Ages, spending, and province here are placeholders. If they say fill the rest / use defaults, call propose_plan this turn with remaining starter defaults.\n\n'
+    : '';
+  return `${setup}PLAN INPUTS (JSON):\n${JSON.stringify(inputs, null, 2)}\n\nCOMPUTED PROJECTION (summary):\n${digests.join('\n')}\n${mc}`;
 }
 
 /**
@@ -165,8 +171,19 @@ export function buildQAPrompt(
   ctx: QAContext,
   preset: QAPreset,
   customQuestion?: string,
+  locale?: Locale,
 ): string {
-  const question = (customQuestion?.trim() || preset.question).trim();
+  const localizedQuestion = locale
+    ? i18n.t(`qa.${preset.id}`, { ns: 'prompts', lng: locale, defaultValue: preset.question })
+    : preset.question;
+  const question = (customQuestion?.trim() || localizedQuestion).trim();
+  const frame = locale
+    ? i18n.t('qa.frame', {
+      ns: 'prompts',
+      lng: locale,
+      defaultValue: 'You are a Canadian retirement-planning analyst. Answer the question at the end using ONLY the plan and the computed projection below — do not re-derive the numbers, and give general educational analysis, not personalized financial advice.',
+    })
+    : 'You are a Canadian retirement-planning analyst. Answer the question at the end using ONLY the plan and the computed projection below — do not re-derive the numbers, and give general educational analysis, not personalized financial advice.';
 
   const digests: string[] = [
     // The household verdict leads (issue A-03); per-person digests follow as detail.
@@ -185,7 +202,7 @@ export function buildQAPrompt(
       `median final balance ${money(ctx.mcResults.medianFinalBalance)}\n`;
   }
 
-  return `You are a Canadian retirement-planning analyst. Answer the question at the end using ONLY the plan and the computed projection below — do not re-derive the numbers, and give general educational analysis, not personalized financial advice.
+  return `${frame}
 
 PLAN INPUTS (JSON):
 ${JSON.stringify(inputs, null, 2)}

@@ -51,7 +51,9 @@ export async function launchChrome({ port = 9222, gpu = true } = {}) {
     `--remote-debugging-port=${port}`,
     '--no-first-run',
     '--no-default-browser-check',
-    '--user-data-dir=' + `${process.env.TEMP}/retired-bakeoff-profile`,
+    // Shared profile so weight Cache API hits survive a port change. Override
+    // with BAKEOFF_PROFILE when a leftover Chrome still holds the default dir.
+    '--user-data-dir=' + (process.env.BAKEOFF_PROFILE ?? `${process.env.TEMP}/retired-bakeoff-profile`),
     // WebGPU on headless: don't force-disable GPU; enable the unsafe fallback so
     // SwiftShader/ANGLE still exposes an adapter where hardware is present.
     ...(gpu ? ['--enable-unsafe-webgpu', '--enable-features=Vulkan'] : []),
@@ -87,6 +89,8 @@ export class TabSession {
     this.ws = null;
     this.seq = 0;
     this.pending = new Map();
+    this.contextId = null;           // page's default execution context (for callFn)
+    this._contextWaiters = [];
   }
 
   async connect() {
@@ -98,6 +102,16 @@ export class TabSession {
     });
     this.ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
+      // Runtime.enable emits executionContextCreated for each existing/new context.
+      if (msg.method === 'Runtime.executionContextCreated') {
+        const ctx = msg.params?.context;
+        // Keep the page's default (main-world) context — it has an empty origin/auxData.isDefault.
+        if (ctx && (ctx.auxData?.isDefault ?? true)) {
+          this.contextId = ctx.id;
+          for (const w of this._contextWaiters.splice(0)) w(ctx.id);
+        }
+        return;
+      }
       if (msg.id != null && this.pending.has(msg.id)) {
         const { resolve, reject } = this.pending.get(msg.id);
         this.pending.delete(msg.id);
@@ -105,6 +119,9 @@ export class TabSession {
         else resolve(msg.result);
       }
     };
+    // Turn on the Runtime domain so Chrome tells us the execution context id;
+    // callFunctionOn needs it (no objectId → must name a context).
+    await this._send('Runtime.enable', {});
   }
 
   _send(method, params) {
@@ -138,19 +155,44 @@ export class TabSession {
    *  there's nothing to mis-escape (CodeQL: improper code sanitization).
    *  `fnDecl` is a function *declaration* source, e.g. `(a, b) => a + b`; args are
    *  JSON-serializable. Returns the awaited, by-value result. */
-  async callFn(fnDecl, args = [], { timeoutMs = 600000 } = {}) {
-    const result = await this._send('Runtime.callFunctionOn', {
-      functionDeclaration: fnDecl,
-      arguments: args.map((v) => ({ value: v })),
-      awaitPromise: true,
-      returnByValue: true,
-      timeout: timeoutMs,
-    });
-    if (result.exceptionDetails) {
-      const d = result.exceptionDetails;
-      throw new Error('page exception: ' + (d.exception?.description ?? d.text ?? 'unknown'));
+  async callFn(fnDecl, args = [], { timeoutMs = 600000, retries = 40, retryDelayMs = 250 } = {}) {
+    let lastErr;
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        // callFunctionOn with no objectId must name an execution context, or Chrome
+        // replies "Either objectId or executionContextId or uniqueContextId must be
+        // specified". Wait (briefly) for Runtime.enable to deliver the default one.
+        if (this.contextId == null) {
+          await new Promise((resolve, reject) => {
+            const t = setTimeout(() => reject(new Error('execution context never reported')), 10000);
+            this._contextWaiters.push((id) => { clearTimeout(t); resolve(id); });
+          });
+        }
+        const result = await this._send('Runtime.callFunctionOn', {
+          functionDeclaration: fnDecl,
+          arguments: args.map((v) => ({ value: v })),
+          executionContextId: this.contextId,
+          awaitPromise: true,
+          returnByValue: true,
+          timeout: timeoutMs,
+        });
+        if (result.exceptionDetails) {
+          const d = result.exceptionDetails;
+          throw new Error('page exception: ' + (d.exception?.description ?? d.text ?? 'unknown'));
+        }
+        return result.result?.value;
+      } catch (e) {
+        lastErr = e;
+        // A model load can navigate/reload the tab and destroy the context we
+        // captured; the next Runtime.executionContextCreated re-arms it. Retry
+        // those transients; a genuine page error still throws immediately.
+        const transient = /Execution context was destroyed|Cannot find context|Inspected target navigated|Session closed|Target closed|execution context/i.test(e.message);
+        if (!transient) throw e;
+        this.contextId = null;   // force re-resolve against the fresh context
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+      }
     }
-    return result.result?.value;
+    throw lastErr;
   }
 
   /** Like eval, but tolerant of the navigation race: a freshly-opened tab can

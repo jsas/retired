@@ -8,7 +8,8 @@
 // tab via web-llm — no server, no proxying.
 //
 // Usage:
-//   node training/driver/runBakeoff.mjs                      # all candidates, smallest first
+//   node training/driver/runBakeoff.mjs                      # tiny-tier candidates, smallest first
+//   node training/driver/runBakeoff.mjs --set family         # dropped families + Qwen3.5 4B control
 //   node training/driver/runBakeoff.mjs --only Qwen3-0.6B    # one base
 //   node training/driver/runBakeoff.mjs --limit 20           # first N eval records (smoke test)
 //   node training/driver/runBakeoff.mjs --serve-port 8788 --cdp-port 9222
@@ -21,7 +22,23 @@ import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { launchChrome, openTab, TabSession } from './cdp.mjs';
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+/** Kill a detached Chrome (and its GPU children). `child.kill()` on Windows
+ *  leaves the tree alive, which is how the last run left a dead adapter. */
+function killChrome(child) {
+  if (!child?.pid) return;
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      child.kill('SIGKILL');
+    }
+  } catch { /* already gone */ }
+}
 
 const here = dirname(fileURLToPath(import.meta.url));       // training/driver
 const trainingDir = dirname(here);                          // training/
@@ -32,6 +49,7 @@ function arg(flag) {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 const ONLY = arg('--only');
+const SET = arg('--set') ?? 'tiny';
 const LIMIT = arg('--limit') ? Number(arg('--limit')) : undefined;
 const SERVE_PORT = Number(arg('--serve-port') ?? 8788);
 const CDP_PORT = Number(arg('--cdp-port') ?? 9222);
@@ -98,56 +116,103 @@ async function main() {
   const evalRecords = LIMIT ? records.slice(0, LIMIT) : records;
   console.error(`eval set: ${evalRecords.length} tool-call records (system prompt ${systemPrompt.length} chars)`);
 
-  const { CANDIDATES_SMALLEST_FIRST } = await import('./candidates.mjs');
+  const { CANDIDATES_SMALLEST_FIRST, FAMILY_CANDIDATES } = await import('./candidates.mjs');
+  const pool = SET === 'family' ? FAMILY_CANDIDATES : CANDIDATES_SMALLEST_FIRST;
+  if (SET !== 'tiny' && SET !== 'family') {
+    console.error(`unknown --set ${SET} (want tiny|family)`);
+    process.exit(2);
+  }
   const bases = ONLY
-    ? CANDIDATES_SMALLEST_FIRST.filter((b) => b.modelId.includes(ONLY) || b.label.includes(ONLY))
-    : CANDIDATES_SMALLEST_FIRST;
+    ? pool.filter((b) => b.modelId.includes(ONLY) || b.label.includes(ONLY))
+    : pool;
   if (bases.length === 0) { console.error(`no base matched --only ${ONLY}`); process.exit(2); }
 
   const server = await serve();
-  const chrome = await launchChrome({ port: CDP_PORT, gpu: true });
+  let chrome = await launchChrome({ port: CDP_PORT, gpu: true });
+
+  async function freshChrome(reason) {
+    console.error(`restarting Chrome (${reason})`);
+    killChrome(chrome);
+    await sleep(4000);
+    chrome = await launchChrome({ port: CDP_PORT, gpu: true });
+  }
+
+  async function openHarness() {
+    const target = await openTab(`http://127.0.0.1:${SERVE_PORT}/harness.html`, CDP_PORT);
+    const tab = new TabSession(target.webSocketDebuggerUrl);
+    await tab.connect();
+    await tab.evalWhenReady(`(async () => { for (let i=0;i<100 && !window.BAKEOFF_READY;i++) await new Promise(r=>setTimeout(r,100)); if (!window.BAKEOFF_READY) throw new Error('harness never became ready'); return true; })()`);
+    return tab;
+  }
 
   try {
     for (const base of bases) {
       console.error(`\n=== ${base.label} (${base.modelId}, ~${base.sizeGB}GB) ===`);
-      const target = await openTab(`http://127.0.0.1:${SERVE_PORT}/harness.html`, CDP_PORT);
-      const tab = new TabSession(target.webSocketDebuggerUrl);
-      await tab.connect();
+      const outFile = join(outDir, `${base.modelId}.replies.json`);
+      if (existsSync(outFile)) {
+        console.error(`skip — already have ${outFile}`);
+        continue;
+      }
 
-      // Wait for the module script to install the BAKEOFF channel.
-      await tab.evalWhenReady(`(async () => { for (let i=0;i<100 && !window.BAKEOFF_READY;i++) await new Promise(r=>setTimeout(r,100)); if (!window.BAKEOFF_READY) throw new Error('harness never became ready'); return true; })()`);
+      let tab = await openHarness();
+      let gpu = await tab.evalWhenReady(`(async () => window.BAKEOFF.hasWebGPU())()`);
+      if (!gpu) {
+        await tab.close();
+        await freshChrome('no WebGPU adapter');
+        tab = await openHarness();
+        gpu = await tab.evalWhenReady(`(async () => window.BAKEOFF.hasWebGPU())()`);
+        if (!gpu) {
+          console.error('webgpu adapter: NO after restart — skipping this base');
+          writeFileSync(join(outDir, `${base.modelId}.error.txt`), 'webgpu adapter: NO after restart');
+          await tab.close();
+          continue;
+        }
+      }
+      console.error('webgpu adapter: YES');
 
-      const gpu = await tab.evalWhenReady(`(async () => window.BAKEOFF.hasWebGPU())()`);
-      console.error(`webgpu adapter: ${gpu ? 'YES' : 'NO — aborting this base'}`);
-      if (!gpu) { await tab.close(); continue; }
-
-      // Download + warm the model (slow on first run; cached in the browser profile after).
-      // modelId crosses as a bound argument, not interpolated into the eval source.
-      await tab.callFn(`(modelId) => window.BAKEOFF.load(modelId)`, [base.modelId], { timeoutMs: 900000 });
+      try {
+        await tab.callFn(`(modelId) => window.BAKEOFF.load(modelId)`, [base.modelId], { timeoutMs: 900000 });
+      } catch (err) {
+        console.error(`LOAD FAIL ${base.label}: ${err.message ?? err}`);
+        writeFileSync(join(outDir, `${base.modelId}.error.txt`), String(err.message ?? err));
+        await tab.close();
+        await freshChrome(`load fail ${base.label}`);
+        continue;
+      }
       console.error('model loaded; running eval…');
 
       const replies = [];
-      for (let i = 0; i < evalRecords.length; i++) {
-        const q = evalRecords[i].question;
-        const text = await tab.callFn(
-          `(systemPrompt, question) => window.BAKEOFF.reply(systemPrompt, question)`,
-          [systemPrompt, q],
-          { timeoutMs: 120000 },
-        );
-        replies.push(text);
-        if ((i + 1) % 10 === 0 || i === evalRecords.length - 1) {
-          console.error(`  ${i + 1}/${evalRecords.length}`);
+      try {
+        for (let i = 0; i < evalRecords.length; i++) {
+          const q = evalRecords[i].question;
+          let text;
+          try {
+            text = await tab.callFn(
+              `(systemPrompt, question) => window.BAKEOFF.reply(systemPrompt, question)`,
+              [systemPrompt, q],
+              { timeoutMs: 180000 },
+            );
+          } catch (err) {
+            text = `REPLY_FAIL: ${err.message ?? err}`;
+            console.error(`  q${i + 1} FAIL: ${err.message ?? err}`);
+          }
+          replies.push(text);
+          if ((i + 1) % 10 === 0 || i === evalRecords.length - 1) {
+            console.error(`  ${i + 1}/${evalRecords.length}`);
+          }
         }
+        writeFileSync(outFile, JSON.stringify(replies, null, 2));
+        console.error(`wrote ${outFile} (${replies.length} replies)`);
+      } catch (err) {
+        console.error(`EVAL FAIL ${base.label}: ${err.message ?? err}`);
+        writeFileSync(join(outDir, `${base.modelId}.error.txt`), String(err.message ?? err));
       }
-
-      const outFile = join(outDir, `${base.modelId}.replies.json`);
-      writeFileSync(outFile, JSON.stringify(replies, null, 2));
-      console.error(`wrote ${outFile} (${replies.length} replies)`);
       await tab.close();
+      await freshChrome(`done ${base.label}`);
     }
   } finally {
     try { server.close(); } catch {}
-    try { chrome.kill?.(); } catch {}
+    killChrome(chrome);
   }
 
   console.error('\nbake-off done. Score a base with:');

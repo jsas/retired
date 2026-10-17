@@ -15,7 +15,8 @@
 import { z } from 'zod';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { calculateHousehold, householdOutcome } from '@retired/engine-core/retirementEngine';
-import { toHousehold } from '@retired/engine-core/householdTypes';
+import { looksLikeUnsetPlan } from '@retired/engine-core/exampleScenarios';
+import { toHousehold, baselineSpouse, personPlanFromSpouse } from '@retired/engine-core/householdTypes';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { runStrategies, type StrategyFilter } from '@retired/engine-core/strategies';
 import { solveSustainableSpending } from '@retired/engine-core/spendingSolver';
@@ -27,6 +28,10 @@ import {
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
 import { MemoryStore } from './memoryStore';
 import type { AgentToolCall, ToolSpec } from './toolTypes';
+import {
+  NAV_CATALOG, rankPages, hashForEntry, canonicalView, pageForView, searchablePages,
+  type NavEntry, type View,
+} from './navigation';
 
 // ---------------------------------------------------------------------------
 // Tool argument schemas
@@ -55,41 +60,48 @@ const compareScenariosArgs = z.object({
     .describe('Up to 4 variants compared in ONE call (e.g. three retirement ages). Current plan is always included as the baseline. Takes precedence over the singular overrides.'),
 });
 
-const setScenarioValueArgs = z.object({
-  field: z.string().min(1)
-    .describe('Top-level RetirementInputs field name (e.g. desiredSpending, retirementAge, rrspBalance, cppStartAge).'),
-  value: z.unknown()
-    .describe('The proposed new value. Must satisfy the scenario schema (numbers as numbers; nullable ages may be null).'),
-  rationale: z.string().optional()
-    .describe('One sentence on why this change helps — shown to the user on the confirm card.'),
-});
+/** Models often skip the `changes` wrapper and pass currentAge / rrspBalance
+ *  at the top level. MCP validates the advertised schema before
+ *  executeToolCall, so `changes` cannot be required — wrap leftover keys
+ *  here so either shape reaches proposePlan. */
+function wrapPlanChanges(raw: unknown): { changes: Record<string, unknown>; rationale?: string } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { changes: {} };
+  const obj = raw as Record<string, unknown>;
+  const rationale = typeof obj.rationale === 'string' ? obj.rationale : undefined;
+  if (obj.changes != null && typeof obj.changes === 'object' && !Array.isArray(obj.changes)) {
+    return { changes: obj.changes as Record<string, unknown>, rationale };
+  }
+  const { rationale: _r, changes: _c, ...rest } = obj;
+  return { changes: rest, rationale };
+}
 
-const proposePatchArgs = z.object({
-  changes: z.record(z.string(), z.unknown())
-    .describe('A batch of top-level RetirementInputs fields to change at once (e.g. {"cppStartAge":70,"oasStartAge":70}). Each is validated; invalid entries are rejected, not proposed.'),
+const proposePlanArgs = z.object({
+  changes: z.record(z.string(), z.unknown()).optional()
+    .describe('Plan numbers the user just gave: currentAge, retirementAge, desiredSpending, rrspBalance, tfsaBalance, taxableBalance, cashCushionBalance, contributions, provinceCode, cpp/oas, etc. Scalars only. Prefer this wrapper; bare top-level fields also work. Call this immediately — do not recap the numbers in prose.'),
   rationale: z.string().optional()
-    .describe('One sentence on why this batch helps — shown on the confirm card.'),
-});
+    .describe('One sentence on the card (e.g. "Start the plan with the numbers you gave").'),
+}).passthrough();
 
 const proposeSpouseArgs = z.object({
-  changes: z.record(z.string(), z.unknown())
-    .describe('Spouse fields to set. Use {"enabled":true,...} to add a spouse (fill the key fields), or {"enabled":false} to remove. Any SpouseInputs scalar field is allowed.'),
+  scenarioId: z.string().optional()
+    .describe('Id of an existing saved plan to link as the partner. Preferred when the partner already has a plan.'),
+  enabled: z.boolean().optional()
+    .describe('false unlinks the partner (this plan becomes single). true with changes mints a new partner plan and links it.'),
+  name: z.string().optional()
+    .describe('Name for a newly created partner plan (default "Partner").'),
+  changes: z.record(z.string(), z.unknown()).optional()
+    .describe('Person fields for a NEW partner plan (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending). Ignored when scenarioId is set. Use {"enabled":false} or enabled:false to unlink.'),
   rationale: z.string().optional(),
 });
-
-const proposeIncomeArgs = incomeSourceSchema
-  .omit({ id: true })
-  .extend({ rationale: z.string().optional() })
-  .describe('An income source to add. kind "pension" = DB/bridge pension (split-eligible; endAge a number for a bridge, null for lifetime; optional pensionAdjustment reduces RRSP room). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room like a job). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible).');
 
 const manageIncomeArgs = z.object({
-  action: z.enum(['update', 'remove']),
-  target: z.string().min(1)
-    .describe('Which income source: its id, or its label if unique (e.g. "Work DB").'),
+  action: z.enum(['add', 'update', 'remove']),
+  target: z.string().min(1).optional()
+    .describe('For update/remove: the income source id, or its label if unique (e.g. "Work DB").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the income-source fields to change (annualAmount, startAge, endAge, indexedToCpi, label, kind, destAccount, topUpSpending, savingsRate, pensionAdjustment). endAge must be a number or explicit null. savingsRate (0–1) is the share of after-tax pay saved; pensionAdjustment is a DB pension\'s annual RRSP-room offset.'),
+    .describe('For update: the income-source fields to change. For add: ignored — pass the source fields at the top level instead.'),
   rationale: z.string().optional(),
-});
+}).passthrough();
 
 const proposeSpendingBandsArgs = z.object({
   bands: z.array(z.object({ fromAge: z.number(), pctOfBase: z.number() }))
@@ -111,29 +123,6 @@ const proposeMarketPeriodsArgs = z.object({
   rationale: z.string().optional(),
 });
 
-const proposeCashEventArgs = cashEventSchema
-  .omit({ id: true })
-  .extend({ rationale: z.string().optional() })
-  .describe('A one-time or recurring cash event (inflow to an account, or outflow adding to spending). Set endAge to repeat yearly through that age.');
-
-const proposeReverseMortgageArgs = z.object({
-  changes: reverseMortgageSchema.partial()
-    .describe('Reverse-mortgage fields to set. Use {"enabled":true,...} to turn it on (homeValue, interestRate, draws/top-up), {"enabled":false} to turn it off.'),
-  rationale: z.string().optional(),
-});
-
-const proposeRdspArgs = z.object({
-  changes: rdspSchema.partial()
-    .describe('RDSP fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, familyIncome, dtcEligible), {"enabled":false} to turn it off.'),
-  rationale: z.string().optional(),
-});
-
-const proposeFhsaArgs = z.object({
-  changes: fhsaSchema.partial()
-    .describe('FHSA fields to set. Use {"enabled":true,...} to turn it on (balance, contribution, contributionBasis, openAge), {"enabled":false} to turn it off.'),
-  rationale: z.string().optional(),
-});
-
 const proposeRevertArgs = z.object({
   checkpoint: z.string().optional()
     .describe('Which checkpoint to revert to: its label, or omit for the most recent one. Labels come from the change cards the user approved ("Add pension").'),
@@ -141,25 +130,28 @@ const proposeRevertArgs = z.object({
 });
 
 const manageCashEventArgs = z.object({
-  action: z.enum(['update', 'remove']),
-  target: z.string().min(1)
-    .describe('Which cash event: its id, or its label if unique (e.g. "Downsize").'),
+  action: z.enum(['add', 'update', 'remove']),
+  target: z.string().min(1).optional()
+    .describe('For update/remove: the cash event id, or its label if unique (e.g. "Downsize").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the cash-event fields to change (age, amount, direction, endAge, account, label). Missing fields keep their current values.'),
+    .describe('For update: the cash-event fields to change. For add: ignored — pass the event fields at the top level instead.'),
   rationale: z.string().optional(),
-});
-
-const proposeDebtArgs = debtSchema
-  .omit({ id: true })
-  .extend({ rationale: z.string().optional() })
-  .describe('A debt to add. kind "mortgage" = a home loan; "creditCard", "loan", "lineOfCredit", or "other" for consumer debt. balance is what\'s owed today, interestRate is the annual rate (e.g. 0.051 = 5.1%), monthlyPayment is the required payment. Payments are funded from spending each year until the balance is paid off (then they stop). Omit startAge to start now; set endAge to stop early (rare).');
+}).passthrough();
 
 const manageDebtArgs = z.object({
-  action: z.enum(['update', 'remove']),
-  target: z.string().min(1)
-    .describe('Which debt: its id, or its label if unique (e.g. "Mortgage").'),
+  action: z.enum(['add', 'update', 'remove']),
+  target: z.string().min(1).optional()
+    .describe('For update/remove: the debt id, or its label if unique (e.g. "Mortgage").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the debt fields to change (label, kind, balance, interestRate, monthlyPayment, startAge, endAge). endAge must be a number or explicit null. Missing fields keep their current values.'),
+    .describe('For update: the debt fields to change. For add: ignored — pass the debt fields at the top level instead.'),
+  rationale: z.string().optional(),
+}).passthrough();
+
+const proposeAccountArgs = z.object({
+  kind: z.enum(['rm', 'reverse_mortgage', 'rdsp', 'fhsa'])
+    .describe('Which special account: rm (reverse mortgage), rdsp, or fhsa.'),
+  changes: z.record(z.string(), z.unknown())
+    .describe('Fields to set. {"enabled":true,...} to turn it on, {"enabled":false} to turn it off. Reverse mortgage needs homeValue, appreciationRate, interestRate (and optionally draws or top-up). RDSP needs balance, contribution, familyIncome, dtcEligible. FHSA needs balance and contribution.'),
   rationale: z.string().optional(),
 });
 
@@ -228,8 +220,42 @@ const saveScenarioAsArgs = z.object({
 });
 
 const listScenariosArgs = z.object({
+  action: z.enum(['list', 'open', 'save_as']).optional().default('list')
+    .describe('list = enumerate saved plans. open = switch to one (give scenarioId or name). save_as = snapshot the current plan under a new name and open the copy.'),
   withDetails: z.boolean().default(false)
-    .describe('true = include the key numbers of each plan (ages, balances, spending, benefits) so you can compare saved plans without opening them. Omit/false for a compact list.'),
+    .describe('For list: true = include the key numbers of each plan (ages, balances, spending, benefits) so you can compare saved plans without opening them. Omit/false for a compact list.'),
+  scenarioId: z.string().min(1).optional()
+    .describe('For open: id of the saved scenario (from the ids given in your context).'),
+  name: z.string().min(1).max(80).optional()
+    .describe('For open: the scenario NAME (case-insensitive, must be unique). For save_as: the name of the new copy.'),
+}).superRefine((v, ctx) => {
+  if (v.action === 'open' && v.scenarioId == null && v.name == null) {
+    ctx.addIssue({ code: 'custom', message: 'open requires scenarioId or name.' });
+  }
+  if (v.action === 'open' && v.scenarioId != null && v.name != null) {
+    ctx.addIssue({ code: 'custom', message: 'Give scenarioId or name, not both.' });
+  }
+  if (v.action === 'save_as' && (v.name == null || v.name.trim() === '')) {
+    ctx.addIssue({ code: 'custom', message: 'save_as requires a name.' });
+  }
+});
+
+// Navigation: plain-words page lookup (find_page; empty query = site map) and the
+// page-switch proposal (propose_navigate). The lookups are pure reads; the
+// proposal is a confirm card, not a plan mutation (empty patch, no
+// checkpoint). The model counting on a find_page for "where" is trained by
+// the same catalog the sitemap artifacts emit.
+const findPageArgs = z.object({
+  query: z.string().optional()
+    .describe('Words to match (e.g. "tfsa room", "monte carlo", "tax table"). Omit or pass empty to return the full site map.'),
+});
+
+const proposeNavigateArgs = z.object({
+  view: z.string().min(1)
+    .describe('View id, from find_page (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.'),
+  label: z.string().min(1)
+    .describe('Confirm-card label, e.g. "Open the Monte Carlo page".'),
+  rationale: z.string().optional(),
 });
 
 // Exported so the fine-tuning spike's eval gate (training/) can validate args
@@ -243,26 +269,20 @@ export const TOOL_SCHEMAS = {
   solve_spending: solveSpendingArgs,
   run_monte_carlo: runMonteCarloArgs,
   get_schedule: getScheduleArgs,
-  set_scenario_value: setScenarioValueArgs,
-  propose_patch: proposePatchArgs,
+  propose_plan: proposePlanArgs,
   propose_spouse: proposeSpouseArgs,
-  propose_income: proposeIncomeArgs,
   propose_spending_bands: proposeSpendingBandsArgs,
   propose_market_periods: proposeMarketPeriodsArgs,
-  propose_cash_event: proposeCashEventArgs,
-  propose_reverse_mortgage: proposeReverseMortgageArgs,
-  propose_rdsp: proposeRdspArgs,
-  propose_fhsa: proposeFhsaArgs,
+  propose_account: proposeAccountArgs,
   propose_revert: proposeRevertArgs,
   manage_cash_event: manageCashEventArgs,
   manage_income: manageIncomeArgs,
-  propose_debt: proposeDebtArgs,
   manage_debt: manageDebtArgs,
   remember: rememberArgs,
   recall: recallArgs,
-  open_scenario: openScenarioArgs,
-  save_scenario_as: saveScenarioAsArgs,
   list_scenarios: listScenariosArgs,
+  find_page: findPageArgs,
+  propose_navigate: proposeNavigateArgs,
 } as const;
 
 export type AgentToolName = keyof typeof TOOL_SCHEMAS;
@@ -271,9 +291,9 @@ export function isAgentToolName(name: string): name is AgentToolName {
   return name in TOOL_SCHEMAS;
 }
 
-/** Top-level scalar fields the agent may propose changing (via set_scenario_value
- *  or propose_patch). Structural blocks (spouse, events, income, spendingBands,
- *  reverseMortgage, rdsp, fhsa, debts) go through their own propose_* tools. */
+/** Top-level scalar fields the agent may propose changing via propose_plan.
+ *  Structural blocks (spouse, events, income, spendingBands, reverseMortgage,
+ *  rdsp, fhsa, debts) go through manage_* / propose_account / propose_spouse. */
 export const EDITABLE_FIELDS = new Set([
   'currentAge', 'retirementAge', 'maxAge',
   'rrspBalance', 'tfsaBalance', 'taxableBalance', 'cashCushionBalance',
@@ -304,38 +324,32 @@ export interface ToolCatalogEntry {
   schema: z.ZodType;
 }
 
-/** The full tool surface as data. `toolSpecs()` renders this for LLM
+/** The advertised tool surface as data. `toolSpecs()` renders this for LLM
  *  providers (zod → JSON Schema); the MCP server (`@retired/mcp-server`)
  *  registers every entry with the official SDK — so both consumers see the
  *  same names, descriptions, and argument shapes from one definition. */
 export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
   get_scenario: { description: 'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
-    run_projection: { description:      'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.', schema: runProjectionArgs },
-    compare_scenarios: { description:      'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: compareScenariosArgs },
-    run_strategies: { description:      'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.', schema: runStrategiesArgs },
-    solve_spending: { description:      'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"', schema: solveSpendingArgs },
-    run_monte_carlo: { description:      'Run the Monte Carlo simulation on the current plan (optionally with overrides) and return the success rate, median final balance, and depletion spread across market futures.', schema: runMonteCarloArgs },
-    get_schedule: { description:      'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.', schema: getScheduleArgs },
-    set_scenario_value: { description:      'PROPOSE changing one plan input. Nothing is applied until the user confirms; it appears as a reviewable card. For top-level scalar levers only.', schema: setScenarioValueArgs },
-    propose_patch: { description:      'PROPOSE changing several top-level scalar fields at once (e.g. CPP+OAS timing). One confirm card. For structural blocks use the dedicated propose_* tools.', schema: proposePatchArgs },
-    propose_spouse: { description:      'PROPOSE adding a spouse/partner (or editing spouse fields, or removing). The spouse is a second plan combined for household totals. User confirms.', schema: proposeSpouseArgs },
-    propose_income: { description:      'PROPOSE adding an income source. kind "pension" = DB/bridge pension (taxable, split-eligible, stacked with CPP/OAS). kind "employment" = a T4 job. kind "selfEmployment" = consulting/business (earned, builds RRSP room). kind "rental" = net rental income (taxable investment income, net to taxable, no RRSP room, not split-eligible). Earned kinds (employment/selfEmployment) are taxed at the marginal rate and savingsRate × the after-tax net is saved into destAccount (default 100% → taxable; set savingsRate 0–1 to save only part). A source starting before retirementAge now actually funds the plan. User confirms.', schema: proposeIncomeArgs },
-    propose_spending_bands: { description:      'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age). User confirms.', schema: proposeSpendingBandsArgs },
-    propose_market_periods: { description:      'PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.', schema: proposeMarketPeriodsArgs },
-    propose_cash_event: { description:      'PROPOSE adding a one-time or recurring cash event (inflow to an account, or outflow adding to spending). User confirms.', schema: proposeCashEventArgs },
-    propose_reverse_mortgage: { description:      'PROPOSE enabling/configuring (or disabling) a reverse mortgage on the home. User confirms.', schema: proposeReverseMortgageArgs },
-    propose_rdsp: { description:      'PROPOSE enabling/configuring (or disabling) an RDSP (Registered Disability Savings Plan). Models CDSG grants, CDSB bonds, tax-sheltered growth, and taxable-fraction withdrawals. User confirms.', schema: proposeRdspArgs },
-    propose_fhsa: { description:      'PROPOSE enabling/configuring (or disabling) an FHSA (First Home Savings Account). Deductible contributions, tax-sheltered growth, accumulation-only; transfers to the RRSP at retirement. User confirms.', schema: proposeFhsaArgs },
-    propose_revert: { description:      'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.', schema: proposeRevertArgs },
-    manage_cash_event: { description:      'PROPOSE updating or REMOVING an existing cash event (by id or unique label). User confirms. Use propose_cash_event to add a new one.', schema: manageCashEventArgs },
-    manage_income: { description:      'PROPOSE updating or REMOVING an existing income source (pension, employment, self-employment, or rental, by id or unique label). User confirms. Use propose_income to add a new one.', schema: manageIncomeArgs },
-    propose_debt: { description:      'PROPOSE adding a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending each year until paid off, then stops — so carrying debt into retirement raises withdrawals and can flip the verdict. User confirms.', schema: proposeDebtArgs },
-    manage_debt: { description:      'PROPOSE updating or REMOVING an existing debt (mortgage, credit card, loan, or line of credit, by id or unique label). User confirms. Use propose_debt to add a new one.', schema: manageDebtArgs },
-    remember: { description:      'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
-    recall: { description:      'Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don\'t know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.', schema: recallArgs },
-    open_scenario: { description:      'Switch to another SAVED scenario (by id or name). Use when the user wants to look at / work on a different plan. Unsaved edits in the current plan are saved first, so nothing is lost.', schema: openScenarioArgs },
-    save_scenario_as: { description:      'Snapshot the CURRENT plan as a new saved scenario with a name, and make it active. Use when the user wants to keep a variant alongside the original (e.g. "keep this as its own plan") — the original stays untouched.', schema: saveScenarioAsArgs },
-    list_scenarios: { description:      'List every SAVED scenario: names, ids, and which one is active. With withDetails, also return each plan\'s key numbers (ages, balances, spending, CPP/OAS) so you can compare saved plans without switching. Use whenever the user asks what plans exist or which to open.', schema: listScenariosArgs },
+  run_projection: { description: 'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.', schema: runProjectionArgs },
+  compare_scenarios: { description: 'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: compareScenariosArgs },
+  run_strategies: { description: 'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.', schema: runStrategiesArgs },
+  solve_spending: { description: 'Invert the verdict: find the most the user can spend per year (after tax) for a target Monte Carlo success rate. Accepts overrides for what-if solving. Use for "how much can I safely spend?"', schema: solveSpendingArgs },
+  run_monte_carlo: { description: 'Run the Monte Carlo simulation on the current plan (optionally with overrides) and return the success rate, median final balance, and depletion spread across market futures.', schema: runMonteCarloArgs },
+  get_schedule: { description: 'Return the year-by-year projection table (balances, withdrawals, tax, CPP/OAS/GIS, pension, employment, reverse mortgage) for an age range. Use stride to cover a whole horizon in one call.', schema: getScheduleArgs },
+  propose_plan: { description: 'PROPOSE a batch of plan numbers as ONE confirm card. Args: { "changes": { currentAge, retirementAge, desiredSpending, rrspBalance, ... } }. Bare top-level fields also work. Call this as soon as the user gives ages, spending, balances, province, CPP/OAS, or contributions — even on a brand-new plan. Do NOT recap the numbers in prose first; the card IS the recap. Scalars only. Spouse, income, debts, events, and special accounts use their own tools.', schema: proposePlanArgs },
+  propose_spouse: { description: 'PROPOSE linking a partner (another saved plan), creating a new partner plan then linking it, or unlinking. Partner numbers live on that plan, not inline. User confirms.', schema: proposeSpouseArgs },
+  propose_spending_bands: { description: 'PROPOSE replacing the spending phases (go-go/slow-go/no-go as % of base spending by age; dollar amounts are desiredSpending × pctOfBase). User confirms.', schema: proposeSpendingBandsArgs },
+  propose_market_periods: { description: 'PROPOSE setting a market hypothesis: per-age expected-return (and optional volatility) anchors the engine interpolates between, so you can model a crash, boom, or choppy stretch instead of one constant return. The projection follows the return curve; volatility shapes Monte Carlo only. Pass an empty array to clear the hypothesis (back to flat constants). User confirms.', schema: proposeMarketPeriodsArgs },
+  manage_income: { description: 'PROPOSE adding, updating, or removing an income source (pension, employment, self-employment, or rental). action "add" takes the source fields (endAge a number or explicit null). action "update"/"remove" take target (id or unique label). User confirms.', schema: manageIncomeArgs },
+  manage_cash_event: { description: 'PROPOSE adding, updating, or removing a cash event (inflow to an account, or outflow adding to spending). action "add" takes the event fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageCashEventArgs },
+  manage_debt: { description: 'PROPOSE adding, updating, or removing a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending until paid off. action "add" takes the debt fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageDebtArgs },
+  propose_account: { description: 'PROPOSE enabling/configuring (or disabling) a special account: kind "rm" (reverse mortgage), "rdsp", or "fhsa". Pass changes with the fields to set; {"enabled":false} turns it off. User confirms.', schema: proposeAccountArgs },
+  propose_revert: { description: 'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.', schema: proposeRevertArgs },
+  remember: { description: 'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
+  recall: { description: 'Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don\'t know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.', schema: recallArgs },
+  list_scenarios: { description: 'Saved scenarios. action "list" (default) enumerates names/ids and which is active; withDetails adds each plan\'s key numbers. action "open" switches to another saved plan (scenarioId or name). action "save_as" snapshots the current plan under a new name and opens the copy.', schema: listScenariosArgs },
+  find_page: { description: 'Search the site\'s page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Omit query (or pass empty) for the full site map. Use whenever the user asks WHERE something lives or what pages exist.', schema: findPageArgs },
+  propose_navigate: { description: 'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → montecarlo, "solver" → solver — name it from find_page. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
 };
 
 /** Tool specs advertised to providers: the catalog rendered as JSON Schema. */
@@ -376,11 +390,25 @@ export interface ToolContext {
   memory?: MemoryStore;
   memoryScenarioId?: string;
   /** Open another saved scenario (the sidebar-switch path). Optional so tests
-   *  and 'off'-mode callers can omit it — open_scenario then errors. */
+   *  and 'off'-mode callers can omit it — list_scenarios action "open" then errors. */
   onOpenScenario?: (id: string) => void;
   /** Snapshot the current live inputs as a new named scenario; returns its id.
-   *  Optional for the same reason — save_scenario_as then errors. */
+   *  Optional for the same reason — list_scenarios action "save_as" then errors. */
   onSaveScenarioAs?: (name: string) => string;
+  /** The view the chat-session of a user is visiting now (for the ambient
+   *  system prompt "current page" line and find_page's "already here" tag).
+   *  Optional: tests / MCP-server-host callers omit it, and the prompt line
+   *  simply goes absent (as it does in 'off'-mode). */
+  currentView?: View;
+  /** True when the host renders a UI the user can move (confirm cards route
+   *  via propose_navigate). When absent (MCP hosts without a page, plain
+   *  tests), propose_navigate returns the #/hash for the model to share —
+   *  there's no view to switch. The flag only GATES the card; switching
+   *  itself happens in the host after the user approves (see MutationProposal). */
+  canNavigate?: boolean;
+  /** Assistant language (Canadian English / French). Optional — hosts that
+   *  omit it get English replies. UI chrome stays English either way. */
+  locale?: 'en-CA' | 'fr-CA';
 }
 
 export type ToolOutcome =
@@ -389,8 +417,13 @@ export type ToolOutcome =
       kind: 'mutation';
       /** The proposed change as a partial inputs patch (merged over the plan
        *  on approval). Always present — structural proposals put their block
-       *  here; single-field ones put { [field]: value }. */
+       *  here; single-field ones put { [field]: value }. UI-only mutations
+       *  (propose_navigate) carry an empty patch and use `navigate` instead. */
       patch: Partial<RetirementInputs>;
+      /** Set on page-navigation proposals: the view to open on approval. The
+       *  UI routes it (host setView) instead of merging a plan patch, and no
+       *  checkpoint is recorded — the plan never changed. */
+      navigate?: View;
       /** Short label for the card ("Set CPP start age", "Add spouse"). */
       label: string;
       /** Human-readable preview lines shown on the confirm card. */
@@ -399,6 +432,10 @@ export type ToolOutcome =
       /** Revert proposals encode absent-at-checkpoint fields with a sentinel
        *  (JSON can't carry undefined); the UI must decode before applying. */
       revert?: true;
+      /** Mint a partner plan on approval, then link this plan to it. The host
+       *  patch is empty — create-and-link is the side effect, applied by the
+       *  host after the user confirms (never at propose time). */
+      createPartner?: { name: string; inputs: RetirementInputs };
     }
   | { kind: 'error'; content: string };
 
@@ -414,7 +451,7 @@ function zodIssues(error: z.ZodError): string {
  *  obvious scalar forms coerced. Raw-first ordering means legitimate string
  *  fields (labels, province codes) are never mangled — coercion only rescues
  *  values the schema already rejected. Used on the top-level scalar paths
- *  (set_scenario_value, propose_patch, flat overrides). */
+ *  (propose_plan, flat overrides). */
 function safeParseTolerant(schema: z.ZodType, value: unknown) {
   const raw = schema.safeParse(value);
   if (raw.success || typeof value !== 'string') return raw;
@@ -448,7 +485,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
     return { kind: 'error', content: `Unknown tool "${call.name}". Available: ${Object.keys(TOOL_SCHEMAS).join(', ')}.` };
   }
   const schema = TOOL_SCHEMAS[call.name];
-  const parsed = schema.safeParse(call.args ?? {});
+  const rawArgs = call.name === 'propose_plan' ? wrapPlanChanges(call.args ?? {}) : (call.args ?? {});
+  const parsed = schema.safeParse(rawArgs);
   if (!parsed.success) {
     return { kind: 'error', content: `Invalid arguments for ${call.name}: ${zodIssues(parsed.error)}` };
   }
@@ -468,46 +506,34 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return runMonteCarloTool(ctx, parsed.data as z.infer<typeof runMonteCarloArgs>);
     case 'get_schedule':
       return getScheduleTool(ctx, parsed.data as z.infer<typeof getScheduleArgs>);
-    case 'set_scenario_value':
-      return proposeSet(ctx, parsed.data as z.infer<typeof setScenarioValueArgs>);
-    case 'propose_patch':
-      return proposePatch(ctx, parsed.data as z.infer<typeof proposePatchArgs>);
+    case 'propose_plan':
+      return proposePlan(ctx, wrapPlanChanges(parsed.data));
     case 'propose_spouse':
       return proposeSpouse(ctx, parsed.data as z.infer<typeof proposeSpouseArgs>);
-    case 'propose_income':
-      return proposeElement(ctx, 'income', incomeSourceSchema, parsed.data, 'income source');
     case 'propose_spending_bands':
       return proposeSpendingBands(ctx, parsed.data as z.infer<typeof proposeSpendingBandsArgs>);
     case 'propose_market_periods':
       return proposeMarketPeriods(ctx, parsed.data as z.infer<typeof proposeMarketPeriodsArgs>);
-    case 'propose_cash_event':
-      return proposeElement(ctx, 'events', cashEventSchema, parsed.data, 'cash event');
-    case 'propose_reverse_mortgage':
-      return proposeReverseMortgage(ctx, parsed.data as z.infer<typeof proposeReverseMortgageArgs>);
-    case 'propose_rdsp':
-      return proposeRdsp(ctx, parsed.data as z.infer<typeof proposeRdspArgs>);
-    case 'propose_fhsa':
-      return proposeFhsa(ctx, parsed.data as z.infer<typeof proposeFhsaArgs>);
+    case 'propose_account':
+      return proposeAccount(ctx, parsed.data as z.infer<typeof proposeAccountArgs>);
     case 'propose_revert':
       return proposeRevert(ctx, parsed.data as z.infer<typeof proposeRevertArgs>);
     case 'manage_cash_event':
-      return manageElement(ctx, 'events', cashEventSchema, parsed.data as z.infer<typeof manageCashEventArgs>, 'cash event');
+      return manageArray(ctx, 'events', cashEventSchema, parsed.data as Record<string, unknown>, 'cash event');
     case 'manage_income':
-      return manageElement(ctx, 'income', incomeSourceSchema, parsed.data as z.infer<typeof manageIncomeArgs>, 'income source');
-    case 'propose_debt':
-      return proposeElement(ctx, 'debts', debtSchema, parsed.data, 'debt');
+      return manageArray(ctx, 'income', incomeSourceSchema, parsed.data as Record<string, unknown>, 'income source');
     case 'manage_debt':
-      return manageElement(ctx, 'debts', debtSchema, parsed.data as z.infer<typeof manageDebtArgs>, 'debt');
+      return manageArray(ctx, 'debts', debtSchema, parsed.data as Record<string, unknown>, 'debt');
     case 'remember':
       return rememberTool(ctx, parsed.data as z.infer<typeof rememberArgs>);
     case 'recall':
       return recallTool(ctx, parsed.data as z.infer<typeof recallArgs>);
-    case 'open_scenario':
-      return openScenarioTool(ctx, parsed.data as z.infer<typeof openScenarioArgs>);
-    case 'save_scenario_as':
-      return saveScenarioAsTool(ctx, parsed.data as z.infer<typeof saveScenarioAsArgs>);
     case 'list_scenarios':
       return listScenariosTool(ctx, parsed.data as z.infer<typeof listScenariosArgs>);
+    case 'find_page':
+      return findPageTool(ctx, parsed.data as z.infer<typeof findPageArgs>);
+    case 'propose_navigate':
+      return proposeNavigateTool(ctx, parsed.data as z.infer<typeof proposeNavigateArgs>);
   }
 }
 
@@ -518,6 +544,11 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
 function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchema>): string {
   const i = ctx.inputs;
   const lines: string[] = [`Scenario "${ctx.scenarioName}" (of ${ctx.scenarioList.length} saved).`];
+  if (looksLikeUnsetPlan(i)) {
+    lines.push(
+      'SETUP: this plan is an unfilled starter (all account balances $0). Ages, spending, and province here are placeholders — interview the user rather than treating them as given. If they say fill the rest / use defaults, call propose_plan this turn with remaining starter defaults — do not only say you will.',
+    );
+  }
 
   const summary = {
     currentAge: i.currentAge, retirementAge: i.retirementAge, maxAge: i.maxAge,
@@ -575,7 +606,8 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
   };
   const spending = {
     desiredSpending: i.desiredSpending,
-    bands: (i.spendingBands ?? []).map(b => `${(b.pctOfBase * 100).toFixed(0)}% from age ${b.fromAge}`),
+    bands: (i.spendingBands ?? []).map(b =>
+      `${(b.pctOfBase * 100).toFixed(0)}% (${money(i.desiredSpending * b.pctOfBase)}/yr) from age ${b.fromAge}`),
     events: (i.events ?? []).map(e => `${e.label}: ${money(e.amount)} ${e.direction} at age ${e.age}${e.endAge != null ? `–${e.endAge}` : ''}`),
     debts: describeDebts(i.debts),
   };
@@ -653,6 +685,7 @@ function summarizeResults(label: string, inputs: RetirementInputs, results: Reti
     (ho.depletionAge != null
       ? `household portfolio depletes at age ${ho.depletionAge}`
       : `household funded to age ${inputs.maxAge}+`),
+    `  Re:score ${ho.depletionAge == null ? 100 : Math.min(100, Math.max(0, Math.round((ho.depletionAge / inputs.maxAge) * 100)))}/100`,
     `  net worth at retirement ${money(results.totalNetWorthAtRetirement)}, ` +
     `withdrawal rate ${(results.withdrawalRate * 100).toFixed(1)}%, ` +
     `lifetime tax ${money(lifetimeTax)}, ending balance ${money(last?.endingBalance ?? 0)}`,
@@ -761,30 +794,6 @@ const delta = (a: number, b: number) => {
   return `${d >= 0 ? '+' : '−'}${money(Math.abs(d))}`;
 };
 
-function proposeSet(
-  ctx: ToolContext,
-  args: { field: string; value: unknown; rationale?: string },
-): ToolOutcome {
-  const { field, value } = args;
-  if (!EDITABLE_FIELDS.has(field)) {
-    const known = [...EDITABLE_FIELDS].join(', ');
-    return { kind: 'error', content: `"${field}" is not changeable through the agent. Changeable scalar fields: ${known}. Structural blocks use their propose_* tool.` };
-  }
-  const shape = retirementInputsSchema.shape as Record<string, z.ZodType>;
-  const res = safeParseTolerant(shape[field], value);
-  if (!res.success) {
-    return { kind: 'error', content: `Invalid value for ${field}: ${zodIssues(res.error)}` };
-  }
-  const currentValue = (ctx.inputs as unknown as Record<string, unknown>)[field];
-  return {
-    kind: 'mutation',
-    patch: { [field]: res.data } as Partial<RetirementInputs>,
-    label: `Set ${field}`,
-    rationale: args.rationale,
-    preview: { field, from: currentValue, to: res.data },
-  };
-}
-
 /** Batch of scalar top-level changes validated together; one confirm card. */
 function proposePatch(
   ctx: ToolContext,
@@ -817,34 +826,97 @@ function proposePatch(
   };
 }
 
-/** Add/edit/remove the spouse. Edits merge over the existing spouse block. */
-function proposeSpouse(
+/** Friendlier card label so a first-plan dump of age/retirement/spending
+ *  shows as "Update plan", not a field list. */
+function proposePlan(
   ctx: ToolContext,
   args: { changes: Record<string, unknown>; rationale?: string },
 ): ToolOutcome {
-  const existing = ctx.inputs.spouse;
-  const merged = { ...(existing ?? {}), ...args.changes };
-  const res = spouseSchema.safeParse(merged);
-  if (!res.success) {
-    const missing = res.error.issues.map(i => i.path.join('.')).filter(Boolean);
+  if (!args.changes || Object.keys(args.changes).length === 0) {
     return {
       kind: 'error',
-      content: `Invalid spouse data: ${zodIssues(res.error)}.` +
-        (!existing && args.changes.enabled !== false
-          ? ' To ADD a spouse you must supply the full block (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending).'
-          : '') +
-        (missing.length ? ` Missing/invalid: ${missing.join(', ')}.` : ''),
+      content: 'propose_plan needs numbers. Pass changes: { currentAge, retirementAge, desiredSpending, rrspBalance, tfsaBalance, taxableBalance, cashCushionBalance, provinceCode, ... } — or the same fields at the top level. Do not call this empty.',
     };
   }
-  const enabling = args.changes.enabled === true && !existing?.enabled;
-  const disabling = args.changes.enabled === false;
+  const out = proposePatch(ctx, args);
+  if (out.kind !== 'mutation') return out;
+  const keys = Object.keys(out.patch);
+  return { ...out, label: keys.length >= 2 ? 'Update plan' : `Set ${keys[0]}` };
+}
+
+/** Link, unlink, or mint a partner plan. Partner numbers never live inline. */
+function proposeSpouse(
+  ctx: ToolContext,
+  args: { scenarioId?: string; enabled?: boolean; name?: string; changes?: Record<string, unknown>; rationale?: string },
+): ToolOutcome {
+  const unlink = args.enabled === false || args.changes?.enabled === false;
+  if (unlink) {
+    // JSON drops `undefined`, so encode removals with the revert sentinel —
+    // the UI decodes before applying, same as propose_revert.
+    return {
+      kind: 'mutation',
+      patch: encodeRevertPatch({ spouse: undefined, spouseSource: undefined }),
+      revert: true,
+      label: 'Unlink spouse',
+      rationale: args.rationale,
+      preview: { spouseSource: null },
+    };
+  }
+  if (args.scenarioId) {
+    const found = ctx.scenarioList.find(s => s.id === args.scenarioId);
+    if (!found) {
+      return { kind: 'error', content: `No saved plan with id "${args.scenarioId}".` };
+    }
+    if (ctx.activeScenarioId && args.scenarioId === ctx.activeScenarioId) {
+      return { kind: 'error', content: 'A plan cannot be its own spouse.' };
+    }
+    return {
+      kind: 'mutation',
+      patch: encodeRevertPatch({ spouse: undefined, spouseSource: { kind: 'scenario', scenarioId: args.scenarioId } }),
+      revert: true,
+      label: `Link spouse: ${found.name}`,
+      rationale: args.rationale,
+      preview: { spouseSource: { kind: 'scenario', scenarioId: args.scenarioId }, name: found.name },
+    };
+  }
+  if (!args.changes && args.enabled !== true) {
+    return {
+      kind: 'error',
+      content: 'To add a partner, pass scenarioId of an existing plan, or changes with their numbers (and enabled:true). Pass enabled:false to unlink.',
+    };
+  }
+  const raw = { ...(args.changes ?? {}) };
+  delete raw.enabled;
+  const merged = { ...baselineSpouse(ctx.inputs), ...raw, enabled: true };
+  const res = spouseSchema.safeParse(merged);
+  if (!res.success) {
+    return {
+      kind: 'error',
+      content: `Invalid spouse data: ${zodIssues(res.error)}. Pass person fields (currentAge, retirementAge, balances, contributions, cpp/oas, desiredSpending) or scenarioId of an existing plan.`,
+    };
+  }
+  const partnerInputs = personPlanFromSpouse(res.data, ctx.inputs);
+  const name = (args.name ?? '').trim() || 'Partner';
   return {
     kind: 'mutation',
-    patch: { spouse: res.data },
-    label: disabling ? 'Remove spouse' : enabling ? 'Add spouse/partner' : 'Update spouse',
+    patch: {},
+    createPartner: { name, inputs: partnerInputs },
+    label: `Add spouse/partner as "${name}"`,
     rationale: args.rationale,
-    preview: { spouse: res.data },
+    preview: { name, currentAge: partnerInputs.currentAge, desiredSpending: partnerInputs.desiredSpending },
   };
+}
+
+/** Enable/configure/disable a reverse mortgage, RDSP, or FHSA. */
+function proposeAccount(
+  ctx: ToolContext,
+  args: z.infer<typeof proposeAccountArgs>,
+): ToolOutcome {
+  const kind = args.kind === 'reverse_mortgage' ? 'rm' : args.kind;
+  const payload = { changes: args.changes, rationale: args.rationale };
+  if (kind === 'rm') return proposeReverseMortgage(ctx, payload);
+  if (kind === 'rdsp') return proposeRdsp(ctx, payload);
+  return proposeFhsa(ctx, payload);
 }
 
 /** Shared helper for the append-to-array structural tools (income source,
@@ -877,7 +949,7 @@ function proposeElement(
 
 /** Replace the whole spending-band set. */
 function proposeSpendingBands(
-  _ctx: ToolContext,
+  ctx: ToolContext,
   args: { bands: Array<{ fromAge: number; pctOfBase: number }>; rationale?: string },
 ): ToolOutcome {
   const band = z.object({ fromAge: z.number(), pctOfBase: z.number().min(0).max(3) });
@@ -886,12 +958,14 @@ function proposeSpendingBands(
     return { kind: 'error', content: `Invalid spending bands: ${zodIssues(res.error)}` };
   }
   const sorted = [...res.data].sort((a, b) => a.fromAge - b.fromAge);
+  const base = ctx.inputs.desiredSpending;
   return {
     kind: 'mutation',
     patch: { spendingBands: sorted },
     label: 'Set spending phases',
     rationale: args.rationale,
-    preview: { bands: sorted.map(b => `${(b.pctOfBase * 100).toFixed(0)}% from age ${b.fromAge}`) },
+    preview: { bands: sorted.map(b =>
+      `${(b.pctOfBase * 100).toFixed(0)}% (${money(base * b.pctOfBase)}/yr) from age ${b.fromAge}`) },
   };
 }
 
@@ -1055,6 +1129,31 @@ function proposeRevert(ctx: ToolContext, args: z.infer<typeof proposeRevertArgs>
   };
 }
 
+/** manage_* dispatcher: action "add" appends a new element; update/remove
+ *  go through manageElement. Strips `action` so it never lands in the schema. */
+function manageArray(
+  ctx: ToolContext,
+  key: 'events' | 'income' | 'debts',
+  schema: z.ZodType,
+  data: Record<string, unknown>,
+  noun: string,
+): ToolOutcome {
+  if (data.action === 'add') {
+    const { action: _a, target: _t, changes: _c, ...rest } = data;
+    return proposeElement(ctx, key, schema, rest, noun);
+  }
+  const target = typeof data.target === 'string' ? data.target : '';
+  if (!target) {
+    return { kind: 'error', content: `${noun} ${data.action} requires "target" (id or unique label).` };
+  }
+  return manageElement(ctx, key, schema, {
+    action: data.action as 'update' | 'remove',
+    target,
+    changes: data.changes as Record<string, unknown> | undefined,
+    rationale: typeof data.rationale === 'string' ? data.rationale : undefined,
+  }, noun);
+}
+
 /** Shared helper for manage_cash_event / manage_income / manage_debt: update
  *  (merge fields over the matched element, re-validated) or remove. Target
  *  matches by exact id first, then by unique case-insensitive label. */
@@ -1172,10 +1271,10 @@ function recallTool(ctx: ToolContext, args: z.infer<typeof recallArgs>): ToolOut
   return { kind: 'result', content: header ? `${header}\n${lines.join('\n')}` : lines.join('\n') };
 }
 
-/** open_scenario: switch the active scenario (the sidebar-switch path). A
- *  navigation, not a plan mutation — no confirm card — but the caller must
- *  announce the switch so the model/user stay oriented. Resolves by id first,
- *  then by unique case-insensitive name; unsaved edits are the caller's
+/** list_scenarios action=open: switch the active scenario (the sidebar-switch
+ *  path). A navigation, not a plan mutation — no confirm card — but the caller
+ *  must announce the switch so the model/user stay oriented. Resolves by id
+ *  first, then by unique case-insensitive name; unsaved edits are the caller's
  *  concern (App's onOpenScenario runs the same save-on-switch flow the
  *  sidebar uses). */
 function openScenarioTool(ctx: ToolContext, args: z.infer<typeof openScenarioArgs>): ToolOutcome {
@@ -1199,9 +1298,10 @@ function openScenarioTool(ctx: ToolContext, args: z.infer<typeof openScenarioArg
   return { kind: 'result', content: `Opened scenario "${target.name}". The plan inputs, and any numbers you compute from now on, refer to it.` };
 }
 
-/** save_scenario_as: snapshot the CURRENT live inputs as a new named scenario
- *  and make it active (so later agent edits land on the copy). A direct write
- *  (no confirm card): it ADDS a scenario and touches no existing one. */
+/** list_scenarios action=save_as: snapshot the CURRENT live inputs as a new
+ *  named scenario and make it active (so later agent edits land on the copy).
+ *  A direct write (no confirm card): it ADDS a scenario and touches no
+ *  existing one. */
 function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioAsArgs>): ToolOutcome {
   if (!ctx.onSaveScenarioAs) {
     return { kind: 'error', content: 'Saving scenarios is unavailable in this session.' };
@@ -1217,7 +1317,94 @@ function saveScenarioAsTool(ctx: ToolContext, args: z.infer<typeof saveScenarioA
 /** list_scenarios: enumerate the saved plans. Compact by default (one line per
  *  scenario, active marked); withDetails adds each plan's key numbers so the
  *  model can compare saved plans without opening them. A pure read. */
+// ---------------------------------------------------------------------------
+// Navigation: find_page / propose_navigate
+// ---------------------------------------------------------------------------
+
+/** Resolve a name to its catalog entry (view id, route, title, or keyword).
+ *  Returns null instead of guessing-then-erroring. The whole catalog is
+ *  searched — a folded legacy name ("details") resolves so the tool can
+ *  redirect it to its destination rather than reject a request the UI can
+ *  satisfy. */
+function resolveNavView(name: string | View): NavEntry | null {
+  const q = name.toLowerCase().trim();
+  const found = NAV_CATALOG.find((e) =>
+    e.viewId.toLowerCase() === q ||
+    e.route.toLowerCase() === q ||
+    e.title.toLowerCase() === q ||
+    e.keywords.some((k) => k.toLowerCase() === q));
+  return found ?? null;
+}
+
+/** Follow `foldedInto` to the page the UI actually shows. */
+function destinationEntry(entry: NavEntry): NavEntry {
+  return entry.foldedInto ? pageForView(entry.foldedInto) ?? entry : entry;
+}
+
+/** find_page: ranked search over the reachable page map. Pure read;
+ *  idempotent-friendly (it's one catalog the user will reach the same way). */
+function findPageTool(ctx: ToolContext, args: z.infer<typeof findPageArgs>): ToolOutcome {
+  const query = args.query?.trim() ?? '';
+  if (query === '') return getSitemapTool();
+  const ranked = rankPages(query, ctx.currentView);
+  if (ranked.length === 0) {
+    return { kind: 'result', content: `No page matches "${query}". Omit the query for the whole map.` };
+  }
+  const here = ctx.currentView != null ? canonicalView(ctx.currentView) : null;
+  const lines = ranked.slice(0, 5).map((e, i) => {
+    const isHere = here != null && e.viewId === here;
+    return `${i + 1}. ${e.title} ${isHere ? '(you are already here) ' : ''}— ${hashForEntry(e)} — ${e.description}`;
+  });
+  return { kind: 'result', content: `Matches for "${args.query}":\n${lines.join('\n')}` };
+}
+
+/** find_page with an empty query: the page map a user can reach,
+ *  machine-readable. Folded legacy pages are left out — the map should read
+ *  as the site, not as the view union. Pure read; idempotent — it's the same
+ *  list regardless of state. */
+function getSitemapTool(): ToolOutcome {
+  const lines = searchablePages().map((e, i) =>
+    `${i + 1}. ${e.title} (view ${e.viewId}) — ${hashForEntry(e)} — ${e.description}${e.betaOnly ? ' (beta-only)' : ''}`);
+  return { kind: 'result', content: `The site map:\n${lines.join('\n')}` };
+}
+
+/** propose_navigate: PROPOSE a UI page switch as a confirm card (unlike a
+ *  direct navigate, which would yank the user out of this chat mid-answer).
+ *  Unbound hosts return the #/hash (not an error) — the model can share the
+ *  destination as a link instead of actioning it. A folded legacy view is
+ *  redirected to the page the UI shows (details → Plans), so the card
+ *  always opens a real destination. */
+function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavigateArgs>): ToolOutcome {
+  const found = resolveNavView(args.view);
+  if (!found) {
+    const routes = searchablePages().map((e) => e.viewId).join(', ');
+    return { kind: 'error', content: `Unknown view "${args.view}". Give a view id from find_page (${routes}).` };
+  }
+  const entry = destinationEntry(found);
+  if (!ctx.canNavigate) {
+    return { kind: 'result', content: `To open "${entry.title}", share: ${hashForEntry(entry)} (view ${entry.viewId}).` };
+  }
+  // UI-only proposal: an empty plan patch + a `navigate` destination. The UI
+  // routes on approval (and skips the checkpoint, since the plan never
+  // changed) — the confirm card is the whole point: the user sees WHERE
+  // before the app moves them there.
+  return {
+    kind: 'mutation',
+    patch: {},
+    navigate: entry.viewId,
+    label: args.label,
+    preview: { Page: entry.title, Route: hashForEntry(entry) },
+    rationale: args.rationale,
+  };
+}
+
 function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
+  if (args.action === 'open') {
+    return openScenarioTool(ctx, { scenarioId: args.scenarioId, name: args.name });
+  }
+  if (args.action === 'save_as') {
+    return saveScenarioAsTool(ctx, { name: args.name ?? '' });
+  }
   const list = ctx.scenarioList;
   if (list.length === 0) {
     return { kind: 'result', content: 'There are no saved scenarios yet.' };

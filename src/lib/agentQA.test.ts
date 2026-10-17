@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { QA_PRESETS, buildQAPrompt, buildPlanDigest } from './agentQA';
 import { calculateRetirement, calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { testConfig, baseInputs } from '@retired/engine-core/test/helpers';
+import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 
 const config = testConfig();
 
@@ -65,6 +66,13 @@ describe('buildQAPrompt', () => {
     const out = buildQAPrompt(inputs, { results }, QA_PRESETS[0]);
     expect(out).toContain('do not re-derive the numbers');
     expect(out).toContain('not personalized financial advice');
+  });
+
+  it('localizes the framing and question when a locale is given', () => {
+    const out = buildQAPrompt(inputs, { results }, QA_PRESETS[0], undefined, 'fr-CA');
+    expect(out).toContain('Vous êtes un analyste canadien');
+    expect(out).toContain('suis-je en voie de financer ma retraite');
+    expect(out).not.toContain(QA_PRESETS[0].question.trim());
   });
 
   it('labels the two plans "You" and "Spouse" for a household', () => {
@@ -143,5 +151,12 @@ describe('buildQAPrompt', () => {
     const digest = buildPlanDigest(single, { results: r });
     expect(digest).toContain('HOUSEHOLD VERDICT:');
     expect(digest.indexOf('HOUSEHOLD VERDICT')).toBeLessThan(digest.indexOf('Plan:'));
+  });
+
+  it('flags a New-Scenario starter in the digest', () => {
+    const blank = baselineInputs();
+    const digest = buildPlanDigest(blank, { results: calculateRetirement(blank, config) });
+    expect(digest).toContain('SETUP:');
+    expect(digest).toContain('unfilled starter');
   });
 });

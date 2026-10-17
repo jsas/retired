@@ -31,5 +31,6 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'packages/**/*.test.ts'],
     globals: false,
+    setupFiles: ['src/lib/i18n.test-setup.ts'],
   },
 });

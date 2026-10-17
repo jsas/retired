@@ -33,9 +33,11 @@ export interface CorpusRecord {
     | 'domain-explain'     // read a projection digest → explain in plain words
     | 'option-framing'     // "what can I optimize?" → survey the levers (run_strategies)
                           //   + plain-words framing of the trade-offs, never a directive
-    | 'domain-knowledge';  // Canadian tax / benefit-program / market-history fact,
+    | 'domain-knowledge'   // Canadian tax / benefit-program / market-history fact,
                           //   answered from the app's OWN shipped tables (can't drift),
                           //   always with an offer to ground it in the user's numbers
+    | 'navigation';        // site-awareness (issue #141): find_page /
+                          //   propose_navigate, keyed to the ambient current-page line
   scenarioId: string;
   messages: ChatMessage[];
   /** Frozen ground truth the eval gate replays. */
@@ -76,34 +78,35 @@ export const TOOL_TAXONOMY: ReadonlyArray<{
     '(conversation start — ground yourself)', 'What do you remember about my pension?'] },
   { tool: 'list_scenarios', mutation: false, sampleQuestions: [
     'What plans do I have saved?', 'Which scenarios exist?'] },
-  { tool: 'set_scenario_value', mutation: true, sampleQuestions: [
-    'Set my CPP start age to 70.', 'Change my retirement age to 62.'] },
-  { tool: 'propose_patch', mutation: true, sampleQuestions: [
-    'Defer both CPP and OAS to 70.', 'Move my retirement and CPP to 65.'] },
+  { tool: 'propose_plan', mutation: true, sampleQuestions: [
+    'Set my CPP start age to 70.', 'Change my retirement age to 62.',
+    'Defer both CPP and OAS to 70.'] },
   { tool: 'propose_spouse', mutation: true, sampleQuestions: [
     'Add my spouse who retires at 65.', 'Remove the spouse from my plan.'] },
-  { tool: 'propose_income', mutation: true, sampleQuestions: [
-    'Add my $12,000/yr defined-benefit pension starting at 65.'] },
   { tool: 'manage_income', mutation: true, sampleQuestions: [
+    'Add my $12,000/yr defined-benefit pension starting at 65.',
     'Remove my pension.', 'Update my DB pension to $14,400.'] },
   { tool: 'propose_spending_bands', mutation: true, sampleQuestions: [
     'Model go-go/slow-go/no-go spending.', 'Spend less after 75.'] },
-  { tool: 'propose_cash_event', mutation: true, sampleQuestions: [
-    'Add a $200k downsize inflow at 70.', 'I inherit $50k at 68.'] },
   { tool: 'manage_cash_event', mutation: true, sampleQuestions: [
+    'Add a $200k downsize inflow at 70.', 'I inherit $50k at 68.',
     'Remove the downsize.', 'Change the inheritance to $60k.'] },
-  { tool: 'propose_reverse_mortgage', mutation: true, sampleQuestions: [
-    'Model a reverse mortgage on my $800k home.'] },
-  { tool: 'propose_rdsp', mutation: true, sampleQuestions: [
+  { tool: 'propose_account', mutation: true, sampleQuestions: [
+    'Model a reverse mortgage on my $800k home.',
     'Set up an RDSP with a $1,500 contribution.'] },
+  { tool: 'manage_debt', mutation: true, sampleQuestions: [
+    'Add my mortgage — $400k at 5% with 20 years left.'] },
   { tool: 'propose_revert', mutation: true, sampleQuestions: [
     'That made it worse — undo it.', 'Roll back the last change.'] },
   { tool: 'remember', mutation: false, sampleQuestions: [
     'Remember that I will not touch my RRSP before 71.'] },
-  { tool: 'open_scenario', mutation: false, sampleQuestions: [
-    'Open my "Downsized at 65" plan.'] },
-  { tool: 'save_scenario_as', mutation: false, sampleQuestions: [
-    'Keep this as its own plan called "Retire at 60".'] },
+  // Navigation (issue #141): the site-awareness layer — find the page, show
+  // the whole map (find_page with no query), propose a page switch (confirm card).
+  { tool: 'find_page', mutation: false, sampleQuestions: [
+    'Where do I enter my TFSA contribution room?', 'Which page has the Monte Carlo odds?',
+    'What pages does this app have?', 'What can this app do?'] },
+  { tool: 'propose_navigate', mutation: true, sampleQuestions: [
+    'Take me to the print summary.', 'Open my saved plans.'] },
 ];
 
 /** Build the assistant's tool-call turn for a question→tool exemplar. */
