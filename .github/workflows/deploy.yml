@@ -53,6 +53,11 @@ jobs:
 
   deploy:
     needs: build
+    # The github-pages environment only accepts deployments from the Pages
+    # source branch (main) — a tag push always fails with "Tag v* is not
+    # allowed to deploy to github-pages due to environment protection rules".
+    # Tags only need build + release; the site is already deployed from main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
