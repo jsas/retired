@@ -642,7 +642,9 @@ describe('web-llm model cache management', () => {
     for await (const _ of streamWebLlm(conn, {
       system: '', messages: [{ role: 'user', content: 'say yes' }], tools: [],
     })) { /* drain */ }
-    const msgs = lastRequest?.messages as Array<{ role: string }>;
+    // Cast: the assignment above narrows lastRequest to null; the mocked
+    // engine reassigns it during the drain loop, which TS can't see.
+    const msgs = (lastRequest as Record<string, unknown> | null)?.messages as Array<{ role: string }>;
     expect(msgs.some(m => m.role === 'system')).toBe(false);
     expect(msgs[0]).toEqual({ role: 'user', content: 'say yes' });
   });

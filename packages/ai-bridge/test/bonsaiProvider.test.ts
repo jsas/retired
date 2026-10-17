@@ -13,8 +13,8 @@ vi.mock('@huggingface/transformers', () => ({
       const cb = callbackHold[0];
       for (const chunk of scriptedChunks) cb?.(chunk);
     };
-    (pipe as { tokenizer: unknown }).tokenizer = {};
-    (pipe as { dispose: () => Promise<void> }).dispose = async () => { disposeCalls++; };
+    (pipe as unknown as { tokenizer: unknown }).tokenizer = {};
+    (pipe as unknown as { dispose: () => Promise<void> }).dispose = async () => { disposeCalls++; };
     return pipe;
   },
   TextStreamer: class {
