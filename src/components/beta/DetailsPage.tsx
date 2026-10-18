@@ -11,8 +11,8 @@ import type { Scenario } from '@retired/engine-core/types';
 import { Panel, Fader, HelpHint, Check } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
-
-const fmtMoney = (v: number) => '$' + Math.round(v).toLocaleString('en-CA');
+import { formatCurrency } from '../../lib/locale';
+import { useAppLocale } from '../../lib/localeContext';
 
 /* Small labelled number input — flat hairline, tabular numerals. */
 function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
@@ -127,6 +127,7 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes, scenario
   // Lever ranges are a user preference (Settings); the faders read them here.
   const ranges = getRangePrefs();
   const { t } = useTranslation('details');
+  const { locale } = useAppLocale();
 
   // The conditional sections are no longer gated on existing data — the
   // enable toggle lives INSIDE each section, so they always render.
@@ -140,7 +141,7 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes, scenario
           <Fader label={t('startDrawing')} value={inputs.retirementAge} min={inputs.currentAge} max={75} step={1}
             format={(v) => `${v}`} onChange={(v) => set({ retirementAge: v })} />
           <Fader label={t('afterTaxSpending')} help="desired-spending" value={inputs.desiredSpending} min={0} max={ranges.spendingMax} step={1000}
-            format={fmtMoney} onChange={(v) => set({ desiredSpending: v })} />
+            format={(v) => formatCurrency(v, locale)} onChange={(v) => set({ desiredSpending: v })} />
           <Fader label={t('markets')} help="expected-return" value={Math.round(inputs.investmentReturn * 1000) / 10} min={ranges.returnMin * 100} max={ranges.returnMax * 100} step={0.1}
             format={(v) => `${v.toFixed(1)}%`} onChange={(v) => set({ investmentReturn: v / 100 })} />
         </div>

@@ -26,3 +26,14 @@ export function detectLocale(): Locale {
   }
   return 'en-CA';
 }
+
+/** Shared CAD money formatter (#178) — every surface renders money through
+ *  this so switching locale switches convention (en-CA `$1,234` → fr-CA
+ *  `1 234 $`, ICU spacing and all). Callers pass the active locale: React
+ *  components from useAppLocale(), non-React code from the caller-supplied
+ *  locale or i18n.language. Currency is always CAD — the app is Canadian. */
+export function formatCurrency(value: number, locale: Locale): string {
+  return new Intl.NumberFormat(locale, {
+    style: 'currency', currency: 'CAD', maximumFractionDigits: 0,
+  }).format(value);
+}

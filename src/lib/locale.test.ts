@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { defaultProvinceCode, detectLocale, parseLocale } from './locale';
+import { defaultProvinceCode, detectLocale, formatCurrency, parseLocale } from './locale';
 
 const realNavigator = globalThis.navigator;
 function setLanguage(language: string | undefined) {
@@ -58,5 +58,30 @@ describe('defaultProvinceCode', () => {
   it('seeds Quebec for French, Ontario for English', () => {
     expect(defaultProvinceCode('fr-CA')).toBe('QC');
     expect(defaultProvinceCode('en-CA')).toBe('ONT');
+  });
+});
+
+describe('formatCurrency', () => {
+  // The point of #178: one formatter, locale-aware output. Assert shape, not
+  // the exact NBSP/NNBSP characters — ICU spacing is the locale's business.
+  it('renders en-CA convention: $ prefix, comma grouping', () => {
+    const s = formatCurrency(1234, 'en-CA');
+    expect(s).toContain('1,234');
+    expect(s.startsWith('$')).toBe(true);
+  });
+
+  it('renders fr-CA convention: $ suffix, no comma grouping', () => {
+    const s = formatCurrency(1234, 'fr-CA');
+    expect(s).not.toContain(',');
+    expect(s).toMatch(/1\s?234/);
+    expect(s).toMatch(/\$\s*$/);
+  });
+
+  it('the same value formats differently per locale', () => {
+    expect(formatCurrency(1234, 'fr-CA')).not.toBe(formatCurrency(1234, 'en-CA'));
+  });
+
+  it('rounds to whole dollars like every money surface needs', () => {
+    expect(formatCurrency(1234.6, 'en-CA')).toContain('1,235');
   });
 });
