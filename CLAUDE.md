@@ -70,7 +70,6 @@ Trivial fixes (typos, one-line tweaks) may commit directly to `main`.
 - **Probe technique** — vitest swallows `console.log`; use `console.error` +
   `--reporter=verbose`, or `writeFileSync` to a scratch file, then delete the
   probe. Don't leave probe tests in the suite.
-- Commit messages end with `Co-Authored-By: Claude <noreply@anthropic.com>`.
 - CRLF line-ending warnings on Windows are normal; don't fight them.
 
 ## Repo layout
