@@ -13,7 +13,7 @@ import { looksLikeUnsetPlan } from '@retired/engine-core/exampleScenarios';
 import { householdOutcome } from '@retired/engine-core/retirementEngine';
 import { toHousehold } from '@retired/engine-core/householdTypes';
 import type { MonteCarloResults } from '@retired/engine-core/monteCarlo';
-import type { Locale } from './locale';
+import { formatCurrency, parseLocale, type Locale } from './locale';
 import { i18n } from './i18n';
 
 export interface QAPreset {
@@ -76,17 +76,21 @@ export const QA_PRESETS: QAPreset[] = [
   },
 ];
 
-const money = (v: number) =>
-  new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
+// Digest money follows the request locale (#178) — the model echoes these
+// figures back to the user, who must read them in the same currency
+// convention as the app chrome. Callers that don't pass an explicit locale
+// get the active i18next language.
+const resolveLocale = (locale?: Locale): Locale =>
+  locale ?? parseLocale(i18n.language) ?? 'en-CA';
 
 // Compact one-line digest of a projection year.
-function yearLine(r: YearlyBreakdown): string {
+function yearLine(r: YearlyBreakdown, loc: Locale): string {
   return (
-    `age ${r.age}: start ${money(r.startingBalance)} -> end ${money(r.endingBalance)}, ` +
-    `withdrawn ${money(r.withdrawals)}, tax ${money(r.incomeTax)}, ` +
-    `income cpp ${money(r.cppIncome)} oas ${money(r.oasIncome)} gis ${money(r.gisIncome)}` +
-    (r.pensionIncome > 0 ? ` pension ${money(r.pensionIncome)}` : '') +
-    (r.netHomeEquity !== undefined ? `, homeEq ${money(r.netHomeEquity)}` : '')
+    `age ${r.age}: start ${formatCurrency(r.startingBalance, loc)} -> end ${formatCurrency(r.endingBalance, loc)}, ` +
+    `withdrawn ${formatCurrency(r.withdrawals, loc)}, tax ${formatCurrency(r.incomeTax, loc)}, ` +
+    `income cpp ${formatCurrency(r.cppIncome, loc)} oas ${formatCurrency(r.oasIncome, loc)} gis ${formatCurrency(r.gisIncome, loc)}` +
+    (r.pensionIncome > 0 ? ` pension ${formatCurrency(r.pensionIncome, loc)}` : '') +
+    (r.netHomeEquity !== undefined ? `, homeEq ${formatCurrency(r.netHomeEquity, loc)}` : '')
   );
 }
 
@@ -107,12 +111,12 @@ function householdVerdictLine(inputs: RetirementInputs, results: RetirementResul
 }
 
 // A compact digest of one person's projection: verdict + milestone ages.
-function planDigest(label: string, results: RetirementResults, maxAge: number): string {
+function planDigest(label: string, results: RetirementResults, maxAge: number, loc: Locale): string {
   const rows = results.yearlyBreakdown;
   const lines: string[] = [];
   lines.push(
     `${label}: status ${results.status.replace('_', ' ')}, wealth at retirement ` +
-    `${money(results.totalNetWorthAtRetirement)}, withdrawal rate ${(results.withdrawalRate * 100).toFixed(1)}%, ` +
+    `${formatCurrency(results.totalNetWorthAtRetirement, loc)}, withdrawal rate ${(results.withdrawalRate * 100).toFixed(1)}%, ` +
     (results.depletionAge != null
       ? `portfolio DEPLETES at age ${results.depletionAge}`
       : `funded to age ${maxAge}+`),
@@ -124,7 +128,7 @@ function planDigest(label: string, results: RetirementResults, maxAge: number): 
   lines.push('  ' + [first, mid, depl, last]
     .filter((r): r is YearlyBreakdown => !!r)
     .filter((r, i, a) => a.indexOf(r) === i) // dedupe overlapping picks
-    .map(yearLine)
+    .map((r) => yearLine(r, loc))
     .join('\n  '));
   return lines.join('\n');
 }
@@ -139,21 +143,22 @@ export interface QAContext {
  * chat-only providers (web-llm) that can't call tools, so the model still
  * answers from the real numbers.
  */
-export function buildPlanDigest(inputs: RetirementInputs, ctx: QAContext): string {
+export function buildPlanDigest(inputs: RetirementInputs, ctx: QAContext, locale?: Locale): string {
+  const loc = resolveLocale(locale);
   const digests: string[] = [
     // The household verdict leads (issue A-03); per-person digests follow as detail.
     householdVerdictLine(inputs, ctx.results),
-    planDigest(inputs.spouse?.enabled ? 'You' : 'Plan', ctx.results, inputs.maxAge),
+    planDigest(inputs.spouse?.enabled ? 'You' : 'Plan', ctx.results, inputs.maxAge, loc),
   ];
   if (ctx.results.spouse) {
-    digests.push(planDigest('Spouse', ctx.results.spouse, inputs.maxAge));
+    digests.push(planDigest('Spouse', ctx.results.spouse, inputs.maxAge, loc));
   }
   let mc = '';
   if (ctx.mcResults) {
     mc =
       `\nMONTE CARLO (${ctx.mcResults.runs} runs, ${(ctx.mcResults.volatility * 100).toFixed(1)}% volatility):\n` +
       `  success rate ${(ctx.mcResults.successRate * 100).toFixed(1)}%, ` +
-      `median final balance ${money(ctx.mcResults.medianFinalBalance)}\n`;
+      `median final balance ${formatCurrency(ctx.mcResults.medianFinalBalance, loc)}\n`;
   }
   const setup = looksLikeUnsetPlan(inputs)
     ? 'SETUP: this plan is an unfilled starter (all account balances $0). Ages, spending, and province here are placeholders. If they say fill the rest / use defaults, call propose_plan this turn with remaining starter defaults.\n\n'
@@ -173,6 +178,7 @@ export function buildQAPrompt(
   customQuestion?: string,
   locale?: Locale,
 ): string {
+  const loc = resolveLocale(locale);
   const localizedQuestion = locale
     ? i18n.t(`qa.${preset.id}`, { ns: 'prompts', lng: locale, defaultValue: preset.question })
     : preset.question;
@@ -188,10 +194,10 @@ export function buildQAPrompt(
   const digests: string[] = [
     // The household verdict leads (issue A-03); per-person digests follow as detail.
     householdVerdictLine(inputs, ctx.results),
-    planDigest(inputs.spouse?.enabled ? 'You' : 'Plan', ctx.results, inputs.maxAge),
+    planDigest(inputs.spouse?.enabled ? 'You' : 'Plan', ctx.results, inputs.maxAge, loc),
   ];
   if (ctx.results.spouse) {
-    digests.push(planDigest('Spouse', ctx.results.spouse, inputs.maxAge));
+    digests.push(planDigest('Spouse', ctx.results.spouse, inputs.maxAge, loc));
   }
 
   let mc = '';
@@ -199,7 +205,7 @@ export function buildQAPrompt(
     mc =
       `\nMONTE CARLO (${ctx.mcResults.runs} runs, ${(ctx.mcResults.volatility * 100).toFixed(1)}% volatility):\n` +
       `  success rate ${(ctx.mcResults.successRate * 100).toFixed(1)}%, ` +
-      `median final balance ${money(ctx.mcResults.medianFinalBalance)}\n`;
+      `median final balance ${formatCurrency(ctx.mcResults.medianFinalBalance, loc)}\n`;
   }
 
   return `${frame}

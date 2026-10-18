@@ -19,7 +19,7 @@ import { prefKV } from '../../lib/prefKv';
 import type { View } from '../../lib/viewRoutes';
 import { Link } from './nav';
 import { LanguageSwitch } from '../LanguageSwitch';
-import { defaultProvinceCode, type Locale } from '../../lib/locale';
+import { formatCurrency, defaultProvinceCode, type Locale } from '../../lib/locale';
 import { useAppLocale } from '../../lib/localeContext';
 import { i18n } from '../../lib/i18n';
 
@@ -39,7 +39,6 @@ interface Q {
   parse: (text: string, a: Answer) => number | string | null;
 }
 
-const money = (v: number) => '$' + Math.round(v).toLocaleString('en-CA');
 function parseMoney(t: string): number | null {
   const m = t.replace(/[$,\s]/g, '').toLowerCase();
   const mult = m.endsWith('m') ? 1_000_000 : m.endsWith('k') ? 1_000 : 1;
@@ -185,7 +184,7 @@ export function LandingPage({ config, onBuild }: {
         {QUESTIONS.slice(0, step).map((qq, i) => (
           <div key={i}>
             <Bubble who="re">{qq.ask(answers)}</Bubble>
-            <Bubble who="me">{formatAnswer(qq.key, answers[qq.key])}</Bubble>
+            <Bubble who="me">{formatAnswer(qq.key, answers[qq.key], locale)}</Bubble>
           </div>
         ))}
 
@@ -324,11 +323,11 @@ function Bubble({ who, children }: { who: 're' | 'me'; children: React.ReactNode
   );
 }
 
-function formatAnswer(key: keyof Answer, v: Answer[keyof Answer]): string {
+function formatAnswer(key: keyof Answer, v: Answer[keyof Answer], locale: Locale): string {
   if (v == null) return '—';
-  if (key === 'savings' || key === 'spending') return money(Number(v));
+  if (key === 'savings' || key === 'spending') return formatCurrency(Number(v), locale);
   if (key === 'benefits') {
-    return v === 'usual' ? i18n.t('landing:chips.usual') : v === 'none' ? i18n.t('landing:chips.none') : money(Number(v)) + '/yr';
+    return v === 'usual' ? i18n.t('landing:chips.usual') : v === 'none' ? i18n.t('landing:chips.none') : formatCurrency(Number(v), locale) + '/yr';
   }
   return String(v);
 }
