@@ -24,6 +24,7 @@ export const DETAILS_SECTIONS: DetailsSection[] = [
   { id: 'income', label: 'Income', group: 'Income' },
   { id: 'benefits', label: 'Government Benefits', group: 'Income' },
   { id: 'events', label: 'Cash Events', group: 'Income' },
+  { id: 'giving', label: 'Charitable Giving', group: 'Income' },
   { id: 'spending', label: 'Spending Phases', group: 'Spending' },
   { id: 'withdrawal', label: 'Withdrawal Strategy', group: 'Spending' },
   { id: 'markets', label: 'Markets', group: 'Spending' },

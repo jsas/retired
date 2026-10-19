@@ -16,6 +16,7 @@
     "income": "Revenu",
     "benefits": "Prestations gouvernementales",
     "events": "Événements de trésorerie",
+    "giving": "Dons de bienfaisance",
     "spending": "Phases de dépenses",
     "withdrawal": "Stratégie de retrait",
     "markets": "Marchés",
@@ -75,6 +76,22 @@
   "addOutflow": "+ ajouter une sortie",
   "removeEvent": "Retirer {{name}}",
   "eventPlaceholder": "p. ex. héritage, rénovation, don",
+  "noGiving": "Aucun don au plan pour l’instant.",
+  "givingPlaceholder": "p. ex. paroisse, Centraide, banque alimentaire",
+  "removeGiving": "Retirer {{name}}",
+  "givingMode": "Mode",
+  "givingModes": {
+    "pct": "% du revenu",
+    "fixed": "$ par année"
+  },
+  "givingPct": "% du revenu",
+  "givingBasis": "Pourcentage de",
+  "givingBases": {
+    "gross": "revenu brut",
+    "net": "revenu après impôt"
+  },
+  "addGiving": "+ ajouter un don",
+  "givingNote": "Les dons s’ajoutent aux retraits annuels à partir de l’âge de début et génèrent le crédit d’impôt pour dons (14 % sur les premiers 200 $, davantage au-delà; regroupés à l’échelle du ménage). Les montants fixes ne sont pas indexés à l’inflation.",
   "spendingLead": "Les dépenses de base sont le levier « Dépenses après impôt » ci-dessus. Chaque phase est un montant annuel en dollars et un pourcentage de cette base, à partir d’un âge (go-go / slow-go / no-go). Modifiez l’un ou l’autre — ils restent synchronisés.",
   "noPhases": "Aucune phase — les dépenses restent plates.",
   "amountOfBase": "$ / an",

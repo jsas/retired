@@ -13,7 +13,7 @@
 // Carlo, the solvers) can migrate to the unified model independently while the
 // wire/storage formats stay stable.
 
-import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, IncomeSource, SpendingBand, ReverseMortgage, RdspInputs, FhsaInputs, Debt, MarketPeriod } from './retirementEngine';
+import type { RetirementInputs, SpouseInputs, CashEvent, WithdrawalAccount, IncomeSource, SpendingBand, ReverseMortgage, RdspInputs, FhsaInputs, Debt, GivingStream, MarketPeriod } from './retirementEngine';
 
 // ---------------------------------------------------------------------------
 // Accounts & transfers
@@ -186,6 +186,9 @@ export function fromHousehold(h: Household, base?: RetirementInputs): Retirement
     rdsp: primary.rdsp,
     fhsa: primary.fhsa,
     debts: primary.debts,
+    // Household-shared: the credit pools all receipts, so giving lives on the
+    // shared half (issue #164), not per-person.
+    giving: shared.giving,
     // Preserve spouse linkage + legacy/optional fields from the base inputs
     // when round-tripping; they aren't part of the unified model.
     spouseSource: base?.spouseSource,
@@ -242,6 +245,9 @@ export interface SharedInputs {
   // both partners experience the same per-age regime. Absent = flat constants.
   marketPeriods?: MarketPeriod[];
   provinceCode: string;
+  // Charitable giving streams (issue #164). Household-level: CRA pools all
+  // receipts into one credit, so a couple shares one list.
+  giving?: GivingStream[];
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +294,7 @@ export function legacyToShared(inputs: RetirementInputs): SharedInputs {
     returnVolatility: inputs.returnVolatility,
     marketPeriods: inputs.marketPeriods,
     provinceCode: inputs.provinceCode,
+    giving: inputs.giving,
   };
 }
 

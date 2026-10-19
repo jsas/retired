@@ -255,6 +255,20 @@
       ],
       "body": "**Entrée** — une somme forfaitaire qui atterrit dans le compte choisi à l'âge choisi; elle apparaît dans les soldes de cette année et croît ensuite. **Sortie** — une dépense extra à l'âge choisi, en plus de la cible de dépenses de l'année; le portefeuille doit financer les deux.\n\nPassez un événement en *Annuel* avec une plage d'âges début–fin pour répéter le même montant chaque année (revenu de location pendant quelques années, ou un coût récurrent)."
     },
+    "charitable-giving": {
+      "title": "Dons de bienfaisance (crédit d'impôt pour dons)",
+      "section": "Income",
+      "keywords": [
+        "organisme de bienfaisance",
+        "don",
+        "dons",
+        "dîme",
+        "philanthropie",
+        "reçu",
+        "crédit d'impôt"
+      ],
+      "body": "Un flux de dons verse chaque année à partir d'un âge de début (et jusqu'à un âge de fin, optionnel) — un montant annuel fixe, ou un pourcentage du revenu de l'année, calculé sur une base **brute** (avant impôt) ou **nette** (après impôt). Les dons s'ajoutent aux besoins de trésorerie de l'année comme toute autre dépense; les retraits sont donc majorés pour les financer.\n\nUn don est un **crédit d'impôt, pas une déduction** : il réduit l'impôt à payer plutôt que le revenu. Le crédit suit le barème fédéral à deux taux — **14 %** sur les premiers 200 $ de dons de l'année, **29 %** sur l'excédent, porté à **33 %** seulement dans la mesure où le revenu tombe dans le taux fédéral le plus élevé — auquel s'ajoute le barème propre à la province (chaque province a ses propres taux de premier et second palier; le taux d'excédent de la Saskatchewan est le plus élevé). Le crédit est **non remboursable** (il peut réduire l'impôt à zéro, jamais en dessous) et la demande est **limitée à 75 % du revenu de l'année** — le Québec est exempté de cette limite. Pour les couples, tous les reçus sont **regroupés en un seul crédit** calculé sur le revenu combiné du ménage, exactement comme l'applique l'ARC (aucun crédit par personne ou par organisme). Le crédit est porté en réduction de l'impôt de la même année.\n\nSources : [taux fédéraux](https://www.canada.ca/en/revenue-agency/services/tax/individuals/tax-rates-brackets/current-year.html), [ligne 34990 crédit fédéral](https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-34990-top-up-tax-credit.html), [montant maximal de la demande](https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-34900-donations-gifts/how-much-claim.html), [taux provinciaux 2026](https://www.taxtips.ca/filing/donations/tax-credit-rates-2026.htm), [ligne 395 Québec](https://www.revenuquebec.ca/en/citizens/income-tax-return/completing-your-income-tax-return/how-to-complete-your-income-tax-return/line-by-line-help/350-to-398-1-non-refundable-tax-credits/line-395/).\n\n**Non modélisés :** le report sur cinq ans des reçus non demandés, la règle du décès (demande jusqu'à 100 % du revenu), le super crédit pour premiers donateurs, le super crédit de 45 % de la Saskatchewan sur les premiers 200 $, les dons de titres en nature et le partage d'une demande entre les déclarations des époux; la surtaxe de l'Ontario ne s'applique pas au calcul du crédit; les dons en pourcentage du revenu sont calculés sur les sources de revenu avant les retraits REER, si bien qu'un don financé par le REER compte comme besoin additionnel sans réduire sa propre base. L'estimation du crédit est rajustée en fin d'année au montant combiné exact."
+    },
     "desired-spending": {
       "title": "Dépenses souhaitées",
       "section": "Spending",

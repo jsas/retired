@@ -6,11 +6,12 @@
 // the verdict, map and dock recompute together.
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt, MarketPeriod } from '@retired/engine-core/retirementEngine';
+import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt, MarketPeriod, GivingStream } from '@retired/engine-core/retirementEngine';
 import type { Scenario } from '@retired/engine-core/types';
 import { Panel, Fader, HelpHint, Check } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
+import { getGivingPrefs } from '../../lib/givingPrefs';
 import { formatCurrency } from '../../lib/locale';
 import { useAppLocale } from '../../lib/localeContext';
 
@@ -367,6 +368,55 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
             <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('in')}>{t('addInflow')}</button>
             <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('out')}>{t('addOutflow')}</button>
           </div>
+        </Section>
+      );
+    }
+    case 'giving': {
+      const list = inp.giving ?? [];
+      // New streams prefill from Settings ▸ Giving defaults (read on click so
+      // a pref change lands without remounting this page).
+      const add = () => {
+        const p = getGivingPrefs();
+        set({ giving: [...list, { id: uid(), label: '', mode: 'pct' as GivingStream['mode'], pct: p.defaultPct, amount: 0, basis: p.defaultBasis, fromAge: inp.retirementAge, toAge: null }] });
+      };
+      const upd = (i: number, patch: Partial<GivingStream>) => {
+        const next = [...list]; next[i] = { ...list[i], ...patch }; set({ giving: next });
+      };
+      return (
+        <Section id="giving" title={t('sections.giving')} hint="charitable-giving">
+          {list.length === 0 && <p className="text-[12.5px] text-slate-400">{t('noGiving')}</p>}
+          <div className="space-y-2">
+            {list.map((g, i) => (
+              <div key={g.id} className="space-y-2 border border-slate-200 p-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><Txt label={t('name')} value={g.label} placeholder={t('givingPlaceholder')} onChange={(v) => upd(i, { label: v })} /></div>
+                  <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={t('removeGiving', { name: g.label || t('sections.giving') })}
+                    onClick={() => set({ giving: list.filter((_, j) => j !== i) })}>×</button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Sel label={t('givingMode')} value={g.mode} onChange={(v) => upd(i, { mode: v })}
+                    options={[{ value: 'pct' as const, label: t('givingModes.pct') }, { value: 'fixed' as const, label: t('givingModes.fixed') }]} />
+                  {g.mode === 'pct' ? (
+                    <>
+                      <Num label={t('givingPct')} value={g.pct} step={1} min={0} onChange={(v) => upd(i, { pct: v })} />
+                      <Sel label={t('givingBasis')} value={g.basis} onChange={(v) => upd(i, { basis: v })}
+                        options={[{ value: 'gross' as const, label: t('givingBases.gross') }, { value: 'net' as const, label: t('givingBases.net') }]} />
+                    </>
+                  ) : (
+                    <Num label={t('amountYear')} value={g.amount} step={500} min={0} onChange={(v) => upd(i, { amount: v })} />
+                  )}
+                  <Num label={t('fromAge')} value={g.fromAge} step={1} onChange={(v) => upd(i, { fromAge: v })} />
+                  <Num label={t('toAgeForever')} value={g.toAge ?? 0} step={1} onChange={(v) => upd(i, { toAge: v <= 0 ? null : v })} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="mt-2 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={add}>
+            {t('addGiving')}
+          </button>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+            {t('givingNote')}
+          </p>
         </Section>
       );
     }

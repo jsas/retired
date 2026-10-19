@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent, type IncomeSource, type RetirementInputs } from './retirementEngine';
+import { calculateRetirement, calculateHousehold, combineHouseholdBreakdown, householdOutcome, calculatePerson, type RetirementResults, type YearlyBreakdown, type CashEvent, type IncomeSource, type RetirementInputs, type GivingStream } from './retirementEngine';
 import { legacyToPerson, legacyToShared, legacySpouseToPerson, toHousehold } from './householdTypes';
-import { calculateTax } from './canadianTax';
+import { calculateTax, donationCredit } from './canadianTax';
 import { baselineInputs, looksLikeUnsetPlan } from './exampleScenarios';
 import { testConfig, baseInputs, yearAt, closeTo } from '../test/helpers';
 
@@ -2737,5 +2737,205 @@ describe('FHSA (First Home Savings Account)', () => {
     const taxNo = yearAt(noFhsa.yearlyBreakdown, 30).employmentTax ?? 0;
     const taxWith = yearAt(withFhsa.yearlyBreakdown, 30).employmentTax ?? 0;
     expect(taxWith).toBeLessThan(taxNo);
+  });
+});
+
+describe('charitable giving (issue #164)', () => {
+  // TFSA-funded single, age 65–70, flat 0% return, ONT: every dollar of
+  // giving is exactly one dollar less ending balance, less the credit.
+  const giver = (over: Partial<RetirementInputs> = {}) => baseInputs({
+    maxAge: 70, investmentReturn: 0, returnVolatility: 0,
+    desiredSpending: 60000,
+    income: [{ id: 'p', label: 'pension', kind: 'pension', annualAmount: 50000, startAge: 60, endAge: null, indexedToCpi: false }],
+    ...over,
+  });
+  const stream = (over: Partial<GivingStream> = {}): GivingStream => ({
+    id: 'g', label: 'church', mode: 'fixed', pct: 0, amount: 5000, basis: 'gross', fromAge: 65, toAge: null,
+    ...over,
+  });
+
+  it('fixed stream: row carries giving + the donation credit', () => {
+    const r = calculateHousehold(giver({ giving: [stream()] }), config);
+    const row = yearAt(r.yearlyBreakdown, 66);
+    expect(row.giving).toBe(5000);
+    // $5,000 on $50k ONT gross-up income: 200×14% + 4,800×29% = 1,444 fed,
+    // but the credit is non-refundable — clamped at the year's actual tax
+    // (≈1,965.78 total on $50k).
+    expect(closeTo(row.donationCredit!, 1965.78, 0.01)).toBe(true);
+    expect(row.detail?.giving).toEqual([{ label: 'church', amount: 5000 }]);
+  });
+
+  it('giving drains the plan by (gift − credit) every year', () => {
+    const ctrl = calculateHousehold(giver(), config);
+    const gift = calculateHousehold(giver({ giving: [stream()] }), config);
+    const credit = yearAt(gift.yearlyBreakdown, 66).donationCredit!;
+    expect(closeTo(
+      yearAt(ctrl.yearlyBreakdown, 70).endingBalance - yearAt(gift.yearlyBreakdown, 70).endingBalance,
+      6 * (5000 - credit), 1,
+    )).toBe(true);
+  });
+
+  it('the credit rides as a draw reduction, not as cash income', () => {
+    // Net-of-credit cash identity: total drain over the plan = gifts − credits.
+    const ctrl = calculateHousehold(giver(), config);
+    const gift = calculateHousehold(giver({ giving: [stream()] }), config);
+    const sum = (rows: YearlyBreakdown[], pick: (y: YearlyBreakdown) => number) =>
+      rows.reduce((a, y) => a + pick(y), 0);
+    const gifts = sum(gift.yearlyBreakdown, y => y.giving ?? 0);
+    const credits = sum(gift.yearlyBreakdown, y => y.donationCredit ?? 0);
+    expect(gifts).toBe(30000);
+    expect(closeTo(
+      (yearAt(ctrl.yearlyBreakdown, 70).endingBalance - yearAt(gift.yearlyBreakdown, 70).endingBalance) + credits,
+      gifts, 1,
+    )).toBe(true);
+  });
+
+  it('pct streams ride the pre-draw income stack: gross vs net basis', () => {
+    const r = calculateHousehold(giver({ giving: [
+      stream({ id: 'g2', label: 'pct-g', mode: 'pct', amount: 0, pct: 10, basis: 'gross' }),
+      stream({ id: 'g3', label: 'pct-n', mode: 'pct', amount: 0, pct: 10, basis: 'net', fromAge: 67, toAge: 68 }),
+    ] }), config);
+    // Gross: 10% of the $50k pension stack. Net: 10% of the after-tax stack.
+    const gross = 5000;
+    const net = 0.1 * (50000 - calculateTax(50000, 'ONT', config).totalTax);
+    const row66 = yearAt(r.yearlyBreakdown, 66);
+    expect(closeTo(row66.giving!, gross, 0.01)).toBe(true);
+    expect(row66.detail?.giving).toEqual([{ label: 'pct-g', amount: gross }]);
+    const row67 = yearAt(r.yearlyBreakdown, 67);
+    expect(closeTo(row67.giving!, gross + net, 0.01)).toBe(true);
+    expect(row67.detail?.giving).toEqual([
+      { label: 'pct-g', amount: gross },
+      { label: 'pct-n', amount: net },
+    ]);
+  });
+
+  it('pct of a zero pre-draw stack gives nothing (RRSP-funded plan)', () => {
+    // Stack base = income sources + employment only. An RRSP-only plan has no
+    // stack, so a % stream has no base and contributes 0 — the window test
+    // below documents that fixed streams still fire.
+    const r = calculateHousehold(giver({
+      tfsaBalance: 0, rrspBalance: 600000, income: [],
+      giving: [stream({ mode: 'pct', amount: 0, pct: 10 })],
+    }), config);
+    expect(yearAt(r.yearlyBreakdown, 66).giving).toBeUndefined();
+  });
+
+  it('window: fires from fromAge through toAge inclusive, not before', () => {
+    const r = calculateHousehold(giver({
+      currentAge: 60, retirementAge: 63,
+      giving: [stream({ amount: 1000, fromAge: 64, toAge: 65 })],
+    }), config);
+    for (const y of r.yearlyBreakdown) {
+      const on = y.age >= 64 && y.age <= 65;
+      expect(y.giving === undefined ? 0 : y.giving).toBe(on ? 1000 : 0);
+    }
+  });
+
+  it('fixed amounts are NOT CPI-inflated (debt convention)', () => {
+    const r = calculateHousehold(giver({
+      investmentReturn: 0.05,
+      giving: [stream()],
+    }), config);
+    for (const age of [65, 66, 67, 68, 69, 70]) {
+      expect(yearAt(r.yearlyBreakdown, age).giving).toBe(5000);
+    }
+  });
+
+  it('no giving → rows carry neither giving nor donationCredit', () => {
+    const r = calculateHousehold(giver(), config);
+    expect(yearAt(r.yearlyBreakdown, 66).giving).toBeUndefined();
+    expect(yearAt(r.yearlyBreakdown, 66).donationCredit).toBeUndefined();
+  });
+
+  it('singles: the reported credit is exact on the year\'s taxable income', () => {
+    // RRSP-funded: the per-year estimate rides the (zero) pre-draw stack; the
+    // household post-pass recomputes it on the row's real net income.
+    const r = calculateHousehold(giver({
+      tfsaBalance: 0, rrspBalance: 600000, income: [],
+      giving: [stream({ amount: 20000 })],
+    }), config);
+    const row = yearAt(r.yearlyBreakdown, 66);
+    expect(row.giving).toBe(20000);
+    const exact = donationCredit(20000, row.unsplitNetIncome ?? 0, 'ONT', config).total;
+    expect(closeTo(row.donationCredit!, exact, 0.01)).toBe(true);
+    expect(row.donationCredit!).toBeGreaterThan(0);
+  });
+});
+
+describe('charitable giving across the household (issue #164)', () => {
+  const spouseOf = (over: Partial<NonNullable<RetirementInputs['spouse']>> = {}): NonNullable<RetirementInputs['spouse']> => ({
+    enabled: true, currentAge: 65, retirementAge: 65,
+    rrspBalance: 0, tfsaBalance: 0, taxableBalance: 0, cashCushionBalance: 0,
+    rrspContribution: 0, tfsaContribution: 0, taxableContribution: 0,
+    cppStartAge: null, cppMonthlyAmount: 0, oasStartAge: null, oasYearsInCanada: 40,
+    desiredSpending: 0, ...over,
+  });
+
+  // Couple, both 65. Giving lives on the SHARED inputs (one receipt pile).
+  const couple = (over: Partial<RetirementInputs> = {}): RetirementInputs => baseInputs({
+    maxAge: 70, investmentReturn: 0, returnVolatility: 0,
+    income: [{ id: 'p', label: 'pension', kind: 'pension', annualAmount: 40000, startAge: 60, endAge: null, indexedToCpi: false }],
+    spouse: spouseOf({
+      taxableBalance: 600000,
+      income: [{ id: 'sp', label: 'sp pension', kind: 'pension', annualAmount: 140000, startAge: 60, endAge: null, indexedToCpi: false }],
+    }),
+    ...over,
+  });
+
+  it('the gift is charged once (primary row), not per person', () => {
+    const r = calculateHousehold(couple({ giving: [{ id: 'g', label: 'u', mode: 'fixed', pct: 0, amount: 20000, basis: 'gross', fromAge: 65, toAge: null }] }), config);
+    expect(yearAt(r.yearlyBreakdown, 66).giving).toBe(20000);
+    expect(yearAt(r.spouse!.yearlyBreakdown, 66).giving).toBeUndefined();
+  });
+
+  it('CRA pools receipts: credit computed on COMBINED household income', () => {
+    const r = calculateHousehold(couple({ giving: [{ id: 'g', label: 'u', mode: 'fixed', pct: 0, amount: 20000, basis: 'gross', fromAge: 65, toAge: null }] }), config);
+    const prow = yearAt(r.yearlyBreakdown, 66);
+    const srow = yearAt(r.spouse!.yearlyBreakdown, 66);
+    // $20k on the primary's own $40k would clamp at $40k's tax (~4,660);
+    // pooled on $180k household net it's the full graduated credit.
+    const pooled = donationCredit(20000, (prow.unsplitNetIncome ?? 0) + (srow.unsplitNetIncome ?? 0), 'ONT', config).total;
+    expect(prow.donationCredit).toBeDefined();
+    expect(closeTo(prow.donationCredit!, pooled, 0.01)).toBe(true);
+    expect(pooled).toBeGreaterThan(7000);
+  });
+
+  it('the gift lowers the primary\'s reported tax vs the control couple', () => {
+    const inputs = couple({ giving: [{ id: 'g', label: 'u', mode: 'fixed', pct: 0, amount: 20000, basis: 'gross', fromAge: 65, toAge: null }] });
+    const r = calculateHousehold(inputs, config);
+    const control = couple();
+    const rc = calculateHousehold(control, config);
+    expect(yearAt(r.yearlyBreakdown, 66).incomeTax)
+      .toBeLessThan(yearAt(rc.yearlyBreakdown, 66).incomeTax);
+  });
+
+  it('combined breakdown sums giving/credit; undefined when no giving', () => {
+    const inputs = couple({ giving: [{ id: 'g', label: 'u', mode: 'fixed', pct: 0, amount: 20000, basis: 'gross', fromAge: 65, toAge: null }] });
+    const r = calculateHousehold(inputs, config);
+    const comb = combineHouseholdBreakdown(r, toHousehold(inputs));
+    const row = yearAt(comb, 66);
+    expect(row.giving).toBe(20000);
+    expect(closeTo(row.donationCredit!, 7989.78, 0.01)).toBe(true);
+    const plain = calculateHousehold(couple(), config);
+    const plainComb = combineHouseholdBreakdown(plain, toHousehold(couple()));
+    expect(yearAt(plainComb, 66).giving).toBeUndefined();
+    expect(yearAt(plainComb, 66).donationCredit).toBeUndefined();
+  });
+
+  it('giving never touches GIS or the OAS clawback', () => {
+    // TFSA-funded couple on OAS+GIS: household draws are unchanged by giving
+    // (TFSA is not income), so gisIncome must be identical year over year.
+    const plain = baseInputs({
+      maxAge: 70, investmentReturn: 0, returnVolatility: 0,
+      tfsaBalance: 200000, desiredSpending: 12000, oasStartAge: 65,
+      spouse: spouseOf({ tfsaBalance: 200000, desiredSpending: 12000, oasStartAge: 65 }),
+    });
+    const giving = { ...plain, giving: [{ id: 'g', label: 'u', mode: 'fixed' as const, pct: 0, amount: 6000, basis: 'gross' as const, fromAge: 65, toAge: null }] };
+    const a = calculateHousehold(plain, config);
+    const b = calculateHousehold(giving, config);
+    expect(yearAt(b.yearlyBreakdown, 66).giving).toBe(6000); // giving IS active
+    a.yearlyBreakdown.forEach((y, i) => {
+      expect(b.yearlyBreakdown[i].gisIncome).toBe(y.gisIncome);
+    });
   });
 });

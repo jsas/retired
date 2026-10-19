@@ -311,7 +311,9 @@
       "rdsp": "REEI",
       "fhsa": "CELIAPP",
       "home": "Valeur nette de la maison",
-      "debts": "Dettes"
+      "debts": "Dettes",
+      "giving": "Dons",
+      "donationCredit": "Crédit pour dons"
     },
     "colTitles": {
       "spendingTarget": "Objectif de revenu après impôt pour l’année (dépenses souhaitées indexées à cette année)",
@@ -323,7 +325,9 @@
       "rdsp": "Régime enregistré d’épargne-invalidité. La croissance est à l’abri de l’impôt; au retrait, la part subvention/bon/croissance est imposable (seul le capital de cotisation est non imposable).",
       "fhsa": "Compte d’épargne libre d’impôt pour l’achat d’une première propriété. Les cotisations sont déductibles; la croissance est à l’abri de l’impôt. Transfère au REER à la retraite (jamais retiré directement).",
       "home": "Valeur de la maison moins le solde du prêt d’hypothèque inversée. Le prêt se compose avec l’intérêt et les tirages, érodant la valeur nette.",
-      "debts": "Solde total des dettes (hypothèque, cartes de crédit, prêts, marges de crédit). L’intérêt s’accumule chaque année; les paiements sont financés par les dépenses."
+      "debts": "Solde total des dettes (hypothèque, cartes de crédit, prêts, marges de crédit). L’intérêt s’accumule chaque année; les paiements sont financés par les dépenses.",
+      "giving": "Dons de bienfaisance imputés aux retraits de l’année. Un crédit d’impôt, pas une déduction — voir la colonne Crédit pour dons.",
+      "donationCredit": "Crédit d’impôt pour dons non remboursable modélisé (14 % sur les premiers 200 $, davantage au-delà; regroupé à l’échelle du ménage), appliqué en réduction de l’impôt de la même année."
     }
   },
   "eq": {
@@ -680,7 +684,10 @@
     "rdspBasisTitle": "Base de cotisation {{amount}} (non imposable); le reste est imposable au retrait",
     "fhsaBalanceTitle": "Cotisé à ce jour {{amount}}; transféré au REER à la retraite",
     "homeLoanTitle": "Maison {{home}} − prêt {{loan}}",
-    "paidThisYear": "Payé {{amount}} cette année"
+    "paidThisYear": "Payé {{amount}} cette année",
+    "giving": "Dons de bienfaisance",
+    "givingCreditLine": "Crédit pour dons",
+    "givingCreditHint": "Crédit non remboursable sur les dons regroupés de l’année (fédéral + provincial), appliqué à l’impôt de la même année."
   },
   "assistant": {
     "title": "Assistant IA",

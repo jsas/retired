@@ -470,6 +470,43 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
   {
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": {},
+      "properties": {
+        "action": {
+          "enum": [
+            "add",
+            "update",
+            "remove",
+          ],
+          "type": "string",
+        },
+        "changes": {
+          "additionalProperties": {},
+          "description": "For update: the giving-stream fields to change. For add: ignored — pass the stream fields at the top level instead.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "target": {
+          "description": "For update/remove: the giving stream id, or its label if unique (e.g. "Parish").",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "action",
+      ],
+      "type": "object",
+    },
+    "name": "manage_giving",
+  },
+  {
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "changes": {
@@ -678,7 +715,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
 exports[`tool catalog surface > exposes every catalog tool to LLM providers (names, descriptions, JSON Schema) 1`] = `
 [
   {
-    "description": "Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).",
+    "description": "Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, charitable giving, withdrawal order, spouse, income sources, reverse mortgage).",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -1155,6 +1192,44 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
       "type": "object",
     },
     "name": "manage_debt",
+  },
+  {
+    "description": "PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). mode "fixed": amount dollars/yr (NOT indexed for inflation); mode "pct": pct of income in percentage points (10 = 10%), basis "gross" (pre-tax income stack) or "net" (after-tax). fromAge/toAge window (toAge null = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields. action "update"/"remove" take target (id or unique label). User confirms.",
+    "jsonSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": {},
+      "properties": {
+        "action": {
+          "enum": [
+            "add",
+            "update",
+            "remove",
+          ],
+          "type": "string",
+        },
+        "changes": {
+          "additionalProperties": {},
+          "description": "For update: the giving-stream fields to change. For add: ignored — pass the stream fields at the top level instead.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "rationale": {
+          "type": "string",
+        },
+        "target": {
+          "description": "For update/remove: the giving stream id, or its label if unique (e.g. "Parish").",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "action",
+      ],
+      "type": "object",
+    },
+    "name": "manage_giving",
   },
   {
     "description": "PROPOSE enabling/configuring (or disabling) a special account: kind "rm" (reverse mortgage), "rdsp", or "fhsa". Pass changes with the fields to set; {"enabled":false} turns it off. User confirms.",

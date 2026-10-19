@@ -3,6 +3,7 @@
     "general": "General",
     "assistant": "Assistant",
     "levers": "Lever Ranges",
+    "giving": "Giving",
     "federal": "Federal Tax",
     "provinces": "Provincial Tax",
     "rrif": "RRIF Rates",
@@ -49,6 +50,16 @@
     "defaultMoney": "Default {{value}}",
     "defaultPct": "% a year · default {{value}}%",
     "back": "Back to the default ranges"
+  },
+  "giving": {
+    "title": "Giving defaults",
+    "lead": "New charitable-giving streams on the Details page start with these values — change any of them on the spot once the stream exists. A preference, not an engine setting: it saves the moment you change it. Gift mode always starts at \"% of income\"; switch a stream to \"$ per year\" to give a fixed amount.",
+    "pct": "Percent of income",
+    "defaultPct": "% points (5 = 5%) · default {{value}}%",
+    "basis": "Percent of",
+    "basisGross": "pre-tax income",
+    "basisNet": "after-tax income",
+    "back": "Back to the defaults"
   },
   "provinces": {
     "title": "Provinces",
