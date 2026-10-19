@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { INK, FAINT, HAIRLINE, RED_DOT, AMBER_DOT } from './tokens';
+import { smoothLinePath, smoothAreaPath } from './curve';
 
 export interface TimelineSeries {
   id: string;
@@ -221,10 +222,12 @@ export function ProjectionTimeline({
     return out;
   }, [minAge, maxAge]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const linePath = (pts: { age: number; value: number }[]) =>
-    pts.map((p, j) => `${j === 0 ? 'M' : 'L'}${x(p.age).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
-  const areaPath = (pts: { age: number; value: number }[]) =>
-    `M ${x(pts[0].age).toFixed(1)},${AXIS} ${pts.map(p => `L ${x(p.age).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ')} L ${x(pts[pts.length - 1].age).toFixed(1)},${AXIS} Z`;
+  // Domain points → screen coords → monotone cubic path (never overshoots
+  // a segment's endpoint y-range, so a $0 plateau can't dip under the axis).
+  const toScreen = (pts: { age: number; value: number }[]) =>
+    pts.map(p => ({ x: x(p.age), y: y(p.value) }));
+  const linePath = (pts: { age: number; value: number }[]) => smoothLinePath(toScreen(pts));
+  const areaPath = (pts: { age: number; value: number }[]) => smoothAreaPath(toScreen(pts), AXIS);
 
   // A plan with no savings degenerates: every value is 0, the top axis label
   // reads $0 and the line sits flat — it looks broken. Say why instead.
@@ -507,7 +510,7 @@ export function ProjectionTimeline({
                 {/* zero/max reference labels */}
                 <text x={LL - 4} y={SPEND_AXIS + 3} textAnchor="end" fontSize="8" fill={FAINT}>{fmtAxis(0)}</text>
                 <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="8" fill={FAINT} />
-                <path d={spend.points.map((p, j) => `${j === 0 ? 'M' : 'L'}${x(p.age).toFixed(1)},${ySp(p.value).toFixed(1)}`).join(' ')}
+                <path d={smoothLinePath(spend.points.map(p => ({ x: x(p.age), y: ySp(p.value) })))}
                   fill="none" stroke="#059669" strokeWidth="1.5" />
                 {/* base-spending handle at the draw age (draggable). The age
                     comes from the marker, the draggable pin, or the left edge
@@ -573,7 +576,7 @@ export function ProjectionTimeline({
                 <>
                   {withVol.length > 0 && (
                     <path
-                      d={withVol.map((a, i) => `${i === 0 ? 'M' : 'L'}${x(a.age).toFixed(1)},${yVol(a.volatility!).toFixed(1)}`).join(' ')}
+                      d={smoothLinePath(withVol.map(a => ({ x: x(a.age), y: yVol(a.volatility!) })))}
                       fill="none" stroke={AMBER_DOT} strokeWidth="1.5" strokeDasharray="5 3" />
                   )}
                   {withVol.map(a => (
@@ -601,7 +604,7 @@ export function ProjectionTimeline({
             {/* return curve + anchors (violet, circles) */}
             {anchors.length > 0 && (
               <path
-                d={anchors.map((a, i) => `${i === 0 ? 'M' : 'L'}${x(a.age).toFixed(1)},${yRet(a.return).toFixed(1)}`).join(' ')}
+                d={smoothLinePath(anchors.map(a => ({ x: x(a.age), y: yRet(a.return) })))}
                 fill="none" stroke="#7c3aed" strokeWidth="2" />
             )}
             {anchors.map(a => (
