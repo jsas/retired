@@ -53,8 +53,8 @@ describe('LandingPage', () => {
 
   it('opens with the greeting and the first question', () => {
     act(() => { root.render(<LandingPage config={config} onBuild={() => {}} />); });
-    expect(container.textContent).toContain("Hi. I'm RE");
-    expect(container.textContent).toContain('make your money last as long as you');
+    expect(container.textContent).toContain("I'm RE");
+    expect(container.textContent).toContain('how long your money will last');
     expect(container.textContent).toContain('how old are you');
   });
 
