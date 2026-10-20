@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  donationCredit,
   calculateTax,
   findGrossIncomeForTakeHome,
   gisAnnual,
@@ -293,5 +294,90 @@ describe('indexConfig (full-table scaling)', () => {
 
   it('factor of 1 returns the config unchanged (no-op)', () => {
     expect(indexConfig(config, 1)).toBe(config);
+  });
+});
+
+// ---- Charitable donation tax credit (issue #164) ---------------------------
+// Rates: federal 14% on the first $200, then 29%/33% over the $258,482 top
+// bracket (https://www.canada.ca/en/revenue-agency/services/tax/individuals/tax-rates-brackets/current-year.html);
+// provincial donation rates from https://www.taxtips.ca/filing/donations/tax-credit-rates-2026.htm.
+describe('donationCredit (line 34900/34990, issue #164)', () => {
+  it('$1,000 gift at $100k income: federal = 200×14% + 800×29%', () => {
+    const r = donationCredit(1000, 100000, 'ONT', config);
+    expect(closeTo(r.federal, 260, 0.01)).toBe(true);
+  });
+
+  it('provincial credit matches each province\'s published 2026 donation rates', () => {
+    // total = first-band×first-rate + 800×over-rate (income < every top bracket).
+    const prov = {
+      ONT: 99.38, BC: 145.60, AB: 288.00, MB: 160.80, SK: 137.00, NS: 185.58,
+      NB: 162.40, NL: 191.80, PE: 171.00, YT: 115.20, NT: 124.20, NU: 100.00, QC: 232.00,
+    };
+    for (const [code, want] of Object.entries(prov)) {
+      expect(closeTo(donationCredit(1000, 100000, code, config).provincial, want, 0.01)).toBe(true);
+    }
+  });
+
+  it('Quebec federal credit is abated (×(1−16.5%)), provincial is not', () => {
+    const r = donationCredit(1000, 100000, 'QC', config);
+    expect(closeTo(r.federal, 260 * (1 - config.qcFederalAbatement), 0.01)).toBe(true); // 217.10
+    expect(closeTo(r.provincial, 232, 0.01)).toBe(true);
+    expect(closeTo(r.total, 449.10, 0.01)).toBe(true);
+  });
+
+  it('top tier (33%/QC 25.75%) applies to the excess above the top bracket', () => {
+    // Income $400k > federal top bracket $258,482: the whole $800 above the
+    // $200 band is in the top tier → 28 + 800×0.33 = 292.
+    expect(closeTo(donationCredit(1000, 400000, 'ONT', config).federal, 292, 0.01)).toBe(true);
+    // BC top bracket $265,545 → donation top rate 20.5% for the excess.
+    expect(closeTo(donationCredit(1000, 400000, 'BC', config).provincial, 11.20 + 800 * 0.205, 0.01)).toBe(true); // 175.20
+    // QC top donation rate 25.75%; federal still abated.
+    const qc = donationCredit(1000, 400000, 'QC', config);
+    expect(closeTo(qc.provincial, 40 + 800 * 0.2575, 0.01)).toBe(true); // 246
+    expect(closeTo(qc.federal, (28 + 800 * 0.33) * (1 - 0.165), 0.01)).toBe(true); // 243.82
+  });
+
+  it('the $200 first band rides the LOW rate even at high income', () => {
+    // $50k gift on $150k income (under the $258,482 top bracket, under both
+    // the 75% claim cap and the non-refundable clamp): the first $200 rides
+    // 14%, everything above rides 29%.
+    const r = donationCredit(50000, 150000, 'ONT', config);
+    expect(closeTo(r.federal, 28 + 49800 * 0.29, 0.01)).toBe(true);
+  });
+
+  it('claims are capped at 75% of income', () => {
+    // $180k gift on $200k income → only $150k claimable.
+    const r = donationCredit(180000, 200000, 'ONT', config);
+    const capped = donationCredit(150000, 200000, 'ONT', config);
+    expect(closeTo(r.total, capped.total, 0.01)).toBe(true);
+  });
+
+  it('Quebec is exempt from the 75% claim cap', () => {
+    // Revenu Québec: no 75% limit. A gift ≥ full tax still only clamps at the
+    // tax payable, not at 75% of income.
+    const r = donationCredit(180000, 200000, 'QC', config);
+    const tax = calculateTax(200000, 'QC', config);
+    expect(closeTo(r.total, tax.totalTax, 0.01)).toBe(true); // clamped at tax, above the 75% line
+    expect(r.total).toBeGreaterThan(donationCredit(150000, 200000, 'QC', config).total);
+  });
+
+  it('non-refundable: credit never exceeds tax payable, each level separately', () => {
+    const r = donationCredit(100000, 50000, 'ONT', config);
+    const tax = calculateTax(50000, 'ONT', config);
+    expect(r.federal).toBe(tax.federalTax);
+    expect(r.provincial).toBe(tax.provincialTax);
+    expect(r.total).toBe(tax.totalTax);
+  });
+
+  it('unknown province code: federal credit only', () => {
+    const r = donationCredit(1000, 100000, 'ZZ', config);
+    expect(r.federal).toBe(260);
+    expect(r.provincial).toBe(0);
+  });
+
+  it('zero or negative donation/income produce zero credit', () => {
+    expect(donationCredit(0, 100000, 'ONT', config).total).toBe(0);
+    expect(donationCredit(-500, 100000, 'ONT', config).total).toBe(0);
+    expect(donationCredit(1000, 0, 'ONT', config).total).toBe(0);
   });
 });

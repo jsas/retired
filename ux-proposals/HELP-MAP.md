@@ -115,6 +115,7 @@ nothing is dropped; they just don't need a `?` anywhere.)
 | `years-in-canada` | Years in Canada (OAS) | Income | Details ▸ Government Benefits |
 | `gis` | GIS | Income | Help page (cross-linked from `oas-start-age`) |
 | `cash-events` | Cash events (in / out) | Income | Details ▸ Cash Events |
+| `charitable-giving` | Charitable giving (donation credit) | Income | Details ▸ Charitable Giving |
 | `desired-spending` | Desired spending | Spending | Dashboard fader · Details lever |
 | `spending-phases` | Go-go / slow-go / no-go | Spending | Details ▸ Spending Phases |
 | `withdrawal-order` | Withdrawal order | Spending | Details ▸ Withdrawal Strategy |
@@ -182,7 +183,7 @@ Status key: ✅ done & shipped to PR #137 · 🚧 in progress · ⬜ not started
 - [x] ✅ Hints placed on **Details**: all 13 sections get one (profile→
   `current-retirement-max-age`, spouse→`include-spouse`, accounts→`rrsp`,
   contributions→`contributions`, income→`income`, benefits→`cpp-start-age`,
-  events→`cash-events`, spending→`spending-phases`, withdrawal→`withdrawal-order`,
+  events→`cash-events`, giving→`charitable-giving`, spending→`spending-phases`, withdrawal→`withdrawal-order`,
   debts→`debts`, home→`home-equity`, rdsp→`rdsp`, fhsa→`fhsa`); levers Spend→
   `desired-spending`, Markets→`expected-return`.
 - [x] ✅ Hints placed on the remaining surfaces via the `BetaPage hint` prop (page

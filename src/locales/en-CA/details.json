@@ -16,6 +16,7 @@
     "income": "Income",
     "benefits": "Government Benefits",
     "events": "Cash Events",
+    "giving": "Charitable Giving",
     "spending": "Spending Phases",
     "withdrawal": "Withdrawal Strategy",
     "markets": "Markets",
@@ -75,6 +76,22 @@
   "addOutflow": "+ add outflow",
   "removeEvent": "Remove {{name}}",
   "eventPlaceholder": "e.g. Inheritance, renovation, gift",
+  "noGiving": "No giving on the plan yet.",
+  "givingPlaceholder": "e.g. Parish, United Way, food bank",
+  "removeGiving": "Remove {{name}}",
+  "givingMode": "Mode",
+  "givingModes": {
+    "pct": "% of income",
+    "fixed": "$ per year"
+  },
+  "givingPct": "% of income",
+  "givingBasis": "Percent of",
+  "givingBases": {
+    "gross": "pre-tax income",
+    "net": "after-tax income"
+  },
+  "addGiving": "+ add giving",
+  "givingNote": "Gifts are added to yearly withdrawals from the start age, and generate the donation tax credit (14% on the first $200, higher above; pooled across the household). Fixed amounts are not indexed for inflation.",
   "spendingLead": "Base spending is the \"After Tax Spending\" lever above. Each phase is a yearly dollar amount and a percent of that base, from an age (go-go / slow-go / no-go). Edit either — they stay in sync.",
   "noPhases": "No phases — spending stays flat.",
   "amountOfBase": "$ / yr",

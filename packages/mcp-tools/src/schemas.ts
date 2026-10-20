@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type {
   RetirementInputs, SpouseInputs, CashEvent, IncomeSource, SpendingBand,
-  ReverseMortgage, WithdrawalAccount, RdspInputs, FhsaInputs, Debt,
+  ReverseMortgage, WithdrawalAccount, RdspInputs, FhsaInputs, Debt, GivingStream,
 } from '@retired/engine-core/retirementEngine';
 import type { AppConfig, TaxTable } from '@retired/engine-core/appConfig';
 import type { Scenario } from '@retired/engine-core/types';
@@ -111,6 +111,20 @@ export const debtSchema = z.object({
   endAge: z.number().nullish(),
 }) satisfies z.ZodType<Debt>;
 
+// Household charitable giving stream (issue #164). Shared across the
+// household (one list, one pooled credit), so it rides on RetirementInputs
+// only, never SpouseInputs.
+export const givingStreamSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  mode: z.enum(['pct', 'fixed']),
+  pct: z.number(),
+  amount: z.number(),
+  basis: z.enum(['gross', 'net']),
+  fromAge: z.number(),
+  toAge: z.number().nullish(),
+}) satisfies z.ZodType<GivingStream>;
+
 const spouseSourceSchema = z.union([
   z.object({ kind: z.literal('builtin') }),
   z.object({ kind: z.literal('scenario'), scenarioId: z.string() }),
@@ -178,6 +192,7 @@ export const retirementInputsSchema = z.object({
   rdsp: rdspSchema.optional(),
   fhsa: fhsaSchema.optional(),
   debts: z.array(debtSchema).optional(),
+  giving: z.array(givingStreamSchema).optional(),
 }) satisfies z.ZodType<RetirementInputs>;
 
 export const scenarioSchema = z.object({
@@ -255,6 +270,16 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
     annualLimit: z.number(),
     lifetimeLimit: z.number(),
     maxYears: z.number(),
+  }),
+  donationCredit: z.object({
+    firstBand: z.number(),
+    federal: z.object({ firstTier: z.number(), overTier: z.number(), topTier: z.number() }),
+    // Same noUncheckedIndexedAccess cast as `provinces` above.
+    provinces: z.record(z.string(), z.object({
+      first: z.number(), over: z.number(), top: z.number().optional(),
+    })) as z.ZodType<AppConfig['donationCredit']['provinces']>,
+    claimCap: z.number(),
+    qcCapExempt: z.boolean(),
   }),
   qcFederalAbatement: z.number(),
   ontarioSurtax: z.object({

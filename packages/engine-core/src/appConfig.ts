@@ -129,6 +129,46 @@ export interface FhsaConfig {
   maxYears: number;       // account must be used within this many years of opening (15)
 }
 
+/**
+ * Charitable donation tax credit parameters (2026). The donation credit is a
+ * NON-REFUNDABLE tax credit (reduces tax payable, never below zero) computed
+ * per province on top of the regular bracket tax. Structure:
+ * - Federal: `firstTier` on the first `firstBand` dollars per year, `overTier`
+ *   on the excess; `topTier` applies to the excess only TO THE EXTENT taxable
+ *   income exceeds the top federal bracket threshold. The excess tier tracks
+ *   the LOWEST federal rate: CRA cut it 15%→14.5% for 2025 and 14.5%→14% for
+ *   2026, so the first-band rate follows (14% for 2026), NOT the 15% the
+ *   statute text historically names. Sources:
+ *   https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-34990-top-up-tax-credit.html
+ *   https://www.canada.ca/en/revenue-agency/services/tax/individuals/tax-rates-brackets/current-year.html
+ * - Provincial: `first` on the first `firstBand`, `over` on the excess; `top`
+ *   (BC 20.5%, QC 25.75%) extends the excess to the extent taxable income
+ *   exceeds the province's top bracket threshold. These are NOT derivable
+ *   from the bracket tables — Alberta's 60%/21% and QC's 20%/24% break the
+ *   pattern, so every province gets an explicit entry. Rates per
+ *   https://www.taxtips.ca/filing/donations/tax-credit-rates-2026.htm
+ * - Claim cap: at most `claimCap` of net income is claimable in the year
+ *   (75%; 100% in the year of death is not modelled). Quebec is exempt from
+ *   the federal cap (`qcCapExempt`): Revenu Québec applies its own schedule
+ *   without a 75% limit. Source:
+ *   https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-34900-donations-gifts/how-much-claim.html
+ *   and https://www.revenuquebec.ca/en/citizens/income-tax-return/completing-your-income-tax-return/how-to-complete-your-income-tax-return/line-by-line-help/350-to-398-1-non-refundable-tax-credits/line-395/
+ *
+ * The `firstBand` is FIXED in dollars: CRA has never indexed the $200 band
+ * (nor QC's), so indexConfig deliberately leaves this whole block unscaled —
+ * all other values are rates. The top-tier extent thresholds are DERIVED at
+ * call time from the (already indexed) federal/provincial bracket tables.
+ */
+export interface DonationCreditConfig {
+  firstBand: number;  // dollars at the first-tier rate (200; never indexed)
+  federal: { firstTier: number; overTier: number; topTier: number };
+  // Per-province donation-credit rates, keyed like `AppConfig.provinces`.
+  // `top` is the extended-excess rate where the province has one.
+  provinces: Record<string, { first: number; over: number; top?: number }>;
+  claimCap: number;      // fraction of net income claimable per year (0.75)
+  qcCapExempt: boolean;  // Quebec applies no 75% cap
+}
+
 export interface AppConfig {
   federal: TaxTable;
   provinces: Record<string, TaxTable>;
@@ -138,6 +178,7 @@ export interface AppConfig {
   engine: EngineConfig;
   rdsp: RdspConfig;
   fhsa: FhsaConfig;
+  donationCredit: DonationCreditConfig;
   qcFederalAbatement: number;  // Quebec abatement: fraction of federal tax refunded (0.165)
   ontarioSurtax: {             // Ontario surtax on provincial tax above two thresholds
     threshold1: number; rate1: number;
@@ -249,6 +290,36 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     lifetimeLimit: 40000,
     maxYears: 15,
   },
+  // 2026 charitable donation credit. Federal tiers (line 34990 top-up): 14%
+  // first $200 / 29% above / 33% to the extent taxable income exceeds the top
+  // bracket — the first-band rate tracks the lowest federal rate (CRA cut it
+  // 15%→14.5% for 2025, →14% for 2026). The $200 band is never indexed, so
+  // indexConfig leaves this block unscaled. Per-province rates:
+  // https://www.taxtips.ca/filing/donations/tax-credit-rates-2026.htm — AB
+  // 60%/21% and QC 20%/24% are the pattern-breakers (worked check, $1,000 in
+  // Alberta: 200×0.60 + 800×0.21 = $288). BC 20.5% / QC 25.75% are the only
+  // extended-excess (`top`) rates. 75% claim cap is federal; QC exempt.
+  donationCredit: {
+    firstBand: 200,
+    federal: { firstTier: 0.14, overTier: 0.29, topTier: 0.33 },
+    provinces: {
+      ONT: { first: 0.0505, over: 0.1116 },
+      BC: { first: 0.056, over: 0.168, top: 0.205 },
+      AB: { first: 0.60, over: 0.21 },
+      MB: { first: 0.108, over: 0.174 },
+      SK: { first: 0.105, over: 0.145 },
+      NS: { first: 0.0879, over: 0.21 },
+      NB: { first: 0.094, over: 0.1795 },
+      NL: { first: 0.087, over: 0.218 },
+      PE: { first: 0.095, over: 0.19 },
+      YT: { first: 0.064, over: 0.128 },
+      NT: { first: 0.059, over: 0.1405 },
+      NU: { first: 0.04, over: 0.115 },
+      QC: { first: 0.20, over: 0.24, top: 0.2575 },
+    },
+    claimCap: 0.75,
+    qcCapExempt: true,
+  },
   qcFederalAbatement: 0.165,
   // 2026 Ontario surtax thresholds (2025 values × 1.02 CRA indexation).
   ontarioSurtax: { threshold1: 5925, rate1: 0.20, threshold2: 7577, rate2: 0.56 },
@@ -339,6 +410,20 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
     const f = c.fhsa as Partial<FhsaConfig> | undefined;
     if (!f || [f.annualLimit, f.lifetimeLimit, f.maxYears].some(v => typeof v !== 'number')) {
       (c as AppConfig).fhsa = { ...DEFAULT_APP_CONFIG.fhsa };
+    }
+  }
+  // Donation-credit config was added later — back-fill the whole block
+  // (all-or-nothing: a partial block is treated as absent; its province map
+  // has 13 entries, too fiddly to merge piecemeal).
+  {
+    const d = c.donationCredit as Partial<DonationCreditConfig> | undefined;
+    const dProvsOk = !!d?.provinces && Object.values(d.provinces).every(
+      p => typeof p?.first === 'number' && typeof p?.over === 'number' &&
+        (p.top === undefined || typeof p.top === 'number'));
+    if (!d || [d.firstBand, d.claimCap].some(v => typeof v !== 'number') ||
+        !d.federal || [d.federal.firstTier, d.federal.overTier, d.federal.topTier].some(v => typeof v !== 'number') ||
+        typeof d.qcCapExempt !== 'boolean' || !dProvsOk) {
+      (c as AppConfig).donationCredit = structuredClone(DEFAULT_APP_CONFIG.donationCredit);
     }
   }
   // QC abatement / ON surtax were added later — back-fill defaults.

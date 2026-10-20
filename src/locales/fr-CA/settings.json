@@ -3,6 +3,7 @@
     "general": "Général",
     "assistant": "Assistant",
     "levers": "Plages des leviers",
+    "giving": "Dons",
     "federal": "Impôt fédéral",
     "provinces": "Impôt provincial",
     "rrif": "Taux FERR",
@@ -49,6 +50,16 @@
     "defaultMoney": "Défaut {{value}}",
     "defaultPct": "% par an · défaut {{value}} %",
     "back": "Revenir aux plages par défaut"
+  },
+  "giving": {
+    "title": "Valeurs par défaut des dons",
+    "lead": "Les nouveaux flux de dons de bienfaisance dans les détails du plan commencent avec ces valeurs — modifiez-les sur place une fois le flux créé. Une préférence, pas un paramètre du moteur : elle s’enregistre dès que vous la changez. Le mode commence toujours à « % du revenu »; passez un flux à « $ par année » pour donner un montant fixe.",
+    "pct": "Pourcentage du revenu",
+    "defaultPct": "points de % (5 = 5 %) · défaut {{value}} %",
+    "basis": "Pourcentage de",
+    "basisGross": "revenu brut",
+    "basisNet": "revenu après impôt",
+    "back": "Revenir aux valeurs par défaut"
   },
   "provinces": {
     "title": "Provinces",

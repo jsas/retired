@@ -26,7 +26,7 @@ describe('DetailsPage inline editors', () => {
   it('renders every hint anchor including the editable collections', () => {
     const html = render();
     for (const id of ['details-profile', 'details-spouse', 'details-accounts', 'details-contributions',
-      'details-income', 'details-benefits', 'details-events', 'details-spending', 'details-withdrawal', 'details-markets', 'details-debts']) {
+      'details-income', 'details-benefits', 'details-events', 'details-giving', 'details-spending', 'details-withdrawal', 'details-markets', 'details-debts']) {
       expect(html, id).toContain(id);
     }
     // Sections stack in one column (the old two-col desktop grid is gone).
@@ -85,6 +85,20 @@ describe('DetailsPage inline editors', () => {
     expect(html).toContain('Mortgage');
     expect(html).toContain('+ add a debt');
     expect(html).toContain('aria-label="Remove Mortgage"');
+  });
+
+  it('lists existing giving streams with add and remove controls', () => {
+    const html = render({ giving: [
+      { id: 'g1', label: 'Parish', mode: 'fixed', pct: 0, amount: 2400, basis: 'gross', fromAge: 62, toAge: null },
+      { id: 'g2', label: 'Food bank', mode: 'pct', pct: 5, amount: 0, basis: 'net', fromAge: 70, toAge: 80 },
+    ] });
+    expect(html).toContain('Parish');
+    expect(html).toContain('value="2400"');
+    expect(html).toContain('value="5"');
+    expect(html).toContain('after-tax income');
+    expect(html).toContain('+ add giving');
+    expect(html).toContain('aria-label="Remove Parish"');
+    expect(html).toContain('aria-label="Remove Food bank"');
   });
 
   it('offers a link picker when other plans exist, and create when they do not', () => {

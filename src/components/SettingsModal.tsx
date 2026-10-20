@@ -18,6 +18,7 @@ import {
   assembleSystemPrompt, defaultSystemPromptFor, defaultToolInstructionsFor,
 } from '../lib/ai/agentLoop';
 import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } from '../lib/rangePrefs';
+import { getGivingPrefs, setGivingPrefs, DEFAULT_GIVING_PREFS, type GivingPrefs } from '../lib/givingPrefs';
 import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { HelpHint } from '../design/primitives';
@@ -57,16 +58,18 @@ const ERASABLE_KEYS = [
   'wealthconsole_panel_state',
   'wealthconsole_schedule_cols',
   'wealthconsole_ranges',
+  'wealthconsole_giving',
   AI_CHATS_STORAGE_KEY,
   AI_SETTINGS_STORAGE_KEY,
 ];
 
-type Section = 'general' | 'assistant' | 'levers' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
+type Section = 'general' | 'assistant' | 'levers' | 'giving' | 'federal' | 'provinces' | 'rrif' | 'oas' | 'cpp' | 'engine' | 'gains' | 'rdsp' | 'fhsa';
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'general', label: 'General' },
   { id: 'assistant', label: 'Assistant' },
   { id: 'levers', label: 'Lever Ranges' },
+  { id: 'giving', label: 'Giving' },
   { id: 'federal', label: 'Federal Tax' },
   { id: 'provinces', label: 'Provincial Tax' },
   { id: 'rrif', label: 'RRIF Rates' },
@@ -108,6 +111,10 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
   // up on their next render.
   const [ranges, setRanges] = useState<RangePrefs>(getRangePrefs);
   const updateRanges = (patch: Partial<RangePrefs>) => setRanges(setRangePrefs(patch));
+  // Giving defaults are prefKV too (issue #164): they prefill the Details
+  // page's "+ add giving" form, not the engine math.
+  const [giving, setGiving] = useState<GivingPrefs>(getGivingPrefs);
+  const updateGiving = (patch: Partial<GivingPrefs>) => setGiving(setGivingPrefs(patch));
   const ai = useSyncExternalStore(subscribeAiSettings, getAiSettings, getAiSettings);
   const patchAi = (mutate: (s: AiSettings) => void) => {
     updateAiSettings(prev => {
@@ -295,6 +302,37 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
               >
                 <RotateCcw size={13} /> {t('levers.back')}
+              </button>
+            </div>
+          )}
+
+          {section === 'giving' && (
+            <div className="space-y-4 max-w-lg">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('giving.title')}<HelpHint topic="charitable-giving" /></h3>
+                <p className="text-xs text-slate-600 leading-snug">
+                  {t('giving.lead')}
+                </p>
+              </div>
+              <RangeNum label={t('giving.pct')} value={giving.defaultPct} step={0.5}
+                hint={t('giving.defaultPct', { value: DEFAULT_GIVING_PREFS.defaultPct })}
+                onChange={(v) => updateGiving({ defaultPct: Math.min(100, Math.max(0, v)) })} />
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-xs text-slate-700">{t('giving.basis')}</span>
+                <select
+                  value={giving.defaultBasis}
+                  onChange={e => updateGiving({ defaultBasis: e.target.value as GivingPrefs['defaultBasis'] })}
+                  className="border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none"
+                >
+                  <option value="gross">{t('giving.basisGross')}</option>
+                  <option value="net">{t('giving.basisNet')}</option>
+                </select>
+              </label>
+              <button
+                onClick={() => setGiving(setGivingPrefs({ ...DEFAULT_GIVING_PREFS }))}
+                className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+              >
+                <RotateCcw size={13} /> {t('giving.back')}
               </button>
             </div>
           )}

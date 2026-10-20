@@ -23,7 +23,7 @@ import { solveSustainableSpending } from '@retired/engine-core/spendingSolver';
 import { runMonteCarlo } from '@retired/engine-core/monteCarlo';
 import {
   retirementInputsSchema, spouseSchema, incomeSourceSchema,
-  cashEventSchema, reverseMortgageSchema, rdspSchema, fhsaSchema, debtSchema,
+  cashEventSchema, reverseMortgageSchema, rdspSchema, fhsaSchema, debtSchema, givingStreamSchema,
 } from './schemas';
 import { buildRevertPlan, encodeRevertPatch, type PlanCheckpoint } from './checkpoints';
 import { MemoryStore } from './memoryStore';
@@ -144,6 +144,15 @@ const manageDebtArgs = z.object({
     .describe('For update/remove: the debt id, or its label if unique (e.g. "Mortgage").'),
   changes: z.record(z.string(), z.unknown()).optional()
     .describe('For update: the debt fields to change. For add: ignored — pass the debt fields at the top level instead.'),
+  rationale: z.string().optional(),
+}).passthrough();
+
+const manageGivingArgs = z.object({
+  action: z.enum(['add', 'update', 'remove']),
+  target: z.string().min(1).optional()
+    .describe('For update/remove: the giving stream id, or its label if unique (e.g. "Parish").'),
+  changes: z.record(z.string(), z.unknown()).optional()
+    .describe('For update: the giving-stream fields to change. For add: ignored — pass the stream fields at the top level instead.'),
   rationale: z.string().optional(),
 }).passthrough();
 
@@ -278,6 +287,7 @@ export const TOOL_SCHEMAS = {
   manage_cash_event: manageCashEventArgs,
   manage_income: manageIncomeArgs,
   manage_debt: manageDebtArgs,
+  manage_giving: manageGivingArgs,
   remember: rememberArgs,
   recall: recallArgs,
   list_scenarios: listScenariosArgs,
@@ -310,7 +320,7 @@ export const EDITABLE_FIELDS = new Set([
 /** Structural top-level keys that are refused in flat override patches — they
  *  have dedicated propose_* tools with element-level validation. */
 const STRUCTURAL_FIELDS = new Set([
-  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa', 'debts', 'marketPeriods',
+  'spouse', 'spouseSource', 'events', 'income', 'spendingBands', 'reverseMortgage', 'rdsp', 'fhsa', 'debts', 'marketPeriods', 'giving',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -329,7 +339,7 @@ export interface ToolCatalogEntry {
  *  registers every entry with the official SDK — so both consumers see the
  *  same names, descriptions, and argument shapes from one definition. */
 export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
-  get_scenario: { description: 'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
+  get_scenario: { description: 'Read the current retirement scenario (plan inputs: ages, balances, contributions, benefits, spending, charitable giving, withdrawal order, spouse, income sources, reverse mortgage).', schema: getScenarioArgs },
   run_projection: { description: 'Run the engine on the current plan (optionally with overrides) and return the verdict: funded/depleted, key ages, tax, and a compact year digest.', schema: runProjectionArgs },
   compare_scenarios: { description: 'Compare the current plan against one or more variants (up to 4) defined by flat override patches, and return all outcomes plus deltas vs current. Use for "retire at 60 vs 65 vs 70?".', schema: compareScenariosArgs },
   run_strategies: { description: 'Run the deterministic strategy explorer: rank named lever variants (CPP/OAS timing, employer-pension start ages, withdrawal order, reverse mortgage, part-time work) against the current plan by sustainable spending, tax, and GIS. Optionally scope with categories/maxVariants. Use for "what levers help most?" steering.', schema: runStrategiesArgs },
@@ -343,6 +353,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
   manage_income: { description: 'PROPOSE adding, updating, or removing an income source (pension, employment, self-employment, or rental). action "add" takes the source fields (endAge a number or explicit null). action "update"/"remove" take target (id or unique label). User confirms.', schema: manageIncomeArgs },
   manage_cash_event: { description: 'PROPOSE adding, updating, or removing a cash event (inflow to an account, or outflow adding to spending). action "add" takes the event fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageCashEventArgs },
   manage_debt: { description: 'PROPOSE adding, updating, or removing a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending until paid off. action "add" takes the debt fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageDebtArgs },
+  manage_giving: { description: 'PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). mode "fixed": amount dollars/yr (NOT indexed for inflation); mode "pct": pct of income in percentage points (10 = 10%), basis "gross" (pre-tax income stack) or "net" (after-tax). fromAge/toAge window (toAge null = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageGivingArgs },
   propose_account: { description: 'PROPOSE enabling/configuring (or disabling) a special account: kind "rm" (reverse mortgage), "rdsp", or "fhsa". Pass changes with the fields to set; {"enabled":false} turns it off. User confirms.', schema: proposeAccountArgs },
   propose_revert: { description: 'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.', schema: proposeRevertArgs },
   remember: { description: 'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
@@ -524,6 +535,8 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
       return manageArray(ctx, 'income', incomeSourceSchema, parsed.data as Record<string, unknown>, 'income source');
     case 'manage_debt':
       return manageArray(ctx, 'debts', debtSchema, parsed.data as Record<string, unknown>, 'debt');
+    case 'manage_giving':
+      return manageArray(ctx, 'giving', givingStreamSchema, parsed.data as Record<string, unknown>, 'giving stream');
     case 'remember':
       return rememberTool(ctx, parsed.data as z.infer<typeof rememberArgs>);
     case 'recall':
@@ -610,6 +623,9 @@ function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchem
       `${(b.pctOfBase * 100).toFixed(0)}% (${money(i.desiredSpending * b.pctOfBase)}/yr) from age ${b.fromAge}`),
     events: (i.events ?? []).map(e => `${e.label}: ${money(e.amount)} ${e.direction} at age ${e.age}${e.endAge != null ? `–${e.endAge}` : ''}`),
     debts: describeDebts(i.debts),
+    giving: (i.giving ?? []).map(g => g.mode === 'fixed'
+      ? `${g.label}: ${money(g.amount)}/yr from ${g.fromAge}${g.toAge != null ? ` to ${g.toAge}` : ''} (household, pooled credit)`
+      : `${g.label}: ${g.pct}% of ${g.basis} income from ${g.fromAge}${g.toAge != null ? ` to ${g.toAge}` : ''} (household, pooled credit)`),
   };
   const spouse = i.spouse?.enabled ? {
     currentAge: i.spouse.currentAge, retirementAge: i.spouse.retirementAge,
@@ -709,6 +725,11 @@ function summarizeResults(label: string, inputs: RetirementInputs, results: Reti
       `withdrew ${money(r.withdrawals)}, tax ${money(r.incomeTax)}, ` +
       `benefits cpp ${money(r.cppIncome)} oas ${money(r.oasIncome)} gis ${money(r.gisIncome)}`,
     );
+  }
+  const givingTotal = rows.reduce((a, r) => a + (r.giving ?? 0), 0);
+  if (givingTotal > 0) {
+    const creditTotal = rows.reduce((a, r) => a + (r.donationCredit ?? 0), 0);
+    lines.push(`  charitable giving ${money(givingTotal)} lifetime, donation tax credit ${money(creditTotal)} (pooled household credit)`);
   }
   return lines.join('\n');
 }
@@ -924,7 +945,7 @@ function proposeAccount(
  *  proposes the array with the new element appended. */
 function proposeElement(
   ctx: ToolContext,
-  key: 'income' | 'events' | 'debts',
+  key: 'income' | 'events' | 'debts' | 'giving',
   schema: z.ZodType,
   rawArgs: unknown,
   noun: string,
@@ -1133,7 +1154,7 @@ function proposeRevert(ctx: ToolContext, args: z.infer<typeof proposeRevertArgs>
  *  go through manageElement. Strips `action` so it never lands in the schema. */
 function manageArray(
   ctx: ToolContext,
-  key: 'events' | 'income' | 'debts',
+  key: 'events' | 'income' | 'debts' | 'giving',
   schema: z.ZodType,
   data: Record<string, unknown>,
   noun: string,
@@ -1159,7 +1180,7 @@ function manageArray(
  *  matches by exact id first, then by unique case-insensitive label. */
 function manageElement(
   ctx: ToolContext,
-  key: 'events' | 'income' | 'debts',
+  key: 'events' | 'income' | 'debts' | 'giving',
   schema: z.ZodType,
   args: { action: 'update' | 'remove'; target: string; changes?: Record<string, unknown>; rationale?: string },
   noun: string,

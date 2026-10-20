@@ -38,7 +38,7 @@ describe('tool catalog surface', () => {
       'solve_spending', 'run_monte_carlo', 'get_schedule',
       'propose_plan', 'propose_spouse',
       'propose_spending_bands', 'propose_market_periods',
-      'manage_income', 'manage_cash_event', 'manage_debt',
+      'manage_income', 'manage_cash_event', 'manage_debt', 'manage_giving',
       'propose_account', 'propose_revert',
       'remember', 'recall', 'list_scenarios',
       'find_page', 'propose_navigate',

@@ -314,6 +314,17 @@ function YearDetailPanel({ detail, row }: { detail: YearDetail; row: YearlyBreak
         </Section>
       )}
 
+      {(detail.giving?.length ?? 0) > 0 && (
+        <Section title={t('yearDetail.giving')}>
+          {detail.giving!.map((g, i) => (
+            <Line key={i} locale={locale} label={g.label} value={g.amount} />
+          ))}
+          {(row.donationCredit ?? 0) > 0.5 && (
+            <Line locale={locale} label={t('yearDetail.givingCreditLine')} value={row.donationCredit ?? 0} strong hint={t('yearDetail.givingCreditHint')} />
+          )}
+        </Section>
+      )}
+
       {detail.events.length > 0 && (
         <Section title={t('yearDetail.events')}>
           {detail.events.map((ev, i) => (
@@ -430,6 +441,9 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
   const hasFhsa = breakdown.some(r => r.fhsaBalance !== undefined);
   // Debt balance column appears only when a person carries a debt.
   const hasDebts = breakdown.some(r => r.debtBalance !== undefined);
+  // Charitable giving columns appear only when a giving stream charged a year
+  // (issue #164).
+  const hasGiving = breakdown.some(r => r.giving !== undefined);
   const anyDetail = household || breakdown.some(r => r.detail);
 
   // User-visible base columns (picker + prefKV), unioned with the columns the
@@ -455,7 +469,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
   // columns. The chevron column was previously left out, so an expandable
   // table's detail row spanned one column too few and the panel didn't reach
   // the table's right edge.
-  const colCount = shownColumns.length + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0) + (hasDebts ? 1 : 0);
+  const colCount = shownColumns.length + (anyDetail ? 1 : 0) + (hasRm ? 1 : 0) + (hasRdsp ? 1 : 0) + (hasFhsa ? 1 : 0) + (hasDebts ? 1 : 0) + (hasGiving ? 2 : 0);
 
   const renderCell = (col: ScheduleColumn, row: YearlyBreakdown, isRetirement: boolean, dragAge: number | null = null) => {
     if (col.id === 'age') {
@@ -523,6 +537,12 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
               {hasDebts && (
                 <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.debts')}>{t('schedule.cols.debts')}</th>
               )}
+              {hasGiving && (
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.giving')}>{t('schedule.cols.giving')}</th>
+              )}
+              {hasGiving && (
+                <th className="text-right px-3 py-2 font-semibold text-slate-700" title={t('schedule.colTitles.donationCredit')}>{t('schedule.cols.donationCredit')}</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -571,6 +591,16 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
                       <td className={`px-3 py-1.5 text-right font-mono ${(row.debtBalance ?? 0) > 0.5 ? 'text-rose-700' : 'text-slate-600'}`}
                         title={(row.debtPayments ?? 0) > 0.5 ? t('yearDetail.paidThisYear', { amount: formatCurrency(row.debtPayments ?? 0, locale) }) : undefined}>
                         {row.debtBalance !== undefined ? formatCurrency(row.debtBalance, locale) : '—'}
+                      </td>
+                    )}
+                    {hasGiving && (
+                      <td className="px-3 py-1.5 text-right font-mono text-slate-600">
+                        {row.giving !== undefined ? formatCurrency(row.giving, locale) : '—'}
+                      </td>
+                    )}
+                    {hasGiving && (
+                      <td className="px-3 py-1.5 text-right font-mono text-emerald-700">
+                        {(row.donationCredit ?? 0) > 0.5 ? formatCurrency(row.donationCredit ?? 0, locale) : '—'}
                       </td>
                     )}
                   </tr>

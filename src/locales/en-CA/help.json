@@ -237,6 +237,20 @@
       ],
       "body": "**Inflow** — a lump sum landing in the chosen account at the chosen age; it appears in that year's balances and grows thereafter. **Outflow** — an extra expense at the chosen age, on top of that year's spending target; the portfolio must fund both.\n\nSwitch an event to *Yearly* with a start–end age range to repeat the same amount every year (rental income for a few years, or a recurring cost)."
     },
+    "charitable-giving": {
+      "title": "Charitable giving (donation tax credit)",
+      "section": "Income",
+      "keywords": [
+        "charity",
+        "donation",
+        "gift",
+        "tithing",
+        "philanthropy",
+        "receipt",
+        "tax credit"
+      ],
+      "body": "A giving stream donates every year from a start age (optionally to an end age) — a fixed yearly amount, or a percent of that year's income on a **gross** (pre-tax) or **net** (after-tax) basis. Gifts are added to the year's cash needs like any other spending, so your withdrawals gross up to cover them.\n\nA donation is a **tax credit, not a deduction**: it reduces tax owing rather than income. The credit follows CRA's two-tier schedule — **14%** on the first $200 of gifts in the year, **29%** above that, rising to **33%** only to the extent your income lands in the top federal bracket — plus your province's own schedule (each province has its own first-tier/excess rates; Saskatchewan's excess tier is the highest). The credit is **non-refundable** (it can zero out tax but never go below), and claims are capped at **75% of the year's income** — Quebec is exempt from that cap. For couples, all receipts **pool into one credit** on the household's combined income, which is exactly how CRA treats them (there is no per-person or per-charity credit). The credit arrives as a same-year reduction of the tax bill.\n\nSources: [federal rates](https://www.canada.ca/en/revenue-agency/services/tax/individuals/tax-rates-brackets/current-year.html), [line 34990 federal credit](https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-34990-top-up-tax-credit.html), [how much you can claim](https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-34900-donations-gifts/how-much-claim.html), [provincial rates 2026](https://www.taxtips.ca/filing/donations/tax-credit-rates-2026.htm), [Québec line 395](https://www.revenuquebec.ca/en/citizens/income-tax-return/completing-your-income-tax-return/how-to-complete-your-income-tax-return/line-by-line-help/350-to-398-1-non-refundable-tax-credits/line-395/).\n\n**Not modelled:** the 5-year carry-forward of unclaimed receipts, the year-of-death rule (100%-of-income claim), the first-time donor super credit, Saskatchewan's 45% super credit on that first $200, gifts of securities in kind, and spouses splitting a claim between returns; Ontario's surtax isn't applied to the credit base; percent-of-income gifts ride on the income stack before RRSP draws, so an RRSP-funded gift counts as an extra need instead of lowering its own base. The credit estimate is refined at year end to the exact pooled amount."
+    },
     "desired-spending": {
       "title": "Desired spending",
       "section": "Spending",

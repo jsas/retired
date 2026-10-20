@@ -70,6 +70,90 @@ export function calculateTax(grossIncome: number, provinceCode: string, config: 
   return { federalTax, provincialTax, totalTax, takeHome: grossIncome - totalTax };
 }
 
+export interface DonationCreditResult {
+  federal: number;
+  provincial: number;
+  total: number;
+}
+
+/**
+ * Charitable donation tax credit on `donation` dollars for a resident of
+ * `provinceCode` with `taxableIncome` for the year (issue #164). A NON-
+ * REFUNDABLE credit: federal is clamped to that income's federal tax,
+ * provincial to its provincial tax (both from calculateTax on the same base),
+ * so the credit never produces a refund below zero.
+ *
+ * Two-tier on config.donationCredit.firstBand (a fixed $200; CRA has never
+ * indexed it — 2026 sources below). The excess tier is lifted to `topTier`
+ * only TO THE EXTENT taxable income exceeds the top bracket threshold, so a
+ * donor below the top bracket gets 14%/29% federally, not 33%. Quebec's
+ * federal abatement (config.qcFederalAbatement) reduces the federal donation
+ * credit like every other federal credit — the effective QC federal rate on
+ * the $1,000 worked example is 260 → 217.10, NOT full suppression; Revenu
+ * Québec then applies QC's own schedule (line 395) without the federal 75%
+ * cap (config.donationCredit.qcCapExempt).
+ *
+ * Simplifications (documented in-app Help): the 75% claim cap uses this
+ * income base rather than line-236 net income (they differ only by
+ * deductions the engine doesn't model); Ontario's surtax raises the effective
+ * provincial rate above $200 and is NOT applied to the credit base; the
+ * year-of-death 100% rule, 5-year carryforward, first-time-donor
+ * enhancement, SK 45% super credit and securities-in-kind gifts are not
+ * modelled.
+ *
+ * 2026 sources:
+ * https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-34990-top-up-tax-credit.html
+ * https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-34900-donations-gifts/how-much-claim.html
+ * https://www.taxtips.ca/filing/donations/tax-credit-rates-2026.htm
+ * https://www.revenuquebec.ca/en/citizens/income-tax-return/completing-your-income-tax-return/how-to-complete-your-income-tax-return/line-by-line-help/350-to-398-1-non-refundable-tax-credits/line-395/
+ */
+export function donationCredit(
+  donation: number,
+  taxableIncome: number,
+  provinceCode: string,
+  config: AppConfig,
+): DonationCreditResult {
+  if (!(donation > 0) || !(taxableIncome > 0)) return { federal: 0, provincial: 0, total: 0 };
+  const dc = config.donationCredit;
+  if (!dc) return { federal: 0, provincial: 0, total: 0 };
+
+  // Annual claim limit: 75% of income (federal rule; Quebec is exempt).
+  const capped = provinceCode === 'QC' && dc.qcCapExempt
+    ? donation
+    : Math.min(donation, taxableIncome * dc.claimCap);
+
+  const band = Math.min(capped, dc.firstBand);
+  const excess = Math.max(0, capped - dc.firstBand);
+  // The top rate reaches only as far as taxable income exceeds the top
+  // bracket threshold; config arrives already CPI-indexed from callers.
+  const fedTopThreshold = config.federal.brackets[config.federal.brackets.length - 1];
+  const fedTop = Math.min(excess, Math.max(0, taxableIncome - fedTopThreshold));
+  let federal = band * dc.federal.firstTier + (excess - fedTop) * dc.federal.overTier + fedTop * dc.federal.topTier;
+  if (provinceCode === 'QC' && (config.qcFederalAbatement ?? 0) > 0) {
+    federal *= 1 - config.qcFederalAbatement;
+  }
+
+  let provincial = 0;
+  const rates = dc.provinces?.[provinceCode];
+  if (rates) {
+    let provTop = 0;
+    if (rates.top && rates.top > rates.over) {
+      const table = config.provinces[provinceCode];
+      const provTopThreshold = table ? table.brackets[table.brackets.length - 1] : Infinity;
+      provTop = Math.min(excess, Math.max(0, taxableIncome - provTopThreshold));
+    }
+    provincial = band * rates.first + (excess - provTop) * rates.over + provTop * (rates.top ?? rates.over);
+  }
+
+  // Non-refundable: each level's credit stops at that level's tax. (Ontario's
+  // surtax is folded into the provincial clamp above — slightly generous,
+  // documented.)
+  const base = calculateTax(taxableIncome, provinceCode, config);
+  federal = Math.min(federal, base.federalTax);
+  provincial = Math.min(provincial, base.provincialTax);
+  return { federal, provincial, total: federal + provincial };
+}
+
 /** After-tax value of a gross income stream on its own. */
 export function takeHome(grossIncome: number, provinceCode: string, config: AppConfig): number {
   return calculateTax(grossIncome, provinceCode, config).takeHome;

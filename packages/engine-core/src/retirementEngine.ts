@@ -1,6 +1,7 @@
 import type { AppConfig } from './appConfig';
 import {
   calculateTax,
+  donationCredit,
   findGrossIncomeForTakeHome,
   calculateRrifMinimum,
   isRrifMandatory,
@@ -176,6 +177,10 @@ export interface RetirementInputs {
   // cash flow (added to the year's spending need), so it drags on the plan
   // until paid off. Absent/empty = debt-free.
   debts?: Debt[];
+  // Charitable giving streams (issue #164). Household-level like the credit
+  // they generate: charged as spending during retirement and offset by the
+  // donation tax credit. Absent/empty = no giving.
+  giving?: GivingStream[];
 }
 
 /** Where the spouse's plan comes from (see RetirementInputs.spouseSource). */
@@ -355,6 +360,28 @@ export interface Debt {
   endAge?: number | null;     // explicit stop-age override; absent/null = until paid off
 }
 
+/**
+ * One recurring charitable-giving stream (issue #164). A `pct` stream is a
+ * pledge ("10% of gross income to the parish"); a `fixed` stream is a specific
+ * recurring gift ("$1,200/yr to the food bank", today's dollars — like a
+ * debt's monthlyPayment, a fixed stream is NOT CPI-inflated). Active from
+ * `fromAge` through `toAge` inclusive; absent/null `toAge` = for life (the
+ * CashEvent endAge convention). Giving is charged as spending in the
+ * decumulation phase and generates the donation tax credit (see
+ * canadianTax.donationCredit); the credit is computed on the household TOTAL,
+ * never per stream, because CRA pools all receipts into one credit.
+ */
+export interface GivingStream {
+  id: string;
+  label: string;              // "Parish", "United Way", "Food bank"
+  mode: 'pct' | 'fixed';      // percent of income, or dollars per year
+  pct: number;                // mode 'pct': 10 = 10%
+  amount: number;             // mode 'fixed': dollars/year, today's dollars
+  basis: 'gross' | 'net';     // mode 'pct' only; which income the % rides on
+  fromAge: number;            // inclusive
+  toAge?: number | null;      // absent/null = ongoing for life
+}
+
 export interface AccountBreakdown {
   age: number;
   rrspBalance: number;
@@ -466,6 +493,8 @@ export interface YearDetail {
   // year's interest charge; payment is what was actually serviced (capped at
   // the balance); balanceEnd is the principal outstanding at year end.
   debts?: Array<{ label: string; kind: Debt['kind']; interestAccrued: number; payment: number; balanceEnd: number }>;
+  // Per-stream charitable giving this year, when giving is active (issue #164).
+  giving?: Array<{ label: string; amount: number }>;
   // Cash events that fired this year (labelled in/out). `from`/`to` are the
   // human-readable endpoints when the event is a transfer (else undefined and
   // the row is a plain inflow/outflow).
@@ -531,6 +560,12 @@ export interface YearlyBreakdown {
   // debtBalance is the total principal outstanding at year end.
   debtPayments?: number;
   debtBalance?: number;
+  // Charitable giving (issue #164; undefined when no stream is active this
+  // year). giving is the charged total (part of the spending need);
+  // donationCredit is the modeled non-refundable credit, applied as a
+  // same-year reduction of the withdrawals needed to fund that spending.
+  giving?: number;
+  donationCredit?: number;
   // Pension-splitting inputs, captured per-year so the household pass can
   // recompute tax with a split applied. Undefined for singles.
   splitEligibleIncome?: number; // DB pensions + registered draws (registered only from age 65) — NOT CPP/OAS
@@ -1007,6 +1042,12 @@ export function calculatePerson(
   const debtBal = new Map<string, number>();
   for (const d of debtList) debtBal.set(d.id, Math.max(0, d.balance));
   const debtOn = debtList.length > 0;
+  // Household giving streams (issue #164). Evaluated in the decum loop only;
+  // the list is household-shared and the credit is pooled, so the spouse's
+  // run must not charge the same list a second time (decum loop guards on
+  // selfRef === 'primary').
+  const givingList = Array.isArray(shared.giving) ? shared.giving : [];
+  const givingOn = givingList.length > 0;
   // Total principal outstanding right now (year-end figure is read after the
   // year's payments, so callers take this AFTER applying the year's ledger).
   const debtBalanceNow = () => {
@@ -1632,7 +1673,7 @@ export function calculatePerson(
     // gross up to cover it — the debt visibly pushes withdrawals up until it's
     // paid off (after-tax money, so it never touches GIS or the clawback).
     const decumDebt = debtOn ? runDebtYear(age) : { total: 0, rows: [] };
-    const yearSpending = desiredSpending * spendingFactorAt(age) * spendingPctAt(age) + eventOutAt(age) + rmInterestExpense + decumDebt.total;
+    const baseSpending = desiredSpending * spendingFactorAt(age) * spendingPctAt(age) + eventOutAt(age) + rmInterestExpense + decumDebt.total;
 
     // Gross benefit income (taxable). OAS amounts come from the (possibly
     // indexed) config; CPP is inflated manually when indexation is on.
@@ -1706,13 +1747,49 @@ export function calculatePerson(
     // a registered draw or realized gain lands on TOP of the year's wages, so
     // grossing up on benefits alone would under-estimate withdrawal tax.
     const stackBase = otherGross + employmentGross;
+    // Charitable giving (issue #164): active streams charge the decumulation
+    // phase as spending. Streams are evaluated on the PRE-DRAW stack (benefits
+    // + employment): 'gross' rides on gross income, 'net' on its take-home
+    // BEFORE any donation credit ("10% of my paycheque" — a paycheque's net
+    // has no credit in it). The giving-induced withdrawal gross-up is
+    // deliberately NOT in the basis: no convergence loop (issue #164). Only
+    // the primary's run charges the shared list — a couple shares one list
+    // because CRA pools all receipts into one credit.
+    let givingTotal = 0;
+    const givingRows: Array<{ label: string; amount: number }> = [];
+    if (givingOn && selfRef === 'primary') {
+      for (const g of givingList) {
+        if (age < g.fromAge) continue;
+        if (g.toAge != null && age > g.toAge) continue;
+        const amt = g.mode === 'pct'
+          ? (g.pct / 100) * (g.basis === 'net'
+              ? Math.max(0, stackBase - calculateTax(stackBase, provinceCode, yearConfig).totalTax)
+              : stackBase)
+          : g.amount;
+        if (amt > 0) { givingRows.push({ label: g.label, amount: amt }); givingTotal += amt; }
+      }
+    }
+    // The credit arrives as same-year cash (the real refund lands on filing;
+    // modelling it the same year avoids a lagged-balance pass). Estimated on
+    // this run's pre-split income; the household pass corrects reported tax
+    // to the pooled exact credit (see applyDonationCredit). It never touches
+    // GIS or the OAS clawback — those are income-based, and a credit is not
+    // income (CRA rule, see canadianTax.donationCredit sources).
+    const givingCredit = givingTotal > 0
+      ? donationCredit(givingTotal, stackBase, provinceCode, yearConfig).total
+      : 0;
+    // Giving raises the year's spending need like any other outflow, so the
+    // ordered draws gross up to cover it.
+    const yearSpending = baseSpending + givingTotal;
 
     // After-tax value of the benefits on their own (employment taxed above).
     const netBenefits = calculateTax(otherGross, provinceCode, yearConfig).takeHome;
 
     // What the portfolio must supply after tax so total take-home = spending.
-    // Top-up employment covers part of the need before the portfolio is drawn.
-    const neededAfterTax = Math.max(0, yearSpending - netBenefits - employmentTopUpNet);
+    // Top-up employment covers part of the need before the portfolio is drawn,
+    // and the donation credit arrives as cash the same year, covering the rest
+    // (the money stays in whichever account the draw would have emptied).
+    const neededAfterTax = Math.max(0, yearSpending - netBenefits - employmentTopUpNet - givingCredit);
 
     let actualWithdrawals = 0;  // gross dollars leaving registered accounts + raw dollars elsewhere
     let registeredGross = 0;    // RRSP/RRIF gross withdrawn this year (taxable)
@@ -2092,6 +2169,7 @@ export function calculatePerson(
       employmentTax,
       employmentNet,
       ...(debtOn ? { debtPayments: decumDebt.total, debtBalance: debtBalanceNow() } : {}),
+      ...(givingTotal > 0 ? { giving: givingTotal, donationCredit: givingCredit } : {}),
       splitEligibleIncome,
       unsplitNetIncome,
       detail: {
@@ -2104,6 +2182,7 @@ export function calculatePerson(
         ...(rdspOn ? { rdsp: { contribution: 0, grant: 0, bond: 0, growth: rdspGains, balance: Math.max(0, rdspBal), contributionBasis: rdspContribBasis, taxableFraction: rdspTaxableFraction(), withdrawal: rdspWithdrawn, taxablePortion: rdspTaxable } } : {}),
         ...(rmOn ? { rm: { interestAccrued: rmInterest, scheduledDraw: rmScheduled, topUpDraw: wd.rmDraw, homeValue, loanBalance: rmLoan, ...(rmIsHeloc ? { interestExpense: rmInterestExpense } : {}) } } : {}),
         ...(debtOn ? { debts: decumDebt.rows } : {}),
+        ...(givingRows.length > 0 ? { giving: givingRows } : {}),
         events: yearEvents,
         calc,
       },
@@ -2379,9 +2458,11 @@ export function calculateHouseholdModel(
     finalPrimary.spouse = spouseResults;
     if (spouseResults.status === 'SHORTFALL') finalPrimary.status = 'SHORTFALL';
     applyPensionSplitting(finalPrimary, spouseResults, primaryCurrentAge, shared.provinceCode, config, spouseCurrentAge);
+    applyDonationCredit(finalPrimary, spouseResults, primaryCurrentAge, shared.provinceCode, config, spouseCurrentAge);
     return finalPrimary;
   }
 
+  applyDonationCredit(primary, null, primaryCurrentAge, shared.provinceCode, config, spouseCurrentAge);
   return primary;
 }
 
@@ -2480,6 +2561,9 @@ export function combineHouseholdBreakdown(
         : {}),
       ...((py.debtBalance !== undefined || sy.debtBalance !== undefined)
         ? { debtBalance: (py.debtBalance ?? 0) + (sy.debtBalance ?? 0) }
+        : {}),
+      ...((py.giving !== undefined || sy.giving !== undefined)
+        ? { giving: (py.giving ?? 0) + (sy.giving ?? 0), donationCredit: (py.donationCredit ?? 0) + (sy.donationCredit ?? 0) }
         : {}),
       ...rm,
       splitTransferred: undefined,
@@ -2644,6 +2728,71 @@ function applyPensionSplitting(
   for (const y of primary.yearlyBreakdown) { cum += y.incomeTax; y.cumulativeTax = cum; }
   cum = 0;
   for (const y of spouse.yearlyBreakdown) { cum += y.incomeTax; y.cumulativeTax = cum; }
+}
+
+/**
+ * Household pooling of the charitable donation credit (issue #164). Each
+ * person's run estimated the credit on their OWN pre-split stackBase; CRA
+ * pools all receipts into ONE credit assessed on net income (one spouse may
+ * even claim both partners' gifts). This pass recomputes the credit per
+ * calendar year on the household's COMBINED unsplit net income — the same
+ * basis field applyPensionSplitting uses — and corrects the reported tax
+ * figures by the difference between the pooled exact credit and the estimate
+ * already modelled as same-year cash in the primary's run. Like the split
+ * pass this adjusts REPORTED tax only: cash-flow and GIS (income-based) are
+ * unchanged, and the cash gap between estimate and exact credit is unmodelled
+ * (the estimate usually lands within a few dollars). Runs for singles too, so
+ * a single's row reports the credit on post-draw net income rather than the
+ * pre-draw stack estimate.
+ */
+function applyDonationCredit(
+  primary: RetirementResults,
+  spouse: RetirementResults | null,
+  primaryCurrentAge: number,
+  province: string,
+  config: AppConfig,
+  spouseCurrentAge: number
+): void {
+  const anyGiving = primary.yearlyBreakdown.some(y => y.giving !== undefined)
+    || (spouse?.yearlyBreakdown ?? []).some(y => y.giving !== undefined);
+  if (!anyGiving) return;
+
+  const indexTables = config.engine.indexTaxTables === true;
+  const inflation = Math.max(0, config.engine.inflationRate ?? 0);
+  const factorAt = (calendarAge: number) => Math.pow(1 + inflation, Math.max(0, calendarAge - primaryCurrentAge));
+  const configCache = new Map<number, AppConfig>();
+  const configAt = (calendarAge: number): AppConfig => {
+    if (!indexTables) return config;
+    const f = factorAt(calendarAge);
+    if (f === 1) return config;
+    let c = configCache.get(calendarAge);
+    if (!c) { c = indexConfig(config, f); configCache.set(calendarAge, c); }
+    return c;
+  };
+
+  // Calendar-year row match (spouse rows share the primary's calendar year at
+  // age = primary age − ageOffset), same as the split pass.
+  const ageOffset = primaryCurrentAge - spouseCurrentAge;
+  const spouseRows = new Map((spouse?.yearlyBreakdown ?? []).map(y => [y.age + ageOffset, y]));
+
+  for (const py of primary.yearlyBreakdown) {
+    const giving = (py.giving ?? 0) + (spouseRows.get(py.age)?.giving ?? 0);
+    if (giving <= 0) continue;
+    const yearConfig = configAt(py.age);
+    const householdNet = (py.unsplitNetIncome ?? 0) + (spouseRows.get(py.age)?.unsplitNetIncome ?? 0);
+    const exact = donationCredit(giving, householdNet, province, yearConfig).total;
+    const delta = exact - (py.donationCredit ?? 0);
+    py.donationCredit = exact;
+    py.incomeTax -= delta;
+    py.totalTaxPaid = Math.max(0, (py.totalTaxPaid ?? 0) - delta);
+  }
+
+  // Rebuild cumulativeTax as a running sum so it stays consistent with the
+  // adjusted per-year incomeTax figures.
+  let cum = 0;
+  for (const y of primary.yearlyBreakdown) { cum += y.incomeTax; y.cumulativeTax = cum; }
+  cum = 0;
+  for (const y of spouse?.yearlyBreakdown ?? []) { cum += y.incomeTax; y.cumulativeTax = cum; }
 }
 
 /**

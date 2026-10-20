@@ -311,7 +311,9 @@
       "rdsp": "RDSP",
       "fhsa": "FHSA",
       "home": "Home Equity",
-      "debts": "Debts"
+      "debts": "Debts",
+      "giving": "Giving",
+      "donationCredit": "Donation Credit"
     },
     "colTitles": {
       "spendingTarget": "After-tax income goal for the year (desired spending inflated to that year)",
@@ -323,7 +325,9 @@
       "rdsp": "Registered Disability Savings Plan. Growth is tax-sheltered; on withdrawal the grant/bond/growth portion is taxable (only contribution principal is tax-free).",
       "fhsa": "First Home Savings Account. Contributions are deductible; growth is tax-sheltered. Transfers to the RRSP at retirement (never drawn directly).",
       "home": "Home value minus reverse-mortgage loan balance. The loan compounds with interest and draws, eroding equity over time.",
-      "debts": "Total outstanding debt balance (mortgage, credit cards, loans, lines of credit). Interest accrues each year; payments are funded from spending."
+      "debts": "Total outstanding debt balance (mortgage, credit cards, loans, lines of credit). Interest accrues each year; payments are funded from spending.",
+      "giving": "Charitable gifts charged to the year's withdrawals. A tax credit, not a deduction — see the Donation Credit column.",
+      "donationCredit": "Modeled non-refundable donation tax credit (14% on the first $200, higher above; pooled across the household), applied as a same-year reduction of the tax bill."
     }
   },
   "eq": {
@@ -680,7 +684,10 @@
     "rdspBasisTitle": "Contribution basis {{amount}} (tax-free); the rest is taxable on withdrawal",
     "fhsaBalanceTitle": "Contributed to date {{amount}}; transfers to the RRSP at retirement",
     "homeLoanTitle": "Home {{home}} − loan {{loan}}",
-    "paidThisYear": "Paid {{amount}} this year"
+    "paidThisYear": "Paid {{amount}} this year",
+    "giving": "Charitable giving",
+    "givingCreditLine": "Donation credit",
+    "givingCreditHint": "Non-refundable credit on this year's pooled gifts (federal + provincial), applied against the same year's tax."
   },
   "assistant": {
     "title": "AI Assistant",

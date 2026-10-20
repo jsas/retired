@@ -33,7 +33,7 @@ describe('toolSpecs', () => {
     expect(specs.map(s => s.name).sort()).toEqual([
       'compare_scenarios', 'find_page', 'get_schedule', 'get_scenario',
       'list_scenarios',
-      'manage_cash_event', 'manage_debt', 'manage_income',
+      'manage_cash_event', 'manage_debt', 'manage_giving', 'manage_income',
       'propose_account', 'propose_market_periods', 'propose_navigate',
       'propose_plan', 'propose_revert', 'propose_spending_bands', 'propose_spouse',
       'recall', 'remember',
@@ -659,6 +659,76 @@ describe('manage_debt', () => {
       expect(out.content).toContain('80%');
       expect(out.content).toContain('$40,000/yr');
       expect(out.content).toContain('from age 70');
+    }
+  });
+});
+
+describe('manage_giving', () => {
+  const parish = { id: 'g1', label: 'Parish', mode: 'fixed' as const, pct: 0, amount: 2400, basis: 'gross' as const, fromAge: 65, toAge: null };
+
+  it('adds a giving stream with a generated id', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'manage_giving',
+      args: { action: 'add', label: 'Food bank', mode: 'pct', pct: 5, amount: 0, basis: 'net', fromAge: 70, toAge: null },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    const giving = out.patch.giving ?? [];
+    expect(giving).toHaveLength(1);
+    expect(giving[0].label).toBe('Food bank');
+    expect(giving[0].mode).toBe('pct');
+    expect(giving[0].basis).toBe('net');
+    expect(giving[0].id).toBeTruthy();
+  });
+
+  it('rejects an unknown mode', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'manage_giving',
+      args: { action: 'add', label: 'X', mode: 'weekly', pct: 0, amount: 100, basis: 'gross', fromAge: 65 },
+    });
+    expect(out.kind).toBe('error');
+  });
+
+  it('updates a stream by unique label, keeping id and untouched fields', () => {
+    const c = ctx({ inputs: baseInputs({ giving: [parish] }) });
+    const out = executeToolCall(c, {
+      id: '1', name: 'manage_giving',
+      args: { action: 'update', target: 'parish', changes: { amount: 3600 } },
+    });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    const giving = out.patch.giving ?? [];
+    expect(giving[0].amount).toBe(3600);
+    expect(giving[0].id).toBe('g1');
+    expect(giving[0].mode).toBe('fixed');
+  });
+
+  it('removes a stream by id', () => {
+    const c = ctx({ inputs: baseInputs({ giving: [parish, { ...parish, id: 'g2', label: 'United Way' }] }) });
+    const out = executeToolCall(c, { id: '1', name: 'manage_giving', args: { action: 'remove', target: 'g1' } });
+    if (out.kind !== 'mutation') throw new Error('expected mutation');
+    expect(out.patch.giving?.map(e => e.id)).toEqual(['g2']);
+  });
+
+  it('errors on an empty plan and mentions the noun', () => {
+    const out = executeToolCall(ctx(), { id: '1', name: 'manage_giving', args: { action: 'remove', target: 'g1' } });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('no giving streams');
+  });
+
+  it('refuses giving as a flat scalar override (structural field)', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'run_projection',
+      args: { overrides: { giving: [parish] } },
+    });
+    expect(out.kind === 'error' || (out.kind === 'result' && /rejected|giving/i.test(out.content))).toBe(true);
+  });
+
+  it('surfaces giving in the get_scenario spending section', () => {
+    const c = ctx({ inputs: baseInputs({ giving: [parish] }) });
+    const out = executeToolCall(c, { id: '1', name: 'get_scenario', args: { section: 'spending' } });
+    expect(out.kind).toBe('result');
+    if (out.kind === 'result') {
+      expect(out.content).toContain('Parish');
+      expect(out.content).toContain('pooled credit');
     }
   });
 });
