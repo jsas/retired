@@ -146,10 +146,11 @@ export function SteeringControls({ inputs, config, onChange, bands, onBandsChang
         {t('eq.lead')}
       </p>
 
-      {/* sliders flow 1→2→4 columns so more fit above the fold */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-        <RangeFader axis="desiredSpending" inputs={inputs} band={bands.desiredSpending} onChange={onChange} />
-        <RangeFader axis="retirementAge" inputs={inputs} band={bands.retirementAge} onChange={onChange} />
+      {/* sliders flow 1→2→3 columns so more fit above the fold. Annual
+          spending and retirement age are NOT here (#192) — the contour
+          panel above owns those two axes (its dot, the Start Drawing and
+          After Tax Spending faders), so repeating them was noise. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
         <RangeFader axis="investmentReturn" inputs={inputs} band={bands.investmentReturn} onChange={onChange} />
         <RangeFader axis="annualSavings" inputs={inputs} band={bands.annualSavings} onChange={onChange} />
         <RangeFader axis="maxAge" inputs={inputs} band={bands.maxAge} onChange={onChange} />

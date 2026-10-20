@@ -111,9 +111,13 @@ describe('dashboard steering controls (folded from Steering — #187)', () => {
         bands={defaultEqBands()} onBandsChange={() => {}} solved={solved}
       />,
     );
-    // the eight faders (a representative subset of the labels)
-    for (const label of ['Annual spending', 'Retirement age', 'CPP start age', 'OAS start age']) {
+    // the six faders (#192: annual spending + retirement age left the
+    // panel — the contour map owns those axes).
+    for (const label of ['Expected return', 'Annual savings', 'CPP start age', 'OAS start age']) {
       expect(html, label).toContain(label);
+    }
+    for (const label of ['Annual spending', 'Retirement age']) {
+      expect(html, label).not.toContain(label);
     }
     // the readouts the solver fills
     expect(html).toContain('Success rate');

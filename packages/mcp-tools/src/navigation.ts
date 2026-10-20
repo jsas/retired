@@ -208,7 +208,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     viewId: 'agent',
     route: 'assistant',
     title: 'Assistant',
-    description: 'The AI assistant full-screen: ask about the plan, what-if it, or change it with propose_* cards you approve.',
+    description: 'The AI assistant chat page: ask about the plan, what-if it, or change it with propose_* cards you approve.',
     keywords: ['assistant', 'ai', 'chat', 'help me', 'what-if', 'ask', 'agent'],
   },
   {
