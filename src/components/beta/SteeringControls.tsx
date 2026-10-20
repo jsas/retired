@@ -1,6 +1,10 @@
-// The steering surface: a goals-level equalizer over the plan. Each control is
-// a styleguide fader; the XY pad lets you drag retirement-age × spending
-// together, shaded by where the plan meets a reference success rate.
+// The steering controls, at home on the Dashboard (issue #187 — the Steering
+// page folded into it). A goals-level equalizer over the plan: each control is
+// a styleguide fader; the XY pad drags retirement-age × spending together,
+// shaded by where the plan meets a reference success rate. The dashboard's own
+// life timeline below is the single visual that answers every drag — the old
+// Steering page drew a second copy under these controls, which just repeated
+// itself, so it's gone.
 //
 // Bands (min–max crops) still exist under the hood — they bound the pad's
 // allowed rectangle and the solver's search — but the faders render plain:
@@ -11,13 +15,11 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
-import { useAppLocale } from '../lib/localeContext';
-import type { RetirementResults, RetirementInputs, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
-import { ProjectionTimeline } from '../design/ProjectionTimeline';
-import { Fader } from '../design/primitives';
-import { baseSpendAtRetirement } from '../design/ProjectionTimeline';
-import { rangePrefsOverride } from '../lib/rangePrefs';
+import { useAppLocale } from '../../lib/localeContext';
+import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
+import { Fader } from '../../design/primitives';
+import { rangePrefsOverride } from '../../lib/rangePrefs';
 import {
   AXES, axisValue, withAxis, clampToBand, effectiveRange, deterministicOutcome, isLimited,
   renderRange, reconcileControl,
@@ -38,15 +40,13 @@ export interface EqSolvedState {
 
 export type Bands = Record<EqAxis, Band>;
 
-export interface EqPageProps {
+export interface SteeringControlsProps {
   inputs: RetirementInputs;
   config: AppConfig;
   onChange: (inputs: RetirementInputs) => void;
   bands: Bands;
   onBandsChange: (b: Bands) => void;
   solved: EqSolvedState;
-  /** Live projection to show under the controls as a visual aid (optional). */
-  projection?: { results: RetirementResults; breakdown: YearlyBreakdown[] };
 }
 
 // ---------------------------------------------------------------------------
@@ -304,9 +304,9 @@ function ReadoutCard({ label, value, tone, solving }: {
 }
 
 // ---------------------------------------------------------------------------
-// The page
+// The controls block, rendered inside the Dashboard's "Adjust the plan" panel.
 // ---------------------------------------------------------------------------
-export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved, projection }: EqPageProps) {
+export function SteeringControls({ inputs, config, onChange, bands, onBandsChange, solved }: SteeringControlsProps) {
   const { t } = useTranslation('pages');
   const { locale } = useAppLocale();
   const o = deterministicOutcome(inputs, config);
@@ -335,7 +335,7 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
         {t('eq.lead')}
       </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start mb-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
         {/* sliders flow 1→2→3 columns so more fit above the fold */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <RangeFader axis="desiredSpending" inputs={inputs} band={bands.desiredSpending} onChange={onChange} />
@@ -368,22 +368,6 @@ export function EqPage({ inputs, config, onChange, bands, onBandsChange, solved,
           </div>
         </div>
       </div>
-
-      {/* Live projection under the controls — the visual aid while steering. The
-          start-drawing pin drags (the instant way to answer "what if I drew
-          later?"); the spend strip rides along for context. */}
-      {projection && (
-        <div className="mt-3 bg-white border border-slate-200 p-3">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">{t('eq.timeline')}</div>
-          <ProjectionTimeline
-            series={[{ id: 'plan', label: t('portfolio'), area: true, points: projection.breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
-            pins={[{ age: inputs.retirementAge, label: t('startDrawingPin', { age: inputs.retirementAge }),
-              onDragAge: (age) => onChange({ ...inputs, retirementAge: Math.max(inputs.currentAge + 1, Math.min(inputs.maxAge - 1, age)) }) }]}
-            spend={{ points: projection.breakdown.map(r => ({ age: r.age, value: r.spendingTarget })), baseSpend: baseSpendAtRetirement(inputs, config.engine.inflationRate, inputs.retirementAge) }}
-            onSpendChange={(today) => onChange({ ...inputs, desiredSpending: Math.max(0, today) })}
-          />
-        </div>
-      )}
     </div>
   );
 }

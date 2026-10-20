@@ -209,7 +209,7 @@ export function StyleGuide() {
             <p className={T.cls.sectionLabel}>ProjectionTimeline — every money-over-age chart</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
               One chart for the portfolio line: soft area-fill, clean axis, hairline year
-              ticks, token colours, labelled pins. Dashboard, steering, projection view,
+              ticks, token colours, labelled pins. Dashboard, projection view,
               and Compare all compose it. Legend entries toggle their line.
             </p>
             <div className="mt-3">

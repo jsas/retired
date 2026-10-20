@@ -2,7 +2,7 @@
  * ProjectionTimeline — money over age, in the design language. A soft balance
  * area-fill above a clean axis with hairline ticks and token colours — the same
  * look as the dashboard's "Your life on one line" — abstracted so any surface
- * (dashboard, steering, Compare) draws it instead of forking its own SVG.
+ * (dashboard, Compare) draws it instead of forking its own SVG.
  *
  * It takes one or more balance series (one line/area each) with a toggleable
  * legend, optional auxiliary overlay lines (spend, market/portfolio components,
@@ -148,7 +148,7 @@ export function ProjectionTimeline({
   onToggleSeries?: (id: string) => void;
   /** When set, this is the source of truth for which lines are off — the
    *  parent owns the Set (Compare's table follows the same one). Omit to
-   *  let the timeline keep its own hide state (dashboard, steering). */
+   *  let the timeline keep its own hide state (dashboard). */
   hiddenIds?: ReadonlySet<string>;
   /** The spend strip: the plan's nominal spending target by age. Renders the
    *  green spend line + the draggable base-spending handle at retirement. */

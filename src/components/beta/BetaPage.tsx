@@ -1,5 +1,5 @@
 // The shared beta page chrome — brand header, the named homes (Dashboard,
-// Projection, Tools ▾: Steering/Optimizer/Monte Carlo/Backtest/Solver,
+// Projection, Tools ▾: Optimizer/Monte Carlo/Backtest/Solver,
 // Plans, Data), the persistent verdict chip, and the assistant dock. Every
 // beta page sits inside this so navigation and the answer are always one
 // glance away. Flat, hairline, sticky. The profile icon (top right) is the
@@ -77,8 +77,8 @@ export interface VerdictChip {
 /** The Tools menu (issue #162, later Compare): each analytic surface is its own
  *  page. Desktop opens them from the header dropdown; the phone menu carries the
  *  same items flat (a dropdown inside a dropdown would close on the first tap). */
-const TOOLS_MENU_VIEWS: View[] = ['eq', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare', 'math'];
-const TOOLS_MENU_KEYS = ['steering', 'optimizer', 'monteCarlo', 'backtest', 'solver', 'compare', 'yearMath'] as const;
+const TOOLS_MENU_VIEWS: View[] = ['optimize', 'montecarlo', 'backtest', 'solver', 'compare', 'math'];
+const TOOLS_MENU_KEYS = ['optimizer', 'monteCarlo', 'backtest', 'solver', 'compare', 'yearMath'] as const;
 const MOBILE_MENU_VIEWS: View[] = [
   'dashboard', 'projection', ...TOOLS_MENU_VIEWS,
   'scenarios', 'data', 'print', 'settings', 'connections', 'help',
@@ -91,7 +91,6 @@ const MOBILE_MENU_KEYS = [
 /** The Tools menu: each analytic surface is its own page. Exported so tests can
  *  prove the item list without opening the dropdown. */
 export const TOOLS_MENU_ITEMS: Array<{ view: View; label: string }> = [
-  { view: 'eq', label: 'Steering' },
   { view: 'optimize', label: 'Optimizer' },
   { view: 'montecarlo', label: 'Monte Carlo' },
   { view: 'backtest', label: 'Backtest' },
@@ -187,8 +186,9 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
           <Link view="dashboard" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">{t('dashboard')}</Link>
           <Link view="projection" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('projection')}</Link>
 
-          {/* The Tools menu: each analytic surface is its own page. Steering
-              through Solver share a projection strip; Compare draws every plan. */}
+          {/* The Tools menu: each analytic surface is its own page (Steering
+              moved onto the Dashboard — #187). Optimizer through Solver share
+              a projection strip; Compare draws every plan. */}
           <div className="hidden md:block">
             <Dropdown label={t('tools')}>
               <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">

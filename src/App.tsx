@@ -4,7 +4,7 @@ import { StyleGuide } from './design/StyleGuide';
 import { BetaPage, PlanUndoContext } from './components/beta/BetaPage';
 import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/beta/LandingPage';
 import {
-  BetaSchedulePage, BetaMathPage, BetaSteeringPage, BetaOptimizerPage, BetaMonteCarloPage,
+  BetaSchedulePage, BetaMathPage, BetaOptimizerPage, BetaMonteCarloPage,
   BetaBacktestPage, BetaSolverPage, BetaComparePage, BetaPlansPage, BetaDataPage,
   BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
   BetaPrintPage, BetaDonatePage,
@@ -39,7 +39,7 @@ import { potDisplay } from './lib/planDisplay';
 import { consumePlanFromHash } from './lib/shareLink';
 import { buildDefaultScenarios, hasUserPlans } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
-import { type EqSolvedState, type Bands } from './components/EqPage';
+import { type EqSolvedState, type Bands } from './components/beta/SteeringControls';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { PREF_KEYS, prefKV } from './lib/prefKv';
 import { runEqSolverAuto } from './lib/runEqSolver';
@@ -601,7 +601,9 @@ function App() {
   // main thread. Unlike the grid, it DOES depend on the current point, so it
   // re-solves on every inputs change (debounced) — including pad-axis drags.
   useEffect(() => {
-    if (view !== 'eq') return;
+    // Steering lives on the Dashboard now (issue #187): the solvers run for
+    // that view; `eq` remains a parseable route that folds to it.
+    if (view !== 'dashboard') return;
     setEqSolved(s => ({ ...s, solving: true }));
     const t = setTimeout(() => {
       try {
@@ -621,7 +623,7 @@ function App() {
   // expensive 81-node worker pool is skipped entirely on those drags. The grid
   // streams in row-by-row (center-out) so the pad shades in live.
   useEffect(() => {
-    if (view !== 'eq') return;
+    if (view !== 'dashboard') return;
     setEqSolved(s => ({ ...s, solving: true }));
     const t = setTimeout(() => {
       const cancel = runEqSolverAuto(
@@ -794,13 +796,8 @@ function App() {
         );
       // The Tools menu (issue #162, later Compare): each analytic surface is
       // its own page. Most feature the projection timeline; Compare draws
-      // every saved plan on one chart instead.
-      case 'eq':
-        return (
-          <BetaSteeringPage chip={chip} assistant={assistantDock}
-            eqProps={{ inputs: resolvedInputs, config, onChange: handleInputsChange, bands: eqBands, onBandsChange: setEqBands, solved: eqSolved, projection: { results, breakdown: householdBreakdown } }}
-          />
-        );
+      // every saved plan on one chart instead. (Steering folded into the
+      // Dashboard — issue #187.)
       case 'optimize':
         return (
           <BetaOptimizerPage chip={chip} assistant={assistantDock}
@@ -945,6 +942,7 @@ function App() {
             results={results}
             config={config}
             assistant={assistantDock}
+            eq={{ bands: eqBands, onBandsChange: setEqBands, solved: eqSolved }}
           />
         );
     }
