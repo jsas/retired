@@ -10,12 +10,13 @@
 //
 // KEYED FOR THE BETA SKIN (issue #141): titles/descriptions match what the
 // beta chrome shows (Dashboard, the Tools menu, Plans, Data).
-// Issue #162 unfurled the analytics surfaces into the Tools menu — Steering,
-// Optimizer, Monte Carlo, Backtest and the new Solver are each their own page
-// again. Compare later joined that menu (its own page at #/compare). Merged
-// legacy routes still fold (export/sharing → Data; details → Plans); they keep
-// their legacy view ids for back-compat routing, carry `foldedInto`, and hide
-// from search/sitemap/proposals.
+// Issue #162 unfurled the analytics surfaces into the Tools menu — Optimizer,
+// Monte Carlo, Backtest and the new Solver are each their own page again.
+// Compare later joined that menu (its own page at #/compare). Steering moved
+// onto the Dashboard (#187) — its own entry below folds to it.
+// Merged legacy routes still fold (export/sharing → Data; details → Plans);
+// they keep their legacy view ids for back-compat routing, carry `foldedInto`,
+// and hide from search/sitemap/proposals.
 
 /** One navigable page (view) in the SPA. `viewId` must be importable by
  *  host-agnostic packages without depending on the app, so it lives here. */
@@ -82,7 +83,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     route: 'dashboard',
     title: 'Dashboard',
     description: 'The plan at a glance: the verdict (funded or depleted, with age and shortfall), key metrics, and the doors to everything else.',
-    keywords: ['dashboard', 'home', 'verdict', 'funded', 'depleted', 'run out', 'shortfall', 'money run out', 'overview', 'main page'],
+    keywords: ['dashboard', 'home', 'verdict', 'funded', 'depleted', 'run out', 'shortfall', 'money run out', 'overview', 'main page', 'steering', 'equalizer', 'levers', 'what helps most'],
   },
   {
     viewId: 'projection',
@@ -110,8 +111,9 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     viewId: 'eq',
     route: 'steering',
     title: 'Steering',
-    description: 'The equalizer: drag the plan’s levers (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) with the projection timeline under your hands, and see the ranking of what helps most.',
-    keywords: ['steering', 'insights', 'equalizer', 'levers', 'options', 'ranked', 'what helps most', 'nudge', 'tools', 'drag'],
+    description: 'The equalizer: drag the plan’s levers (retirement age, spending, CPP/OAS timing, savings) and see the success rate live — now on the Dashboard, under “Adjust the plan”.',
+    keywords: ['steering', 'insights', 'equalizer', 'levers', 'options', 'ranked', 'what helps most', 'nudge', 'drag'],
+    foldedInto: 'dashboard',
   },
   {
     viewId: 'optimize',

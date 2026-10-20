@@ -1,7 +1,6 @@
 {
   "projection": "Projection",
   "yearMath": "Year Math",
-  "steering": "Steering",
   "optimizer": {
     "tabStrategies": "Strategy Explorer",
     "tabSolver": "Solver",
@@ -225,6 +224,7 @@
     "dragDot": "drag the dot, or use the faders",
     "startDrawing": "Start Drawing",
     "afterTaxSpending": "After Tax Spending",
+    "adjust": "Adjust the plan",
     "lifeLine": "Your life on one line — this exact plan",
     "receipts": "The receipts",
     "footnote": "Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. The year-by-year schedule is Projection; the step-by-step worksheet is Year Math under Tools, with the levers, the odds, the history and the solver.",
@@ -331,7 +331,7 @@
     }
   },
   "eq": {
-    "lead": "Push the sliders or drag the pad to explore your plan — the readouts update live.",
+    "lead": "Push the sliders to explore your plan — the readouts update live.",
     "axes": {
       "desiredSpending": "Annual spending",
       "retirementAge": "Retirement age",
@@ -342,16 +342,12 @@
       "cppStartAge": "CPP start age",
       "oasStartAge": "OAS start age"
     },
-    "padX": "Retirement age",
-    "padY": "spending",
     "status": "Status",
     "onTrack": "On track",
     "shortfall": "Shortfall",
     "moneyLastsTo": "Money lasts to",
     "successRate": "Success rate",
     "leftAtEnd": "Left at end",
-    "timeline": "Projection timeline",
-    "recalculating": "recalculating",
     "calculating": "calculating"
   },
   "monteCarloUi": {

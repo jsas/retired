@@ -696,7 +696,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
           "type": "string",
         },
         "view": {
-          "description": "View id, from find_page (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
+          "description": "View id, from find_page (e.g. "projection", "optimizer", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
           "minLength": 1,
           "type": "string",
         },
@@ -1416,7 +1416,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "find_page",
   },
   {
-    "description": "PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → montecarlo, "solver" → solver — name it from find_page. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.",
+    "description": "PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → dashboard, "monte carlo" → montecarlo, "solver" → solver — name it from find_page. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -1430,7 +1430,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
           "type": "string",
         },
         "view": {
-          "description": "View id, from find_page (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
+          "description": "View id, from find_page (e.g. "projection", "optimizer", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.",
           "minLength": 1,
           "type": "string",
         },

@@ -49,7 +49,9 @@ describe('rankPages', () => {
     expect(rankPages('optimize')[0]?.viewId).toBe('optimize');
     expect(rankPages('solver')[0]?.viewId).toBe('solver');
     expect(rankPages('how much can i spend')[0]?.viewId).toBe('solver');
-    expect(rankPages('steering')[0]?.viewId).toBe('eq');
+    // Issue #187: Steering folded into the Dashboard — its words resolve there.
+    expect(rankPages('steering')[0]?.viewId).toBe('dashboard');
+    expect(rankPages('equalizer')[0]?.viewId).toBe('dashboard');
     expect(rankPages('backup')[0]?.viewId).toBe('data');
     expect(rankPages('tax tables')[0]?.viewId).toBe('settings');
     expect(rankPages('print')[0]?.viewId).toBe('print');
@@ -62,18 +64,19 @@ describe('rankPages', () => {
 
   it('searches only the reachable pages — folded legacy views never surface', () => {
     // Only the truly-merged legacy names fold now; the Tools surfaces are real
-    // pages and DO surface for their own words.
-    for (const q of ['export', 'sharing', 'details']) {
+    // pages and DO surface for their own words. Steering folded last (#187).
+    for (const q of ['export', 'sharing', 'details', 'steering']) {
       const ids = rankPages(q).map((e) => e.viewId);
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('export');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('sharing');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('details');
+      expect(ids, `query "${q}" surfaced a folded page`).not.toContain('eq');
     }
     expect(rankPages('compare').map((e) => e.viewId)).toContain('compare');
   });
 
   it('hoists the current page first so "already here" is the first thing read', () => {
-    const ranked = rankPages('compare', 'eq');
+    const ranked = rankPages('compare', 'details');
     expect(ranked[0]?.viewId).toBe('compare');
     // With the user on the destination itself, it leads.
     const here = rankPages('compare', 'compare');
@@ -100,7 +103,7 @@ describe('canonicalView / pageTitleLine', () => {
     expect(canonicalView('montecarlo')).toBe('montecarlo');
     expect(canonicalView('backtest')).toBe('backtest');
     expect(canonicalView('optimize')).toBe('optimize');
-    expect(canonicalView('eq')).toBe('eq');
+    expect(canonicalView('eq')).toBe('dashboard');
     expect(canonicalView('projection')).toBe('projection');
     expect(canonicalView('dashboard')).toBe('dashboard');
   });
@@ -109,7 +112,7 @@ describe('canonicalView / pageTitleLine', () => {
     expect(pageTitleLine('dashboard')).toBe('Dashboard');
     expect(pageTitleLine('projection')).toBe('Projection');
     expect(pageTitleLine('details')).toBe('Plans');
-    expect(pageTitleLine('eq')).toBe('Steering');
+    expect(pageTitleLine('eq')).toBe('Dashboard');
     expect(pageTitleLine('math')).toBe('Year Math');
     expect(pageTitleLine('optimize')).toBe('Optimizer');
     expect(pageTitleLine('montecarlo')).toBe('Monte Carlo');

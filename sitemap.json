@@ -16,7 +16,11 @@
         "shortfall",
         "money run out",
         "overview",
-        "main page"
+        "main page",
+        "steering",
+        "equalizer",
+        "levers",
+        "what helps most"
       ]
     },
     {
@@ -54,25 +58,6 @@
         "household year",
         "per person",
         "how the year works"
-      ]
-    },
-    {
-      "view": "eq",
-      "route": "#/steering",
-      "url": "https://jsas.github.io/retired/#/steering",
-      "title": "Steering",
-      "description": "The equalizer: drag the plan’s levers (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) with the projection timeline under your hands, and see the ranking of what helps most.",
-      "keywords": [
-        "steering",
-        "insights",
-        "equalizer",
-        "levers",
-        "options",
-        "ranked",
-        "what helps most",
-        "nudge",
-        "tools",
-        "drag"
       ]
     },
     {

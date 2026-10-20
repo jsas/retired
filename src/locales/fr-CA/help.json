@@ -519,18 +519,18 @@
       "body": "Monte Carlo invente des futurs aléatoires; le test historique rejoue de vrais passés. Il lance le plan contre chaque fenêtre glissante d'une série canadienne de portefeuille équilibré en rendement réel (après inflation) de 1970 à aujourd'hui, chaque fenêtre aussi longue que votre horizon, et rapporte à quelle fréquence le plan a survécu.\n\nLe risque de séquence des rendements est la plus grande menace d'un plan de décaissement : prendre sa retraite dans le krach 1973–74, 2000–02 ou 2008 est bien pire que le même rendement moyen avec le krach à la fin. Un taux de réussite élevé au test historique a historiquement tenu bon face à chaque mauvaise séquence enregistrée."
     },
     "levers-ranked": {
-      "title": "Pilotage (l’égaliseur)",
+      "title": "Pilotage — les leviers du Tableau de bord",
       "section": "Analysis",
       "keywords": [
         "éq",
         "égaliseur",
         "curseurs",
-        "pavé",
+        "molettes",
         "classement de stratégies",
         "cultures",
         "pilotage"
       ],
-      "body": "Le Pilotage est une surface au niveau des objectifs sur tout votre plan : poussez des curseurs et glissez un pavé pendant que le statut, l'argent-dure-jusqu'à et le taux de réussite se mettent à jour en direct. Le carré est âge de retraite × dépenses; le dégradé vert→rouge est le taux de réussite du plan à chaque combinaison, calculé en cherchant la frontière ligne par ligne par dichotomie pour qu'il s'affiche vite. La frise de projection sous les commandes se redessine à chaque glissement."
+      "body": "Les leviers de pilotage se trouvent sur le Tableau de bord, sous « Ajuster le plan » : huit curseurs — dépenses annuelles, âge de retraite, rendement prévu, épargne annuelle, planification jusqu’à, volatilité du rendement, âges de début RPC et SV — pendant que l’état, l’argent-dure-jusqu’à, le taux de réussite et le reste-à-la-fin se mettent à jour en direct sous eux. Le tableau âge × dépenses, c’est la carte de contour plus haut sur le Tableau de bord : glissez son point ou utilisez les curseurs. La ligne de vie se redessine à chaque glissement — un seul visuel, toujours visible."
     },
     "strategy-explorer": {
       "title": "Optimiseur (explorateur de stratégies)",

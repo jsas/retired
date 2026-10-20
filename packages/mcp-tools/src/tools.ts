@@ -261,7 +261,7 @@ const findPageArgs = z.object({
 
 const proposeNavigateArgs = z.object({
   view: z.string().min(1)
-    .describe('View id, from find_page (e.g. "projection", "steering", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.'),
+    .describe('View id, from find_page (e.g. "projection", "optimizer", "monte-carlo"). Do not confuse route names with view ids; the resolver normalizes for you.'),
   label: z.string().min(1)
     .describe('Confirm-card label, e.g. "Open the Monte Carlo page".'),
   rationale: z.string().optional(),
@@ -360,7 +360,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
   recall: { description: 'Search what you remember (facts saved in earlier conversations). Matching is by KEYWORD — query with the words a category would be filed under ("fruit", "pension", "city"), not a full sentence. If nothing matches, the closest memories are returned anyway; use them before telling the user you don\'t know. Omit the query to list the most important current memories — do this at the START of a conversation to ground yourself.', schema: recallArgs },
   list_scenarios: { description: 'Saved scenarios. action "list" (default) enumerates names/ids and which is active; withDetails adds each plan\'s key numbers. action "open" switches to another saved plan (scenarioId or name). action "save_as" snapshots the current plan under a new name and opens the copy.', schema: listScenariosArgs },
   find_page: { description: 'Search the site\'s page map by any words a user would type ("tfsa room", "monte carlo", "tax table"). Returns the ranked matches, each with route/hash one can share, plus the current page flagged as "you are already here". Omit query (or pass empty) for the full site map. Use whenever the user asks WHERE something lives or what pages exist.', schema: findPageArgs },
-  propose_navigate: { description: 'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → eq, "monte carlo" → montecarlo, "solver" → solver — name it from find_page. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
+  propose_navigate: { description: 'PROPOSE switching the app to a named view (UI-level navigation — not a plan mutation). Resolves page words to their view — "steering" → dashboard, "monte carlo" → montecarlo, "solver" → solver — name it from find_page. Shows a confirm card with the destination; on approval the app opens it. When unbound (no UI in this host) returns the #/hash so the model can share the link instead.', schema: proposeNavigateArgs },
 };
 
 /** Tool specs advertised to providers: the catalog rendered as JSON Schema. */

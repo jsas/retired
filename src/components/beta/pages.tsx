@@ -5,11 +5,11 @@
 // native beta; these wrap the rest.
 //
 // Issue #162 split the old combined Insights page into the Tools-menu
-// surfaces (Steering · Optimizer · Monte Carlo · Backtest · Solver). Compare
-// later joined that menu. Every tool page except Compare features the shared
-// ProjectStrip — the same ProjectionTimeline the dashboard draws — so each
-// tool answers its question with the plan's shape always on screen. Compare
-// draws every saved plan on one chart instead.
+// surfaces (Optimizer · Monte Carlo · Backtest · Solver); Steering later
+// folded into the Dashboard (#187). Every tool page except Compare features
+// the shared ProjectStrip — the same ProjectionTimeline the dashboard draws —
+// so each tool answers its question with the plan's shape always on screen.
+// Compare draws every saved plan on one chart instead.
 import type { ComponentProps, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { YearlyBreakdown, RetirementInputs } from '@retired/engine-core/retirementEngine';
@@ -22,7 +22,6 @@ import { INK, RED_DOT, cls } from '../../design/tokens';
 import { firstEmptyAge } from '../../lib/planDisplay';
 import { ScheduleTable } from '../ScheduleTable';
 import { MathPage } from '../MathPage';
-import { EqPage } from '../EqPage';
 import { StrategyExplorer, SpendingSolver } from '../OptimizeCard';
 import { BacktestPanel } from '../BacktestPanel';
 import { MonteCarloChart } from '../MonteCarloChart';
@@ -138,27 +137,6 @@ export function BetaMathPage({ chip, assistant, ...props }: ComponentProps<typeo
 
 // ── The Tools menu (issue #162, later Compare) ────────────────────────────
 
-export function BetaSteeringPage({ chip, assistant, eqProps }: {
-  chip: VerdictChip;
-  assistant?: ReactNode;
-  /** Unused on this page — kept so App can pass the same timeline props to
-   *  every tool page uniformly. */
-  timeline?: ProjectStripProps;
-  eqProps: ComponentProps<typeof EqPage>;
-}) {
-  const t = usePageT();
-  return (
-    <BetaPage title={t('steering')} hint="levers-ranked" chip={chip} assistant={assistant}>
-      {/* No separate ProjectStrip here on purpose: EqPage already features the
-          same ProjectionTimeline under its controls (the `projection` prop),
-          live-redrawing as you drag — the strip with a second copy under it
-          would just repeat itself. */}
-      <div className="pt-6">
-        <EqPage {...eqProps} />
-      </div>
-    </BetaPage>
-  );
-}
 
 export function BetaOptimizerPage({ chip, assistant, timeline, optimizeProps }: {
   chip: VerdictChip;

@@ -1400,13 +1400,15 @@ describe('find_page / propose_navigate', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
     expect(out.content).toContain('The site map:');
-    expect(out.content).toContain('(view eq)');
+    expect(out.content).toContain('(view dashboard)');
   });
 
   it('find_page with no query lists the reachable pages, not the folded legacy names', () => {
     const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: {} });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('(view eq)');
+    // Steering folded into the Dashboard (#187) — it keeps its route but is
+    // no longer a destination of its own on the map.
+    expect(out.content).not.toContain('(view eq)');
     expect(out.content).toContain('(view scenarios)');
     expect(out.content).toContain('#/plan');
     expect(out.content).toContain('(view data)');
@@ -1418,15 +1420,15 @@ describe('find_page / propose_navigate', () => {
     expect(out.content).not.toContain('(view details)');
   });
 
-  it('propose_navigate returns a confirm card with the destination, empty patch', () => {
+  it('propose_navigate redirects a folded page to its destination', () => {
     const out = executeToolCall(ctx({ canNavigate: true }), {
       id: '1', name: 'propose_navigate', args: { view: 'steering', label: 'Open Steering' },
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
     expect(out.patch).toEqual({});
-    expect(out.navigate).toBe('eq');
+    expect(out.navigate).toBe('dashboard');
     expect(out.label).toBe('Open Steering');
-    expect(out.preview).toMatchObject({ Page: 'Steering', Route: '#/steering' });
+    expect(out.preview).toMatchObject({ Page: 'Dashboard', Route: '#/dashboard' });
   });
 
   it('propose_navigate lands an unfurled tool on its own page (issue #162)', () => {

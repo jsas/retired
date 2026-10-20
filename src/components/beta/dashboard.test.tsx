@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Smoke tests for the dashboard's live surfaces: the market dial, down-market
-// check, life timeline, and evidence row. Each renders from the real engine
-// and asserts its load-bearing content shows up.
+// check, steering controls, life timeline, and evidence row. Each renders
+// from the real engine and asserts its load-bearing content shows up.
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
@@ -10,6 +10,8 @@ import { MarketDial } from './MarketDial';
 import { DownMarketCheck, DOWN_MARKET_RETURN } from './DownMarketCheck';
 import { ProjectionTimeline } from '../../design/ProjectionTimeline';
 import { EvidenceRow } from './EvidenceRow';
+import { SteeringControls } from './SteeringControls';
+import { defaultEqBands } from '../../lib/eqStorage';
 
 const config = testConfig();
 
@@ -97,5 +99,26 @@ describe('EvidenceRow', () => {
     expect(html).not.toContain(`${broke.maxAge}+`);
     expect(html).toContain('nothing');
     expect(html).not.toContain('past the plan');
+  });
+});
+
+describe('dashboard steering controls (folded from Steering — #187)', () => {
+  it('renders every lever and the live readouts', () => {
+    const solved = { successRate: null, solving: false };
+    const html = renderToStaticMarkup(
+      <SteeringControls
+        inputs={plan} config={config} onChange={() => {}}
+        bands={defaultEqBands()} onBandsChange={() => {}} solved={solved}
+      />,
+    );
+    // the eight faders (a representative subset of the labels)
+    for (const label of ['Annual spending', 'Retirement age', 'CPP start age', 'OAS start age']) {
+      expect(html, label).toContain(label);
+    }
+    // the readouts the solver fills
+    expect(html).toContain('Success rate');
+    expect(html).toContain('Money lasts to');
+    // the redundant age × spending gradient pad is gone
+    expect(html).not.toContain('Retirement age × spending');
   });
 });

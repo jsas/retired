@@ -18,6 +18,7 @@ import { BetaPage, type VerdictChip } from './beta/BetaPage';
 import { ContourMap } from './beta/ContourMap';
 import { MarketDial } from './beta/MarketDial';
 import { DownMarketCheck } from './beta/DownMarketCheck';
+import { SteeringControls, type Bands, type EqSolvedState } from './beta/SteeringControls';
 import { EvidenceRow } from './beta/EvidenceRow';
 import { firstEmptyAge, potDisplay } from '../lib/planDisplay';
 import { useAppLocale } from '../lib/localeContext';
@@ -46,6 +47,9 @@ interface BetaAppProps {
   config: AppConfig;
   /** The assistant conversation, docked on the right (f7's star). */
   assistant?: ReactNode;
+  /** Steering state (bands + solver readout) for the "Adjust the plan"
+   *  panel — the levers the old Steering page carried (issue #187). */
+  eq?: { bands: Bands; onBandsChange: (b: Bands) => void; solved: EqSolvedState };
 }
 
 function verdict(inputs: RetirementInputs, results: RetirementResults, t: TFunction) {
@@ -62,7 +66,7 @@ function verdict(inputs: RetirementInputs, results: RetirementResults, t: TFunct
 }
 
 export function BetaApp({
-  inputs, onInputsChange, results, config, assistant,
+  inputs, onInputsChange, results, config, assistant, eq,
 }: BetaAppProps) {
   const { t } = useTranslation('pages');
   const { t: tHelp } = useTranslation('help');
@@ -131,6 +135,23 @@ export function BetaApp({
             </div>
           </div>
         </Panel>
+
+        {/* The steering levers, folded in from the old Steering page
+            (issue #187): every knob, the age × spending pad, and the live
+            outcome readouts — the life timeline below is the single visual
+            that answers each drag. */}
+        {eq && (
+          <Panel label={t('dash.adjust')} hint="levers-ranked">
+            <SteeringControls
+              inputs={inputs}
+              config={config}
+              onChange={onInputsChange}
+              bands={eq.bands}
+              onBandsChange={eq.onBandsChange}
+              solved={eq.solved}
+            />
+          </Panel>
+        )}
 
         <Panel label={t('dash.lifeLine')} hint="life-timeline">
           <ProjectionTimeline
