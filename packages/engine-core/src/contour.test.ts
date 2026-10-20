@@ -3,7 +3,7 @@
 // engine, and the pure geometry (axis mapping, smoothing path) without the DOM.
 import { describe, it, expect } from 'vitest';
 import {
-  makeSample, boundarySpend, boundaryChain, buildBands,
+  makeSample, boundarySpend, boundaryChain, buildBands, isotonicSmooth,
   predGreen, predAmber, predDeep,
   xFrac, yFrac, ageAtFrac, spendAtFrac, smoothPath, terrainKey,
   type TerrainWindow,
@@ -94,6 +94,42 @@ describe('buildBands ordering', () => {
     const bullish = buildBands({ ...plan, investmentReturn: 0.07 }, config, WIN, { cols: 8, bisect: 10 });
     const mid = 4;
     expect(bullish.green[mid]).toBeGreaterThan(bearish.green[mid]);
+  });
+
+  it('green boundary never dips across columns (the sawtooth is projected out)', () => {
+    // Fractional retire ages make the engine plan slightly different year
+    // counts per column; the raw chain zigzags by thousands of dollars and
+    // the drawing spline turns that into waves. The boundary is monotone in
+    // reality, so the shipped chains must be nondecreasing.
+    const bands = buildBands(plan, config, WIN, { cols: 30, bisect: 12 });
+    for (const chain of [bands.green, bands.amber, bands.deep]) {
+      for (let i = 1; i < chain.length; i++) {
+        expect(chain[i]).toBeGreaterThanOrEqual(chain[i - 1]);
+      }
+    }
+  });
+});
+
+describe('isotonicSmooth', () => {
+  it('pools adjacent dips into their mean and keeps an increasing trend', () => {
+    expect(isotonicSmooth([1, 3, 2, 4])).toEqual([1, 2.5, 2.5, 4]);
+  });
+
+  it('preserves an already monotone chain untouched', () => {
+    expect(isotonicSmooth([1, 2, 2, 5])).toEqual([1, 2, 2, 5]);
+  });
+
+  it('flattens a sawtooth and a descending run to a single pooled value', () => {
+    expect(isotonicSmooth([5, 1, 4, 0])).toEqual([2.5, 2.5, 2.5, 2.5]);
+  });
+
+  it('keeps real jumps as steps', () => {
+    expect(isotonicSmooth([10, 10, 20, 20])).toEqual([10, 10, 20, 20]);
+  });
+
+  it('handles empty and single-element inputs', () => {
+    expect(isotonicSmooth([])).toEqual([]);
+    expect(isotonicSmooth([7])).toEqual([7]);
   });
 });
 
