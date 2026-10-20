@@ -8,8 +8,8 @@
 // this catalog with a drift test both directions, so adding or renaming a view
 // is a one-file change and the combined test fails on half-drift.
 //
-// KEYED FOR THE BETA SKIN (issue #141): titles/descriptions match what the
-// beta chrome shows (Dashboard, the Tools menu, Plans, Data).
+// KEYED FOR THE CONSOLE UI (issue #141): titles/descriptions match what the
+// page chrome shows (Dashboard, the Tools menu, Plans, Data).
 // Issue #162 unfurled the analytics surfaces into the Tools menu — Optimizer,
 // Monte Carlo, Backtest and the new Solver are each their own page again.
 // Compare later joined that menu (its own page at #/compare). Steering moved
@@ -41,12 +41,12 @@ export type View =
   | 'welcome'
   | 'help'
   | 'settings'
-  // Beta-skin only: the design-system style guide. Not part of the stable UI —
-  // App renders it from the beta branch, but it must be a recognized view so
+  // Internal chrome: the design-system style guide. Not part of the plan
+  // surface — App renders it, but it must be a recognized view so
   // the URL-sync effect doesn't rewrite #/styleguide back to the default view.
   | 'styleguide'
-  // Legacy stable-skin pages whose content merged into a beta home. On the
-  // beta skin these routes land on the page named in `foldedInto`; they stay
+  // Legacy pages whose content merged into a current home. On the
+  // current UI these routes land on the page named in `foldedInto`; they stay
   // routable for existing deep links.
   | 'export'
   | 'sharing'
@@ -71,10 +71,10 @@ export interface NavEntry {
    *  sections. Catalog rows sharing a section MUST stay contiguous — the nav
    *  renders one header per run. */
   section?: 'plan' | 'explore' | 'share' | 'setup';
-  /** True if this view is only in the beta design-skin (style guide), so
-   *  find_page can still name it without saying "beta". */
-  betaOnly?: true;
-  /** Set when the beta skin folds this legacy page into another one: the
+  /** True if this view is internal chrome (the style guide): it stays out of
+   *  the sitemap, but find_page can still name it. */
+  internal?: true;
+  /** Set when a legacy page folds into another one: the
    *  canonical destination view. Hidden from search/sitemap; a proposal that
    *  names it is redirected to the destination. */
   foldedInto?: View;
@@ -223,8 +223,8 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     route: 'styleguide',
     title: 'Style Guide',
     description: 'Design-system reference for the app itself; not part of the plan surface.',
-    keywords: ['style guide', 'design', 'beta', 'components'],
-    betaOnly: true,
+    keywords: ['style guide', 'design', 'internal', 'components'],
+    internal: true,
   },
   // ── Legacy pages still folded ───────────────────────────────────────────
   // (issue #162 unfurled optimize/montecarlo/backtest into the Tools menu;
@@ -295,7 +295,7 @@ export function pageTitleLine(view: View): string {
 // are currently on X" matches find_page result titles, and the sitemap.xml
 // emitted by the plugin contains the same editorializing once, not twice.
 
-/** The pages a user can actually reach on the current (beta) UI: the catalog
+/** The pages a user can actually reach on the current UI: the catalog
  *  minus the legacy surfaces folded into other pages. find_page lists these
  *  (empty query) and searches them, and propose_navigate redirects anything
  *  else. */
@@ -303,8 +303,8 @@ export function searchablePages(): ReadonlyArray<NavEntry> {
   return NAV_CATALOG.filter((e) => e.foldedInto == null);
 }
 
-/** Resolve a folded legacy view (or any view) to the destination the beta
- *  skin shows. Identity for canonical pages. */
+/** Resolve a folded legacy view (or any view) to the destination the app
+ *  shows. Identity for canonical pages. */
 export function canonicalView(view: View): View {
   const e = NAV_CATALOG.find((n) => n.viewId === view);
   return e?.foldedInto ?? view;
@@ -377,10 +377,10 @@ export interface SitemapEntry {
 }
 
 /** The user-facing pages, serialized. Folded legacy views share their
- *  destination's entry; beta-only chrome (the style guide) stays out. */
+ *  destination's entry; internal chrome (the style guide) stays out. */
 export function sitemapEntries(origin: string): SitemapEntry[] {
   return searchablePages()
-    .filter((e) => e.betaOnly == null)
+    .filter((e) => e.internal == null)
     .map((e) => ({
       view: e.viewId,
       route: hashForEntry(e),

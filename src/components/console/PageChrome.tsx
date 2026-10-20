@@ -1,9 +1,9 @@
-// The shared beta page chrome — brand header, the named homes (Dashboard,
+// The shared page chrome — brand header, the named homes (Dashboard,
 // Projection, Tools ▾ grouped by outcome section, Plans, Data), the
-// persistent verdict chip, and the assistant dock. Every
-// beta page sits inside this so navigation and the answer are always one
-// glance away. Flat, hairline, sticky. The profile icon (top right) is the
-// current plan — #/plan, the list of plans plus the numbers behind this one.
+// persistent verdict chip, and the assistant dock. Every page sits inside
+// this so navigation and the answer are always one glance away. Flat,
+// hairline, sticky. The profile icon (top right) is the current plan —
+// #/plan, the list of plans plus the numbers behind this one.
 //
 // The dock (f7's star): a min-340px right rail on desktop (user-draggable
 // wider, remembered), a full-screen sheet on phones. The app works without
@@ -26,7 +26,7 @@ import { prefKV } from '../../lib/prefKv';
 
 /** The plan's undo surface for the header (issue #165): edits autosave, and
  *  the undo icon steps back through the saved revisions (the rollback
- *  machinery). App owns the handler; every beta page's header reads it from
+ *  machinery). App owns the handler; every page's header reads it from
  *  here so the icons never need threading through each page's props. */
 export const PlanUndoContext = createContext<{ canUndo: boolean; onUndo: () => void }>({
   canUndo: false,
@@ -153,7 +153,7 @@ function chipDot(tone: VerdictChip['tone']) {
   return tone === 'holds' ? BLUE : tone === 'short' ? RED_DOT : tone === 'borderline' ? AMBER_DOT : '#94a3b8';
 }
 
-export function BetaPage({ title, hint, chip, actions, assistant, children }: {
+export function PageChrome({ title, hint, chip, actions, assistant, children }: {
   title?: string;
   /** A help-topic id — renders a ? beside the page title. */
   hint?: string;

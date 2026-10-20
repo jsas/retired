@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The beta page wrappers: the Data page is ONE home — the share surface
+// The page wrappers: the Data page is ONE home — the share surface
 // (SharingPage) and the full backup/restore/projection-export surface
 // (DataPage) stacked — so nothing lives on a side route. Issue #162 split the
 // old combined Insights page into the Tools-menu surfaces, each featuring
@@ -13,8 +13,8 @@ import type { Scenario } from '@retired/engine-core/types';
 import { baseInputs, testConfig } from '../../../packages/engine-core/test/helpers';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import {
-  BetaDataPage, BetaSchedulePage, BetaMathPage, BetaOptimizerPage,
-  BetaMonteCarloPage, BetaBacktestPage, BetaSolverPage, BetaComparePage, BetaPlansPage,
+  DataPage, SchedulePage, MathPage, OptimizerPage,
+  MonteCarloPage, BacktestPage, SolverPage, ComparePage, PlansPage,
 } from './pages';
 import { DEFAULT_PROJECTION_EXPORT } from '../../lib/projectionExport';
 import { runBacktest } from '../../lib/historicalReturns';
@@ -35,7 +35,7 @@ const TIMELINE_MARK = 'aria-label="Projection from age';
 describe('The Projection page (was Schedule — issue #162)', () => {
   it('renames to Projection and features the timeline over the table', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaSchedulePage, {
+      createElement(SchedulePage, {
         chip, timeline,
         breakdown, retirementAge: results.retirementAge, currentAge: inputs.currentAge, maxAge: inputs.maxAge,
         onRetirementAgeChange: () => {},
@@ -50,7 +50,7 @@ describe('The Projection page (was Schedule — issue #162)', () => {
 describe('The One Year, Step by Step page', () => {
   it('wraps the household worksheet, not the projection schedule', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaMathPage, {
+      createElement(MathPage, {
         chip,
         inputs,
         results,
@@ -72,7 +72,7 @@ describe('The One Year, Step by Step page', () => {
 describe('The Tools menu pages each feature the projection timeline', () => {
   it('Improve the Plan: the strategy explorer under the timeline', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaOptimizerPage, {
+      createElement(OptimizerPage, {
         chip, timeline, optimizeProps: { inputs, config, onApply: () => {} },
       }),
     );
@@ -84,7 +84,7 @@ describe('The Tools menu pages each feature the projection timeline', () => {
 
   it('Your Odds: the fan under the timeline (needs a request)', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaMonteCarloPage, {
+      createElement(MonteCarloPage, {
         chip, timeline,
         mcProps: { request: { inputs, config, runs: 5, volatility: 0.15 }, retirementAge: results.retirementAge },
       }),
@@ -95,7 +95,7 @@ describe('The Tools menu pages each feature the projection timeline', () => {
 
   it('Your Odds with no request still shows the timeline + a nudge', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaMonteCarloPage, { chip, timeline, mcProps: null }),
+      createElement(MonteCarloPage, { chip, timeline, mcProps: null }),
     );
     expect(html).toContain(TIMELINE_MARK);
     expect(html).toContain('volatility');
@@ -105,7 +105,7 @@ describe('The Tools menu pages each feature the projection timeline', () => {
     // The real runner is synchronous — feed the page its actual output.
     const backtest = runBacktest(inputs, config, calculateHousehold);
     const html = renderToStaticMarkup(
-      createElement(BetaBacktestPage, {
+      createElement(BacktestPage, {
         chip, timeline, backtestProps: { result: backtest },
       }),
     );
@@ -116,7 +116,7 @@ describe('The Tools menu pages each feature the projection timeline', () => {
 
   it('Safe Spending: the spending solve under the timeline', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaSolverPage, {
+      createElement(SolverPage, {
         chip, timeline, solverProps: { inputs, config, onApply: () => {} },
       }),
     );
@@ -126,10 +126,10 @@ describe('The Tools menu pages each feature the projection timeline', () => {
   });
 });
 
-describe('BetaPlansPage — list plus this plan\'s numbers', () => {
+describe('PlansPage — list plus this plan\'s numbers', () => {
   it('stacks the plan list and the current-plan editor — compare lives under Tools', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaPlansPage, {
+      createElement(PlansPage, {
         chip,
         managerProps: {
           scenarios, activeScenarioId: 's1',
@@ -149,10 +149,10 @@ describe('BetaPlansPage — list plus this plan\'s numbers', () => {
   });
 });
 
-describe('BetaComparePage — every saved plan on one chart', () => {
+describe('ComparePage — every saved plan on one chart', () => {
   it('is its own Tools page, without a second projection strip', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaComparePage, {
+      createElement(ComparePage, {
         chip,
         compareProps: { scenarios, activeScenarioId: 's1', config },
       }),
@@ -163,10 +163,10 @@ describe('BetaComparePage — every saved plan on one chart', () => {
   });
 });
 
-describe('BetaDataPage — one Data home', () => {
+describe('DataPage — one Data home', () => {
   it('renders the share surface and the backup/restore surface together', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaDataPage, {
+      createElement(DataPage, {
         chip: { tone: 'holds', age: '90+', label: 'the plan holds' },
         // SharingPage props
         inputs,

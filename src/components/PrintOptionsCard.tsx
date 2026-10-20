@@ -15,7 +15,7 @@ interface PrintOptionsCardProps {
   mcResults: MonteCarloResults | null;
 }
 
-// The Print & export page body (BetaPage owns the page title — this renders
+// The Print & export page body (PageChrome owns the page title — this renders
 // no heading of its own). Choose the optional sections, then print. Flat,
 // hairline, text-first: no icons, no colour that isn't carrying meaning.
 export function PrintOptionsCard({

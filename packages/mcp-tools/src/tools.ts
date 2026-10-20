@@ -1385,7 +1385,7 @@ function findPageTool(ctx: ToolContext, args: z.infer<typeof findPageArgs>): Too
  *  list regardless of state. */
 function getSitemapTool(): ToolOutcome {
   const lines = searchablePages().map((e, i) =>
-    `${i + 1}. ${e.title} (view ${e.viewId}) — ${hashForEntry(e)} — ${e.description}${e.betaOnly ? ' (beta-only)' : ''}`);
+    `${i + 1}. ${e.title} (view ${e.viewId}) — ${hashForEntry(e)} — ${e.description}`);
   return { kind: 'result', content: `The site map:\n${lines.join('\n')}` };
 }
 

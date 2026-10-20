@@ -1,6 +1,6 @@
 // @vitest-environment node
 // The Plans page's scenario list, rebuilt in the f7 design: no inner page
-// heading (BetaPage owns it), no rounded blue button/cards — one hairline
+// heading (PageChrome owns it), no rounded blue button/cards — one hairline
 // list where the active plan reads by weight and its blue dot.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
@@ -24,8 +24,8 @@ function render(props: Partial<Parameters<typeof ScenarioManager>[0]> = {}) {
   }));
 }
 
-describe('ScenarioManager (beta design)', () => {
-  it('renders no inner page heading — BetaPage owns the title', () => {
+describe('ScenarioManager (console design)', () => {
+  it('renders no inner page heading — PageChrome owns the title', () => {
     const html = render();
     expect(html).not.toContain('Manage Scenarios');
     expect(html).not.toContain('text-lg font-bold');

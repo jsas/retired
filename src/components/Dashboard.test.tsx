@@ -14,13 +14,13 @@ vi.stubGlobal('localStorage', {
   clear: () => store.clear(),
 });
 
-// Importing mapWindow via BetaApp keeps the helper colocated with the page
+// Importing mapWindow via Dashboard keeps the helper colocated with the page
 // that renders the map, while this test exercises exactly the window math.
-import { mapWindow } from './BetaApp';
+import { mapWindow } from './Dashboard';
 
 beforeEach(() => { store.clear(); });
 
-describe('BetaApp map window (lever-range pref)', () => {
+describe('Dashboard map window (lever-range pref)', () => {
   it('defaults the axis to the default pref ($300,000 cap)', () => {
     // The pref defaults to $300,000; the axis ends at the pref, so the
     // fader's range and the map match — parity with the Details faders.

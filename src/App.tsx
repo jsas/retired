@@ -1,14 +1,15 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { BetaApp } from './components/BetaApp';
+import { Dashboard } from './components/Dashboard';
 import { StyleGuide } from './design/StyleGuide';
-import { BetaPage, PlanUndoContext } from './components/beta/BetaPage';
-import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/beta/LandingPage';
+import { PageChrome, PlanUndoContext } from './components/console/PageChrome';
+import type { VerdictChip } from './components/console/PageChrome';
+import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/console/LandingPage';
 import {
-  BetaSchedulePage, BetaMathPage, BetaOptimizerPage, BetaMonteCarloPage,
-  BetaBacktestPage, BetaSolverPage, BetaComparePage, BetaPlansPage, BetaDataPage,
-  BetaSettingsPage, BetaConnectionsPage, BetaHelpPage,
-  BetaPrintPage, BetaDonatePage,
-} from './components/beta/pages';
+  SchedulePage, MathPage, OptimizerPage, MonteCarloPage,
+  BacktestPage, SolverPage, ComparePage, PlansPage, DataPage,
+  SettingsPage, ConnectionsPage, HelpPage,
+  PrintPage, DonatePage,
+} from './components/console/pages';
 import { AlertTriangle, X } from 'lucide-react';
 import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from '@retired/engine-core/retirementEngine';
 import { resolveSpouseSource, baselineSpouse, personPlanFromSpouse, promoteEmbeddedSpouses, toHousehold } from '@retired/engine-core/householdTypes';
@@ -39,7 +40,7 @@ import { potDisplay } from './lib/planDisplay';
 import { consumePlanFromHash } from './lib/shareLink';
 import { buildDefaultScenarios, hasUserPlans } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
-import { type EqSolvedState, type Bands } from './components/beta/SteeringControls';
+import type { EqSolvedState, Bands } from './components/console/SteeringControls';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { PREF_KEYS, prefKV } from './lib/prefKv';
 import { solveEqReadout } from '@retired/engine-core/eqSolver';
@@ -665,7 +666,7 @@ function App() {
   }
 
     // The persistent verdict chip — the answer, always top-right.
-    const chip: import('./components/beta/BetaPage').VerdictChip = (() => {
+    const chip: VerdictChip = (() => {
       const pot = potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge);
       const borderline = !pot.holds && pot.emptyAge != null && (inputs.maxAge - pot.emptyAge) <= 6;
       return {
@@ -683,7 +684,7 @@ function App() {
     })();
 
     // The assistant dock — one conversation, docked on the right of every
-    // page. Passing it through BetaPage turns the Assistant button + rail on
+    // page. Passing it through PageChrome turns the Assistant button + rail on
     // everywhere.
     const assistantDock = (
       <AgentPage
@@ -711,7 +712,7 @@ function App() {
     const page = (() => { switch (view) {
       case 'projection':
         return (
-          <BetaSchedulePage chip={chip} assistant={assistantDock}
+          <SchedulePage chip={chip} assistant={assistantDock}
             timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
             edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             breakdown={householdBreakdown}
@@ -726,7 +727,7 @@ function App() {
         );
       case 'math':
         return (
-          <BetaMathPage chip={chip} assistant={assistantDock}
+          <MathPage chip={chip} assistant={assistantDock}
             inputs={resolvedInputs}
             results={results}
             spouseAgeOffset={spouseAgeOffset}
@@ -738,7 +739,7 @@ function App() {
       // Dashboard — issue #187.)
       case 'optimize':
         return (
-          <BetaOptimizerPage chip={chip} assistant={assistantDock}
+          <OptimizerPage chip={chip} assistant={assistantDock}
             timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
             edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             optimizeProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
@@ -746,7 +747,7 @@ function App() {
         );
       case 'solver':
         return (
-          <BetaSolverPage chip={chip} assistant={assistantDock}
+          <SolverPage chip={chip} assistant={assistantDock}
             timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
             edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             solverProps={{ inputs: resolvedInputs, config, onApply: (patch) => handleInputsChange({ ...inputs, ...patch }) }}
@@ -754,7 +755,7 @@ function App() {
         );
       case 'montecarlo':
         return (
-          <BetaMonteCarloPage chip={chip} assistant={assistantDock}
+          <MonteCarloPage chip={chip} assistant={assistantDock}
             timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
             edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             mcProps={mcRequest ? { request: mcRequest, retirementAge: results.retirementAge, onRefresh: () => setMcRefreshNonce(n => n + 1) } : null}
@@ -762,7 +763,7 @@ function App() {
         );
       case 'backtest':
         return (
-          <BetaBacktestPage chip={chip} assistant={assistantDock}
+          <BacktestPage chip={chip} assistant={assistantDock}
             timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
             edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
             backtestProps={backtestResult ? { result: backtestResult } : null}
@@ -770,7 +771,7 @@ function App() {
         );
       case 'compare':
         return (
-          <BetaComparePage chip={chip} assistant={assistantDock}
+          <ComparePage chip={chip} assistant={assistantDock}
             compareProps={{ scenarios, activeScenarioId, config }}
           />
         );
@@ -778,7 +779,7 @@ function App() {
       case 'details': // legacy — details now live under Plans
       case 'legacyScenarios': // legacy #/scenarios URL
         return (
-          <BetaPlansPage chip={chip} assistant={assistantDock}
+          <PlansPage chip={chip} assistant={assistantDock}
             managerProps={{
               scenarios, activeScenarioId, onScenariosChange: setScenarios, revisions, onRollback: handleRollback,
               onSelectScenario: (id) => { handleScenarioChange(id); },
@@ -805,7 +806,7 @@ function App() {
         // One Data home: share a plan (link/code) plus the full backup /
         // restore / projection-export surface — nothing lives on a side route.
         return (
-          <BetaDataPage chip={chip} assistant={assistantDock}
+          <DataPage chip={chip} assistant={assistantDock}
             inputs={inputs} scenarioName={activeScenario.name} onImport={handleSharingImport}
             exportOptions={exportOptions} onExportOptionsChange={updateExportOptions}
             hasSpouse={!!exportResults.spouse}
@@ -815,7 +816,7 @@ function App() {
             onImportProjection={handleProjectionImport} />);
       case 'print':
         return (
-          <BetaPrintPage chip={chip} assistant={assistantDock}
+          <PrintPage chip={chip} assistant={assistantDock}
             options={printOptions} onChange={updatePrintOptions}
             onPrint={() => window.print()} mcPending={printMcPending} mcResults={printMc}
             sheet={{
@@ -829,25 +830,25 @@ function App() {
             }} />
         );
       case 'donate':
-        return <BetaDonatePage chip={chip} assistant={assistantDock} />;
+        return <DonatePage chip={chip} assistant={assistantDock} />;
       case 'settings':
-        return <BetaSettingsPage chip={chip} assistant={assistantDock} config={config} onSave={setConfig} />;
+        return <SettingsPage chip={chip} assistant={assistantDock} config={config} onSave={setConfig} />;
       case 'connections':
-        return <BetaConnectionsPage chip={chip} assistant={assistantDock} onClose={() => setView('dashboard')} />;
+        return <ConnectionsPage chip={chip} assistant={assistantDock} onClose={() => setView('dashboard')} />;
       case 'help':
-        return <BetaHelpPage chip={chip} assistant={assistantDock} />;
+        return <HelpPage chip={chip} assistant={assistantDock} />;
       case 'agent':
         // The assistant's own route: the SAME docked conversation as every
         // other page (one AgentPage in the tree — mounting a second one here
         // would fork the chat state). The route just opens the dock and lets
-        // BetaPage lay it out; deep links and back/forward keep working.
+        // PageChrome lay it out; deep links and back/forward keep working.
         return (
-          <BetaPage title={tPages('agentPage.title')} hint="assistant" chip={chip} assistant={assistantDock}>
+          <PageChrome title={tPages('agentPage.title')} hint="assistant" chip={chip} assistant={assistantDock}>
             <div className="pt-6 max-w-xl space-y-3 text-[13px] text-slate-500">
               <p className="text-[15px] font-semibold text-slate-900">{tPages('agentPage.open')}</p>
               <p>{tPages('agentPage.body')}</p>
             </div>
-          </BetaPage>
+          </PageChrome>
         );
       case 'welcome':
         // Explicit #/welcome (the RE: mark) always shows the landing, even with
@@ -874,7 +875,7 @@ function App() {
       case 'dashboard':
       default:
         return (
-          <BetaApp
+          <Dashboard
             inputs={inputs}
             onInputsChange={handleInputsChange}
             results={results}
