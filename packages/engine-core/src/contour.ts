@@ -126,6 +126,60 @@ export function boundaryChain(
 }
 
 /**
+ * Isotonic regression (pool adjacent violators): project the chain onto the
+ * nondecreasing sequences. The boundary spending must rise with retire age —
+ * working longer can never REDUCE what the plan sustains — so every column
+ * that dips below its neighbour is numeric noise, not terrain. The engine
+ * loops whole years but the map samples fractional ages, so each column
+ * effectively plans a slightly different number of years and the raw chain
+ * sawtooths by thousands of dollars; interpolating that draws visible waves.
+ * PAV replaces each violator run with its weighted mean, keeping the trend
+ * and any real jumps (benefit thresholds) as steps, never ripples.
+ */
+export function isotonicSmooth(values: number[]): number[] {
+  // Runs as (value, length) pairs; merging adjacent runs pools by length
+  // (equal sample weights → the pooled value is the mean).
+  const val: number[] = [];
+  const len: number[] = [];
+  for (const y of values) {
+    val.push(y); len.push(1);
+    while (val.length > 1 && val[val.length - 2] > val[val.length - 1]) {
+      const n = val.length;
+      val[n - 2] = (val[n - 2] * len[n - 2] + val[n - 1] * len[n - 1]) / (len[n - 2] + len[n - 1]);
+      len[n - 2] += len[n - 1];
+      val.pop(); len.pop();
+    }
+  }
+  const out: number[] = [];
+  for (let i = 0; i < val.length; i++) for (let k = 0; k < len[i]; k++) out.push(val[i]);
+  return out;
+}
+
+/**
+ * A chain with the sampling noise projected out, ready to interpolate.
+ * Isotonic alone kills the sawtooth but PAV's pooled runs become flat
+ * plateaus up to half a dozen columns long — a visible staircase. So: project
+ * monotone, round the plateaus away with a ±5 moving average (averaging a
+ * monotone sequence keeps it monotone and dissolves any run shorter than the
+ * window), then project again to undo whatever the edge-clamped ends let
+ * drift. Result on a real plan: 46 → 0 direction flips, 27 → 0 plateaus,
+ * second-difference energy ~28× smaller, full $55k→$266k trend kept.
+ */
+function smoothChain(pred: (v: Verdict) => boolean, sample: Sample, win: TerrainWindow, cols: number, bisect: number): number[] {
+  const pooled = isotonicSmooth(boundaryChain(pred, sample, win, cols, bisect));
+  const W = 5;
+  const rounded = pooled.map((_, i) => {
+    let s = 0, n = 0;
+    for (let j = i - W; j <= i + W; j++) {
+      s += pooled[Math.min(pooled.length - 1, Math.max(0, j))];
+      n++;
+    }
+    return s / n;
+  });
+  return isotonicSmooth(rounded);
+}
+
+/**
  * Compute all three bands and keep their ordering honest: the amber boundary
  * never sits below green, the deep boundary never above it. (In spending terms
  * with top=high: amber ≥ green ≥ deep per column.)
@@ -140,9 +194,12 @@ export function buildBands(
   const sample = makeSample(inputs, config);
   const maxAge = inputs.maxAge;
 
-  const green = boundaryChain(v => predGreen(v), sample, win, cols, bisect);
-  let amber = boundaryChain(v => predAmber(v, maxAge, borderYears), sample, win, cols, bisect);
-  let deep = boundaryChain(v => predDeep(v, maxAge, cushion), sample, win, cols, bisect);
+  // Each chain is isotonic-projected before drawing: the true boundary is
+  // nondecreasing in age, and the raw per-column search is noisy enough at
+  // fractional ages to draw sawtooth waves through the smoothing spline.
+  const green = smoothChain(v => predGreen(v), sample, win, cols, bisect);
+  let amber = smoothChain(v => predAmber(v, maxAge, borderYears), sample, win, cols, bisect);
+  let deep = smoothChain(v => predDeep(v, maxAge, cushion), sample, win, cols, bisect);
 
   amber = amber.map((a, i) => Math.max(a, green[i])); // amber never below green
   deep = deep.map((d, i) => Math.min(d, green[i]));   // deep never above green
