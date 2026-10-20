@@ -120,7 +120,7 @@
         "emergency fund",
         "low yield"
       ],
-      "body": "A low-yield reserve (rate set in Settings → Engine, default 0.5%). Always drawn last, as the final backstop before the plan runs dry."
+      "body": "A low-yield reserve (rate set in Settings → Engine, default 0.5%). Always drawn last, as the final reserve before the balance reaches $0."
     },
     "contributions": {
       "title": "Contributions ($/yr)",
@@ -386,7 +386,7 @@
         "answer",
         "will it last"
       ],
-      "body": "The number on the dashboard is leftover in the pot: **Money lasts to** is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the life-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.\n\nThe engine's ON TRACK / SHORTFALL flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The receipts, chip, and chart pin all follow the pot so they cannot disagree.\n\nFor a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined life line."
+      "body": "The number on the dashboard is the leftover balance: **Money lasts to** is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the life-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.\n\nThe engine's ON TRACK / SHORTFALL flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The receipts, chip, and chart pin all use the same leftover balance so they cannot disagree.\n\nFor a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined life line."
     },
     "rescore": {
       "title": "The Re:score",
@@ -420,7 +420,7 @@
         "low return",
         "bear market"
       ],
-      "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It's the quick, one-number cousin of the full Monte Carlo in the Tools menu."
+      "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It is the single-number summary; the full Monte Carlo is in the Tools menu."
     },
     "life-timeline": {
       "title": "The life timeline",
@@ -444,7 +444,7 @@
         "stats",
         "proof"
       ],
-      "body": "The numbers behind the verdict: the account mix at any age you pick (RRSP+RRIF, TFSA, Taxable+cash), plus the Re:score (0–100, how close the household gets to max age before money runs out), how long the money lasts (first empty year of the pot — the same age as the life-timeline pin), what's left at max age, the pot at work's end, and when CPP+OAS start. \"90+ / past the plan\" only prints when leftover is still there."
+      "body": "The numbers behind the verdict: the account mix at any age you pick (RRSP+RRIF, TFSA, Taxable+cash), plus the Re:score (0–100, how close the household gets to max age before money runs out), how long the money lasts (the first year the balance reaches $0 — the same age as the life-timeline pin), what's left at max age, the balance at retirement, and when CPP+OAS start. \"90+ / past the plan\" only prints when leftover is still there."
     },
     "stress-test": {
       "title": "How to stress-test the plan",

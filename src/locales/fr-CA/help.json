@@ -127,7 +127,7 @@
         "fonds d'urgence",
         "faible rendement"
       ],
-      "body": "Une réserve à faible rendement (taux fixé dans Paramètres → Moteur, 0,5 % par défaut). Toujours retirée en dernier, comme ultime filet avant que le plan ne tarisse."
+      "body": "Une réserve à faible rendement (taux fixé dans Paramètres → Moteur, 0,5 % par défaut). Toujours retirée en dernier, comme dernière réserve avant que le solde n'atteigne 0 $."
     },
     "contributions": {
       "title": "Cotisations ($/an)",
@@ -410,7 +410,7 @@
         "on track",
         "shortfall"
       ],
-      "body": "Le chiffre du tableau de bord est ce qui reste dans le pot : **L'argent dure jusqu'à** n'est votre âge max que s'il reste un solde à l'horizon. Si les comptes investissables tombent à 0 $ plus tôt — l'épingle de la frise de vie — c'est cet âge que nous imprimons, même si une hypothèque inversée peut encore emprunter sur la maison.\n\nLe drapeau EN BONNE VOIE / DÉFICIT du moteur est plus strict sur les dépenses non financées (il reste en bonne voie tant qu'une hypothèque inversée a de la marge). Les reçus, la pastille et l'épingle du graphique suivent tous le pot pour ne pas se contredire.\n\nPour un couple, le verdict moteur du ménage est les comptes combinés; le tableau de bord suit encore le reste sur la ligne de vie combinée."
+      "body": "Le chiffre du tableau de bord est le solde restant : **L'argent dure jusqu'à** n'est votre âge max que s'il reste un solde à l'horizon. Si les comptes investissables tombent à 0 $ plus tôt — l'épingle de la frise de vie — c'est cet âge que nous imprimons, même si une hypothèque inversée peut encore emprunter sur la maison.\n\nLe drapeau EN BONNE VOIE / DÉFICIT du moteur est plus strict sur les dépenses non financées (il reste en bonne voie tant qu'une hypothèque inversée a de la marge). Les reçus, la pastille et l'épingle du graphique utilisent tous le même solde restant pour ne pas se contredire.\n\nPour un couple, le verdict moteur du ménage est les comptes combinés; le tableau de bord suit encore le reste sur la ligne de vie combinée."
     },
     "rescore": {
       "title": "Le Re:score",
@@ -444,7 +444,7 @@
         "faible rendement",
         "marché baissier"
       ],
-      "body": "Relance tout votre plan à un rendement pessimiste unique (1,2 %) pour montrer comment il tient si les marchés déçoivent. Bleu signifie qu'il survit même alors; rose nomme l'âge où il s'épuise. C'est le cousin rapide, à un seul chiffre, du Monte Carlo complet dans le menu Outils."
+      "body": "Relance tout votre plan à un rendement pessimiste unique (1,2 %) pour montrer comment il tient si les marchés déçoivent. Bleu signifie qu'il survit même alors; rose nomme l'âge où il s'épuise. C'est le résumé à un seul chiffre; le Monte Carlo complet se trouve dans le menu Outils."
     },
     "life-timeline": {
       "title": "La ligne de vie",
@@ -468,7 +468,7 @@
         "stats",
         "preuve"
       ],
-      "body": "Les chiffres derrière le verdict : la composition des comptes à n'importe quel âge choisi (REER+FERR, CELI, Non enregistré+liquidités), plus le Re:score (0–100, à quel point le ménage se rapproche de l'âge max avant que l'argent s'épuise), combien de temps l'argent dure (première année vide du pot — le même âge que l'épingle de la frise), ce qui reste à l'âge max, le pot à la fin du travail, et quand RPC+SV commencent. « 90+ / au-delà du plan » ne s'imprime que s'il reste encore quelque chose."
+      "body": "Les chiffres derrière le verdict : la composition des comptes à n'importe quel âge choisi (REER+FERR, CELI, Non enregistré+liquidités), plus le Re:score (0–100, à quel point le ménage se rapproche de l'âge max avant que l'argent s'épuise), combien de temps l'argent dure (la première année où le solde atteint 0 $ — le même âge que l'épingle de la frise), ce qui reste à l'âge max, le solde à la retraite, et quand RPC+SV commencent. « 90+ / au-delà du plan » ne s'imprime que s'il reste encore quelque chose."
     },
     "stress-test": {
       "title": "Comment tester le plan sous stress",

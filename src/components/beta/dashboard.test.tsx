@@ -78,7 +78,7 @@ describe('EvidenceRow', () => {
     const html = renderToStaticMarkup(<EvidenceRow inputs={plan} results={results} breakdown={breakdown} />);
     expect(html).toContain('Money lasts to');
     expect(html).toContain('Re:score');
-    expect(html).toContain('In the pot at work');
+    expect(html).toContain('Balance at retirement');
     expect(html).toContain('CPP + OAS');
     expect(html).toContain('RRSP');
     expect(html).toContain('TFSA');
