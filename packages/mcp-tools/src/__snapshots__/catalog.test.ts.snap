@@ -371,7 +371,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
         },
         "changes": {
           "additionalProperties": {},
-          "description": "For update: the income-source fields to change. For add: ignored — pass the source fields at the top level instead.",
+          "description": "For update: the income-source fields to change. For add: also accepted — fields here merge under any top-level ones.",
           "propertyNames": {
             "type": "string",
           },
@@ -408,7 +408,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
         },
         "changes": {
           "additionalProperties": {},
-          "description": "For update: the cash-event fields to change. For add: ignored — pass the event fields at the top level instead.",
+          "description": "For update: the cash-event fields to change. For add: also accepted — fields here merge under any top-level ones.",
           "propertyNames": {
             "type": "string",
           },
@@ -445,7 +445,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
         },
         "changes": {
           "additionalProperties": {},
-          "description": "For update: the debt fields to change. For add: ignored — pass the debt fields at the top level instead.",
+          "description": "For update: the debt fields to change. For add: also accepted — fields here merge under any top-level ones.",
           "propertyNames": {
             "type": "string",
           },
@@ -480,13 +480,45 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
           ],
           "type": "string",
         },
+        "amount": {
+          "description": "For add, mode "fixed": dollars per year (today's dollars).",
+          "type": "number",
+        },
+        "basis": {
+          "description": "For add, mode "pct" only: which income the % rides on.",
+          "enum": [
+            "gross",
+            "net",
+          ],
+          "type": "string",
+        },
         "changes": {
           "additionalProperties": {},
-          "description": "For update: the giving-stream fields to change. For add: ignored — pass the stream fields at the top level instead.",
+          "description": "For update: the giving-stream fields to change. For add: also accepted — fields here merge under any top-level ones.",
           "propertyNames": {
             "type": "string",
           },
           "type": "object",
+        },
+        "fromAge": {
+          "description": "For add: first giving age (inclusive).",
+          "type": "number",
+        },
+        "label": {
+          "description": "For add: the stream name, e.g. "Food Bank".",
+          "type": "string",
+        },
+        "mode": {
+          "description": "For add: "fixed" = amount $/yr (default); "pct" = pct of income.",
+          "enum": [
+            "pct",
+            "fixed",
+          ],
+          "type": "string",
+        },
+        "pct": {
+          "description": "For add, mode "pct": percentage points of income (10 = 10%).",
+          "type": "number",
         },
         "rationale": {
           "type": "string",
@@ -495,6 +527,17 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
           "description": "For update/remove: the giving stream id, or its label if unique (e.g. "Parish").",
           "minLength": 1,
           "type": "string",
+        },
+        "toAge": {
+          "anyOf": [
+            {
+              "type": "number",
+            },
+            {
+              "type": "null",
+            },
+          ],
+          "description": "For add: last giving age; null/omit = for life.",
         },
       },
       "required": [
@@ -1095,7 +1138,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
         },
         "changes": {
           "additionalProperties": {},
-          "description": "For update: the income-source fields to change. For add: ignored — pass the source fields at the top level instead.",
+          "description": "For update: the income-source fields to change. For add: also accepted — fields here merge under any top-level ones.",
           "propertyNames": {
             "type": "string",
           },
@@ -1133,7 +1176,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
         },
         "changes": {
           "additionalProperties": {},
-          "description": "For update: the cash-event fields to change. For add: ignored — pass the event fields at the top level instead.",
+          "description": "For update: the cash-event fields to change. For add: also accepted — fields here merge under any top-level ones.",
           "propertyNames": {
             "type": "string",
           },
@@ -1171,7 +1214,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
         },
         "changes": {
           "additionalProperties": {},
-          "description": "For update: the debt fields to change. For add: ignored — pass the debt fields at the top level instead.",
+          "description": "For update: the debt fields to change. For add: also accepted — fields here merge under any top-level ones.",
           "propertyNames": {
             "type": "string",
           },
@@ -1194,7 +1237,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "manage_debt",
   },
   {
-    "description": "PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). mode "fixed": amount dollars/yr (NOT indexed for inflation); mode "pct": pct of income in percentage points (10 = 10%), basis "gross" (pre-tax income stack) or "net" (after-tax). fromAge/toAge window (toAge null = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields. action "update"/"remove" take target (id or unique label). User confirms.",
+    "description": "PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). mode "fixed" (the default): amount dollars/yr (NOT indexed for inflation) — a fixed add is just {label, mode:"fixed", amount, fromAge}; pct/basis are pct-mode-only and auto-filled. mode "pct": pct of income in percentage points (10 = 10%), basis "gross" (pre-tax income stack) or "net" (after-tax). fromAge/toAge window (toAge null or omitted = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields (top level, or inside changes). action "update"/"remove" take target (id or unique label). User confirms.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": {},
@@ -1207,13 +1250,45 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
           ],
           "type": "string",
         },
+        "amount": {
+          "description": "For add, mode "fixed": dollars per year (today's dollars).",
+          "type": "number",
+        },
+        "basis": {
+          "description": "For add, mode "pct" only: which income the % rides on.",
+          "enum": [
+            "gross",
+            "net",
+          ],
+          "type": "string",
+        },
         "changes": {
           "additionalProperties": {},
-          "description": "For update: the giving-stream fields to change. For add: ignored — pass the stream fields at the top level instead.",
+          "description": "For update: the giving-stream fields to change. For add: also accepted — fields here merge under any top-level ones.",
           "propertyNames": {
             "type": "string",
           },
           "type": "object",
+        },
+        "fromAge": {
+          "description": "For add: first giving age (inclusive).",
+          "type": "number",
+        },
+        "label": {
+          "description": "For add: the stream name, e.g. "Food Bank".",
+          "type": "string",
+        },
+        "mode": {
+          "description": "For add: "fixed" = amount $/yr (default); "pct" = pct of income.",
+          "enum": [
+            "pct",
+            "fixed",
+          ],
+          "type": "string",
+        },
+        "pct": {
+          "description": "For add, mode "pct": percentage points of income (10 = 10%).",
+          "type": "number",
         },
         "rationale": {
           "type": "string",
@@ -1222,6 +1297,17 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
           "description": "For update/remove: the giving stream id, or its label if unique (e.g. "Parish").",
           "minLength": 1,
           "type": "string",
+        },
+        "toAge": {
+          "anyOf": [
+            {
+              "type": "number",
+            },
+            {
+              "type": "null",
+            },
+          ],
+          "description": "For add: last giving age; null/omit = for life.",
         },
       },
       "required": [

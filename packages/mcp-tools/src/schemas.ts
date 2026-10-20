@@ -114,13 +114,17 @@ export const debtSchema = z.object({
 // Household charitable giving stream (issue #164). Shared across the
 // household (one list, one pooled credit), so it rides on RetirementInputs
 // only, never SpouseInputs.
+// Defaults (#194): pct/basis only mean something in 'pct' mode and amount
+// only in 'fixed' — a caller adding {mode:'fixed', amount, fromAge}
+// must not be forced to invent the unused siblings. The engine's own type
+// keeps all fields required; zod fills the inert ones.
 export const givingStreamSchema = z.object({
   id: z.string(),
   label: z.string(),
-  mode: z.enum(['pct', 'fixed']),
-  pct: z.number(),
-  amount: z.number(),
-  basis: z.enum(['gross', 'net']),
+  mode: z.enum(['pct', 'fixed']).default('fixed'),
+  pct: z.number().default(0),
+  amount: z.number().default(0),
+  basis: z.enum(['gross', 'net']).default('gross'),
   fromAge: z.number(),
   toAge: z.number().nullish(),
 }) satisfies z.ZodType<GivingStream>;

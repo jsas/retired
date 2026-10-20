@@ -99,7 +99,7 @@ const manageIncomeArgs = z.object({
   target: z.string().min(1).optional()
     .describe('For update/remove: the income source id, or its label if unique (e.g. "Work DB").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the income-source fields to change. For add: ignored — pass the source fields at the top level instead.'),
+    .describe('For update: the income-source fields to change. For add: also accepted — fields here merge under any top-level ones.'),
   rationale: z.string().optional(),
 }).passthrough();
 
@@ -134,7 +134,7 @@ const manageCashEventArgs = z.object({
   target: z.string().min(1).optional()
     .describe('For update/remove: the cash event id, or its label if unique (e.g. "Downsize").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the cash-event fields to change. For add: ignored — pass the event fields at the top level instead.'),
+    .describe('For update: the cash-event fields to change. For add: also accepted — fields here merge under any top-level ones.'),
   rationale: z.string().optional(),
 }).passthrough();
 
@@ -143,7 +143,7 @@ const manageDebtArgs = z.object({
   target: z.string().min(1).optional()
     .describe('For update/remove: the debt id, or its label if unique (e.g. "Mortgage").'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the debt fields to change. For add: ignored — pass the debt fields at the top level instead.'),
+    .describe('For update: the debt fields to change. For add: also accepted — fields here merge under any top-level ones.'),
   rationale: z.string().optional(),
 }).passthrough();
 
@@ -151,8 +151,18 @@ const manageGivingArgs = z.object({
   action: z.enum(['add', 'update', 'remove']),
   target: z.string().min(1).optional()
     .describe('For update/remove: the giving stream id, or its label if unique (e.g. "Parish").'),
+  // #194: the add fields declared explicitly — models (and the schema JSON
+  // they see) otherwise guess at pct/basis, which only pct-mode streams
+  // need. Fixed-mode adds are just {label, mode:'fixed', amount, fromAge}.
+  label: z.string().optional().describe('For add: the stream name, e.g. "Food Bank".'),
+  mode: z.enum(['pct', 'fixed']).optional().describe('For add: "fixed" = amount $/yr (default); "pct" = pct of income.'),
+  amount: z.number().optional().describe('For add, mode "fixed": dollars per year (today\'s dollars).'),
+  pct: z.number().optional().describe('For add, mode "pct": percentage points of income (10 = 10%).'),
+  basis: z.enum(['gross', 'net']).optional().describe('For add, mode "pct" only: which income the % rides on.'),
+  fromAge: z.number().optional().describe('For add: first giving age (inclusive).'),
+  toAge: z.number().nullable().optional().describe('For add: last giving age; null/omit = for life.'),
   changes: z.record(z.string(), z.unknown()).optional()
-    .describe('For update: the giving-stream fields to change. For add: ignored — pass the stream fields at the top level instead.'),
+    .describe('For update: the giving-stream fields to change. For add: also accepted — fields here merge under any top-level ones.'),
   rationale: z.string().optional(),
 }).passthrough();
 
@@ -353,7 +363,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
   manage_income: { description: 'PROPOSE adding, updating, or removing an income source (pension, employment, self-employment, or rental). action "add" takes the source fields (endAge a number or explicit null). action "update"/"remove" take target (id or unique label). User confirms.', schema: manageIncomeArgs },
   manage_cash_event: { description: 'PROPOSE adding, updating, or removing a cash event (inflow to an account, or outflow adding to spending). action "add" takes the event fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageCashEventArgs },
   manage_debt: { description: 'PROPOSE adding, updating, or removing a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending until paid off. action "add" takes the debt fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageDebtArgs },
-  manage_giving: { description: 'PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). mode "fixed": amount dollars/yr (NOT indexed for inflation); mode "pct": pct of income in percentage points (10 = 10%), basis "gross" (pre-tax income stack) or "net" (after-tax). fromAge/toAge window (toAge null = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageGivingArgs },
+  manage_giving: { description: 'PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). mode "fixed" (the default): amount dollars/yr (NOT indexed for inflation) — a fixed add is just {label, mode:"fixed", amount, fromAge}; pct/basis are pct-mode-only and auto-filled. mode "pct": pct of income in percentage points (10 = 10%), basis "gross" (pre-tax income stack) or "net" (after-tax). fromAge/toAge window (toAge null or omitted = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields (top level, or inside changes). action "update"/"remove" take target (id or unique label). User confirms.', schema: manageGivingArgs },
   propose_account: { description: 'PROPOSE enabling/configuring (or disabling) a special account: kind "rm" (reverse mortgage), "rdsp", or "fhsa". Pass changes with the fields to set; {"enabled":false} turns it off. User confirms.', schema: proposeAccountArgs },
   propose_revert: { description: 'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.', schema: proposeRevertArgs },
   remember: { description: 'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
@@ -1151,7 +1161,9 @@ function proposeRevert(ctx: ToolContext, args: z.infer<typeof proposeRevertArgs>
 }
 
 /** manage_* dispatcher: action "add" appends a new element; update/remove
- *  go through manageElement. Strips `action` so it never lands in the schema. */
+ *  go through manageElement. Strips `action` so it never lands in the schema.
+ *  #194: "add" also accepts the element fields inside `changes` (models
+ *  reach for it naturally) — top-level fields win, changes fill in. */
 function manageArray(
   ctx: ToolContext,
   key: 'events' | 'income' | 'debts' | 'giving',
@@ -1160,8 +1172,11 @@ function manageArray(
   noun: string,
 ): ToolOutcome {
   if (data.action === 'add') {
-    const { action: _a, target: _t, changes: _c, ...rest } = data;
-    return proposeElement(ctx, key, schema, rest, noun);
+    const { action: _a, target: _t, changes, ...rest } = data;
+    const element = typeof changes === 'object' && changes !== null && !Array.isArray(changes)
+      ? { ...(changes as Record<string, unknown>), ...rest }
+      : rest;
+    return proposeElement(ctx, key, schema, element, noun);
   }
   const target = typeof data.target === 'string' ? data.target : '';
   if (!target) {
