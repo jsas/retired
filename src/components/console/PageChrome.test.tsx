@@ -16,7 +16,7 @@ vi.stubGlobal('localStorage', {
 const chip: VerdictChip = { tone: 'holds', age: '90+', label: 'the plan holds' };
 
 describe('PageChrome assistant dock', () => {
-  it('renders the Assistant toggle and the dock rail when an assistant is given', () => {
+  it('renders the Assistant robot toggle and the dock rail when an assistant is given', () => {
     const html = renderToStaticMarkup(
       createElement(PageChrome, {
         chip,
@@ -24,19 +24,21 @@ describe('PageChrome assistant dock', () => {
         children: createElement('div', null, 'page-body'),
       }),
     );
-    expect(html).toContain('Assistant');
+    // #192: the word "Assistant" became a robot icon — the accessible name
+    // carries it now, not the visible text.
+    expect(html).toContain('aria-label="Assistant"');
     expect(html).toContain('chat-body');
     expect(html).toContain('page-body');
-    // the grow/shrink arrows live ON the Assistant button now (nowhere else)
-    expect(html).toContain('aria-label="Grow the assistant to fullscreen"');
-    expect(html).not.toContain('aria-label="Close the assistant"');
+    // no fullscreen mode exists — the toggle only opens/hides the dock
+    expect(html).not.toContain('Grow');
+    expect(html).not.toContain('fullscreen');
   });
 
   it('the Assistant toggle is ALWAYS in the header — even with no assistant wired', () => {
     const html = renderToStaticMarkup(
       createElement(PageChrome, { chip, children: createElement('div', null, 'page-body') }),
     );
-    expect(html).toContain('>Assistant<');
+    expect(html).toContain('aria-label="Assistant"');
     expect(html).toContain('page-body');
     // but the dock rail itself stays out — nothing to show
     expect(html).not.toContain('chat-body');
@@ -47,23 +49,28 @@ describe('PageChrome assistant dock', () => {
       createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('90+');
-    for (const label of ['Projection', 'Tools', 'Plans']) {
+    for (const label of ['Dashboard', 'Tools', 'Plans']) {
       expect(html, label).toContain(label);
     }
+    // #192: Projection moved into the Tools dropdown — the dropdown renders
+    // its items only when open, so the header's static markup no longer
+    // carries it as a top-level link.
+    expect(html).not.toContain('href="#/projection"');
     expect(html).not.toContain('>Details<');
     expect(html).not.toContain('>Profiles<');
   });
 
-  it('the Tools menu carries the analytic surfaces including Compare', () => {
+  it('the Tools menu carries the analytic surfaces including Projection and Compare', () => {
     // Issue #162: each analytic surface is its own page; Compare later
     // joined that menu; Steering moved onto the Dashboard (#187). Issue
-    // #186 ordered and grouped the menu by outcome section, Year Math first.
-    // (The Dropdown renders its children only when open, so the static
-    // markup proves the trigger; the item list is proven against the
-    // exported source of truth.)
-    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['math', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare']);
-    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['One Year, Step by Step', 'Improve the Plan', 'Your Odds', 'Test Against History', 'Safe Spending', 'Compare plans']);
-    expect(TOOLS_MENU_ITEMS.map(t => t.section)).toEqual(['plan', 'explore', 'explore', 'explore', 'explore', 'explore']);
+    // #186 ordered and grouped the menu by outcome section, Projection
+    // first. #192: Projection itself moved from the header row into the
+    // menu. (The Dropdown renders its children only when open, so the
+    // static markup proves the trigger; the item list is proven against
+    // the exported source of truth.)
+    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['projection', 'math', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Projection', 'One Year, Step by Step', 'Improve the Plan', 'Your Odds', 'Test Against History', 'Safe Spending', 'Compare plans']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.section)).toEqual(['plan', 'plan', 'explore', 'explore', 'explore', 'explore', 'explore']);
     const html = renderToStaticMarkup(
       createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
@@ -112,23 +119,37 @@ describe('PageChrome assistant dock', () => {
     vi.unstubAllGlobals();
   });
 
-  it('the Assistant button in the header carries the grow/shrink control', () => {
+  it('the robot button reports pressed state and carries no grow control', () => {
+    // #192: on #/assistant the dock starts open (the button reads pressed),
+    // and there is no grow-to-fullscreen affordance anywhere. The click
+    // behaviour itself is proven by PageChromeDock.test.tsx (jsdom).
+    store.set('wealthconsole_dock_open', '0');
+    const fakeWindow = { location: { hash: '#/assistant' } };
+    vi.stubGlobal('window', fakeWindow);
     const html = renderToStaticMarkup(
-      createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
+      createElement(PageChrome, { chip, assistant: createElement('div', null, 'chat-body'), children: createElement('div') }),
     );
-    expect(html).toContain('title="Grow"');
-    expect(html).toContain('aria-label="Grow the assistant to fullscreen"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).not.toContain('aria-label="Grow the assistant to fullscreen"');
+    expect(html).not.toContain('title="Grow"');
+    vi.unstubAllGlobals();
   });
 
   it('the open dock shows as a full-screen sheet on phones (not hidden below lg)', () => {
-    // The open (non-fullscreen) state must be `flex` on phones with the sticky
-    // rail only from lg up — a `hidden` in the base classes would blank the
-    // assistant for every phone user.
+    // The open state must be `flex` on phones with the sticky rail only
+    // from lg up — a `hidden` in the base classes would blank the assistant
+    // for every phone user. There is no fullscreen variant anymore (#192):
+    // the sheet is the ONLY page-covering state, and the robot button in
+    // the sticky header (z-40 < the sheet's z-50 but the header sits above
+    // it via top-12) always hides it again.
     const html = renderToStaticMarkup(
       createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toMatch(/class="[^"]*fixed inset-0 top-12 z-50 flex flex-col lg:sticky/);
     expect(html).not.toMatch(/flex flex-col hidden/);
+    // the takeover variant (`fixed inset-0 z-50 top-12` without the top-12
+    // start) is gone — the sheet always begins below the header.
+    expect(html).not.toContain('fixed inset-0 z-50 top-12');
     // unprefixed `relative` would beat `fixed` in Tailwind and drop the phone
     // sheet back into the page flow (settings squeezed beside the chat).
     expect(html).not.toMatch(/aria-label="Assistant"[^>]*\brelative\b/);

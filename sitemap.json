@@ -298,7 +298,7 @@
       "route": "#/assistant",
       "url": "https://jsas.github.io/retired/#/assistant",
       "title": "Assistant",
-      "description": "The AI assistant full-screen: ask about the plan, what-if it, or change it with propose_* cards you approve.",
+      "description": "The AI assistant chat page: ask about the plan, what-if it, or change it with propose_* cards you approve.",
       "keywords": [
         "assistant",
         "ai",

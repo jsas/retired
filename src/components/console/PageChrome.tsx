@@ -1,13 +1,13 @@
 // The shared page chrome — brand header, the named homes (Dashboard,
-// Projection, Tools ▾ grouped by outcome section, Plans, Data), the
-// persistent verdict chip, and the assistant dock. Every page sits inside
-// this so navigation and the answer are always one glance away. Flat,
-// hairline, sticky. The profile icon (top right) is the current plan —
+// Tools ▾ grouped by outcome section, Plans, Data), the persistent
+// verdict chip, and the assistant dock. Every page sits inside this so
+// navigation and the answer are always one glance away. Flat, hairline,
+// sticky. The profile icon (top right) is the current plan —
 // #/plan, the list of plans plus the numbers behind this one.
 //
 // The dock (f7's star): a min-340px right rail on desktop (user-draggable
 // wider, remembered), a full-screen sheet on phones. The app works without
-// it — the Assistant button toggles it and it never traps you.
+// it — the robot button toggles it and it never traps you.
 import { createContext, Fragment, useCallback, useContext, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from './nav';
@@ -15,13 +15,13 @@ import type { View } from '../../lib/viewRoutes';
 import { pageForView, type NavEntry } from '@retired/mcp-tools/navigation';
 import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
-import { CircleUserRound, Maximize2, Minimize2, Undo2 } from 'lucide-react';
+import { Bot, CircleUserRound, Undo2 } from 'lucide-react';
 import { LanguageSwitch } from '../LanguageSwitch';
 import { useAppLocale } from '../../lib/localeContext';
 
-// The grow/shrink arrows follow the Assistant button's own text colour —
-// white on the dark (open) button, black on the white (closed) one.
-const ASSISTANT_TOGGLE_ICON = 'h-3.5 w-3.5';
+// The robot icon follows the Assistant button's own text colour — white on
+// the dark (open) button, black on the white (closed) one.
+const ASSISTANT_TOGGLE_ICON = 'h-4 w-4';
 import { prefKV } from '../../lib/prefKv';
 
 /** The plan's undo surface for the header (issue #165): edits autosave, and
@@ -81,11 +81,13 @@ export interface VerdictChip {
 type NavSection = NonNullable<NavEntry['section']>;
 
 /** The Tools menu (issue #162, later Compare): each analytic surface is its
- *  own page. Desktop opens them from the header dropdown; the phone menu
- *  carries the same items flat (a dropdown inside a dropdown would close on
- *  the first tap). Both group by catalog section (issue #186). */
-const TOOLS_MENU_VIEWS: View[] = ['math', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare'];
-const TOOLS_MENU_KEYS = ['yearMath', 'optimizer', 'monteCarlo', 'backtest', 'solver', 'compare'] as const;
+ *  own page. Projection moved in from the header row (#192) — the header
+ *  stays Dashboard + Tools ▾ + Plans/Data/Print/Settings. Desktop opens
+ *  them from the header dropdown; the phone menu carries the same items
+ *  flat (a dropdown inside a dropdown would close on the first tap). Both
+ *  group by catalog section (issue #186). */
+const TOOLS_MENU_VIEWS: View[] = ['projection', 'math', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare'];
+const TOOLS_MENU_KEYS = ['projection', 'yearMath', 'optimizer', 'monteCarlo', 'backtest', 'solver', 'compare'] as const;
 // Section order (issue #186): Your plan → Explore → Share & print → Settings & help.
 const MOBILE_MENU_VIEWS: View[] = [
   'dashboard', 'projection', 'math', 'scenarios',
@@ -167,17 +169,17 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
   children?: ReactNode;
 }) {
   // The dock's open state is remembered (prefKV) — closing it once keeps it
-  // closed across loads and pages until reopened. Default open. Fullscreen is
-  // session-only: it's a viewing mode, not a preference. The assistant's own
-  // route (#/assistant) is an explicit open — the pref can't close it there.
+  // closed across loads and pages until reopened. Default open. The
+  // assistant's own route (#/assistant) starts open, but the robot button
+  // always toggles — even there, one click hides the dock (#192: no mode
+  // may take over the page or trap the user).
   const openRoute = isAssistantRoute();
   const [dockOpen, setDockOpenState] = useState<boolean>(() => readDockOpen(openRoute));
-  const [fullscreen, setAssistantFullscreen] = useState(false);
   const [dockWidth, setDockWidth] = useState<number>(() => readDockWidth());
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const setDockOpen = (open: boolean) => {
-    setDockOpenState(open || openRoute);
-    try { prefKV().setItem(DOCK_PREF_KEY, (open || openRoute) ? '1' : '0'); } catch { /* storage blocked */ }
+    setDockOpenState(open);
+    try { prefKV().setItem(DOCK_PREF_KEY, open ? '1' : '0'); } catch { /* storage blocked */ }
   };
   const persistDockWidth = useCallback((w: number) => {
     try { prefKV().setItem(DOCK_WIDTH_PREF_KEY, String(w)); } catch { /* storage blocked */ }
@@ -218,11 +220,11 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
             RE:
           </Link>
           <Link view="dashboard" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">{t('dashboard')}</Link>
-          <Link view="projection" className="hidden px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block">{t('projection')}</Link>
 
           {/* The Tools menu: each analytic surface is its own page (Steering
-              moved onto the Dashboard — #187). Optimizer through Solver share
-              a projection strip; Compare draws every plan. */}
+              moved onto the Dashboard — #187; Projection moved in from the
+              header row — #192). Optimizer through Solver share a projection
+              strip; Compare draws every plan. */}
           <div className="hidden md:block">
             <Dropdown label={t('tools')}>
               <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
@@ -259,44 +261,24 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
           <div className="flex-1" />
           {actions}
 
-          {/* the assistant toggle — ALWAYS present, not gated on the dock
-              being wired: one click opens or closes it, on every page. The
-              grow/shrink arrows live here too (nowhere else): click the
-              arrows to expand the open dock to fullscreen or shrink it back
-              to the rail — or to open straight into fullscreen when closed. */}
+          {/* The assistant toggle — ALWAYS present, not gated on the dock
+              being wired: one click opens or hides it, on every page, on
+              every route (#192: a robot icon replaces the word; there is no
+              fullscreen mode anymore, so the icon can never leave you
+              trapped in a page-covering panel). */}
           <button
             type="button"
             onClick={() => setDockOpen(!dockOpen)}
-            className={`flex items-center border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            aria-label={t('assistant')}
+            aria-pressed={dockOpen}
+            className={`flex h-8 w-8 items-center justify-center border transition-colors ${
               dockOpen
                 ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-700'
                 : 'border-slate-300 text-slate-800 hover:border-slate-900'
             }`}
             title={t('assistantTitle')}
           >
-            {t('assistant')}
-            <span
-              role="button"
-              tabIndex={0}
-              aria-label={fullscreen ? t('assistantShrink') : t('assistantGrow')}
-              title={fullscreen ? t('shrink') : t('grow')}
-              className={`ml-2 flex items-center border-l pl-2 ${
-                dockOpen
-                  ? 'border-white/30 text-white/80 hover:text-white'
-                  : 'border-slate-300 text-slate-900 hover:text-slate-600'
-              }`}
-              onClick={(e) => { e.stopPropagation(); setAssistantFullscreen(!fullscreen); setDockOpen(true); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault(); e.stopPropagation();
-                  setAssistantFullscreen(!fullscreen); setDockOpen(true);
-                }
-              }}
-            >
-              {fullscreen
-                ? <Minimize2 size={12} className={ASSISTANT_TOGGLE_ICON} />
-                : <Maximize2 size={12} className={ASSISTANT_TOGGLE_ICON} />}
-            </span>
+            <Bot className={ASSISTANT_TOGGLE_ICON} />
           </button>
 
           {/* Issue #165: profile + undo beside the verdict chip. The profile
@@ -348,29 +330,27 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
           {children}
         </main>
 
-        {/* The assistant dock. Closing it (header button) hides the rail but
-            NEVER unmounts the conversation — the same element sits at the
-            same tree position every page, so a stream keeps running and the
-            chat is exactly as you left it when you reopen. Desktop: sticky
-            min-340px rail (draggable wider), or fullscreen from its own
-            expand button. Phones: a full-screen sheet when open, gone when
-            closed — width is never applied below lg. */}
+        {/* The assistant dock. Closing it (the robot button) hides the rail
+            but NEVER unmounts the conversation — the same element sits at
+            the same tree position every page, so a stream keeps running and
+            the chat is exactly as you left it when you reopen. Desktop:
+            sticky min-340px rail (draggable wider). Phones: a full-screen
+            sheet when open, gone when closed — width is never applied
+            below lg. There is no fullscreen takeover (#192). */}
         {assistant && (
           <aside
             className={`${
               dockOpen
-                ? fullscreen
-                  ? 'fixed inset-0 z-50 top-12 flex flex-col'
-                  // phone: full-screen sheet starting BELOW the sticky header
-                  // (top-12) so the Assistant button stays reachable to close
-                  // it · desktop: the sticky rail beside the content
-                  : 'fixed inset-0 top-12 z-50 flex flex-col lg:sticky lg:top-12 lg:z-0 lg:h-[calc(100vh-3rem)] lg:w-[var(--dock-w)] lg:shrink-0'
+                // phone: full-screen sheet starting BELOW the sticky header
+                // (top-12) so the robot button stays reachable to hide it ·
+                // desktop: the sticky rail beside the content
+                ? 'fixed inset-0 top-12 z-50 flex flex-col lg:sticky lg:top-12 lg:z-0 lg:h-[calc(100vh-3rem)] lg:w-[var(--dock-w)] lg:shrink-0'
                 : 'hidden'
             } border-l border-slate-200 bg-white`}
-            style={dockOpen && !fullscreen ? { ['--dock-w' as string]: `${dockWidth}px` } : undefined}
+            style={dockOpen ? { ['--dock-w' as string]: `${dockWidth}px` } : undefined}
             aria-label={t('assistant')}
           >
-            {dockOpen && !fullscreen && (
+            {dockOpen && (
               <div
                 role="separator"
                 aria-orientation="vertical"
@@ -412,8 +392,8 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
               <div className="flex h-5 w-5 items-center justify-center bg-slate-900 text-[8px] font-bold text-white">RE</div>
               <HelpHint topic="assistant" />
               <div className="flex-1" />
-              {/* grow/shrink moved to the header's Assistant button (its arrow
-                  chips) — the dock header stays pure chrome */}
+              {/* the dock header stays pure chrome — the robot button in
+                  the app header is the only show/hide control */}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">{assistant}</div>
           </aside>
