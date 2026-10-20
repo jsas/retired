@@ -1,6 +1,6 @@
 // The registry of the plan editor's sections — the single source the Plans
-// page reads. Plain names, grouped the way a person looks for them
-// (BETA-MAP.md §2). `conditional` sections appear only when the plan uses
+// page reads. Plain names, grouped the way a person looks for them.
+// `conditional` sections appear only when the plan uses
 // them (RDSP / FHSA / Home Equity).
 
 export interface DetailsSection {

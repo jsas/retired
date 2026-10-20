@@ -3,7 +3,7 @@ import { cls } from '../design/tokens';
 
 const DONATE_URL = 'https://github.com/sponsors/jsas';
 
-// The Support page body (BetaPage owns the page title — no heading here):
+// The Support page body (PageChrome owns the page title — no heading here):
 // a few quiet paragraphs and one ink button. Kept tiny on purpose.
 export function DonateCard() {
   const { t } = useTranslation('pages');

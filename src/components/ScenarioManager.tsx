@@ -34,7 +34,7 @@ interface ScenarioManagerProps {
   onCreateScenario: (scenario: Scenario) => void;
 }
 
-// The Plans page list (BetaPage owns the page title — no heading here). One
+// The Plans page list (PageChrome owns the page title — no heading here). One
 // hairline list: the active plan reads by weight and its blue dot, the rest
 // sit quiet until hovered. Every save keeps a revision you can roll back to.
 export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange, revisions, onRollback, onSelectScenario, onCreateScenario }: ScenarioManagerProps) {

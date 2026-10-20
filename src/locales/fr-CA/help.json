@@ -458,7 +458,7 @@
         "faible rendement",
         "marché baissier"
       ],
-      "body": "Relance tout votre plan à un rendement pessimiste unique (1,2 %) pour montrer comment il tient si les marchés déçoivent. Bleu signifie qu'il survit même alors; rose nomme l'âge où il s'épuise. C'est le résumé à un seul chiffre; le Monte Carlo complet se trouve dans le menu Outils."
+      "body": "Relance tout votre plan à un rendement pessimiste unique (1,2 %) pour montrer comment il tient si les marchés déçoivent. Bleu signifie qu'il survit même alors; rose nomme l'âge où il s'épuise. C'est le résumé à un seul chiffre; la simulation Monte-Carlo complète se trouve sous Outils → Vos chances."
     },
     "life-timeline": {
       "title": "La ligne de vie",
@@ -492,10 +492,10 @@
         "ce qui pourrait mal tourner",
         "sensibilité"
       ],
-      "body": "Le verdict utilise votre rendement prévu chaque année. Pour voir à quel point le plan est vraiment robuste :\n\n- **Baissez le rendement prévu** (le cadran Marchés) pour un cas pessimiste.\n- **Lancez Monte Carlo** — il randomise les rendements autour de votre hypothèse et rapporte la part des essais qui ne s'épuisent jamais; ce taux de réussite est le chiffre unique le plus honnête.\n- **Lancez un test historique** — rejoue votre plan à travers de vraies séquences de marché historiques."
+      "body": "Le verdict utilise votre rendement prévu chaque année. Pour voir à quel point le plan est vraiment robuste :\n\n- **Baissez le rendement prévu** (le cadran Marchés) pour un cas pessimiste.\n- **Lancez Vos chances** (Monte-Carlo) — il randomise les rendements autour de votre hypothèse et rapporte la part des essais qui ne s'épuisent jamais; ce taux de réussite est le chiffre unique le plus honnête.\n- **Testez le plan sur l'histoire** — rejoue votre plan à travers de vraies séquences de marché historiques."
     },
     "monte-carlo": {
-      "title": "Monte-Carlo",
+      "title": "Vos chances (Monte-Carlo)",
       "section": "Analysis",
       "keywords": [
         "simulation",
@@ -507,7 +507,7 @@
       "body": "Lance la projection complète 500 fois, chacune avec une séquence randomisée de rendements annuels (mouvement brownien géométrique autour de votre rendement prévu, avec des chocs Student-t pour que les krachs soient plus fréquents qu'une normale ne le prévoit).\n\n- La bande foncée est le milieu 50 % des issues (p25–p75); la bande claire est p10–p90. La ligne bleue est la médiane.\n- **Taux de réussite** — la part des essais restés financés jusqu'à l'âge max. 90 %+ est conventionnellement confortable; sous 75 % le plan est fragile.\n- La largeur de l'éventail est menée par la Volatilité. Un krach tôt à la retraite fait beaucoup plus mal qu'un krach tardif."
     },
     "backtest": {
-      "title": "Rétrosimulation",
+      "title": "Tester sur l'histoire (rétrosimulation)",
       "section": "Analysis",
       "keywords": [
         "historique",
@@ -533,7 +533,7 @@
       "body": "Les leviers de pilotage se trouvent sur le Tableau de bord, sous « Ajuster le plan » : huit curseurs — dépenses annuelles, âge de retraite, rendement prévu, épargne annuelle, planification jusqu’à, volatilité du rendement, âges de début RPC et SV — pendant que l’état, l’argent-dure-jusqu’à, le taux de réussite et le reste-à-la-fin se mettent à jour en direct sous eux. Le tableau âge × dépenses, c’est la carte de contour plus haut sur le Tableau de bord : glissez son point ou utilisez les curseurs. La ligne de vie se redessine à chaque glissement — un seul visuel, toujours visible."
     },
     "strategy-explorer": {
-      "title": "Optimiseur (explorateur de stratégies)",
+      "title": "Améliorer le plan (explorateur de stratégies)",
       "section": "Analysis",
       "keywords": [
         "optimiser",
@@ -544,10 +544,10 @@
         "ajoute de l'argent",
         "améliorations"
       ],
-      "body": "L'Optimiseur relance votre plan sous un menu d'alternatives nommées — moment RPC/SV, âges de début de pension, ordres de retrait, moment d'hypothèque inversée, travail à temps partiel — chacune notée selon les dépenses après impôt soutenables qu'elle appuie, avec un Appliquer en un clic. C'est déterministe : même plan en entrée, même réponse en sortie.\n\nPar défaut, le tableau n'affiche que les variantes qui **ajoutent de l'argent** par rapport au plan actuel (dépenses soutenables plus élevées). Décochez pour voir celles qui coûtent. Le plan actuel reste toujours la première rangée."
+      "body": "« Améliorer le plan » relance votre plan sous un menu d'alternatives nommées — moment RPC/SV, âges de début de pension, ordres de retrait, moment d'hypothèque inversée, travail à temps partiel — chacune notée selon les dépenses après impôt soutenables qu'elle appuie, avec un Appliquer en un clic. C'est déterministe : même plan en entrée, même réponse en sortie.\n\nPar défaut, le tableau n'affiche que les variantes qui **ajoutent de l'argent** par rapport au plan actuel (dépenses soutenables plus élevées). Décochez pour voir celles qui coûtent. Le plan actuel reste toujours la première rangée."
     },
     "optimize-spending": {
-      "title": "Solveur : dépenses soutenables",
+      "title": "Dépenses sûres (dépenses soutenables)",
       "section": "Analysis",
       "keywords": [
         "combien puis-je dépenser",
@@ -556,7 +556,7 @@
         "dépenses maximales",
         "retrait sûr"
       ],
-      "body": "Le Solveur répond « combien pourrais-je dépenser ? » plutôt que « mes dépenses tiendront-elles ? » — il cherche par dichotomie les dépenses après impôt qui gardent le plan financé jusqu'à l'âge max, au taux de réussite que vous choisissez, en utilisant des futurs Monte Carlo."
+      "body": "« Dépenses sûres » répond « combien pourrais-je dépenser ? » plutôt que « mes dépenses tiendront-elles ? » — il cherche par dichotomie les dépenses après impôt qui gardent le plan financé jusqu'à l'âge max, au taux de réussite que vous choisissez, en utilisant des futurs Monte Carlo."
     },
     "schedule-columns": {
       "title": "Les colonnes de la page Projection",
@@ -572,7 +572,7 @@
       "body": "Le tableau année par année de la page Projection parcourt chaque année d'ici à l'âge max : solde de départ, cotisations, gains de marché, retraits, impôt, RPC/SV/SRG/pension, et solde de fin, plus les soldes par compte. Le bouton **Colonnes** choisit ce qui s'affiche — le jeu de départ garde l'histoire des flux d'argent à l'écran et le reste n'est qu'à un « tout afficher »; votre choix est mémorisé. Les colonnes REEI / CELIAPP / Avoir propre / Dettes n'apparaissent automatiquement que lorsque ces fonctions produisent des données. Touchez une année pour déplier tout son détail."
     },
     "year-math": {
-      "title": "La feuille Mathématiques de l’année",
+      "title": "La feuille « Une année, étape par étape »",
       "section": "Schedule",
       "keywords": [
         "mathématiques de l’année",
@@ -585,7 +585,7 @@
         "par personne",
         "comment l’année fonctionne"
       ],
-      "body": "Mathématiques de l’année est la feuille étape par étape d'une année civile du ménage — pas le tableau Projection. Choisissez une année, puis Vous / Conjoint / Côte à côte, et parcourez de la cible de dépenses jusqu'aux retraits, l'impôt, les prestations et le solde de fin. Chaque chiffre est le même calcul que le moteur a déjà fait pour cette année; cette page montre simplement le travail."
+      "body": "« Une année, étape par étape » est la feuille d'une année civile du ménage — pas le tableau Projection. Choisissez une année, puis Vous / Conjoint / Côte à côte, et parcourez de la cible de dépenses jusqu'aux retraits, l'impôt, les prestations et le solde de fin. Chaque chiffre est le même calcul que le moteur a déjà fait pour cette année; cette page montre simplement le travail."
     },
     "scenarios": {
       "title": "Plans",

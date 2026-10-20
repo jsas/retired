@@ -1,7 +1,7 @@
 import { prefKV } from './prefKv';
 
 /**
- * Lever range prefs (BETA-MAP.md §2).
+ * Lever range prefs.
  *
  * The four axes that can conceivably "run away" — spending, savings, expected
  * return, volatility — read their slider min/max from here so a Settings page

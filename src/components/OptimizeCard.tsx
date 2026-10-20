@@ -25,8 +25,8 @@ interface OptimizeCardProps {
   onApply: (patch: Partial<RetirementInputs>) => void;
 }
 
-/* The two tool halves behind the tabbed card (stable site). Issue #162 gave
-   each half its own beta page under the Tools menu — StrategyExplorer answers
+/* The two tool halves behind the tabbed card. Issue #162 gave
+   each half its own page under the Tools menu — StrategyExplorer answers
    "which lever helps?", SpendingSolver answers "how much can I spend?" — and
    the card stays their tabbed container on the old site so neither surface
    forks its logic. */

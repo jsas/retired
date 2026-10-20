@@ -1,8 +1,8 @@
-// Beta page wrappers — each reuses the stable app's full-featured panel inside
-// the beta page chrome (BetaPage). This is how the beta reaches feature parity
-// without forking the complex editors: the surface is new, the substance is
-// shared. The Plans page (list + current-plan numbers) and dashboard are
-// native beta; these wrap the rest.
+// Page wrappers — each reuses the app's full-featured panel inside the page
+// chrome (PageChrome). This is how a page reaches feature parity without
+// forking the complex editors: the surface is new, the substance is shared.
+// The Plans page (list + current-plan numbers) and the Dashboard are native
+// pages; these wrap the rest.
 //
 // Issue #162 split the old combined Insights page into the Tools-menu
 // surfaces (Optimizer · Monte Carlo · Backtest · Solver); Steering later
@@ -14,14 +14,14 @@ import type { ComponentProps, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { YearlyBreakdown, RetirementInputs } from '@retired/engine-core/retirementEngine';
 import { useAppLocale } from '../../lib/localeContext';
-import { BetaPage, type VerdictChip } from './BetaPage';
+import { PageChrome, type VerdictChip } from './PageChrome';
 import { HelpHint } from '../../design/primitives';
 import { ProjectionTimeline, baseSpendAtRetirement } from '../../design/ProjectionTimeline';
 import type { TimelineEvent, TimelineMarketAnchor } from '../../design/ProjectionTimeline';
 import { INK, RED_DOT, cls } from '../../design/tokens';
 import { firstEmptyAge } from '../../lib/planDisplay';
 import { ScheduleTable } from '../ScheduleTable';
-import { MathPage } from '../MathPage';
+import { MathPage as YearMathPanel } from '../MathPage';
 import { StrategyExplorer, SpendingSolver } from '../OptimizeCard';
 import { BacktestPanel } from '../BacktestPanel';
 import { MonteCarloChart } from '../MonteCarloChart';
@@ -30,12 +30,12 @@ import { CompareCard } from '../CompareCard';
 import { DetailsPage } from './DetailsPage';
 import { SharingPage } from '../SharingPage';
 import { SettingsModal } from '../SettingsModal';
-import { ConnectionsPage } from '../ConnectionsPage';
+import { ConnectionsPage as ConnectionsPanel } from '../ConnectionsPage';
 import { HelpModal } from '../HelpModal';
 import { PrintOptionsCard } from '../PrintOptionsCard';
 import { PrintSummary } from '../PrintSummary';
 import { DonateCard } from '../DonateCard';
-import { DataPage } from '../DataPage';
+import { DataPage as DataBackupPanel } from '../DataPage';
 
 function usePageT() {
   const { t } = useTranslation('pages');
@@ -104,41 +104,41 @@ export interface ProjectStripProps {
   };
 }
 
-export function BetaSchedulePage({ chip, assistant, timeline, ...props }: ComponentProps<typeof ScheduleTable> & {
+export function SchedulePage({ chip, assistant, timeline, ...props }: ComponentProps<typeof ScheduleTable> & {
   chip: VerdictChip;
   assistant?: ReactNode;
   timeline: ProjectStripProps;
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('projection')} hint="schedule-columns" chip={chip} assistant={assistant}>
+    <PageChrome title={t('projection')} hint="schedule-columns" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <ScheduleTable {...props} />
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
 /** Year Math — the old worksheet: one calendar year, you / spouse / side by side. */
-export function BetaMathPage({ chip, assistant, ...props }: ComponentProps<typeof MathPage> & {
+export function MathPage({ chip, assistant, ...props }: ComponentProps<typeof YearMathPanel> & {
   chip: VerdictChip;
   assistant?: ReactNode;
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('yearMath')} hint="year-math" chip={chip} assistant={assistant}>
+    <PageChrome title={t('yearMath')} hint="year-math" chip={chip} assistant={assistant}>
       <div className="pt-6">
-        <MathPage {...props} />
+        <YearMathPanel {...props} />
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
 // ── The Tools menu (issue #162, later Compare) ────────────────────────────
 
 
-export function BetaOptimizerPage({ chip, assistant, timeline, optimizeProps }: {
+export function OptimizerPage({ chip, assistant, timeline, optimizeProps }: {
   chip: VerdictChip;
   assistant?: ReactNode;
   timeline: ProjectStripProps;
@@ -146,7 +146,7 @@ export function BetaOptimizerPage({ chip, assistant, timeline, optimizeProps }: 
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('optimizer')} hint="strategy-explorer" chip={chip} assistant={assistant}>
+    <PageChrome title={t('optimizePage')} hint="strategy-explorer" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>
@@ -154,11 +154,11 @@ export function BetaOptimizerPage({ chip, assistant, timeline, optimizeProps }: 
           <StrategyExplorer {...optimizeProps} />
         </section>
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaMonteCarloPage({ chip, assistant, timeline, mcProps }: {
+export function MonteCarloPage({ chip, assistant, timeline, mcProps }: {
   chip: VerdictChip;
   assistant?: ReactNode;
   timeline: ProjectStripProps;
@@ -166,7 +166,7 @@ export function BetaMonteCarloPage({ chip, assistant, timeline, mcProps }: {
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('monteCarlo')} hint="monte-carlo" chip={chip} assistant={assistant}>
+    <PageChrome title={t('monteCarlo')} hint="monte-carlo" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>
@@ -176,11 +176,11 @@ export function BetaMonteCarloPage({ chip, assistant, timeline, mcProps }: {
             : <p className="text-[12px] text-slate-500">{t('monteCarloNeedsVol')}</p>}
         </section>
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaBacktestPage({ chip, assistant, timeline, backtestProps }: {
+export function BacktestPage({ chip, assistant, timeline, backtestProps }: {
   chip: VerdictChip;
   assistant?: ReactNode;
   timeline: ProjectStripProps;
@@ -188,7 +188,7 @@ export function BetaBacktestPage({ chip, assistant, timeline, backtestProps }: {
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('backtest')} hint="backtest" chip={chip} assistant={assistant}>
+    <PageChrome title={t('backtest')} hint="backtest" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>
@@ -198,11 +198,11 @@ export function BetaBacktestPage({ chip, assistant, timeline, backtestProps }: {
             : <p className="text-[12px] text-slate-500">{t('backtestComputing')}</p>}
         </section>
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaSolverPage({ chip, assistant, timeline, solverProps }: {
+export function SolverPage({ chip, assistant, timeline, solverProps }: {
   chip: VerdictChip;
   assistant?: ReactNode;
   timeline: ProjectStripProps;
@@ -210,7 +210,7 @@ export function BetaSolverPage({ chip, assistant, timeline, solverProps }: {
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('solver')} hint="optimize-spending" chip={chip} assistant={assistant}>
+    <PageChrome title={t('solver')} hint="optimize-spending" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>
@@ -218,28 +218,28 @@ export function BetaSolverPage({ chip, assistant, timeline, solverProps }: {
           <SpendingSolver {...solverProps} />
         </section>
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaComparePage({ chip, assistant, compareProps }: {
+export function ComparePage({ chip, assistant, compareProps }: {
   chip: VerdictChip;
   assistant?: ReactNode;
   compareProps: ComponentProps<typeof CompareCard>;
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('comparePlans')} hint="compare" chip={chip} assistant={assistant}>
+    <PageChrome title={t('comparePlans')} hint="compare" chip={chip} assistant={assistant}>
       {/* No ProjectStrip here: the compare timeline IS the chart — every saved
           plan as a line. A second strip of the current plan would just repeat. */}
       <div className="pt-6">
         <CompareCard {...compareProps} />
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaPlansPage({ chip, assistant, managerProps, detailsProps }: {
+export function PlansPage({ chip, assistant, managerProps, detailsProps }: {
   chip: VerdictChip;
   assistant?: ReactNode;
   managerProps: ComponentProps<typeof ScenarioManager>;
@@ -247,7 +247,7 @@ export function BetaPlansPage({ chip, assistant, managerProps, detailsProps }: {
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('plans')} hint="scenarios" chip={chip} assistant={assistant}>
+    <PageChrome title={t('plans')} hint="scenarios" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ScenarioManager {...managerProps} />
         <section>
@@ -255,52 +255,52 @@ export function BetaPlansPage({ chip, assistant, managerProps, detailsProps }: {
           <DetailsPage {...detailsProps} />
         </section>
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaDataPage({ chip, assistant, ...props }: ComponentProps<typeof SharingPage> & ComponentProps<typeof DataPage> & { chip: VerdictChip; assistant?: ReactNode }) {
+export function DataPage({ chip, assistant, ...props }: ComponentProps<typeof SharingPage> & ComponentProps<typeof DataBackupPanel> & { chip: VerdictChip; assistant?: ReactNode }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('data')} hint="data-backup-restore" chip={chip} assistant={assistant}>
+    <PageChrome title={t('data')} hint="data-backup-restore" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         {/* share a plan — link/code, in and out */}
         <SharingPage {...props} />
         {/* backup, restore, projection export — the full file surface */}
-        <DataPage {...props} />
+        <DataBackupPanel {...props} />
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaSettingsPage({ chip, assistant, ...props }: ComponentProps<typeof SettingsModal> & { chip: VerdictChip; assistant?: ReactNode }) {
+export function SettingsPage({ chip, assistant, ...props }: ComponentProps<typeof SettingsModal> & { chip: VerdictChip; assistant?: ReactNode }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('settings')} chip={chip} assistant={assistant}>
+    <PageChrome title={t('settings')} chip={chip} assistant={assistant}>
       <div className="pt-6"><SettingsModal {...props} /></div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaConnectionsPage({ chip, assistant, ...props }: ComponentProps<typeof ConnectionsPage> & { chip: VerdictChip; assistant?: ReactNode }) {
+export function ConnectionsPage({ chip, assistant, ...props }: ComponentProps<typeof ConnectionsPanel> & { chip: VerdictChip; assistant?: ReactNode }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('models')} hint="assistant-local-vs-online" chip={chip} assistant={assistant}>
-      <div className="pt-6"><ConnectionsPage {...props} /></div>
-    </BetaPage>
+    <PageChrome title={t('models')} hint="assistant-local-vs-online" chip={chip} assistant={assistant}>
+      <div className="pt-6"><ConnectionsPanel {...props} /></div>
+    </PageChrome>
   );
 }
 
-export function BetaHelpPage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
+export function HelpPage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('help')} chip={chip} assistant={assistant}>
+    <PageChrome title={t('help')} chip={chip} assistant={assistant}>
       <div className="pt-6"><HelpModal /></div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaPrintPage({ chip, assistant, sheet, ...props }: ComponentProps<typeof PrintOptionsCard> & {
+export function PrintPage({ chip, assistant, sheet, ...props }: ComponentProps<typeof PrintOptionsCard> & {
   chip: VerdictChip;
   assistant?: ReactNode;
   sheet: ComponentProps<typeof PrintSummary>;
@@ -310,7 +310,7 @@ export function BetaPrintPage({ chip, assistant, sheet, ...props }: ComponentPro
   const { i18n } = useTranslation();
   const tPrint = i18n.getFixedT(locale, 'print');
   return (
-    <BetaPage title={t('print')} hint="print-export" chip={chip} assistant={assistant}>
+    <PageChrome title={t('print')} hint="print-export" chip={chip} assistant={assistant}>
       <div className="grid items-start gap-8 pt-6 xl:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]">
         <PrintOptionsCard {...props} />
         <div className="min-w-0 border border-slate-200 bg-white no-print">
@@ -318,15 +318,15 @@ export function BetaPrintPage({ chip, assistant, sheet, ...props }: ComponentPro
           <PrintSummary {...sheet} preview />
         </div>
       </div>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
-export function BetaDonatePage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
+export function DonatePage({ chip, assistant }: { chip: VerdictChip; assistant?: ReactNode }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('support')} chip={chip} assistant={assistant}>
+    <PageChrome title={t('support')} chip={chip} assistant={assistant}>
       <div className="pt-6"><DonateCard /></div>
-    </BetaPage>
+    </PageChrome>
   );
 }

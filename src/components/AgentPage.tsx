@@ -92,11 +92,11 @@ interface AgentPageProps {
   /** Agent scenario navigation: switch active scenario / save-current-as-new. */
   onOpenScenario?: (id: string) => void;
   onSaveScenarioAs?: (name: string) => string;
-  /** Docked mode: render just the conversation column in the beta's
+  /** Docked mode: render just the conversation column in the console's
    *  right rail — no page header, no chat-list sidebar (a slim strip handles
    *  chat switching so the rail can stay at its 340px floor). */
   docked?: boolean;
-  /** Hide the inner "AI Assistant" title (the beta page chrome already says
+  /** Hide the inner "AI Assistant" title (the page chrome already says
    *  Assistant — an inner h2 would be a second header). Controls and the
    *  connection badge stay. */
   hideTitle?: boolean;
@@ -526,7 +526,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
     <div className={`flex flex-col ${docked ? 'h-full min-h-0' : 'h-[calc(100vh-11rem)] min-h-[30rem]'}`}>
       {/* Header: title + model picker + connections link. Lives on the page so
           it's visible in chat, empty, and copy/paste modes alike. Docked mode
-          drops it — the rail is too narrow and the beta chrome owns the
+          drops it — the rail is too narrow and the page chrome owns the
           assistant's on/off. */}
       {!docked && (
         <div className="flex flex-wrap items-center gap-2 mb-2">

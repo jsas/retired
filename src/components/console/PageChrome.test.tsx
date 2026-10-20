@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { BetaPage, MOBILE_MENU_ITEMS, TOOLS_MENU_ITEMS, type VerdictChip } from './BetaPage';
+import { PageChrome, MOBILE_MENU_ITEMS, TOOLS_MENU_ITEMS, type VerdictChip } from './PageChrome';
 
 // Node has no localStorage — stub it so the dock-open pref read/write works.
 const store = new Map<string, string>();
@@ -15,10 +15,10 @@ vi.stubGlobal('localStorage', {
 
 const chip: VerdictChip = { tone: 'holds', age: '90+', label: 'the plan holds' };
 
-describe('BetaPage assistant dock', () => {
+describe('PageChrome assistant dock', () => {
   it('renders the Assistant toggle and the dock rail when an assistant is given', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaPage, {
+      createElement(PageChrome, {
         chip,
         assistant: createElement('div', null, 'chat-body'),
         children: createElement('div', null, 'page-body'),
@@ -34,7 +34,7 @@ describe('BetaPage assistant dock', () => {
 
   it('the Assistant toggle is ALWAYS in the header — even with no assistant wired', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, children: createElement('div', null, 'page-body') }),
+      createElement(PageChrome, { chip, children: createElement('div', null, 'page-body') }),
     );
     expect(html).toContain('>Assistant<');
     expect(html).toContain('page-body');
@@ -44,7 +44,7 @@ describe('BetaPage assistant dock', () => {
 
   it('keeps the persistent verdict chip and the named homes', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+      createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('90+');
     for (const label of ['Projection', 'Tools', 'Plans']) {
@@ -55,22 +55,24 @@ describe('BetaPage assistant dock', () => {
   });
 
   it('the Tools menu carries the analytic surfaces including Compare', () => {
-    // Issue #162: Optimizer, Monte Carlo, Backtest, Solver — Compare later
-    // joined that menu; Steering moved onto the Dashboard (#187). The
-    // dropdown's item list is the contract the pages hang off. (The Dropdown
-    // renders its children only when open, so the static markup proves the
-    // trigger; the item list is proven against the exported source of truth.)
-    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['optimize', 'montecarlo', 'backtest', 'solver', 'compare', 'math']);
-    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Compare plans', 'Year Math']);
+    // Issue #162: each analytic surface is its own page; Compare later
+    // joined that menu; Steering moved onto the Dashboard (#187). Issue
+    // #186 ordered and grouped the menu by outcome section, Year Math first.
+    // (The Dropdown renders its children only when open, so the static
+    // markup proves the trigger; the item list is proven against the
+    // exported source of truth.)
+    expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['math', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['One Year, Step by Step', 'Improve the Plan', 'Your Odds', 'Test Against History', 'Safe Spending', 'Compare plans']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.section)).toEqual(['plan', 'explore', 'explore', 'explore', 'explore', 'explore']);
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+      createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('>Tools');
   });
 
   it('puts a profile icon (to Plans / #/plan) and an undo icon next to the verdict chip', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, children: createElement('div') }),
+      createElement(PageChrome, { chip, children: createElement('div') }),
     );
     expect(html).toContain('aria-label="Your plan — the Plans page"');
     expect(html).toContain('href="#/plan"');
@@ -84,13 +86,14 @@ describe('BetaPage assistant dock', () => {
     // item list must cover every home (nothing dropped on phones), and the
     // trigger must render.
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, children: createElement('div') }),
+      createElement(PageChrome, { chip, children: createElement('div') }),
     );
     expect(html).toContain('Menu');
+    // Issue #186: the menu reads in section order — Your plan, Explore,
+    // Share & print, Settings & help.
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    for (const label of ['Dashboard', 'Projection', 'Optimizer', 'Monte Carlo', 'Backtest', 'Solver', 'Compare plans', 'Year Math', 'Plans', 'Data', 'Print', 'Settings', 'Assistant connection', 'Help']) {
-      expect(labels, label).toContain(label);
-    }
+    expect(labels).toEqual(['Dashboard', 'Projection', 'One Year, Step by Step', 'Plans', 'Improve the Plan', 'Your Odds', 'Test Against History', 'Safe Spending', 'Compare plans', 'Data', 'Print & export', 'Settings', 'Assistant connection', 'Help']);
+    expect(MOBILE_MENU_ITEMS.map(i => i.section)).toEqual(['plan', 'plan', 'plan', 'plan', 'explore', 'explore', 'explore', 'explore', 'explore', 'share', 'share', 'setup', 'setup', 'setup']);
     expect(labels).not.toContain('Details');
     expect(labels).not.toContain('Profiles');
   });
@@ -101,7 +104,7 @@ describe('BetaPage assistant dock', () => {
     const fakeWindow = { location: { hash: '#/assistant' } };
     vi.stubGlobal('window', fakeWindow);
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, assistant: createElement('div', null, 'chat-body'), children: createElement('div') }),
+      createElement(PageChrome, { chip, assistant: createElement('div', null, 'chat-body'), children: createElement('div') }),
     );
     expect(html).toContain('chat-body');
     // the rail is mounted (fixed sheet on phones / sticky rail on desktop)
@@ -111,7 +114,7 @@ describe('BetaPage assistant dock', () => {
 
   it('the Assistant button in the header carries the grow/shrink control', () => {
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+      createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('title="Grow"');
     expect(html).toContain('aria-label="Grow the assistant to fullscreen"');
@@ -122,7 +125,7 @@ describe('BetaPage assistant dock', () => {
     // rail only from lg up — a `hidden` in the base classes would blank the
     // assistant for every phone user.
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+      createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toMatch(/class="[^"]*fixed inset-0 top-12 z-50 flex flex-col lg:sticky/);
     expect(html).not.toMatch(/flex flex-col hidden/);
@@ -144,7 +147,7 @@ describe('BetaPage assistant dock', () => {
     store.set('wealthconsole_dock_open', '1');
     store.set('wealthconsole_dock_width', '480');
     const html = renderToStaticMarkup(
-      createElement(BetaPage, { chip, assistant: createElement('div'), children: createElement('div') }),
+      createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
     );
     expect(html).toContain('max-w-[90rem]');
     expect(html).not.toContain('max-w-5xl');

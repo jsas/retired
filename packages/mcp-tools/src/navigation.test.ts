@@ -37,6 +37,24 @@ describe('NAV_CATALOG shape', () => {
       expect(target!.foldedInto, `fold of a fold (${e.viewId})`).toBeUndefined();
     }
   });
+
+  it('groups the catalog into contiguous plain-language sections (issue #186)', () => {
+    // The dropdown headers rely on it: each section forms exactly one
+    // uninterrupted run, in plan → explore → share → setup order.
+    const runs: Array<string | undefined> = [];
+    for (const e of NAV_CATALOG) {
+      if (runs[runs.length - 1] !== e.section) runs.push(e.section);
+    }
+    expect(runs.filter(s => s != null)).toEqual(['plan', 'explore', 'share', 'setup']);
+    // Every destination the nav shows carries its section; only the
+    // chrome-adjacent pages (assistant route, Welcome, the internal style
+    // guide) and the folds don't.
+    for (const e of searchablePages()) {
+      if (e.internal) continue;
+      if (e.viewId === 'agent' || e.viewId === 'welcome') continue;
+      expect(e.section, `${e.viewId} has no section`).toBeTruthy();
+    }
+  });
 });
 
 describe('rankPages', () => {
@@ -113,11 +131,11 @@ describe('canonicalView / pageTitleLine', () => {
     expect(pageTitleLine('projection')).toBe('Projection');
     expect(pageTitleLine('details')).toBe('Plans');
     expect(pageTitleLine('eq')).toBe('Dashboard');
-    expect(pageTitleLine('math')).toBe('Year Math');
-    expect(pageTitleLine('optimize')).toBe('Optimizer');
-    expect(pageTitleLine('montecarlo')).toBe('Monte Carlo');
-    expect(pageTitleLine('backtest')).toBe('Backtest');
-    expect(pageTitleLine('solver')).toBe('Solver');
+    expect(pageTitleLine('math')).toBe('One Year, Step by Step');
+    expect(pageTitleLine('optimize')).toBe('Improve the Plan');
+    expect(pageTitleLine('montecarlo')).toBe('Your Odds');
+    expect(pageTitleLine('backtest')).toBe('Test Against History');
+    expect(pageTitleLine('solver')).toBe('Safe Spending');
     expect(pageTitleLine('compare')).toBe('Compare plans');
     expect(pageTitleLine('scenarios')).toBe('Plans');
     expect(pageTitleLine('data')).toBe('Data');
@@ -143,13 +161,13 @@ describe('sitemap artifact serialization', () => {
       pages: Array<{ view: string; route: string; url: string; title: string }>;
     };
     const views = doc.pages.map((p) => p.view);
-    expect(views).toEqual(searchablePages().filter((e) => e.betaOnly == null).map((e) => e.viewId));
+    expect(views).toEqual(searchablePages().filter((e) => e.internal == null).map((e) => e.viewId));
     for (const p of doc.pages) {
       expect(p.route).toMatch(/^#\//);
       expect(p.url).toBe(`${PAGES_ORIGIN}/${p.route}`);
       expect(p.title.length).toBeGreaterThan(0);
     }
-    // Folded legacy views (export/sharing/details) and beta-only chrome never
+    // Folded legacy views (export/sharing/details) and internal chrome never
     // appear; the Tools surfaces (montecarlo, compare, …) do.
     expect(views).toContain('montecarlo');
     expect(views).toContain('solver');

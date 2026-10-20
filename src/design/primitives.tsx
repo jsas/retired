@@ -1,5 +1,5 @@
 /**
- * Design primitives — the small reusable pieces the beta skin is built from.
+ * Design primitives — the small reusable pieces the app is built from.
  * Each one is a named embodiment of a rule in the style guide; pages compose
  * these rather than restyle raw elements, so the vocabulary stays consistent.
  * The living reference is StyleGuide.tsx; the prose is STYLEGUIDE.md.
@@ -423,7 +423,7 @@ export function Modal({ open, onClose, title, children, wide = false }: {
 }
 
 /* ── AppHeader ────────────────────────────────────────────────────────────
-   The beta chrome: brand square, the named homes (menus/actions), and the
+   The app header: brand square, the named homes (menus/actions), and the
    save control. Flat, hairline bottom border, sticky. */
 export function AppHeader({ children }: { children: ReactNode }) {
   return (
