@@ -501,12 +501,12 @@
         "eq",
         "equalizer",
         "sliders",
-        "drag pad",
+        "faders",
         "strategy ranking",
         "crops",
         "steering"
       ],
-      "body": "The steering levers live on the Dashboard under “Adjust the plan”: push sliders and drag a pad while status, money-lasts-to and success rate update live. The square is retirement age × spending; the green→red shading is the plan's success rate at every combination, computed by binary-searching the boundary row by row so it streams in fast. The life timeline further down the Dashboard redraws with every drag — one visual, always in view."
+      "body": "The steering levers live on the Dashboard under “Adjust the plan”: eight sliders — annual spending, retirement age, expected return, annual savings, plan-to age, return volatility, CPP and OAS start ages — while status, money-lasts-to, success rate and left-at-end update live beneath them. The age × spending picture is the contour map further up the Dashboard: drag its dot, or use the sliders. The life timeline redraws with every drag — one visual, always in view."
     },
     "strategy-explorer": {
       "title": "Optimizer (strategy explorer)",

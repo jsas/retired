@@ -103,8 +103,8 @@ describe('EvidenceRow', () => {
 });
 
 describe('dashboard steering controls (folded from Steering — #187)', () => {
-  it('renders every lever, the pad, and the live readouts', () => {
-    const solved = { successRate: null, grid: null, gridSize: 9, solving: false };
+  it('renders every lever and the live readouts', () => {
+    const solved = { successRate: null, solving: false };
     const html = renderToStaticMarkup(
       <SteeringControls
         inputs={plan} config={config} onChange={() => {}}
@@ -115,9 +115,10 @@ describe('dashboard steering controls (folded from Steering — #187)', () => {
     for (const label of ['Annual spending', 'Retirement age', 'CPP start age', 'OAS start age']) {
       expect(html, label).toContain(label);
     }
-    // the age × spending pad and the readouts the solver fills
-    expect(html).toContain('Retirement age × spending');
+    // the readouts the solver fills
     expect(html).toContain('Success rate');
     expect(html).toContain('Money lasts to');
+    // the redundant age × spending gradient pad is gone
+    expect(html).not.toContain('Retirement age × spending');
   });
 });

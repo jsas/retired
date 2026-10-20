@@ -331,7 +331,7 @@
     }
   },
   "eq": {
-    "lead": "Poussez les curseurs ou glissez le pavé pour explorer votre plan — les indicateurs se mettent à jour en direct.",
+    "lead": "Poussez les curseurs pour explorer votre plan — les indicateurs se mettent à jour en direct.",
     "axes": {
       "desiredSpending": "Dépenses annuelles",
       "retirementAge": "Âge de retraite",
@@ -342,15 +342,12 @@
       "cppStartAge": "Début du RPC",
       "oasStartAge": "Début de la SV"
     },
-    "padX": "Âge de retraite",
-    "padY": "dépenses",
     "status": "État",
     "onTrack": "Sur la bonne voie",
     "shortfall": "Manque",
     "moneyLastsTo": "L’argent dure jusqu’à",
     "successRate": "Taux de succès",
     "leftAtEnd": "Reste à la fin",
-    "recalculating": "recalcul",
     "calculating": "calcul"
   },
   "monteCarloUi": {

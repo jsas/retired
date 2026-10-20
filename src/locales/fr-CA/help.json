@@ -525,12 +525,12 @@
         "éq",
         "égaliseur",
         "curseurs",
-        "pavé",
+        "molettes",
         "classement de stratégies",
         "cultures",
         "pilotage"
       ],
-      "body": "Les leviers de pilotage se trouvent sur le Tableau de bord, sous « Ajuster le plan » : poussez des curseurs et glissez un pavé pendant que le statut, l'argent-dure-jusqu'à et le taux de réussite se mettent à jour en direct. Le carré est âge de retraite × dépenses; le dégradé vert→rouge est le taux de réussite du plan à chaque combinaison, calculé en cherchant la frontière ligne par ligne par dichotomie pour qu'il s'affiche vite. La ligne de vie plus bas sur le Tableau de bord se redessine à chaque glissement — un seul visuel, toujours visible."
+      "body": "Les leviers de pilotage se trouvent sur le Tableau de bord, sous « Ajuster le plan » : huit curseurs — dépenses annuelles, âge de retraite, rendement prévu, épargne annuelle, planification jusqu’à, volatilité du rendement, âges de début RPC et SV — pendant que l’état, l’argent-dure-jusqu’à, le taux de réussite et le reste-à-la-fin se mettent à jour en direct sous eux. Le tableau âge × dépenses, c’est la carte de contour plus haut sur le Tableau de bord : glissez son point ou utilisez les curseurs. La ligne de vie se redessine à chaque glissement — un seul visuel, toujours visible."
     },
     "strategy-explorer": {
       "title": "Optimiseur (explorateur de stratégies)",

@@ -42,9 +42,8 @@ import { PrintSummary } from './components/PrintSummary';
 import { type EqSolvedState, type Bands } from './components/beta/SteeringControls';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { PREF_KEYS, prefKV } from './lib/prefKv';
-import { runEqSolverAuto } from './lib/runEqSolver';
 import { solveEqReadout } from '@retired/engine-core/eqSolver';
-import { renderRange, axisValue, consistentAges } from '@retired/engine-core/eqConstraints';
+import { consistentAges } from '@retired/engine-core/eqConstraints';
 import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
 
 // The SQL store loads asynchronously (the wasm binary has to be fetched/decoded
@@ -126,7 +125,6 @@ function App() {
   // montecarlo route is active. backtestResult is built while backtest is.
   const [mcRequest, setMcRequest] = useState<MonteCarloRequest | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
-  const cancelEqSolveRef = useRef<(() => void) | null>(null);
 
   // (Monte Carlo / backtest route-sync effects live further down, after
   // `inputs` and `config` are declared.)
@@ -574,40 +572,21 @@ function App() {
     saveEqBands(eqBands);
   }, [eqBands]);
   const [eqSolved, setEqSolved] = useState<EqSolvedState>({
-    successRate: null, grid: null, gridSize: 9, solving: false,
+    successRate: null, solving: false,
   });
 
-  // The success-rate GRID is sampled across retirementAge × desiredSpending, so
-  // each grid cell OVERWRITES those two inputs (withAxis) — their current values
-  // don't affect any cell's probability. The grid therefore depends only on the
-  // plan's FINANCIAL inputs (balances, contributions, return, volatility, ages,
-  // CPP/OAS, pensions, spouse, events, maxAge), the config, and the rendered
-  // range (which grows in whole-axis steps when a value crosses the axis max).
-  // This key captures exactly those, omitting the two pad axes, so dragging the
-  // retirement-age / spending VALUE thumbs (or the pad dot) leaves the key — and
-  // the cached grid — unchanged. Only the cheap readout re-runs on those drags.
-  const eqGridKey = useMemo(() => {
-    const { retirementAge: _ra, desiredSpending: _ds, ...financial } = resolvedInputs;
-    return JSON.stringify({
-      financial,
-      config,
-      rx: renderRange('retirementAge', axisValue(resolvedInputs, 'retirementAge'), resolvedInputs),
-      ry: renderRange('desiredSpending', axisValue(resolvedInputs, 'desiredSpending'), resolvedInputs),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedInputs, config]);
+  // The success-rate READOUT is one cheap Monte Carlo node on the main thread
+  // (debounced), so it re-solves on every inputs change and keeps the Success
+  // rate card live.
 
-  // The success-rate READOUT under the dot is one cheap Monte Carlo node on the
-  // main thread. Unlike the grid, it DOES depend on the current point, so it
-  // re-solves on every inputs change (debounced) — including pad-axis drags.
   useEffect(() => {
-    // Steering lives on the Dashboard now (issue #187): the solvers run for
+    // Steering lives on the Dashboard now (issue #187): the solver runs for
     // that view; `eq` remains a parseable route that folds to it.
     if (view !== 'dashboard') return;
     setEqSolved(s => ({ ...s, solving: true }));
     const t = setTimeout(() => {
       try {
-        const successRate = solveEqReadout({ inputs: resolvedInputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' } });
+        const successRate = solveEqReadout(resolvedInputs, config);
         setEqSolved(s => ({ ...s, successRate, solving: false }));
       } catch {
         setEqSolved(s => ({ ...s, solving: false }));
@@ -616,47 +595,6 @@ function App() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, resolvedInputs, config]);
-
-  // Re-solve the success-rate pad shading only when the grid's actual inputs
-  // change (eqGridKey) — NOT on every plan edit. Dragging the retirement-age or
-  // spending value thumbs moves the dot but doesn't change any grid cell, so the
-  // expensive 81-node worker pool is skipped entirely on those drags. The grid
-  // streams in row-by-row (center-out) so the pad shades in live.
-  useEffect(() => {
-    if (view !== 'dashboard') return;
-    setEqSolved(s => ({ ...s, solving: true }));
-    const t = setTimeout(() => {
-      const cancel = runEqSolverAuto(
-        {
-          inputs: resolvedInputs, config, pad: { x: 'retirementAge', y: 'desiredSpending' },
-          // Shade the ranges the pad actually renders (grown to fit an
-          // out-of-range point), so the gradient lines up with the dot.
-          ranges: {
-            x: renderRange('retirementAge', axisValue(resolvedInputs, 'retirementAge'), resolvedInputs),
-            y: renderRange('desiredSpending', axisValue(resolvedInputs, 'desiredSpending'), resolvedInputs),
-          },
-        },
-        (res) => setEqSolved(s => ({
-          ...s,
-          grid: res.grid,
-          gridSize: res.gridMeta?.size ?? 9,
-          solving: false,
-        })),
-        (msg) => { console.warn('EQ solve failed:', msg); setEqSolved(s => ({ ...s, solving: false })); },
-        // Stream partial rows: write each finished row's rates into the grid so
-        // the gradient fills in live (center-out). Solved rows overwrite.
-        (prog) => setEqSolved(s => {
-          const size = s.gridSize;
-          const grid = s.grid ? [...s.grid] : new Array<number>(size * size).fill(0);
-          for (let gx = 0; gx < size; gx++) grid[prog.row * size + gx] = prog.cells[gx];
-          return { ...s, grid, solving: true };
-        }),
-      );
-      cancelEqSolveRef.current = cancel;
-    }, 250);
-    return () => { clearTimeout(t); cancelEqSolveRef.current?.(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, eqGridKey]);
 
   // Household breakdown (both spouses summed per calendar year) for the
   // timeline chart and year-by-year table; singles get the primary plan as-is.

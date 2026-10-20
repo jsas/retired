@@ -331,7 +331,7 @@
     }
   },
   "eq": {
-    "lead": "Push the sliders or drag the pad to explore your plan — the readouts update live.",
+    "lead": "Push the sliders to explore your plan — the readouts update live.",
     "axes": {
       "desiredSpending": "Annual spending",
       "retirementAge": "Retirement age",
@@ -342,15 +342,12 @@
       "cppStartAge": "CPP start age",
       "oasStartAge": "OAS start age"
     },
-    "padX": "Retirement age",
-    "padY": "spending",
     "status": "Status",
     "onTrack": "On track",
     "shortfall": "Shortfall",
     "moneyLastsTo": "Money lasts to",
     "successRate": "Success rate",
     "leftAtEnd": "Left at end",
-    "recalculating": "recalculating",
     "calculating": "calculating"
   },
   "monteCarloUi": {
