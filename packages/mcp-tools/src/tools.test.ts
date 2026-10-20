@@ -680,6 +680,51 @@ describe('manage_giving', () => {
     expect(giving[0].id).toBeTruthy();
   });
 
+  // #194: a fixed-mode add only needs the fixed fields — pct/basis are
+  // pct-mode-only and get inert defaults. These are the exact args the
+  // assistant sent in the wild (which used to fail).
+  it('adds a fixed stream without pct/basis, filling inert defaults', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'manage_giving',
+      args: { action: 'add', label: 'Food Bank', mode: 'fixed', amount: 10000, fromAge: 60, toAge: 90 },
+    });
+    if (out.kind !== 'mutation') throw new Error(`expected mutation, got ${out.kind}: ${(out as { content?: string }).content ?? ''}`);
+    const giving = out.patch.giving ?? [];
+    expect(giving).toHaveLength(1);
+    expect(giving[0]).toMatchObject({
+      label: 'Food Bank', mode: 'fixed', amount: 10000, pct: 0, basis: 'gross', fromAge: 60, toAge: 90,
+    });
+    expect(giving[0].id).toBeTruthy();
+  });
+
+  it('adds a pct stream without amount/basis (amount defaults to 0)', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'manage_giving',
+      args: { action: 'add', label: 'United Way', mode: 'pct', pct: 2, fromAge: 65 },
+    });
+    if (out.kind !== 'mutation') throw new Error(`expected mutation, got ${out.kind}`);
+    expect(out.patch.giving?.[0]).toMatchObject({ mode: 'pct', pct: 2, amount: 0, basis: 'gross', fromAge: 65 });
+    expect(out.patch.giving?.[0].toAge ?? null).toBeNull();
+  });
+
+  it('accepts add fields nested in changes (the model reaches for it)', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'manage_giving',
+      args: { action: 'add', changes: { label: 'Food Bank', mode: 'fixed', amount: 10000, fromAge: 60, toAge: 90 } },
+    });
+    if (out.kind !== 'mutation') throw new Error(`expected mutation, got ${out.kind}: ${(out as { content?: string }).content ?? ''}`);
+    expect(out.patch.giving?.[0]).toMatchObject({ label: 'Food Bank', amount: 10000, pct: 0, fromAge: 60 });
+  });
+
+  it('still rejects an add with no label', () => {
+    const out = executeToolCall(ctx(), {
+      id: '1', name: 'manage_giving',
+      args: { action: 'add', mode: 'fixed', amount: 10000, fromAge: 60 },
+    });
+    expect(out.kind).toBe('error');
+    if (out.kind === 'error') expect(out.content).toContain('label');
+  });
+
   it('rejects an unknown mode', () => {
     const out = executeToolCall(ctx(), {
       id: '1', name: 'manage_giving',
