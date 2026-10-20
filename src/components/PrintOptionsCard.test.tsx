@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The Print & export page body, rebuilt in the f7 design: BetaPage owns the
+// The Print & export page body, rebuilt in the f7 design: PageChrome owns the
 // page title, so the card renders NO heading of its own (the old double
 // header), no decorative blue icons, and a flat ink print button.
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -14,8 +14,8 @@ const base = {
   mcResults: null,
 };
 
-describe('PrintOptionsCard (beta design)', () => {
-  it('renders no inner page heading — BetaPage owns the title', () => {
+describe('PrintOptionsCard (console design)', () => {
+  it('renders no inner page heading — PageChrome owns the title', () => {
     const html = renderToStaticMarkup(createElement(PrintOptionsCard, {
       ...base,
       options: { includeTimeline: false, includeMonteCarlo: false, includeMilestones: true, includeDetailedTable: false },

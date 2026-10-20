@@ -1,4 +1,4 @@
-// Beta navigation — plain hash links so pages are linkable and the browser
+// In-console navigation — plain hash links so pages are linkable and the browser
 // back/forward buttons work. `Link` renders an <a href="#/route">; the app's
 // URL-sync effect turns the hash into the view. For the Plans page, a
 // `section` prop appends ?section=… so the page scrolls to the tapped section.

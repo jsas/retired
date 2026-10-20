@@ -1,5 +1,5 @@
 /**
- * Design tokens — the single source of truth for the beta skin's visual
+ * Design tokens — the single source of truth for the app's visual
  * language. These are plain constants (not Tailwind theme overrides) so the
  * engine-adjacent code (SVG fills, canvas, chart strokes) and the style guide
  * can read the same values the components use.
@@ -30,7 +30,7 @@ export const FAINT = '#94a3b8';       // slate-400 — captions, axis labels
 export const HAIRLINE = '#e2e8f0';    // slate-200 — the 1px structural border
 export const HAIRLINE_STRONG = '#cbd5e1'; // slate-300 — input borders
 export const PAPER = '#ffffff';       // the ground; the app is paper-white
-export const WASH = '#fbfbfa';        // barely-off-white page bg (BetaApp)
+export const WASH = '#fbfbfa';        // barely-off-white page bg (Dashboard)
 
 /** Type scale (px) — small, tight, num-aligned. Matches the mock's sizes. */
 export const TEXT = {

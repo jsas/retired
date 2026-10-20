@@ -2,7 +2,7 @@
  * The living style guide. Renders every token and primitive from
  * ./tokens and ./primitives so the documentation can never drift from the
  * code — the swatches ARE the constants, the examples ARE the components.
- * Reachable in dev at #/styleguide (beta only). See STYLEGUIDE.md for prose.
+ * Reachable at #/styleguide (internal only). See STYLEGUIDE.md for prose.
  */
 import { useState } from 'react';
 import * as T from './tokens';
@@ -157,7 +157,7 @@ export function StyleGuide() {
             <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
               Square, ink fill, white ✓. Never round, never blue — a control is not a
               verdict. Pages compose <code>&lt;Check&gt;</code>; raw
-              <code> &lt;input type="checkbox"&gt;</code> in the beta skin is a bug.
+              <code> &lt;input type="checkbox"&gt;</code> in the app is a bug.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
               <Check checked={checkOn} onChange={setCheckOn} label="Include a partner" />

@@ -20,7 +20,7 @@ interface SharingPageProps {
   onImport: (req: SharingImportRequest) => void;
 }
 
-// The Data page's sharing half (BetaPage owns the page title — no heading
+// The Data page's sharing half (PageChrome owns the page title — no heading
 // here). A plan travels two ways, both built on the same planTransfer backend
 // so either side can decode the other:
 //   - Share link  — the plan code in a URL fragment; one click for the receiver

@@ -17,7 +17,7 @@ const config = testConfig();
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Stub localStorage (jsdom doesn't expose it here) with an isolated Map so
-// pref writes don't leak between tests — same pattern as BetaPage.test.tsx.
+// pref writes don't leak between tests — same pattern as PageChrome.test.tsx.
 const store = new Map<string, string>();
 vi.stubGlobal('localStorage', {
   getItem: (k: string) => store.get(k) ?? null,

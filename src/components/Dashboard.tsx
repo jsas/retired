@@ -14,12 +14,12 @@ import { getRangePrefs } from '../lib/rangePrefs';
 import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
 import { INK, RED_DOT } from '../design/tokens';
 import { ProjectionTimeline, baseSpendAtRetirement } from '../design/ProjectionTimeline';
-import { BetaPage, type VerdictChip } from './beta/BetaPage';
-import { ContourMap } from './beta/ContourMap';
-import { MarketDial } from './beta/MarketDial';
-import { DownMarketCheck } from './beta/DownMarketCheck';
-import { SteeringControls, type Bands, type EqSolvedState } from './beta/SteeringControls';
-import { EvidenceRow } from './beta/EvidenceRow';
+import { PageChrome, type VerdictChip } from './console/PageChrome';
+import { ContourMap } from './console/ContourMap';
+import { MarketDial } from './console/MarketDial';
+import { DownMarketCheck } from './console/DownMarketCheck';
+import { SteeringControls, type Bands, type EqSolvedState } from './console/SteeringControls';
+import { EvidenceRow } from './console/EvidenceRow';
 import { firstEmptyAge, potDisplay } from '../lib/planDisplay';
 import { useAppLocale } from '../lib/localeContext';
 
@@ -40,7 +40,7 @@ export function mapWindow({ desiredSpending }: { desiredSpending: number }) {
   };
 }
 
-interface BetaAppProps {
+interface DashboardProps {
   inputs: RetirementInputs;
   onInputsChange: (next: RetirementInputs) => void;
   results: RetirementResults;
@@ -65,9 +65,9 @@ function verdict(inputs: RetirementInputs, results: RetirementResults, t: TFunct
   return { text: t('dash.verdictShort', { runsTo, short, age: inputs.maxAge }), holds: false };
 }
 
-export function BetaApp({
+export function Dashboard({
   inputs, onInputsChange, results, config, assistant, eq,
-}: BetaAppProps) {
+}: DashboardProps) {
   const { t } = useTranslation('pages');
   const { t: tHelp } = useTranslation('help');
   const { locale } = useAppLocale();
@@ -84,7 +84,7 @@ export function BetaApp({
     label: pot.holds ? t('holds') : t('short'),
   };
   return (
-    <BetaPage chip={chip} assistant={assistant}>
+    <PageChrome chip={chip} assistant={assistant}>
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="min-w-0 flex-1">
             <VerdictHero
@@ -184,7 +184,7 @@ export function BetaApp({
         <Footnote>
           {t('dash.footnote')}
         </Footnote>
-    </BetaPage>
+    </PageChrome>
   );
 }
 
