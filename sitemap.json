@@ -46,7 +46,7 @@
       "view": "math",
       "route": "#/year-math",
       "url": "https://jsas.github.io/retired/#/year-math",
-      "title": "Year Math",
+      "title": "One Year, Step by Step",
       "description": "The year-math worksheet: one calendar year of the household, worked step by step — you, spouse, or side by side — from the spending target down to the ending balance.",
       "keywords": [
         "year math",
@@ -58,94 +58,6 @@
         "household year",
         "per person",
         "how the year works"
-      ]
-    },
-    {
-      "view": "optimize",
-      "route": "#/optimize",
-      "url": "https://jsas.github.io/retired/#/optimize",
-      "title": "Optimizer",
-      "description": "The strategy explorer: named plan variants (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) each replayed and scored on sustainable spending, lifetime tax and GIS — with one-click apply.",
-      "keywords": [
-        "optimize",
-        "optimiser",
-        "optimizer",
-        "strategies",
-        "variants",
-        "best option",
-        "best lever",
-        "compare timing",
-        "apply",
-        "sustainable spending"
-      ]
-    },
-    {
-      "view": "montecarlo",
-      "route": "#/monte-carlo",
-      "url": "https://jsas.github.io/retired/#/monte-carlo",
-      "title": "Monte Carlo",
-      "description": "Probabilistic run: 500 randomized market futures over your plan — the success-rate fan, the odds of lasting, and a depletion histogram.",
-      "keywords": [
-        "monte carlo",
-        "simulation",
-        "odds",
-        "success rate",
-        "probabilities",
-        "market futures",
-        "probabilistic",
-        "fan chart",
-        "risk"
-      ]
-    },
-    {
-      "view": "backtest",
-      "route": "#/backtest",
-      "url": "https://jsas.github.io/retired/#/backtest",
-      "title": "Backtest",
-      "description": "Run the plan against every historical market stretch on record — real returns, not invented ones — and see how often it would have survived.",
-      "keywords": [
-        "backtest",
-        "historical",
-        "1926",
-        "1970",
-        "stress test",
-        "past markets",
-        "sequence risk",
-        "crash"
-      ]
-    },
-    {
-      "view": "solver",
-      "route": "#/solver",
-      "url": "https://jsas.github.io/retired/#/solver",
-      "title": "Solver",
-      "description": "Invert the verdict: pick a confidence level and the solver binary-searches the most you can spend per year while the Monte Carlo still succeeds that often — then apply it in one click.",
-      "keywords": [
-        "solver",
-        "solve",
-        "how much can i spend",
-        "maximum spending",
-        "safe withdrawal",
-        "sustainable",
-        "target success rate",
-        "spend freely"
-      ]
-    },
-    {
-      "view": "compare",
-      "route": "#/compare",
-      "url": "https://jsas.github.io/retired/#/compare",
-      "title": "Compare plans",
-      "description": "Side-by-side outcomes across all saved plans — each scored as a household when it has a spouse, with a compare-only toggle to hide the spouse on this page.",
-      "keywords": [
-        "compare",
-        "side-by-side",
-        "which plan",
-        "vs",
-        "household",
-        "spouse",
-        "partner",
-        "compare plans"
       ]
     },
     {
@@ -192,6 +104,94 @@
       ]
     },
     {
+      "view": "optimize",
+      "route": "#/optimize",
+      "url": "https://jsas.github.io/retired/#/optimize",
+      "title": "Improve the Plan",
+      "description": "The strategy explorer: named plan variants (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) each replayed and scored on sustainable spending, lifetime tax and GIS — with one-click apply.",
+      "keywords": [
+        "optimize",
+        "optimiser",
+        "optimizer",
+        "strategies",
+        "variants",
+        "best option",
+        "best lever",
+        "compare timing",
+        "apply",
+        "sustainable spending"
+      ]
+    },
+    {
+      "view": "montecarlo",
+      "route": "#/monte-carlo",
+      "url": "https://jsas.github.io/retired/#/monte-carlo",
+      "title": "Your Odds",
+      "description": "The Monte Carlo run: 500 randomized market futures over your plan — the success-rate fan, the odds of lasting, and a depletion histogram.",
+      "keywords": [
+        "monte carlo",
+        "simulation",
+        "odds",
+        "success rate",
+        "probabilities",
+        "market futures",
+        "probabilistic",
+        "fan chart",
+        "risk"
+      ]
+    },
+    {
+      "view": "backtest",
+      "route": "#/backtest",
+      "url": "https://jsas.github.io/retired/#/backtest",
+      "title": "Test Against History",
+      "description": "Run the plan against every historical market stretch on record — real returns, not invented ones — and see how often it would have survived.",
+      "keywords": [
+        "backtest",
+        "historical",
+        "1926",
+        "1970",
+        "stress test",
+        "past markets",
+        "sequence risk",
+        "crash"
+      ]
+    },
+    {
+      "view": "solver",
+      "route": "#/solver",
+      "url": "https://jsas.github.io/retired/#/solver",
+      "title": "Safe Spending",
+      "description": "Invert the verdict: pick a confidence level and the solver binary-searches the most you can spend per year while the Monte Carlo still succeeds that often — then apply it in one click.",
+      "keywords": [
+        "solver",
+        "solve",
+        "how much can i spend",
+        "maximum spending",
+        "safe withdrawal",
+        "sustainable",
+        "target success rate",
+        "spend freely"
+      ]
+    },
+    {
+      "view": "compare",
+      "route": "#/compare",
+      "url": "https://jsas.github.io/retired/#/compare",
+      "title": "Compare plans",
+      "description": "Side-by-side outcomes across all saved plans — each scored as a household when it has a spouse, with a compare-only toggle to hide the spouse on this page.",
+      "keywords": [
+        "compare",
+        "side-by-side",
+        "which plan",
+        "vs",
+        "household",
+        "spouse",
+        "partner",
+        "compare plans"
+      ]
+    },
+    {
       "view": "data",
       "route": "#/data",
       "url": "https://jsas.github.io/retired/#/data",
@@ -226,6 +226,20 @@
         "one page",
         "pdf",
         "report"
+      ]
+    },
+    {
+      "view": "donate",
+      "route": "#/donate",
+      "url": "https://jsas.github.io/retired/#/donate",
+      "title": "Support this app",
+      "description": "Ways to support the app (it is free and open source).",
+      "keywords": [
+        "donate",
+        "support",
+        "contribute",
+        "sponsor",
+        "pay"
       ]
     },
     {
@@ -264,22 +278,6 @@
       ]
     },
     {
-      "view": "agent",
-      "route": "#/assistant",
-      "url": "https://jsas.github.io/retired/#/assistant",
-      "title": "Assistant",
-      "description": "The AI assistant full-screen: ask about the plan, what-if it, or change it with propose_* cards you approve.",
-      "keywords": [
-        "assistant",
-        "ai",
-        "chat",
-        "help me",
-        "what-if",
-        "ask",
-        "agent"
-      ]
-    },
-    {
       "view": "help",
       "route": "#/help",
       "url": "https://jsas.github.io/retired/#/help",
@@ -296,17 +294,19 @@
       ]
     },
     {
-      "view": "donate",
-      "route": "#/donate",
-      "url": "https://jsas.github.io/retired/#/donate",
-      "title": "Support this app",
-      "description": "Ways to support the app (it is free and open source).",
+      "view": "agent",
+      "route": "#/assistant",
+      "url": "https://jsas.github.io/retired/#/assistant",
+      "title": "Assistant",
+      "description": "The AI assistant full-screen: ask about the plan, what-if it, or change it with propose_* cards you approve.",
       "keywords": [
-        "donate",
-        "support",
-        "contribute",
-        "sponsor",
-        "pay"
+        "assistant",
+        "ai",
+        "chat",
+        "help me",
+        "what-if",
+        "ask",
+        "agent"
       ]
     },
     {

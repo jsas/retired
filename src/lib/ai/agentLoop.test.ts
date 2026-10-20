@@ -314,9 +314,9 @@ describe('buildSystemPrompt', () => {
     expect(folded).toContain('The user is currently on the Plans page.');
     expect(buildSystemPrompt('My Plan', { currentView: 'compare' }))
       .toContain('The user is currently on the Compare plans page.');
-    // An unfurled tool names its own page.
+    // An unfurled tool names its own page (#186 retitled it Your Odds).
     expect(buildSystemPrompt('My Plan', { currentView: 'montecarlo' }))
-      .toContain('The user is currently on the Monte Carlo page.');
+      .toContain('The user is currently on the Your Odds page.');
     // No currentView (tests / MCP hosts): the line simply falls out.
     expect(buildSystemPrompt('My Plan')).not.toContain('currently on the');
   });
@@ -373,7 +373,7 @@ describe('buildSystemPrompt', () => {
 
   it('localizes the current-page line', () => {
     expect(buildSystemPrompt('My Plan', { currentView: 'montecarlo', locale: 'fr-CA' }))
-      .toContain("L'utilisateur est actuellement sur la page Monte-Carlo.");
+      .toContain("L'utilisateur est actuellement sur la page Vos chances.");
     expect(buildSystemPrompt('My Plan', { currentView: 'details', locale: 'fr-CA' }))
       .toContain("L'utilisateur est actuellement sur la page Plans.");
   });

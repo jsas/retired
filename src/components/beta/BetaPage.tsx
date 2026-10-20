@@ -1,6 +1,6 @@
 // The shared beta page chrome — brand header, the named homes (Dashboard,
-// Projection, Tools ▾: Optimizer/Monte Carlo/Backtest/Solver,
-// Plans, Data), the persistent verdict chip, and the assistant dock. Every
+// Projection, Tools ▾ grouped by outcome section, Plans, Data), the
+// persistent verdict chip, and the assistant dock. Every
 // beta page sits inside this so navigation and the answer are always one
 // glance away. Flat, hairline, sticky. The profile icon (top right) is the
 // current plan — #/plan, the list of plans plus the numbers behind this one.
@@ -8,10 +8,11 @@
 // The dock (f7's star): a min-340px right rail on desktop (user-draggable
 // wider, remembered), a full-screen sheet on phones. The app works without
 // it — the Assistant button toggles it and it never traps you.
-import { createContext, useCallback, useContext, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { createContext, Fragment, useCallback, useContext, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from './nav';
 import type { View } from '../../lib/viewRoutes';
+import { pageForView, type NavEntry } from '@retired/mcp-tools/navigation';
 import { Dropdown, HelpHint } from '../../design/primitives';
 import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
 import { CircleUserRound, Maximize2, Minimize2, Undo2 } from 'lucide-react';
@@ -74,46 +75,79 @@ export interface VerdictChip {
   label: string;
 }
 
-/** The Tools menu (issue #162, later Compare): each analytic surface is its own
- *  page. Desktop opens them from the header dropdown; the phone menu carries the
- *  same items flat (a dropdown inside a dropdown would close on the first tap). */
-const TOOLS_MENU_VIEWS: View[] = ['optimize', 'montecarlo', 'backtest', 'solver', 'compare', 'math'];
-const TOOLS_MENU_KEYS = ['optimizer', 'monteCarlo', 'backtest', 'solver', 'compare', 'yearMath'] as const;
+/** The outcome sections the nav groups by (issue #186): the catalog's
+ *  `section` field is the single source of truth; nav.json carries the
+ *  `sectionPlan`/`sectionExplore`/`sectionShare`/`sectionSetup` labels. */
+type NavSection = NonNullable<NavEntry['section']>;
+
+/** The Tools menu (issue #162, later Compare): each analytic surface is its
+ *  own page. Desktop opens them from the header dropdown; the phone menu
+ *  carries the same items flat (a dropdown inside a dropdown would close on
+ *  the first tap). Both group by catalog section (issue #186). */
+const TOOLS_MENU_VIEWS: View[] = ['math', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare'];
+const TOOLS_MENU_KEYS = ['yearMath', 'optimizer', 'monteCarlo', 'backtest', 'solver', 'compare'] as const;
+// Section order (issue #186): Your plan → Explore → Share & print → Settings & help.
 const MOBILE_MENU_VIEWS: View[] = [
-  'dashboard', 'projection', ...TOOLS_MENU_VIEWS,
-  'scenarios', 'data', 'print', 'settings', 'connections', 'help',
+  'dashboard', 'projection', 'math', 'scenarios',
+  'optimize', 'montecarlo', 'backtest', 'solver', 'compare',
+  'data', 'print',
+  'settings', 'connections', 'help',
 ];
 const MOBILE_MENU_KEYS = [
-  'dashboard', 'projection', ...TOOLS_MENU_KEYS,
-  'plans', 'data', 'print', 'settings', 'connections', 'help',
+  'dashboard', 'projection', 'yearMath', 'plans',
+  'optimizer', 'monteCarlo', 'backtest', 'solver', 'compare',
+  'data', 'print',
+  'settings', 'connections', 'help',
 ] as const;
 
-/** The Tools menu: each analytic surface is its own page. Exported so tests can
- *  prove the item list without opening the dropdown. */
-export const TOOLS_MENU_ITEMS: Array<{ view: View; label: string }> = [
-  { view: 'optimize', label: 'Optimizer' },
-  { view: 'montecarlo', label: 'Monte Carlo' },
-  { view: 'backtest', label: 'Backtest' },
-  { view: 'solver', label: 'Solver' },
-  { view: 'compare', label: 'Compare plans' },
-  { view: 'math', label: 'Year Math' },
-];
+function sectionFor(view: View): NavSection | undefined {
+  return pageForView(view)?.section;
+}
 
-/** The phone menu's contents — the same named homes the desktop row shows
- *  (plus Dashboard/Help, which desktop reaches other ways). Exported so tests
- *  can prove nothing was dropped on phones. Details lives on Plans now. */
-export const MOBILE_MENU_ITEMS: Array<{ view: View; label: string }> = [
-  { view: 'dashboard', label: 'Dashboard' },
-  { view: 'projection', label: 'Projection' },
-  // Tools ▾ flattened: every tool one tap away on phones.
-  ...TOOLS_MENU_ITEMS,
-  { view: 'scenarios', label: 'Plans' },
-  { view: 'data', label: 'Data' },
-  { view: 'print', label: 'Print' },
-  { view: 'settings', label: 'Settings' },
-  { view: 'connections', label: 'Assistant connection' },
-  { view: 'help', label: 'Help' },
-];
+/** The Tools menu: each analytic surface is its own page. Exported so tests
+ *  can prove the item list without opening the dropdown; labels are the
+ *  English catalog titles (the live UI renders the localized nav strings). */
+export const TOOLS_MENU_ITEMS: Array<{ view: View; label: string; section?: NavSection }> =
+  TOOLS_MENU_VIEWS.map(view => ({ view, label: pageForView(view)?.title ?? view, section: sectionFor(view) }));
+
+/** The phone menu's contents — every named home the desktop row shows (plus
+ *  Dashboard/Help, which desktop reaches other ways), grouped by section so
+ *  the dropdown reads as outcomes, not jargon. Exported so tests can prove
+ *  nothing was dropped on phones. Details lives on Plans now. */
+export const MOBILE_MENU_ITEMS: Array<{ view: View; label: string; section?: NavSection }> =
+  MOBILE_MENU_VIEWS.map(view => ({ view, label: pageForView(view)?.title ?? view, section: sectionFor(view) }));
+
+/** Dropdown items grouped by outcome section (issue #186): one header per
+ *  run of the same `section`, labelled from nav.json's sectionPlan/… keys.
+ *  The catalog keeps each section's pages contiguous, so the runs are the
+ *  sections. */
+function SectionedMenu({ items, linkClass, headerClass }: {
+  items: Array<{ view: View; label: string; section?: NavSection }>;
+  linkClass: string;
+  headerClass: string;
+}) {
+  const { t } = useTranslation('nav');
+  let prev: NavSection | 'none' = 'none';
+  return (
+    <div className="flex flex-col">
+      {items.map(item => {
+        const section = item.section;
+        const showHeader = section != null && section !== prev;
+        prev = section ?? 'none';
+        return (
+          <Fragment key={item.view}>
+            {showHeader && (
+              <p className={headerClass}>
+                {t(`section${section[0].toUpperCase()}${section.slice(1)}`)}
+              </p>
+            )}
+            <Link view={item.view} className={linkClass}>{item.label}</Link>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
 
 function chipDot(tone: VerdictChip['tone']) {
   return tone === 'holds' ? BLUE : tone === 'short' ? RED_DOT : tone === 'borderline' ? AMBER_DOT : '#94a3b8';
@@ -173,8 +207,8 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
   const undo = useContext(PlanUndoContext);
   const { t } = useTranslation('nav');
   const { locale, setLocale } = useAppLocale();
-  const toolsItems = TOOLS_MENU_VIEWS.map((view, i) => ({ view, label: t(TOOLS_MENU_KEYS[i]) }));
-  const mobileItems = MOBILE_MENU_VIEWS.map((view, i) => ({ view, label: t(MOBILE_MENU_KEYS[i]) }));
+  const toolsItems = TOOLS_MENU_VIEWS.map((view, i) => ({ view, label: t(TOOLS_MENU_KEYS[i]), section: sectionFor(view) }));
+  const mobileItems = MOBILE_MENU_VIEWS.map((view, i) => ({ view, label: t(MOBILE_MENU_KEYS[i]), section: sectionFor(view) }));
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-800">
@@ -194,13 +228,11 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
               <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 {t('toolsBlurb')}
               </p>
-              <div className="flex flex-col">
-                {toolsItems.map(item => (
-                  <Link key={item.view} view={item.view} className="px-2 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
+              <SectionedMenu
+                items={toolsItems}
+                linkClass="px-2 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                headerClass="px-2 pb-1.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 first:pt-0"
+              />
               <p className="border-t border-slate-100 px-2 pt-1.5 text-[10.5px] text-slate-400">
                 {t('toolsFoot')}
               </p>
@@ -216,13 +248,11 @@ export function BetaPage({ title, hint, chip, actions, assistant, children }: {
               (logo, Menu, Assistant, verdict chip) fits a 375px viewport. */}
           <div className="md:hidden">
             <Dropdown label={t('menu')}>
-              <div className="flex flex-col">
-                {mobileItems.map(item => (
-                  <Link key={item.view} view={item.view} className="px-2 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900">
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
+              <SectionedMenu
+                items={mobileItems}
+                linkClass="px-2 py-1.5 text-[13px] text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                headerClass="px-2 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400"
+              />
             </Dropdown>
           </div>
 

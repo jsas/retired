@@ -1,6 +1,6 @@
 {
   "projection": "Projection",
-  "yearMath": "Mathématiques de l’année",
+  "yearMath": "Une année, étape par étape",
   "optimizer": {
     "tabStrategies": "Explorateur de stratégies",
     "tabSolver": "Solveur",
@@ -36,9 +36,10 @@
     "approx": "Approximatif : la réponse est exacte pour les 500 futurs testés, mais un nouveau lot atterrit à un ou deux points près. Cibles plus élevées → dépenses soutenables plus basses.",
     "lead": "Inversez le verdict : choisissez un niveau de confiance et le solveur trouve le <strong>maximum que vous pouvez dépenser par an</strong> tout en réussissant encore aussi souvent en Monte-Carlo. Il cherche par dichotomie contre 500 futurs de marché aléatoires (volatilité de {{vol}} %), puis vous pouvez appliquer le résultat."
   },
-  "monteCarlo": "Monte-Carlo",
-  "backtest": "Rétrosimulation",
-  "solver": "Solveur",
+  "optimizePage": "Améliorer le plan",
+  "monteCarlo": "Vos chances",
+  "backtest": "Tester sur l’histoire",
+  "solver": "Dépenses sûres",
   "plans": "Plans",
   "data": "Données",
   "settings": "Paramètres",
@@ -227,7 +228,7 @@
     "adjust": "Ajuster le plan",
     "lifeLine": "Votre vie sur une ligne — ce plan exact",
     "receipts": "Les reçus",
-    "footnote": "Tout ici est en direct — glissez le point ou un curseur et le verdict, les bandes, la ligne de vie, les comptes et le test de marché baissier se recalculent ensemble. Le tableau année par année est Projection; la feuille étape par étape est Mathématiques de l’année sous Outils, avec les leviers, les chances, l’histoire et le solveur.",
+    "footnote": "Tout ici est en direct — glissez le point ou un curseur et le verdict, les bandes, la ligne de vie, les comptes et le test de marché baissier se recalculent ensemble. Le tableau année par année est Projection; pour détailler une année étape par étape, ouvrez « Une année, étape par étape » sous Outils, avec les chances, le test historique, les dépenses sûres et l’améliorateur de plan.",
     "markets": "Marchés",
     "marketsHint": "à la baisse ↔ à la hausse — le rendement annuel moyen que le plan suppose",
     "downCheck": "Test de marché baissier",

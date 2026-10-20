@@ -434,7 +434,7 @@
         "low return",
         "bear market"
       ],
-      "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It is the single-number summary; the full Monte Carlo is in the Tools menu."
+      "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It is the single-number summary; the full Monte Carlo run lives on Your Odds under Tools."
     },
     "life-timeline": {
       "title": "The life timeline",
@@ -468,10 +468,10 @@
         "what could go wrong",
         "sensitivity"
       ],
-      "body": "The verdict uses your expected return every year. To see how robust the plan really is:\n\n- **Lower the expected return** (the Markets dial) for a pessimistic case.\n- **Run Monte Carlo** — it randomizes returns around your assumption and reports the share of runs that never deplete; that success rate is the most honest single number.\n- **Run a Backtest** — replays your plan through actual historical market sequences."
+      "body": "The verdict uses your expected return every year. To see how robust the plan really is:\n\n- **Lower the expected return** (the Markets dial) for a pessimistic case.\n- **Run Your Odds** (Monte Carlo) — it randomizes returns around your assumption and reports the share of runs that never deplete; that success rate is the most honest single number.\n- **Run Test Against History** — replays your plan through actual historical market sequences."
     },
     "monte-carlo": {
-      "title": "Monte Carlo",
+      "title": "Your odds (Monte Carlo)",
       "section": "Analysis",
       "keywords": [
         "simulation",
@@ -483,7 +483,7 @@
       "body": "Runs the full projection 500 times, each with a randomized sequence of annual returns (geometric Brownian motion around your expected return, with Student-t shocks so crashes are more common than a normal distribution predicts).\n\n- The dark band is the middle 50% of outcomes (p25–p75); the light band is p10–p90. The blue line is the median.\n- **Success rate** — the share of runs that stayed funded through max age. 90%+ is conventionally comfortable; below 75% the plan is fragile.\n- The width of the fan is driven by Volatility. A crash early in retirement hurts far more than one late."
     },
     "backtest": {
-      "title": "Backtest",
+      "title": "Test against history (backtest)",
       "section": "Analysis",
       "keywords": [
         "historical",
@@ -509,7 +509,7 @@
       "body": "The steering levers live on the Dashboard under “Adjust the plan”: eight sliders — annual spending, retirement age, expected return, annual savings, plan-to age, return volatility, CPP and OAS start ages — while status, money-lasts-to, success rate and left-at-end update live beneath them. The age × spending picture is the contour map further up the Dashboard: drag its dot, or use the sliders. The life timeline redraws with every drag — one visual, always in view."
     },
     "strategy-explorer": {
-      "title": "Optimizer (strategy explorer)",
+      "title": "Improve the plan (strategy explorer)",
       "section": "Analysis",
       "keywords": [
         "optimize",
@@ -520,10 +520,10 @@
         "add money",
         "improvements"
       ],
-      "body": "The Optimizer re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.\n\nBy default the table only lists variants that **add money** versus the current plan (higher sustainable spending). Untick that to see the ones that cost. The current plan always stays as the first row."
+      "body": "Improve the Plan re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.\n\nBy default the table only lists variants that **add money** versus the current plan (higher sustainable spending). Untick that to see the ones that cost. The current plan always stays as the first row."
     },
     "optimize-spending": {
-      "title": "Solver: sustainable spending",
+      "title": "Safe spending (sustainable spending solver)",
       "section": "Analysis",
       "keywords": [
         "how much can i spend",
@@ -532,7 +532,7 @@
         "maximum spending",
         "safe withdrawal"
       ],
-      "body": "The Solver answers \"how much could I spend?\" instead of \"will my spending last?\" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures."
+      "body": "Safe Spending answers \"how much could I spend?\" instead of \"will my spending last?\" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures."
     },
     "schedule-columns": {
       "title": "The Projection page columns",
@@ -548,7 +548,7 @@
       "body": "The Projection page's year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The **Columns** button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one \"show all\" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail."
     },
     "year-math": {
-      "title": "The Year Math worksheet",
+      "title": "The One Year, Step by Step worksheet",
       "section": "Schedule",
       "keywords": [
         "year math",
@@ -560,7 +560,7 @@
         "per person",
         "how the year works"
       ],
-      "body": "Year Math is the step-by-step worksheet for one calendar year of the household — not the Projection schedule. Pick a year, then You / Spouse / Side by side, and walk from the spending target down through withdrawals, tax, benefits, and the ending balance. Every number is the same calc the engine already ran for that year; this page just shows the working."
+      "body": "One Year, Step by Step is the worksheet for one calendar year of the household — not the Projection schedule. Pick a year, then You / Spouse / Side by side, and walk from the spending target down through withdrawals, tax, benefits, and the ending balance. Every number is the same calc the engine already ran for that year; this page just shows the working."
     },
     "scenarios": {
       "title": "Plans",

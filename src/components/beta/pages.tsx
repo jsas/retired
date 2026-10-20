@@ -146,7 +146,7 @@ export function BetaOptimizerPage({ chip, assistant, timeline, optimizeProps }: 
 }) {
   const t = usePageT();
   return (
-    <BetaPage title={t('optimizer')} hint="strategy-explorer" chip={chip} assistant={assistant}>
+    <BetaPage title={t('optimizePage')} hint="strategy-explorer" chip={chip} assistant={assistant}>
       <div className="space-y-10 pt-6">
         <ProjectStrip {...timeline} />
         <section>

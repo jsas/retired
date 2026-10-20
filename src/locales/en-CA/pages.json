@@ -1,6 +1,6 @@
 {
   "projection": "Projection",
-  "yearMath": "Year Math",
+  "yearMath": "One Year, Step by Step",
   "optimizer": {
     "tabStrategies": "Strategy Explorer",
     "tabSolver": "Solver",
@@ -36,11 +36,12 @@
     "approx": "Approximate: the answer is exact for the 500 futures tested, but a fresh batch of futures lands within a point or two. Higher targets → lower sustainable spending.",
     "lead": "Invert the verdict: pick a confidence level and the solver finds the <strong>most you can spend per year</strong> while your Monte Carlo still succeeds that often. It binary-searches spending against 500 randomized market futures ({{vol}}% volatility), then you can apply the result to your plan."
   },
-  "monteCarlo": "Monte Carlo",
-  "backtest": "Backtest",
-  "solver": "Solver",
-  "plans": "Plans",
+  "optimizePage": "Improve the Plan",
+  "monteCarlo": "Your Odds",
+  "backtest": "Test Against History",
+  "solver": "Safe Spending",
   "data": "Data",
+  "plans": "Plans",
   "settings": "Settings",
   "models": {
     "back": "Back to the assistant",
@@ -227,7 +228,7 @@
     "adjust": "Adjust the plan",
     "lifeLine": "Your life on one line — this exact plan",
     "receipts": "The receipts",
-    "footnote": "Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. The year-by-year schedule is Projection; the step-by-step worksheet is Year Math under Tools, with the levers, the odds, the history and the solver.",
+    "footnote": "Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. The year-by-year schedule is Projection; to work a single year step by step, open One Year, Step by Step under Tools, along with the odds, the history test, safe spending and the plan improver.",
     "markets": "Markets",
     "marketsHint": "down ↔ up — the average yearly return the plan assumes",
     "downCheck": "Down-market check",

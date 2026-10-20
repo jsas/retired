@@ -65,6 +65,12 @@ export interface NavEntry {
   description: string;
   /** Search terms a user might type (lowercase words/phrases), ranked best-first. */
   keywords: readonly string[];
+  /** Which outcome section the page belongs to in the nav (issue #186):
+   *  Your plan · Explore · Share & print · Settings & help. Pages without one
+   *  (Assistant, Welcome, Style Guide, folded legacy views) sit outside the
+   *  sections. Catalog rows sharing a section MUST stay contiguous — the nav
+   *  renders one header per run. */
+  section?: 'plan' | 'explore' | 'share' | 'setup';
   /** True if this view is only in the beta design-skin (style guide), so
    *  find_page can still name it without saying "beta". */
   betaOnly?: true;
@@ -84,6 +90,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     title: 'Dashboard',
     description: 'The plan at a glance: the verdict (funded or depleted, with age and shortfall), key metrics, and the doors to everything else.',
     keywords: ['dashboard', 'home', 'verdict', 'funded', 'depleted', 'run out', 'shortfall', 'money run out', 'overview', 'main page', 'steering', 'equalizer', 'levers', 'what helps most'],
+    section: 'plan',
   },
   {
     viewId: 'projection',
@@ -91,64 +98,15 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     title: 'Projection',
     description: 'The projection: the money-over-age timeline plus the schedule table — one row per retirement year with withdrawals, tax, and balances — pick the columns you care about.',
     keywords: ['projection', 'schedule', 'year-by-year', 'year by year', 'table', 'columns', 'withdrawals', 'tax paid', 'one year', 'timeline'],
-  },
-  {
-    viewId: 'details',
-    route: 'details',
-    title: 'Details',
-    description: 'Every input behind the plan — now on the Plans page, under the list of saved plans.',
-    keywords: ['tfsa room', 'rrsp room', 'contribution room', 'caps', 'balances', 'accounts', 'contributions', 'income', 'benefits', 'cpp', 'oas', 'spending', 'spouse', 'debts', 'loan', 'reverse mortgage', 'volatility', 'returns', 'market hypotheses', 'inputs', 'edit', 'change my numbers', 'the details'],
-    foldedInto: 'scenarios',
+    section: 'plan',
   },
   {
     viewId: 'math',
     route: 'year-math',
-    title: 'Year Math',
+    title: 'One Year, Step by Step',
     description: 'The year-math worksheet: one calendar year of the household, worked step by step — you, spouse, or side by side — from the spending target down to the ending balance.',
     keywords: ['year math', 'year-math', 'worksheet', 'breakdown', 'step by step', 'calculation', 'household year', 'per person', 'how the year works'],
-  },
-  {
-    viewId: 'eq',
-    route: 'steering',
-    title: 'Steering',
-    description: 'The equalizer: drag the plan’s levers (retirement age, spending, CPP/OAS timing, savings) and see the success rate live — now on the Dashboard, under “Adjust the plan”.',
-    keywords: ['steering', 'insights', 'equalizer', 'levers', 'options', 'ranked', 'what helps most', 'nudge', 'drag'],
-    foldedInto: 'dashboard',
-  },
-  {
-    viewId: 'optimize',
-    route: 'optimize',
-    title: 'Optimizer',
-    description: 'The strategy explorer: named plan variants (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) each replayed and scored on sustainable spending, lifetime tax and GIS — with one-click apply.',
-    keywords: ['optimize', 'optimiser', 'optimizer', 'strategies', 'variants', 'best option', 'best lever', 'compare timing', 'apply', 'sustainable spending'],
-  },
-  {
-    viewId: 'montecarlo',
-    route: 'monte-carlo',
-    title: 'Monte Carlo',
-    description: 'Probabilistic run: 500 randomized market futures over your plan — the success-rate fan, the odds of lasting, and a depletion histogram.',
-    keywords: ['monte carlo', 'simulation', 'odds', 'success rate', 'probabilities', 'market futures', 'probabilistic', 'fan chart', 'risk'],
-  },
-  {
-    viewId: 'backtest',
-    route: 'backtest',
-    title: 'Backtest',
-    description: 'Run the plan against every historical market stretch on record — real returns, not invented ones — and see how often it would have survived.',
-    keywords: ['backtest', 'historical', '1926', '1970', 'stress test', 'past markets', 'sequence risk', 'crash'],
-  },
-  {
-    viewId: 'solver',
-    route: 'solver',
-    title: 'Solver',
-    description: 'Invert the verdict: pick a confidence level and the solver binary-searches the most you can spend per year while the Monte Carlo still succeeds that often — then apply it in one click.',
-    keywords: ['solver', 'solve', 'how much can i spend', 'maximum spending', 'safe withdrawal', 'sustainable', 'target success rate', 'spend freely'],
-  },
-  {
-    viewId: 'compare',
-    route: 'compare',
-    title: 'Compare plans',
-    description: 'Side-by-side outcomes across all saved plans — each scored as a household when it has a spouse, with a compare-only toggle to hide the spouse on this page.',
-    keywords: ['compare', 'side-by-side', 'which plan', 'vs', 'household', 'spouse', 'partner', 'compare plans'],
+    section: 'plan',
   },
   {
     viewId: 'scenarios',
@@ -156,6 +114,47 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     title: 'Plans',
     description: 'Your saved plans and the numbers behind the current one: switch, rename, duplicate, roll back — then edit every input (accounts, income, benefits, spending, markets) in one scroll.',
     keywords: ['plans', 'plan', 'profiles', 'scenarios', 'saved plans', 'manager', 'duplicate', 'rename', 'delete', 'revisions', 'tfsa room', 'rrsp room', 'contribution room', 'caps', 'balances', 'accounts', 'contributions', 'income', 'benefits', 'cpp', 'oas', 'spending', 'spouse', 'debts', 'loan', 'reverse mortgage', 'volatility', 'returns', 'market hypotheses', 'inputs', 'edit', 'change my numbers', 'the details', 'details'],
+    section: 'plan',
+  },
+  {
+    viewId: 'optimize',
+    route: 'optimize',
+    title: 'Improve the Plan',
+    description: 'The strategy explorer: named plan variants (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) each replayed and scored on sustainable spending, lifetime tax and GIS — with one-click apply.',
+    keywords: ['optimize', 'optimiser', 'optimizer', 'strategies', 'variants', 'best option', 'best lever', 'compare timing', 'apply', 'sustainable spending'],
+    section: 'explore',
+  },
+  {
+    viewId: 'montecarlo',
+    route: 'monte-carlo',
+    title: 'Your Odds',
+    description: 'The Monte Carlo run: 500 randomized market futures over your plan — the success-rate fan, the odds of lasting, and a depletion histogram.',
+    keywords: ['monte carlo', 'simulation', 'odds', 'success rate', 'probabilities', 'market futures', 'probabilistic', 'fan chart', 'risk'],
+    section: 'explore',
+  },
+  {
+    viewId: 'backtest',
+    route: 'backtest',
+    title: 'Test Against History',
+    description: 'Run the plan against every historical market stretch on record — real returns, not invented ones — and see how often it would have survived.',
+    keywords: ['backtest', 'historical', '1926', '1970', 'stress test', 'past markets', 'sequence risk', 'crash'],
+    section: 'explore',
+  },
+  {
+    viewId: 'solver',
+    route: 'solver',
+    title: 'Safe Spending',
+    description: 'Invert the verdict: pick a confidence level and the solver binary-searches the most you can spend per year while the Monte Carlo still succeeds that often — then apply it in one click.',
+    keywords: ['solver', 'solve', 'how much can i spend', 'maximum spending', 'safe withdrawal', 'sustainable', 'target success rate', 'spend freely'],
+    section: 'explore',
+  },
+  {
+    viewId: 'compare',
+    route: 'compare',
+    title: 'Compare plans',
+    description: 'Side-by-side outcomes across all saved plans — each scored as a household when it has a spouse, with a compare-only toggle to hide the spouse on this page.',
+    keywords: ['compare', 'side-by-side', 'which plan', 'vs', 'household', 'spouse', 'partner', 'compare plans'],
+    section: 'explore',
   },
   {
     viewId: 'data',
@@ -163,6 +162,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     title: 'Data',
     description: 'Everything in and out: share a plan by link or code, full backup and restore, and exporting the plan or projections to CSV/JSON.',
     keywords: ['data', 'backup', 'restore', 'export', 'csv', 'json', 'download', 'spreadsheet', 'share', 'link', 'code', 'snapshot', 'import', 'send plan'],
+    section: 'share',
   },
   {
     viewId: 'print',
@@ -170,34 +170,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     title: 'Print & export',
     description: 'One-page printable summary of the plan and its key numbers, with the export options.',
     keywords: ['print', 'summary', 'one page', 'pdf', 'report'],
-  },
-  {
-    viewId: 'settings',
-    route: 'settings',
-    title: 'Settings',
-    description: 'Tax tables (user-editable), export defaults, assistant/system prompt defaults.',
-    keywords: ['settings', 'tax tables', 'defaults', 'prompt', 'province', 'edit table'],
-  },
-  {
-    viewId: 'connections',
-    route: 'connections',
-    title: 'Assistant connection',
-    description: 'Where the assistant runs: local model or online provider, the API key, and exactly what the chat may see.',
-    keywords: ['connections', 'api key', 'llm', 'provider', 'local', 'online', 'model', 'privacy', 'wire', 'openrouter', 'free models'],
-  },
-  {
-    viewId: 'agent',
-    route: 'assistant',
-    title: 'Assistant',
-    description: 'The AI assistant full-screen: ask about the plan, what-if it, or change it with propose_* cards you approve.',
-    keywords: ['assistant', 'ai', 'chat', 'help me', 'what-if', 'ask', 'agent'],
-  },
-  {
-    viewId: 'help',
-    route: 'help',
-    title: 'Help',
-    description: 'In-app explanation of every feature in the plain-language terms the app itself uses.',
-    keywords: ['help', 'docs', 'explain', 'how do i', 'how to', 'manual', 'faq'],
+    section: 'share',
   },
   {
     viewId: 'donate',
@@ -205,6 +178,38 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     title: 'Support this app',
     description: 'Ways to support the app (it is free and open source).',
     keywords: ['donate', 'support', 'contribute', 'sponsor', 'pay'],
+    section: 'share',
+  },
+  {
+    viewId: 'settings',
+    route: 'settings',
+    title: 'Settings',
+    description: 'Tax tables (user-editable), export defaults, assistant/system prompt defaults.',
+    keywords: ['settings', 'tax tables', 'defaults', 'prompt', 'province', 'edit table'],
+    section: 'setup',
+  },
+  {
+    viewId: 'connections',
+    route: 'connections',
+    title: 'Assistant connection',
+    description: 'Where the assistant runs: local model or online provider, the API key, and exactly what the chat may see.',
+    keywords: ['connections', 'api key', 'llm', 'provider', 'local', 'online', 'model', 'privacy', 'wire', 'openrouter', 'free models'],
+    section: 'setup',
+  },
+  {
+    viewId: 'help',
+    route: 'help',
+    title: 'Help',
+    description: 'In-app explanation of every feature in the plain-language terms the app itself uses.',
+    keywords: ['help', 'docs', 'explain', 'how do i', 'how to', 'manual', 'faq'],
+    section: 'setup',
+  },
+  {
+    viewId: 'agent',
+    route: 'assistant',
+    title: 'Assistant',
+    description: 'The AI assistant full-screen: ask about the plan, what-if it, or change it with propose_* cards you approve.',
+    keywords: ['assistant', 'ai', 'chat', 'help me', 'what-if', 'ask', 'agent'],
   },
   {
     viewId: 'welcome',
@@ -221,10 +226,26 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     keywords: ['style guide', 'design', 'beta', 'components'],
     betaOnly: true,
   },
-  // ── Legacy pages still folded on beta ───────────────────────────────────
+  // ── Legacy pages still folded ───────────────────────────────────────────
   // (issue #162 unfurled optimize/montecarlo/backtest into the Tools menu;
-  // Compare later joined that menu as its own page. Details and the old
-  // Profiles URL still live on Plans.)
+  // Compare later joined that menu as its own page; Steering folded into the
+  // Dashboard (#187). Details and the old Profiles URL still live on Plans.)
+  {
+    viewId: 'details',
+    route: 'details',
+    title: 'Details',
+    description: 'Every input behind the plan — now on the Plans page, under the list of saved plans.',
+    keywords: ['tfsa room', 'rrsp room', 'contribution room', 'caps', 'balances', 'accounts', 'contributions', 'income', 'benefits', 'cpp', 'oas', 'spending', 'spouse', 'debts', 'loan', 'reverse mortgage', 'volatility', 'returns', 'market hypotheses', 'inputs', 'edit', 'change my numbers', 'the details'],
+    foldedInto: 'scenarios',
+  },
+  {
+    viewId: 'eq',
+    route: 'steering',
+    title: 'Steering',
+    description: 'The equalizer: drag the plan’s levers (retirement age, spending, CPP/OAS timing, savings) and see the success rate live — now on the Dashboard, under “Adjust the plan”.',
+    keywords: ['steering', 'insights', 'equalizer', 'levers', 'options', 'ranked', 'what helps most', 'nudge', 'drag'],
+    foldedInto: 'dashboard',
+  },
   {
     viewId: 'legacyScenarios',
     route: 'scenarios',
