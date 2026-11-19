@@ -23,6 +23,7 @@ import { SteeringControls, type Bands, type EqSolvedState } from './console/Stee
 import { EvidenceRow } from './console/EvidenceRow';
 import { firstEmptyAge, potDisplay, unsetDetailGroups, verdictChip } from '../lib/planDisplay';
 import { useAppLocale } from '../lib/localeContext';
+import { formatCurrency } from '../lib/locale';
 
 // The map's axis window defaults — retire age × spending. The spending axis
 // reads the Settings lever-range pref (spendingMax) when set; age bounds stay
@@ -75,7 +76,7 @@ export function Dashboard({
   const { t } = useTranslation('pages');
   const { t: tHelp } = useTranslation('help');
   const { locale } = useAppLocale();
-  const money = (v: number) => fmtMoney(v, locale);
+  const money = (v: number) => formatCurrency(v, locale);
   const v = verdict(inputs, results, t);
   const breakdown = results.yearlyBreakdown ?? [];
   const pot = potDisplay(breakdown, inputs.maxAge);
@@ -221,8 +222,4 @@ function DetailsRow({ inputs }: { inputs: RetirementInputs }) {
       </Link>
     </div>
   );
-}
-
-function fmtMoney(v: number, locale = 'en-CA') {
-  return '$' + Math.round(v).toLocaleString(locale);
 }
