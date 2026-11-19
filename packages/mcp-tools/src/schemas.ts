@@ -216,6 +216,9 @@ export const scenarioSchema = z.object({
   id: z.string(),
   name: z.string(),
   inputs: retirementInputsSchema,
+  // Which plans shipped with the app travels with the plan (R4) — a backup or an
+  // AI-tool copy must not turn a stock example into the user's own plan.
+  isExample: z.boolean().optional(),
 }) satisfies z.ZodType<Scenario>;
 // ---------------------------------------------------------------------------
 // Engine configuration

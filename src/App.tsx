@@ -40,7 +40,7 @@ import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
 import { potDisplay, verdictChip } from './lib/planDisplay';
 import { consumePlanFromHash } from './lib/shareLink';
-import { buildDefaultScenarios, baselineInputs, isExamplePlanName } from '@retired/engine-core/exampleScenarios';
+import { buildDefaultScenarios, baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
 import type { EqSolvedState, Bands } from './components/console/SteeringControls';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
@@ -785,7 +785,7 @@ function App() {
       <AgentPage
         docked
         inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
-        scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
+        scenarioList={scenarios.map(s => ({ id: s.id, name: s.name, isExample: s.isExample }))}
         activeScenarioId={activeScenarioId}
         scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
         onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
@@ -956,13 +956,13 @@ function App() {
             assistant={assistantDock}
             eq={{ bands: eqBands, onBandsChange: setEqBands, solved: eqSolved }}
             setup={setupCardVisible({
-              planIsExample: isExamplePlanName(activeScenario.name),
+              planIsExample: activeScenario.isExample === true,
               inputs,
               alwaysShow: config.general.showSetupCardOnLoad || setupForced,
               dismissed: setupDismissed,
             }) ? (
               <QuickStart
-                planIsExample={isExamplePlanName(activeScenario.name)}
+                planIsExample={activeScenario.isExample === true}
                 inputs={inputs}
                 onStart={handleSetupStart}
                 onDismiss={() => { dismissSetupCard(); setSetupDismissed(true); setSetupForced(false); }}

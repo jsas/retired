@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
+import type { Scenario as EngineScenario } from '@retired/engine-core/types';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { diffRevisions, MAX_REVISIONS, type ScenarioRevision } from '../lib/scenarioRevisions';
 import { Dot } from '../design/primitives';
@@ -8,12 +9,12 @@ import { BLUE, cls } from '../design/tokens';
 import { defaultProvinceCode } from '../lib/locale';
 import { useAppLocale } from '../lib/localeContext';
 
-interface Scenario {
-  id: string;
-  name: string;
-  inputs: RetirementInputs;
-  /** True when this is a clean baseline (New Scenario) so the parent can run
-   *  the setup wizard; false/undefined for a Duplicate (already-filled plan). */
+// The rows this list manages ARE the app's saved plans, so the engine type stays
+// the single source of truth for id/name/inputs/isExample — a plan-level field
+// added once is visible here too. Only `isFresh` is UI-local: it marks a
+// just-created blank plan so the parent can run the setup wizard (a Duplicate is
+// already filled in).
+interface Scenario extends EngineScenario {
   isFresh?: boolean;
 }
 
@@ -133,6 +134,9 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
                       </div>
                       <div className="mt-0.5 text-[11px] text-slate-400">
                         {isActive ? t('plansUi.activeHint') : t('plansUi.clickToLoad')}
+                        {/* Which plan shipped with the app is plan state now (R4), so
+                            the list can say so instead of relying on an English name. */}
+                        {scenario.isExample ? ` · ${t('plansUi.exampleTag')}` : ''}
                       </div>
                     </button>
                     <div className="flex shrink-0 items-center gap-1 text-[11px]">

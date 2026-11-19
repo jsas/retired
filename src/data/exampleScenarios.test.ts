@@ -34,6 +34,10 @@ describe('exampleScenarios — data audit', () => {
     ]);
     expect(new Set(examples.map(s => s.id)).size).toBe(examples.length);
     expect(examples.every(s => s.name.startsWith(EXAMPLE_PLAN_PREFIX))).toBe(true);
+    // The prefix is decoration; the flag is what the app actually reads (R4).
+    // A French UI, a rename, or a translated seed name must not turn a shipped
+    // example into a plan the set-up card would edit in place.
+    expect(examples.every(s => s.isExample === true)).toBe(true);
   });
 
   it.each(examples.map(s => [s.name, s] as const))('%s: ages are internally consistent', (_name, s) => {

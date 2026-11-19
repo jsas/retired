@@ -392,7 +392,7 @@ export interface ToolContext {
   config: AppConfig;
   scenarioName: string;
   /** Names/ids of other saved scenarios, for orientation. */
-  scenarioList: Array<{ id: string; name: string }>;
+  scenarioList: Array<{ id: string; name: string; isExample?: boolean }>;
   /** Which of scenarioList is currently open (list_scenarios marks it).
    *  Optional so tests and 'off'-mode callers can omit it — the marker is
    *  then simply absent from the listing. */
@@ -1449,14 +1449,18 @@ function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosA
   const lines: string[] = [`${list.length} saved scenario${list.length === 1 ? '' : 's'}:`];
   for (const s of list) {
     const isActive = s.id === activeId;
+    // Which plan shipped with the app is plan state (R4). Say it: an
+    // "Example - Early Couple" row otherwise reads as the user's own situation,
+    // and the whole conversation is then about a plan nobody built.
+    const label = `${s.name}${s.isExample ? ' (built-in EXAMPLE plan, not the user\'s own)' : ''}`;
     if (!args.withDetails) {
-      lines.push(`- ${s.name}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`);
+      lines.push(`- ${label}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`);
       continue;
     }
     const inputs = s.id === activeId
       ? ctx.inputs
       : ctx.scenarioInputsById?.(s.id);
-    const head = `- ${s.name}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`;
+    const head = `- ${label}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`;
     if (!inputs) {
       // Not the active plan and the caller supplied no detail source: fall
       // back to the compact line rather than fabricate numbers.

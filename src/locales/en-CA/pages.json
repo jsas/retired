@@ -200,6 +200,7 @@
     "activeDot": "the active plan",
     "activeHint": "Active — the dashboard shows this plan",
     "clickToLoad": "Click to load",
+    "exampleTag": "example",
     "history": "History",
     "hideHistory": "Hide history",
     "duplicate": "Duplicate",

@@ -4,6 +4,8 @@
 // it's part of the persistence boundary, not the engine.
 
 import type { RetirementInputs, IncomeSource } from '@retired/engine-core/retirementEngine';
+import type { Scenario } from '@retired/engine-core/types';
+import { isExamplePlanName } from '@retired/engine-core/exampleScenarios';
 
 // The legacy array element shapes, defined structurally here because the engine
 // no longer exports them (no-legacy cutover). They describe what OLD payloads
@@ -115,4 +117,21 @@ function migrateRecord(inputs: Record<string, unknown>): RetirementInputs {
   }
 
   return migrated as unknown as RetirementInputs;
+}
+
+/**
+ * Fill in plan-level fields added after a scenario was saved. One today:
+ * `isExample` (R4).
+ *
+ * `storedFlag` is the raw `scenarios.is_example` column. NULL means the row
+ * predates the column, and the only signal those rows have is the English
+ * "Example - " prefix their name still carries — so the name is read here, once,
+ * on the way out, and the answer is written back as a column on the next save.
+ * Nothing after this point consults names: a plan the user renamed, or a French
+ * UI, can no longer change what the app thinks a plan is.
+ */
+export function migrateScenario(scenario: Scenario, storedFlag: unknown): Scenario {
+  if (storedFlag === 1) return { ...scenario, isExample: true };
+  if (storedFlag === 0) return scenario;
+  return isExamplePlanName(scenario.name) ? { ...scenario, isExample: true } : scenario;
 }
