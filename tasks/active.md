@@ -11,7 +11,7 @@ execution plans.
 | Task | Record | State |
 |------|--------|-------|
 | Income & contribution tracking | `tasks/PLAN-income-contribution-tracking.md` | T1–T4 shipped (verified in code); **T5 remainder**: over-contribution warning + remaining-room beside the contribution inputs (DetailsPage), ScheduleTable room section exists already. Issue #24 closed. |
-| Holistic site pass: no intro screen, Dashboard as home | `tasks/TASKS.md` | Running ledger (`S` simplify · `B` bugs · `C` consistency · `R` recommendations). S1–S10 and B1–B7 shipped; open: `B4`/`C1` audits, `B8` 8px strip text, and the `[!]` items that need a product call (`S8` five seed plans, `R1`/`R3`/`R4`). |
+| Holistic site pass: no intro screen, Dashboard as home | `tasks/TASKS.md` | Running ledger (`S` simplify · `B` bugs · `C` consistency · `R` recommendations). Everything is closed except `C3`: the raw checkboxes/radios, the chart hexes, `NUM_CLASS`, the dead `TEXT`, `HelpModal`'s English fallback and the duplicated dot-and-label rows are gone, but the hand-typed button and field recipes (`cls.primaryBtn` / `cls.hairlineBtn` / `cls.input`) are unmoved and need a page-by-page pass against the StyleGuide. |
 | ML fine-tune bake-off (#112, #135) | `training/SPIKE.md` §5 | Corpus/gate/bake-off machinery on main. First task: fix `training/driver/cdp.mjs` `callFn` (`Runtime.callFunctionOn` needs `executionContextId`). Then bake-off → full-SFT winner → MLC compile (own issue/PR). GPU-bound stages annotated in the issue. |
 
 ## Queued (from tasks/REVIEW.md "Still open")

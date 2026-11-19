@@ -170,7 +170,7 @@ export function Dashboard({
             series={[{ id: 'plan', label: t('portfolio'), color: INK, area: true, points: breakdown.map(r => ({ age: r.age, value: r.endingBalance })) }]}
             pins={[
               { age: inputs.currentAge, label: t('youPin', { age: inputs.currentAge }), place: 'below', anchor: 'start', color: INK },
-              { age: inputs.retirementAge, label: t('startDrawingPin', { age: inputs.retirementAge }), color: '#475569',
+              { age: inputs.retirementAge, label: t('startDrawingPin', { age: inputs.retirementAge }),
                 onDragAge: (age) => onInputsChange({ ...inputs, retirementAge: Math.max(inputs.currentAge + 1, Math.min(inputs.maxAge - 1, age)) }) },
               ...(lifeDepletion != null
                 ? [{ age: lifeDepletion, label: t('runsOutPin', { age: lifeDepletion }), color: RED_DOT }]

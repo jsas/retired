@@ -32,13 +32,16 @@ needs a product decision (not started).
       Private by design`) is not lost: it lives in Help under Legal
       (`not-financial-advice`, `data-responsibility`); verified nothing else
       pointed at `landing.json`.
-- [!] `S8` **Recommendation**: seed a first-run visitor with ONE example plan.
+- [x] `S8` **Recommendation**: seed a first-run visitor with ONE example plan.
       Today the seeds are FIVE — "Example - Early Couple" (plus its linked spouse
       row, which shows as a separate row in Plans), "Example - Partner",
       "Example - Single at 60", "Example - Semi-retirement", "Example - RDSP
       Starting Out". Five "Example - …" rows read as five of the user's own
-      plans. Needs a product call: fewer seeds vs. an explicit "Example" badge
-      in `ScenarioManager`.
+      plans. Decision (2026-11-19): keep all five — each one teaches a different
+      register (couple + linked spouse, partner, single at 60, semi-retirement,
+      RDSP). The real fix is `R4`: example-ness becomes plan state instead of an
+      English name prefix, so a seed can be badged and never mistaken for the
+      user's own plan.
 - [x] `S9` The way from the Dashboard to the rest of the plan: one hairline row
       under the verdict naming what this plan has never been told
       (`unsetDetailGroups`, `src/lib/planDisplay.ts`: account balances, partner,
@@ -114,11 +117,14 @@ needs a product decision (not started).
       description led with fixed mode and named `gross` first, so the
       on-computer model never found the capability; it now opens with the pledge
       example and `basis` defaults to `net` (see `S10`).
-- [ ] `B8` `ProjectionTimeline`'s spend/market strip labels measure **8px** on
+- [x] `B8` `ProjectionTimeline`'s spend/market strip labels measure **8px** on
       the live Dashboard (measured 2026-11-19: the strip svg renders 993×312 from
       a `0 0 1000 314` viewBox) — the one hard readability floor found on the
       page. Not touched by the B5 fix, which only moves pin labels.
-- [ ] `B9` **A storage failure is silent.** `App.tsx:221` swallows a rejected
+      Fixed: the strips have a 10px readability floor and their lane titles read
+      11px; the spend strip's childless `<text>` node is gone and the market
+      strip's `0%` sits below the curve instead of under it.
+- [x] `B9` **A storage failure is silent.** `App.tsx:221` swallows a rejected
       `AppStore.open()` into `console.warn('SQL store failed to open; running
       in-memory')`, so `store` stays `null`: the persist effect (`:233`) is
       `store?.persist(…) ?? false` — a no-op that looks like success — and the
@@ -126,7 +132,9 @@ needs a product decision (not started).
       (`:241`) returns early when `store` is null. An hour of editing in a
       private window reads as saved and is not. Fix: an open failure is a visible
       state on the existing banner channel (with retry), never a steady state.
-- [ ] `B10` **An edit during cold start can replace the user's plans.** The
+      Fixed: a rejected open sets `storeUnavailable`, bannered with a Retry that
+      re-runs the boot effect (`bootNonce`).
+- [x] `B10` **An edit during cold start can replace the user's plans.** The
       store's contents are adopted only `if (!dirty)` (`App.tsx:207-216`), so a
       lever moved while wasm/OPFS is still opening keeps the synchronous seed —
       which is `buildDefaultScenarios()` whenever the localStorage mirror is
@@ -136,35 +144,58 @@ needs a product decision (not started).
       (`db.ts:332`). The adopt also sits *inside* the `setHasUnsavedChanges`
       updater, which is meant to be pure. Fix: adopt into pending state and merge
       with the in-flight edit; move the `set*` calls out of the updater.
-- [ ] `B11` **One unreadable row kills all persistence.** `loadScenarios`
+      Fixed: `mergeOnOpen` (`src/lib/storeMerge.ts`, 6 tests) — adopting is
+      unconditional, a dirty edit wins only for its own plan, and both persist
+      effects are gated on `settled`, so a seed list can never reach disk.
+- [x] `B11` **One unreadable row kills all persistence.** `loadScenarios`
       (`db.ts:315-323`) and `loadConfig` (`:367`) `JSON.parse` per row with no
       `try`, and `AppStore.open` calls them bare (`store.ts:80-83`): a truncated
       blob rejects the whole open, which lands in `B9`'s silent in-memory mode.
       A per-row guard degrades that to one lost plan instead of no saving at all.
-- [ ] `B12` **Importing your own backup loses data.** `retirementInputsSchema`
+      Fixed: per-row guards in `loadScenarios`, `loadConfig` and
+      `SqliteRevisionStore.loadAll` skip the row, name it in the console and count
+      it into `AppState.unreadableRows`, which banners; `configLoadWarning` is now
+      the code `config-reset` so the copy translates.
+- [x] `B12` **Importing your own backup loses data.** `retirementInputsSchema`
       (`schemas.ts:168-203`) has no `marketPeriods` and `appConfigSchema`'s
       `general` (`:296-298`) carries only `showSetupCardOnLoad` — no `locale` —
       while the engine has both (`retirementEngine.ts:128`, `appConfig.ts:195`).
       zod strips unknown keys and the doc is validated through `appDbDocSchema`
       (`src/data/schemas.ts:21`, called at `db.ts:425`), so Data → Export then
       Import deletes the market-hypothesis anchors and resets the language.
-- [ ] `B13` **Clearing a number box stores `null`.** `Num` (`primitives.tsx:190`)
+      Fixed: `marketPeriodSchema` and `general.locale` added to the portable
+      schemas; both round-trip through `parseAppDbDoc` (`schemas.test.ts`).
+- [x] `B13` **Clearing a number box stores `null`.** `Num` (`primitives.tsx:190`)
       emits `NaN` when the field is emptied; autosave's
       `JSON.parse(JSON.stringify(inputs))` (`App.tsx:398`) turns `NaN` into
       `null`, and the engine's arithmetic reads `null` as 0. Clear an RDSP or
       TFSA balance, wait 1.2 s, reload: the balance is gone, with nothing on
       screen saying so. `DetailsPage.tsx:651` guards with `Number.isFinite`; the
       neighbouring call sites (`:630`, `:631`, `:633`, `:655`, `:656`) do not.
-- [ ] `B14` **The assistant's money ignores the language.** `ToolContext.locale`
+      Fixed: `Num` keeps the draft of what is being typed and hands the plan only
+      a finite number, so an emptied or half-typed box can no longer reach the
+      engine, and blur restores the plan's value instead of leaving the box blank
+      over a number. A field for which blank *is* the value passes the new
+      `onClear` — band amount, band share, the volatility override, the FHSA
+      opening age — which replaces the per-call-site `Number.isFinite` guards.
+      `primitives.num.test.tsx` drives real input and focusout events, which the
+      static-markup suite in `primitives.test.tsx` cannot.
+- [x] `B14` **The assistant's money ignores the language.** `ToolContext.locale`
       is declared (`tools.ts:432`) and threaded from the app, and never read:
       `money()` hardcodes `new Intl.NumberFormat('en-CA', …)` (`:464`). In French
       the sentences are French and every figure is `$1,234` instead of `1 234 $`.
-- [ ] `B15` `moveAnchor` (`ProjectionTimeline.tsx:321-326`) guards `if (!pt)` but
+      Fixed: `money()` became `moneyFor(locale)` and is built from `ctx.locale`
+      at every call; `summarizeResults`, `delta` and the `proposeRevert`
+      checkpoint dates take the locale too, so a French session reads `1 234 $`
+      throughout instead of `$1,234`.
+- [x] `B15` `moveAnchor` (`ProjectionTimeline.tsx:321-326`) guards `if (!pt)` but
       not the `anchors.find()` result, unlike its sibling `moveEvent` (`:315`). If
       the anchor disappears mid-drag, every later pointermove emits
       `onAnchorsChange` with an unchanged array — dirtying the plan and recording
       no-op autosave revisions while the drag appears dead. One `|| !a`.
-- [ ] `B16` **Money is printed outside the shared formatter**, so French gets
+      Fixed: `|| !a`, and the optional chains on the comparison below it are
+      dropped now that the anchor cannot be undefined there.
+- [x] `B16` **Money is printed outside the shared formatter**, so French gets
       English currency placement: `Dashboard.tsx:227` and `EvidenceRow.tsx:24`
       build `'$' + …toLocaleString(locale)` (→ `$1 234`, not `1 234 $`),
       `ContourMap.tsx:113` builds `'$' + … + 'k'` with no locale at all,
@@ -172,10 +203,18 @@ needs a product decision (not started).
       the lever hints, `ScheduleTable.tsx:34`'s `locale = 'en-CA'` *default
       argument* hides exactly this at the next call site, and `primitives.tsx:302`
       does it inside a design primitive with `'en-CA'` written in.
+      Fixed: `formatCurrency(value, locale)` from `src/lib/locale.ts` is the only
+      money formatter left in the chrome — `EvidenceRow`, `ScheduleTable` (whose
+      `'en-CA'` default argument is deleted), `OptimizeCard`, `MonteCarloChart`,
+      `AccountBars`, the lever hints and the Dashboard all call it. Left short on
+      purpose: `ContourMap`'s `$600k` axis labels and `MonteCarloChart`'s compact
+      money, neither of which the shared formatter can emit, and
+      `ConnectionsPage.tsx:477`'s token count, which is a window size rather than
+      money and so follows the browser's locale.
 
 ## 3. UI consistency
 
-- [ ] `C1` Two consistency breaks, both found and verified by direct grep on
+- [x] `C1` Two consistency breaks, both found and verified by direct grep on
       this pass, both open:
       (a) **seven raw `<input type="checkbox">`** — `ConnectionsPage.tsx:356`
       and `:776`, `OptimizeCard.tsx:87`, `SettingsModal.tsx:222`, `:575`,
@@ -195,7 +234,18 @@ needs a product decision (not started).
       literal `#475569`. Fix: import the tokens; keep a literal only where no
       token exists (the two band fills are alpha steps of `BLUE`, so they are
       legitimately local).
-- [ ] `C2` **Chrome that was never put through i18n**, verified by reading each
+      Fixed: (a) every raw checkbox and radio outside `primitives.tsx` is now
+      `Check`, `Radio` or `RadioGroup` — the group hands its members the shared
+      `name`, so a list of radios cannot forget to group — and `SettingsModal`
+      turned out to carry no uncommitted work after all, so its controls went too;
+      `OptimizeCard.test.tsx:29`'s pin still passes. (b) the charts read
+      `tokens.ts`: `toneColor` replaces the per-component dot ternaries and each
+      chart names its own colours once, so a legend swatch and the thing it
+      explains cannot drift apart. Literals survive only where no token exists —
+      the two `BLUE` alpha band washes and the axis-title greys. `Dashboard.tsx`
+      no longer hands the retire pin its own `#475569`; it takes
+      `ProjectionTimeline`'s `PIN_INK` default like every uncoloured pin.
+- [x] `C2` **Chrome that was never put through i18n**, verified by reading each
       site: `primitives.tsx:321` — `AccountBars`, a design primitive, renders the
       English sentence "Shares of … at that age. The mix shifts as the plan
       moves.", so the Dashboard's account block is English in French;
@@ -209,6 +259,13 @@ needs a product decision (not started).
       The banner pair is duplicated markup too (`:937` and `:951` are the same
       amber row, with off-token `bg-amber-50 border-amber-300` and a `rounded`
       control, against the flat rule asserted in `PrintOptionsCard.test.tsx:41`).
+      Fixed: `AccountBars` takes a translated `note` — the primitive renders no
+      words of its own — and the Dashboard supplies `dash.accountSharesNote`; the
+      banner pair and its dismiss titles went with `B9`; the compaction row reads
+      `assistant.compactedName` / `compactedSummary`, and the two
+      `window.prompt('Copy this prompt:')` fallbacks are gone. Still hardcoded:
+      `AgentPage.tsx`'s "context window too small" paragraph, which needs a
+      `{{tokens}}` key before it can move.
 - [ ] `C3` **The token layer exists and is half-used**, measured this pass: 44
       `bg-slate-900` literals against 8 `cls.primaryBtn`, 42
       `border border-slate-200` against 7 `cls.hairlineBtn`, 67
@@ -231,12 +288,39 @@ needs a product decision (not started).
       `bg-yellow-200`, a colour in no palette, and `:56`'s
       `{ defaultValue: section }` reintroduces the silent English fallback that
       `i18n.ts:53-63` removed; `common:apply` is a key nothing asks for.
+      Partly fixed. The widgets and colours landed: every raw checkbox and radio
+      is behind `Check` / `Radio` / `RadioGroup` (`C1(a)`), `DownMarketCheck`'s
+      third dot-and-label row is a `Chip`, `PageChrome`'s verdict dot reads
+      `toneColor` instead of a literal `#94a3b8`, `ProjectionTimeline` names its
+      ramp once instead of repeating literals per legend swatch, `NUM_CLASS` is
+      live (`className="num` 53 → 46, none left inside `primitives.tsx`), `TEXT`
+      is deleted, `BLUE_WASH_*` is what `ContourMap` actually paints with, and
+      `HelpModal` neither highlights in off-palette yellow nor falls back to raw
+      key names. The recipes did not move, measured the same way as the finding:
+      46 `bg-slate-900` against 8 `cls.primaryBtn`, 43 `border
+      border-slate-200` against 7 `cls.hairlineBtn`, 67 `border
+      border-slate-300` against 6 `cls.input`. They are not drop-in — padding,
+      text size and rounding differ per site — so closing this needs a
+      page-by-page pass against the StyleGuide, not a rename; 14 component files
+      still hand-type the field recipe. Left open by choice: the four
+      `window.confirm` calls and the provinces `window.prompt` in `SettingsModal`
+      are translated and the prompt takes real input, so a styled shell buys
+      nothing there — which is why `Modal` stays exercised only by `StyleGuide`
+      and `AppHeader` only by its own test. The dead `common:apply` the finding
+      named is already gone; the live `optimizer:apply` stays.
 
 ## 4. Recommended updates (not started — needs sign-off)
 
-- [!] `R1` The `#/assistant` route renders a page whose only content is "the
+- [x] `R1` The `#/assistant` route renders a page whose only content is "the
       assistant is docked beside this page" — a page that is a pointer at
       chrome. Fold it: `agent` → open the dock on the Dashboard.
+      Fixed: `agent` carries the catalog's `foldedInto` (like `#/welcome` and
+      `#/steering`), so the route parses, the Dashboard renders, and PageChrome's
+      hash check opens the dock; the page's copy (`agentPage.*`) is gone in both
+      locales, the folded view leaves `searchablePages()` and `sitemap.json`, and
+      the page subtree is keyed for `agent` so typing `#/assistant` while already
+      on the Dashboard still opens the dock (verified in the browser from a
+      closed dock, both from the Dashboard and from `#/print`).
 - [x] `R2` `nav.json`'s `home` label now reads "Home — the Dashboard" (fr:
       "Accueil — le tableau de bord").
 - [x] `R3` The verdict chip was computed twice: `App.tsx` and `Dashboard.tsx`
@@ -247,7 +331,13 @@ needs a product decision (not started).
       `src/lib/planDisplay.ts` (with the margin named `BORDERLINE_YEARS`), called
       by both; `planDisplay.test.ts` pins holds, the exact borderline boundary,
       and a real shortfall.
-- [!] `R4` `EXAMPLE_PLAN_PREFIX` is English-only and locale-independent, but
+- [x] `R4` `EXAMPLE_PLAN_PREFIX` is English-only and locale-independent, but
       plan names are user-visible; the prefix is how "is this mine?" is
       decided. A `Scenario.isExample` flag would stop name-matching being
       load-bearing.
+      Fixed: `Scenario.isExample`, set on all five seeds in
+      `buildDefaultScenarios`; stored as `scenarios.is_example` (schema v2) so it
+      travels in the exported `.sqlite` and the backup document, and read by the
+      set-up card, the plan-list badge, and `list_scenarios`.
+      `migrateScenario` still honours the old prefix for rows that predate the
+      column, then never rewrites the flag from a name again.
