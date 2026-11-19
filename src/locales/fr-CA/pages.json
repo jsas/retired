@@ -1,4 +1,14 @@
 {
+  "app": {
+    "configResetTitle": "Paramètres rétablis.",
+    "configReset": "Vos paramètres de moteur enregistrés n’ont pas pu être lus et sont repassés aux valeurs par défaut. Vous devez ressaisir vos tables d’impôt personnalisées et vos réglages de moteur, ou les restaurer à partir d’une sauvegarde.",
+    "storeUnavailableTitle": "Rien de ce que vous changez n’est enregistré.",
+    "storeUnavailable": "Le planificateur n’a pas pu ouvrir sa base de données : cette session n’existe qu’en mémoire et sera perdue à la fermeture de cet onglet. Exportez une sauvegarde complète depuis Données avant de quitter.",
+    "saveFailedTitle": "Vos modifications risquent de ne pas être enregistrées.",
+    "saveFailed": "Le stockage du navigateur est indisponible ou plein — votre plan est toujours dans cet onglet, mais il ne survivra pas à sa fermeture. Libérez de l’espace de stockage, ou utilisez Données → Exporter une sauvegarde complète pour en garder une copie sur disque.",
+    "unreadableRows_one": "{{count}} élément enregistré n’a pas pu être lu et a été ignoré — la liste des plans à l’écran est peut-être incomplète.",
+    "unreadableRows_other": "{{count}} éléments enregistrés n’ont pas pu être lus et ont été ignorés — la liste des plans à l’écran est peut-être incomplète."
+  },
   "projection": "Projection",
   "yearMath": "Une année, étape par étape",
   "optimizer": {

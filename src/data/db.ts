@@ -157,6 +157,12 @@ export class AppDatabase {
    *  show/clear a "changes may not be saved" banner (issue U-02); before this,
    *  a failed write was only a console.warn. */
   private saveListeners = new Set<(err: unknown | null) => void>();
+  /** Stored rows whose payload could not be decoded, counted while loading. One
+   *  truncated `inputs` blob used to reject the whole `AppStore.open()` — and the
+   *  app then kept running in memory with no store at all and no message (B11).
+   *  The loaders skip the unreadable row and count it here instead, so one bad row
+   *  costs one plan and the UI can say which count it lost. */
+  unreadableRows = 0;
   private constructor(db: Database, backend: OpfsBackend | null) {
     this.db = db;
     this.backend = backend;
@@ -315,12 +321,21 @@ export class AppDatabase {
   loadScenarios(): Scenario[] {
     const res = this.db.exec(`SELECT id, name, inputs FROM scenarios ORDER BY rowid`);
     if (res.length === 0) return [];
-    return res[0].values.map(([id, name, inputs]) => ({
-      id: id as string,
-      name: name as string,
-      // Migrated on the way out so older rows gain newer fields.
-      inputs: migrateInputs(JSON.parse(inputs as string)),
-    }));
+    const out: Scenario[] = [];
+    for (const [id, name, inputs] of res[0].values) {
+      try {
+        out.push({
+          id: id as string,
+          name: name as string,
+          // Migrated on the way out so older rows gain newer fields.
+          inputs: migrateInputs(JSON.parse(inputs as string)),
+        });
+      } catch (err) {
+        this.unreadableRows += 1;
+        console.error(`[RE:tired] Stored plan ${JSON.stringify(name)} could not be decoded; skipping it.`, err);
+      }
+    }
+    return out;
   }
 
   /** Full replace — scenarios are few and written as a set, never one row at
@@ -364,7 +379,14 @@ export class AppDatabase {
 
   loadConfig(): unknown | null {
     const res = this.db.exec(`SELECT value FROM kv WHERE key = 'config'`);
-    return res.length > 0 ? JSON.parse(res[0].values[0][0] as string) : null;
+    if (res.length === 0) return null;
+    try {
+      return JSON.parse(res[0].values[0][0] as string);
+    } catch (err) {
+      this.unreadableRows += 1;
+      console.error('[RE:tired] Stored engine config could not be decoded; using defaults.', err);
+      return null;
+    }
   }
 
   saveConfig(config: unknown): void {

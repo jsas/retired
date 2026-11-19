@@ -1,4 +1,14 @@
 {
+  "app": {
+    "configResetTitle": "Settings were reset.",
+    "configReset": "Your saved engine settings could not be read and were reset to defaults. Any custom tax tables or engine settings need to be re-entered, or restored from a backup.",
+    "storeUnavailableTitle": "Nothing you change is being saved.",
+    "storeUnavailable": "The planner could not open its database, so this session lives in memory only and will be lost when you close this tab. Export a full backup from Data before you leave.",
+    "saveFailedTitle": "Changes may not be saved.",
+    "saveFailed": "Browser storage is unavailable or full — your plan is still in this tab, but it won't survive closing it. Free up site storage, or use Data → Export full backup to keep a copy on disk.",
+    "unreadableRows_one": "{{count}} saved item could not be read and was skipped — the plans listed here may be incomplete.",
+    "unreadableRows_other": "{{count}} saved items could not be read and were skipped — the plans listed here may be incomplete."
+  },
   "projection": "Projection",
   "yearMath": "One Year, Step by Step",
   "optimizer": {

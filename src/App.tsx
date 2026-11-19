@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { StyleGuide } from './design/StyleGuide';
 import { PageChrome, PlanUndoContext } from './components/console/PageChrome';
@@ -13,6 +14,7 @@ import {
 import { AlertTriangle, X } from 'lucide-react';
 import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from '@retired/engine-core/retirementEngine';
 import { resolveSpouseSource, baselineSpouse, personPlanFromSpouse, promoteEmbeddedSpouses, toHousehold } from '@retired/engine-core/householdTypes';
+import { mergeOnOpen } from './lib/storeMerge';
 import type { Scenario } from '@retired/engine-core/types';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { AppStore } from './data/store';
@@ -51,11 +53,12 @@ import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
 // The SQL store loads asynchronously (the wasm binary has to be fetched/decoded
 // first — near-instant after the first visit). To keep first paint synchronous
 // we seed state from the localStorage mirror of the SQL blob (or first-run
-// examples) and then swap in the store's authoritative contents the moment it
+// examples) and then merge in the store's authoritative contents the moment it
 // opens. The mirror is the SQL store's own compatibility copy, written on every
 // persist, so this is a cache read of the same source of truth — not a fork.
-// The swap is skipped while the user holds unsaved edits so in-flight work is
-// never clobbered.
+// The merge never drops work: a plan the user was already editing keeps its own
+// live inputs, and nothing is written back until the merge has run (see the
+// `settled` gate below).
 const getSyncSeed = () => {
   const stored = readSeedScenariosFromMirror();
   if (stored) {
@@ -69,6 +72,30 @@ const getSyncSeed = () => {
   const scenarios = buildDefaultScenarios();
   return { scenarios, activeScenarioId: scenarios[0].id };
 };
+
+// Every "your data is at risk" state renders the same amber row: settings reset,
+// the store refusing to open, stored rows it couldn't decode, a failed save. They
+// were two copies of this markup with the dismiss labels hardcoded in English.
+function WarningBanner({ children, onDismiss, dismissLabel }: {
+  children: ReactNode;
+  onDismiss: () => void;
+  dismissLabel: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 bg-amber-50 border-b border-amber-300 px-3 md:px-6 py-2 text-xs text-amber-900" role="alert">
+      <AlertTriangle size={14} className="shrink-0" />
+      <span className="flex-1">{children}</span>
+      <button
+        onClick={onDismiss}
+        className="shrink-0 p-0.5 hover:bg-amber-100"
+        title={dismissLabel}
+        aria-label={dismissLabel}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
 
 function App() {
   const [initialState] = useState(getSyncSeed);
@@ -84,6 +111,7 @@ function App() {
   const locale = parseLocale(config.general.locale) ?? detected;
   const { t: tPages } = useTranslation('pages');
   const { t: tStart } = useTranslation('start');
+  const { t: tCommon } = useTranslation('common');
   useEffect(() => { void setAppLanguage(locale); }, [locale]);
   const setLocale = (next: Locale) => {
     setConfig(prev => ({ ...prev, general: { ...prev.general, locale: next } }));
@@ -196,33 +224,61 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printOptions.includeMonteCarlo, resolvedInputs, config]);
 
-  // Open the SQL store once (async: the wasm has to load). When its contents
-  // differ from the sync seed and the user isn't mid-edit, adopt them — the
-  // store is the authoritative copy.
+  // The store's live counterpart: the plan list as rendered, the plan on screen,
+  // its possibly-unsaved inputs, and whether it is dirty. Synced after every
+  // render (below the `hasUnsavedChanges` declaration) and read only from inside
+  // the open promise, so merging needs none of them as effect dependencies.
+  const liveRef = useRef({
+    scenarios: initialState.scenarios,
+    activeId: initialState.activeScenarioId,
+    inputs,
+    dirty: false,
+  });
+  // Nothing persists until the store's contents have been merged in. persist used
+  // to fire against the seed list while the open was still in flight, and
+  // `saveScenarios` starts with `DELETE FROM scenarios` — so a slow open (OPFS
+  // warm-up, first run in Safari) wrote the example plans over the user's own.
+  const [settled, setSettled] = useState(false);
+  // A failed open used to be a console.warn: the app carried on in memory with no
+  // store, saving nothing, saying nothing. `bootNonce` is the retry handle.
+  const [bootNonce, setBootNonce] = useState(0);
+  const [storeUnavailable, setStoreUnavailable] = useState(false);
+  // Stored rows the loaders could not decode (B11) — bannered, not swallowed.
+  const [unreadableRows, setUnreadableRows] = useState(0);
+
+  // Open the SQL store (async: the wasm has to load) and merge in what it holds.
+  // Adoption is unconditional — skipping it while the user was mid-edit was the
+  // bug: the merge never happened and the persist effect then wrote the seed list
+  // over everything the store held. A live edit still wins, but only for the one
+  // plan it was made on.
   useEffect(() => {
     let cancelled = false;
     AppStore.open(buildDefaultScenarios).then(({ store: opened, state }) => {
       if (cancelled) return;
       setStore(opened);
-      setHasUnsavedChanges(dirty => {
-        if (!dirty) {
-          setScenarios(state.scenarios);
-          setActiveScenarioId(state.activeScenarioId);
-          setInputs(JSON.parse(JSON.stringify(
-            state.scenarios.find(s => s.id === state.activeScenarioId)!.inputs,
-          )));
-        }
-        return dirty;
-      });
+      setStoreUnavailable(false);
+      setUnreadableRows(state.unreadableRows ?? 0);
+      const merged = mergeOnOpen(state, liveRef.current);
+      setScenarios(merged.scenarios);
+      setActiveScenarioId(merged.activeScenarioId);
+      setInputs(merged.inputs);
+      // Still dirty means the edit is real and not on disk yet: autosave (or the
+      // next persist) writes the merged list back.
+      setHasUnsavedChanges(merged.dirty);
+      setSettled(true);
       if (state.config) setConfig(state.config);
       // Issue #19: a stored config that failed wholesale validation was reset
       // to defaults — don't let that pass silently; the user's custom tax
       // tables need re-entering.
       if (state.configLoadWarning) setConfigLoadWarning(state.configLoadWarning);
-    }).catch(err => console.warn('SQL store failed to open; running in-memory:', err));
+    }).catch(err => {
+      if (cancelled) return;
+      console.warn('SQL store failed to open; running in-memory:', err);
+      setStoreUnavailable(true);
+    });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [bootNonce]);
 
   // Persist scenarios + active scenario on every change (once the store is
   // open — before that there's nothing to write through to). persist returns
@@ -230,9 +286,10 @@ function App() {
   // page's history list re-reads it.
   const [revisionNonce, setRevisionNonce] = useState(0);
   useEffect(() => {
-    const wrote = store?.persist({ scenarios, activeScenarioId }) ?? false;
+    if (!store || !settled) return;
+    const wrote = store.persist({ scenarios, activeScenarioId });
     if (wrote) setRevisionNonce(n => n + 1);
-  }, [store, scenarios, activeScenarioId]);
+  }, [store, settled, scenarios, activeScenarioId]);
 
   // Durability feedback (issue U-02): the persist writes are fire-and-forget,
   // so a failed OPFS/localStorage write was previously only a console.warn —
@@ -248,12 +305,13 @@ function App() {
   // Issue #19: a stored config that failed wholesale validation was reset to
   // defaults. Surface that — custom tax tables silently vanishing is a data
   // loss the user must know about. Stays until dismissed.
-  const [configLoadWarning, setConfigLoadWarning] = useState<string | null>(null);
+  const [configLoadWarning, setConfigLoadWarning] = useState<'config-reset' | null>(null);
 
   // Persist engine config on every change.
   useEffect(() => {
-    store?.persist({ config });
-  }, [store, config]);
+    if (!store || !settled) return;
+    store.persist({ config });
+  }, [store, settled, config]);
 
   // If the URL carried a shared plan (#plan=...), import it once as a new
   // scenario and select it. Runs before the persist effect's first save would
@@ -386,6 +444,12 @@ function App() {
   // Update scenario when inputs change - with save button
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Keep the merge snapshot honest: whatever the user has on screen right now,
+  // including edits that have not reached `scenarios` yet.
+  useEffect(() => {
+    liveRef.current = { scenarios, activeId: activeScenarioId, inputs, dirty: hasUnsavedChanges };
+  });
+
   const handleInputsChange = (newInputs: RetirementInputs) => {
     // Keep the plan's ages internally consistent: editing current age can
     // invalidate retirement age (retire before now) etc., so clamp them.
@@ -447,7 +511,12 @@ function App() {
     if (pending) handleSaveScenario();
     return pending;
   };
-  useEffect(() => () => { flushPendingSave(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The unmount flush has to call the *latest* closure: `flushPendingSave` reads
+  // `inputs` and `activeScenarioId` from its render, so the empty-deps effect
+  // below keeps it in a ref instead of capturing the first render's.
+  const flushRef = useRef(flushPendingSave);
+  useEffect(() => { flushRef.current = flushPendingSave; });
+  useEffect(() => () => { flushRef.current(); }, []);
 
   // Update inputs when scenario changes. Autosave flushes first so the plan
   // on screen is already the plan on disk — no "save first?" prompt.
@@ -920,36 +989,42 @@ function App() {
       />
       <div className="no-print">
         {configLoadWarning && (
-          <div className="flex items-center gap-2 bg-amber-50 border-b border-amber-300 px-3 md:px-6 py-2 text-xs text-amber-900" role="alert">
-            <AlertTriangle size={14} className="shrink-0" />
-            <span className="flex-1">{configLoadWarning}</span>
+          <WarningBanner
+            onDismiss={() => setConfigLoadWarning(null)}
+            dismissLabel={tCommon('dismissWarning')}
+          >
+            <strong>{tPages('app.configResetTitle')}</strong> {tPages('app.configReset')}
+          </WarningBanner>
+        )}
+        {storeUnavailable && (
+          <WarningBanner
+            onDismiss={() => setStoreUnavailable(false)}
+            dismissLabel={tCommon('dismissWarning')}
+          >
+            <strong>{tPages('app.storeUnavailableTitle')}</strong> {tPages('app.storeUnavailable')}{' '}
             <button
-              onClick={() => setConfigLoadWarning(null)}
-              className="shrink-0 rounded p-0.5 hover:bg-amber-100"
-              title="Dismiss this warning"
-              aria-label="Dismiss settings warning"
+              onClick={() => setBootNonce(n => n + 1)}
+              className="underline font-medium hover:text-amber-700"
             >
-              <X size={14} />
+              {tCommon('retry')}
             </button>
-          </div>
+          </WarningBanner>
+        )}
+        {unreadableRows > 0 && (
+          <WarningBanner
+            onDismiss={() => setUnreadableRows(0)}
+            dismissLabel={tCommon('dismissWarning')}
+          >
+            {tPages('app.unreadableRows', { count: unreadableRows })}
+          </WarningBanner>
         )}
         {saveError && (
-          <div className="flex items-center gap-2 bg-amber-50 border-b border-amber-300 px-3 md:px-6 py-2 text-xs text-amber-900" role="alert">
-            <AlertTriangle size={14} className="shrink-0" />
-            <span className="flex-1">
-              <strong>Changes may not be saved.</strong> Browser storage is unavailable or full —
-              your plan is still in this tab, but it won&apos;t survive closing it.
-              Free up site storage, or use Data → Export full backup to keep a copy on disk.
-            </span>
-            <button
-              onClick={() => setSaveError(false)}
-              className="shrink-0 rounded p-0.5 hover:bg-amber-100"
-              title="Dismiss (the warning returns if saving still fails)"
-              aria-label="Dismiss storage warning"
-            >
-              <X size={14} />
-            </button>
-          </div>
+          <WarningBanner
+            onDismiss={() => setSaveError(false)}
+            dismissLabel={tCommon('dismissWarning')}
+          >
+            <strong>{tPages('app.saveFailedTitle')}</strong> {tPages('app.saveFailed')}
+          </WarningBanner>
         )}
         <PlanUndoContext.Provider value={undoState}>
           {page}

@@ -50,9 +50,14 @@ export interface AppState {
   config: AppConfig | null;
   /** Set when a stored config existed but failed wholesale validation and was
    *  replaced by defaults (issue #19). Absent when the config loaded cleanly
-   *  (or there was never one) — the UI can banner this so the user knows their
-   *  custom tax tables didn't survive the load. */
-  configLoadWarning?: string;
+   *  (or there was never one). A code rather than a sentence: the UI banners it
+   *  through `pages:app.configReset*`, so a French user gets French copy about
+   *  their vanished tax tables. */
+  configLoadWarning?: 'config-reset';
+  /** Stored rows (plans, history rows, or the config payload) that could not be
+   *  decoded and were skipped, so the UI can banner the count instead of quietly
+   *  showing a shorter plan list (B11). */
+  unreadableRows?: number;
 }
 
 export class AppStore {
@@ -107,16 +112,14 @@ export class AppStore {
     // validates but is missing newer fields is back-filled by
     // validateAppConfig on purpose and stays silent.
     let config: AppConfig | null = null;
-    let configLoadWarning: string | undefined;
+    let configLoadWarning: 'config-reset' | undefined;
     if (configRaw) {
       config = validateAppConfig(configRaw);
       if (!config) {
         const shape = configRaw && typeof configRaw === 'object'
           ? `keys [${Object.keys(configRaw as object).join(', ')}]`
           : typeof configRaw;
-        configLoadWarning =
-          'Your saved engine settings could not be read and were reset to defaults. '
-          + 'Any custom tax tables or engine settings need to be re-entered (or restored from a backup).';
+        configLoadWarning = 'config-reset';
         console.error(
           '[RE:tired] Stored config failed validation and was reset to defaults.',
           `Raw payload: ${shape}, length ${JSON.stringify(configRaw).length} chars.`,
@@ -127,7 +130,10 @@ export class AppStore {
       ? activeScenarioId
       : scenarios[0].id;
 
-    return { store, state: { scenarios, activeScenarioId: resolvedActive, config, configLoadWarning } };
+    return {
+      store,
+      state: { scenarios, activeScenarioId: resolvedActive, config, configLoadWarning, unreadableRows: db.unreadableRows },
+    };
   }
 
   /** True when the SQL store is already mirrored locally (sync checks for
