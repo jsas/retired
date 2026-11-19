@@ -336,13 +336,13 @@ export function ProjectionTimeline({
   const moveAnchor = (e: React.PointerEvent, id: string, field: 'return' | 'volatility') => {
     const pt = svgPoint(e);
     const a = anchors.find(v => v.id === id);
-    if (!pt) return;
+    if (!pt || !a) return;
     const roundRet = (v: number) => Math.round(v * 1000) / 1000;
     const roundVol = (v: number) => Math.round(v * 200) / 200;
     const next = { ...a, age: Math.max(minAge, Math.min(maxAge, ageAtX(pt.px))) } as TimelineMarketAnchor;
     if (field === 'return') next.return = roundRet(Math.min(RET_MAX, Math.max(RET_MIN, retAtY(pt.py))));
     else next.volatility = roundVol(volAtY(pt.py));
-    if (next.age !== a?.age || next.return !== a?.return || next.volatility !== a?.volatility) {
+    if (next.age !== a.age || next.return !== a.return || next.volatility !== a.volatility) {
       onAnchorsChange?.(anchors.map(v => (v.id === id ? next : v)));
     }
   };

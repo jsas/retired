@@ -413,13 +413,11 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
                 <div key={i} className="flex items-end gap-2">
                   <Num label={t('fromAge')} value={b.fromAge} step={1} onChange={(v) => setBand({ fromAge: v })} />
                   <Num label={t('amountOfBase')} value={dollars} step={1000} min={0} onChange={(v) => {
-                    if (!Number.isFinite(v) || !(base > 0)) return;
+                    if (!(base > 0)) return;
                     setBand({ pctOfBase: v / base });
                   }} />
-                  <Num label={t('pctOfBase')} value={Math.round(b.pctOfBase * 100)} step={5} min={0} onChange={(v) => {
-                    if (!Number.isFinite(v)) return;
-                    setBand({ pctOfBase: v / 100 });
-                  }} />
+                  <Num label={t('pctOfBase')} value={Math.round(b.pctOfBase * 100)} step={5} min={0}
+                    onChange={(v) => setBand({ pctOfBase: v / 100 })} />
                   <button className="mb-1.5 text-slate-400 hover:text-rose-600" aria-label={t('removePhase')}
                     onClick={() => set({ spendingBands: bands.filter((_, j) => j !== i) })}>×</button>
                 </div>
@@ -458,7 +456,8 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
                 <Num label={t('fromAge')} value={p.age} step={1} onChange={(v) => upd(i, { age: v })} />
                 <Num label={t('returnPct')} value={Math.round(p.return * 1000) / 10} step={0.5} onChange={(v) => upd(i, { return: v / 100 })} />
                 <Num label={t('volPct')} value={p.volatility != null ? Math.round(p.volatility * 1000) / 10 : NaN} step={0.5} min={0}
-                  onChange={(v) => upd(i, { volatility: Number.isFinite(v) ? Math.max(0, v / 100) : undefined })} />
+                  onChange={(v) => upd(i, { volatility: Math.max(0, v / 100) })}
+                  onClear={() => upd(i, { volatility: undefined })} />
                 <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={t('removeAnchor', { age: p.age })}
                   onClick={() => setPeriods(periods.filter((_, j) => j !== i))}>×</button>
               </div>
@@ -611,7 +610,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
               <Num label={t('contributionYr')} value={fh!.contribution} onChange={(v) => setFh({ contribution: v })} />
               <Num label={t('openedAtAge')} value={fh!.openAge ?? NaN} step={1}
                 hint={t('openedHint')}
-                onChange={(v) => setFh({ openAge: Number.isFinite(v) ? v : undefined })} />
+                onChange={(v) => setFh({ openAge: v })} onClear={() => setFh({ openAge: undefined })} />
             </div>
           )}
         </Section>

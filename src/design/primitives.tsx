@@ -174,12 +174,23 @@ export function Fader({ label, help, value, min, max, step, format, onChange, hi
    The labelled number field: flat hairline box, label above, tabular numerals,
    optional suffix unit and a small grey hint under the box. Pages compose this
    instead of a raw <input type="number"> so a form row can't drift back to
-   browser defaults (blue focus, proportional digits). NaN reads as "cleared",
-   not zero — the field is empty while the user is mid-edit. */
-export function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
+   browser defaults (blue focus, proportional digits). What is being typed stays
+   here until it is a number: an emptied or half-typed box never reaches the plan.
+   A non-finite value survives into the engine's arithmetic, turns into `null` in
+   autosave's JSON round-trip, and `null` reads as 0 there — so clearing an RDSP
+   balance used to quietly store zero with an empty box on screen. Blur drops the
+   draft, so a box can't be left showing nothing over a plan that still has a
+   value. */
+export function Num({ label, value, onChange, onClear, step = 1000, min, suffix, hint }: {
   label: string; value: number; onChange: (v: number) => void;
+  /** The box was emptied. Without this, emptying changes nothing and the number
+      returns on blur; a field where blank *is* a value — contribution room with
+      no limit, a market anchor with no volatility override — passes it so the
+      page's own "blank means" keeps working. */
+  onClear?: () => void;
   step?: number; min?: number; suffix?: string; hint?: string;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
   return (
     <label className="block">
       <span className="text-[12px] text-slate-500">{label}</span>
@@ -187,9 +198,16 @@ export function Num({ label, value, onChange, step = 1000, min, suffix, hint }: 
         <input
           type="number"
           className={`${NUM_CLASS} w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none`}
-          value={Number.isFinite(value) ? value : ''}
+          value={draft ?? (Number.isFinite(value) ? String(value) : '')}
           step={step} min={min}
-          onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))}
+          onChange={(e) => {
+            const text = e.target.value;
+            setDraft(text);
+            if (text === '') { onClear?.(); return; }
+            const n = Number(text);
+            if (Number.isFinite(n)) onChange(n);
+          }}
+          onBlur={() => setDraft(null)}
         />
         {suffix && <span className="text-[11px] text-slate-400">{suffix}</span>}
       </span>
