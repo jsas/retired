@@ -175,11 +175,6 @@
   "help": "Help",
   "print": "Print & export",
   "support": "Support this app",
-  "agentPage": {
-    "title": "Assistant",
-    "open": "The conversation is open beside you.",
-    "body": "Ask about your plan, or ask it to change something — every edit is a card you approve. This page holds the same chat as the dock on every other page; the expand button in the dock's header gives it the full screen."
-  },
   "thisPlanEndToEnd": "This plan, end to end",
   "namedVariants": "Named variants, scored",
   "acrossFutures": "Across many market futures",

@@ -175,11 +175,6 @@
   "help": "Aide",
   "print": "Imprimer et exporter",
   "support": "Soutenir cette appli",
-  "agentPage": {
-    "title": "Assistant",
-    "open": "La conversation est ouverte à côté de vous.",
-    "body": "Posez une question sur votre plan, ou demandez-lui de changer quelque chose — chaque modification est une carte à approuver. Cette page porte le même clavardage que le dock de chaque autre page; le bouton d’agrandissement dans l’en-tête du dock le met en plein écran."
-  },
   "thisPlanEndToEnd": "Ce plan, du début à la fin",
   "namedVariants": "Variantes nommées, notées",
   "acrossFutures": "Sur de nombreux futurs de marché",

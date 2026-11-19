@@ -14,9 +14,10 @@
 // Monte Carlo, Backtest and the new Solver are each their own page again.
 // Compare later joined that menu (its own page at #/compare). Steering moved
 // onto the Dashboard (#187) — its own entry below folds to it.
-// Merged legacy routes still fold (export/sharing → Data; details → Plans);
-// they keep their legacy view ids for back-compat routing, carry `foldedInto`,
-// and hide from search/sitemap/proposals.
+// Merged legacy routes still fold (export/sharing → Data; details → Plans; the
+// assistant's #/assistant page → the Dashboard's dock); they keep their legacy
+// view ids for back-compat routing, carry `foldedInto`, and hide from
+// search/sitemap/proposals.
 
 /** One navigable page (view) in the SPA. `viewId` must be importable by
  *  host-agnostic packages without depending on the app, so it lives here. */
@@ -206,13 +207,6 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     section: 'setup',
   },
   {
-    viewId: 'agent',
-    route: 'assistant',
-    title: 'Assistant',
-    description: 'The AI assistant chat page: ask about the plan, what-if it, or change it with propose_* cards you approve.',
-    keywords: ['assistant', 'ai', 'chat', 'help me', 'what-if', 'ask', 'agent'],
-  },
-  {
     viewId: 'styleguide',
     route: 'styleguide',
     title: 'Style Guide',
@@ -233,6 +227,18 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
     title: 'Welcome',
     description: 'The old intro screen — it now opens the Dashboard, where the set-up card asks for the four numbers.',
     keywords: ['welcome', 'start', 'getting started', 'onboarding', 'first time', 'new plan', 'build a plan'],
+    foldedInto: 'dashboard',
+  },
+  // The assistant had a page whose entire body was "the conversation is open
+  // beside you" — a page pointing at chrome. The dock is the feature, so
+  // #/assistant now opens the dock on the Dashboard: PageChrome still reads the
+  // legacy hash as an explicit open, and the URL then normalizes to #/dashboard.
+  {
+    viewId: 'agent',
+    route: 'assistant',
+    title: 'Assistant',
+    description: 'The AI assistant is not a page: its dock sits beside every page (the robot button in the header opens it). The old #/assistant route opens that dock on the Dashboard.',
+    keywords: ['assistant', 'ai', 'chat', 'help me', 'what-if', 'ask', 'agent', 'docked', 'robot'],
     foldedInto: 'dashboard',
   },
   {

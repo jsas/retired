@@ -46,12 +46,11 @@ describe('NAV_CATALOG shape', () => {
       if (runs[runs.length - 1] !== e.section) runs.push(e.section);
     }
     expect(runs.filter(s => s != null)).toEqual(['plan', 'explore', 'share', 'setup']);
-    // Every destination the nav shows carries its section; only the
-    // chrome-adjacent pages (the assistant route, the internal style guide) and
-    // the folds — including the retired #/welcome intro screen — don't.
+    // Every destination the nav shows carries its section; only the internal
+    // style guide and the folds — #/welcome's intro screen and the assistant's
+    // old page — don't.
     for (const e of searchablePages()) {
       if (e.internal) continue;
-      if (e.viewId === 'agent') continue;
       expect(e.section, `${e.viewId} has no section`).toBeTruthy();
     }
   });
@@ -82,13 +81,16 @@ describe('rankPages', () => {
 
   it('searches only the reachable pages — folded legacy views never surface', () => {
     // Only the truly-merged legacy names fold now; the Tools surfaces are real
-    // pages and DO surface for their own words. Steering folded last (#187).
-    for (const q of ['export', 'sharing', 'details', 'steering']) {
+    // pages and DO surface for their own words. Steering folded last (#187),
+    // then the assistant's page: asking for the assistant reaches the Dashboard,
+    // never a page of its own — the assistant is chrome beside every page.
+    for (const q of ['export', 'sharing', 'details', 'steering', 'assistant']) {
       const ids = rankPages(q).map((e) => e.viewId);
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('export');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('sharing');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('details');
       expect(ids, `query "${q}" surfaced a folded page`).not.toContain('eq');
+      expect(ids, `query "${q}" surfaced a folded page`).not.toContain('agent');
     }
     expect(rankPages('compare').map((e) => e.viewId)).toContain('compare');
   });
@@ -122,12 +124,17 @@ describe('canonicalView / pageTitleLine', () => {
     expect(canonicalView('backtest')).toBe('backtest');
     expect(canonicalView('optimize')).toBe('optimize');
     expect(canonicalView('eq')).toBe('dashboard');
+    // The assistant stopped being a page (R1): its route belongs to the Dashboard.
+    expect(canonicalView('agent')).toBe('dashboard');
     expect(canonicalView('projection')).toBe('projection');
     expect(canonicalView('dashboard')).toBe('dashboard');
   });
 
   it('names pages by their UI title — folded pages report their destination', () => {
     expect(pageTitleLine('dashboard')).toBe('Dashboard');
+    // The assistant's page folded onto the Dashboard, so the ambient prompt line
+    // names the page the user actually sees.
+    expect(pageTitleLine('agent')).toBe('Dashboard');
     expect(pageTitleLine('projection')).toBe('Projection');
     expect(pageTitleLine('details')).toBe('Plans');
     expect(pageTitleLine('eq')).toBe('Dashboard');

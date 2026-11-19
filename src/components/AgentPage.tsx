@@ -1109,7 +1109,14 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     if (planContext) compaction.messages.unshift(planContext);
     const history = compaction.messages;
     if (compaction.compacted) {
-      patchAssistant(t => { t.tools.push({ id: `compact-${Date.now().toString(36)}`, name: 'context compacted', state: 'done', summary: 'Older messages were summarized to fit the context window.' }); });
+      patchAssistant(turn => {
+        turn.tools.push({
+          id: `compact-${Date.now().toString(36)}`,
+          name: t('assistant.compactedName'),
+          state: 'done',
+          summary: t('assistant.compactedSummary'),
+        });
+      });
     }
 
     // Even after compaction the request can exceed the window: the fixed
@@ -1313,7 +1320,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       if (change.navigate != null) {
         // Page-navigation card: no plan change to checkpoint and nothing to
         // merge into inputs (the patch is empty by design). Queue the route —
-        // the host unmounts this chat when the view leaves 'agent', so moving
+        // the host unmounts this chat whenever the view changes, so moving
         // now would abort the assistant's reply mid-stream (see
         // pendingNavigation). runTurn's finally navigates once the turn is over.
         pendingNavigation.current.push(change.navigate);
@@ -2402,7 +2409,7 @@ function AskQuestionPanel({ inputs, results, compact = false }: {
   const copy = () => {
     navigator.clipboard.writeText(prompt).then(
       () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
-      () => window.prompt('Copy this prompt:', prompt),
+      () => { /* clipboard blocked — the prompt stays selectable in the box below */ },
     );
   };
 
@@ -2481,7 +2488,7 @@ function TuneInputsPanel({ inputs, onApply }: {
   const copy = () => {
     navigator.clipboard.writeText(prompt).then(
       () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
-      () => window.prompt('Copy this prompt:', prompt),
+      () => { /* clipboard blocked — the prompt stays selectable in the box below */ },
     );
   };
 
