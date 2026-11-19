@@ -73,6 +73,31 @@ describe('schemas — persisted shapes', () => {
     expect(appConfigSchema.safeParse(DEFAULT_APP_CONFIG).success).toBe(true);
   });
 
+  it('keeps market periods and the site language through a document round-trip (B12)', () => {
+    // Both are real engine fields the portable (AI-tool) schemas had never heard
+    // of, and every whole-DB export/import plus plan import is validated through
+    // them. Zod's default is to strip unknown keys, so a restore quietly dropped
+    // the user's market hypothesis and sent them back to English.
+    const inputs = baseInputs({
+      marketPeriods: [{ id: 'p1', age: 62, return: -0.20, volatility: 0.25 }, { id: 'p2', age: 70, return: 0.05 }],
+    });
+    expect(retirementInputsSchema.parse(inputs).marketPeriods).toEqual(inputs.marketPeriods);
+
+    const doc = parseAppDbDoc({
+      version: 1,
+      scenarios: [{ id: 'p', name: 'Crash test', inputs }],
+      activeScenarioId: 'p',
+      config: { ...DEFAULT_APP_CONFIG, general: { ...DEFAULT_APP_CONFIG.general, locale: 'fr-CA' } },
+    });
+    expect(doc?.scenarios[0].inputs.marketPeriods?.[0]).toEqual({ id: 'p1', age: 62, return: -0.2, volatility: 0.25 });
+    expect(doc?.config.general.locale).toBe('fr-CA');
+  });
+
+  it('rejects a market period with no age rather than dropping the list', () => {
+    const bad = { ...baseInputs(), marketPeriods: [{ id: 'p1', return: 0.05 }] };
+    expect(retirementInputsSchema.safeParse(bad).success).toBe(false);
+  });
+
   it('parseAppDbDoc migrates legacy inputs before validating', () => {
     const legacyScenario = {
       id: 'old', name: 'Old plan',

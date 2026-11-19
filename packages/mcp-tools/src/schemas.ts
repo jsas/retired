@@ -165,6 +165,15 @@ export const spouseSchema = z.object({
   debts: z.array(debtSchema).optional(),
 }) satisfies z.ZodType<SpouseInputs>;
 
+/** One stretch of the plan's future with its own return/volatility hypothesis
+ *  (#138). Optional: absent means the plan's flat assumptions apply everywhere. */
+export const marketPeriodSchema = z.object({
+  id: z.string(),
+  age: z.number(),
+  return: z.number(),
+  volatility: z.number().optional(),
+});
+
 export const retirementInputsSchema = z.object({
   currentAge: z.number(),
   retirementAge: z.number(),
@@ -200,6 +209,7 @@ export const retirementInputsSchema = z.object({
   fhsa: fhsaSchema.optional(),
   debts: z.array(debtSchema).optional(),
   giving: z.array(givingStreamSchema).optional(),
+  marketPeriods: z.array(marketPeriodSchema).optional(),
 }) satisfies z.ZodType<RetirementInputs>;
 
 export const scenarioSchema = z.object({
@@ -295,5 +305,8 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
   }),
   general: z.object({
     showSetupCardOnLoad: z.boolean(),
+    // The site language lives in the config, so a full backup — or a plan sent
+    // through an AI tool — has to carry it or the user is back in English.
+    locale: z.enum(['en-CA', 'fr-CA']).optional(),
   }),
 });
