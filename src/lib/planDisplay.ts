@@ -8,7 +8,7 @@
 // so a drained pot could read as lasting past the horizon. These helpers keep
 // those surfaces on the same leftover.
 
-import type { YearlyBreakdown } from '@retired/engine-core/retirementEngine';
+import type { RetirementInputs, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 
 /** First age the investable pot is empty (matches the "money runs out" pin). */
 export function firstEmptyAge(breakdown: YearlyBreakdown[]): number | null {
@@ -44,4 +44,34 @@ export function formatReScore(ho: { depletionAge: number | null }, maxAge: numbe
   const { depletionAge } = ho;
   if (depletionAge === null) return 100;
   return Math.min(100, Math.max(0, Math.round((depletionAge / maxAge) * 100)));
+}
+
+// ── What the plan still doesn't know ───────────────────────────────────────
+// The Dashboard is four numbers and a verdict; everything else a plan can
+// carry (balances, partner, debts, one-off events, other income, spending
+// phases) lives on Plans and is easy to never open at all. These are the
+// registers that read as provably untouched — a switch still off, a list still
+// empty — in the order the Plans page shows them.
+//
+// Province and the CPP/OAS placeholder are deliberately NOT counted: a real
+// answer and the default are indistinguishable, and a nudge that is wrong once
+// is a nudge the user stops reading.
+
+export type DetailGroupId = 'accounts' | 'partner' | 'debts' | 'events' | 'income' | 'phases';
+
+/** The registers this plan has never been given data for. Empty = nothing left
+ *  to add, and the Dashboard's pointer to Plans goes quiet. */
+export function unsetDetailGroups(inputs: RetirementInputs): DetailGroupId[] {
+  const unset: DetailGroupId[] = [];
+  if (!inputs.rrspBalance && !inputs.tfsaBalance && !inputs.taxableBalance && !inputs.cashCushionBalance) {
+    unset.push('accounts');
+  }
+  // A partner is either the embedded spouse or a linked one (`spouseSource`
+  // points at another saved scenario, which is how the couple examples ship).
+  if (!inputs.spouse?.enabled && inputs.spouseSource?.kind !== 'scenario') unset.push('partner');
+  if (!inputs.debts?.length) unset.push('debts');
+  if (!inputs.events?.length) unset.push('events');
+  if (!inputs.income?.length) unset.push('income');
+  if (!inputs.spendingBands?.length) unset.push('phases');
+  return unset;
 }

@@ -47,11 +47,11 @@ describe('NAV_CATALOG shape', () => {
     }
     expect(runs.filter(s => s != null)).toEqual(['plan', 'explore', 'share', 'setup']);
     // Every destination the nav shows carries its section; only the
-    // chrome-adjacent pages (assistant route, Welcome, the internal style
-    // guide) and the folds don't.
+    // chrome-adjacent pages (the assistant route, the internal style guide) and
+    // the folds — including the retired #/welcome intro screen — don't.
     for (const e of searchablePages()) {
       if (e.internal) continue;
-      if (e.viewId === 'agent' || e.viewId === 'welcome') continue;
+      if (e.viewId === 'agent') continue;
       expect(e.section, `${e.viewId} has no section`).toBeTruthy();
     }
   });

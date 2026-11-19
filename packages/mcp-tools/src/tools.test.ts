@@ -692,18 +692,18 @@ describe('manage_giving', () => {
     const giving = out.patch.giving ?? [];
     expect(giving).toHaveLength(1);
     expect(giving[0]).toMatchObject({
-      label: 'Food Bank', mode: 'fixed', amount: 10000, pct: 0, basis: 'gross', fromAge: 60, toAge: 90,
+      label: 'Food Bank', mode: 'fixed', amount: 10000, pct: 0, basis: 'net', fromAge: 60, toAge: 90,
     });
     expect(giving[0].id).toBeTruthy();
   });
 
-  it('adds a pct stream without amount/basis (amount defaults to 0)', () => {
+  it('adds a pct stream without amount/basis (amount 0, after-tax basis)', () => {
     const out = executeToolCall(ctx(), {
       id: '1', name: 'manage_giving',
       args: { action: 'add', label: 'United Way', mode: 'pct', pct: 2, fromAge: 65 },
     });
     if (out.kind !== 'mutation') throw new Error(`expected mutation, got ${out.kind}`);
-    expect(out.patch.giving?.[0]).toMatchObject({ mode: 'pct', pct: 2, amount: 0, basis: 'gross', fromAge: 65 });
+    expect(out.patch.giving?.[0]).toMatchObject({ mode: 'pct', pct: 2, amount: 0, basis: 'net', fromAge: 65 });
     expect(out.patch.giving?.[0].toAge ?? null).toBeNull();
   });
 

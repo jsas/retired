@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDefaultScenarios, EXAMPLE_PLAN_PREFIX, hasUserPlans } from '@retired/engine-core/exampleScenarios';
+import { buildDefaultScenarios, EXAMPLE_PLAN_PREFIX } from '@retired/engine-core/exampleScenarios';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
 import { DEFAULT_APP_CONFIG } from '@retired/engine-core/appConfig';
 import { resolveSpouseSource } from '@retired/engine-core/householdTypes';
@@ -34,9 +34,6 @@ describe('exampleScenarios — data audit', () => {
     ]);
     expect(new Set(examples.map(s => s.id)).size).toBe(examples.length);
     expect(examples.every(s => s.name.startsWith(EXAMPLE_PLAN_PREFIX))).toBe(true);
-    // Stock examples alone are not "the user has a plan" — welcome still opens.
-    expect(hasUserPlans(examples)).toBe(false);
-    expect(hasUserPlans([...examples, { name: 'My plan' }])).toBe(true);
   });
 
   it.each(examples.map(s => [s.name, s] as const))('%s: ages are internally consistent', (_name, s) => {

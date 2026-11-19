@@ -1,0 +1,20 @@
+{
+  "label": "Set up your plan",
+  "leadExample": "This is an example plan. Change any of these four numbers and your own plan starts there — the example stays in your list.",
+  "leadUnset": "Four numbers are enough for a first answer. Everything else can wait until you want it.",
+  "ageNow": "Your age now",
+  "retireAt": "Start drawing at",
+  "saved": "Saved so far",
+  "savedHint": "RRSP, TFSA, investments — all of it. Split 60/40 RRSP/TFSA; the Plans page edits each account.",
+  "spend": "Spend a year, after tax",
+  "go": "See how long my money lasts",
+  "dismiss": "Not now",
+  "details": "Add the details on Plans",
+  "planName": "My plan",
+  "error": {
+    "age": "Your age is a number between 30 and 100.",
+    "retireAge": "The drawing age can’t be earlier than your age today.",
+    "savings": "Savings can’t be negative — 0 is a fine answer.",
+    "spending": "At least $5,000 a year."
+  }
+}

@@ -1,6 +1,6 @@
 {
-  "walkTitle": "Parcourir votre premier scénario",
-  "walkBody": "— une configuration guidée en 5 étapes (âges, épargne, prestations, dépenses).",
+  "walkTitle": "Créer un plan à partir de quatre chiffres",
+  "walkBody": "— la carte de configuration, en haut du tableau de bord, demande votre âge, l’âge des retraits, vos économies et vos dépenses.",
   "open": "Ouvrir →",
   "searchPlaceholder": "Chercher dans l’aide — essayez « récupération », « CELI », « lien de partage »…",
   "clearSearch": "Effacer la recherche",
@@ -586,6 +586,20 @@
         "comment l’année fonctionne"
       ],
       "body": "« Une année, étape par étape » est la feuille d'une année civile du ménage — pas le tableau Projection. Choisissez une année, puis Vous / Conjoint / Côte à côte, et parcourez de la cible de dépenses jusqu'aux retraits, l'impôt, les prestations et le solde de fin. Chaque chiffre est le même calcul que le moteur a déjà fait pour cette année; cette page montre simplement le travail."
+    },
+    "setup-card": {
+      "title": "La carte de configuration",
+      "section": "Plans",
+      "keywords": [
+        "configuration",
+        "démarrage",
+        "quatre chiffres",
+        "bienvenue",
+        "introduction",
+        "premier plan",
+        "plan exemple"
+      ],
+      "body": "La carte en haut du tableau de bord demande quatre chiffres : votre âge, l’âge où vous commencez les retraits, tout ce que vous avez économisé et ce que vous voulez dépenser par année après impôt. C’est suffisant pour la première réponse — les économies se répartissent 60/40 entre le REER et le CELI, et tous les autres champs partent des valeurs par défaut, modifiables dans **Plans**.\n\nLa carte s’affiche tant que le plan à l’écran n’est pas le vôtre : un plan *Exemple* ou un plan vierge. Sur un exemple, le bouton conserve l’exemple et crée une copie personnelle (« Mon plan »); sur votre plan vierge, il le remplit simplement. **Pas maintenant** cache la carte; Réglages → *Afficher la carte de configuration* la ramène à chaque visite.\n\nTant que la carte est visible, elle est le seul appel à l’action de la page. Une fois fermée, une ligne discrète sous votre verdict nomme les rubriques que ce plan n’a jamais reçues : soldes des comptes, conjoint, dettes, événements ponctuels, autres revenus, phases de dépenses, et le bouton à côté ouvre **Plans**. Quand chaque rubrique contient des données, la ligne se fait discrète et propose *Vérifier chaque détail*."
     },
     "scenarios": {
       "title": "Plans",

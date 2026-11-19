@@ -3,7 +3,7 @@ import { Dashboard } from './components/Dashboard';
 import { StyleGuide } from './design/StyleGuide';
 import { PageChrome, PlanUndoContext } from './components/console/PageChrome';
 import type { VerdictChip } from './components/console/PageChrome';
-import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/console/LandingPage';
+import { QuickStart, quickStartPlan, setupCardVisible, type SetupAnswers } from './components/console/QuickStart';
 import {
   SchedulePage, MathPage, OptimizerPage, MonteCarloPage,
   BacktestPage, SolverPage, ComparePage, PlansPage, DataPage,
@@ -22,7 +22,7 @@ import { type FullBackupSelection, type ProjectionImportRequest, type AiBackupIn
 import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
 import { AI_SETTINGS_STORAGE_KEY, reloadAiSettingsFromStorage } from './lib/aiSettings';
 import { AgentPage } from './components/AgentPage';
-import { detectLocale, parseLocale, type Locale } from './lib/locale';
+import { detectLocale, parseLocale, defaultProvinceCode, type Locale } from './lib/locale';
 import { setAppLanguage } from './lib/i18n';
 import { LocaleContext } from './lib/localeContext';
 import { useTranslation } from 'react-i18next';
@@ -38,11 +38,12 @@ import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
 import { potDisplay } from './lib/planDisplay';
 import { consumePlanFromHash } from './lib/shareLink';
-import { buildDefaultScenarios, hasUserPlans } from '@retired/engine-core/exampleScenarios';
+import { buildDefaultScenarios, baselineInputs, isExamplePlanName } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
 import type { EqSolvedState, Bands } from './components/console/SteeringControls';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { PREF_KEYS, prefKV } from './lib/prefKv';
+import { isSetupCardDismissed, dismissSetupCard } from './lib/setupCardPrefs';
 import { solveEqReadout } from '@retired/engine-core/eqSolver';
 import { consistentAges } from '@retired/engine-core/eqConstraints';
 import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
@@ -82,17 +83,21 @@ function App() {
   const [detected] = useState<Locale>(detectLocale);
   const locale = parseLocale(config.general.locale) ?? detected;
   const { t: tPages } = useTranslation('pages');
+  const { t: tStart } = useTranslation('start');
   useEffect(() => { void setAppLanguage(locale); }, [locale]);
   const setLocale = (next: Locale) => {
     setConfig(prev => ({ ...prev, general: { ...prev.general, locale: next } }));
   };
-  // First-run gate (issue #153): an explicit hash (including #/welcome from the
-  // RE: mark) always wins. Without a hash, a user-saved plan ⇒ dashboard; stock
-  // `Example - …` plans alone still open the landing so a new visitor sees it.
-  // Completing the landing still creates the first user scenario.
-  const [view, setView] = useState<View>(() =>
-    welcomeLandingGate(viewFromHash(window.location.hash), hasUserPlans(scenarios))
-  );
+  // The Dashboard IS the home page (there is no intro screen any more): the
+  // first paint is the answer, with the set-up card on top of it while the
+  // plan on screen isn't the user's own. An explicit hash always wins, and the
+  // legacy #/welcome URL folds here through viewRoutes.
+  const [view, setView] = useState<View>(() => viewFromHash(window.location.hash) ?? 'dashboard');
+  // The set-up card's dismissal, remembered across visits (setupCardPrefs),
+  // plus a one-shot force from a #/dashboard?setup=1 link — that's how Help's
+  // "set up a plan" entry re-opens the card on a plan that already has numbers.
+  const [setupDismissed, setSetupDismissed] = useState(isSetupCardDismissed);
+  const [setupForced, setSetupForced] = useState(() => /[?&]setup=1/.test(window.location.hash));
 
   // Keep the URL hash in sync with the current view (push a history entry per
   // navigation), and follow hash changes so back/forward and pasted links work.
@@ -118,6 +123,7 @@ function App() {
     const onHashChange = () => {
       const v = viewFromHash(window.location.hash);
       if (v) setView(v);
+      if (/[?&]setup=1/.test(window.location.hash)) setSetupForced(true);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -135,7 +141,9 @@ function App() {
     setExportOptions(opts);
     saveProjectionExportOptions(opts);
   };
-  const activeScenario = scenarios.find(s => s.id === activeScenarioId)!;
+  // A stale/unknown active id (an import that replaced the list, a delete that
+  // raced) must not blank the whole app — fall back to the first plan.
+  const activeScenario = scenarios.find(s => s.id === activeScenarioId) ?? scenarios[0];
 
   const [inputs, setInputs] = useState<RetirementInputs>(
     () => JSON.parse(JSON.stringify(activeScenario.inputs))
@@ -495,6 +503,29 @@ function App() {
     return id;
   };
 
+  // The Dashboard's set-up card — the intro screen's old job, done in place.
+  // Two cases: the plan on screen is a stock example, so the four numbers
+  // start a personal copy and the example stays untouched for later
+  // exploration; or it's the user's own (still blank) plan, which is patched
+  // in place. Either way the normal inputs pipeline recomputes the verdict.
+  const handleSetupStart = (answers: SetupAnswers, asNewPlan: boolean) => {
+    const plan = quickStartPlan(asNewPlan ? baselineInputs() : inputs, answers);
+    if (asNewPlan) plan.provinceCode = defaultProvinceCode(locale);
+    const next = JSON.parse(JSON.stringify(plan)) as RetirementInputs;
+    setSetupDismissed(false);
+    setSetupForced(false);
+    if (!asNewPlan) { handleInputsChange(next); return; }
+    const scenario: Scenario = {
+      id: `scenario-${Date.now().toString(36)}`,
+      name: tStart('planName'),
+      inputs: next,
+    };
+    setScenarios(prev => [...prev, scenario]);
+    setActiveScenarioId(scenario.id);
+    setInputs(JSON.parse(JSON.stringify(next)));
+    setHasUnsavedChanges(false);
+  };
+
   // Scenario revision history (scenarios page). The store owns the snapshots;
   // the UI reads them through this memo, refreshed by revisionNonce (bumped by
   // the persist effect whenever a new revision landed).
@@ -850,28 +881,6 @@ function App() {
             </div>
           </PageChrome>
         );
-      case 'welcome':
-        // Explicit #/welcome (the RE: mark) always shows the landing, even with
-        // saved plans. The no-hash first-run gate is the only welcome→dashboard
-        // redirect. Completing the questions still saves a new starter scenario.
-        return (
-          <LandingPage
-            config={config}
-            onBuild={(plan, opts) => {
-              const scenario = landingScenarioFromPlan(JSON.parse(JSON.stringify(plan)), Date.now());
-              setScenarios(prev => [...prev, scenario]);
-              setActiveScenarioId(scenario.id);
-              setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
-              setHasUnsavedChanges(false);
-              // "keep chatting" arrives with the assistant dock open; "go to
-              // dashboard" with it closed. The dock reads this pref on mount.
-              if (opts?.openAssistant !== undefined) {
-                try { prefKV().setItem('wealthconsole_dock_open', opts.openAssistant ? '1' : '0'); } catch { /* storage blocked */ }
-              }
-              setView('dashboard');
-            }}
-          />
-        );
       case 'dashboard':
       default:
         return (
@@ -882,6 +891,19 @@ function App() {
             config={config}
             assistant={assistantDock}
             eq={{ bands: eqBands, onBandsChange: setEqBands, solved: eqSolved }}
+            setup={setupCardVisible({
+              planIsExample: isExamplePlanName(activeScenario.name),
+              inputs,
+              alwaysShow: config.general.showSetupCardOnLoad || setupForced,
+              dismissed: setupDismissed,
+            }) ? (
+              <QuickStart
+                planIsExample={isExamplePlanName(activeScenario.name)}
+                inputs={inputs}
+                onStart={handleSetupStart}
+                onDismiss={() => { dismissSetupCard(); setSetupDismissed(true); setSetupForced(false); }}
+              />
+            ) : null}
           />
         );
     }

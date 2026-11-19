@@ -1,7 +1,7 @@
 // Print-summary section toggles, persisted in the same panel-state store the
-// collapsible panels and the welcome dismissal use, so the user's choices
-// survive reloads and travel with .sqlite backups (issue #20 — via the
-// prefKv facade: store kv row + localStorage mirror).
+// collapsible panels and the set-up-card dismissal (setupCardPrefs) use, so the
+// user's choices survive reloads and travel with .sqlite backups (issue #20 —
+// via the prefKv facade: store kv row + localStorage mirror).
 
 export interface PrintOptions {
   includeTimeline: boolean;

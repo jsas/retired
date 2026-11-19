@@ -85,9 +85,10 @@ export function HelpModal() {
 
   return (
     <div>
-      {/* Re-run the guided first-scenario setup (the welcome wizard). */}
+      {/* Re-open the four-number set-up card on the Dashboard (the intro
+          screen's old job). ?setup=1 forces the card even on a filled plan. */}
       <a
-        href="#/welcome"
+        href="#/dashboard?setup=1"
         className="group mb-5 flex items-baseline gap-3 border-b border-slate-200 pb-4 text-[13px] text-slate-600 hover:text-slate-900"
       >
         <span className="flex-1">

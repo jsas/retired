@@ -8,35 +8,12 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt, MarketPeriod, GivingStream } from '@retired/engine-core/retirementEngine';
 import type { Scenario } from '@retired/engine-core/types';
-import { Panel, Fader, HelpHint, Check } from '../../design/primitives';
+import { Panel, Fader, HelpHint, Check, Num } from '../../design/primitives';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
 import { getGivingPrefs } from '../../lib/givingPrefs';
 import { formatCurrency } from '../../lib/locale';
 import { useAppLocale } from '../../lib/localeContext';
-
-/* Small labelled number input — flat hairline, tabular numerals. */
-function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
-  label: string; value: number; onChange: (v: number) => void;
-  step?: number; min?: number; suffix?: string; hint?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[12px] text-slate-500">{label}</span>
-      <span className="mt-0.5 flex items-baseline gap-1">
-        <input
-          type="number"
-          className="num w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
-          value={Number.isFinite(value) ? value : ''}
-          step={step} min={min}
-          onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))}
-        />
-        {suffix && <span className="text-[11px] text-slate-400">{suffix}</span>}
-      </span>
-      {hint && <span className="mt-0.5 block text-[10.5px] text-slate-400">{hint}</span>}
-    </label>
-  );
-}
 
 /* A small labelled text input, same flat hairline. */
 function Txt({ label, value, onChange, placeholder }: {

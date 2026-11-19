@@ -216,36 +216,18 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 <p className="text-xs text-slate-600 leading-snug mt-1.5">{t('helpBody2')}</p>
               </div>
               <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('welcome')}</h3>
+                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('setupCard')}</h3>
                 <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={draft.general.showWelcomeOnLoad}
-                    onChange={e => update(c => { c.general.showWelcomeOnLoad = e.target.checked; })}
+                    checked={draft.general.showSetupCardOnLoad}
+                    onChange={e => update(c => { c.general.showSetupCardOnLoad = e.target.checked; })}
                     className="mt-0.5"
                   />
                   <span>
-                    {t('welcomeShow')}
+                    {t('setupCardShow')}
                     <span className="block text-[11px] text-slate-500 mt-0.5">
-                      {t('welcomeHint')}
-                    </span>
-                  </span>
-                </label>
-              </div>
-
-              <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('unsaved')}</h3>
-                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.general.promptToSaveOnSwitch}
-                    onChange={e => update(c => { c.general.promptToSaveOnSwitch = e.target.checked; })}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    {t('unsavedAsk')}
-                    <span className="block text-[11px] text-slate-500 mt-0.5">
-                      {t('unsavedHint')}
+                      {t('setupCardHint')}
                     </span>
                   </span>
                 </label>

@@ -188,10 +188,9 @@ export interface AppConfig {
 }
 
 export interface GeneralConfig {
-  showWelcomeOnLoad: boolean;  // always show the getting-started welcome card at startup, even after dismissal
-  /** Ask to save before switching away from a scenario with unsaved edits.
-   *  true (default) = prompt each time; false = switch silently (the opt-out). */
-  promptToSaveOnSwitch: boolean;
+  /** Keep the Dashboard's four-number set-up card open on every visit, even
+   *  after it was dismissed or the plan already has numbers. */
+  showSetupCardOnLoad: boolean;
   /** Assistant language. Absent = follow the browser. UI chrome stays English. */
   locale?: 'en-CA' | 'fr-CA';
 }
@@ -323,7 +322,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   qcFederalAbatement: 0.165,
   // 2026 Ontario surtax thresholds (2025 values × 1.02 CRA indexation).
   ontarioSurtax: { threshold1: 5925, rate1: 0.20, threshold2: 7577, rate2: 0.56 },
-  general: { showWelcomeOnLoad: false, promptToSaveOnSwitch: true }
+  general: { showSetupCardOnLoad: false }
 };
 
 function isValidTaxTable(t: unknown): t is TaxTable {
@@ -432,22 +431,16 @@ export function validateAppConfig(raw: unknown): AppConfig | null {
   if (!os || [os.threshold1, os.rate1, os.threshold2, os.rate2].some(v => typeof v !== 'number')) {
     (c as AppConfig).ontarioSurtax = { ...DEFAULT_APP_CONFIG.ontarioSurtax };
   }
-  // General/UI preferences were added later — back-fill defaults.
+  // General/UI preferences were added later — back-fill defaults. The block is
+  // rebuilt from the keys we know, so a stored config can't carry a retired or
+  // renamed flag along (showWelcomeOnLoad → showSetupCardOnLoad; the
+  // save-before-switch prompt, obsolete since autosave #165).
   const g = c.general as Partial<GeneralConfig> | undefined;
-  if (!g || typeof g.showWelcomeOnLoad !== 'boolean') {
-    (c as AppConfig).general = { ...DEFAULT_APP_CONFIG.general };
-  } else if (typeof g.promptToSaveOnSwitch !== 'boolean') {
-    // promptToSaveOnSwitch was added after showWelcomeOnLoad — back-fill it.
-    (c as AppConfig).general = { ...g, promptToSaveOnSwitch: true } as GeneralConfig;
-  }
+  const general: GeneralConfig = { showSetupCardOnLoad: g?.showSetupCardOnLoad === true };
   // locale is optional: keep only the Canadian tags so the host can fall back
   // to the browser when the field is missing or unknown.
-  const loc = (c as AppConfig).general.locale;
-  if (loc !== undefined && loc !== 'en-CA' && loc !== 'fr-CA') {
-    const next = { ...(c as AppConfig).general };
-    delete next.locale;
-    (c as AppConfig).general = next;
-  }
+  if (g?.locale === 'en-CA' || g?.locale === 'fr-CA') general.locale = g.locale;
+  (c as AppConfig).general = general;
 
   return c as AppConfig;
 }

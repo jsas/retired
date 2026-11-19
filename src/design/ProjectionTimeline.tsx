@@ -106,6 +106,9 @@ const W = 1000, H = 190;
 const AXIS = 118;           // y of the baseline the area sits on
 const LL = 34, LR = 978;    // plot left/right
 const AREA_TOP = 18;        // tallest the area rises above the axis
+const PIN_LINE = 13;        // one label line: pins on a side stack by this pitch
+const PIN_GLYPH = 6;        // ≈ one glyph's width at the labels' fontSize 11
+const PIN_PAD = 8;          // minimum gap between two labels sharing a lane
 // The spend + market strips hang BELOW the balance axis (each with a gap).
 const STRIP_GAP = 16;
 const STRIP_H = 44;         // visible strip height (hairline box)
@@ -119,6 +122,28 @@ function fmtAxis(v: number): string {
   if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (Math.abs(v) >= 1_000) return `$${Math.round(v / 1_000)}k`;
   return `$${Math.round(v)}`;
+}
+
+/** Pin label lanes: every label claims the lowest lane on its side where
+ *  nothing already placed overlaps it horizontally. Pins far apart keep the
+ *  single line they always had; pins whose text would collide stack, which is
+ *  what a plan that depletes soon after retirement used to get wrong ("start
+ *  drawing at 62" printed straight through "money runs out · 63"). Label width
+ *  is estimated from the string — SVG text can't be measured before render —
+ *  and the estimate only ever decides a lane. */
+function pinLanes(pins: TimelinePin[], pxOf: (pin: TimelinePin) => number): number[] {
+  const rows: Record<'above' | 'below', Array<Array<{ lo: number; hi: number }>>> = { above: [], below: [] };
+  return pins.map(p => {
+    const side = (p.place ?? 'above') === 'above' ? 'above' : 'below';
+    const w = p.label.length * PIN_GLYPH;
+    const anchor = p.anchor ?? 'middle';
+    const lo = pxOf(p) - (anchor === 'middle' ? w / 2 : anchor === 'end' ? w : 0);
+    const table = rows[side];
+    let lane = 0;
+    while (lane < table.length && table[lane].some(s => lo < s.hi + PIN_PAD && s.lo < lo + w + PIN_PAD)) lane += 1;
+    (table[lane] ??= []).push({ lo, hi: lo + w });
+    return lane;
+  });
 }
 
 export function ProjectionTimeline({
@@ -250,6 +275,15 @@ export function ProjectionTimeline({
   const retAtY = (py: number) => RET_MIN + (1 - (py - MKT_TOP) / STRIP_H) * (RET_MAX - RET_MIN);
   const yVol = (v: number) => MKT_TOP + (1 - v / VOL_MAX) * STRIP_H;
   const volAtY = (py: number) => Math.min(VOL_MAX, Math.max(0, (1 - (py - MKT_TOP) / STRIP_H) * VOL_MAX));
+  // Lane + headroom for the labelled pins (see pinLanes): the viewBox grows
+  // upward by the lanes the above-pins need so a stacked label is never
+  // clipped, and svgY undoes that shift for the drag math below.
+  const pinLane = pinLanes(pins, p => x(Math.max(minAge, Math.min(maxAge, p.age))));
+  const labelHead = PIN_LINE * pinLane.reduce((max, lane, i) =>
+    (pins[i].place ?? 'above') === 'above' ? Math.max(max, lane) : max, 0);
+  /** Client y → user units, undoing the `labelHead` of viewBox space on top. */
+  const svgY = (clientY: number, rect: DOMRect, height: number) =>
+    ((clientY - rect.top) / rect.height) * (height + labelHead) - labelHead;
 
   // Drag state — one at a time: an event diamond, a market anchor, or a
   // draggable pin (the "start drawing" marker).
@@ -267,7 +301,7 @@ export function ProjectionTimeline({
     if (!rect) return null;
     return {
       px: ((e.clientX - rect.left) / rect.width) * W,
-      py: ((e.clientY - rect.top) / rect.height) * TOTAL_H,
+      py: svgY(e.clientY, rect, TOTAL_H),
     };
   };
 
@@ -401,7 +435,7 @@ export function ProjectionTimeline({
 
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${W} ${showStrips ? TOTAL_H : H}`}
+        viewBox={`0 ${-labelHead} ${W} ${(showStrips ? TOTAL_H : H) + labelHead}`}
         className="block w-full select-none"
         role="img"
         aria-label={t('dash.projectionAria', { from: minAge, to: maxAge })}
@@ -409,7 +443,7 @@ export function ProjectionTimeline({
           if (!onAnchorsChange) return;
           const rect = svgRef.current?.getBoundingClientRect();
           if (!rect) return;
-          const py = ((e.clientY - rect.top) / rect.height) * (showStrips ? TOTAL_H : H);
+          const py = svgY(e.clientY, rect, showStrips ? TOTAL_H : H);
           if (py < MKT_TOP) return; // only the market strip accepts new anchors
           const px = ((e.clientX - rect.left) / rect.width) * W;
           const age = ageAtX(px);
@@ -480,13 +514,14 @@ export function ProjectionTimeline({
         {pins.map((p, i) => {
           const px = x(Math.max(minAge, Math.min(maxAge, p.age)));
           const above = (p.place ?? 'above') === 'above';
-          const ly = above ? AREA_TOP - 4 : AXIS + 40;
+          // one lane per pin on this side, so two close ages never share a baseline
+          const ly = above ? AREA_TOP - 4 - pinLane[i] * PIN_LINE : AXIS + 40 + pinLane[i] * PIN_LINE;
           const color = p.color ?? '#475569';
           const draggable = !!p.onDragAge;
           return (
             <g key={i} className={draggable ? 'cursor-ew-resize' : undefined}
               onPointerDown={draggable ? pinPointerDown(i) : undefined}>
-              <title>{t('dash.startDrawingDrag')}</title>
+              {draggable && <title>{t('dash.startDrawingDrag')}</title>}
               <line x1={px} y1={AXIS} x2={px} y2={above ? ly + 4 : AXIS + 30} stroke={HAIRLINE} strokeWidth="1" />
               {/* a wider invisible grab strip over the rule so the drag is
                   easy to catch (the 1px line alone is a sub-pixel target) */}
@@ -527,7 +562,7 @@ export function ProjectionTimeline({
                       const move = (ev: PointerEvent) => {
                         const rect = svgRef.current?.getBoundingClientRect();
                         if (!rect) return;
-                        const py = ((ev.clientY - rect.top) / rect.height) * TOTAL_H;
+                        const py = svgY(ev.clientY, rect, TOTAL_H);
                         onSpendChange(Math.round(spendAtY(py) / 500) * 500);
                       };
                       const up = () => {

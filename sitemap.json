@@ -308,22 +308,6 @@
         "ask",
         "agent"
       ]
-    },
-    {
-      "view": "welcome",
-      "route": "#/welcome",
-      "url": "https://jsas.github.io/retired/#/welcome",
-      "title": "Welcome",
-      "description": "The front door: five questions build a starter plan, then the doors to the rest of the app.",
-      "keywords": [
-        "welcome",
-        "start",
-        "getting started",
-        "onboarding",
-        "first time",
-        "new plan",
-        "build a plan"
-      ]
     }
   ]
 }

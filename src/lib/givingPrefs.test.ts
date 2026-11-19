@@ -19,14 +19,14 @@ vi.stubGlobal('localStorage', {
 describe('giving defaults pref', () => {
   beforeEach(() => store.clear());
 
-  it('defaults to a 5%-of-gross pledge', () => {
-    expect(getGivingPrefs()).toEqual({ defaultPct: 5, defaultBasis: 'gross' });
+  it('defaults to the pledge people state out loud: 10% of after-tax income', () => {
+    expect(getGivingPrefs()).toEqual({ defaultPct: 10, defaultBasis: 'net' });
   });
 
   it('a set persists and merges over the defaults', () => {
-    setGivingPrefs({ defaultBasis: 'net' });
-    expect(getGivingPrefs()).toEqual({ defaultPct: 5, defaultBasis: 'net' });
-    expect(JSON.parse(store.get(GIVING_PREF_KEY)!)).toMatchObject({ defaultBasis: 'net' });
+    setGivingPrefs({ defaultPct: 5, defaultBasis: 'gross' });
+    expect(getGivingPrefs()).toEqual({ defaultPct: 5, defaultBasis: 'gross' });
+    expect(JSON.parse(store.get(GIVING_PREF_KEY)!)).toMatchObject({ defaultBasis: 'gross' });
   });
 
   it('ignores junk values from a hand-edited pref', () => {

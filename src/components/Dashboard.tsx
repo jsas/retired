@@ -12,15 +12,16 @@ import type { RetirementInputs, RetirementResults } from '@retired/engine-core/r
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { getRangePrefs } from '../lib/rangePrefs';
 import { VerdictHero, Panel, Fader, Footnote, HelpHint } from '../design/primitives';
-import { INK, RED_DOT } from '../design/tokens';
+import { INK, RED_DOT, cls } from '../design/tokens';
 import { ProjectionTimeline, baseSpendAtRetirement } from '../design/ProjectionTimeline';
 import { PageChrome, type VerdictChip } from './console/PageChrome';
+import { Link } from './console/nav';
 import { ContourMap } from './console/ContourMap';
 import { MarketDial } from './console/MarketDial';
 import { DownMarketCheck } from './console/DownMarketCheck';
 import { SteeringControls, type Bands, type EqSolvedState } from './console/SteeringControls';
 import { EvidenceRow } from './console/EvidenceRow';
-import { firstEmptyAge, potDisplay } from '../lib/planDisplay';
+import { firstEmptyAge, potDisplay, unsetDetailGroups } from '../lib/planDisplay';
 import { useAppLocale } from '../lib/localeContext';
 
 // The map's axis window defaults — retire age × spending. The spending axis
@@ -47,6 +48,9 @@ interface DashboardProps {
   config: AppConfig;
   /** The assistant conversation, docked on the right (f7's star). */
   assistant?: ReactNode;
+  /** The set-up card (the intro screen's old job) — App owns when it shows;
+   *  the Dashboard only places it, above the verdict. */
+  setup?: ReactNode;
   /** Steering state (bands + solver readout) for the "Adjust the plan"
    *  panel — the levers the old Steering page carried (issue #187). */
   eq?: { bands: Bands; onBandsChange: (b: Bands) => void; solved: EqSolvedState };
@@ -66,7 +70,7 @@ function verdict(inputs: RetirementInputs, results: RetirementResults, t: TFunct
 }
 
 export function Dashboard({
-  inputs, onInputsChange, results, config, assistant, eq,
+  inputs, onInputsChange, results, config, assistant, eq, setup,
 }: DashboardProps) {
   const { t } = useTranslation('pages');
   const { t: tHelp } = useTranslation('help');
@@ -85,6 +89,7 @@ export function Dashboard({
   };
   return (
     <PageChrome chip={chip} assistant={assistant}>
+      {setup}
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="min-w-0 flex-1">
             <VerdictHero
@@ -104,6 +109,14 @@ export function Dashboard({
             />
           </div>
         </div>
+
+        {/* The way to the rest of the plan. The four numbers above are the
+            whole interface until this line says otherwise, so it names what
+            the plan is missing and hands over a button — one rule, one
+            sentence, one control, and nothing at all once the registers are
+            full. Hidden while the set-up card is up: same message, same
+            reader, one CTA per screen. */}
+        {!setup && <DetailsRow inputs={inputs} />}
 
         <Panel label={t('dash.ground')} hint="contour-map" action={
           <span className="text-[11px] text-slate-400">{t('dash.dragDot')}</span>
@@ -185,6 +198,30 @@ export function Dashboard({
           {t('dash.footnote')}
         </Footnote>
     </PageChrome>
+  );
+}
+
+/** One line under the verdict: what this plan has never been told, and the
+ *  way to tell it. Sits at the fold under the verdict number, which is the
+ *  only prominence it needs. */
+function DetailsRow({ inputs }: { inputs: RetirementInputs }) {
+  const { t } = useTranslation('pages');
+  const unset = unsetDetailGroups(inputs);
+  const shown = unset.slice(0, 3).map(g => t(`dash.group.${g}`));
+  const extra = unset.length - shown.length;
+  const groups = `${shown.join(', ')}${extra > 0 ? t('dash.detailsMore', { n: extra }) : ''}`;
+  return (
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-slate-200 pt-5">
+      <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
+        {unset.length > 0 ? t('dash.detailsMissing', { groups }) : t('dash.detailsComplete')}
+      </p>
+      <Link
+        view="scenarios"
+        className={unset.length > 0 ? cls.primaryBtn : cls.hairlineBtn}
+      >
+        {unset.length > 0 ? t('dash.detailsCta') : t('dash.detailsCtaComplete')}
+      </Link>
+    </div>
   );
 }
 

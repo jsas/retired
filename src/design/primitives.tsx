@@ -168,6 +168,34 @@ export function Fader({ label, help, value, min, max, step, format, onChange, hi
   );
 }
 
+/* ── Num ──────────────────────────────────────────────────────────────────
+   The labelled number field: flat hairline box, label above, tabular numerals,
+   optional suffix unit and a small grey hint under the box. Pages compose this
+   instead of a raw <input type="number"> so a form row can't drift back to
+   browser defaults (blue focus, proportional digits). NaN reads as "cleared",
+   not zero — the field is empty while the user is mid-edit. */
+export function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
+  label: string; value: number; onChange: (v: number) => void;
+  step?: number; min?: number; suffix?: string; hint?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[12px] text-slate-500">{label}</span>
+      <span className="mt-0.5 flex items-baseline gap-1">
+        <input
+          type="number"
+          className="num w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
+          value={Number.isFinite(value) ? value : ''}
+          step={step} min={min}
+          onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))}
+        />
+        {suffix && <span className="text-[11px] text-slate-400">{suffix}</span>}
+      </span>
+      {hint && <span className="mt-0.5 block text-[10.5px] text-slate-400">{hint}</span>}
+    </label>
+  );
+}
+
 /* ── Check ────────────────────────────────────────────────────────────────
    The one checkbox. A square (never round, never blue): hairline border when
    off, solid INK with a white ✓ when on. Pages compose this instead of a raw

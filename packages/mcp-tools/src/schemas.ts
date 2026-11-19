@@ -118,13 +118,16 @@ export const debtSchema = z.object({
 // only in 'fixed' — a caller adding {mode:'fixed', amount, fromAge}
 // must not be forced to invent the unused siblings. The engine's own type
 // keeps all fields required; zod fills the inert ones.
+// 'net' is the basis default: a pledge stated without one ("10% of my income
+// for church") means take-home. Streams saved earlier keep whatever basis they
+// stored — nothing back-fills them, so no existing plan's math moves.
 export const givingStreamSchema = z.object({
   id: z.string(),
   label: z.string(),
   mode: z.enum(['pct', 'fixed']).default('fixed'),
   pct: z.number().default(0),
   amount: z.number().default(0),
-  basis: z.enum(['gross', 'net']).default('gross'),
+  basis: z.enum(['gross', 'net']).default('net'),
   fromAge: z.number(),
   toAge: z.number().nullish(),
 }) satisfies z.ZodType<GivingStream>;
@@ -291,7 +294,6 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
     threshold2: z.number(), rate2: z.number(),
   }),
   general: z.object({
-    showWelcomeOnLoad: z.boolean(),
-    promptToSaveOnSwitch: z.boolean(),
+    showSetupCardOnLoad: z.boolean(),
   }),
 });

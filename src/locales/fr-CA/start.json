@@ -1,0 +1,20 @@
+{
+  "label": "Créer votre plan",
+  "leadExample": "Ceci est un plan d’exemple. Changez l’un de ces quatre chiffres et votre propre plan commence ici; l’exemple reste dans votre liste.",
+  "leadUnset": "Quatre chiffres suffisent pour une première réponse. Tout le reste peut attendre.",
+  "ageNow": "Votre âge actuel",
+  "retireAt": "Commencer les retraits à",
+  "saved": "Économies actuelles",
+  "savedHint": "REER, CELI, placements — le tout. Réparti 60/40 REER/CELI; la page Plans modifie chaque compte.",
+  "spend": "Dépenses par année, après impôt",
+  "go": "Voir jusqu’où va mon argent",
+  "dismiss": "Pas maintenant",
+  "details": "Ajouter les détails dans Plans",
+  "planName": "Mon plan",
+  "error": {
+    "age": "Votre âge est un nombre entre 30 et 100.",
+    "retireAge": "L’âge des retraits ne peut pas précéder votre âge actuel.",
+    "savings": "Les économies ne peuvent pas être négatives — 0 est une bonne réponse.",
+    "spending": "Au moins 5 000 $ par année."
+  }
+}
