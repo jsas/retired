@@ -36,7 +36,7 @@ import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
-import { potDisplay } from './lib/planDisplay';
+import { potDisplay, verdictChip } from './lib/planDisplay';
 import { consumePlanFromHash } from './lib/shareLink';
 import { buildDefaultScenarios, baselineInputs, isExamplePlanName } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
@@ -697,15 +697,10 @@ function App() {
   }
 
     // The persistent verdict chip — the answer, always top-right.
-    const chip: VerdictChip = (() => {
-      const pot = potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge);
-      const borderline = !pot.holds && pot.emptyAge != null && (inputs.maxAge - pot.emptyAge) <= 6;
-      return {
-        tone: pot.holds ? 'holds' : borderline ? 'borderline' : 'short',
-        age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
-        label: pot.holds ? tPages('holds') : borderline ? tPages('borderline') : tPages('short'),
-      };
-    })();
+    const chip: VerdictChip = verdictChip(
+      potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge), inputs.maxAge,
+      { holds: tPages('holds'), short: tPages('short'), borderline: tPages('borderline') },
+    );
 
     // The section deep-link for the Plans page (#/plan?section=…, or the
     // legacy #/details?section=… which folds here).

@@ -38,6 +38,27 @@ export function potDisplay(breakdown: YearlyBreakdown[], maxAge: number): PotDis
   };
 }
 
+/** Within this many years of the horizon a plan that still runs out reads as
+ *  borderline, not a failure — the same margin the header chip has always used. */
+export const BORDERLINE_YEARS = 6;
+
+/** The header's verdict: tone, age, and the word for it, computed once.
+ *  The Dashboard used to rewrite the tone rule inline and then pick its label
+ *  from holds/short only, so a borderline plan read "runs short" on the home
+ *  page while the header on every other page said "borderline". `labels` comes
+ *  from the caller's `pages` namespace so this stays free of i18n imports. */
+export function verdictChip(pot: PotDisplay, maxAge: number, labels: {
+  holds: string; short: string; borderline: string;
+}): { tone: 'holds' | 'short' | 'borderline'; age: string; label: string } {
+  const borderline = !pot.holds && pot.emptyAge != null
+    && (maxAge - pot.emptyAge) <= BORDERLINE_YEARS;
+  return {
+    tone: pot.holds ? 'holds' : borderline ? 'borderline' : 'short',
+    age: pot.holds ? `${maxAge}+` : `${pot.lastsTo ?? '—'}`,
+    label: pot.holds ? labels.holds : borderline ? labels.borderline : labels.short,
+  };
+}
+
 /** 0–100 snapshot of how close the plan gets to maxAge before money runs out.
  *  Never depletes → 100. Depletes at maxAge → 100. Earlier → round(age/maxAge×100). */
 export function formatReScore(ho: { depletionAge: number | null }, maxAge: number): number {

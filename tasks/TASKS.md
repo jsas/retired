@@ -87,6 +87,9 @@ needs a product decision (not started).
       and all 66 `pages.json` `dash.*` leaves are referenced, so there is no
       dead-copy pile. Suite after this pass: 110 files / 1494 tests green,
       `tsc --noEmit` clean.
+      A **second** round of the same two audits, filed later the same night, was
+      a different matter: it cited files that exist, and everything below passed
+      line-by-line checking before promotion (`B9`–`B16`, `C2`–`C3`).
 
 - [x] `B5` **Reported by the user (screenshot, 2026-11-19):** "the height of the
       two are the same and it is unreadable" — clarified by the user to mean the
@@ -115,6 +118,60 @@ needs a product decision (not started).
       the live Dashboard (measured 2026-11-19: the strip svg renders 993×312 from
       a `0 0 1000 314` viewBox) — the one hard readability floor found on the
       page. Not touched by the B5 fix, which only moves pin labels.
+- [ ] `B9` **A storage failure is silent.** `App.tsx:221` swallows a rejected
+      `AppStore.open()` into `console.warn('SQL store failed to open; running
+      in-memory')`, so `store` stays `null`: the persist effect (`:233`) is
+      `store?.persist(…) ?? false` — a no-op that looks like success — and the
+      "Changes may not be saved" banner can never fire, because its subscription
+      (`:241`) returns early when `store` is null. An hour of editing in a
+      private window reads as saved and is not. Fix: an open failure is a visible
+      state on the existing banner channel (with retry), never a steady state.
+- [ ] `B10` **An edit during cold start can replace the user's plans.** The
+      store's contents are adopted only `if (!dirty)` (`App.tsx:207-216`), so a
+      lever moved while wasm/OPFS is still opening keeps the synchronous seed —
+      which is `buildDefaultScenarios()` whenever the localStorage mirror is
+      missing or undecodable (`readSeedScenariosFromMirror`, `db.ts:89`, returns
+      `null` from a whole-body `catch`). The persist effect then writes that seed
+      through `saveScenarios`, whose first statement is `DELETE FROM scenarios`
+      (`db.ts:332`). The adopt also sits *inside* the `setHasUnsavedChanges`
+      updater, which is meant to be pure. Fix: adopt into pending state and merge
+      with the in-flight edit; move the `set*` calls out of the updater.
+- [ ] `B11` **One unreadable row kills all persistence.** `loadScenarios`
+      (`db.ts:315-323`) and `loadConfig` (`:367`) `JSON.parse` per row with no
+      `try`, and `AppStore.open` calls them bare (`store.ts:80-83`): a truncated
+      blob rejects the whole open, which lands in `B9`'s silent in-memory mode.
+      A per-row guard degrades that to one lost plan instead of no saving at all.
+- [ ] `B12` **Importing your own backup loses data.** `retirementInputsSchema`
+      (`schemas.ts:168-203`) has no `marketPeriods` and `appConfigSchema`'s
+      `general` (`:296-298`) carries only `showSetupCardOnLoad` — no `locale` —
+      while the engine has both (`retirementEngine.ts:128`, `appConfig.ts:195`).
+      zod strips unknown keys and the doc is validated through `appDbDocSchema`
+      (`src/data/schemas.ts:21`, called at `db.ts:425`), so Data → Export then
+      Import deletes the market-hypothesis anchors and resets the language.
+- [ ] `B13` **Clearing a number box stores `null`.** `Num` (`primitives.tsx:190`)
+      emits `NaN` when the field is emptied; autosave's
+      `JSON.parse(JSON.stringify(inputs))` (`App.tsx:398`) turns `NaN` into
+      `null`, and the engine's arithmetic reads `null` as 0. Clear an RDSP or
+      TFSA balance, wait 1.2 s, reload: the balance is gone, with nothing on
+      screen saying so. `DetailsPage.tsx:651` guards with `Number.isFinite`; the
+      neighbouring call sites (`:630`, `:631`, `:633`, `:655`, `:656`) do not.
+- [ ] `B14` **The assistant's money ignores the language.** `ToolContext.locale`
+      is declared (`tools.ts:432`) and threaded from the app, and never read:
+      `money()` hardcodes `new Intl.NumberFormat('en-CA', …)` (`:464`). In French
+      the sentences are French and every figure is `$1,234` instead of `1 234 $`.
+- [ ] `B15` `moveAnchor` (`ProjectionTimeline.tsx:321-326`) guards `if (!pt)` but
+      not the `anchors.find()` result, unlike its sibling `moveEvent` (`:315`). If
+      the anchor disappears mid-drag, every later pointermove emits
+      `onAnchorsChange` with an unchanged array — dirtying the plan and recording
+      no-op autosave revisions while the drag appears dead. One `|| !a`.
+- [ ] `B16` **Money is printed outside the shared formatter**, so French gets
+      English currency placement: `Dashboard.tsx:227` and `EvidenceRow.tsx:24`
+      build `'$' + …toLocaleString(locale)` (→ `$1 234`, not `1 234 $`),
+      `ContourMap.tsx:113` builds `'$' + … + 'k'` with no locale at all,
+      `SettingsModal.tsx:268,271` pass `.toLocaleString()` with no locale into
+      the lever hints, `ScheduleTable.tsx:34`'s `locale = 'en-CA'` *default
+      argument* hides exactly this at the next call site, and `primitives.tsx:302`
+      does it inside a design primitive with `'en-CA'` written in.
 
 ## 3. UI consistency
 
@@ -138,6 +195,42 @@ needs a product decision (not started).
       literal `#475569`. Fix: import the tokens; keep a literal only where no
       token exists (the two band fills are alpha steps of `BLUE`, so they are
       legitimately local).
+- [ ] `C2` **Chrome that was never put through i18n**, verified by reading each
+      site: `primitives.tsx:321` — `AccountBars`, a design primitive, renders the
+      English sentence "Shares of … at that age. The mix shifts as the plan
+      moves.", so the Dashboard's account block is English in French;
+      `App.tsx:951-959` — the "Changes may not be saved" banner body is raw
+      English JSX and its dismiss button hardcodes `title="Dismiss this warning"`
+      (`:943`, `:960`) while translated `common:dismissWarning` /
+      `common:dismissSettingsWarning` already exist in both trees;
+      `AgentPage.tsx:1112` — the compaction tool row (`'context compacted'`,
+      "Older messages were summarized to fit the context window.") and
+      `:2405`/`:2484`'s `window.prompt('Copy this prompt:')` are English-only.
+      The banner pair is duplicated markup too (`:937` and `:951` are the same
+      amber row, with off-token `bg-amber-50 border-amber-300` and a `rounded`
+      control, against the flat rule asserted in `PrintOptionsCard.test.tsx:41`).
+- [ ] `C3` **The token layer exists and is half-used**, measured this pass: 44
+      `bg-slate-900` literals against 8 `cls.primaryBtn`, 42
+      `border border-slate-200` against 7 `cls.hairlineBtn`, 67
+      `border border-slate-300` against 6 `cls.input` — the hand-typed copies are
+      where the padding and sizes drift. Also: no `Radio` primitive, and two raw
+      `<input type="radio">` (`SettingsModal.tsx:199`, `:746`) beside the seven raw
+      checkboxes in `C1(a)`; `AppHeader`, `Modal` and `Chip` are referenced from
+      nothing but `StyleGuide` and their own tests, while destructive flows go
+      through `window.confirm` (`SettingsModal.tsx` ×4) and `window.prompt`
+      (`AgentPage.tsx` ×2) — so the styled dialog shell is dead code and native
+      chrome carries the destructive confirmations; `PageChrome.tsx:154`
+      re-implements `Chip`'s tone→colour map with a literal `#94a3b8`;
+      `DownMarketCheck.tsx:31-39` re-implements the same dot-and-label row a third
+      time; `ProjectionTimeline.tsx:506` writes `stroke="#f59e0b"` with `AMBER_DOT`
+      imported at `:23` and identical literals repeated per legend swatch, so a
+      legend can silently mislabel its series; `tokens.ts:36` `TEXT` is referenced
+      by no component and has drifted from the sizes actually used, and
+      `BLUE_WASH_FROM/_TO` (`:17-18`) plus `NUM_CLASS` (`:45`) survive only in
+      tokens and one assertion; `HelpModal.tsx:30` highlights search hits with
+      `bg-yellow-200`, a colour in no palette, and `:56`'s
+      `{ defaultValue: section }` reintroduces the silent English fallback that
+      `i18n.ts:53-63` removed; `common:apply` is a key nothing asks for.
 
 ## 4. Recommended updates (not started — needs sign-off)
 
@@ -146,9 +239,14 @@ needs a product decision (not started).
       chrome. Fold it: `agent` → open the dock on the Dashboard.
 - [x] `R2` `nav.json`'s `home` label now reads "Home — the Dashboard" (fr:
       "Accueil — le tableau de bord").
-- [!] `R3` The verdict chip is computed in two places (`App.tsx` and
-      `Dashboard.tsx`) with the same rules written twice; the Dashboard copy
-      has no `borderline` label while the header does. One shared helper.
+- [x] `R3` The verdict chip was computed twice: `App.tsx` and `Dashboard.tsx`
+      wrote the same borderline rule separately, and the Dashboard copy picked its
+      label from holds/short only — so a borderline plan showed an amber dot
+      reading "runs short" on the home page while the header on every other page
+      said "borderline". Now one `verdictChip(pot, maxAge, labels)` in
+      `src/lib/planDisplay.ts` (with the margin named `BORDERLINE_YEARS`), called
+      by both; `planDisplay.test.ts` pins holds, the exact borderline boundary,
+      and a real shortfall.
 - [!] `R4` `EXAMPLE_PLAN_PREFIX` is English-only and locale-independent, but
       plan names are user-visible; the prefix is how "is this mine?" is
       decided. A `Scenario.isExample` flag would stop name-matching being

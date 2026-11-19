@@ -21,7 +21,7 @@ import { MarketDial } from './console/MarketDial';
 import { DownMarketCheck } from './console/DownMarketCheck';
 import { SteeringControls, type Bands, type EqSolvedState } from './console/SteeringControls';
 import { EvidenceRow } from './console/EvidenceRow';
-import { firstEmptyAge, potDisplay, unsetDetailGroups } from '../lib/planDisplay';
+import { firstEmptyAge, potDisplay, unsetDetailGroups, verdictChip } from '../lib/planDisplay';
 import { useAppLocale } from '../lib/localeContext';
 
 // The map's axis window defaults — retire age × spending. The spending axis
@@ -82,11 +82,9 @@ export function Dashboard({
   // Where the investable pot hits $0 (null = leftover at the horizon).
   const lifeDepletion = firstEmptyAge(breakdown);
   const window = mapWindow({ desiredSpending: inputs.desiredSpending });
-  const chip: VerdictChip = {
-    tone: pot.holds ? 'holds' : (pot.emptyAge != null && inputs.maxAge - pot.emptyAge <= 6) ? 'borderline' : 'short',
-    age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
-    label: pot.holds ? t('holds') : t('short'),
-  };
+  const chip: VerdictChip = verdictChip(pot, inputs.maxAge, {
+    holds: t('holds'), short: t('short'), borderline: t('borderline'),
+  });
   return (
     <PageChrome chip={chip} assistant={assistant}>
       {setup}

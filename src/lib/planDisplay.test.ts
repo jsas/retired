@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstEmptyAge, formatReScore, potDisplay, unsetDetailGroups } from './planDisplay';
+import { firstEmptyAge, formatReScore, potDisplay, unsetDetailGroups, verdictChip } from './planDisplay';
 import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import type { YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 
@@ -46,6 +46,32 @@ describe('potDisplay', () => {
     expect(d.lastsTo).toBe(86);
     expect(d.emptyAge).toBe(86);
     expect(d.leftover).toBe(0);
+  });
+});
+
+// One rule for every page's header chip, and the word has to match the tone:
+// the Dashboard used to recompute the tone inline and then choose a label from
+// holds/short only, so a borderline plan read "runs short" on the home page.
+const LABELS = { holds: 'the plan holds', short: 'runs short', borderline: 'borderline' };
+
+describe('verdictChip', () => {
+  it('says holds and shows the horizon when the pot survives', () => {
+    const chip = verdictChip(potDisplay([row(88, 40_000), row(90, 8_000)], 90), 90, LABELS);
+    expect(chip).toEqual({ tone: 'holds', age: '90+', label: LABELS.holds });
+  });
+
+  it('calls the borderline boundary borderline, not a failure', () => {
+    // Empty at 84 with a 90 horizon is exactly the margin.
+    const chip = verdictChip(potDisplay([row(83, 500), row(84, 0), row(90, -1_000)], 90), 90, LABELS);
+    expect(chip.tone).toBe('borderline');
+    expect(chip.label).toBe(LABELS.borderline);
+    expect(chip.age).toBe('84');
+  });
+
+  it('calls a real shortfall short', () => {
+    const chip = verdictChip(potDisplay([row(70, 0), row(90, -50_000)], 90), 90, LABELS);
+    expect(chip.tone).toBe('short');
+    expect(chip.label).toBe(LABELS.short);
   });
 });
 
