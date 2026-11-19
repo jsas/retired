@@ -8,8 +8,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { calculateHousehold } from '@retired/engine-core/retirementEngine';
-import { BLUE, RED_DOT } from '../../design/tokens';
-import { HelpHint } from '../../design/primitives';
+import { Chip, HelpHint } from '../../design/primitives';
 
 /** The down-market return the check stress-tests against (1.2%). */
 export const DOWN_MARKET_RETURN = 0.012;
@@ -25,22 +24,19 @@ export function DownMarketCheck({ inputs, config }: { inputs: RetirementInputs; 
 
   const pct = (DOWN_MARKET_RETURN * 100).toFixed(1);
   const dial = (inputs.investmentReturn * 100).toFixed(1);
-  const dot = check.holds ? BLUE : RED_DOT;
-
   return (
-    <div className="border-l-2 border-slate-200 pl-4">
-      <div className="flex items-center gap-2">
-        <span className="inline-block h-2 w-2" style={{ backgroundColor: dot }} />
-        <span className="text-[13px] font-medium text-slate-700">
+    <Chip
+      tone={check.holds ? 'holds' : 'short'}
+      title={
+        <>
           {check.holds ? t('dash.downCheck') : t('dash.downWarn')}
-        </span>
-        <HelpHint topic="down-market-check" />
-      </div>
-      <p className="num mt-1.5 text-[11.5px] leading-relaxed text-slate-500">
-        {check.holds
-          ? <Trans i18nKey="dash.downHolds" ns="pages" values={{ pct, age: inputs.maxAge }} components={{ b: <b /> }} />
-          : <Trans i18nKey="dash.downFails" ns="pages" values={{ pct, runsTo: check.depletionAge ?? '—', dial }} components={{ b: <b /> }} />}
-      </p>
-    </div>
+          <HelpHint topic="down-market-check" className="ml-1" />
+        </>
+      }
+    >
+      {check.holds
+        ? <Trans i18nKey="dash.downHolds" ns="pages" values={{ pct, age: inputs.maxAge }} components={{ b: <b /> }} />
+        : <Trans i18nKey="dash.downFails" ns="pages" values={{ pct, runsTo: check.depletionAge ?? '—', dial }} components={{ b: <b /> }} />}
+    </Chip>
   );
 }

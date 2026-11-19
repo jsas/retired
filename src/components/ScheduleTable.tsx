@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppLocale } from '../lib/localeContext';
+import { formatCurrency, type Locale } from '../lib/locale';
 import { ChevronRight, ChevronDown, Columns3, GripVertical } from 'lucide-react';
 import type { YearlyBreakdown, YearDetail } from '@retired/engine-core/retirementEngine';
 import { prefKV } from '../lib/prefKv';
@@ -29,15 +30,6 @@ interface ScheduleTableProps {
   primaryBreakdown?: YearlyBreakdown[];
   spouseBreakdown?: YearlyBreakdown[];
   spouseAgeOffset?: number; // inputs.currentAge - spouse.currentAge
-}
-
-function formatCurrency(value: number, locale: string = 'en-CA'): string {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: 'CAD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
 }
 
 const TONE_CLASS: Record<ScheduleColumn['tone'], string> = {
@@ -136,7 +128,7 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
 
 // A single labelled money line inside the drill-down panel.
 function Line({ label, value, hint, strong, indent, locale }: {
-  label: string; value: number; hint?: string; strong?: boolean; indent?: boolean; locale: string;
+  label: string; value: number; hint?: string; strong?: boolean; indent?: boolean; locale: Locale;
 }) {
   if (Math.abs(value) < 0.5) return null; // hide zero lines to reduce noise
   return (

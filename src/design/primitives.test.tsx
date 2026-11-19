@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import * as T from './tokens';
 import {
   VerdictHero, Panel, Fader, Chip, Stat, AccountBars, Legend, Dropdown, Footnote, AppHeader,
-  HelpHint, HelpHintPopup, Check,
+  HelpHint, HelpHintPopup, Check, Radio, RadioGroup,
 } from './primitives';
 
 const render = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -159,5 +159,48 @@ describe('primitives render', () => {
     );
     expect(html).toContain('rich title');
     expect(html).not.toContain('plain');
+  });
+
+  it('Radio is a square dot, ink when chosen — never blue', () => {
+    const on = render(<Radio checked onChange={() => {}} label="RRSP first" />);
+    expect(on).toContain('bg-slate-900');
+    expect(on).toContain('border-slate-900');
+    expect(on).toContain('RRSP first');
+    expect(on).toContain('type="radio"');
+    expect(on).toMatch(/\schecked/);
+    expect(on).not.toContain('blue');
+
+    const off = render(<Radio checked={false} onChange={() => {}} />);
+    expect(off).toContain('border-slate-300');
+    expect(off).toContain('bg-white');
+    expect(off).not.toContain('bg-slate-900');
+    expect(off).not.toContain('blue');
+  });
+
+  it('RadioGroup gives a set one name and marks only the current value', () => {
+    const html = render(
+      <RadioGroup name="withdrawal-order" value="tfsa" onChange={() => {}}>
+        <Radio value="rrsp" label="RRSP first" />
+        <Radio value="tfsa" label="TFSA first" />
+      </RadioGroup>,
+    );
+    // one native group, so arrow keys move between the options
+    expect((html.match(/name="withdrawal-order"/g) ?? []).length).toBe(2);
+    expect((html.match(/type="radio"/g) ?? []).length).toBe(2);
+    // exactly one option is checked, and it is the current value
+    const chosen = html.split('</label>')[1] ?? '';
+    expect(chosen).toContain('TFSA first');
+    expect(chosen).toMatch(/\schecked/);
+    expect(html.split('</label>')[0]).not.toMatch(/\schecked/);
+    // the group renders no element of its own — the page's rows are untouched
+    expect(html).not.toContain('<div');
+  });
+
+  it('Radio scales its box and keeps a name when the row has no words', () => {
+    expect(render(<Radio checked={false} onChange={() => {}} size={12} />)).toContain('width:12px');
+    expect(render(<Radio checked={false} onChange={() => {}} size={20} />)).toContain('width:20px');
+    const iconOnly = render(<Radio checked onChange={() => {}} label={<span className="sr-only">use this</span>} />);
+    expect(iconOnly).toContain('sr-only');
+    expect(iconOnly).toContain('use this');
   });
 });

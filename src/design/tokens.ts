@@ -32,14 +32,18 @@ export const HAIRLINE_STRONG = '#cbd5e1'; // slate-300 — input borders
 export const PAPER = '#ffffff';       // the ground; the app is paper-white
 export const WASH = '#fbfbfa';        // barely-off-white page bg (Dashboard)
 
-/** Type scale (px) — small, tight, num-aligned. Matches the mock's sizes. */
-export const TEXT = {
-  verdict: 28,      // the one-number answer, md+
-  section: 11,      // uppercase section labels, tracking 0.16em
-  label: 13,        // control labels
-  body: 13.5,       // prose lines
-  caption: 11,      // footnotes, legends
-} as const;
+/** The verdict behind a dot, chip or bar. `neutral` / `checking` are the
+ *  no-verdict-yet states, so every tone the UI can name maps to one colour. */
+export type Tone = 'holds' | 'short' | 'borderline' | 'neutral' | 'checking';
+
+/** One tone, one colour — shared by `Chip`, the verdict dot and any future
+ *  surface so a verdict can never render two different blues. */
+export function toneColor(tone: Tone): string {
+  return tone === 'holds' ? BLUE
+    : tone === 'short' ? RED_DOT
+    : tone === 'borderline' ? AMBER_DOT
+    : FAINT;
+}
 
 /** The one number that must always be tabular. */
 export const NUM_CLASS = 'num';

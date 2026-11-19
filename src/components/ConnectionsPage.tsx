@@ -14,7 +14,7 @@
 // This page owns its own AI-settings state so the assistant page stays
 // focused on chatting. Keys never leave this browser.
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   Plus, Trash2, X, Check, ChevronDown, ChevronRight, Loader2, RefreshCw,
@@ -33,7 +33,7 @@ import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { buildMachineGuide, type MachineGuide } from '../lib/ai/machineGuide';
 import { estimateContextFit, fmtMB } from '../lib/ai/vramEstimate';
 import { defaultContextSize } from '../lib/ai/context';
-import { Check as CheckBox, HelpHint } from '../design/primitives';
+import { Check as CheckBox, HelpHint, Radio, RadioGroup } from '../design/primitives';
 import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider';
 import { deleteBonsaiModel, isBonsaiModelCached } from '../lib/ai/bonsaiProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
@@ -340,7 +340,8 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
       )}
 
       {/* Catalog */}
-      <div className="mt-2 space-y-1">
+      <RadioGroup name="local-model" value={chosenId ?? ''} onChange={pick}>
+        <div className="mt-2 space-y-1">
         {byVram.map(m => {
           const isChosen = m.id === chosenId;
           const isCached = cached[m.id] === true;
@@ -352,19 +353,19 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                 isChosen ? 'border-slate-900' : 'border-slate-200'
               }`}
             >
-              <input
-                type="checkbox"
+              <CheckBox
                 checked={(settings.favoriteModels ?? []).includes(`local:${m.id}`)}
                 onChange={() => updateAiSettings(prev => toggleFavorite(prev, `local:${m.id}`))}
                 title={t('models.showOnChat')}
+                label={<span className="sr-only">{t('models.showOnChat')}</span>}
                 className="shrink-0"
               />
-              <button
-                onClick={() => pick(m.id)}
+              <Radio
+                value={m.id}
+                size={12}
                 title={t('models.useThis')}
-                className={`h-3.5 w-3.5 shrink-0 border-2 ${
-                  isChosen ? 'border-slate-900 bg-slate-900' : 'border-slate-300'
-                }`}
+                label={<span className="sr-only">{t('models.useThis')}</span>}
+                className="shrink-0"
               />
               <span className="flex-1 min-w-0">
                 <span className="font-semibold text-slate-800">{m.label}</span>
@@ -400,7 +401,8 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
             </div>
           );
         })}
-      </div>
+        </div>
+      </RadioGroup>
 
       {/* Active download progress */}
       {downloading && progress && (
@@ -759,8 +761,17 @@ function ModelPickList({ list, active, onPick, favorites = [] }: {
   favorites?: string[];
 }) {
   const { t } = useTranslation('pages');
+  const groupId = useId();
   const fav = new Set(favorites);
   return (
+    <RadioGroup
+      name={groupId}
+      value={active ?? ''}
+      onChange={key => {
+        const picked = list.find(x => x.key === key);
+        if (picked) onPick(picked);
+      }}
+    >
     <div className="space-y-1">
       {list.map(e => {
         const isChosen = e.key === active;
@@ -772,18 +783,19 @@ function ModelPickList({ list, active, onPick, favorites = [] }: {
               isChosen ? 'border-slate-900 bg-white' : 'border-slate-200 bg-white'
             }`}
           >
-            <input
-              type="checkbox"
+            <CheckBox
               checked={fav.has(e.key)}
               onChange={() => updateAiSettings(prev => toggleFavorite(prev, e.key))}
               title={t('models.showOnChat')}
+              label={<span className="sr-only">{t('models.showOnChat')}</span>}
               className="shrink-0"
             />
-            <button
-              type="button"
-              onClick={() => onPick(e)}
+            <Radio
+              value={e.key}
+              size={12}
               title={t('models.useThis')}
-              className={`h-3.5 w-3.5 shrink-0 border-2 ${isChosen ? 'border-slate-900 bg-slate-900' : 'border-slate-300'}`}
+              label={<span className="sr-only">{t('models.useThis')}</span>}
+              className="shrink-0"
             />
             <button type="button" onClick={() => onPick(e)} className="min-w-0 flex-1 truncate text-left font-semibold text-slate-800">
               {e.label}
@@ -798,6 +810,7 @@ function ModelPickList({ list, active, onPick, favorites = [] }: {
         );
       })}
     </div>
+    </RadioGroup>
   );
 }
 

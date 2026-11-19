@@ -4,13 +4,14 @@
 // end, and the CPP+OAS that arrives every year. Everything reads the same
 // engine breakdown.
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import type { RetirementInputs, RetirementResults, YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 import { householdOutcome } from '@retired/engine-core/retirementEngine';
 import { toHousehold } from '@retired/engine-core/householdTypes';
 import { potDisplay, formatReScore } from '../../lib/planDisplay';
 import { AccountBars, Stat } from '../../design/primitives';
 import { useAppLocale } from '../../lib/localeContext';
+import { formatCurrency } from '../../lib/locale';
 
 export function EvidenceRow({ inputs, results, breakdown }: {
   inputs: RetirementInputs;
@@ -21,7 +22,6 @@ export function EvidenceRow({ inputs, results, breakdown }: {
   const { t } = useTranslation('pages');
   const { t: td } = useTranslation('details');
   const { locale } = useAppLocale();
-  const fmt = (v: number) => '$' + Math.round(v).toLocaleString(locale);
   const { currentAge, retirementAge, maxAge } = inputs;
   const [age, setAge] = useState(retirementAge);
 
@@ -72,7 +72,18 @@ export function EvidenceRow({ inputs, results, breakdown }: {
             ))}
           </select>
         </div>
-        <AccountBars rows={accounts} total={accTotal} />
+        <AccountBars
+          rows={accounts}
+          total={accTotal}
+          note={
+            <Trans
+              i18nKey="dash.accountSharesNote"
+              ns="pages"
+              values={{ amount: formatCurrency(accTotal, locale) }}
+              components={{ n: <span className="num" /> }}
+            />
+          }
+        />
       </div>
 
       {/* key numbers */}
@@ -92,17 +103,17 @@ export function EvidenceRow({ inputs, results, breakdown }: {
         />
         <Stat
           label={t('dash.leftAt', { age: maxAge })}
-          value={leftAtMax > 0 ? fmt(leftAtMax) : t('dash.nothing')}
+          value={leftAtMax > 0 ? formatCurrency(Math.round(leftAtMax), locale) : t('dash.nothing')}
           note={leftAtMax > 0 ? t('dash.stillInPot') : t('dash.potEmpty')}
         />
         <Stat
           label={t('dash.inPotAtEnd')}
-          value={fmt(atRet?.endingBalance ?? 0)}
+          value={formatCurrency(Math.round(atRet?.endingBalance ?? 0), locale)}
           note={t('dash.afterSaving')}
         />
         <Stat
           label={t('dash.cppOasFrom', { age: benAge })}
-          value={benefits > 0 ? fmt(benefits) : '—'}
+          value={benefits > 0 ? formatCurrency(Math.round(benefits), locale) : '—'}
           note={t('dash.everyYearAfter')}
         />
       </div>

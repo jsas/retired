@@ -460,8 +460,13 @@ export type ToolOutcome =
     }
   | { kind: 'error'; content: string };
 
-const money = (v: number) =>
-  new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
+/** Money for tool text. The assistant speaks the host UI's language: fr-CA gets
+ *  `1 234 $`, en-CA `$1,234`. A tool that has a context takes one line —
+ *  `const money = moneyFor(ctx.locale)` — and every figure it prints follows.
+ *  Hosts that send no locale keep the old en-CA output exactly. */
+type Money = (v: number) => string;
+const moneyFor = (locale?: ToolContext['locale']): Money => (v: number) =>
+  new Intl.NumberFormat(locale ?? 'en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
 
 function zodIssues(error: z.ZodError): string {
   return error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
@@ -565,6 +570,7 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
 // ---------------------------------------------------------------------------
 
 function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchema>): string {
+  const money = moneyFor(ctx.locale);
   const i = ctx.inputs;
   const lines: string[] = [`Scenario "${ctx.scenarioName}" (of ${ctx.scenarioList.length} saved).`];
   if (looksLikeUnsetPlan(i)) {
@@ -695,7 +701,13 @@ function validateOverrides(
 
 /** The compact verdict block returned for any engine run. Deliberately small:
  *  the model gets decision-grade numbers, not the whole schedule. */
-function summarizeResults(label: string, inputs: RetirementInputs, results: RetirementResults): string {
+function summarizeResults(
+  label: string,
+  inputs: RetirementInputs,
+  results: RetirementResults,
+  locale?: ToolContext['locale'],
+): string {
+  const money = moneyFor(locale);
   const rows = results.yearlyBreakdown;
   const last = rows[rows.length - 1];
   const lifetimeTax = last?.cumulativeTax ?? 0;
@@ -757,7 +769,7 @@ function runProjection(ctx: ToolContext, overrides?: Record<string, unknown>): T
     const head = overrides && Object.keys(overrides).length
       ? 'Projection WITH overrides (what-if; plan unchanged)'
       : 'Projection of the current plan';
-    const body = summarizeResults('Result', inputs, results);
+    const body = summarizeResults('Result', inputs, results, ctx.locale);
     return { kind: 'result', content: [head, ...notes, body].join('\n') };
   } catch (err) {
     return { kind: 'error', content: `Engine failed to run: ${err instanceof Error ? err.message : String(err)}` };
@@ -792,7 +804,7 @@ function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenario
       }
     }
     // One verdict line per plan (current first), then deltas per variant.
-    lines.push(summarizeResults('CURRENT plan', ctx.inputs, base));
+    lines.push(summarizeResults('CURRENT plan', ctx.inputs, base, ctx.locale));
     const variantRuns = usable.map(v => ({
       label: v.label,
       overrides: v.patch,
@@ -801,13 +813,13 @@ function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenario
       notes: v.rejected.length ? ` (ignored invalid: ${v.rejected.join('; ')})` : '',
     }));
     for (const r of variantRuns) {
-      lines.push(summarizeResults(`VARIANT "${r.label}" ${JSON.stringify(r.overrides)}${r.notes}`, r.inputs, r.results));
+      lines.push(summarizeResults(`VARIANT "${r.label}" ${JSON.stringify(r.overrides)}${r.notes}`, r.inputs, r.results, ctx.locale));
     }
     lines.push('DELTAS (variant − current):');
     for (const r of variantRuns) {
       lines.push(
-        `  ${r.label}: ending balance ${delta(end(base), end(r.results))}, ` +
-        `lifetime tax ${delta(lifeTax(base), lifeTax(r.results))}, ` +
+        `  ${r.label}: ending balance ${delta(end(base), end(r.results), ctx.locale)}, ` +
+        `lifetime tax ${delta(lifeTax(base), lifeTax(r.results), ctx.locale)}, ` +
         `depletion: ${fmtDepl(base)} → ${fmtDepl(r.results)}`,
       );
     }
@@ -820,8 +832,9 @@ function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenario
 const end = (r: RetirementResults) => r.yearlyBreakdown.at(-1)?.endingBalance ?? 0;
 const lifeTax = (r: RetirementResults) => r.yearlyBreakdown.at(-1)?.cumulativeTax ?? 0;
 const fmtDepl = (r: RetirementResults) => (r.depletionAge != null ? `depletes ${r.depletionAge}` : 'funded to max age');
-const delta = (a: number, b: number) => {
+const delta = (a: number, b: number, locale?: ToolContext['locale']) => {
   const d = b - a;
+  const money = moneyFor(locale);
   return `${d >= 0 ? '+' : '−'}${money(Math.abs(d))}`;
 };
 
@@ -983,6 +996,7 @@ function proposeSpendingBands(
   ctx: ToolContext,
   args: { bands: Array<{ fromAge: number; pctOfBase: number }>; rationale?: string },
 ): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   const band = z.object({ fromAge: z.number(), pctOfBase: z.number().min(0).max(3) });
   const res = z.array(band).safeParse(args.bands);
   if (!res.success) {
@@ -1138,7 +1152,7 @@ function proposeRevert(ctx: ToolContext, args: z.infer<typeof proposeRevertArgs>
     target = checkpoints.find(c => c.id.toLowerCase() === wanted)
       ?? checkpoints.filter(c => c.label.toLowerCase() === wanted)[0];
     if (!target) {
-      const known = [...checkpoints].reverse().map(c => `"${c.label}" (${new Date(c.at).toLocaleDateString('en-CA')})`).join(', ');
+      const known = [...checkpoints].reverse().map(c => `"${c.label}" (${new Date(c.at).toLocaleDateString(ctx.locale ?? 'en-CA')})`).join(', ');
       return { kind: 'error', content: `No checkpoint matches "${args.checkpoint}". Recent checkpoints: ${known}. Omit the argument to revert to the most recent.` };
     }
   } else {
@@ -1435,6 +1449,7 @@ function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavig
 }
 
 function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   if (args.action === 'open') {
     return openScenarioTool(ctx, { scenarioId: args.scenarioId, name: args.name });
   }
@@ -1484,6 +1499,7 @@ function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosA
 // ---------------------------------------------------------------------------
 
 function runStrategiesTool(ctx: ToolContext, filter?: StrategyFilter): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   try {
     const report = runStrategies(ctx.inputs, ctx.config, filter);
     const row = (s: { name: string; survived: boolean; sustainableSpending: number; deltaSpending: number; lifetimeTax: number; lifetimeGis: number; endingBalance: number; depletionAge: number | null }) =>
@@ -1507,6 +1523,7 @@ function runStrategiesTool(ctx: ToolContext, filter?: StrategyFilter): ToolOutco
 }
 
 function solveSpendingTool(ctx: ToolContext, args: z.infer<typeof solveSpendingArgs>): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   let inputs = ctx.inputs;
   const notes: string[] = [];
   if (args.overrides && Object.keys(args.overrides).length > 0) {
@@ -1539,6 +1556,7 @@ function solveSpendingTool(ctx: ToolContext, args: z.infer<typeof solveSpendingA
 }
 
 function runMonteCarloTool(ctx: ToolContext, args: z.infer<typeof runMonteCarloArgs>): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   let inputs = ctx.inputs;
   const notes: string[] = [];
   if (args.overrides && Object.keys(args.overrides).length > 0) {
@@ -1571,6 +1589,7 @@ function runMonteCarloTool(ctx: ToolContext, args: z.infer<typeof runMonteCarloA
 }
 
 function getScheduleTool(ctx: ToolContext, args: z.infer<typeof getScheduleArgs>): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   let inputs = ctx.inputs;
   const notes: string[] = [];
   if (args.overrides && Object.keys(args.overrides).length > 0) {

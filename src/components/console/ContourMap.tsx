@@ -18,7 +18,10 @@ import {
   buildBands, smoothPath, xFrac, yFrac, ageAtFrac, spendAtFrac, terrainKey,
   type TerrainWindow, type PlotBox,
 } from '@retired/engine-core/contour';
-import { BLUE, BLUE_DEEP, RED_DOT, AMBER_DOT, HAIRLINE, HAIRLINE_STRONG, FAINT, INK } from '../../design/tokens';
+import {
+  BLUE, BLUE_DEEP, BLUE_WASH_FROM, BLUE_WASH_TO, PAPER, RED_DOT, AMBER_DOT,
+  HAIRLINE, HAIRLINE_STRONG, FAINT, INK,
+} from '../../design/tokens';
 import { Legend } from '../../design/primitives';
 
 // Plot geometry (viewBox units). Matches the mock's 720×480 pad.
@@ -127,8 +130,8 @@ export function ContourMap({ inputs, config, window: win, onChange }: ContourMap
       >
         <defs>
           <linearGradient id="holdWash" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={BLUE} stopOpacity="0.05" />
-            <stop offset="100%" stopColor={BLUE_DEEP} stopOpacity="0.20" />
+            <stop offset="0%" stopColor={BLUE} stopOpacity={String(BLUE_WASH_FROM)} />
+            <stop offset="100%" stopColor={BLUE_DEEP} stopOpacity={String(BLUE_WASH_TO)} />
           </linearGradient>
         </defs>
 
@@ -167,7 +170,7 @@ export function ContourMap({ inputs, config, window: win, onChange }: ContourMap
         {/* you are here — halo + dot + square tag */}
         <g>
           <circle cx={dotX} cy={dotY} r="24" fill={dotColor} opacity="0.12" />
-          <circle cx={dotX} cy={dotY} r="11" fill={dotColor} stroke="#fff" strokeWidth="3" style={{ cursor: 'grab' }} />
+          <circle cx={dotX} cy={dotY} r="11" fill={dotColor} stroke={PAPER} strokeWidth="3" style={{ cursor: 'grab' }} />
           <DotTag x={dotX} y={dotY} text={t('dash.youAreHere', { age: inputs.retirementAge, spend: fmtK(inputs.desiredSpending) })} />
         </g>
       </svg>
@@ -194,7 +197,7 @@ function DotTag({ x, y, text }: { x: number; y: number; text: string }) {
   return (
     <g pointerEvents="none">
       <rect x={tx} y={ty} width={w} height={h} fill={INK} opacity="0.92" />
-      <text x={tx + w / 2} y={ty + h / 2 + 4} textAnchor="middle" fontSize="11.5" fontWeight="600" fill="#fff" fontFamily="inherit">
+      <text x={tx + w / 2} y={ty + h / 2 + 4} textAnchor="middle" fontSize="11.5" fontWeight="600" fill={PAPER} fontFamily="inherit">
         {text}
       </text>
     </g>

@@ -8,7 +8,7 @@ import { useState } from 'react';
 import * as T from './tokens';
 import {
   Fader, Chip, VerdictHero, Panel, Stat, AccountBars, Legend, Dropdown, Footnote,
-  HelpHint, Dot, Progress, Modal, Check,
+  HelpHint, Dot, Progress, Modal, Check, Radio, RadioGroup,
 } from './primitives';
 import { ProjectionTimeline } from './ProjectionTimeline';
 
@@ -52,6 +52,7 @@ export function StyleGuide() {
   const [open, setOpen] = useState(false);
   const [checkOn, setCheckOn] = useState(true);
   const [checkOff, setCheckOff] = useState(false);
+  const [radioPick, setRadioPick] = useState('rrsp');
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -145,19 +146,26 @@ export function StyleGuide() {
           </div>
 
           <div className="mt-8 border-t border-slate-100 pt-6">
-            <AccountBars total={850000} rows={[
-              { label: 'RRSP', value: 442000 },
-              { label: 'TFSA', value: 263000, active: true },
-              { label: 'Taxable', value: 145000 },
-            ]} />
+            <AccountBars
+              total={850000}
+              rows={[
+                { label: 'RRSP', value: 442000 },
+                { label: 'TFSA', value: 263000, active: true },
+                { label: 'Taxable', value: 145000 },
+              ]}
+              note="Shares of $850,000 at that age. The mix shifts as the plan moves."
+            />
           </div>
 
           <div className="mt-8 border-t border-slate-100 pt-6">
-            <p className={T.cls.sectionLabel}>Check — the one checkbox</p>
+            <p className={T.cls.sectionLabel}>Check & Radio — the only choice controls</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
               Square, ink fill, white ✓. Never round, never blue — a control is not a
-              verdict. Pages compose <code>&lt;Check&gt;</code>; raw
-              <code> &lt;input type="checkbox"&gt;</code> in the app is a bug.
+              verdict. Pages compose <code>&lt;Check&gt;</code> for yes/no and
+              <code>&lt;Radio&gt;</code> for choose-one; raw
+              <code> &lt;input type="checkbox"&gt;</code> or
+              <code>&lt;input type="radio"&gt;</code> in the app is a bug. The real
+              input sits inside the label, so the whole row is the tap target.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
               <Check checked={checkOn} onChange={setCheckOn} label="Include a partner" />
@@ -165,6 +173,14 @@ export function StyleGuide() {
               <Check checked={checkOn} onChange={setCheckOn} size={12} label="tight row (12)" />
               <Check checked={checkOn} onChange={setCheckOn} size={20} label="big tap target (20)" />
             </div>
+            <RadioGroup name="demo-withdrawal-order" value={radioPick} onChange={setRadioPick}>
+              <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
+                <Radio value="rrsp" label="RRSP first" />
+                <Radio value="tfsa" label="TFSA first" />
+                <Radio value="cash" size={12} label="tight row (12)" />
+                <Radio value="bridge" size={20} label="big tap target (20)" />
+              </div>
+            </RadioGroup>
           </div>
 
           <div className="mt-8 border-t border-slate-100 pt-6">

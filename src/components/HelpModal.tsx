@@ -27,7 +27,7 @@ function highlight(node: ReactNode, query: string): ReactNode {
       if (hit === -1) { parts.push(node.slice(i)); break; }
       if (hit > i) parts.push(node.slice(i, hit));
       parts.push(
-        <mark key={k++} className="bg-yellow-200 text-inherit px-px">
+        <mark key={k++} className="bg-blue-100 text-inherit px-px">
           {node.slice(hit, hit + q.length)}
         </mark>
       );
@@ -53,7 +53,7 @@ export function HelpModal() {
   const [query, setQuery] = useState('');
   const [flashId, setFlashId] = useState<string | null>(null);
   const q = query.trim();
-  const sectionLabel = (section: string) => t(`sections.${section}`, { defaultValue: section });
+  const sectionLabel = (section: string) => t(`sections.${section}`);
 
   const filtered = useMemo(() => searchHelpTopics(q), [q, i18n.language]);
   const bySection = useMemo(() => {

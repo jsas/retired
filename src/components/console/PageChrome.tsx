@@ -13,8 +13,8 @@ import { useTranslation } from 'react-i18next';
 import { Link } from './nav';
 import type { View } from '../../lib/viewRoutes';
 import { pageForView, type NavEntry } from '@retired/mcp-tools/navigation';
-import { Dropdown, HelpHint } from '../../design/primitives';
-import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
+import { Dot, Dropdown, HelpHint } from '../../design/primitives';
+import { cls, toneColor, NUM_CLASS } from '../../design/tokens';
 import { Bot, CircleUserRound, Undo2 } from 'lucide-react';
 import { LanguageSwitch } from '../LanguageSwitch';
 import { useAppLocale } from '../../lib/localeContext';
@@ -149,10 +149,6 @@ function SectionedMenu({ items, linkClass, headerClass }: {
       })}
     </div>
   );
-}
-
-function chipDot(tone: VerdictChip['tone']) {
-  return tone === 'holds' ? BLUE : tone === 'short' ? RED_DOT : tone === 'borderline' ? AMBER_DOT : '#94a3b8';
 }
 
 export function PageChrome({ title, hint, chip, actions, assistant, children }: {
@@ -314,8 +310,8 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
             className="hidden px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block"
           />
           <Link view="dashboard" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label={t('verdictChip', { label: chip.label })}>
-            <span title={chip.label} className="inline-block h-2.5 w-2.5" style={{ backgroundColor: chipDot(chip.tone) }} />
-            <span className="num text-[14px] font-bold text-slate-900">{chip.age}</span>
+            <Dot color={toneColor(chip.tone)} title={chip.label} />
+            <span className={`${NUM_CLASS} text-[14px] font-bold text-slate-900`}>{chip.age}</span>
           </Link>
         </div>
       </header>

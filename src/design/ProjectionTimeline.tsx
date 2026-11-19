@@ -20,7 +20,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { INK, FAINT, HAIRLINE, RED_DOT, AMBER_DOT } from './tokens';
+import { INK, FAINT, HAIRLINE, PAPER, BLUE, RED_DOT, RED_TEXT, AMBER_DOT, AMBER_TEXT } from './tokens';
 import { smoothLinePath, smoothAreaPath } from './curve';
 
 export interface TimelineSeries {
@@ -100,7 +100,23 @@ export function baseSpendAtRetirement(
   return nominal * pct;
 }
 
-const PALETTE = ['#1d4ed8', '#059669', '#d97706', '#be123c', '#7c3aed', '#0e7490'];
+/* Series + strip colours. Every colour the verdict already owns comes from
+   ./tokens; the rest is this chart's own categorical ramp (Compare draws
+   several plans at once) and the two strip inks. Named once, here, so a legend
+   swatch and the thing it explains can never drift apart. */
+const SERIES_BLUE = BLUE;
+const SERIES_GREEN = '#059669';  // spending, or a second plan
+const SERIES_AMBER = '#d97706';
+const SERIES_RED = RED_TEXT;     // runs out
+const SERIES_VIOLET = '#7c3aed'; // the market return hypothesis
+const SERIES_CYAN = '#0e7490';
+const PALETTE = [SERIES_BLUE, SERIES_GREEN, SERIES_AMBER, SERIES_RED, SERIES_VIOLET, SERIES_CYAN];
+const SPEND_LINE = SERIES_GREEN;   // the spend strip: line, handle, legend swatch
+const EVENT_IN = '#0ea5e9';        // a cash event coming in (going out is RED_DOT)
+const RETURN_LINE = SERIES_VIOLET; // the market strip: return curve, 0% label, legend
+const RETURN_SELECTED = '#5b21b6'; // a return anchor, and its label, while selected
+const VOL_SELECTED = AMBER_TEXT;   // a volatility anchor, and its label, while selected
+const PIN_INK = '#475569';         // a pin label with no colour of its own
 
 const W = 1000, H = 190;
 const AXIS = 118;           // y of the baseline the area sits on
@@ -417,18 +433,18 @@ export function ProjectionTimeline({
         })}
         {spend && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-0.5 w-4" style={{ background: '#059669' }} /> {t('dash.spend')}
+            <span className="inline-block h-0.5 w-4" style={{ background: SPEND_LINE }} /> {t('dash.spend')}
           </span>
         )}
         {onEventChange != null && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-2 w-2 rotate-45" style={{ background: '#0ea5e9' }} />
+            <span className="inline-block h-2 w-2 rotate-45" style={{ background: EVENT_IN }} />
             <span className="inline-block h-2 w-2 rotate-45" style={{ background: RED_DOT }} /> {t('dash.events')}
           </span>
         )}
         {onAnchorsChange != null && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-2 w-4" style={{ background: '#7c3aed' }} /> {t('dash.market')}
+            <span className="inline-block h-2 w-4" style={{ background: RETURN_LINE }} /> {t('dash.market')}
           </span>
         )}
       </div>
@@ -503,10 +519,10 @@ export function ProjectionTimeline({
         {/* retirement marker */}
         {marker && (marker.style ?? 'line') === 'line' && (
           <line x1={x(marker.age)} x2={x(marker.age)} y1={AREA_TOP} y2={AXIS}
-            stroke="#f59e0b" strokeWidth="2" strokeDasharray="5 3" />
+            stroke={AMBER_DOT} strokeWidth="2" strokeDasharray="5 3" />
         )}
         {marker && marker.style === 'dot' && (
-          <rect x={x(marker.age) - 4.5} y={AXIS - 4.5} width="9" height="9" fill="#f59e0b" />
+          <rect x={x(marker.age) - 4.5} y={AXIS - 4.5} width="9" height="9" fill={AMBER_DOT} />
         )}
 
         {/* labelled pins — the "start drawing" pin (onDragAge set) drags
@@ -516,7 +532,7 @@ export function ProjectionTimeline({
           const above = (p.place ?? 'above') === 'above';
           // one lane per pin on this side, so two close ages never share a baseline
           const ly = above ? AREA_TOP - 4 - pinLane[i] * PIN_LINE : AXIS + 40 + pinLane[i] * PIN_LINE;
-          const color = p.color ?? '#475569';
+          const color = p.color ?? PIN_INK;
           const draggable = !!p.onDragAge;
           return (
             <g key={i} className={draggable ? 'cursor-ew-resize' : undefined}
@@ -538,15 +554,14 @@ export function ProjectionTimeline({
         {/* ── Spend strip (interactive when handlers arrive) ─────────────── */}
         {showStrips && (
           <g>
-            <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="9" fill={FAINT}>{t('dash.spend')}</text>
+            <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="11" fill={FAINT}>{t('dash.spend')}</text>
             <rect x={LL} y={SPEND_TOP} width={LR - LL} height={STRIP_H} fill="none" stroke={HAIRLINE} strokeWidth="1" />
             {spend && spend.points.length > 0 && (
               <>
                 {/* zero/max reference labels */}
-                <text x={LL - 4} y={SPEND_AXIS + 3} textAnchor="end" fontSize="8" fill={FAINT}>{fmtAxis(0)}</text>
-                <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="8" fill={FAINT} />
+                <text x={LL - 4} y={SPEND_AXIS + 3} textAnchor="end" fontSize="10" fill={FAINT}>{fmtAxis(0)}</text>
                 <path d={smoothLinePath(spend.points.map(p => ({ x: x(p.age), y: ySp(p.value) })))}
-                  fill="none" stroke="#059669" strokeWidth="1.5" />
+                  fill="none" stroke={SPEND_LINE} strokeWidth="1.5" />
                 {/* base-spending handle at the draw age (draggable). The age
                     comes from the marker, the draggable pin, or the left edge
                     — never from sniffing a label string. */}
@@ -554,7 +569,7 @@ export function ProjectionTimeline({
                   <circle
                     cx={x(marker?.age ?? pins.find(p => p.onDragAge)?.age ?? minAge)}
                     cy={ySp(spend.baseSpend)}
-                    r="5" fill="#059669" stroke="#fff" strokeWidth="1.5" className="cursor-ns-resize"
+                    r="5" fill={SPEND_LINE} stroke={PAPER} strokeWidth="1.5" className="cursor-ns-resize"
                     onPointerDown={(e) => {
                       e.preventDefault(); e.stopPropagation();
                       const el = e.currentTarget as Element;
@@ -582,7 +597,7 @@ export function ProjectionTimeline({
                     key={ev.id}
                     x={x(ev.age) - 4.5} y={ySp(Math.min(maxSpend, ev.amount)) - 4.5} width="9" height="9"
                     transform={`rotate(45 ${x(ev.age)} ${ySp(Math.min(maxSpend, ev.amount))})`}
-                    fill={ev.direction === 'in' ? '#0ea5e9' : RED_DOT} stroke="#fff" strokeWidth="1.5"
+                    fill={ev.direction === 'in' ? EVENT_IN : RED_DOT} stroke={PAPER} strokeWidth="1.5"
                     className="cursor-move"
                     onPointerDown={onStripPointerDown('event', ev.id)}
                   >
@@ -597,12 +612,12 @@ export function ProjectionTimeline({
         {/* ── Market strip (interactive when onAnchorsChange arrives) ────── */}
         {showStrips && (
           <g>
-            <text x={LL - 4} y={MKT_TOP + 10} textAnchor="end" fontSize="9" fill={FAINT}>{t('dash.market')}</text>
+            <text x={LL - 4} y={MKT_TOP + 10} textAnchor="end" fontSize="11" fill={FAINT}>{t('dash.market')}</text>
             <rect x={LL} y={MKT_TOP} width={LR - LL} height={STRIP_H} fill="none" stroke={HAIRLINE} strokeWidth="1"
               className={onAnchorsChange ? 'cursor-crosshair' : undefined} />
             {/* zero-return reference */}
             <line x1={LL} x2={LR} y1={yRet(0)} y2={yRet(0)} stroke={HAIRLINE} strokeWidth="1" />
-            <text x={LL - 4} y={yRet(0) + 3} textAnchor="end" fontSize="8" fill="#7c3aed">0%</text>
+            <text x={LL - 4} y={yRet(0) + 12} textAnchor="end" fontSize="10" fill={RETURN_LINE}>0%</text>
 
             {/* volatility curve + anchors (amber dashed, squares) */}
             {(() => {
@@ -618,7 +633,7 @@ export function ProjectionTimeline({
                     <g key={`v-${a.id}`}>
                       <rect
                         x={x(a.age) - 4} y={yVol(a.volatility!) - 4} width="8" height="8"
-                        fill={selectedMkt === a.id ? '#b45309' : AMBER_DOT} stroke="#fff" strokeWidth="1.5"
+                        fill={selectedMkt === a.id ? VOL_SELECTED : AMBER_DOT} stroke={PAPER} strokeWidth="1.5"
                         className="cursor-move" opacity={drag?.kind === 'mkt' && drag.id === a.id ? 1 : 0.9}
                         onPointerDown={onStripPointerDown('mkt', a.id, 'volatility')}
                         onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
@@ -626,7 +641,7 @@ export function ProjectionTimeline({
                         <title>{t('dash.volTitle', { age: a.age, pct: (a.volatility! * 100).toFixed(0) })}</title>
                       </rect>
                       {/* the value, readable without hovering */}
-                      <text x={x(a.age) + 7} y={yVol(a.volatility!) + 3} fontSize="8" fill="#b45309"
+                      <text x={x(a.age) + 7} y={yVol(a.volatility!) + 3} fontSize="10" fill={VOL_SELECTED}
                         fontFamily="inherit" className="pointer-events-none select-none">
                         {Math.round(a.volatility! * 100)}%
                       </text>
@@ -640,13 +655,13 @@ export function ProjectionTimeline({
             {anchors.length > 0 && (
               <path
                 d={smoothLinePath(anchors.map(a => ({ x: x(a.age), y: yRet(a.return) })))}
-                fill="none" stroke="#7c3aed" strokeWidth="2" />
+                fill="none" stroke={RETURN_LINE} strokeWidth="2" />
             )}
             {anchors.map(a => (
               <g key={`r-${a.id}`}>
                 <circle
                   cx={x(a.age)} cy={yRet(a.return)} r={selectedMkt === a.id ? 5.5 : 4.5}
-                  fill={selectedMkt === a.id ? '#5b21b6' : '#7c3aed'} stroke="#fff" strokeWidth="1.5"
+                  fill={selectedMkt === a.id ? RETURN_SELECTED : RETURN_LINE} stroke={PAPER} strokeWidth="1.5"
                   className="cursor-move" opacity={drag?.kind === 'mkt' && drag.id === a.id ? 1 : 0.9}
                   onPointerDown={onStripPointerDown('mkt', a.id, 'return')}
                   onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
@@ -654,7 +669,7 @@ export function ProjectionTimeline({
                   <title>{t('dash.retTitle', { age: a.age, pct: (a.return * 100).toFixed(1) })}</title>
                 </circle>
                 {/* the value, readable without hovering */}
-                <text x={x(a.age) + 8} y={yRet(a.return) - 5} fontSize="8" fill="#5b21b6"
+                <text x={x(a.age) + 8} y={yRet(a.return) - 5} fontSize="10" fill={RETURN_SELECTED}
                   fontFamily="inherit" className="pointer-events-none select-none">
                   {(a.return * 100).toFixed(1)}%
                 </text>
@@ -673,7 +688,7 @@ export function ProjectionTimeline({
                     setSelectedMkt(null);
                   }}>
                   <rect x={x(a.age) + 8} y={yRet(a.return) - 20} width="15" height="15" fill={RED_DOT} />
-                  <text x={x(a.age) + 15.5} y={yRet(a.return) - 8.5} textAnchor="middle" fontSize="10" fill="#fff" className="pointer-events-none">×</text>
+                  <text x={x(a.age) + 15.5} y={yRet(a.return) - 8.5} textAnchor="middle" fontSize="10" fill={PAPER} className="pointer-events-none">×</text>
                   <title>{t('dash.deleteAnchor')}</title>
                 </g>
               );

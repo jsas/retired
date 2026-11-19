@@ -21,7 +21,7 @@ import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } fr
 import { getGivingPrefs, setGivingPrefs, DEFAULT_GIVING_PREFS, type GivingPrefs } from '../lib/givingPrefs';
 import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
-import { HelpHint } from '../design/primitives';
+import { Check, HelpHint, Radio, RadioGroup } from '../design/primitives';
 import { useAppLocale } from '../lib/localeContext';
 import { useTranslation } from 'react-i18next';
 
@@ -90,6 +90,7 @@ const PROVINCE_NAMES: Record<string, string> = {
 
 export function SettingsModal({ config, onSave }: SettingsModalProps) {
   const { t } = useTranslation('settings');
+  const { locale } = useAppLocale();
   const [draft, setDraft] = useState<AppConfig>(() => structuredClone(config));
   // The header language switch writes live config immediately; this page's
   // draft is a clone from mount. Keep the draft locale in step so the General
@@ -189,26 +190,26 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <div>
                 <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('language.title')}</h3>
                 <p className="text-xs text-slate-600 leading-snug mb-2">{t('language.lead')}</p>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  {([
-                    { value: undefined, label: t('language.followBrowser') },
-                    { value: 'en-CA' as const, label: t('language.en') },
-                    { value: 'fr-CA' as const, label: t('language.fr') },
-                  ]).map(opt => (
-                    <label key={opt.label} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="site-locale"
-                        checked={(draft.general.locale ?? undefined) === opt.value}
-                        onChange={() => update(c => {
-                          if (opt.value === undefined) delete c.general.locale;
-                          else c.general.locale = opt.value;
-                        })}
-                      />
-                      {opt.label}
-                    </label>
-                  ))}
-                </div>
+                <RadioGroup
+                  name="site-locale"
+                  value={draft.general.locale ?? ''}
+                  onChange={v => update(c => {
+                    if (v === '') delete c.general.locale;
+                    else c.general.locale = v as typeof c.general.locale;
+                  })}
+                >
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    {([
+                      { value: '', label: t('language.followBrowser') },
+                      { value: 'en-CA', label: t('language.en') },
+                      { value: 'fr-CA', label: t('language.fr') },
+                    ]).map(opt => (
+                      <Radio key={opt.label} value={opt.value} className="text-xs text-slate-700">
+                        {opt.label}
+                      </Radio>
+                    ))}
+                  </div>
+                </RadioGroup>
               </div>
               <div>
                 <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('helpHeading')}</h3>
@@ -217,20 +218,18 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               </div>
               <div className="border-t border-slate-200 pt-3">
                 <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('setupCard')}</h3>
-                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.general.showSetupCardOnLoad}
-                    onChange={e => update(c => { c.general.showSetupCardOnLoad = e.target.checked; })}
-                    className="mt-0.5"
-                  />
+                <Check
+                  checked={draft.general.showSetupCardOnLoad}
+                  onChange={checked => update(c => { c.general.showSetupCardOnLoad = checked; })}
+                  className="text-xs text-slate-700"
+                >
                   <span>
                     {t('setupCardShow')}
                     <span className="block text-[11px] text-slate-500 mt-0.5">
                       {t('setupCardHint')}
                     </span>
                   </span>
-                </label>
+                </Check>
               </div>
 
               {/* Danger zone: wipes the SQLite database (OPFS file + localStorage
@@ -265,10 +264,10 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 </p>
               </div>
               <RangeNum label={t('levers.spendingMax')} value={ranges.spendingMax} step={10000}
-                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.spendingMax.toLocaleString() })}
+                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.spendingMax.toLocaleString(locale) })}
                 onChange={(v) => updateRanges({ spendingMax: v })} money />
               <RangeNum label={t('levers.savingsMax')} value={ranges.savingsMax} step={10000}
-                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.savingsMax.toLocaleString() })}
+                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.savingsMax.toLocaleString(locale) })}
                 onChange={(v) => updateRanges({ savingsMax: v })} money />
               <RangeNum label={t('levers.returnMin')} value={+(ranges.returnMin * 100).toFixed(2)} step={0.25}
                 hint={t('levers.defaultPct', { value: (DEFAULT_RANGE_PREFS.returnMin * 100).toFixed(1) })}
@@ -570,34 +569,30 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <p className="text-[11px] text-slate-500 leading-snug -mt-1">
                 {t('engine.pensionSplitNote')}
               </p>
-              <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={draft.engine.indexSpending}
-                  onChange={e => update(c => { c.engine.indexSpending = e.target.checked; })}
-                  className="mt-0.5"
-                />
+              <Check
+                checked={draft.engine.indexSpending}
+                onChange={checked => update(c => { c.engine.indexSpending = checked; })}
+                className="pt-1 text-xs text-slate-700"
+              >
                 <span>
                   {t('engine.growSpend')}
                   <span className="block text-[11px] text-slate-500 mt-0.5">
                     {t('engine.growSpendHint')}
                   </span>
                 </span>
-              </label>
-              <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={draft.engine.indexTaxTables}
-                  onChange={e => update(c => { c.engine.indexTaxTables = e.target.checked; })}
-                  className="mt-0.5"
-                />
+              </Check>
+              <Check
+                checked={draft.engine.indexTaxTables}
+                onChange={checked => update(c => { c.engine.indexTaxTables = checked; })}
+                className="pt-1 text-xs text-slate-700"
+              >
                 <span>
                   {t('engine.indexTax')}
                   <span className="block text-[11px] text-slate-500 mt-0.5">
                     {t('engine.indexTaxHint')}
                   </span>
                 </span>
-              </label>
+              </Check>
               <p className="text-[11px] text-slate-500 leading-snug border-t border-slate-200 pt-2">
                 {t('engine.togglesNote')}
               </p>
@@ -691,18 +686,17 @@ function AssistantSettings({ ai, patchAi, config }: {
 
       <div className="space-y-2">
         {SEND_TOGGLE_KEYS.map(key => (
-          <label key={key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={send[key]}
-              onChange={e => setSend(key, e.target.checked)}
-              className="mt-0.5"
-            />
+          <Check
+            key={key}
+            checked={send[key]}
+            onChange={checked => setSend(key, checked)}
+            className="text-xs text-slate-700"
+          >
             <span>
               {t(`assistant.send.${key}.label`)}
               <span className="block text-[11px] text-slate-500 mt-0.5">{t(`assistant.send.${key}.hint`)}</span>
             </span>
-          </label>
+          </Check>
         ))}
         <button
           onClick={resetSend}
@@ -741,22 +735,22 @@ function AssistantSettings({ ai, patchAi, config }: {
                     {t('assistant.catalogDefault', { catalog })}
                   </span>
                 </span>
-                {(['auto', 'on', 'off'] as const).map(opt => (
-                  <label key={opt} className="flex items-center gap-1 text-[11px] text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name={`toolcap-${m.id}`}
-                      checked={value === opt}
-                      onChange={() => patchAi(s => {
-                        const next = { ...(s.toolCapableByModel ?? {}) };
-                        if (opt === 'auto') delete next[m.id];
-                        else next[m.id] = opt;
-                        s.toolCapableByModel = Object.keys(next).length ? next : undefined;
-                      })}
-                    />
-                    {t(`assistant.${opt}`)}
-                  </label>
-                ))}
+                <RadioGroup
+                  name={`toolcap-${m.id}`}
+                  value={value}
+                  onChange={opt => patchAi(s => {
+                    const next = { ...(s.toolCapableByModel ?? {}) };
+                    if (opt === 'auto') delete next[m.id];
+                    else next[m.id] = opt as 'on' | 'off';
+                    s.toolCapableByModel = Object.keys(next).length ? next : undefined;
+                  })}
+                >
+                  {(['auto', 'on', 'off'] as const).map(opt => (
+                    <Radio key={opt} value={opt} size={12} className="text-[11px] text-slate-700">
+                      {t(`assistant.${opt}`)}
+                    </Radio>
+                  ))}
+                </RadioGroup>
               </div>
             );
           })}

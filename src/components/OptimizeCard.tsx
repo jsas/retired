@@ -7,16 +7,14 @@ import { runStrategies, SUSTAINABLE_SPENDING_CEILING, type StrategyReport } from
 import { runSpendingSolverAuto } from '../lib/runSpendingSolver';
 import type { SolverResult } from '@retired/engine-core/spendingSolver';
 import { useAppLocale } from '../lib/localeContext';
-
-function fmt(v: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
-}
+import { formatCurrency, type Locale } from '../lib/locale';
+import { Check as CheckBox } from '../design/primitives';
 
 /* The sustainable-spending search caps at an absolute ceiling so a plan with
    more money than it can ever spend doesn't run forever. When a row reports
    exactly that sentinel the honest answer is "no cap reached", not the number. */
-function fmtSustainable(v: number, locale: string, noCap: string): string {
-  return v >= SUSTAINABLE_SPENDING_CEILING ? noCap : fmt(v, locale);
+function fmtSustainable(v: number, locale: Locale, noCap: string): string {
+  return v >= SUSTAINABLE_SPENDING_CEILING ? noCap : formatCurrency(v, locale);
 }
 
 interface OptimizeCardProps {
@@ -82,17 +80,16 @@ export function StrategyExplorer({ inputs, config, onApply }: OptimizeCardProps)
         </ul>
       </div>
 
-      <label className="mb-2 flex cursor-pointer items-center gap-2 text-xs text-slate-600">
-        <input
-          type="checkbox"
-          checked={onlyGains}
-          onChange={e => setOnlyGains(e.target.checked)}
-        />
+      <CheckBox
+        checked={onlyGains}
+        onChange={setOnlyGains}
+        className="mb-2 text-xs text-slate-600"
+      >
         {t('optimizer.onlyGains')}
         {onlyGains && hiddenCount > 0 && (
           <span className="text-[11px] text-slate-400">{t('optimizer.hidingLosers', { count: hiddenCount })}</span>
         )}
-      </label>
+      </CheckBox>
 
       {/* Strategy table */}
       <div className="overflow-x-auto">
@@ -196,7 +193,7 @@ export function SpendingSolver({ inputs, config, onApply }: OptimizeCardProps) {
           {solverResult.feasible && !solverResult.unconstrained && (
             <>
               <div className="flex flex-wrap items-baseline gap-2">
-                <span className="num text-xl font-bold text-slate-900">{fmt(solverResult.spending, locale)}</span>
+                <span className="num text-xl font-bold text-slate-900">{formatCurrency(solverResult.spending, locale)}</span>
                 <span className="text-xs text-slate-500">{t('optimizer.perYearMax')}</span>
               </div>
               <div className="mt-1.5 text-[11px] leading-snug text-slate-500">
@@ -206,11 +203,11 @@ export function SpendingSolver({ inputs, config, onApply }: OptimizeCardProps) {
                 })}
                 {solverResult.nextStepSuccessRate !== null &&
                   t('optimizer.oneStepHigher', { pct: (solverResult.nextStepSuccessRate * 100).toFixed(1) })}
-                {t('optimizer.currentSpends', { amount: fmt(inputs.desiredSpending, locale) })}
+                {t('optimizer.currentSpends', { amount: formatCurrency(inputs.desiredSpending, locale) })}
                 {solverResult.spending > inputs.desiredSpending
-                  ? t('optimizer.headroom', { amount: fmt(solverResult.spending - inputs.desiredSpending, locale) })
+                  ? t('optimizer.headroom', { amount: formatCurrency(solverResult.spending - inputs.desiredSpending, locale) })
                   : solverResult.spending < inputs.desiredSpending
-                    ? t('optimizer.over', { amount: fmt(inputs.desiredSpending - solverResult.spending, locale) })
+                    ? t('optimizer.over', { amount: formatCurrency(inputs.desiredSpending - solverResult.spending, locale) })
                     : t('optimizer.atLevel')}
               </div>
               <div className="mt-2.5 flex items-center gap-2">
@@ -218,7 +215,7 @@ export function SpendingSolver({ inputs, config, onApply }: OptimizeCardProps) {
                   onClick={() => onApply({ desiredSpending: solverResult.spending })}
                   className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
                 >
-                  <Check size={13} /> {t('optimizer.applyYr', { amount: fmt(solverResult.spending, locale) })}
+                  <Check size={13} /> {t('optimizer.applyYr', { amount: formatCurrency(solverResult.spending, locale) })}
                 </button>
                 <span className="text-[10px] text-slate-400">{t('optimizer.writesDesired')}</span>
               </div>
@@ -254,14 +251,14 @@ function StrategyRow({ r, isBaseline = false, onApply }: {
           <span className="inline-flex items-center gap-0.5 justify-end">
             {up && <ArrowUpRight size={11} />}
             {down && <ArrowDownRight size={11} />}
-            {fmt(Math.abs(r.deltaSpending), locale)}
+            {formatCurrency(Math.abs(r.deltaSpending), locale)}
           </span>
         )}
       </td>
-      <td className="num py-1.5 pr-3 text-right text-slate-700">{fmt(r.lifetimeTax, locale)}</td>
-      <td className="num py-1.5 pr-3 text-right text-slate-700">{r.lifetimeGis > 0 ? fmt(r.lifetimeGis, locale) : '—'}</td>
+      <td className="num py-1.5 pr-3 text-right text-slate-700">{formatCurrency(r.lifetimeTax, locale)}</td>
+      <td className="num py-1.5 pr-3 text-right text-slate-700">{r.lifetimeGis > 0 ? formatCurrency(r.lifetimeGis, locale) : '—'}</td>
       <td className={`num py-1.5 pr-3 text-right ${r.survived ? 'text-slate-700' : 'font-medium text-rose-700'}`}>
-        {r.survived ? fmt(r.endingBalance, locale) : t('optimizer.outAt', { age: r.depletionAge })}
+        {r.survived ? formatCurrency(r.endingBalance, locale) : t('optimizer.outAt', { age: r.depletionAge })}
       </td>
       <td className="py-1.5 text-right">
         {!isBaseline && (
