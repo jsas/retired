@@ -655,6 +655,19 @@ function App() {
     return calculateHouseholdModel(household, config);
   }, [household, config]);
 
+  // Contribution-room state at the end of the first projected year, for the
+  // plan editor's contribution inputs (issue #24 / T5): the room hint and the
+  // over-contribution warning reflect what THIS year's deposit does. The
+  // primary person's rows — DetailsPage edits the primary's fields; a partner
+  // is a separate linked plan with its own editor.
+  const yearOneRoom = useMemo(() => {
+    const rows = results.yearlyBreakdown ?? [];
+    const row = rows.find(r => r.age === resolvedInputs.currentAge) ?? rows[0];
+    const detail = row?.detail;
+    if (!detail?.roomRemaining && !detail?.overflow) return undefined;
+    return { room: detail.roomRemaining, overflow: detail.overflow };
+  }, [results, resolvedInputs.currentAge]);
+
   // The projection export shows the active plan's own computed numbers. When a
   // spouse is disabled the spouse block lingers in the inputs (for re-enabling),
   // so export against a spouse-stripped copy to keep the file to just "you".
@@ -890,6 +903,7 @@ function App() {
               provinceCodes: Object.keys(config.provinces).sort(),
               scenarios, activeScenarioId,
               spouseWarnings: spouseResolution.warnings,
+              yearOneRoom,
               onCreateSpousePlan: handleCreateSpousePlan,
               onOpenPlan: (id) => { handleScenarioChange(id); },
             }}

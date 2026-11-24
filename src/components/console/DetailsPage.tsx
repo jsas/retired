@@ -64,7 +64,17 @@ function Section({ id, title, hint, children }: { id: string; title: string; hin
   );
 }
 
-export function DetailsPage({ inputs, onChange, section, provinceCodes, scenarios, activeScenarioId, spouseWarnings, onCreateSpousePlan, onOpenPlan }: {
+/** Year-1 contribution room from the live projection, threaded in from App:
+ *  `room` is room left at the end of the first projected year (after that
+ *  year's deposit), `overflow` the amount that spilled to taxable because the
+ *  deposit exceeded the tracked room. Both undefined when room tracking is
+ *  off (issue #24 / tracking plan T5). */
+export interface YearOneRoom {
+  room?: { tfsa?: number; rrsp?: number };
+  overflow?: { tfsa: number; rrsp: number };
+}
+
+export function DetailsPage({ inputs, onChange, section, provinceCodes, scenarios, activeScenarioId, spouseWarnings, yearOneRoom, onCreateSpousePlan, onOpenPlan }: {
   inputs: RetirementInputs;
   onChange: (next: RetirementInputs) => void;
   section?: string | null;
@@ -76,6 +86,7 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes, scenario
   scenarios?: Scenario[];
   activeScenarioId?: string;
   spouseWarnings?: string[];
+  yearOneRoom?: YearOneRoom;
   onCreateSpousePlan?: (name?: string) => string;
   onOpenPlan?: (id: string) => void;
 }) {
@@ -133,7 +144,7 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes, scenario
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t(`groups.${group}`)}</h2>
             <div className="flex max-w-xl flex-col">
               {sections.map(s => (
-                <div key={s.id}><DetailsSection id={s.id} inputs={inputs} set={set} order={order} move={move} bands={bands} provinces={provinces} provinceKnown={provinceKnown} scenarios={scenarios} activeScenarioId={activeScenarioId} spouseWarnings={spouseWarnings} onCreateSpousePlan={onCreateSpousePlan} onOpenPlan={onOpenPlan} /></div>
+                <div key={s.id}><DetailsSection id={s.id} inputs={inputs} set={set} order={order} move={move} bands={bands} provinces={provinces} provinceKnown={provinceKnown} scenarios={scenarios} activeScenarioId={activeScenarioId} spouseWarnings={spouseWarnings} yearOneRoom={yearOneRoom} onCreateSpousePlan={onCreateSpousePlan} onOpenPlan={onOpenPlan} /></div>
               ))}
             </div>
           </div>
@@ -146,7 +157,7 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes, scenario
 /* Render one section's editor. Every register edits in place — including the
    conditional ones (RDSP / FHSA / Home Equity), whose enable toggles live
    inside the section body. */
-function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, provinceKnown, scenarios, activeScenarioId, spouseWarnings, onCreateSpousePlan, onOpenPlan }: {
+function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, provinceKnown, scenarios, activeScenarioId, spouseWarnings, yearOneRoom, onCreateSpousePlan, onOpenPlan }: {
   id: string;
   inputs: RetirementInputs;
   set: (p: Partial<RetirementInputs>) => void;
@@ -158,10 +169,13 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
   scenarios?: Scenario[];
   activeScenarioId?: string;
   spouseWarnings?: string[];
+  yearOneRoom?: YearOneRoom;
   onCreateSpousePlan?: (name?: string) => string;
   onOpenPlan?: (id: string) => void;
 }) {
   const { t } = useTranslation('details');
+  const { locale } = useAppLocale();
+  const money = (v: number) => formatCurrency(v, locale);
   switch (id) {
     case 'profile':
       return (
@@ -264,10 +278,35 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
       return (
         <Section id="contributions" title={t('sections.contributions')} hint="contributions">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Num label={t('rrspYr')} value={inp.rrspContribution} onChange={(v) => set({ rrspContribution: v })} />
-            <Num label={t('tfsaYr')} value={inp.tfsaContribution} onChange={(v) => set({ tfsaContribution: v })} />
+            <Num label={t('rrspYr')} value={inp.rrspContribution} onChange={(v) => set({ rrspContribution: v })}
+              hint={yearOneRoom?.room?.rrsp !== undefined
+                ? t('rrspYrRoomHint', { room: money(yearOneRoom.room.rrsp) })
+                : undefined} />
+            <Num label={t('tfsaYr')} value={inp.tfsaContribution} onChange={(v) => set({ tfsaContribution: v })}
+              hint={yearOneRoom?.room?.tfsa !== undefined
+                ? t('tfsaYrRoomHint', { room: money(yearOneRoom.room.tfsa) })
+                : undefined} />
             <Num label={t('taxableYr')} value={inp.taxableContribution} onChange={(v) => set({ taxableContribution: v })} />
+            {/* Contribution room (issue #24 / help "contribution-room"): blank =
+                no limit; a number switches tracking on, so the projection caps
+                each year's registered deposits and surfaces room/overflow here. */}
+            <Num label={t('tfsaRoom')} value={inp.tfsaRoom ?? NaN} suffix={t('roomSuffix')}
+              onChange={(v) => set({ tfsaRoom: v })} onClear={() => set({ tfsaRoom: null })} />
+            <Num label={t('rrspRoom')} value={inp.rrspRoom ?? NaN} suffix={t('roomSuffix')}
+              onChange={(v) => set({ rrspRoom: v })} onClear={() => set({ rrspRoom: null })} />
           </div>
+          {/* Over-contribution (issue #24 / T5): the projection already spills
+              the excess into the taxable account — say so next to the inputs. */}
+          {yearOneRoom?.overflow && (yearOneRoom.overflow.tfsa > 0.5 || yearOneRoom.overflow.rrsp > 0.5) && (
+            <div className="mt-2 space-y-1 border border-amber-200 bg-amber-50 px-2 py-1.5">
+              {yearOneRoom.overflow.rrsp > 0.5 && (
+                <p className="text-[12px] text-amber-800">{t('rrspOverflow', { amount: money(yearOneRoom.overflow.rrsp) })}</p>
+              )}
+              {yearOneRoom.overflow.tfsa > 0.5 && (
+                <p className="text-[12px] text-amber-800">{t('tfsaOverflow', { amount: money(yearOneRoom.overflow.tfsa) })}</p>
+              )}
+            </div>
+          )}
         </Section>
       );
     case 'income': {
