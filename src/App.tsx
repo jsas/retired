@@ -874,7 +874,7 @@ function App() {
           <BacktestPage chip={chip} assistant={assistantDock}
             timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
             edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
-            backtestProps={backtestResult ? { result: backtestResult } : null}
+            backtestProps={backtestResult ? { result: backtestResult, primaryOnly: !!resolvedInputs.spouse?.enabled } : null}
           />
         );
       case 'compare':

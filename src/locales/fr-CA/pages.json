@@ -399,6 +399,7 @@
   },
   "backtestUi": {
     "windows": "{{count}} fenêtres glissantes de {{years}} ans · rendements réels canadiens {{from}}–{{to}}",
+    "primaryOnly": "Plan du titulaire principal seulement — le plan de votre conjoint n’est pas compris dans ces fenêtres.",
     "successRate": "Taux de succès",
     "neverDepleted": "{{ok}}/{{total}} fenêtres jamais épuisées",
     "worst": "Pire fenêtre",

@@ -399,6 +399,7 @@
   },
   "backtestUi": {
     "windows": "{{count}} rolling {{years}}-yr windows · Canadian real returns {{from}}–{{to}}",
+    "primaryOnly": "Primary plan only — your spouse's plan is not included in these windows.",
     "successRate": "Success Rate",
     "neverDepleted": "{{ok}}/{{total}} windows never depleted",
     "worst": "Worst Window",

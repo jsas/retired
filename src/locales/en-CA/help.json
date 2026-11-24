@@ -492,7 +492,7 @@
         "real returns",
         "crash"
       ],
-      "body": "Monte Carlo invents random futures; the backtest replays real pasts. It runs the plan against every rolling window of a Canadian real (after-inflation) balanced-portfolio series from 1970 to today, each window as long as your horizon, and reports how often the plan survived.\n\nSequence-of-returns risk is the biggest threat to a drawdown plan: retiring into the 1973–74 crash, 2000–02 or 2008 is far worse than the same average return with the crash at the end. A high backtest success rate has historically withstood every bad sequence on record."
+      "body": "Monte Carlo invents random futures; the backtest replays real pasts. It runs the plan against every rolling window of a Canadian real (after-inflation) balanced-portfolio series from 1970 to today, each window as long as your horizon, and reports how often the plan survived.\n\nSequence-of-returns risk is the biggest threat to a drawdown plan: retiring into the 1973–74 crash, 2000–02 or 2008 is far worse than the same average return with the crash at the end. A high backtest success rate has historically withstood every bad sequence on record.\n\nFor a couple, the backtest covers the **primary plan only**: each window replays your solo plan, without the spouse's income or savings, and the panel says so. Treat the result as the primary's worst case — combined household money can only improve the odds, never worsen them."
     },
     "levers-ranked": {
       "title": "Steering — the levers on the Dashboard",
