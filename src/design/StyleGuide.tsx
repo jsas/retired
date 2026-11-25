@@ -203,6 +203,46 @@ export function StyleGuide() {
             </span>
           </div>
 
+          <div className="mt-8 border-t border-slate-100 pt-6">
+            <p className={T.cls.sectionLabel}>The recipes — buttons, fields, panels, badges</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
+              Each control below is one token in <code>T.cls</code>, and these are the
+              only sizes the app repeats. A control takes the variant that exists; a
+              one-off keeps its literal recipe and says why in a comment. Never stack a
+              conflicting utility beside a token — Tailwind settles same-specificity
+              utilities by stylesheet order, not by the order they were written.
+            </p>
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="w-64 shrink-0 text-[11px] text-slate-400">primaryBtn · primaryBtnSm · primaryBtnXs · disabledBtn</span>
+                <button className={T.cls.primaryBtn}>Save plan</button>
+                <button className={T.cls.primaryBtnSm}>Save backup</button>
+                <button className={T.cls.primaryBtnXs}>Accept</button>
+                <button className={T.cls.disabledBtn} disabled>Print summary</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="w-64 shrink-0 text-[11px] text-slate-400">hairlineBtn · hairlineBtnSm</span>
+                <button className={T.cls.hairlineBtn}>Compare scenarios</button>
+                <button className={T.cls.hairlineBtnSm}>Decline</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="w-64 shrink-0 text-[11px] text-slate-400">input · inputSm · numField</span>
+                <input className={T.cls.input} placeholder="Type an amount…" />
+                <input className={T.cls.inputSm} placeholder="Dense field" />
+                <input className={`${T.cls.numField} w-24 text-right`} defaultValue="120000" />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="w-64 shrink-0 text-[11px] text-slate-400">panel · panelBare · panelTinted · mark · badgeDark · badgeHairline</span>
+                <span className={T.cls.mark}>RE:</span>
+                <span className={T.cls.badgeDark}>3</span>
+                <span className={T.cls.badgeHairline}>NEW</span>
+                <span className={`px-3 py-2 text-[12px] text-slate-600 ${T.cls.panel}`}>panel</span>
+                <span className={`px-3 py-2 text-[12px] text-slate-600 ${T.cls.panelBare}`}>panelBare</span>
+                <span className={`px-3 py-2 text-[12px] text-slate-600 ${T.cls.panelTinted}`}>panelTinted</span>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-8 space-y-4 border-t border-slate-100 pt-6">
             <div>
               <p className={T.cls.sectionLabel}>Square dot, progress, modal — no round corners, no shadows</p>
