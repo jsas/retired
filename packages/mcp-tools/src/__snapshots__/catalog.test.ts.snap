@@ -529,15 +529,11 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
           "type": "string",
         },
         "toAge": {
-          "anyOf": [
-            {
-              "type": "number",
-            },
-            {
-              "type": "null",
-            },
-          ],
           "description": "For add: last giving age; null/omit = for life.",
+          "type": [
+            "number",
+            "null",
+          ],
         },
       },
       "required": [
@@ -1299,15 +1295,11 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
           "type": "string",
         },
         "toAge": {
-          "anyOf": [
-            {
-              "type": "number",
-            },
-            {
-              "type": "null",
-            },
-          ],
           "description": "For add: last giving age; null/omit = for life.",
+          "type": [
+            "number",
+            "null",
+          ],
         },
       },
       "required": [
