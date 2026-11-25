@@ -305,7 +305,7 @@ export function MathPage({ inputs, results, spouseAgeOffset }: MathPageProps) {
       {/* Controls */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         {spouse && (
-          <div className="flex border border-slate-200">
+          <div className={`flex ${cls.panelBare}`}>
             {(['you', 'spouse', 'both'] as const).map(p => (
               <button
                 key={p}
