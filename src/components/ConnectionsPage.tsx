@@ -38,6 +38,7 @@ import { deleteWebLlmModel, isWebLlmModelCached } from '../lib/ai/webLlmProvider
 import { deleteBonsaiModel, isBonsaiModelCached } from '../lib/ai/bonsaiProvider';
 import { PROVIDER_HELP } from '../lib/ai/providerHelp';
 import { Progress } from '../design/primitives';
+import { cls } from '../design/tokens';
 import { localizeLoadProgress } from '../lib/ai/loadProgress';
 import {
   activeCatalogKey, pickModel, toggleFavorite, useModelCatalog,
@@ -371,10 +372,10 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                 <span className="font-semibold text-slate-800">{m.label}</span>
                 <span className="text-slate-400"> · {fmtSize(m.sizeGB)}</span>
                 {recommended === m.id && (
-                  <span className="ml-1.5 border border-slate-200 px-1 py-0.5 text-[9px] font-semibold text-slate-500">{t('models.bestForYou')}</span>
+                  <span className={`ml-1.5 ${cls.badgeHairline}`}>{t('models.bestForYou')}</span>
                 )}
                 {isChosen && (
-                  <span className="ml-1.5 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">{t('models.inUse')}</span>
+                  <span className={`ml-1.5 ${cls.badgeDark}`}>{t('models.inUse')}</span>
                 )}
                 <span className="block text-[10px] text-slate-500 truncate">{m.blurb}</span>
               </span>
@@ -393,7 +394,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                 <button
                   onClick={() => void download(m.id)}
                   disabled={downloading != null}
-                  className="shrink-0 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
+                  className={`shrink-0 disabled:opacity-40 ${cls.primaryBtnXs}`}
                 >
                   {tc('download')}
                 </button>
@@ -461,7 +462,7 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
                     : undefined;
                 })}
                 placeholder={isAuto ? t('models.auto') : String(defaultContextSize(localConn.provider))}
-                className="num w-24 border border-slate-300 bg-white px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                className={`w-24 bg-white font-mono disabled:bg-slate-50 disabled:text-slate-400 ${cls.numField}`}
               />
               <CheckBox size={12} checked={isAuto}
                 onChange={(on) => onChange(s => {
@@ -500,10 +501,10 @@ function ModelsSection({ settings, onChange, webllmConn, bonsaiConn, activeConne
           </div>
           <div className="space-y-1">
             {extraIds.map(id => (
-              <div key={id} className="flex items-center gap-2 border border-slate-200 bg-white px-2.5 py-1.5 text-[11px]">
+              <div key={id} className={`flex items-center gap-2 bg-white px-2.5 py-1.5 text-[11px] ${cls.panelBare}`}>
                 <span className="num min-w-0 flex-1 truncate font-mono text-slate-600">{id}</span>
                 {id === chosenId && (
-                  <span className="shrink-0 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">{t('models.inUse')}</span>
+                  <span className={`shrink-0 ${cls.badgeDark}`}>{t('models.inUse')}</span>
                 )}
                 <CachedActions id={id} onDelete={() => void remove(id)} />
               </div>
@@ -563,7 +564,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
             value={num(gen.maxTokens)}
             onChange={e => setGen({ maxTokens: parse(e.target.value, 256, 200000) })}
             placeholder={String(DEFAULT_MAX_TOKENS)}
-            className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+            className={`w-full font-mono ${cls.numField}`}
           />
         </label>
         <label className="block">
@@ -573,7 +574,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
             value={num(gen.temperature)}
             onChange={e => setGen({ temperature: parse(e.target.value, 0, 2) })}
             placeholder={isLocal ? String(tempDefault) : t('models.providerPh')}
-            className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+            className={`w-full font-mono ${cls.numField}`}
           />
         </label>
         {isLocal && (
@@ -585,7 +586,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
                 value={num(gen.repetitionPenalty)}
                 onChange={e => setGen({ repetitionPenalty: parse(e.target.value, 0, 2) })}
                 placeholder={String(repDefault)}
-                className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+                className={`w-full font-mono ${cls.numField}`}
               />
             </label>
             <label className="block">
@@ -595,7 +596,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
                 value={num(gen.presencePenalty)}
                 onChange={e => setGen({ presencePenalty: parse(e.target.value, -2, 2) })}
                 placeholder={String(presDefault)}
-                className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+                className={`w-full font-mono ${cls.numField}`}
               />
             </label>
             <label className="block">
@@ -605,7 +606,7 @@ function GenerationFields({ conn, onPatch, isLocal, compact = false }: {
                 value={num(gen.frequencyPenalty)}
                 onChange={e => setGen({ frequencyPenalty: parse(e.target.value, -2, 2) })}
                 placeholder={String(freqDefault)}
-                className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+                className={`w-full font-mono ${cls.numField}`}
               />
             </label>
           </>
@@ -801,10 +802,10 @@ function ModelPickList({ list, active, onPick, favorites = [] }: {
               {e.label}
             </button>
             {free && (
-              <span className="shrink-0 border border-slate-200 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500">{t('models.free')}</span>
+              <span className={`shrink-0 uppercase tracking-wider ${cls.badgeHairline}`}>{t('models.free')}</span>
             )}
             {isChosen && (
-              <span className="shrink-0 bg-slate-900 px-1 py-0.5 text-[9px] font-semibold text-white">{t('models.inUse')}</span>
+              <span className={`shrink-0 ${cls.badgeDark}`}>{t('models.inUse')}</span>
             )}
           </div>
         );
@@ -923,7 +924,7 @@ function OpenRouterFreeSection({ settings, catalog, onPick }: {
         <button
           type="button"
           onClick={startSetup}
-          className="mt-3 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+          className={`mt-3 ${cls.primaryBtnSm}`}
         >
           {t('models.setupFree')}
         </button>
@@ -937,7 +938,7 @@ function OpenRouterFreeSection({ settings, catalog, onPick }: {
               onChange={e => patchKey(e.target.value)}
               placeholder="sk-or-v1-…"
               autoComplete="off"
-              className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+              className={`w-full font-mono ${cls.numField}`}
             />
           </label>
           {!ready && (
@@ -1022,7 +1023,7 @@ function ConnectionsSection({ settings, onChange }: {
       </button>
 
       {advancedOpen && (
-        <div className="mt-2 border border-slate-200 bg-white p-3">
+        <div className={`mt-2 bg-white p-3 ${cls.panelBare}`}>
           <p className="mb-3 text-[12px] leading-relaxed text-slate-500">
             {t('models.onlineLead')}
           </p>
@@ -1040,7 +1041,7 @@ function ConnectionsSection({ settings, onChange }: {
             <select
               value={addingProvider}
               onChange={e => setAddingProvider(e.target.value as (typeof AI_PROVIDERS)[number])}
-              className="border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-slate-900 focus:outline-none"
+              className={cls.inputSm}
             >
               {AI_PROVIDERS.filter(p => !isLocalProvider(p)).map(p => (
                 <option key={p} value={p}>{t(`models.providers.${p}.name`, { defaultValue: PROVIDER_HELP[p]?.name ?? p })}</option>
@@ -1048,7 +1049,7 @@ function ConnectionsSection({ settings, onChange }: {
             </select>
             <button
               onClick={addCloud}
-              className="flex items-center gap-1 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              className={`flex items-center gap-1 ${cls.primaryBtnSm}`}
             >
               <Plus size={13} /> {t('models.addProvider')}
             </button>
@@ -1086,19 +1087,19 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
   };
 
   return (
-    <div className="border border-slate-200 bg-white p-2.5">
+    <div className={`bg-white p-2.5 ${cls.panelBare}`}>
       <div className="mb-2 flex items-center gap-2">
         <span className="border border-slate-300 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
           {helpName}
         </span>
         {help?.easiest && (
-          <span className="border border-slate-200 px-1 py-0.5 text-[9px] font-semibold text-slate-500">{t('models.easiest')}</span>
+          <span className={cls.badgeHairline}>{t('models.easiest')}</span>
         )}
         <input
           value={c.label}
           onChange={e => onPatch(c.id, { label: e.target.value })}
           placeholder={t('models.labelPh')}
-          className="min-w-0 flex-1 border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none"
+          className={`min-w-0 flex-1 ${cls.inputSm}`}
         />
         <button
           onClick={onDelete}
@@ -1133,7 +1134,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
               onChange={e => onPatch(c.id, { apiKey: e.target.value })}
               placeholder={c.provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'}
               autoComplete="off"
-              className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+              className={`w-full font-mono ${cls.numField}`}
             />
           </label>
         )}
@@ -1143,7 +1144,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
             value={c.model}
             onChange={e => onPatch(c.id, { model: e.target.value })}
             placeholder={defaultModelFor(c.provider) || 'model id'}
-            className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+            className={`w-full font-mono ${cls.numField}`}
           />
           <span className="mt-0.5 block text-[9px] text-slate-400">
             {t('models.fallback')}
@@ -1156,7 +1157,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
               value={c.baseUrl ?? ''}
               onChange={e => onPatch(c.id, { baseUrl: e.target.value })}
               placeholder={defaultBaseUrlFor(c.provider) ?? 'https://…/v1'}
-              className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+              className={`w-full font-mono ${cls.numField}`}
             />
           </label>
         )}
@@ -1168,7 +1169,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
             value={c.contextSize ?? ''}
             onChange={e => onPatch(c.id, { contextSize: e.target.value ? Math.max(1024, Math.round(Number(e.target.value))) : undefined })}
             placeholder="128000"
-            className="num w-full border border-slate-300 px-2 py-1 font-mono text-xs focus:border-slate-900 focus:outline-none"
+            className={`w-full font-mono ${cls.numField}`}
           />
           <span className="block text-[9px] text-slate-400 mt-0.5">
             {t('models.ctxHint')}
@@ -1183,7 +1184,7 @@ function CloudConnectionCard({ conn: c, onPatch, onDelete }: {
         <button
           onClick={() => void runTest()}
           disabled={testing}
-          className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
+          className={`flex items-center gap-1 font-semibold disabled:opacity-40 ${cls.hairlineBtnSm}`}
         >
           {testing ? <Loader2 size={11} className="animate-spin" /> : null}
           {t('models.test')}

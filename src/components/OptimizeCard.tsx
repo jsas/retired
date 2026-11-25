@@ -9,6 +9,7 @@ import type { SolverResult } from '@retired/engine-core/spendingSolver';
 import { useAppLocale } from '../lib/localeContext';
 import { formatCurrency, type Locale } from '../lib/locale';
 import { Check as CheckBox } from '../design/primitives';
+import { cls } from '../design/tokens';
 
 /* The sustainable-spending search caps at an absolute ceiling so a plan with
    more money than it can ever spend doesn't run forever. When a row reports
@@ -163,13 +164,13 @@ export function SpendingSolver({ inputs, config, onApply }: OptimizeCardProps) {
             type="number" min={50} max={99} step={1}
             value={targetPct}
             onChange={e => setTargetPct(Math.min(99, Math.max(50, parseInt(e.target.value) || 90)))}
-            className="w-24 border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-slate-900 focus:outline-none"
+            className={`w-24 ${cls.inputSm}`}
           />
         </div>
         <button
           onClick={runSolver}
           disabled={solverBusy}
-          className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+          className={`flex items-center gap-1.5 disabled:opacity-50 ${cls.primaryBtnSm}`}
         >
           {solverBusy ? <Loader2 size={13} className="animate-spin" /> : <Crosshair size={13} />}
           {solverBusy ? t('optimizer.solving') : t('optimizer.solve')}
@@ -179,7 +180,7 @@ export function SpendingSolver({ inputs, config, onApply }: OptimizeCardProps) {
       {solverError && <div className="mb-2 text-xs text-rose-700">✕ {solverError}</div>}
 
       {solverResult && (
-        <div className="border border-slate-200 bg-slate-50 p-3">
+        <div className={`bg-slate-50 p-3 ${cls.panelBare}`}>
           {!solverResult.feasible && (
             <p className="text-xs leading-snug text-rose-700">
               {t('optimizer.infeasible', { pct: Math.round(solverResult.targetSuccessRate * 100) })}
@@ -213,7 +214,7 @@ export function SpendingSolver({ inputs, config, onApply }: OptimizeCardProps) {
               <div className="mt-2.5 flex items-center gap-2">
                 <button
                   onClick={() => onApply({ desiredSpending: solverResult.spending })}
-                  className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+                  className={`flex items-center gap-1.5 ${cls.primaryBtnSm}`}
                 >
                   <Check size={13} /> {t('optimizer.applyYr', { amount: formatCurrency(solverResult.spending, locale) })}
                 </button>
@@ -264,7 +265,7 @@ function StrategyRow({ r, isBaseline = false, onApply }: {
         {!isBaseline && (
           <button
             onClick={() => onApply(r.patch)}
-            className="border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:border-slate-900 hover:text-slate-900"
+            className={`font-medium ${cls.hairlineBtnSm}`}
           >
             {t('optimizer.apply')}
           </button>
