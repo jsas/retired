@@ -8,9 +8,9 @@ execution plans.
 
 ## In flight
 
-| Task | Record | State |
-|------|--------|-------|
-| Holistic site pass: no intro screen, Dashboard as home | `tasks/TASKS.md` | Running ledger (`S` simplify · `B` bugs · `C` consistency · `R` recommendations). Everything is closed except `C3`: the raw checkboxes/radios, the chart hexes, `NUM_CLASS`, the dead `TEXT`, `HelpModal`'s English fallback and the duplicated dot-and-label rows are gone, but the hand-typed button and field recipes (`cls.primaryBtn` / `cls.hairlineBtn` / `cls.input`) are unmoved and need a page-by-page pass against the StyleGuide. |
+Nothing in flight. The holistic site pass closed 2026-11-25 with `C3` (the
+hand-typed button, field, panel and badge recipes routed through `cls`); its
+burn-down is the last record below. The next initiative opens its own file here.
 | ML fine-tune bake-off (#112, #135) | `training/SPIKE.md` §5 | Corpus/gate/bake-off machinery on main, and the `training/driver/cdp.mjs` `callFn` blocker (`Runtime.callFunctionOn` needs `executionContextId`) is fixed. Next: bake-off → full-SFT winner → MLC compile (own issue/PR). GPU-bound stages annotated in the issue. |
 
 ## Queued (from tasks/REVIEW.md "Still open")
@@ -21,6 +21,11 @@ the backtest “primary plan only”) both landed 2026-11-24; the records stay i
 
 ## Closed records
 
+- `tasks/completed/TASKS-holistic-site-pass.md` — the holistic site pass
+  (2026-11-18 → 2026-11-25): `S` simplify, `B` bugs, `C` consistency and `R`
+  recommendations, 34 items, all closed. `C3` was the last: 114 hand-typed
+  button / field / panel / badge call-sites across 14 files now read from the
+  `cls` tokens, and the sites that stay literal are listed there with reasons.
 - `tasks/PLANS.md` — all 22 plans burned down, H-02 included (2026-11-24).
 - `tasks/REVIEW.md` — review ledger; "Still open" mirrors the Queued table here.
 - `tasks/completed/PLAN-universal-household.md` — issue #124, closed.

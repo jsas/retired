@@ -266,7 +266,7 @@ needs a product decision (not started).
       `window.prompt('Copy this prompt:')` fallbacks are gone. Still hardcoded:
       `AgentPage.tsx`'s "context window too small" paragraph, which needs a
       `{{tokens}}` key before it can move.
-- [ ] `C3` **The token layer exists and is half-used**, measured this pass: 44
+- [x] `C3` **The token layer exists and is half-used**, measured this pass: 44
       `bg-slate-900` literals against 8 `cls.primaryBtn`, 42
       `border border-slate-200` against 7 `cls.hairlineBtn`, 67
       `border border-slate-300` against 6 `cls.input` — the hand-typed copies are
@@ -296,13 +296,66 @@ needs a product decision (not started).
       live (`className="num` 53 → 46, none left inside `primitives.tsx`), `TEXT`
       is deleted, `BLUE_WASH_*` is what `ContourMap` actually paints with, and
       `HelpModal` neither highlights in off-palette yellow nor falls back to raw
-      key names. The recipes did not move, measured the same way as the finding:
-      46 `bg-slate-900` against 8 `cls.primaryBtn`, 43 `border
-      border-slate-200` against 7 `cls.hairlineBtn`, 67 `border
-      border-slate-300` against 6 `cls.input`. They are not drop-in — padding,
-      text size and rounding differ per site — so closing this needs a
-      page-by-page pass against the StyleGuide, not a rename; 14 component files
-      still hand-type the field recipe. Left open by choice: the four
+      key names.
+      The recipes moved in this pass. The survey found 203 hand-typed button /
+      field / panel / badge recipes; 114 call-sites across 14 files now read from
+      `cls`, and the rest stay literal on purpose (each one named below).
+      Measured the same way on both sides (`src/`, tests, `tokens.ts` and
+      `StyleGuide` excluded): `bg-slate-900` 38 → 16, `border border-slate-200`
+      42 → 6, `border border-slate-300` 67 → 11, and the field recipe is
+      hand-typed in 6 files instead of 11. `cls` gained only sizes the pages
+      already repeat, each measured off existing controls — `primaryBtnSm`,
+      `primaryBtnXs`, `disabledBtn` (a disabled CTA keeps the primary's box and
+      loses its fill), `hairlineBtnSm`, `inputSm`, `numField` (carries `num`, not
+      `font-mono`: mono is the assistant-rail and Connections taste, not law),
+      `panel` / `panelBare` / `panelTinted`, `badgeDark` / `badgeHairline` and
+      `mark` — and every one is shown in `StyleGuide`. Uses after: `numField` 18,
+      `inputSm` 16, `panelBare` 15, `hairlineBtnSm` 14, `primaryBtnSm` 14,
+      `panel` 11, `hairlineBtn` 13, `primaryBtn` 6, `input` 5, `panelTinted` 5,
+      `primaryBtnXs` 3, `badgeDark` 3, `badgeHairline` 3, `disabledBtn` 2,
+      `mark` 2. Each token is complete for the properties it sets, and the doc
+      block over `cls` says why: Tailwind settles same-specificity utilities by
+      stylesheet order, not by the order they are written, so stacking a stray
+      `px-3` or `text-xs` beside one is a coin-flip, not an override.
+      The swap is pixels, not names. 932 of the 969 class attributes the sweep
+      touched carry an identical utility set once the tokens are expanded and the
+      sites are compared pairwise; the other 37 differ only inside a whitelist
+      (font size ≤2px, slate→slate steps, one 2px padding step, hover-only
+      colour). Confirmed in the running app: computed styles over 769 controls on
+      16 routes moved only by those steps — 11.5→12px on the 9 Details/plan
+      hairline buttons (their sections follow by 1.25px), 12→13px on the
+      `inputSm` fields (assistant-rail model select, `OptimizeCard.tsx:167`,
+      `ConnectionsPage.tsx:1043/1102`, the Settings basis select, RRIF rate and
+      prompt textareas), 6→8px padding on the 9 Settings tax-table fields,
+      10→8px at `DataPage.tsx:280/791` and `OptimizeCard.tsx:167`, slate-700/800
+      →slate-900 on fields, slate-700→600 on hairline buttons, and nothing else:
+      no radius, box size, font family, disabled state or
+      `text-white`/`bg-slate-900` pair moved.
+      Left hand-typed, deliberately: the ~40 one-sided dividers
+      (`border-t|b|l|y border-slate-200`) are structure, not a card;
+      `MonteCarloChart.tsx:93` is a hairline button with a white fill and
+      `font-medium`, which is neither hairline token; the selected halves of
+      segmented controls and the `Check`/`Radio` fills (`MathPage.tsx:313`,
+      `PageChrome.tsx:287`, `DataPage.tsx:172/188`, `AgentPage.tsx:670/1986/2306`,
+      `primitives.tsx:242/325`) are state colours, not call-to-action;
+      `AgentPage.tsx`'s chat bubble (`:1483`), the conditional-padding CTA
+      (`:2349`), its `px-4 py-2 text-xs` one-off (`:2276`), the borderless model
+      select (`:2115`) and the three mono JSON `<textarea>`s
+      (`:2458`/`:2515`/`:2535`) are chat and code surfaces where 13px sans would
+      be a redesign; `HelpModal.tsx:109` is an icon-padded search box
+      (`pl-8 pr-8`); `MathPage.tsx:325`'s choice-row select carries
+      `cursor-pointer`; `ConnectionsPage.tsx:1092` is a 10px uppercase tag; the
+      print sheet keeps its own geometry (`PrintSummary.tsx`,
+      `PrintOptionsCard.tsx`, including the `h-[22px]` monogram at
+      `PrintSummary.tsx:486`) as does `PageChrome.tsx:403`'s `h-5 w-5
+      text-[8px]` one; `primitives.tsx:104`'s `h-4 w-4` help badge, `:510`'s
+      progress track and the `Modal` scrim (`:539`) are single-source components;
+      `Markdown.tsx:17`'s `[&_pre]`/`[&_code]` washes and `helpMarkdown.tsx:92`'s
+      `<pre>` are descendant selectors, not controls; `ScheduleTable.tsx:560-595`
+      is table-cell geometry; and the 15 bare text-buttons
+      (`DataPage.tsx:264/724/767/799`, `SettingsModal.tsx:816/990`,
+      `AgentPage.tsx:340/352/607/648/1912/2030/2046/2141/2163`) have no box to
+      name. Left open by choice: the four
       `window.confirm` calls and the provinces `window.prompt` in `SettingsModal`
       are translated and the prompt takes real input, so a styled shell buys
       nothing there — which is why `Modal` stays exercised only by `StyleGuide`
