@@ -20,6 +20,7 @@ import {
 import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } from '../lib/rangePrefs';
 import { getGivingPrefs, setGivingPrefs, DEFAULT_GIVING_PREFS, type GivingPrefs } from '../lib/givingPrefs';
 import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
+import { cls } from '../design/tokens';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
 import { Check, HelpHint, Radio, RadioGroup } from '../design/primitives';
 import { useAppLocale } from '../lib/localeContext';
@@ -280,7 +281,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={(v) => updateRanges({ volatilityMax: Math.max(0.01, v) / 100 })} />
               <button
                 onClick={() => setRanges(setRangePrefs({ ...DEFAULT_RANGE_PREFS }))}
-                className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+                className={`flex items-center gap-1.5 font-medium ${cls.hairlineBtn}`}
               >
                 <RotateCcw size={13} /> {t('levers.back')}
               </button>
@@ -303,7 +304,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 <select
                   value={giving.defaultBasis}
                   onChange={e => updateGiving({ defaultBasis: e.target.value as GivingPrefs['defaultBasis'] })}
-                  className="border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none"
+                  className={cls.inputSm}
                 >
                   <option value="gross">{t('giving.basisGross')}</option>
                   <option value="net">{t('giving.basisNet')}</option>
@@ -311,7 +312,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               </label>
               <button
                 onClick={() => setGiving(setGivingPrefs({ ...DEFAULT_GIVING_PREFS }))}
-                className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+                className={`flex items-center gap-1.5 font-medium ${cls.hairlineBtn}`}
               >
                 <RotateCcw size={13} /> {t('giving.back')}
               </button>
@@ -428,7 +429,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                         onChange={e => update(c => {
                           c.rrifRates[String(age)] = parseFloat(e.target.value) || 0;
                         })}
-                        className="w-full border border-slate-300 px-1.5 py-1 text-xs focus:border-slate-900 focus:outline-none"
+                        className={`w-full ${cls.inputSm}`}
                       />
                     </div>
                   ))}
@@ -604,7 +605,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
         <div className="flex items-center justify-between py-3 border-t border-slate-200 mt-2">
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+            className={`flex items-center gap-1.5 font-medium ${cls.hairlineBtn}`}
           >
             <RotateCcw size={13} /> {t('reset')}
           </button>
@@ -612,7 +613,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
             {error && <span className="text-xs text-rose-700">{error}</span>}
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              className={`flex items-center gap-1.5 ${cls.primaryBtnSm}`}
             >
               <Save size={13} /> {t('save')}
             </button>
@@ -700,13 +701,13 @@ function AssistantSettings({ ai, patchAi, config }: {
         ))}
         <button
           onClick={resetSend}
-          className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+          className={`flex items-center gap-1.5 font-medium ${cls.hairlineBtn}`}
         >
           <RotateCcw size={13} /> {t('assistant.resetSend')}
         </button>
       </div>
 
-      <div className="border border-slate-200 bg-slate-50 p-3">
+      <div className={`p-3 ${cls.panelTinted}`}>
         <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('assistant.assembled')}</h3>
         <p className="text-[11px] text-slate-500 leading-snug mb-2">
           {t('assistant.assembledLead')}
@@ -807,7 +808,7 @@ function PromptEditor({ title, hint, value, fallback, onChange }: {
         value={shown}
         onChange={e => onChange(e.target.value)}
         rows={8}
-        className="w-full border border-slate-300 bg-white px-2 py-1.5 font-mono text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-y"
+        className={`w-full font-mono resize-y ${cls.inputSm}`}
       />
       <div className="flex items-center gap-2 mt-1">
         <button
@@ -845,7 +846,7 @@ function RangeNum({ label, value, onChange, step, hint, money }: {
           min={0}
           value={Number.isFinite(value) ? value : 0}
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="num w-36 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+          className={`w-36 text-right ${cls.numField}`}
         />
       </span>
       {hint && <span className="mt-0.5 block text-[11px] text-slate-500">{hint}</span>}
@@ -867,7 +868,7 @@ function NumberField({ label, value, onChange, step }: {
         step={step ?? '1'}
         value={value}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="num w-32 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+        className={`w-32 text-right ${cls.numField}`}
       />
     </label>
   );
@@ -888,7 +889,7 @@ function PercentField({ label, value, onChange }: {
         min="0"
         value={+(value * 100).toFixed(4)}
         onChange={e => onChange((parseFloat(e.target.value) || 0) / 100)}
-        className="num w-32 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+        className={`w-32 text-right ${cls.numField}`}
       />
     </label>
   );
@@ -933,7 +934,7 @@ function TaxTableEditor({ table, onChange }: {
           step="1000"
           value={table.exemption}
           onChange={e => onChange({ ...table, exemption: parseFloat(e.target.value) || 0 })}
-          className="num w-28 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+          className={`w-28 text-right ${cls.numField}`}
         />
       </div>
       <table className="w-full text-xs">
@@ -952,7 +953,7 @@ function TaxTableEditor({ table, onChange }: {
                 type="number" step="0.005" min="0" max="1"
                 value={table.rates[0] ?? 0}
                 onChange={e => setRate(0, parseFloat(e.target.value) || 0)}
-                className="num w-24 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
+                className={`w-24 text-right ${cls.numField}`}
               />
             </td>
             <td></td>
@@ -964,7 +965,7 @@ function TaxTableEditor({ table, onChange }: {
                   type="number" step="1000" min="0"
                   value={b}
                   onChange={e => setBracket(i, parseFloat(e.target.value) || 0)}
-                  className="num w-28 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
+                  className={`w-28 text-right ${cls.numField}`}
                 />
               </td>
               <td>
@@ -972,7 +973,7 @@ function TaxTableEditor({ table, onChange }: {
                   type="number" step="0.005" min="0" max="1"
                   value={table.rates[i + 1] ?? 0}
                   onChange={e => setRate(i + 1, parseFloat(e.target.value) || 0)}
-                  className="num w-24 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
+                  className={`w-24 text-right ${cls.numField}`}
                 />
               </td>
               <td>
