@@ -1,4 +1,14 @@
 {
+  "app": {
+    "configResetTitle": "Settings were reset.",
+    "configReset": "Your saved engine settings could not be read and were reset to defaults. Any custom tax tables or engine settings need to be re-entered, or restored from a backup.",
+    "storeUnavailableTitle": "Nothing you change is being saved.",
+    "storeUnavailable": "The planner could not open its database, so this session lives in memory only and will be lost when you close this tab. Export a full backup from Data before you leave.",
+    "saveFailedTitle": "Changes may not be saved.",
+    "saveFailed": "Browser storage is unavailable or full — your plan is still in this tab, but it won't survive closing it. Free up site storage, or use Data → Export full backup to keep a copy on disk.",
+    "unreadableRows_one": "{{count}} saved item could not be read and was skipped — the plans listed here may be incomplete.",
+    "unreadableRows_other": "{{count}} saved items could not be read and were skipped — the plans listed here may be incomplete."
+  },
   "projection": "Projection",
   "yearMath": "One Year, Step by Step",
   "optimizer": {
@@ -165,11 +175,6 @@
   "help": "Help",
   "print": "Print & export",
   "support": "Support this app",
-  "agentPage": {
-    "title": "Assistant",
-    "open": "The conversation is open beside you.",
-    "body": "Ask about your plan, or ask it to change something — every edit is a card you approve. This page holds the same chat as the dock on every other page; the expand button in the dock's header gives it the full screen."
-  },
   "thisPlanEndToEnd": "This plan, end to end",
   "namedVariants": "Named variants, scored",
   "acrossFutures": "Across many market futures",
@@ -190,6 +195,7 @@
     "activeDot": "the active plan",
     "activeHint": "Active — the dashboard shows this plan",
     "clickToLoad": "Click to load",
+    "exampleTag": "example",
     "history": "History",
     "hideHistory": "Hide history",
     "duplicate": "Duplicate",
@@ -228,6 +234,7 @@
     "adjust": "Adjust the plan",
     "lifeLine": "Your life on one line — this exact plan",
     "receipts": "The receipts",
+    "accountSharesNote": "Shares of <n>{{amount}}</n> at that age. The mix shifts as the plan moves.",
     "footnote": "Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. The year-by-year schedule is Projection; to work a single year step by step, open One Year, Step by Step under Tools, along with the odds, the history test, safe spending and the plan improver.",
     "markets": "Markets",
     "marketsHint": "down ↔ up — the average yearly return the plan assumes",
@@ -256,6 +263,19 @@
     "moneyLastsTo": "Money lasts to",
     "pastThePlan": "past the plan",
     "beforePlanned": "before the {{age}} planned",
+    "detailsMissing": "Not on this plan yet: {{groups}}.",
+    "detailsComplete": "Every register on this plan holds your own data.",
+    "detailsCta": "Add the rest of your details",
+    "detailsCtaComplete": "Review every detail",
+    "detailsMore": " (+{{n}} more)",
+    "group": {
+      "accounts": "account balances",
+      "partner": "a partner",
+      "debts": "debts or a mortgage",
+      "events": "one-off cash events",
+      "income": "other income",
+      "phases": "spending phases"
+    },
     "leftAt": "Left at {{age}}",
     "nothing": "nothing",
     "stillInPot": "still left at the end of the plan",
@@ -379,6 +399,7 @@
   },
   "backtestUi": {
     "windows": "{{count}} rolling {{years}}-yr windows · Canadian real returns {{from}}–{{to}}",
+    "primaryOnly": "Primary plan only — your spouse's plan is not included in these windows.",
     "successRate": "Success Rate",
     "neverDepleted": "{{ok}}/{{total}} windows never depleted",
     "worst": "Worst Window",
@@ -502,7 +523,7 @@
     "replaceAi": "Replace AI connections & model settings with the file's",
     "replaceAiHint": "This brings in the API keys saved in that backup",
     "alsoPrefs": "Also apply UI preferences from the file",
-    "alsoPrefsHint": "Panel layout, print & export options, welcome setting, steering crops",
+    "alsoPrefsHint": "Panel layout, print & export options, set-up card setting, steering crops",
     "replacesWarn": "Importing replaces your current scenarios{{andSettings}} with the ones selected above.",
     "andSettings": " and settings",
     "applyImport": "Apply import",
@@ -757,6 +778,8 @@
     "useDefaultTitle": "Stop customizing and use the built-in default",
     "ctxHard": "Estimated context usage: ~{{used}} of {{limit}} tokens (~4 chars/token). Over the model's context window — raise \"Context window\" for this connection on the Connections page, or older messages will be summarized aggressively.",
     "ctxCompacted": "Estimated context usage: ~{{used}} of {{limit}} tokens (~4 chars/token). Older messages have been compacted into a summary to fit.",
+    "compactedName": "context compacted",
+    "compactedSummary": "Older messages were summarized to fit the context window.",
     "ctxOk": "Estimated context usage: ~{{used}} of {{limit}} tokens (~4 chars/token). Past {{pct}}% the oldest messages are summarized to fit.",
     "generate": "Generate a response to this message",
     "regenerate": "Regenerate this response",

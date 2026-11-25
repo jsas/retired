@@ -71,6 +71,7 @@ import {
 import { resetWebLlmChat, loadedWebLlmModel, loadedWebLlmWindow } from '../lib/ai/webLlmProvider';
 import { resetBonsaiChat, loadedBonsaiModel } from '../lib/ai/bonsaiProvider';
 import { Markdown } from './Markdown';
+import { cls } from '../design/tokens';
 
 interface AgentPageProps {
   inputs: RetirementInputs;
@@ -354,7 +355,7 @@ export function DockChatPicker({ threads, activeThreadId, onSelect, onNew, onDel
       </button>
       {modelPicker && <div className="shrink-0">{modelPicker}</div>}
       {open && (
-        <div className="absolute left-0 top-full z-50 w-full border border-slate-200 bg-white">
+        <div className={`absolute left-0 top-full z-50 w-full ${cls.panel}`}>
           {threads.length === 0 && (
             <p className="px-2.5 py-2 text-[11px] text-slate-400">{t('assistant.noChats')}</p>
           )}
@@ -590,7 +591,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
             Both variants show the thinking spinner on a running chat — the
             registry re-renders them the moment any thread's run state moves. */}
         {docked ? null : chatsPinned ? (
-          <aside className="w-52 shrink-0 flex flex-col border border-slate-200 bg-white">
+          <aside className={`w-52 shrink-0 flex flex-col ${cls.panel}`}>
             <div className="flex items-center justify-between px-2.5 py-2 border-b border-slate-100">
               <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('assistant.chats')}</span>
               <div className="flex items-center gap-1.5">
@@ -641,7 +642,7 @@ export function AgentPage({ inputs, config, scenarioName, scenarioList, activeSc
             </div>
           </aside>
         ) : (
-          <aside className="w-9 shrink-0 flex flex-col items-center gap-2 border border-slate-200 bg-white py-2">
+          <aside className={`w-9 shrink-0 flex flex-col items-center gap-2 py-2 ${cls.panel}`}>
             <button
               onClick={() => setChatsPinned(true)}
               className="text-slate-400 hover:text-slate-900"
@@ -747,7 +748,7 @@ export function ModelPickerSelect({ entries, activeKey, onPick, onLoadModel }: {
           if (e.target.value === '__load__') onLoadModel();
           else if (e.target.value) onPick(e.target.value);
         }}
-        className="max-w-56 border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-slate-900 focus:outline-none"
+        className={`max-w-56 ${cls.inputSm}`}
         title={t('assistant.pickerTitle')}
       >
         {!connected && (
@@ -1109,7 +1110,14 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     if (planContext) compaction.messages.unshift(planContext);
     const history = compaction.messages;
     if (compaction.compacted) {
-      patchAssistant(t => { t.tools.push({ id: `compact-${Date.now().toString(36)}`, name: 'context compacted', state: 'done', summary: 'Older messages were summarized to fit the context window.' }); });
+      patchAssistant(turn => {
+        turn.tools.push({
+          id: `compact-${Date.now().toString(36)}`,
+          name: t('assistant.compactedName'),
+          state: 'done',
+          summary: t('assistant.compactedSummary'),
+        });
+      });
     }
 
     // Even after compaction the request can exceed the window: the fixed
@@ -1313,7 +1321,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
       if (change.navigate != null) {
         // Page-navigation card: no plan change to checkpoint and nothing to
         // merge into inputs (the patch is empty by design). Queue the route —
-        // the host unmounts this chat when the view leaves 'agent', so moving
+        // the host unmounts this chat whenever the view changes, so moving
         // now would abort the assistant's reply mid-stream (see
         // pendingNavigation). runTurn's finally navigates once the turn is over.
         pendingNavigation.current.push(change.navigate);
@@ -1430,7 +1438,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex flex-col h-full">
         {/* Thread */}
-        <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0 border border-slate-200 bg-white">
+        <ThreadPrimitive.Root className={`flex-1 flex flex-col min-h-0 ${cls.panel}`}>
           {/* All four auto-scroll triggers OFF. The defaults re-pin to the
               bottom on content growth (autoScroll), on run start, on
               initialize, and on the store's selectionChanged event — and in an
@@ -1656,7 +1664,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
               />
               {running ? (
                 <ComposerPrimitive.Cancel asChild>
-                  <button className="flex items-center gap-1.5 border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900">
+                  <button className={`flex items-center gap-1.5 font-semibold ${cls.hairlineBtn}`}>
                     <X size={13} /> {t('assistant.stop')}
                   </button>
                 </ComposerPrimitive.Cancel>
@@ -1664,7 +1672,7 @@ function Conversation({ thread, ready, isLocal, toolMode, bridge, settings, onSe
                 <ComposerPrimitive.Send asChild>
                   <button
                     disabled={!ready}
-                    className="flex items-center gap-1.5 bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
+                    className={`flex items-center gap-1.5 disabled:opacity-40 ${cls.primaryBtnSm}`}
                   >
                     {t('assistant.send')}
                   </button>
@@ -1893,7 +1901,7 @@ function ReasoningBlock({ reasoning, streaming }: { reasoning: string; streaming
   // (whose pin state now survives re-renders — see elRef there).
   useEffect(() => { if (open) pin(); }, [open]);
   return (
-    <div className="relative min-w-0 border border-slate-200 bg-slate-50">
+    <div className={`relative min-w-0 ${cls.panelTinted}`}>
       {/* Activity spinner pinned to the block's top-right corner while the
           stream is live — visible whether the body is open or collapsed. */}
       {streaming && (
@@ -1987,7 +1995,7 @@ function ToolChip({ tool }: { tool: ToolActivity }) {
         {hasDetail && (open ? <ChevronDown size={9} className="shrink-0" /> : <ChevronRight size={9} className="shrink-0" />)}
       </button>
       {open && (
-        <div className="mt-1 border border-slate-200 bg-slate-50 p-2 text-[10px] leading-snug space-y-1.5 max-h-64 overflow-y-auto [overflow-wrap:anywhere]">
+        <div className={`mt-1 p-2 text-[10px] leading-snug space-y-1.5 max-h-64 overflow-y-auto [overflow-wrap:anywhere] ${cls.panelTinted}`}>
           {tool.args != null && (
             <div>
               <div className="font-semibold text-slate-500 uppercase tracking-wide text-[9px] mb-0.5">{t('assistant.input')}</div>
@@ -2028,7 +2036,7 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
     );
   }
   return (
-    <div className="mb-2 border border-slate-200 bg-slate-50 p-2">
+    <div className={`mb-2 p-2 ${cls.panelTinted}`}>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
           {t('assistant.customHeading')}
@@ -2046,12 +2054,12 @@ function SystemNoteEditor({ note, onChange }: { note: string; onChange: (note: s
         onChange={e => setDraft(e.target.value)}
         rows={2}
         placeholder={t('assistant.customPlaceholder')}
-        className="w-full border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-none"
+        className={`w-full resize-none ${cls.inputSm}`}
       />
       <div className="flex justify-end gap-2 mt-1">
         <button
           onClick={() => { onChange(draft.trim()); setOpen(false); }}
-          className="bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-700"
+          className={cls.primaryBtnXs}
         >
           {tc('save')}
         </button>
@@ -2194,13 +2202,13 @@ function ChangeCard({ change, onDecide }: {
         <div className="flex gap-2">
           <button
             onClick={() => onDecide(change, true)}
-            className="flex items-center gap-1 bg-slate-900 px-2.5 py-1 font-semibold text-white hover:bg-slate-700"
+            className={`flex items-center gap-1 ${cls.primaryBtnXs}`}
           >
             <Check size={12} /> {t('assistant.accept')}
           </button>
           <button
             onClick={() => onDecide(change, false)}
-            className="flex items-center gap-1 border border-slate-300 px-2.5 py-1 font-semibold text-slate-600 hover:border-slate-900 hover:text-slate-900"
+            className={`flex items-center gap-1 font-semibold ${cls.hairlineBtnSm}`}
           >
             <X size={12} /> {t('assistant.decline')}
           </button>
@@ -2257,7 +2265,7 @@ function PreviewLines({ preview }: { preview: Record<string, unknown> }) {
 function EmptyChatState({ onNew }: { onNew: () => void }) {
   const { t } = useTranslation('pages');
   return (
-    <div className="h-full flex flex-col items-center justify-center border border-slate-200 bg-white py-12 text-center">
+    <div className={`h-full flex flex-col items-center justify-center py-12 text-center ${cls.panel}`}>
       <Bot size={32} className="mb-3 text-slate-300" />
       <p className="mb-1 text-sm font-medium text-slate-700">{t('assistant.emptyTitle')}</p>
       <p className="mb-4 max-w-md text-xs text-slate-500">
@@ -2328,7 +2336,7 @@ function OfflineAssistant({ inputs, config, hasConnections, onApply, onConnect, 
   const results = useMemo(() => calculateHousehold(inputs, config), [inputs, config]);
 
   return (
-    <div className="h-full overflow-y-auto border border-slate-200 bg-white">
+    <div className={`h-full overflow-y-auto ${cls.panel}`}>
       <div className={`border-b border-slate-100 ${compact ? 'space-y-2 p-3' : 'flex flex-wrap items-center gap-3 p-4'}`}>
         <div className={compact ? '' : 'min-w-52 flex-1'}>
           <p className={`font-semibold text-slate-800 ${compact ? 'text-xs' : 'text-sm'}`}>{t('assistant.chooseModel')}</p>
@@ -2402,7 +2410,7 @@ function AskQuestionPanel({ inputs, results, compact = false }: {
   const copy = () => {
     navigator.clipboard.writeText(prompt).then(
       () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
-      () => window.prompt('Copy this prompt:', prompt),
+      () => { /* clipboard blocked — the prompt stays selectable in the box below */ },
     );
   };
 
@@ -2431,7 +2439,7 @@ function AskQuestionPanel({ inputs, results, compact = false }: {
             value={customQuestion}
             onChange={e => setCustomQuestion(e.target.value)}
             placeholder={t('assistant.customQPlaceholder')}
-            className="h-16 w-full border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none"
+            className={`h-16 w-full ${cls.inputSm}`}
           />
         </div>
       </div>
@@ -2452,7 +2460,7 @@ function AskQuestionPanel({ inputs, results, compact = false }: {
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={copy}
-            className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+            className={`flex items-center gap-1.5 ${cls.primaryBtnSm}`}
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
             {copied ? tc('copied') : t('assistant.copyPrompt')}
@@ -2481,7 +2489,7 @@ function TuneInputsPanel({ inputs, onApply }: {
   const copy = () => {
     navigator.clipboard.writeText(prompt).then(
       () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
-      () => window.prompt('Copy this prompt:', prompt),
+      () => { /* clipboard blocked — the prompt stays selectable in the box below */ },
     );
   };
 
@@ -2508,7 +2516,7 @@ function TuneInputsPanel({ inputs, onApply }: {
         />
         <button
           onClick={copy}
-          className="mt-2 flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+          className={`mt-2 flex items-center gap-1.5 ${cls.primaryBtnSm}`}
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
           {copied ? tc('copied') : t('assistant.copyPrompt')}
@@ -2530,14 +2538,14 @@ function TuneInputsPanel({ inputs, onApply }: {
           <button
             onClick={() => setIngest(parseAgentResult(pasteText, inputs))}
             disabled={!pasteText.trim()}
-            className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900 disabled:opacity-40"
+            className={`flex items-center gap-1.5 font-semibold disabled:opacity-40 ${cls.hairlineBtn}`}
           >
             <ClipboardPaste size={13} /> {t('assistant.validate')}
           </button>
           {ingest?.ok && (
             <button
               onClick={apply}
-              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              className={`flex items-center gap-1.5 ${cls.primaryBtnSm}`}
             >
               <Check size={13} /> {t('assistant.applyN', { count: ingest.applied.length })}
             </button>

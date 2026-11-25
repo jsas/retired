@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { firstEmptyAge, formatReScore, potDisplay } from './planDisplay';
+import { firstEmptyAge, formatReScore, potDisplay, unsetDetailGroups, verdictChip } from './planDisplay';
+import { baselineInputs } from '@retired/engine-core/exampleScenarios';
 import type { YearlyBreakdown } from '@retired/engine-core/retirementEngine';
 
 function row(age: number, endingBalance: number): YearlyBreakdown {
@@ -48,6 +49,32 @@ describe('potDisplay', () => {
   });
 });
 
+// One rule for every page's header chip, and the word has to match the tone:
+// the Dashboard used to recompute the tone inline and then choose a label from
+// holds/short only, so a borderline plan read "runs short" on the home page.
+const LABELS = { holds: 'the plan holds', short: 'runs short', borderline: 'borderline' };
+
+describe('verdictChip', () => {
+  it('says holds and shows the horizon when the pot survives', () => {
+    const chip = verdictChip(potDisplay([row(88, 40_000), row(90, 8_000)], 90), 90, LABELS);
+    expect(chip).toEqual({ tone: 'holds', age: '90+', label: LABELS.holds });
+  });
+
+  it('calls the borderline boundary borderline, not a failure', () => {
+    // Empty at 84 with a 90 horizon is exactly the margin.
+    const chip = verdictChip(potDisplay([row(83, 500), row(84, 0), row(90, -1_000)], 90), 90, LABELS);
+    expect(chip.tone).toBe('borderline');
+    expect(chip.label).toBe(LABELS.borderline);
+    expect(chip.age).toBe('84');
+  });
+
+  it('calls a real shortfall short', () => {
+    const chip = verdictChip(potDisplay([row(70, 0), row(90, -50_000)], 90), 90, LABELS);
+    expect(chip.tone).toBe('short');
+    expect(chip.label).toBe(LABELS.short);
+  });
+});
+
 describe('formatReScore', () => {
   it('is 100 when the plan never depletes', () => {
     expect(formatReScore({ depletionAge: null }, 90)).toBe(100);
@@ -61,5 +88,53 @@ describe('formatReScore', () => {
     expect(formatReScore({ depletionAge: 45 }, 90)).toBe(50);
     expect(formatReScore({ depletionAge: 0 }, 90)).toBe(0);
     expect(formatReScore({ depletionAge: 180 }, 90)).toBe(100);
+  });
+});
+
+// The starter plan the set-up card and New Scenario both start from.
+const SPOUSE = {
+  enabled: true, currentAge: 62, retirementAge: 65, rrspBalance: 0, tfsaBalance: 0,
+  taxableBalance: 0, cashCushionBalance: 0, rrspContribution: 0, tfsaContribution: 0,
+  taxableContribution: 0, cppStartAge: 65, cppMonthlyAmount: 800, oasStartAge: 65,
+  oasYearsInCanada: 40, desiredSpending: 30000,
+};
+const DEBT = { id: 'd1', label: 'Mortgage', kind: 'mortgage' as const, balance: 250000, interestRate: 0.05, monthlyPayment: 1500 };
+const EVENT = { id: 'e1', age: 68, label: 'Roof', amount: 30000, direction: 'out' as const };
+const PENSION = { id: 'i1', label: 'DB pension', kind: 'pension' as const, annualAmount: 12000, startAge: 60, endAge: null, indexedToCpi: true };
+const PHASE = { fromAge: 75, pctOfBase: 0.8 };
+
+describe('unsetDetailGroups', () => {
+  it('names every untouched register on a starter plan, in Plans-page order', () => {
+    expect(unsetDetailGroups(baselineInputs())).toEqual(
+      ['accounts', 'partner', 'debts', 'events', 'income', 'phases'],
+    );
+  });
+
+  it('clears each group as soon as that register carries data', () => {
+    const base = baselineInputs();
+    expect(unsetDetailGroups({ ...base, tfsaBalance: 25_000 })).not.toContain('accounts');
+    expect(unsetDetailGroups({ ...base, spouse: SPOUSE })).not.toContain('partner');
+    expect(unsetDetailGroups({ ...base, debts: [DEBT] })).not.toContain('debts');
+    expect(unsetDetailGroups({ ...base, events: [EVENT] })).not.toContain('events');
+    expect(unsetDetailGroups({ ...base, income: [PENSION] })).not.toContain('income');
+    expect(unsetDetailGroups({ ...base, spendingBands: [PHASE] })).not.toContain('phases');
+  });
+
+  it('counts a switch that exists but is off as untouched', () => {
+    expect(unsetDetailGroups({ ...baselineInputs(), spouse: { ...SPOUSE, enabled: false } }))
+      .toContain('partner');
+  });
+
+  it('counts a linked partner scenario as a partner, not a gap', () => {
+    expect(unsetDetailGroups({ ...baselineInputs(), spouseSource: { kind: 'scenario', scenarioId: 'p2' } }))
+      .not.toContain('partner');
+  });
+
+  it('says nothing is left once every register holds data', () => {
+    expect(unsetDetailGroups({
+      ...baselineInputs(),
+      rrspBalance: 200_000, spouse: SPOUSE, debts: [DEBT], events: [EVENT],
+      income: [PENSION], spendingBands: [PHASE],
+    })).toEqual([]);
   });
 });

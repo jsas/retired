@@ -18,6 +18,7 @@ import { useAppLocale } from '../../lib/localeContext';
 import type { RetirementInputs } from '@retired/engine-core/retirementEngine';
 import type { AppConfig } from '@retired/engine-core/appConfig';
 import { Fader } from '../../design/primitives';
+import { cls } from '../../design/tokens';
 import { rangePrefsOverride } from '../../lib/rangePrefs';
 import {
   AXES, axisValue, withAxis, clampToBand, deterministicOutcome, reconcileControl,
@@ -104,7 +105,7 @@ function ReadoutCard({ label, value, tone, solving }: {
     : 'text-slate-900';
 
   return (
-    <div className={`border border-slate-200 border-l-2 px-2.5 py-1.5 ${edge}`}>
+    <div className={`border-l-2 px-2.5 py-1.5 ${cls.panelBare} ${edge}`}>
       <div className="text-[9px] uppercase tracking-[0.16em] text-slate-400">{label}</div>
       <div className={`num flex items-center gap-1 text-[13px] font-semibold ${valueColor}`}>
         {solving && <Loader2 size={12} className="animate-spin text-slate-400" aria-label={t('eq.calculating')} />}

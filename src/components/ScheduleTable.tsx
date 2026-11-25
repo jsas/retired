@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppLocale } from '../lib/localeContext';
+import { formatCurrency, type Locale } from '../lib/locale';
 import { ChevronRight, ChevronDown, Columns3, GripVertical } from 'lucide-react';
 import type { YearlyBreakdown, YearDetail } from '@retired/engine-core/retirementEngine';
 import { prefKV } from '../lib/prefKv';
@@ -13,6 +14,7 @@ import {
   type ScheduleColumn,
 } from './scheduleColumns';
 import { Check } from '../design/primitives';
+import { cls } from '../design/tokens';
 
 interface ScheduleTableProps {
   breakdown: YearlyBreakdown[];
@@ -29,15 +31,6 @@ interface ScheduleTableProps {
   primaryBreakdown?: YearlyBreakdown[];
   spouseBreakdown?: YearlyBreakdown[];
   spouseAgeOffset?: number; // inputs.currentAge - spouse.currentAge
-}
-
-function formatCurrency(value: number, locale: string = 'en-CA'): string {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: 'CAD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
 }
 
 const TONE_CLASS: Record<ScheduleColumn['tone'], string> = {
@@ -97,14 +90,14 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
       <button
         type="button"
           onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-slate-600 border border-slate-300 hover:border-slate-900 hover:text-slate-900"
+        className={`inline-flex items-center gap-1.5 font-medium ${cls.hairlineBtnSm}`}
         title={t('schedule.columnsTitle')}
       >
         <Columns3 size={13} />
         {t('schedule.columns')}
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 p-2">
+        <div className={`absolute right-0 z-20 mt-1 w-52 bg-white p-2 ${cls.panelBare}`}>
           <button
             type="button"
             onClick={reset}
@@ -136,7 +129,7 @@ function ColumnPicker({ visible, onChange }: { visible: Set<string>; onChange: (
 
 // A single labelled money line inside the drill-down panel.
 function Line({ label, value, hint, strong, indent, locale }: {
-  label: string; value: number; hint?: string; strong?: boolean; indent?: boolean; locale: string;
+  label: string; value: number; hint?: string; strong?: boolean; indent?: boolean; locale: Locale;
 }) {
   if (Math.abs(value) < 0.5) return null; // hide zero lines to reduce noise
   return (
@@ -507,7 +500,7 @@ export function ScheduleTable({ breakdown, retirementAge, currentAge, maxAge, on
   };
 
   return (
-    <div className="bg-white border border-slate-200 overflow-hidden">
+    <div className={`bg-white overflow-hidden ${cls.panelBare}`}>
       <div className="flex justify-end px-2 py-1.5 border-b border-slate-100 bg-slate-50/60">
         <ColumnPicker visible={visibleCols} onChange={updateVisibleCols} />
       </div>

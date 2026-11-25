@@ -8,35 +8,13 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RetirementInputs, WithdrawalAccount, SpendingBand, CashEvent, IncomeSource, IncomeKind, Debt, MarketPeriod, GivingStream } from '@retired/engine-core/retirementEngine';
 import type { Scenario } from '@retired/engine-core/types';
-import { Panel, Fader, HelpHint, Check } from '../../design/primitives';
+import { Panel, Fader, HelpHint, Check, Num } from '../../design/primitives';
+import { cls } from '../../design/tokens';
 import { DETAILS_GROUPS, DETAILS_SECTIONS } from './detailsSections';
 import { getRangePrefs } from '../../lib/rangePrefs';
 import { getGivingPrefs } from '../../lib/givingPrefs';
 import { formatCurrency } from '../../lib/locale';
 import { useAppLocale } from '../../lib/localeContext';
-
-/* Small labelled number input — flat hairline, tabular numerals. */
-function Num({ label, value, onChange, step = 1000, min, suffix, hint }: {
-  label: string; value: number; onChange: (v: number) => void;
-  step?: number; min?: number; suffix?: string; hint?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[12px] text-slate-500">{label}</span>
-      <span className="mt-0.5 flex items-baseline gap-1">
-        <input
-          type="number"
-          className="num w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
-          value={Number.isFinite(value) ? value : ''}
-          step={step} min={min}
-          onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))}
-        />
-        {suffix && <span className="text-[11px] text-slate-400">{suffix}</span>}
-      </span>
-      {hint && <span className="mt-0.5 block text-[10.5px] text-slate-400">{hint}</span>}
-    </label>
-  );
-}
 
 /* A small labelled text input, same flat hairline. */
 function Txt({ label, value, onChange, placeholder }: {
@@ -47,7 +25,7 @@ function Txt({ label, value, onChange, placeholder }: {
       <span className="text-[12px] text-slate-500">{label}</span>
       <input
         type="text"
-        className="mt-0.5 w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
+        className={`mt-0.5 w-full ${cls.inputSm}`}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
@@ -64,7 +42,7 @@ function Sel<T extends string>({ label, value, onChange, options }: {
     <label className="block">
       <span className="text-[12px] text-slate-500">{label}</span>
       <select
-        className="mt-0.5 w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none"
+        className={`mt-0.5 w-full ${cls.inputSm}`}
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
       >
@@ -87,7 +65,17 @@ function Section({ id, title, hint, children }: { id: string; title: string; hin
   );
 }
 
-export function DetailsPage({ inputs, onChange, section, provinceCodes, scenarios, activeScenarioId, spouseWarnings, onCreateSpousePlan, onOpenPlan }: {
+/** Year-1 contribution room from the live projection, threaded in from App:
+ *  `room` is room left at the end of the first projected year (after that
+ *  year's deposit), `overflow` the amount that spilled to taxable because the
+ *  deposit exceeded the tracked room. Both undefined when room tracking is
+ *  off (issue #24 / tracking plan T5). */
+export interface YearOneRoom {
+  room?: { tfsa?: number; rrsp?: number };
+  overflow?: { tfsa: number; rrsp: number };
+}
+
+export function DetailsPage({ inputs, onChange, section, provinceCodes, scenarios, activeScenarioId, spouseWarnings, yearOneRoom, onCreateSpousePlan, onOpenPlan }: {
   inputs: RetirementInputs;
   onChange: (next: RetirementInputs) => void;
   section?: string | null;
@@ -99,6 +87,7 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes, scenario
   scenarios?: Scenario[];
   activeScenarioId?: string;
   spouseWarnings?: string[];
+  yearOneRoom?: YearOneRoom;
   onCreateSpousePlan?: (name?: string) => string;
   onOpenPlan?: (id: string) => void;
 }) {
@@ -156,7 +145,7 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes, scenario
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t(`groups.${group}`)}</h2>
             <div className="flex max-w-xl flex-col">
               {sections.map(s => (
-                <div key={s.id}><DetailsSection id={s.id} inputs={inputs} set={set} order={order} move={move} bands={bands} provinces={provinces} provinceKnown={provinceKnown} scenarios={scenarios} activeScenarioId={activeScenarioId} spouseWarnings={spouseWarnings} onCreateSpousePlan={onCreateSpousePlan} onOpenPlan={onOpenPlan} /></div>
+                <div key={s.id}><DetailsSection id={s.id} inputs={inputs} set={set} order={order} move={move} bands={bands} provinces={provinces} provinceKnown={provinceKnown} scenarios={scenarios} activeScenarioId={activeScenarioId} spouseWarnings={spouseWarnings} yearOneRoom={yearOneRoom} onCreateSpousePlan={onCreateSpousePlan} onOpenPlan={onOpenPlan} /></div>
               ))}
             </div>
           </div>
@@ -169,7 +158,7 @@ export function DetailsPage({ inputs, onChange, section, provinceCodes, scenario
 /* Render one section's editor. Every register edits in place — including the
    conditional ones (RDSP / FHSA / Home Equity), whose enable toggles live
    inside the section body. */
-function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, provinceKnown, scenarios, activeScenarioId, spouseWarnings, onCreateSpousePlan, onOpenPlan }: {
+function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, provinceKnown, scenarios, activeScenarioId, spouseWarnings, yearOneRoom, onCreateSpousePlan, onOpenPlan }: {
   id: string;
   inputs: RetirementInputs;
   set: (p: Partial<RetirementInputs>) => void;
@@ -181,10 +170,13 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
   scenarios?: Scenario[];
   activeScenarioId?: string;
   spouseWarnings?: string[];
+  yearOneRoom?: YearOneRoom;
   onCreateSpousePlan?: (name?: string) => string;
   onOpenPlan?: (id: string) => void;
 }) {
   const { t } = useTranslation('details');
+  const { locale } = useAppLocale();
+  const money = (v: number) => formatCurrency(v, locale);
   switch (id) {
     case 'profile':
       return (
@@ -195,7 +187,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           </div>
           <label className="block">
             <span className="text-[12px] text-slate-500">{t('province')}</span>
-            <select className="mt-0.5 w-full cursor-pointer border border-slate-300 bg-white px-2 py-1.5 text-[13px] focus:border-slate-900 focus:outline-none"
+            <select className={`mt-0.5 w-full cursor-pointer ${cls.inputSm}`}
               value={inp.provinceCode} onChange={(e) => set({ provinceCode: e.target.value.toUpperCase() })}>
               {provinces && provinces.map(code => (
                 <option key={code} value={code}>{code}</option>
@@ -224,7 +216,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
             <label className="block">
               <span className="text-[12px] text-slate-500">{t('linkedPlan')}</span>
               <select
-                className="mt-0.5 w-full cursor-pointer border border-slate-300 bg-white px-2 py-1.5 text-[13px] focus:border-slate-900 focus:outline-none"
+                className={`mt-0.5 w-full cursor-pointer ${cls.inputSm}`}
                 value={linkedId}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -244,12 +236,12 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           {linked && (
             <div className="flex flex-wrap gap-2">
               <button type="button"
-                className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+                className={cls.hairlineBtnSm}
                 onClick={() => onOpenPlan?.(linked.id)}>
                 {t('openPlan', { name: linked.name })}
               </button>
               <button type="button"
-                className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+                className={cls.hairlineBtnSm}
                 onClick={unlink}>
                 {t('unlink')}
               </button>
@@ -257,7 +249,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           )}
           {!linked && onCreateSpousePlan && (
             <button type="button"
-              className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+              className={cls.hairlineBtnSm}
               onClick={() => onCreateSpousePlan()}>
               {t('createPartner')}
             </button>
@@ -287,10 +279,35 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
       return (
         <Section id="contributions" title={t('sections.contributions')} hint="contributions">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Num label={t('rrspYr')} value={inp.rrspContribution} onChange={(v) => set({ rrspContribution: v })} />
-            <Num label={t('tfsaYr')} value={inp.tfsaContribution} onChange={(v) => set({ tfsaContribution: v })} />
+            <Num label={t('rrspYr')} value={inp.rrspContribution} onChange={(v) => set({ rrspContribution: v })}
+              hint={yearOneRoom?.room?.rrsp !== undefined
+                ? t('rrspYrRoomHint', { room: money(yearOneRoom.room.rrsp) })
+                : undefined} />
+            <Num label={t('tfsaYr')} value={inp.tfsaContribution} onChange={(v) => set({ tfsaContribution: v })}
+              hint={yearOneRoom?.room?.tfsa !== undefined
+                ? t('tfsaYrRoomHint', { room: money(yearOneRoom.room.tfsa) })
+                : undefined} />
             <Num label={t('taxableYr')} value={inp.taxableContribution} onChange={(v) => set({ taxableContribution: v })} />
+            {/* Contribution room (issue #24 / help "contribution-room"): blank =
+                no limit; a number switches tracking on, so the projection caps
+                each year's registered deposits and surfaces room/overflow here. */}
+            <Num label={t('tfsaRoom')} value={inp.tfsaRoom ?? NaN} suffix={t('roomSuffix')}
+              onChange={(v) => set({ tfsaRoom: v })} onClear={() => set({ tfsaRoom: null })} />
+            <Num label={t('rrspRoom')} value={inp.rrspRoom ?? NaN} suffix={t('roomSuffix')}
+              onChange={(v) => set({ rrspRoom: v })} onClear={() => set({ rrspRoom: null })} />
           </div>
+          {/* Over-contribution (issue #24 / T5): the projection already spills
+              the excess into the taxable account — say so next to the inputs. */}
+          {yearOneRoom?.overflow && (yearOneRoom.overflow.tfsa > 0.5 || yearOneRoom.overflow.rrsp > 0.5) && (
+            <div className="mt-2 space-y-1 border border-amber-200 bg-amber-50 px-2 py-1.5">
+              {yearOneRoom.overflow.rrsp > 0.5 && (
+                <p className="text-[12px] text-amber-800">{t('rrspOverflow', { amount: money(yearOneRoom.overflow.rrsp) })}</p>
+              )}
+              {yearOneRoom.overflow.tfsa > 0.5 && (
+                <p className="text-[12px] text-amber-800">{t('tfsaOverflow', { amount: money(yearOneRoom.overflow.tfsa) })}</p>
+              )}
+            </div>
+          )}
         </Section>
       );
     case 'income': {
@@ -304,7 +321,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           {list.length === 0 && <p className="text-[12.5px] text-slate-400">{t('noIncome')}</p>}
           <div className="space-y-2">
             {list.map((s, i) => (
-              <div key={s.id} className="space-y-2 border border-slate-200 p-2">
+              <div key={s.id} className={`space-y-2 p-2 ${cls.panelBare}`}>
                 <div className="flex items-center gap-2">
                   <div className="flex-1"><Txt label={t('name')} value={s.label} placeholder={t('incomePlaceholder')} onChange={(v) => upd(i, { label: v })} /></div>
                   <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={t('removeIncome', { name: s.label || t('sections.income') })}
@@ -320,7 +337,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
               </div>
             ))}
           </div>
-          <button type="button" className="mt-2 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={add}>
+          <button type="button" className={`mt-2 ${cls.hairlineBtnSm}`} onClick={add}>
             {t('addIncome')}
           </button>
         </Section>
@@ -348,7 +365,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           {list.length === 0 && <p className="text-[12.5px] text-slate-400">{t('noEvents')}</p>}
           <div className="space-y-2">
             {list.map((e, i) => (
-              <div key={e.id} className="space-y-2 border border-slate-200 p-2">
+              <div key={e.id} className={`space-y-2 p-2 ${cls.panelBare}`}>
                 <div className="flex items-center gap-2">
                   <div className="flex-1"><Txt label={t('name')} value={e.label} placeholder={t('eventPlaceholder')} onChange={(v) => upd(i, { label: v })} /></div>
                   <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={t('removeEvent', { name: e.label || t('sections.events') })}
@@ -365,8 +382,8 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
             ))}
           </div>
           <div className="mt-2 flex gap-2">
-            <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('in')}>{t('addInflow')}</button>
-            <button type="button" className="border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={() => add('out')}>{t('addOutflow')}</button>
+            <button type="button" className={cls.hairlineBtnSm} onClick={() => add('in')}>{t('addInflow')}</button>
+            <button type="button" className={cls.hairlineBtnSm} onClick={() => add('out')}>{t('addOutflow')}</button>
           </div>
         </Section>
       );
@@ -387,7 +404,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           {list.length === 0 && <p className="text-[12.5px] text-slate-400">{t('noGiving')}</p>}
           <div className="space-y-2">
             {list.map((g, i) => (
-              <div key={g.id} className="space-y-2 border border-slate-200 p-2">
+              <div key={g.id} className={`space-y-2 p-2 ${cls.panelBare}`}>
                 <div className="flex items-center gap-2">
                   <div className="flex-1"><Txt label={t('name')} value={g.label} placeholder={t('givingPlaceholder')} onChange={(v) => upd(i, { label: v })} /></div>
                   <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={t('removeGiving', { name: g.label || t('sections.giving') })}
@@ -411,7 +428,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
               </div>
             ))}
           </div>
-          <button type="button" className="mt-2 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={add}>
+          <button type="button" className={`mt-2 ${cls.hairlineBtnSm}`} onClick={add}>
             {t('addGiving')}
           </button>
           <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
@@ -436,20 +453,18 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
                 <div key={i} className="flex items-end gap-2">
                   <Num label={t('fromAge')} value={b.fromAge} step={1} onChange={(v) => setBand({ fromAge: v })} />
                   <Num label={t('amountOfBase')} value={dollars} step={1000} min={0} onChange={(v) => {
-                    if (!Number.isFinite(v) || !(base > 0)) return;
+                    if (!(base > 0)) return;
                     setBand({ pctOfBase: v / base });
                   }} />
-                  <Num label={t('pctOfBase')} value={Math.round(b.pctOfBase * 100)} step={5} min={0} onChange={(v) => {
-                    if (!Number.isFinite(v)) return;
-                    setBand({ pctOfBase: v / 100 });
-                  }} />
+                  <Num label={t('pctOfBase')} value={Math.round(b.pctOfBase * 100)} step={5} min={0}
+                    onChange={(v) => setBand({ pctOfBase: v / 100 })} />
                   <button className="mb-1.5 text-slate-400 hover:text-rose-600" aria-label={t('removePhase')}
                     onClick={() => set({ spendingBands: bands.filter((_, j) => j !== i) })}>×</button>
                 </div>
               );
             })}
           </div>
-          <button className="mt-1 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+          <button className={`mt-1 ${cls.hairlineBtnSm}`}
             onClick={() => set({ spendingBands: [...bands, { fromAge: (bands[bands.length - 1]?.fromAge ?? inp.retirementAge) + 10, pctOfBase: 0.8 }] })}>
             {t('addPhase')}
           </button>
@@ -477,17 +492,18 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           </p>
           <div className="space-y-2">
             {periods.map((p, i) => (
-              <div key={p.id} className="flex items-center gap-2 border border-slate-200 p-2">
+              <div key={p.id} className={`flex items-center gap-2 p-2 ${cls.panelBare}`}>
                 <Num label={t('fromAge')} value={p.age} step={1} onChange={(v) => upd(i, { age: v })} />
                 <Num label={t('returnPct')} value={Math.round(p.return * 1000) / 10} step={0.5} onChange={(v) => upd(i, { return: v / 100 })} />
                 <Num label={t('volPct')} value={p.volatility != null ? Math.round(p.volatility * 1000) / 10 : NaN} step={0.5} min={0}
-                  onChange={(v) => upd(i, { volatility: Number.isFinite(v) ? Math.max(0, v / 100) : undefined })} />
+                  onChange={(v) => upd(i, { volatility: Math.max(0, v / 100) })}
+                  onClear={() => upd(i, { volatility: undefined })} />
                 <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={t('removeAnchor', { age: p.age })}
                   onClick={() => setPeriods(periods.filter((_, j) => j !== i))}>×</button>
               </div>
             ))}
           </div>
-          <button type="button" className="mt-1 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900"
+          <button type="button" className={`mt-1 ${cls.hairlineBtnSm}`}
             onClick={() => setPeriods([...periods, { id: uid(), age: (periods[periods.length - 1]?.age ?? inp.retirementAge) + 10, return: inp.investmentReturn }])}>
             {t('addAnchor')}
           </button>
@@ -500,7 +516,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           <p className="text-[12px] text-slate-500">{t('withdrawalLead')}</p>
           <ol className="space-y-1.5">
             {order.map((acc, i) => (
-              <li key={acc} className="flex items-center gap-2 border border-slate-200 px-2 py-1.5">
+              <li key={acc} className={`flex items-center gap-2 px-2 py-1.5 ${cls.panelBare}`}>
                 <span className="num w-5 text-[11px] text-slate-400">{i + 1}</span>
                 <span className="flex-1 text-[13px] text-slate-800">{t(acc)}</span>
                 <button className="px-1 text-slate-400 hover:text-slate-900 disabled:opacity-30" disabled={i === 0}
@@ -523,7 +539,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
           {list.length === 0 && <p className="text-[12.5px] text-slate-400">{t('noDebts')}</p>}
           <div className="space-y-2">
             {list.map((d, i) => (
-              <div key={d.id} className="space-y-2 border border-slate-200 p-2">
+              <div key={d.id} className={`space-y-2 p-2 ${cls.panelBare}`}>
                 <div className="flex items-center gap-2">
                   <div className="flex-1"><Txt label={t('name')} value={d.label} placeholder={t('debtPlaceholder')} onChange={(v) => upd(i, { label: v })} /></div>
                   <button type="button" className="mt-4 px-1 text-slate-400 hover:text-rose-600" aria-label={t('removeDebt', { name: d.label || t('sections.debts') })}
@@ -539,7 +555,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
               </div>
             ))}
           </div>
-          <button type="button" className="mt-2 border border-slate-300 px-2 py-1 text-[11.5px] text-slate-600 hover:border-slate-900" onClick={add}>
+          <button type="button" className={`mt-2 ${cls.hairlineBtnSm}`} onClick={add}>
             {t('addDebt')}
           </button>
           <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
@@ -634,7 +650,7 @@ function DetailsSection({ id, inputs: inp, set, order, move, bands, provinces, p
               <Num label={t('contributionYr')} value={fh!.contribution} onChange={(v) => setFh({ contribution: v })} />
               <Num label={t('openedAtAge')} value={fh!.openAge ?? NaN} step={1}
                 hint={t('openedHint')}
-                onChange={(v) => setFh({ openAge: Number.isFinite(v) ? v : undefined })} />
+                onChange={(v) => setFh({ openAge: v })} onClear={() => setFh({ openAge: undefined })} />
             </div>
           )}
         </Section>

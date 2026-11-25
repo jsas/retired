@@ -68,7 +68,7 @@ describe('hashForView', () => {
     const views: View[] = [
       'dashboard', 'projection', 'math', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare',
       'scenarios', 'data', 'print', 'donate',
-      'welcome', 'help', 'settings', 'styleguide',
+      'help', 'settings', 'styleguide',
     ];
     for (const v of views) {
       expect(viewFromHash(hashForView(v))).toBe(v);
@@ -87,6 +87,8 @@ describe('hashForView', () => {
     expect(foldTarget('legacyScenarios')).toBe('scenarios');
     expect(foldTarget('export')).toBe('data');
     expect(foldTarget('sharing')).toBe('data');
+    // The intro screen folded onto the Dashboard: the home page is the answer.
+    expect(foldTarget('welcome')).toBe('dashboard');
   });
 
   it('hashForView prints the destination hash for folded views', () => {
@@ -98,6 +100,11 @@ describe('hashForView', () => {
     expect(hashForView('scenarios')).toBe('#/plan');
     expect(hashForView('export')).toBe('#/data');
     expect(hashForView('sharing')).toBe('#/data');
+    expect(hashForView('welcome')).toBe('#/dashboard');
+    // The assistant's page folded onto the Dashboard (R1): #/assistant is still
+    // what a user types, but the canonical link is the home page the dock opens
+    // on, and the sitemap no longer lists an assistant page.
+    expect(hashForView('agent')).toBe('#/dashboard');
     // Unfurled tools print their own routes.
     expect(hashForView('montecarlo')).toBe('#/monte-carlo');
     expect(hashForView('backtest')).toBe('#/backtest');
@@ -106,7 +113,7 @@ describe('hashForView', () => {
   });
 
   it('round-trips folded views through their fold', () => {
-    for (const v of ['export', 'sharing', 'details', 'legacyScenarios', 'eq'] as View[]) {
+    for (const v of ['export', 'sharing', 'details', 'legacyScenarios', 'eq', 'welcome', 'agent'] as View[]) {
       expect(viewFromHash(hashForView(v))).toBe(foldTarget(v));
     }
   });

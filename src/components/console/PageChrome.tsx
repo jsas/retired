@@ -8,13 +8,13 @@
 // The dock (f7's star): a min-340px right rail on desktop (user-draggable
 // wider, remembered), a full-screen sheet on phones. The app works without
 // it — the robot button toggles it and it never traps you.
-import { createContext, Fragment, useCallback, useContext, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { createContext, Fragment, useCallback, useContext, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from './nav';
 import type { View } from '../../lib/viewRoutes';
 import { pageForView, type NavEntry } from '@retired/mcp-tools/navigation';
-import { Dropdown, HelpHint } from '../../design/primitives';
-import { BLUE, RED_DOT, AMBER_DOT, cls } from '../../design/tokens';
+import { Dot, Dropdown, HelpHint } from '../../design/primitives';
+import { cls, toneColor, NUM_CLASS } from '../../design/tokens';
 import { Bot, CircleUserRound, Undo2 } from 'lucide-react';
 import { LanguageSwitch } from '../LanguageSwitch';
 import { useAppLocale } from '../../lib/localeContext';
@@ -23,6 +23,13 @@ import { useAppLocale } from '../../lib/localeContext';
 // the dark (open) button, black on the white (closed) one.
 const ASSISTANT_TOGGLE_ICON = 'h-4 w-4';
 import { prefKV } from '../../lib/prefKv';
+
+/** What the app is showing, as far as the chrome cares: `assistantRoute` is
+ *  true on the assistant's own (#/assistant) route. The dock opens when it
+ *  turns true while this chrome is already mounted — the folded assistant
+ *  route redraws the very page already on screen, so a hash read at mount
+ *  alone left the rail shut and App had to remount the page to open it. */
+export const PageRouteContext = createContext<{ assistantRoute: boolean }>({ assistantRoute: false });
 
 /** The plan's undo surface for the header (issue #165): edits autosave, and
  *  the undo icon steps back through the saved revisions (the rollback
@@ -151,10 +158,6 @@ function SectionedMenu({ items, linkClass, headerClass }: {
   );
 }
 
-function chipDot(tone: VerdictChip['tone']) {
-  return tone === 'holds' ? BLUE : tone === 'short' ? RED_DOT : tone === 'borderline' ? AMBER_DOT : '#94a3b8';
-}
-
 export function PageChrome({ title, hint, chip, actions, assistant, children }: {
   title?: string;
   /** A help-topic id — renders a ? beside the page title. */
@@ -173,8 +176,16 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
   // assistant's own route (#/assistant) starts open, but the robot button
   // always toggles — even there, one click hides the dock (#192: no mode
   // may take over the page or trap the user).
-  const openRoute = isAssistantRoute();
-  const [dockOpen, setDockOpenState] = useState<boolean>(() => readDockOpen(openRoute));
+  const route = useContext(PageRouteContext);
+  const [dockOpen, setDockOpenState] = useState<boolean>(() =>
+    readDockOpen(isAssistantRoute() || route.assistantRoute),
+  );
+  // Turning to the assistant route while this chrome stays mounted (the folded
+  // route redraws the page already on screen) opens the dock then. No pref
+  // write: closing it again still sticks, same as the mount-time open.
+  useEffect(() => {
+    if (route.assistantRoute) setDockOpenState(true);
+  }, [route.assistantRoute]);
   const [dockWidth, setDockWidth] = useState<number>(() => readDockWidth());
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const setDockOpen = (open: boolean) => {
@@ -216,7 +227,7 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
     <div className="flex min-h-screen flex-col bg-white text-slate-800">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
         <div className={`mx-auto flex h-12 w-full ${PAGE_MAX} items-center gap-1 px-4`}>
-          <Link view="welcome" className="flex h-6 w-6 shrink-0 items-center justify-center bg-slate-900 text-[10px] font-bold text-white" aria-label={t('home')}>
+          <Link view="dashboard" className={cls.mark} aria-label={t('home')}>
             RE:
           </Link>
           <Link view="dashboard" className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">{t('dashboard')}</Link>
@@ -314,8 +325,8 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
             className="hidden px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 md:block"
           />
           <Link view="dashboard" className="flex items-center gap-2 border-l border-slate-200 pl-3" aria-label={t('verdictChip', { label: chip.label })}>
-            <span title={chip.label} className="inline-block h-2.5 w-2.5" style={{ backgroundColor: chipDot(chip.tone) }} />
-            <span className="num text-[14px] font-bold text-slate-900">{chip.age}</span>
+            <Dot color={toneColor(chip.tone)} title={chip.label} />
+            <span className={`${NUM_CLASS} text-[14px] font-bold text-slate-900`}>{chip.age}</span>
           </Link>
         </div>
       </header>

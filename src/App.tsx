@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { StyleGuide } from './design/StyleGuide';
-import { PageChrome, PlanUndoContext } from './components/console/PageChrome';
+import { PlanUndoContext, PageRouteContext } from './components/console/PageChrome';
 import type { VerdictChip } from './components/console/PageChrome';
-import { LandingPage, landingScenarioFromPlan, welcomeLandingGate } from './components/console/LandingPage';
+import { QuickStart, quickStartPlan, setupCardVisible, type SetupAnswers } from './components/console/QuickStart';
 import {
   SchedulePage, MathPage, OptimizerPage, MonteCarloPage,
   BacktestPage, SolverPage, ComparePage, PlansPage, DataPage,
@@ -13,6 +14,7 @@ import {
 import { AlertTriangle, X } from 'lucide-react';
 import { calculateHousehold, calculateHouseholdModel, combineHouseholdBreakdown, type RetirementInputs, type RetirementResults } from '@retired/engine-core/retirementEngine';
 import { resolveSpouseSource, baselineSpouse, personPlanFromSpouse, promoteEmbeddedSpouses, toHousehold } from '@retired/engine-core/householdTypes';
+import { mergeOnOpen } from './lib/storeMerge';
 import type { Scenario } from '@retired/engine-core/types';
 import { DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { AppStore } from './data/store';
@@ -22,7 +24,7 @@ import { type FullBackupSelection, type ProjectionImportRequest, type AiBackupIn
 import { AI_CHATS_STORAGE_KEY } from './lib/ai/chatStore';
 import { AI_SETTINGS_STORAGE_KEY, reloadAiSettingsFromStorage } from './lib/aiSettings';
 import { AgentPage } from './components/AgentPage';
-import { detectLocale, parseLocale, type Locale } from './lib/locale';
+import { detectLocale, parseLocale, defaultProvinceCode, type Locale } from './lib/locale';
 import { setAppLanguage } from './lib/i18n';
 import { LocaleContext } from './lib/localeContext';
 import { useTranslation } from 'react-i18next';
@@ -36,13 +38,14 @@ import { runMonteCarloAuto } from './lib/runMonteCarlo';
 import { runBacktest, type BacktestResult } from './lib/historicalReturns';
 
 import { viewFromHash, hashForView, type View } from './lib/viewRoutes';
-import { potDisplay } from './lib/planDisplay';
+import { potDisplay, verdictChip } from './lib/planDisplay';
 import { consumePlanFromHash } from './lib/shareLink';
-import { buildDefaultScenarios, hasUserPlans } from '@retired/engine-core/exampleScenarios';
+import { buildDefaultScenarios, baselineInputs } from '@retired/engine-core/exampleScenarios';
 import { PrintSummary } from './components/PrintSummary';
 import type { EqSolvedState, Bands } from './components/console/SteeringControls';
 import { loadEqBands, saveEqBands } from './lib/eqStorage';
 import { PREF_KEYS, prefKV } from './lib/prefKv';
+import { isSetupCardDismissed, dismissSetupCard } from './lib/setupCardPrefs';
 import { solveEqReadout } from '@retired/engine-core/eqSolver';
 import { consistentAges } from '@retired/engine-core/eqConstraints';
 import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
@@ -50,11 +53,12 @@ import type { MonteCarloRequest } from '@retired/engine-core/monteCarlo';
 // The SQL store loads asynchronously (the wasm binary has to be fetched/decoded
 // first — near-instant after the first visit). To keep first paint synchronous
 // we seed state from the localStorage mirror of the SQL blob (or first-run
-// examples) and then swap in the store's authoritative contents the moment it
+// examples) and then merge in the store's authoritative contents the moment it
 // opens. The mirror is the SQL store's own compatibility copy, written on every
 // persist, so this is a cache read of the same source of truth — not a fork.
-// The swap is skipped while the user holds unsaved edits so in-flight work is
-// never clobbered.
+// The merge never drops work: a plan the user was already editing keeps its own
+// live inputs, and nothing is written back until the merge has run (see the
+// `settled` gate below).
 const getSyncSeed = () => {
   const stored = readSeedScenariosFromMirror();
   if (stored) {
@@ -69,6 +73,30 @@ const getSyncSeed = () => {
   return { scenarios, activeScenarioId: scenarios[0].id };
 };
 
+// Every "your data is at risk" state renders the same amber row: settings reset,
+// the store refusing to open, stored rows it couldn't decode, a failed save. They
+// were two copies of this markup with the dismiss labels hardcoded in English.
+function WarningBanner({ children, onDismiss, dismissLabel }: {
+  children: ReactNode;
+  onDismiss: () => void;
+  dismissLabel: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 bg-amber-50 border-b border-amber-300 px-3 md:px-6 py-2 text-xs text-amber-900" role="alert">
+      <AlertTriangle size={14} className="shrink-0" />
+      <span className="flex-1">{children}</span>
+      <button
+        onClick={onDismiss}
+        className="shrink-0 p-0.5 hover:bg-amber-100"
+        title={dismissLabel}
+        aria-label={dismissLabel}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 function App() {
   const [initialState] = useState(getSyncSeed);
 
@@ -82,17 +110,22 @@ function App() {
   const [detected] = useState<Locale>(detectLocale);
   const locale = parseLocale(config.general.locale) ?? detected;
   const { t: tPages } = useTranslation('pages');
+  const { t: tStart } = useTranslation('start');
+  const { t: tCommon } = useTranslation('common');
   useEffect(() => { void setAppLanguage(locale); }, [locale]);
   const setLocale = (next: Locale) => {
     setConfig(prev => ({ ...prev, general: { ...prev.general, locale: next } }));
   };
-  // First-run gate (issue #153): an explicit hash (including #/welcome from the
-  // RE: mark) always wins. Without a hash, a user-saved plan ⇒ dashboard; stock
-  // `Example - …` plans alone still open the landing so a new visitor sees it.
-  // Completing the landing still creates the first user scenario.
-  const [view, setView] = useState<View>(() =>
-    welcomeLandingGate(viewFromHash(window.location.hash), hasUserPlans(scenarios))
-  );
+  // The Dashboard IS the home page (there is no intro screen any more): the
+  // first paint is the answer, with the set-up card on top of it while the
+  // plan on screen isn't the user's own. An explicit hash always wins, and the
+  // legacy #/welcome URL folds here through viewRoutes.
+  const [view, setView] = useState<View>(() => viewFromHash(window.location.hash) ?? 'dashboard');
+  // The set-up card's dismissal, remembered across visits (setupCardPrefs),
+  // plus a one-shot force from a #/dashboard?setup=1 link — that's how Help's
+  // "set up a plan" entry re-opens the card on a plan that already has numbers.
+  const [setupDismissed, setSetupDismissed] = useState(isSetupCardDismissed);
+  const [setupForced, setSetupForced] = useState(() => /[?&]setup=1/.test(window.location.hash));
 
   // Keep the URL hash in sync with the current view (push a history entry per
   // navigation), and follow hash changes so back/forward and pasted links work.
@@ -118,6 +151,7 @@ function App() {
     const onHashChange = () => {
       const v = viewFromHash(window.location.hash);
       if (v) setView(v);
+      if (/[?&]setup=1/.test(window.location.hash)) setSetupForced(true);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -135,7 +169,9 @@ function App() {
     setExportOptions(opts);
     saveProjectionExportOptions(opts);
   };
-  const activeScenario = scenarios.find(s => s.id === activeScenarioId)!;
+  // A stale/unknown active id (an import that replaced the list, a delete that
+  // raced) must not blank the whole app — fall back to the first plan.
+  const activeScenario = scenarios.find(s => s.id === activeScenarioId) ?? scenarios[0];
 
   const [inputs, setInputs] = useState<RetirementInputs>(
     () => JSON.parse(JSON.stringify(activeScenario.inputs))
@@ -188,33 +224,61 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printOptions.includeMonteCarlo, resolvedInputs, config]);
 
-  // Open the SQL store once (async: the wasm has to load). When its contents
-  // differ from the sync seed and the user isn't mid-edit, adopt them — the
-  // store is the authoritative copy.
+  // The store's live counterpart: the plan list as rendered, the plan on screen,
+  // its possibly-unsaved inputs, and whether it is dirty. Synced after every
+  // render (below the `hasUnsavedChanges` declaration) and read only from inside
+  // the open promise, so merging needs none of them as effect dependencies.
+  const liveRef = useRef({
+    scenarios: initialState.scenarios,
+    activeId: initialState.activeScenarioId,
+    inputs,
+    dirty: false,
+  });
+  // Nothing persists until the store's contents have been merged in. persist used
+  // to fire against the seed list while the open was still in flight, and
+  // `saveScenarios` starts with `DELETE FROM scenarios` — so a slow open (OPFS
+  // warm-up, first run in Safari) wrote the example plans over the user's own.
+  const [settled, setSettled] = useState(false);
+  // A failed open used to be a console.warn: the app carried on in memory with no
+  // store, saving nothing, saying nothing. `bootNonce` is the retry handle.
+  const [bootNonce, setBootNonce] = useState(0);
+  const [storeUnavailable, setStoreUnavailable] = useState(false);
+  // Stored rows the loaders could not decode (B11) — bannered, not swallowed.
+  const [unreadableRows, setUnreadableRows] = useState(0);
+
+  // Open the SQL store (async: the wasm has to load) and merge in what it holds.
+  // Adoption is unconditional — skipping it while the user was mid-edit was the
+  // bug: the merge never happened and the persist effect then wrote the seed list
+  // over everything the store held. A live edit still wins, but only for the one
+  // plan it was made on.
   useEffect(() => {
     let cancelled = false;
     AppStore.open(buildDefaultScenarios).then(({ store: opened, state }) => {
       if (cancelled) return;
       setStore(opened);
-      setHasUnsavedChanges(dirty => {
-        if (!dirty) {
-          setScenarios(state.scenarios);
-          setActiveScenarioId(state.activeScenarioId);
-          setInputs(JSON.parse(JSON.stringify(
-            state.scenarios.find(s => s.id === state.activeScenarioId)!.inputs,
-          )));
-        }
-        return dirty;
-      });
+      setStoreUnavailable(false);
+      setUnreadableRows(state.unreadableRows ?? 0);
+      const merged = mergeOnOpen(state, liveRef.current);
+      setScenarios(merged.scenarios);
+      setActiveScenarioId(merged.activeScenarioId);
+      setInputs(merged.inputs);
+      // Still dirty means the edit is real and not on disk yet: autosave (or the
+      // next persist) writes the merged list back.
+      setHasUnsavedChanges(merged.dirty);
+      setSettled(true);
       if (state.config) setConfig(state.config);
       // Issue #19: a stored config that failed wholesale validation was reset
       // to defaults — don't let that pass silently; the user's custom tax
       // tables need re-entering.
       if (state.configLoadWarning) setConfigLoadWarning(state.configLoadWarning);
-    }).catch(err => console.warn('SQL store failed to open; running in-memory:', err));
+    }).catch(err => {
+      if (cancelled) return;
+      console.warn('SQL store failed to open; running in-memory:', err);
+      setStoreUnavailable(true);
+    });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [bootNonce]);
 
   // Persist scenarios + active scenario on every change (once the store is
   // open — before that there's nothing to write through to). persist returns
@@ -222,9 +286,10 @@ function App() {
   // page's history list re-reads it.
   const [revisionNonce, setRevisionNonce] = useState(0);
   useEffect(() => {
-    const wrote = store?.persist({ scenarios, activeScenarioId }) ?? false;
+    if (!store || !settled) return;
+    const wrote = store.persist({ scenarios, activeScenarioId });
     if (wrote) setRevisionNonce(n => n + 1);
-  }, [store, scenarios, activeScenarioId]);
+  }, [store, settled, scenarios, activeScenarioId]);
 
   // Durability feedback (issue U-02): the persist writes are fire-and-forget,
   // so a failed OPFS/localStorage write was previously only a console.warn —
@@ -240,12 +305,13 @@ function App() {
   // Issue #19: a stored config that failed wholesale validation was reset to
   // defaults. Surface that — custom tax tables silently vanishing is a data
   // loss the user must know about. Stays until dismissed.
-  const [configLoadWarning, setConfigLoadWarning] = useState<string | null>(null);
+  const [configLoadWarning, setConfigLoadWarning] = useState<'config-reset' | null>(null);
 
   // Persist engine config on every change.
   useEffect(() => {
-    store?.persist({ config });
-  }, [store, config]);
+    if (!store || !settled) return;
+    store.persist({ config });
+  }, [store, settled, config]);
 
   // If the URL carried a shared plan (#plan=...), import it once as a new
   // scenario and select it. Runs before the persist effect's first save would
@@ -378,6 +444,12 @@ function App() {
   // Update scenario when inputs change - with save button
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Keep the merge snapshot honest: whatever the user has on screen right now,
+  // including edits that have not reached `scenarios` yet.
+  useEffect(() => {
+    liveRef.current = { scenarios, activeId: activeScenarioId, inputs, dirty: hasUnsavedChanges };
+  });
+
   const handleInputsChange = (newInputs: RetirementInputs) => {
     // Keep the plan's ages internally consistent: editing current age can
     // invalidate retirement age (retire before now) etc., so clamp them.
@@ -439,7 +511,12 @@ function App() {
     if (pending) handleSaveScenario();
     return pending;
   };
-  useEffect(() => () => { flushPendingSave(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The unmount flush has to call the *latest* closure: `flushPendingSave` reads
+  // `inputs` and `activeScenarioId` from its render, so the empty-deps effect
+  // below keeps it in a ref instead of capturing the first render's.
+  const flushRef = useRef(flushPendingSave);
+  useEffect(() => { flushRef.current = flushPendingSave; });
+  useEffect(() => () => { flushRef.current(); }, []);
 
   // Update inputs when scenario changes. Autosave flushes first so the plan
   // on screen is already the plan on disk — no "save first?" prompt.
@@ -476,6 +553,9 @@ function App() {
   const canUndo = hasUnsavedChanges
     || (store?.allRevisions() ?? []).filter(r => r.scenarioId === activeScenarioId).length >= 2;
   const undoState = { canUndo, onUndo: handleUndoSave };
+  // What the chrome shows: the assistant's own route opens the dock (see
+  // PageRouteContext). `agent` has no page of its own — it redraws this one.
+  const routeValue = { assistantRoute: view === 'agent' };
 
   // Agent scenario tools (list_scenarios action open / save_as). Both mirror the
   // sidebar paths: open saves the current plan first (nothing the user typed
@@ -493,6 +573,29 @@ function App() {
     setActiveScenarioId(id);
     setHasUnsavedChanges(false);
     return id;
+  };
+
+  // The Dashboard's set-up card — the intro screen's old job, done in place.
+  // Two cases: the plan on screen is a stock example, so the four numbers
+  // start a personal copy and the example stays untouched for later
+  // exploration; or it's the user's own (still blank) plan, which is patched
+  // in place. Either way the normal inputs pipeline recomputes the verdict.
+  const handleSetupStart = (answers: SetupAnswers, asNewPlan: boolean) => {
+    const plan = quickStartPlan(asNewPlan ? baselineInputs() : inputs, answers);
+    if (asNewPlan) plan.provinceCode = defaultProvinceCode(locale);
+    const next = JSON.parse(JSON.stringify(plan)) as RetirementInputs;
+    setSetupDismissed(false);
+    setSetupForced(false);
+    if (!asNewPlan) { handleInputsChange(next); return; }
+    const scenario: Scenario = {
+      id: `scenario-${Date.now().toString(36)}`,
+      name: tStart('planName'),
+      inputs: next,
+    };
+    setScenarios(prev => [...prev, scenario]);
+    setActiveScenarioId(scenario.id);
+    setInputs(JSON.parse(JSON.stringify(next)));
+    setHasUnsavedChanges(false);
   };
 
   // Scenario revision history (scenarios page). The store owns the snapshots;
@@ -531,7 +634,7 @@ function App() {
   // Mint a blank partner plan from the host's ages/spending and link it.
   // Used by Details / Sidebar when the user has no other plan to link yet.
   const handleCreateSpousePlan = (name?: string, partnerInputs?: RetirementInputs) => {
-    const id = `scenario-${Date.now()}`;
+    const id = `scenario-${Date.now().toString(36)}`;
     const planName = (name ?? '').trim() || `${activeScenario.name} — Partner`;
     const minted = partnerInputs ?? personPlanFromSpouse(baselineSpouse(inputs), inputs);
     minted.spouse = undefined;
@@ -554,6 +657,19 @@ function App() {
   const results = useMemo(() => {
     return calculateHouseholdModel(household, config);
   }, [household, config]);
+
+  // Contribution-room state at the end of the first projected year, for the
+  // plan editor's contribution inputs (issue #24 / T5): the room hint and the
+  // over-contribution warning reflect what THIS year's deposit does. The
+  // primary person's rows — DetailsPage edits the primary's fields; a partner
+  // is a separate linked plan with its own editor.
+  const yearOneRoom = useMemo(() => {
+    const rows = results.yearlyBreakdown ?? [];
+    const row = rows.find(r => r.age === resolvedInputs.currentAge) ?? rows[0];
+    const detail = row?.detail;
+    if (!detail?.roomRemaining && !detail?.overflow) return undefined;
+    return { room: detail.roomRemaining, overflow: detail.overflow };
+  }, [results, resolvedInputs.currentAge]);
 
   // The projection export shows the active plan's own computed numbers. When a
   // spouse is disabled the spouse block lingers in the inputs (for re-enabling),
@@ -666,15 +782,10 @@ function App() {
   }
 
     // The persistent verdict chip — the answer, always top-right.
-    const chip: VerdictChip = (() => {
-      const pot = potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge);
-      const borderline = !pot.holds && pot.emptyAge != null && (inputs.maxAge - pot.emptyAge) <= 6;
-      return {
-        tone: pot.holds ? 'holds' : borderline ? 'borderline' : 'short',
-        age: pot.holds ? `${inputs.maxAge}+` : `${pot.lastsTo ?? '—'}`,
-        label: pot.holds ? tPages('holds') : borderline ? tPages('borderline') : tPages('short'),
-      };
-    })();
+    const chip: VerdictChip = verdictChip(
+      potDisplay(results.yearlyBreakdown ?? [], inputs.maxAge), inputs.maxAge,
+      { holds: tPages('holds'), short: tPages('short'), borderline: tPages('borderline') },
+    );
 
     // The section deep-link for the Plans page (#/plan?section=…, or the
     // legacy #/details?section=… which folds here).
@@ -690,7 +801,7 @@ function App() {
       <AgentPage
         docked
         inputs={resolvedInputs} config={config} scenarioName={activeScenario.name}
-        scenarioList={scenarios.map(s => ({ id: s.id, name: s.name }))}
+        scenarioList={scenarios.map(s => ({ id: s.id, name: s.name, isExample: s.isExample }))}
         activeScenarioId={activeScenarioId}
         scenarioInputsById={(id) => scenarios.find(s => s.id === id)?.inputs}
         onApply={(patch) => handleInputsChange({ ...inputs, ...patch })}
@@ -766,7 +877,7 @@ function App() {
           <BacktestPage chip={chip} assistant={assistantDock}
             timeline={{ breakdown: householdBreakdown, currentAge: inputs.currentAge, retirementAge: results.retirementAge,
             edit: { inputs, onInputsChange: handleInputsChange, inflationRate: config.engine.inflationRate } }}
-            backtestProps={backtestResult ? { result: backtestResult } : null}
+            backtestProps={backtestResult ? { result: backtestResult, primaryOnly: !!resolvedInputs.spouse?.enabled } : null}
           />
         );
       case 'compare':
@@ -795,6 +906,7 @@ function App() {
               provinceCodes: Object.keys(config.provinces).sort(),
               scenarios, activeScenarioId,
               spouseWarnings: spouseResolution.warnings,
+              yearOneRoom,
               onCreateSpousePlan: handleCreateSpousePlan,
               onOpenPlan: (id) => { handleScenarioChange(id); },
             }}
@@ -837,41 +949,10 @@ function App() {
         return <ConnectionsPage chip={chip} assistant={assistantDock} onClose={() => setView('dashboard')} />;
       case 'help':
         return <HelpPage chip={chip} assistant={assistantDock} />;
-      case 'agent':
-        // The assistant's own route: the SAME docked conversation as every
-        // other page (one AgentPage in the tree — mounting a second one here
-        // would fork the chat state). The route just opens the dock and lets
-        // PageChrome lay it out; deep links and back/forward keep working.
-        return (
-          <PageChrome title={tPages('agentPage.title')} hint="assistant" chip={chip} assistant={assistantDock}>
-            <div className="pt-6 max-w-xl space-y-3 text-[13px] text-slate-500">
-              <p className="text-[15px] font-semibold text-slate-900">{tPages('agentPage.open')}</p>
-              <p>{tPages('agentPage.body')}</p>
-            </div>
-          </PageChrome>
-        );
-      case 'welcome':
-        // Explicit #/welcome (the RE: mark) always shows the landing, even with
-        // saved plans. The no-hash first-run gate is the only welcome→dashboard
-        // redirect. Completing the questions still saves a new starter scenario.
-        return (
-          <LandingPage
-            config={config}
-            onBuild={(plan, opts) => {
-              const scenario = landingScenarioFromPlan(JSON.parse(JSON.stringify(plan)), Date.now());
-              setScenarios(prev => [...prev, scenario]);
-              setActiveScenarioId(scenario.id);
-              setInputs(JSON.parse(JSON.stringify(scenario.inputs)));
-              setHasUnsavedChanges(false);
-              // "keep chatting" arrives with the assistant dock open; "go to
-              // dashboard" with it closed. The dock reads this pref on mount.
-              if (opts?.openAssistant !== undefined) {
-                try { prefKV().setItem('wealthconsole_dock_open', opts.openAssistant ? '1' : '0'); } catch { /* storage blocked */ }
-              }
-              setView('dashboard');
-            }}
-          />
-        );
+      // The assistant's #/assistant route ends up here: `agent` is a folded
+      // catalog view, so there is no page of its own to draw — the Dashboard
+      // renders and the route signal opens the dock (PageRouteContext).
+      // Mounting a second AgentPage here would fork the one conversation.
       case 'dashboard':
       default:
         return (
@@ -882,6 +963,19 @@ function App() {
             config={config}
             assistant={assistantDock}
             eq={{ bands: eqBands, onBandsChange: setEqBands, solved: eqSolved }}
+            setup={setupCardVisible({
+              planIsExample: activeScenario.isExample === true,
+              inputs,
+              alwaysShow: config.general.showSetupCardOnLoad || setupForced,
+              dismissed: setupDismissed,
+            }) ? (
+              <QuickStart
+                planIsExample={activeScenario.isExample === true}
+                inputs={inputs}
+                onStart={handleSetupStart}
+                onDismiss={() => { dismissSetupCard(); setSetupDismissed(true); setSetupForced(false); }}
+              />
+            ) : null}
           />
         );
     }
@@ -903,39 +997,51 @@ function App() {
       />
       <div className="no-print">
         {configLoadWarning && (
-          <div className="flex items-center gap-2 bg-amber-50 border-b border-amber-300 px-3 md:px-6 py-2 text-xs text-amber-900" role="alert">
-            <AlertTriangle size={14} className="shrink-0" />
-            <span className="flex-1">{configLoadWarning}</span>
+          <WarningBanner
+            onDismiss={() => setConfigLoadWarning(null)}
+            dismissLabel={tCommon('dismissWarning')}
+          >
+            <strong>{tPages('app.configResetTitle')}</strong> {tPages('app.configReset')}
+          </WarningBanner>
+        )}
+        {storeUnavailable && (
+          <WarningBanner
+            onDismiss={() => setStoreUnavailable(false)}
+            dismissLabel={tCommon('dismissWarning')}
+          >
+            <strong>{tPages('app.storeUnavailableTitle')}</strong> {tPages('app.storeUnavailable')}{' '}
             <button
-              onClick={() => setConfigLoadWarning(null)}
-              className="shrink-0 rounded p-0.5 hover:bg-amber-100"
-              title="Dismiss this warning"
-              aria-label="Dismiss settings warning"
+              onClick={() => setBootNonce(n => n + 1)}
+              className="underline font-medium hover:text-amber-700"
             >
-              <X size={14} />
+              {tCommon('retry')}
             </button>
-          </div>
+          </WarningBanner>
+        )}
+        {unreadableRows > 0 && (
+          <WarningBanner
+            onDismiss={() => setUnreadableRows(0)}
+            dismissLabel={tCommon('dismissWarning')}
+          >
+            {tPages('app.unreadableRows', { count: unreadableRows })}
+          </WarningBanner>
         )}
         {saveError && (
-          <div className="flex items-center gap-2 bg-amber-50 border-b border-amber-300 px-3 md:px-6 py-2 text-xs text-amber-900" role="alert">
-            <AlertTriangle size={14} className="shrink-0" />
-            <span className="flex-1">
-              <strong>Changes may not be saved.</strong> Browser storage is unavailable or full —
-              your plan is still in this tab, but it won&apos;t survive closing it.
-              Free up site storage, or use Data → Export full backup to keep a copy on disk.
-            </span>
-            <button
-              onClick={() => setSaveError(false)}
-              className="shrink-0 rounded p-0.5 hover:bg-amber-100"
-              title="Dismiss (the warning returns if saving still fails)"
-              aria-label="Dismiss storage warning"
-            >
-              <X size={14} />
-            </button>
-          </div>
+          <WarningBanner
+            onDismiss={() => setSaveError(false)}
+            dismissLabel={tCommon('dismissWarning')}
+          >
+            <strong>{tPages('app.saveFailedTitle')}</strong> {tPages('app.saveFailed')}
+          </WarningBanner>
         )}
+        {/* The dock opens from this signal, not from a remount: the folded
+            #/assistant route redraws this very subtree (the Dashboard), so
+            reopening the rail used to throw the page away — scroll, open cards,
+            half-typed inputs — to let PageChrome read the hash once more. */}
         <PlanUndoContext.Provider value={undoState}>
-          {page}
+          <PageRouteContext.Provider value={routeValue}>
+            {page}
+          </PageRouteContext.Provider>
         </PlanUndoContext.Provider>
       </div>
     </LocaleContext.Provider>

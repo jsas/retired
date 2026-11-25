@@ -1,6 +1,6 @@
 {
-  "walkTitle": "Walk through your first scenario",
-  "walkBody": "— a 5-step guided setup (ages, savings, benefits, spending).",
+  "walkTitle": "Set up a plan from four numbers",
+  "walkBody": "— the set-up card at the top of the Dashboard asks for your age, the age you start drawing, what you have saved, and what you want to spend.",
   "open": "Open →",
   "searchPlaceholder": "Search help — try “clawback”, “TFSA”, “share link”…",
   "clearSearch": "Clear search",
@@ -492,7 +492,7 @@
         "real returns",
         "crash"
       ],
-      "body": "Monte Carlo invents random futures; the backtest replays real pasts. It runs the plan against every rolling window of a Canadian real (after-inflation) balanced-portfolio series from 1970 to today, each window as long as your horizon, and reports how often the plan survived.\n\nSequence-of-returns risk is the biggest threat to a drawdown plan: retiring into the 1973–74 crash, 2000–02 or 2008 is far worse than the same average return with the crash at the end. A high backtest success rate has historically withstood every bad sequence on record."
+      "body": "Monte Carlo invents random futures; the backtest replays real pasts. It runs the plan against every rolling window of a Canadian real (after-inflation) balanced-portfolio series from 1970 to today, each window as long as your horizon, and reports how often the plan survived.\n\nSequence-of-returns risk is the biggest threat to a drawdown plan: retiring into the 1973–74 crash, 2000–02 or 2008 is far worse than the same average return with the crash at the end. A high backtest success rate has historically withstood every bad sequence on record.\n\nFor a couple, the backtest covers the **primary plan only**: each window replays your solo plan, without the spouse's income or savings, and the panel says so. Treat the result as the primary's worst case — combined household money can only improve the odds, never worsen them."
     },
     "levers-ranked": {
       "title": "Steering — the levers on the Dashboard",
@@ -561,6 +561,21 @@
         "how the year works"
       ],
       "body": "One Year, Step by Step is the worksheet for one calendar year of the household — not the Projection schedule. Pick a year, then You / Spouse / Side by side, and walk from the spending target down through withdrawals, tax, benefits, and the ending balance. Every number is the same calc the engine already ran for that year; this page just shows the working."
+    },
+    "setup-card": {
+      "title": "The set-up card",
+      "section": "Plans",
+      "keywords": [
+        "setup",
+        "set up",
+        "four numbers",
+        "getting started",
+        "welcome",
+        "intro",
+        "first plan",
+        "example plan"
+      ],
+      "body": "The card at the top of the Dashboard asks for four numbers: your age, the age you start drawing, everything you have saved, and what you want to spend a year after tax. That is enough for the first answer — savings land 60/40 between the RRSP and the TFSA, and every other input starts at the app's defaults, editable on **Plans**.\n\nThe card shows itself while the plan on screen isn't yours: a stock *Example* plan, or a blank new one. Pressing the button on an example keeps the example and starts a personal copy (\"My plan\"); on your own blank plan it simply fills it in. **Not now** hides the card; Settings → *Show the set-up card* brings it back on every visit.\n\nWhile the card is up it is the only call to action on the page. Once it is gone, a hairline line under your verdict names the registers this plan has never been told about — account balances, a partner, debts, one-off cash events, other income, spending phases — and the button beside it opens **Plans**. When every register holds data the line goes quiet and offers *Review every detail* instead."
     },
     "scenarios": {
       "title": "Plans",

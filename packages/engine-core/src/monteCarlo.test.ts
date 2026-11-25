@@ -5,8 +5,8 @@
 // at $0. The chart must describe the SAME money the verdict is scored on.
 
 import { describe, it, expect } from 'vitest';
-import { runMonteCarlo } from './monteCarlo';
-import { calculateHouseholdModel } from './retirementEngine';
+import { runMonteCarlo, simulate, generateSequences } from './monteCarlo';
+import { calculateHouseholdModel, householdOutcome } from './retirementEngine';
 import { toHousehold } from './householdTypes';
 import { testConfig, baseInputs } from '../test/helpers';
 
@@ -63,6 +63,40 @@ describe('monte carlo household bands (issue #175)', () => {
     const collapsed = mc.percentileBands.filter(b => lastPositive && b.age > lastPositive.age);
     expect(collapsed.length).toBeGreaterThan(0);
     expect(collapsed.every(b => b.p10 === 0 && b.p50 === 0 && b.p90 === 0)).toBe(true);
+  });
+
+  // E-MC-01 / issue #33: the solver scores a plan through simulate(), the MC
+  // screen through runMonteCarlo(). Both MUST reach the same verdict on the
+  // same futures, or the solver steers toward a success rate the screen will
+  // never report. The case that used to diverge is a couple whose PRIMARY
+  // silo runs dry while the spouse's savings carry the household: the raw
+  // engine `depletionAge` fires, and a silo-based scorer counts every run as
+  // a failure.
+  it('simulate() agrees with runMonteCarlo() when only the primary silo depletes (E-MC-01 / #33)', () => {
+    const inputs = flushPrimaryCouple();
+    const runs = 25;
+    const volatility = 0.1;
+    const seed = 42;
+
+    // The primary's OWN plan depletes (that's the raw engine's view)…
+    const det = calculateHouseholdModel(toHousehold(inputs), config);
+    expect(det.depletionAge).not.toBeNull();
+    // …while the household verdict is intact: combined money lasts to max age.
+    expect(householdOutcome(det, toHousehold(inputs)).depletionAge).toBeNull();
+
+    const mc = runMonteCarlo({ inputs, config, runs, volatility, seed });
+    const shared = simulate(inputs, config, generateSequences(runs, inputs.currentAge, inputs.maxAge, inputs.investmentReturn, volatility, seed));
+
+    // Same futures, same household-first verdict: every run succeeds in both.
+    expect(mc.runs).toBe(runs);
+    expect(shared.runs).toBe(runs);
+    expect(shared.successCount).toBe(mc.successCount);
+    expect(shared.successRate).toBe(mc.successRate);
+    expect(shared.successRate).toBe(1);
+    expect(shared.medianFinalBalance).toBeCloseTo(mc.medianFinalBalance, 0);
+    // And the scorer isn't just reading the primary silo — it would have said
+    // 0% here, which is the bug #33 fixed.
+    expect(shared.successCount).toBeGreaterThan(0);
   });
 
   it('single-person plans are unchanged: bands track the plan balance', () => {

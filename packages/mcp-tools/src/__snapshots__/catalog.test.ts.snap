@@ -485,7 +485,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
           "type": "number",
         },
         "basis": {
-          "description": "For add, mode "pct" only: which income the % rides on.",
+          "description": "For add, mode "pct" only: which income the % rides on — "net" = after-tax (default; "after tax"/"take-home" means this), "gross" = pre-tax.",
           "enum": [
             "gross",
             "net",
@@ -509,7 +509,7 @@ exports[`tool catalog surface > advertises the same per-tool inputSchema the MCP
           "type": "string",
         },
         "mode": {
-          "description": "For add: "fixed" = amount $/yr (default); "pct" = pct of income.",
+          "description": "For add: "pct" = pct of income — a pledge ("I give 10% of my after-tax income"); "fixed" = amount $/yr (the default).",
           "enum": [
             "pct",
             "fixed",
@@ -1237,7 +1237,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
     "name": "manage_debt",
   },
   {
-    "description": "PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). mode "fixed" (the default): amount dollars/yr (NOT indexed for inflation) — a fixed add is just {label, mode:"fixed", amount, fromAge}; pct/basis are pct-mode-only and auto-filled. mode "pct": pct of income in percentage points (10 = 10%), basis "gross" (pre-tax income stack) or "net" (after-tax). fromAge/toAge window (toAge null or omitted = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields (top level, or inside changes). action "update"/"remove" take target (id or unique label). User confirms.",
+    "description": "PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). Percentage-of-income giving IS supported — "I give 10% of my after-tax income to my church" is ONE stream, not a workaround: {label:"Church", mode:"pct", pct:10, basis:"net", fromAge}. mode "fixed" (the default): amount dollars/yr (NOT indexed for inflation) — a fixed add is just {label, mode:"fixed", amount, fromAge}; pct/basis are pct-mode-only and auto-filled. mode "pct": pct of income in percentage points (10 = 10%), basis "net" (after-tax — the default, and what "after tax"/"take-home" means) or "gross" (pre-tax income stack). fromAge/toAge window (toAge null or omitted = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields (top level, or inside changes). action "update"/"remove" take target (id or unique label). User confirms.",
     "jsonSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": {},
@@ -1255,7 +1255,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
           "type": "number",
         },
         "basis": {
-          "description": "For add, mode "pct" only: which income the % rides on.",
+          "description": "For add, mode "pct" only: which income the % rides on — "net" = after-tax (default; "after tax"/"take-home" means this), "gross" = pre-tax.",
           "enum": [
             "gross",
             "net",
@@ -1279,7 +1279,7 @@ exports[`tool catalog surface > exposes every catalog tool to LLM providers (nam
           "type": "string",
         },
         "mode": {
-          "description": "For add: "fixed" = amount $/yr (default); "pct" = pct of income.",
+          "description": "For add: "pct" = pct of income — a pledge ("I give 10% of my after-tax income"); "fixed" = amount $/yr (the default).",
           "enum": [
             "pct",
             "fixed",

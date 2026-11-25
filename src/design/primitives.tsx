@@ -4,10 +4,12 @@
  * these rather than restyle raw elements, so the vocabulary stays consistent.
  * The living reference is StyleGuide.tsx; the prose is STYLEGUIDE.md.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BLUE, RED_DOT, AMBER_DOT, cls } from './tokens';
+import { cls, toneColor, NUM_CLASS, type Tone } from './tokens';
 import { helpTopic } from '../help/topics';
+import { formatCurrency } from '../lib/locale';
+import { useAppLocale } from '../lib/localeContext';
 
 /* ── VerdictHero ──────────────────────────────────────────────────────────
    The answer, first, in plain English. One uppercase eyebrow, one sentence,
@@ -21,7 +23,7 @@ export function VerdictHero({ eyebrow, verdict, sub }: {
   return (
     <section className="border-b border-slate-200 pb-6 pt-8 md:pt-10">
       <p className={cls.sectionLabel}>{eyebrow ?? t('verdict')}</p>
-      <h1 className="num mt-1.5 text-[24px] font-semibold leading-snug text-slate-900 md:text-[30px]">
+      <h1 className={`${NUM_CLASS} mt-1.5 text-[24px] font-semibold leading-snug text-slate-900 md:text-[30px]`}>
         {verdict}
       </h1>
       {sub && <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-500">{sub}</p>}
@@ -150,7 +152,7 @@ export function Fader({ label, help, value, min, max, step, format, onChange, hi
     <div className="border-l-2 border-slate-200 pl-4">
       <div className="mb-1.5 flex items-baseline justify-between">
         <label className="text-[13px] font-medium text-slate-700">{label}{help && <HelpHint topic={help} />}</label>
-        <span className="num text-[15px] font-bold text-slate-900">{format(value)}</span>
+        <span className={`${NUM_CLASS} text-[15px] font-bold text-slate-900`}>{format(value)}</span>
       </div>
       <input
         type="range"
@@ -160,11 +162,57 @@ export function Fader({ label, help, value, min, max, step, format, onChange, hi
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label={label}
       />
-      <div className="num mt-1 flex justify-between text-[10px] text-slate-400">
+      <div className={`${NUM_CLASS} mt-1 flex justify-between text-[10px] text-slate-400`}>
         <span>{format(min)}</span><span>{format(max)}</span>
       </div>
       {hint && <p className="mt-2 text-[11.5px] leading-relaxed text-slate-500">{hint}</p>}
     </div>
+  );
+}
+
+/* ── Num ──────────────────────────────────────────────────────────────────
+   The labelled number field: flat hairline box, label above, tabular numerals,
+   optional suffix unit and a small grey hint under the box. Pages compose this
+   instead of a raw <input type="number"> so a form row can't drift back to
+   browser defaults (blue focus, proportional digits). What is being typed stays
+   here until it is a number: an emptied or half-typed box never reaches the plan.
+   A non-finite value survives into the engine's arithmetic, turns into `null` in
+   autosave's JSON round-trip, and `null` reads as 0 there — so clearing an RDSP
+   balance used to quietly store zero with an empty box on screen. Blur drops the
+   draft, so a box can't be left showing nothing over a plan that still has a
+   value. */
+export function Num({ label, value, onChange, onClear, step = 1000, min, suffix, hint }: {
+  label: string; value: number; onChange: (v: number) => void;
+  /** The box was emptied. Without this, emptying changes nothing and the number
+      returns on blur; a field where blank *is* a value — contribution room with
+      no limit, a market anchor with no volatility override — passes it so the
+      page's own "blank means" keeps working. */
+  onClear?: () => void;
+  step?: number; min?: number; suffix?: string; hint?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <label className="block">
+      <span className="text-[12px] text-slate-500">{label}</span>
+      <span className="mt-0.5 flex items-baseline gap-1">
+        <input
+          type="number"
+          className={`${NUM_CLASS} w-full ${cls.inputSm}`}
+          value={draft ?? (Number.isFinite(value) ? String(value) : '')}
+          step={step} min={min}
+          onChange={(e) => {
+            const text = e.target.value;
+            setDraft(text);
+            if (text === '') { onClear?.(); return; }
+            const n = Number(text);
+            if (Number.isFinite(n)) onChange(n);
+          }}
+          onBlur={() => setDraft(null)}
+        />
+        {suffix && <span className="text-[11px] text-slate-400">{suffix}</span>}
+      </span>
+      {hint && <span className="mt-0.5 block text-[10.5px] text-slate-400">{hint}</span>}
+    </label>
   );
 }
 
@@ -174,7 +222,7 @@ export function Fader({ label, help, value, min, max, step, format, onChange, hi
    <input type="checkbox"> so no surface can drift back to the browser's blue
    default. Renders a real input underneath — labels, focus, and keyboard all
    behave natively. `size` scales the box for denser (12px) or roomier rows. */
-export function Check({ checked, onChange, size = 16, label, children, className = '' }: {
+export function Check({ checked, onChange, size = 16, label, children, className = '', title }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   /** Box edge in px — 16 default, 12 for tight list rows, 20 for big tap targets. */
@@ -184,6 +232,8 @@ export function Check({ checked, onChange, size = 16, label, children, className
   /** Rich content beside the box (title + note blocks) — wins over `label`. */
   children?: ReactNode;
   className?: string;
+  /** Hover text for the whole row — carries the tooltip a raw input used to hold. */
+  title?: string;
 }) {
   const box = (
     <span
@@ -211,8 +261,87 @@ export function Check({ checked, onChange, size = 16, label, children, className
   // The input is visually hidden but present, so the <label> click / focus /
   // space-key semantics all come from the browser — no custom key handling.
   return (
-    <label className={`inline-flex cursor-pointer items-center gap-2 ${className}`}>
+    <label title={title} className={`inline-flex cursor-pointer items-center gap-2 ${className}`}>
       {input}
+      {box}
+      {children ?? (label != null && <span className="text-[13px] text-slate-800">{label}</span>)}
+    </label>
+  );
+}
+
+/* ── Radio / RadioGroup ───────────────────────────────────────────────────
+   The one choose-one control, drawn in Check's idiom: a SQUARE (never the
+   browser's blue disc) with a hairline border when unselected and solid INK
+   with a white square dot when selected. The real <input type="radio"> is
+   sr-only inside the <label>, so labels, focus, arrow keys and grouping stay
+   native. `RadioGroup` hands its members one shared `name` plus the current
+   value — a list of radios can no longer forget to group — and renders no
+   element of its own, so the surrounding list markup is untouched. A lone
+   `Radio` may still carry its own name/checked/onChange. */
+const RadioGroupCtx = createContext<{
+  name: string;
+  value: string;
+  onChange: (value: string) => void;
+} | null>(null);
+
+export function RadioGroup({ name, value, onChange, children }: {
+  name: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <RadioGroupCtx.Provider value={{ name, value, onChange }}>
+      {children}
+    </RadioGroupCtx.Provider>
+  );
+}
+
+export function Radio({ value, name, checked, onChange, size = 16, label, children, className = '', title }: {
+  /** This option's value within its RadioGroup. */
+  value?: string;
+  /** Only needed outside a group — inside one, name/value/onChange come from it. */
+  name?: string;
+  checked?: boolean;
+  onChange?: (value: string) => void;
+  /** Box edge in px — 16 default, 12 for tight list rows, 20 for big tap targets. */
+  size?: 12 | 16 | 20;
+  /** Text beside the box; pass <span className="sr-only">…</span> when the row
+      has no room for words but still needs an accessible name. */
+  label?: ReactNode;
+  /** Rich content beside the box — wins over `label`. */
+  children?: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  const group = useContext(RadioGroupCtx);
+  const v = value ?? '';
+  const selected = group ? group.value === v : Boolean(checked);
+  const select = () => (group ? group.onChange(v) : onChange?.(v));
+  const box = (
+    <span
+      aria-hidden
+      className={`inline-flex shrink-0 items-center justify-center border transition-colors ${
+        selected ? 'border-slate-900 bg-slate-900' : 'border-slate-300 bg-white'
+      }`}
+      style={{ width: size, height: size }}
+    >
+      {selected && (
+        <span className="bg-white" style={{ width: Math.round(size * 0.4), height: Math.round(size * 0.4) }} />
+      )}
+    </span>
+  );
+  // Same as Check: the hidden real input gives the <label> its native click,
+  // focus and space-key behaviour.
+  return (
+    <label title={title} className={`inline-flex cursor-pointer items-center gap-2 ${className}`}>
+      <input
+        type="radio"
+        name={name ?? group?.name}
+        checked={selected}
+        onChange={select}
+        className="sr-only"
+      />
       {box}
       {children ?? (label != null && <span className="text-[13px] text-slate-800">{label}</span>)}
     </label>
@@ -223,21 +352,19 @@ export function Check({ checked, onChange, size = 16, label, children, className
    A small stateless status pill: a square dot + plain words. Colour carries
    the verdict — blue holds, red runs out, amber borderline. */
 export function Chip({ tone, title, children }: {
-  tone: 'holds' | 'short' | 'borderline' | 'neutral';
-  title: string;
+  tone: Tone;
+  /** The verdict in words — plus anything that rides beside it (a help dot). */
+  title: ReactNode;
   children?: ReactNode;
 }) {
-  const dot =
-    tone === 'holds' ? BLUE :
-    tone === 'short' ? RED_DOT :
-    tone === 'borderline' ? AMBER_DOT : '#94a3b8';
+  const dot = toneColor(tone);
   return (
     <div className="border-l-2 border-slate-200 pl-4">
       <div className="flex items-center gap-2">
         <span className="inline-block h-2 w-2" style={{ backgroundColor: dot }} />
         <span className="text-[13px] font-medium text-slate-700">{title}</span>
       </div>
-      {children && <p className="mt-1.5 text-[11.5px] leading-relaxed text-slate-500">{children}</p>}
+      {children && <p className={`${NUM_CLASS} mt-1.5 text-[11.5px] leading-relaxed text-slate-500`}>{children}</p>}
     </div>
   );
 }
@@ -258,7 +385,7 @@ export function Stat({ label, value, note, tone = 'neutral' }: {
   return (
     <div>
       <p className="text-[10.5px] uppercase tracking-wider text-slate-400">{label}</p>
-      <p className={`num mt-0.5 text-2xl font-bold ${valueColor}`}>{value}</p>
+      <p className={`${NUM_CLASS} mt-0.5 text-2xl font-bold ${valueColor}`}>{value}</p>
       {note && <p className="mt-0.5 text-[11px] text-slate-400">{note}</p>}
     </div>
   );
@@ -267,11 +394,15 @@ export function Stat({ label, value, note, tone = 'neutral' }: {
 /* ── AccountBars ──────────────────────────────────────────────────────────
    Shares of the pot at a given age: a label, a flat bar (no rounding), and
    the amount. The active account reads blue, the rest slate. */
-export function AccountBars({ rows, total }: {
+export function AccountBars({ rows, total, note }: {
   rows: Array<{ label: string; value: number; active?: boolean }>;
   total: number;
+  /** One plain line under the bars — whose shares, at what age. The caller
+      owns the words (they differ per surface, and they are translated). */
+  note?: ReactNode;
 }) {
-  const fmt = (v: number) => '$' + Math.round(v).toLocaleString('en-CA');
+  const { locale } = useAppLocale();
+  const fmt = (v: number) => formatCurrency(Math.round(v), locale);
   return (
     <div>
       <div className="space-y-2">
@@ -284,14 +415,12 @@ export function AccountBars({ rows, total }: {
                 style={{ width: total > 0 ? `${Math.max(0, Math.min(100, (r.value / total) * 100))}%` : '0%' }}
               />
             </div>
-            <span className="num w-20 text-right text-slate-700">{fmt(r.value)}</span>
+            <span className={`${NUM_CLASS} w-20 text-right text-slate-700`}>{fmt(r.value)}</span>
           </div>
         ))}
       </div>
-      {total > 0 && (
-        <p className="mt-2.5 text-[11px] leading-relaxed text-slate-400">
-          Shares of <span className="num">{fmt(total)}</span> at that age. The mix shifts as the plan moves.
-        </p>
+      {total > 0 && note && (
+        <p className="mt-2.5 text-[11px] leading-relaxed text-slate-400">{note}</p>
       )}
     </div>
   );
@@ -337,7 +466,7 @@ export function Dropdown({ label, children, wide = false }: {
       </button>
       {open && (
         <div
-          className={`absolute left-0 top-[calc(100%+4px)] z-50 max-w-[calc(100vw-2rem)] border border-slate-200 bg-white p-2 ${wide ? 'min-w-[300px]' : 'min-w-[230px]'}`}
+          className={`absolute left-0 top-[calc(100%+4px)] z-50 max-w-[calc(100vw-2rem)] p-2 ${cls.panel} ${wide ? 'min-w-[300px]' : 'min-w-[230px]'}`}
           onClick={() => setOpen(false)}
         >
           {children}
@@ -408,7 +537,7 @@ export function Modal({ open, onClose, title, children, wide = false }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <button type="button" aria-label="Close" onClick={onClose}
         className="absolute inset-0 cursor-default bg-slate-900/30" />
-      <div className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-sm'} border border-slate-200 bg-white`}>
+      <div className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-sm'} ${cls.panel}`}>
         {title != null && (
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <h2 className="text-[13px] font-semibold text-slate-900">{title}</h2>
@@ -429,7 +558,7 @@ export function AppHeader({ children }: { children: ReactNode }) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
       <div className="mx-auto flex h-12 max-w-5xl items-center gap-2 px-4">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center bg-slate-900 text-[10px] font-bold text-white">
+        <span className={cls.mark}>
           RE:
         </span>
         {children}

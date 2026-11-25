@@ -164,4 +164,31 @@ describe('ProjectionTimeline', () => {
     );
     expect(still).not.toContain('cursor-ew-resize');
   });
+
+  it('stacks pin labels that would print through each other, and leaves apart what is apart', () => {
+    const yOf = (html: string, label: string) =>
+      new RegExp(`<text[^>]*y="(-?[\\d.]+)"[^>]*>${label}<`).exec(html)?.[1];
+    const close = renderToStaticMarkup(createElement(ProjectionTimeline, {
+      series,
+      pins: [
+        { age: 62, label: 'start drawing at 62', color: '#475569' },
+        { age: 63, label: 'money runs out · 63', color: RED },
+      ],
+    }));
+    // One year apart: the labels would set on one another, so the depletion
+    // pin takes the lane above and the viewBox grows to hold it.
+    expect(yOf(close, 'start drawing at 62')).toBe('14');
+    expect(yOf(close, 'money runs out · 63')).toBe('1');
+    expect(close).toContain('viewBox="0 -13 1000 203"');
+
+    const apart = renderToStaticMarkup(createElement(ProjectionTimeline, {
+      series,
+      pins: [
+        { age: 52, label: 'you · 52', color: '#475569' },
+        { age: 88, label: 'money runs out · 88', color: RED },
+      ],
+    }));
+    expect(yOf(apart, 'you · 52')).toBe(yOf(apart, 'money runs out · 88'));
+    expect(apart).toContain('viewBox="0 0 1000 190"');
+  });
 });

@@ -111,15 +111,25 @@ export class SqliteRevisionStore {
     const res = this.db.exec(`SELECT id, scenario_id, at, source, inputs
       FROM scenario_revisions ORDER BY at, id`);
     if (res.length === 0) return [];
-    return res[0].values.map(([id, scenarioId, at, source, inputs]) => ({
-      id: id as string,
-      scenarioId: scenarioId as string,
-      at: at as number,
-      source: source as ScenarioRevision['source'],
-      // Migrated on the way out so older rows gain newer fields (same policy
-      // as the scenarios table).
-      inputs: migrateInputs(JSON.parse(inputs as string)),
-    }));
+    const out: ScenarioRevision[] = [];
+    for (const [id, scenarioId, at, source, inputs] of res[0].values) {
+      try {
+        out.push({
+          id: id as string,
+          scenarioId: scenarioId as string,
+          at: at as number,
+          source: source as ScenarioRevision['source'],
+          // Migrated on the way out so older rows gain newer fields (same policy
+          // as the scenarios table).
+          inputs: migrateInputs(JSON.parse(inputs as string)),
+        });
+      } catch (err) {
+        // One unreadable history row must not cost the whole store (B11).
+        this.db.unreadableRows += 1;
+        console.error(`[RE:tired] Stored revision ${id} could not be decoded; skipping it.`, err);
+      }
+    }
+    return out;
   }
 
   /** Replace the whole revision set (the write path mirrors saveScenarios:

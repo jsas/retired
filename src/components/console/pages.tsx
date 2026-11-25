@@ -313,7 +313,7 @@ export function PrintPage({ chip, assistant, sheet, ...props }: ComponentProps<t
     <PageChrome title={t('print')} hint="print-export" chip={chip} assistant={assistant}>
       <div className="grid items-start gap-8 pt-6 xl:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]">
         <PrintOptionsCard {...props} />
-        <div className="min-w-0 border border-slate-200 bg-white no-print">
+        <div className={`min-w-0 bg-white no-print ${cls.panelBare}`}>
           <div className={`border-b border-slate-200 px-3 py-2 ${cls.sectionLabel}`}>{tPrint('preview')}</div>
           <PrintSummary {...sheet} preview />
         </div>

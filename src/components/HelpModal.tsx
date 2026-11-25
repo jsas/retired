@@ -27,7 +27,7 @@ function highlight(node: ReactNode, query: string): ReactNode {
       if (hit === -1) { parts.push(node.slice(i)); break; }
       if (hit > i) parts.push(node.slice(i, hit));
       parts.push(
-        <mark key={k++} className="bg-yellow-200 text-inherit px-px">
+        <mark key={k++} className="bg-blue-100 text-inherit px-px">
           {node.slice(hit, hit + q.length)}
         </mark>
       );
@@ -53,7 +53,7 @@ export function HelpModal() {
   const [query, setQuery] = useState('');
   const [flashId, setFlashId] = useState<string | null>(null);
   const q = query.trim();
-  const sectionLabel = (section: string) => t(`sections.${section}`, { defaultValue: section });
+  const sectionLabel = (section: string) => t(`sections.${section}`);
 
   const filtered = useMemo(() => searchHelpTopics(q), [q, i18n.language]);
   const bySection = useMemo(() => {
@@ -85,9 +85,10 @@ export function HelpModal() {
 
   return (
     <div>
-      {/* Re-run the guided first-scenario setup (the welcome wizard). */}
+      {/* Re-open the four-number set-up card on the Dashboard (the intro
+          screen's old job). ?setup=1 forces the card even on a filled plan. */}
       <a
-        href="#/welcome"
+        href="#/dashboard?setup=1"
         className="group mb-5 flex items-baseline gap-3 border-b border-slate-200 pb-4 text-[13px] text-slate-600 hover:text-slate-900"
       >
         <span className="flex-1">

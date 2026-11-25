@@ -118,13 +118,16 @@ export const debtSchema = z.object({
 // only in 'fixed' — a caller adding {mode:'fixed', amount, fromAge}
 // must not be forced to invent the unused siblings. The engine's own type
 // keeps all fields required; zod fills the inert ones.
+// 'net' is the basis default: a pledge stated without one ("10% of my income
+// for church") means take-home. Streams saved earlier keep whatever basis they
+// stored — nothing back-fills them, so no existing plan's math moves.
 export const givingStreamSchema = z.object({
   id: z.string(),
   label: z.string(),
   mode: z.enum(['pct', 'fixed']).default('fixed'),
   pct: z.number().default(0),
   amount: z.number().default(0),
-  basis: z.enum(['gross', 'net']).default('gross'),
+  basis: z.enum(['gross', 'net']).default('net'),
   fromAge: z.number(),
   toAge: z.number().nullish(),
 }) satisfies z.ZodType<GivingStream>;
@@ -162,6 +165,15 @@ export const spouseSchema = z.object({
   debts: z.array(debtSchema).optional(),
 }) satisfies z.ZodType<SpouseInputs>;
 
+/** One stretch of the plan's future with its own return/volatility hypothesis
+ *  (#138). Optional: absent means the plan's flat assumptions apply everywhere. */
+export const marketPeriodSchema = z.object({
+  id: z.string(),
+  age: z.number(),
+  return: z.number(),
+  volatility: z.number().optional(),
+});
+
 export const retirementInputsSchema = z.object({
   currentAge: z.number(),
   retirementAge: z.number(),
@@ -197,12 +209,16 @@ export const retirementInputsSchema = z.object({
   fhsa: fhsaSchema.optional(),
   debts: z.array(debtSchema).optional(),
   giving: z.array(givingStreamSchema).optional(),
+  marketPeriods: z.array(marketPeriodSchema).optional(),
 }) satisfies z.ZodType<RetirementInputs>;
 
 export const scenarioSchema = z.object({
   id: z.string(),
   name: z.string(),
   inputs: retirementInputsSchema,
+  // Which plans shipped with the app travels with the plan (R4) — a backup or an
+  // AI-tool copy must not turn a stock example into the user's own plan.
+  isExample: z.boolean().optional(),
 }) satisfies z.ZodType<Scenario>;
 // ---------------------------------------------------------------------------
 // Engine configuration
@@ -291,7 +307,9 @@ export const appConfigSchema: z.ZodType<AppConfig> = z.object({
     threshold2: z.number(), rate2: z.number(),
   }),
   general: z.object({
-    showWelcomeOnLoad: z.boolean(),
-    promptToSaveOnSwitch: z.boolean(),
+    showSetupCardOnLoad: z.boolean(),
+    // The site language lives in the config, so a full backup — or a plan sent
+    // through an AI tool — has to carry it or the user is back in English.
+    locale: z.enum(['en-CA', 'fr-CA']).optional(),
   }),
 });

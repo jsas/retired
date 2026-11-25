@@ -67,7 +67,7 @@ export function PrintOptionsCard({
         <button
           onClick={onPrint}
           disabled={!canPrint}
-          className={canPrint ? cls.primaryBtn : 'border border-slate-200 px-4 py-2 text-sm font-medium text-slate-400'}
+          className={canPrint ? cls.primaryBtn : cls.disabledBtn}
           title={canPrint ? t('printTitle') : t('waitingMc')}
         >
           {mcPending ? t('preparing') : t('printSummary')}

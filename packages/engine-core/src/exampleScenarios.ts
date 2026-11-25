@@ -36,17 +36,17 @@ export function baselineInputs(): RetirementInputs {
   };
 }
 
-/** Stock first-run plans are named this way so the welcome gate can tell them
- *  apart from a plan the user actually built. A new install seeds examples and
- *  still opens on welcome; only a user-named plan auto-routes to the dashboard. */
+/** The name the first-run plans ship with — presentation only now. What says
+ *  "this plan came with the app" is `Scenario.isExample` (R4); the prefix
+ *  survives for one job, recognising rows saved before that flag existed. */
 export const EXAMPLE_PLAN_PREFIX = 'Example - ';
 
+/** Rows written before `Scenario.isExample` have nothing but their name to go
+ *  on, so the migrator reads this once per stored plan. Nothing else should:
+ *  the UI reads `scenario.isExample`, because a plan name is user-visible text
+ *  and the prefix is English. */
 export function isExamplePlanName(name: string): boolean {
   return name.startsWith(EXAMPLE_PLAN_PREFIX);
-}
-
-export function hasUserPlans(scenarios: ReadonlyArray<{ name: string }>): boolean {
-  return scenarios.some(s => !isExamplePlanName(s.name));
 }
 
 /**
@@ -98,7 +98,7 @@ export function looksLikeUnsetPlan(inputs: RetirementInputs): boolean {
  * Keep these aligned with the current RetirementInputs shape — the test suite
  * asserts each one runs through the engine and touches the features above.
  */
-export const buildDefaultScenarios = (): Scenario[] => [
+export const buildDefaultScenarios = (): Scenario[] => ([
   {
     id: 'scenario-1',
     name: 'Example - Early Couple',
@@ -261,4 +261,10 @@ export const buildDefaultScenarios = (): Scenario[] => [
       },
     },
   },
-];
+] satisfies Scenario[]).map(s => ({
+  // Every shipped plan is flagged as an example (R4): the set-up card starts a
+  // personal copy beside it instead of editing it in place, and the plan list can
+  // badge it. Name matching is gone from the UI.
+  ...s,
+  isExample: true,
+}))

@@ -1,7 +1,7 @@
 import initSqlJs, { type Database } from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import type { Scenario } from '@retired/engine-core/types';
-import { migrateInputs } from './migrations';
+import { migrateInputs, migrateScenario } from './migrations';
 import { validateAppConfig, DEFAULT_APP_CONFIG, type AppConfig } from '@retired/engine-core/appConfig';
 import { appDbDocSchema, type AppDbDoc } from './schemas';
 import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './opfs';
@@ -14,7 +14,8 @@ import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './
  *   meta(key TEXT PK, value TEXT)      — schema_version, active_scenario_id
  *   scenarios(id TEXT PK, name TEXT,   — one row per saved plan
  *             inputs TEXT,             — RetirementInputs as JSON
- *             updated_at TEXT)
+ *             updated_at TEXT,         — last write
+ *             is_example INTEGER)      — 1 on a plan that shipped with the app
  *   kv(key TEXT PK, value TEXT)        — engine config ('config') as JSON, plus
  *                                        opt-in app data ('retirement_ai_chats',
  *                                        'retirement_ai_settings') when the user
@@ -32,7 +33,7 @@ import { AsyncOpfsBackend, requestPersistentStorage, type OpfsBackend } from './
  */
 
 const STORAGE_KEY = 'wealthconsole_db';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 let wasmPromise: Promise<Awaited<ReturnType<typeof initSqlJs>>> | null = null;
 
@@ -147,6 +148,14 @@ const MIGRATIONS: Array<(db: Database) => void> = [
       value TEXT NOT NULL
     )`);
   },
+  // 1 → 2: `is_example`, so "did this plan ship with the app?" is state on the
+  // row instead of a match on the English name prefix (R4). ALTER TABLE is not
+  // idempotent — migrations re-run on every open — so check the column first.
+  (db) => {
+    const cols = db.exec(`PRAGMA table_info(scenarios)`);
+    const exists = cols.length > 0 && cols[0].values.some(col => col[1] === 'is_example');
+    if (!exists) db.run(`ALTER TABLE scenarios ADD COLUMN is_example INTEGER`);
+  },
 ];
 
 export class AppDatabase {
@@ -157,6 +166,12 @@ export class AppDatabase {
    *  show/clear a "changes may not be saved" banner (issue U-02); before this,
    *  a failed write was only a console.warn. */
   private saveListeners = new Set<(err: unknown | null) => void>();
+  /** Stored rows whose payload could not be decoded, counted while loading. One
+   *  truncated `inputs` blob used to reject the whole `AppStore.open()` — and the
+   *  app then kept running in memory with no store at all and no message (B11).
+   *  The loaders skip the unreadable row and count it here instead, so one bad row
+   *  costs one plan and the UI can say which count it lost. */
+  unreadableRows = 0;
   private constructor(db: Database, backend: OpfsBackend | null) {
     this.db = db;
     this.backend = backend;
@@ -313,14 +328,23 @@ export class AppDatabase {
   // ---- scenarios -----------------------------------------------------------
 
   loadScenarios(): Scenario[] {
-    const res = this.db.exec(`SELECT id, name, inputs FROM scenarios ORDER BY rowid`);
+    const res = this.db.exec(`SELECT id, name, inputs, is_example FROM scenarios ORDER BY rowid`);
     if (res.length === 0) return [];
-    return res[0].values.map(([id, name, inputs]) => ({
-      id: id as string,
-      name: name as string,
-      // Migrated on the way out so older rows gain newer fields.
-      inputs: migrateInputs(JSON.parse(inputs as string)),
-    }));
+    const out: Scenario[] = [];
+    for (const [id, name, inputs, isExample] of res[0].values) {
+      try {
+        out.push(migrateScenario({
+          id: id as string,
+          name: name as string,
+          // Migrated on the way out so older rows gain newer fields.
+          inputs: migrateInputs(JSON.parse(inputs as string)),
+        }, isExample));
+      } catch (err) {
+        this.unreadableRows += 1;
+        console.error(`[RE:tired] Stored plan ${JSON.stringify(name)} could not be decoded; skipping it.`, err);
+      }
+    }
+    return out;
   }
 
   /** Full replace — scenarios are few and written as a set, never one row at
@@ -331,11 +355,11 @@ export class AppDatabase {
     try {
       this.db.run('DELETE FROM scenarios');
       const stmt = this.db.prepare(
-        `INSERT INTO scenarios (id, name, inputs, updated_at) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO scenarios (id, name, inputs, updated_at, is_example) VALUES (?, ?, ?, ?, ?)`,
       );
       const now = new Date().toISOString();
       for (const s of scenarios) {
-        stmt.run([s.id, s.name, JSON.stringify(s.inputs), now]);
+        stmt.run([s.id, s.name, JSON.stringify(s.inputs), now, s.isExample ? 1 : 0]);
       }
       stmt.free();
       this.db.run('COMMIT');
@@ -364,7 +388,14 @@ export class AppDatabase {
 
   loadConfig(): unknown | null {
     const res = this.db.exec(`SELECT value FROM kv WHERE key = 'config'`);
-    return res.length > 0 ? JSON.parse(res[0].values[0][0] as string) : null;
+    if (res.length === 0) return null;
+    try {
+      return JSON.parse(res[0].values[0][0] as string);
+    } catch (err) {
+      this.unreadableRows += 1;
+      console.error('[RE:tired] Stored engine config could not be decoded; using defaults.', err);
+      return null;
+    }
   }
 
   saveConfig(config: unknown): void {

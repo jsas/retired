@@ -18,6 +18,10 @@ tradeoff, no action).
 
 ## Still open
 
+Nothing below is open as of 2026-11-24: #24 and #104 are closed on GitHub,
+E-MC-01 landed with the `simulate()` couple regression, H-02 with the backtest’s
+“primary plan only” label. The table stays as the finding record.
+
 | ID / Issue | Severity | What it is | Suggested next step |
 |------------|----------|------------|---------------------|
 | **#24** | Feature | Track TFSA/RRSP contribution room; overflow deposits to taxable. No contribution-room model exists yet. | Annual limits are already in config (`engine.tfsaAnnualLimit`, `engine.rrspAnnualMax`). Its own feature PR. |

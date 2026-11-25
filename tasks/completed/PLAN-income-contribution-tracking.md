@@ -9,6 +9,12 @@ Already shipped: the income register (`income[]`, Phase 1) and RRSP/TFSA room
 tracking with accrual + caps + overflow (Phase 2). This PR finishes the item.
 Work is five tracks; each is independently testable and lands as its own commit(s).
 
+**Complete 2026-11-24.** T1–T5 all shipped: the income register and RRSP/TFSA room
+tracking landed earlier, and T5's UI — year-1 room beside the contribution inputs,
+the over-contribution warning, `tfsaRoom`/`rrspRoom` boxes where blank means "no
+tracked limit" — landed with the ScheduleTable room section already in place. The
+deferred list below stays deferred, as its own issues.
+
 ## T1 — Pre-retirement income (the reported bug)
 
 Income active **before `retirementAge`** currently vanishes: the accumulation loop

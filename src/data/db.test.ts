@@ -84,6 +84,36 @@ describe('AppDatabase', () => {
     db.close();
   });
 
+  it('carries the shipped-example flag through save, load and a backup doc', async () => {
+    const db = await AppDatabase.open();
+    db.saveScenarios([
+      { id: 'seed', name: 'Example - Early Couple', inputs: baseInputs(), isExample: true },
+      { id: 'mine', name: 'My plan', inputs: baseInputs() },
+    ]);
+    expect(db.loadScenarios().map(s => s.isExample)).toEqual([true, undefined]);
+    // The flag travels in the exported document too, so a backup can't quietly
+    // promote a stock example to the user's own plan.
+    expect(db.toDoc()!.scenarios.map(s => s.isExample)).toEqual([true, undefined]);
+    db.close();
+  });
+
+  it('derives the flag from the name only for rows written before the column', async () => {
+    // A v1 store's rows have no is_example value: after migrating, the column
+    // exists but is NULL, and the English prefix those rows were saved with is
+    // the only signal left. It is read on the way out, then stored as state.
+    const db = await AppDatabase.open();
+    db.saveScenarios([
+      { id: 'seed', name: 'Example - Early Couple', inputs: baseInputs(), isExample: true },
+      { id: 'mine', name: 'My plan', inputs: baseInputs() },
+    ]);
+    db.run('UPDATE scenarios SET is_example = NULL');
+    const migrated = db.loadScenarios();
+    expect(migrated.map(s => s.isExample)).toEqual([true, undefined]);
+    db.saveScenarios(migrated);
+    expect(db.loadScenarios().map(s => s.isExample)).toEqual([true, undefined]);
+    db.close();
+  });
+
   it('toDoc validates the whole store; loadDoc replaces it', async () => {
     const db = await AppDatabase.open();
     db.saveScenarios(scenarios());

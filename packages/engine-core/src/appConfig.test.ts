@@ -1,42 +1,47 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_APP_CONFIG, validateAppConfig } from './appConfig';
 
-describe('validateAppConfig — general.promptToSaveOnSwitch', () => {
-  it('defaults to true in the shipped config', () => {
-    expect(DEFAULT_APP_CONFIG.general.promptToSaveOnSwitch).toBe(true);
+describe('validateAppConfig — general.showSetupCardOnLoad', () => {
+  it('defaults to off in the shipped config', () => {
+    expect(DEFAULT_APP_CONFIG.general.showSetupCardOnLoad).toBe(false);
   });
 
   it('round-trips a stored true', () => {
     const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
+    raw.general.showSetupCardOnLoad = true;
+    const out = validateAppConfig(raw);
+    expect(out?.general.showSetupCardOnLoad).toBe(true);
+  });
+
+  it('back-fills false for configs saved before the field existed', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
+    delete raw.general.showSetupCardOnLoad;
+    const out = validateAppConfig(raw);
+    expect(out?.general.showSetupCardOnLoad).toBe(false);
+  });
+
+  it('back-fills false when the stored value is not a boolean', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
+    raw.general.showSetupCardOnLoad = 'yes';
+    const out = validateAppConfig(raw);
+    expect(out?.general.showSetupCardOnLoad).toBe(false);
+  });
+
+  // The Dashboard's set-up card replaced the intro screen, so the flags it
+  // used are gone: showWelcomeOnLoad was renamed, and promptToSaveOnSwitch
+  // died with the save-before-switch prompt (autosave #165 made it moot). A
+  // stored general block is rebuilt, so neither leaks back into the config,
+  // an export, or the AI config schema.
+  it('drops the retired welcome and save-prompt flags', () => {
+    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
+    raw.general.showWelcomeOnLoad = true;
     raw.general.promptToSaveOnSwitch = true;
     const out = validateAppConfig(raw);
-    expect(out?.general.promptToSaveOnSwitch).toBe(true);
+    expect(out?.general).not.toHaveProperty('showWelcomeOnLoad');
+    expect(out?.general).not.toHaveProperty('promptToSaveOnSwitch');
   });
 
-  it('preserves the opt-out (false) instead of resetting it', () => {
-    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
-    raw.general.promptToSaveOnSwitch = false;
-    const out = validateAppConfig(raw);
-    expect(out?.general.promptToSaveOnSwitch).toBe(false);
-  });
-
-  it('back-fills true for configs saved before the field existed', () => {
-    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
-    delete raw.general.promptToSaveOnSwitch;
-    const out = validateAppConfig(raw);
-    expect(out?.general.promptToSaveOnSwitch).toBe(true);
-    // The pre-existing sibling field survives the back-fill.
-    expect(out?.general.showWelcomeOnLoad).toBe(raw.general.showWelcomeOnLoad);
-  });
-
-  it('back-fills when general has a non-boolean value', () => {
-    const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
-    raw.general.promptToSaveOnSwitch = 'yes';
-    const out = validateAppConfig(raw);
-    expect(out?.general.promptToSaveOnSwitch).toBe(true);
-  });
-
-  it('replaces a wholly missing general block with defaults (prompt on)', () => {
+  it('replaces a wholly missing general block with defaults', () => {
     const raw = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG));
     delete raw.general;
     const out = validateAppConfig(raw);

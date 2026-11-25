@@ -20,8 +20,9 @@ import {
 import { getRangePrefs, setRangePrefs, DEFAULT_RANGE_PREFS, type RangePrefs } from '../lib/rangePrefs';
 import { getGivingPrefs, setGivingPrefs, DEFAULT_GIVING_PREFS, type GivingPrefs } from '../lib/givingPrefs';
 import { WEBLLM_MODELS, visibleWebLlmModels } from '../lib/ai/webLlmModels';
+import { cls } from '../design/tokens';
 import { BONSAI_MODELS } from '../lib/ai/bonsaiModels';
-import { HelpHint } from '../design/primitives';
+import { Check, HelpHint, Radio, RadioGroup } from '../design/primitives';
 import { useAppLocale } from '../lib/localeContext';
 import { useTranslation } from 'react-i18next';
 
@@ -90,6 +91,7 @@ const PROVINCE_NAMES: Record<string, string> = {
 
 export function SettingsModal({ config, onSave }: SettingsModalProps) {
   const { t } = useTranslation('settings');
+  const { locale } = useAppLocale();
   const [draft, setDraft] = useState<AppConfig>(() => structuredClone(config));
   // The header language switch writes live config immediately; this page's
   // draft is a clone from mount. Keep the draft locale in step so the General
@@ -189,26 +191,26 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <div>
                 <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('language.title')}</h3>
                 <p className="text-xs text-slate-600 leading-snug mb-2">{t('language.lead')}</p>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  {([
-                    { value: undefined, label: t('language.followBrowser') },
-                    { value: 'en-CA' as const, label: t('language.en') },
-                    { value: 'fr-CA' as const, label: t('language.fr') },
-                  ]).map(opt => (
-                    <label key={opt.label} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="site-locale"
-                        checked={(draft.general.locale ?? undefined) === opt.value}
-                        onChange={() => update(c => {
-                          if (opt.value === undefined) delete c.general.locale;
-                          else c.general.locale = opt.value;
-                        })}
-                      />
-                      {opt.label}
-                    </label>
-                  ))}
-                </div>
+                <RadioGroup
+                  name="site-locale"
+                  value={draft.general.locale ?? ''}
+                  onChange={v => update(c => {
+                    if (v === '') delete c.general.locale;
+                    else c.general.locale = v as typeof c.general.locale;
+                  })}
+                >
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    {([
+                      { value: '', label: t('language.followBrowser') },
+                      { value: 'en-CA', label: t('language.en') },
+                      { value: 'fr-CA', label: t('language.fr') },
+                    ]).map(opt => (
+                      <Radio key={opt.label} value={opt.value} className="text-xs text-slate-700">
+                        {opt.label}
+                      </Radio>
+                    ))}
+                  </div>
+                </RadioGroup>
               </div>
               <div>
                 <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('helpHeading')}</h3>
@@ -216,39 +218,19 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 <p className="text-xs text-slate-600 leading-snug mt-1.5">{t('helpBody2')}</p>
               </div>
               <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('welcome')}</h3>
-                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.general.showWelcomeOnLoad}
-                    onChange={e => update(c => { c.general.showWelcomeOnLoad = e.target.checked; })}
-                    className="mt-0.5"
-                  />
+                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('setupCard')}</h3>
+                <Check
+                  checked={draft.general.showSetupCardOnLoad}
+                  onChange={checked => update(c => { c.general.showSetupCardOnLoad = checked; })}
+                  className="text-xs text-slate-700"
+                >
                   <span>
-                    {t('welcomeShow')}
+                    {t('setupCardShow')}
                     <span className="block text-[11px] text-slate-500 mt-0.5">
-                      {t('welcomeHint')}
+                      {t('setupCardHint')}
                     </span>
                   </span>
-                </label>
-              </div>
-
-              <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-1.5">{t('unsaved')}</h3>
-                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.general.promptToSaveOnSwitch}
-                    onChange={e => update(c => { c.general.promptToSaveOnSwitch = e.target.checked; })}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    {t('unsavedAsk')}
-                    <span className="block text-[11px] text-slate-500 mt-0.5">
-                      {t('unsavedHint')}
-                    </span>
-                  </span>
-                </label>
+                </Check>
               </div>
 
               {/* Danger zone: wipes the SQLite database (OPFS file + localStorage
@@ -283,10 +265,10 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 </p>
               </div>
               <RangeNum label={t('levers.spendingMax')} value={ranges.spendingMax} step={10000}
-                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.spendingMax.toLocaleString() })}
+                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.spendingMax.toLocaleString(locale) })}
                 onChange={(v) => updateRanges({ spendingMax: v })} money />
               <RangeNum label={t('levers.savingsMax')} value={ranges.savingsMax} step={10000}
-                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.savingsMax.toLocaleString() })}
+                hint={t('levers.defaultMoney', { value: DEFAULT_RANGE_PREFS.savingsMax.toLocaleString(locale) })}
                 onChange={(v) => updateRanges({ savingsMax: v })} money />
               <RangeNum label={t('levers.returnMin')} value={+(ranges.returnMin * 100).toFixed(2)} step={0.25}
                 hint={t('levers.defaultPct', { value: (DEFAULT_RANGE_PREFS.returnMin * 100).toFixed(1) })}
@@ -299,7 +281,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 onChange={(v) => updateRanges({ volatilityMax: Math.max(0.01, v) / 100 })} />
               <button
                 onClick={() => setRanges(setRangePrefs({ ...DEFAULT_RANGE_PREFS }))}
-                className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+                className={`flex items-center gap-1.5 font-medium ${cls.hairlineBtn}`}
               >
                 <RotateCcw size={13} /> {t('levers.back')}
               </button>
@@ -322,7 +304,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                 <select
                   value={giving.defaultBasis}
                   onChange={e => updateGiving({ defaultBasis: e.target.value as GivingPrefs['defaultBasis'] })}
-                  className="border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none"
+                  className={cls.inputSm}
                 >
                   <option value="gross">{t('giving.basisGross')}</option>
                   <option value="net">{t('giving.basisNet')}</option>
@@ -330,7 +312,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               </label>
               <button
                 onClick={() => setGiving(setGivingPrefs({ ...DEFAULT_GIVING_PREFS }))}
-                className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+                className={`flex items-center gap-1.5 font-medium ${cls.hairlineBtn}`}
               >
                 <RotateCcw size={13} /> {t('giving.back')}
               </button>
@@ -447,7 +429,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
                         onChange={e => update(c => {
                           c.rrifRates[String(age)] = parseFloat(e.target.value) || 0;
                         })}
-                        className="w-full border border-slate-300 px-1.5 py-1 text-xs focus:border-slate-900 focus:outline-none"
+                        className={`w-full ${cls.inputSm}`}
                       />
                     </div>
                   ))}
@@ -588,34 +570,30 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
               <p className="text-[11px] text-slate-500 leading-snug -mt-1">
                 {t('engine.pensionSplitNote')}
               </p>
-              <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={draft.engine.indexSpending}
-                  onChange={e => update(c => { c.engine.indexSpending = e.target.checked; })}
-                  className="mt-0.5"
-                />
+              <Check
+                checked={draft.engine.indexSpending}
+                onChange={checked => update(c => { c.engine.indexSpending = checked; })}
+                className="pt-1 text-xs text-slate-700"
+              >
                 <span>
                   {t('engine.growSpend')}
                   <span className="block text-[11px] text-slate-500 mt-0.5">
                     {t('engine.growSpendHint')}
                   </span>
                 </span>
-              </label>
-              <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={draft.engine.indexTaxTables}
-                  onChange={e => update(c => { c.engine.indexTaxTables = e.target.checked; })}
-                  className="mt-0.5"
-                />
+              </Check>
+              <Check
+                checked={draft.engine.indexTaxTables}
+                onChange={checked => update(c => { c.engine.indexTaxTables = checked; })}
+                className="pt-1 text-xs text-slate-700"
+              >
                 <span>
                   {t('engine.indexTax')}
                   <span className="block text-[11px] text-slate-500 mt-0.5">
                     {t('engine.indexTaxHint')}
                   </span>
                 </span>
-              </label>
+              </Check>
               <p className="text-[11px] text-slate-500 leading-snug border-t border-slate-200 pt-2">
                 {t('engine.togglesNote')}
               </p>
@@ -627,7 +605,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
         <div className="flex items-center justify-between py-3 border-t border-slate-200 mt-2">
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+            className={`flex items-center gap-1.5 font-medium ${cls.hairlineBtn}`}
           >
             <RotateCcw size={13} /> {t('reset')}
           </button>
@@ -635,7 +613,7 @@ export function SettingsModal({ config, onSave }: SettingsModalProps) {
             {error && <span className="text-xs text-rose-700">{error}</span>}
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              className={`flex items-center gap-1.5 ${cls.primaryBtnSm}`}
             >
               <Save size={13} /> {t('save')}
             </button>
@@ -709,28 +687,27 @@ function AssistantSettings({ ai, patchAi, config }: {
 
       <div className="space-y-2">
         {SEND_TOGGLE_KEYS.map(key => (
-          <label key={key} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={send[key]}
-              onChange={e => setSend(key, e.target.checked)}
-              className="mt-0.5"
-            />
+          <Check
+            key={key}
+            checked={send[key]}
+            onChange={checked => setSend(key, checked)}
+            className="text-xs text-slate-700"
+          >
             <span>
               {t(`assistant.send.${key}.label`)}
               <span className="block text-[11px] text-slate-500 mt-0.5">{t(`assistant.send.${key}.hint`)}</span>
             </span>
-          </label>
+          </Check>
         ))}
         <button
           onClick={resetSend}
-          className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-900 hover:text-slate-900"
+          className={`flex items-center gap-1.5 font-medium ${cls.hairlineBtn}`}
         >
           <RotateCcw size={13} /> {t('assistant.resetSend')}
         </button>
       </div>
 
-      <div className="border border-slate-200 bg-slate-50 p-3">
+      <div className={`p-3 ${cls.panelTinted}`}>
         <h3 className="text-xs font-semibold text-slate-700 mb-1">{t('assistant.assembled')}</h3>
         <p className="text-[11px] text-slate-500 leading-snug mb-2">
           {t('assistant.assembledLead')}
@@ -759,22 +736,22 @@ function AssistantSettings({ ai, patchAi, config }: {
                     {t('assistant.catalogDefault', { catalog })}
                   </span>
                 </span>
-                {(['auto', 'on', 'off'] as const).map(opt => (
-                  <label key={opt} className="flex items-center gap-1 text-[11px] text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name={`toolcap-${m.id}`}
-                      checked={value === opt}
-                      onChange={() => patchAi(s => {
-                        const next = { ...(s.toolCapableByModel ?? {}) };
-                        if (opt === 'auto') delete next[m.id];
-                        else next[m.id] = opt;
-                        s.toolCapableByModel = Object.keys(next).length ? next : undefined;
-                      })}
-                    />
-                    {t(`assistant.${opt}`)}
-                  </label>
-                ))}
+                <RadioGroup
+                  name={`toolcap-${m.id}`}
+                  value={value}
+                  onChange={opt => patchAi(s => {
+                    const next = { ...(s.toolCapableByModel ?? {}) };
+                    if (opt === 'auto') delete next[m.id];
+                    else next[m.id] = opt as 'on' | 'off';
+                    s.toolCapableByModel = Object.keys(next).length ? next : undefined;
+                  })}
+                >
+                  {(['auto', 'on', 'off'] as const).map(opt => (
+                    <Radio key={opt} value={opt} size={12} className="text-[11px] text-slate-700">
+                      {t(`assistant.${opt}`)}
+                    </Radio>
+                  ))}
+                </RadioGroup>
               </div>
             );
           })}
@@ -831,7 +808,7 @@ function PromptEditor({ title, hint, value, fallback, onChange }: {
         value={shown}
         onChange={e => onChange(e.target.value)}
         rows={8}
-        className="w-full border border-slate-300 bg-white px-2 py-1.5 font-mono text-[11px] text-slate-700 focus:border-slate-900 focus:outline-none resize-y"
+        className={`w-full font-mono resize-y ${cls.inputSm}`}
       />
       <div className="flex items-center gap-2 mt-1">
         <button
@@ -869,7 +846,7 @@ function RangeNum({ label, value, onChange, step, hint, money }: {
           min={0}
           value={Number.isFinite(value) ? value : 0}
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="num w-36 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+          className={`w-36 text-right ${cls.numField}`}
         />
       </span>
       {hint && <span className="mt-0.5 block text-[11px] text-slate-500">{hint}</span>}
@@ -891,7 +868,7 @@ function NumberField({ label, value, onChange, step }: {
         step={step ?? '1'}
         value={value}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="num w-32 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+        className={`w-32 text-right ${cls.numField}`}
       />
     </label>
   );
@@ -912,7 +889,7 @@ function PercentField({ label, value, onChange }: {
         min="0"
         value={+(value * 100).toFixed(4)}
         onChange={e => onChange((parseFloat(e.target.value) || 0) / 100)}
-        className="num w-32 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+        className={`w-32 text-right ${cls.numField}`}
       />
     </label>
   );
@@ -957,7 +934,7 @@ function TaxTableEditor({ table, onChange }: {
           step="1000"
           value={table.exemption}
           onChange={e => onChange({ ...table, exemption: parseFloat(e.target.value) || 0 })}
-          className="num w-28 border border-slate-300 px-2 py-1 text-right text-xs focus:border-slate-900 focus:outline-none"
+          className={`w-28 text-right ${cls.numField}`}
         />
       </div>
       <table className="w-full text-xs">
@@ -976,7 +953,7 @@ function TaxTableEditor({ table, onChange }: {
                 type="number" step="0.005" min="0" max="1"
                 value={table.rates[0] ?? 0}
                 onChange={e => setRate(0, parseFloat(e.target.value) || 0)}
-                className="num w-24 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
+                className={`w-24 text-right ${cls.numField}`}
               />
             </td>
             <td></td>
@@ -988,7 +965,7 @@ function TaxTableEditor({ table, onChange }: {
                   type="number" step="1000" min="0"
                   value={b}
                   onChange={e => setBracket(i, parseFloat(e.target.value) || 0)}
-                  className="num w-28 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
+                  className={`w-28 text-right ${cls.numField}`}
                 />
               </td>
               <td>
@@ -996,7 +973,7 @@ function TaxTableEditor({ table, onChange }: {
                   type="number" step="0.005" min="0" max="1"
                   value={table.rates[i + 1] ?? 0}
                   onChange={e => setRate(i + 1, parseFloat(e.target.value) || 0)}
-                  className="num w-24 border border-slate-300 px-1.5 py-1 text-right focus:border-slate-900 focus:outline-none"
+                  className={`w-24 text-right ${cls.numField}`}
                 />
               </td>
               <td>

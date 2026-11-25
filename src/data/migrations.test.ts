@@ -2,8 +2,9 @@
 // issue #24 Phase 1: legacy `pensions[]`+`employment[]` become one `income[]`,
 // the old keys are dropped, and no legacy shape survives into the engine.
 import { describe, it, expect } from 'vitest';
-import { migrateInputs } from './migrations';
-import type { IncomeSource } from '@retired/engine-core/retirementEngine';
+import { migrateInputs, migrateScenario } from './migrations';
+import type { IncomeSource, RetirementInputs } from '@retired/engine-core/retirementEngine';
+import type { Scenario } from '@retired/engine-core/types';
 
 const base = () => ({
   currentAge: 60, retirementAge: 65, maxAge: 95,
@@ -91,5 +92,27 @@ describe('migrateInputs — income-register fold (issue #24)', () => {
   it('produces no income key when there was never any income', () => {
     const out = migrateInputs({ ...base() });
     expect(out.income).toBeUndefined();
+  });
+});
+
+describe('migrateScenario — which plan shipped with the app (R4)', () => {
+  const plan = (name: string): Scenario => ({
+    id: 'x', name, inputs: base() as unknown as RetirementInputs,
+  });
+
+  it('trusts the stored column over the name', () => {
+    expect(migrateScenario(plan('My plan'), 1).isExample).toBe(true);
+    expect(migrateScenario(plan('Example - Early Couple'), 0).isExample).toBeUndefined();
+  });
+
+  it('falls back to the legacy English prefix only when the column says nothing', () => {
+    expect(migrateScenario(plan('Example - Early Couple'), null).isExample).toBe(true);
+    expect(migrateScenario(plan('Mon plan'), null).isExample).toBeUndefined();
+  });
+
+  it('leaves the field absent rather than writing a false', () => {
+    // A plan the user made carries no flag at all — stored rows and exported
+    // documents stay as clean as they were before the column existed.
+    expect('isExample' in migrateScenario(plan('My plan'), null)).toBe(false);
   });
 });

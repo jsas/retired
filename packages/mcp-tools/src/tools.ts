@@ -155,10 +155,10 @@ const manageGivingArgs = z.object({
   // they see) otherwise guess at pct/basis, which only pct-mode streams
   // need. Fixed-mode adds are just {label, mode:'fixed', amount, fromAge}.
   label: z.string().optional().describe('For add: the stream name, e.g. "Food Bank".'),
-  mode: z.enum(['pct', 'fixed']).optional().describe('For add: "fixed" = amount $/yr (default); "pct" = pct of income.'),
+  mode: z.enum(['pct', 'fixed']).optional().describe('For add: "pct" = pct of income — a pledge ("I give 10% of my after-tax income"); "fixed" = amount $/yr (the default).'),
   amount: z.number().optional().describe('For add, mode "fixed": dollars per year (today\'s dollars).'),
   pct: z.number().optional().describe('For add, mode "pct": percentage points of income (10 = 10%).'),
-  basis: z.enum(['gross', 'net']).optional().describe('For add, mode "pct" only: which income the % rides on.'),
+  basis: z.enum(['gross', 'net']).optional().describe('For add, mode "pct" only: which income the % rides on — "net" = after-tax (default; "after tax"/"take-home" means this), "gross" = pre-tax.'),
   fromAge: z.number().optional().describe('For add: first giving age (inclusive).'),
   toAge: z.number().nullable().optional().describe('For add: last giving age; null/omit = for life.'),
   changes: z.record(z.string(), z.unknown()).optional()
@@ -363,7 +363,7 @@ export const TOOL_CATALOG: Record<AgentToolName, ToolCatalogEntry> = {
   manage_income: { description: 'PROPOSE adding, updating, or removing an income source (pension, employment, self-employment, or rental). action "add" takes the source fields (endAge a number or explicit null). action "update"/"remove" take target (id or unique label). User confirms.', schema: manageIncomeArgs },
   manage_cash_event: { description: 'PROPOSE adding, updating, or removing a cash event (inflow to an account, or outflow adding to spending). action "add" takes the event fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageCashEventArgs },
   manage_debt: { description: 'PROPOSE adding, updating, or removing a debt (mortgage or consumer: credit card, loan, line of credit). The balance compounds at its interest rate; the monthly payment is funded from spending until paid off. action "add" takes the debt fields. action "update"/"remove" take target (id or unique label). User confirms.', schema: manageDebtArgs },
-  manage_giving: { description: 'PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). mode "fixed" (the default): amount dollars/yr (NOT indexed for inflation) — a fixed add is just {label, mode:"fixed", amount, fromAge}; pct/basis are pct-mode-only and auto-filled. mode "pct": pct of income in percentage points (10 = 10%), basis "gross" (pre-tax income stack) or "net" (after-tax). fromAge/toAge window (toAge null or omitted = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields (top level, or inside changes). action "update"/"remove" take target (id or unique label). User confirms.', schema: manageGivingArgs },
+  manage_giving: { description: 'PROPOSE adding, updating, or removing a charitable giving stream (household-level; all receipts pool into ONE donation tax credit). Percentage-of-income giving IS supported — "I give 10% of my after-tax income to my church" is ONE stream, not a workaround: {label:"Church", mode:"pct", pct:10, basis:"net", fromAge}. mode "fixed" (the default): amount dollars/yr (NOT indexed for inflation) — a fixed add is just {label, mode:"fixed", amount, fromAge}; pct/basis are pct-mode-only and auto-filled. mode "pct": pct of income in percentage points (10 = 10%), basis "net" (after-tax — the default, and what "after tax"/"take-home" means) or "gross" (pre-tax income stack). fromAge/toAge window (toAge null or omitted = for life). The credit follows CRA rules: 14% on the first $200, 29%/33% above, per-province rates, 75%-of-income claim cap, non-refundable. action "add" takes the stream fields (top level, or inside changes). action "update"/"remove" take target (id or unique label). User confirms.', schema: manageGivingArgs },
   propose_account: { description: 'PROPOSE enabling/configuring (or disabling) a special account: kind "rm" (reverse mortgage), "rdsp", or "fhsa". Pass changes with the fields to set; {"enabled":false} turns it off. User confirms.', schema: proposeAccountArgs },
   propose_revert: { description: 'PROPOSE rolling the plan back to a checkpoint — an automatic snapshot taken just before a previously-approved change landed. Use when an experiment did not pan out ("that made it worse, undo it"). User confirms.', schema: proposeRevertArgs },
   remember: { description: 'Save a durable fact to memory for later conversations — about THIS plan (scope "scenario": a decision the user made, a figure they quoted, a constraint like "cannot touch the RRSP") or about the user themselves (scope "global": preferences, life plans). ONLY when clearly important; never for numbers already in the plan or in computed results. When the fact uses a specific term a future question might generalize (oranges → fruit), pass those category words as keywords so the fact can be found again.', schema: rememberArgs },
@@ -392,7 +392,7 @@ export interface ToolContext {
   config: AppConfig;
   scenarioName: string;
   /** Names/ids of other saved scenarios, for orientation. */
-  scenarioList: Array<{ id: string; name: string }>;
+  scenarioList: Array<{ id: string; name: string; isExample?: boolean }>;
   /** Which of scenarioList is currently open (list_scenarios marks it).
    *  Optional so tests and 'off'-mode callers can omit it — the marker is
    *  then simply absent from the listing. */
@@ -460,8 +460,13 @@ export type ToolOutcome =
     }
   | { kind: 'error'; content: string };
 
-const money = (v: number) =>
-  new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
+/** Money for tool text. The assistant speaks the host UI's language: fr-CA gets
+ *  `1 234 $`, en-CA `$1,234`. A tool that has a context takes one line —
+ *  `const money = moneyFor(ctx.locale)` — and every figure it prints follows.
+ *  Hosts that send no locale keep the old en-CA output exactly. */
+type Money = (v: number) => string;
+const moneyFor = (locale?: ToolContext['locale']): Money => (v: number) =>
+  new Intl.NumberFormat(locale ?? 'en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v);
 
 function zodIssues(error: z.ZodError): string {
   return error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
@@ -565,6 +570,7 @@ export function executeToolCall(ctx: ToolContext, call: AgentToolCall): ToolOutc
 // ---------------------------------------------------------------------------
 
 function describeScenario(ctx: ToolContext, section: z.infer<typeof sectionSchema>): string {
+  const money = moneyFor(ctx.locale);
   const i = ctx.inputs;
   const lines: string[] = [`Scenario "${ctx.scenarioName}" (of ${ctx.scenarioList.length} saved).`];
   if (looksLikeUnsetPlan(i)) {
@@ -695,7 +701,13 @@ function validateOverrides(
 
 /** The compact verdict block returned for any engine run. Deliberately small:
  *  the model gets decision-grade numbers, not the whole schedule. */
-function summarizeResults(label: string, inputs: RetirementInputs, results: RetirementResults): string {
+function summarizeResults(
+  label: string,
+  inputs: RetirementInputs,
+  results: RetirementResults,
+  locale?: ToolContext['locale'],
+): string {
+  const money = moneyFor(locale);
   const rows = results.yearlyBreakdown;
   const last = rows[rows.length - 1];
   const lifetimeTax = last?.cumulativeTax ?? 0;
@@ -757,7 +769,7 @@ function runProjection(ctx: ToolContext, overrides?: Record<string, unknown>): T
     const head = overrides && Object.keys(overrides).length
       ? 'Projection WITH overrides (what-if; plan unchanged)'
       : 'Projection of the current plan';
-    const body = summarizeResults('Result', inputs, results);
+    const body = summarizeResults('Result', inputs, results, ctx.locale);
     return { kind: 'result', content: [head, ...notes, body].join('\n') };
   } catch (err) {
     return { kind: 'error', content: `Engine failed to run: ${err instanceof Error ? err.message : String(err)}` };
@@ -792,7 +804,7 @@ function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenario
       }
     }
     // One verdict line per plan (current first), then deltas per variant.
-    lines.push(summarizeResults('CURRENT plan', ctx.inputs, base));
+    lines.push(summarizeResults('CURRENT plan', ctx.inputs, base, ctx.locale));
     const variantRuns = usable.map(v => ({
       label: v.label,
       overrides: v.patch,
@@ -801,13 +813,13 @@ function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenario
       notes: v.rejected.length ? ` (ignored invalid: ${v.rejected.join('; ')})` : '',
     }));
     for (const r of variantRuns) {
-      lines.push(summarizeResults(`VARIANT "${r.label}" ${JSON.stringify(r.overrides)}${r.notes}`, r.inputs, r.results));
+      lines.push(summarizeResults(`VARIANT "${r.label}" ${JSON.stringify(r.overrides)}${r.notes}`, r.inputs, r.results, ctx.locale));
     }
     lines.push('DELTAS (variant − current):');
     for (const r of variantRuns) {
       lines.push(
-        `  ${r.label}: ending balance ${delta(end(base), end(r.results))}, ` +
-        `lifetime tax ${delta(lifeTax(base), lifeTax(r.results))}, ` +
+        `  ${r.label}: ending balance ${delta(end(base), end(r.results), ctx.locale)}, ` +
+        `lifetime tax ${delta(lifeTax(base), lifeTax(r.results), ctx.locale)}, ` +
         `depletion: ${fmtDepl(base)} → ${fmtDepl(r.results)}`,
       );
     }
@@ -820,8 +832,9 @@ function compareScenarios(ctx: ToolContext, args: z.infer<typeof compareScenario
 const end = (r: RetirementResults) => r.yearlyBreakdown.at(-1)?.endingBalance ?? 0;
 const lifeTax = (r: RetirementResults) => r.yearlyBreakdown.at(-1)?.cumulativeTax ?? 0;
 const fmtDepl = (r: RetirementResults) => (r.depletionAge != null ? `depletes ${r.depletionAge}` : 'funded to max age');
-const delta = (a: number, b: number) => {
+const delta = (a: number, b: number, locale?: ToolContext['locale']) => {
   const d = b - a;
+  const money = moneyFor(locale);
   return `${d >= 0 ? '+' : '−'}${money(Math.abs(d))}`;
 };
 
@@ -983,6 +996,7 @@ function proposeSpendingBands(
   ctx: ToolContext,
   args: { bands: Array<{ fromAge: number; pctOfBase: number }>; rationale?: string },
 ): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   const band = z.object({ fromAge: z.number(), pctOfBase: z.number().min(0).max(3) });
   const res = z.array(band).safeParse(args.bands);
   if (!res.success) {
@@ -1138,7 +1152,7 @@ function proposeRevert(ctx: ToolContext, args: z.infer<typeof proposeRevertArgs>
     target = checkpoints.find(c => c.id.toLowerCase() === wanted)
       ?? checkpoints.filter(c => c.label.toLowerCase() === wanted)[0];
     if (!target) {
-      const known = [...checkpoints].reverse().map(c => `"${c.label}" (${new Date(c.at).toLocaleDateString('en-CA')})`).join(', ');
+      const known = [...checkpoints].reverse().map(c => `"${c.label}" (${new Date(c.at).toLocaleDateString(ctx.locale ?? 'en-CA')})`).join(', ');
       return { kind: 'error', content: `No checkpoint matches "${args.checkpoint}". Recent checkpoints: ${known}. Omit the argument to revert to the most recent.` };
     }
   } else {
@@ -1435,6 +1449,7 @@ function proposeNavigateTool(ctx: ToolContext, args: z.infer<typeof proposeNavig
 }
 
 function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosArgs>): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   if (args.action === 'open') {
     return openScenarioTool(ctx, { scenarioId: args.scenarioId, name: args.name });
   }
@@ -1449,14 +1464,18 @@ function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosA
   const lines: string[] = [`${list.length} saved scenario${list.length === 1 ? '' : 's'}:`];
   for (const s of list) {
     const isActive = s.id === activeId;
+    // Which plan shipped with the app is plan state (R4). Say it: an
+    // "Example - Early Couple" row otherwise reads as the user's own situation,
+    // and the whole conversation is then about a plan nobody built.
+    const label = `${s.name}${s.isExample ? ' (built-in EXAMPLE plan, not the user\'s own)' : ''}`;
     if (!args.withDetails) {
-      lines.push(`- ${s.name}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`);
+      lines.push(`- ${label}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`);
       continue;
     }
     const inputs = s.id === activeId
       ? ctx.inputs
       : ctx.scenarioInputsById?.(s.id);
-    const head = `- ${s.name}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`;
+    const head = `- ${label}${isActive ? ' (ACTIVE — currently open)' : ''} [id: ${s.id}]`;
     if (!inputs) {
       // Not the active plan and the caller supplied no detail source: fall
       // back to the compact line rather than fabricate numbers.
@@ -1480,6 +1499,7 @@ function listScenariosTool(ctx: ToolContext, args: z.infer<typeof listScenariosA
 // ---------------------------------------------------------------------------
 
 function runStrategiesTool(ctx: ToolContext, filter?: StrategyFilter): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   try {
     const report = runStrategies(ctx.inputs, ctx.config, filter);
     const row = (s: { name: string; survived: boolean; sustainableSpending: number; deltaSpending: number; lifetimeTax: number; lifetimeGis: number; endingBalance: number; depletionAge: number | null }) =>
@@ -1503,6 +1523,7 @@ function runStrategiesTool(ctx: ToolContext, filter?: StrategyFilter): ToolOutco
 }
 
 function solveSpendingTool(ctx: ToolContext, args: z.infer<typeof solveSpendingArgs>): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   let inputs = ctx.inputs;
   const notes: string[] = [];
   if (args.overrides && Object.keys(args.overrides).length > 0) {
@@ -1535,6 +1556,7 @@ function solveSpendingTool(ctx: ToolContext, args: z.infer<typeof solveSpendingA
 }
 
 function runMonteCarloTool(ctx: ToolContext, args: z.infer<typeof runMonteCarloArgs>): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   let inputs = ctx.inputs;
   const notes: string[] = [];
   if (args.overrides && Object.keys(args.overrides).length > 0) {
@@ -1567,6 +1589,7 @@ function runMonteCarloTool(ctx: ToolContext, args: z.infer<typeof runMonteCarloA
 }
 
 function getScheduleTool(ctx: ToolContext, args: z.infer<typeof getScheduleArgs>): ToolOutcome {
+  const money = moneyFor(ctx.locale);
   let inputs = ctx.inputs;
   const notes: string[] = [];
   if (args.overrides && Object.keys(args.overrides).length > 0) {

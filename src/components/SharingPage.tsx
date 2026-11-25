@@ -172,7 +172,7 @@ export function SharingPage({ inputs, scenarioName, onImport }: SharingPageProps
           <button
             onClick={submit}
             disabled={!parsed}
-            className={parsed ? `${cls.primaryBtn} shrink-0` : 'shrink-0 border border-slate-200 px-4 py-2 text-sm font-medium text-slate-400'}
+            className={parsed ? `${cls.primaryBtn} shrink-0` : `${cls.disabledBtn} shrink-0`}
             title={parsed ? t('share.importTitle', { name: importName }) : t('share.importDisabled')}
           >
             {t('share.importBtn')}

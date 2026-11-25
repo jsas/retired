@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Loader2, RefreshCw } from 'lucide-react';
 import type { MonteCarloRequest, MonteCarloResults } from '@retired/engine-core/monteCarlo';
 import { runMonteCarloAuto } from '../lib/runMonteCarlo';
-import { BLUE } from '../design/tokens';
+import { BLUE, FAINT, HAIRLINE, MUTED } from '../design/tokens';
+import { formatCurrency } from '../lib/locale';
 import { useAppLocale } from '../lib/localeContext';
 
 interface MonteCarloChartProps {
@@ -21,10 +22,6 @@ function formatMoney(v: number): string {
   if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (Math.abs(v) >= 1_000) return `$${Math.round(v / 1_000)}k`;
   return `$${Math.round(v)}`;
-}
-
-function formatMoneyFull(v: number, locale: string): string {
-  return v.toLocaleString(locale, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
 }
 
 export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }: MonteCarloChartProps) {
@@ -156,15 +153,15 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
                 {/* Y gridlines + labels */}
                 {chart.yTicks.map((tick, i) => (
                   <g key={i}>
-                    <line x1={PAD.left} x2={W - PAD.right} y1={chart.y(tick)} y2={chart.y(tick)} stroke="#e2e8f0" strokeWidth="1" />
-                    <text x={PAD.left - 6} y={chart.y(tick) + 3} textAnchor="end" fontSize="10" fill="#64748b">
+                    <line x1={PAD.left} x2={W - PAD.right} y1={chart.y(tick)} y2={chart.y(tick)} stroke={HAIRLINE} strokeWidth="1" />
+                    <text x={PAD.left - 6} y={chart.y(tick) + 3} textAnchor="end" fontSize="10" fill={MUTED}>
                       {formatMoney(tick)}
                     </text>
                   </g>
                 ))}
                 {/* X labels */}
                 {chart.xTicks.map(a => (
-                  <text key={a} x={chart.x(a)} y={H - 8} textAnchor="middle" fontSize="10" fill="#64748b">
+                  <text key={a} x={chart.x(a)} y={H - 8} textAnchor="middle" fontSize="10" fill={MUTED}>
                     {a}
                   </text>
                 ))}
@@ -172,15 +169,15 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
                 {/* Probability bands */}
                 <path d={chart.bandPath('p90', 'p10')} fill="#3b82f6" opacity="0.12" />
                 <path d={chart.bandPath('p75', 'p25')} fill="#3b82f6" opacity="0.22" />
-                <path d={chart.linePath('p50')} fill="none" stroke="#1d4ed8" strokeWidth="2" />
+                <path d={chart.linePath('p50')} fill="none" stroke={BLUE} strokeWidth="2" />
 
                 {/* Retirement marker */}
                 <line
                   x1={chart.x(retirementAge)} x2={chart.x(retirementAge)}
                   y1={PAD.top} y2={H - PAD.bottom}
-                  stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3"
+                  stroke={FAINT} strokeWidth="1" strokeDasharray="4 3"
                 />
-                <text x={chart.x(retirementAge) + 4} y={PAD.top + 10} fontSize="10" fill="#64748b">
+                <text x={chart.x(retirementAge) + 4} y={PAD.top + 10} fontSize="10" fill={MUTED}>
                   {t('monteCarloUi.retire')}
                 </text>
 
@@ -198,11 +195,11 @@ export function MonteCarloChart({ request, retirementAge, onRefresh, onMounted }
               {hoverBand && (
                 <div className="absolute top-2 right-2 border border-slate-200 bg-white px-3 py-2 font-mono text-[11px] pointer-events-none">
                   <div className="font-semibold text-slate-900 mb-1">{t('monteCarloUi.age', { age: hoverBand.age })}</div>
-                  <div className="text-slate-600">{t('monteCarloUi.p90')}: {formatMoneyFull(hoverBand.p90, locale)}</div>
-                  <div className="text-slate-600">{t('monteCarloUi.p75')}: {formatMoneyFull(hoverBand.p75, locale)}</div>
-                  <div className="text-blue-700 font-semibold">{t('monteCarloUi.median')}: {formatMoneyFull(hoverBand.p50, locale)}</div>
-                  <div className="text-slate-600">{t('monteCarloUi.p25')}: {formatMoneyFull(hoverBand.p25, locale)}</div>
-                  <div className="text-slate-600">{t('monteCarloUi.p10')}: {formatMoneyFull(hoverBand.p10, locale)}</div>
+                  <div className="text-slate-600">{t('monteCarloUi.p90')}: {formatCurrency(hoverBand.p90, locale)}</div>
+                  <div className="text-slate-600">{t('monteCarloUi.p75')}: {formatCurrency(hoverBand.p75, locale)}</div>
+                  <div className="text-blue-700 font-semibold">{t('monteCarloUi.median')}: {formatCurrency(hoverBand.p50, locale)}</div>
+                  <div className="text-slate-600">{t('monteCarloUi.p25')}: {formatCurrency(hoverBand.p25, locale)}</div>
+                  <div className="text-slate-600">{t('monteCarloUi.p10')}: {formatCurrency(hoverBand.p10, locale)}</div>
                 </div>
               )}
             </div>

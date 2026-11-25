@@ -20,7 +20,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { INK, FAINT, HAIRLINE, RED_DOT, AMBER_DOT } from './tokens';
+import { INK, FAINT, HAIRLINE, PAPER, BLUE, RED_DOT, RED_TEXT, AMBER_DOT, AMBER_TEXT } from './tokens';
 import { smoothLinePath, smoothAreaPath } from './curve';
 
 export interface TimelineSeries {
@@ -100,12 +100,31 @@ export function baseSpendAtRetirement(
   return nominal * pct;
 }
 
-const PALETTE = ['#1d4ed8', '#059669', '#d97706', '#be123c', '#7c3aed', '#0e7490'];
+/* Series + strip colours. Every colour the verdict already owns comes from
+   ./tokens; the rest is this chart's own categorical ramp (Compare draws
+   several plans at once) and the two strip inks. Named once, here, so a legend
+   swatch and the thing it explains can never drift apart. */
+const SERIES_BLUE = BLUE;
+const SERIES_GREEN = '#059669';  // spending, or a second plan
+const SERIES_AMBER = '#d97706';
+const SERIES_RED = RED_TEXT;     // runs out
+const SERIES_VIOLET = '#7c3aed'; // the market return hypothesis
+const SERIES_CYAN = '#0e7490';
+const PALETTE = [SERIES_BLUE, SERIES_GREEN, SERIES_AMBER, SERIES_RED, SERIES_VIOLET, SERIES_CYAN];
+const SPEND_LINE = SERIES_GREEN;   // the spend strip: line, handle, legend swatch
+const EVENT_IN = '#0ea5e9';        // a cash event coming in (going out is RED_DOT)
+const RETURN_LINE = SERIES_VIOLET; // the market strip: return curve, 0% label, legend
+const RETURN_SELECTED = '#5b21b6'; // a return anchor, and its label, while selected
+const VOL_SELECTED = AMBER_TEXT;   // a volatility anchor, and its label, while selected
+const PIN_INK = '#475569';         // a pin label with no colour of its own
 
 const W = 1000, H = 190;
 const AXIS = 118;           // y of the baseline the area sits on
 const LL = 34, LR = 978;    // plot left/right
 const AREA_TOP = 18;        // tallest the area rises above the axis
+const PIN_LINE = 13;        // one label line: pins on a side stack by this pitch
+const PIN_GLYPH = 6;        // ≈ one glyph's width at the labels' fontSize 11
+const PIN_PAD = 8;          // minimum gap between two labels sharing a lane
 // The spend + market strips hang BELOW the balance axis (each with a gap).
 const STRIP_GAP = 16;
 const STRIP_H = 44;         // visible strip height (hairline box)
@@ -119,6 +138,28 @@ function fmtAxis(v: number): string {
   if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (Math.abs(v) >= 1_000) return `$${Math.round(v / 1_000)}k`;
   return `$${Math.round(v)}`;
+}
+
+/** Pin label lanes: every label claims the lowest lane on its side where
+ *  nothing already placed overlaps it horizontally. Pins far apart keep the
+ *  single line they always had; pins whose text would collide stack, which is
+ *  what a plan that depletes soon after retirement used to get wrong ("start
+ *  drawing at 62" printed straight through "money runs out · 63"). Label width
+ *  is estimated from the string — SVG text can't be measured before render —
+ *  and the estimate only ever decides a lane. */
+function pinLanes(pins: TimelinePin[], pxOf: (pin: TimelinePin) => number): number[] {
+  const rows: Record<'above' | 'below', Array<Array<{ lo: number; hi: number }>>> = { above: [], below: [] };
+  return pins.map(p => {
+    const side = (p.place ?? 'above') === 'above' ? 'above' : 'below';
+    const w = p.label.length * PIN_GLYPH;
+    const anchor = p.anchor ?? 'middle';
+    const lo = pxOf(p) - (anchor === 'middle' ? w / 2 : anchor === 'end' ? w : 0);
+    const table = rows[side];
+    let lane = 0;
+    while (lane < table.length && table[lane].some(s => lo < s.hi + PIN_PAD && s.lo < lo + w + PIN_PAD)) lane += 1;
+    (table[lane] ??= []).push({ lo, hi: lo + w });
+    return lane;
+  });
 }
 
 export function ProjectionTimeline({
@@ -250,6 +291,15 @@ export function ProjectionTimeline({
   const retAtY = (py: number) => RET_MIN + (1 - (py - MKT_TOP) / STRIP_H) * (RET_MAX - RET_MIN);
   const yVol = (v: number) => MKT_TOP + (1 - v / VOL_MAX) * STRIP_H;
   const volAtY = (py: number) => Math.min(VOL_MAX, Math.max(0, (1 - (py - MKT_TOP) / STRIP_H) * VOL_MAX));
+  // Lane + headroom for the labelled pins (see pinLanes): the viewBox grows
+  // upward by the lanes the above-pins need so a stacked label is never
+  // clipped, and svgY undoes that shift for the drag math below.
+  const pinLane = pinLanes(pins, p => x(Math.max(minAge, Math.min(maxAge, p.age))));
+  const labelHead = PIN_LINE * pinLane.reduce((max, lane, i) =>
+    (pins[i].place ?? 'above') === 'above' ? Math.max(max, lane) : max, 0);
+  /** Client y → user units, undoing the `labelHead` of viewBox space on top. */
+  const svgY = (clientY: number, rect: DOMRect, height: number) =>
+    ((clientY - rect.top) / rect.height) * (height + labelHead) - labelHead;
 
   // Drag state — one at a time: an event diamond, a market anchor, or a
   // draggable pin (the "start drawing" marker).
@@ -267,7 +317,7 @@ export function ProjectionTimeline({
     if (!rect) return null;
     return {
       px: ((e.clientX - rect.left) / rect.width) * W,
-      py: ((e.clientY - rect.top) / rect.height) * TOTAL_H,
+      py: svgY(e.clientY, rect, TOTAL_H),
     };
   };
 
@@ -286,13 +336,13 @@ export function ProjectionTimeline({
   const moveAnchor = (e: React.PointerEvent, id: string, field: 'return' | 'volatility') => {
     const pt = svgPoint(e);
     const a = anchors.find(v => v.id === id);
-    if (!pt) return;
+    if (!pt || !a) return;
     const roundRet = (v: number) => Math.round(v * 1000) / 1000;
     const roundVol = (v: number) => Math.round(v * 200) / 200;
     const next = { ...a, age: Math.max(minAge, Math.min(maxAge, ageAtX(pt.px))) } as TimelineMarketAnchor;
     if (field === 'return') next.return = roundRet(Math.min(RET_MAX, Math.max(RET_MIN, retAtY(pt.py))));
     else next.volatility = roundVol(volAtY(pt.py));
-    if (next.age !== a?.age || next.return !== a?.return || next.volatility !== a?.volatility) {
+    if (next.age !== a.age || next.return !== a.return || next.volatility !== a.volatility) {
       onAnchorsChange?.(anchors.map(v => (v.id === id ? next : v)));
     }
   };
@@ -383,25 +433,25 @@ export function ProjectionTimeline({
         })}
         {spend && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-0.5 w-4" style={{ background: '#059669' }} /> {t('dash.spend')}
+            <span className="inline-block h-0.5 w-4" style={{ background: SPEND_LINE }} /> {t('dash.spend')}
           </span>
         )}
         {onEventChange != null && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-2 w-2 rotate-45" style={{ background: '#0ea5e9' }} />
+            <span className="inline-block h-2 w-2 rotate-45" style={{ background: EVENT_IN }} />
             <span className="inline-block h-2 w-2 rotate-45" style={{ background: RED_DOT }} /> {t('dash.events')}
           </span>
         )}
         {onAnchorsChange != null && (
           <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-2 w-4" style={{ background: '#7c3aed' }} /> {t('dash.market')}
+            <span className="inline-block h-2 w-4" style={{ background: RETURN_LINE }} /> {t('dash.market')}
           </span>
         )}
       </div>
 
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${W} ${showStrips ? TOTAL_H : H}`}
+        viewBox={`0 ${-labelHead} ${W} ${(showStrips ? TOTAL_H : H) + labelHead}`}
         className="block w-full select-none"
         role="img"
         aria-label={t('dash.projectionAria', { from: minAge, to: maxAge })}
@@ -409,7 +459,7 @@ export function ProjectionTimeline({
           if (!onAnchorsChange) return;
           const rect = svgRef.current?.getBoundingClientRect();
           if (!rect) return;
-          const py = ((e.clientY - rect.top) / rect.height) * (showStrips ? TOTAL_H : H);
+          const py = svgY(e.clientY, rect, showStrips ? TOTAL_H : H);
           if (py < MKT_TOP) return; // only the market strip accepts new anchors
           const px = ((e.clientX - rect.left) / rect.width) * W;
           const age = ageAtX(px);
@@ -469,10 +519,10 @@ export function ProjectionTimeline({
         {/* retirement marker */}
         {marker && (marker.style ?? 'line') === 'line' && (
           <line x1={x(marker.age)} x2={x(marker.age)} y1={AREA_TOP} y2={AXIS}
-            stroke="#f59e0b" strokeWidth="2" strokeDasharray="5 3" />
+            stroke={AMBER_DOT} strokeWidth="2" strokeDasharray="5 3" />
         )}
         {marker && marker.style === 'dot' && (
-          <rect x={x(marker.age) - 4.5} y={AXIS - 4.5} width="9" height="9" fill="#f59e0b" />
+          <rect x={x(marker.age) - 4.5} y={AXIS - 4.5} width="9" height="9" fill={AMBER_DOT} />
         )}
 
         {/* labelled pins — the "start drawing" pin (onDragAge set) drags
@@ -480,13 +530,14 @@ export function ProjectionTimeline({
         {pins.map((p, i) => {
           const px = x(Math.max(minAge, Math.min(maxAge, p.age)));
           const above = (p.place ?? 'above') === 'above';
-          const ly = above ? AREA_TOP - 4 : AXIS + 40;
-          const color = p.color ?? '#475569';
+          // one lane per pin on this side, so two close ages never share a baseline
+          const ly = above ? AREA_TOP - 4 - pinLane[i] * PIN_LINE : AXIS + 40 + pinLane[i] * PIN_LINE;
+          const color = p.color ?? PIN_INK;
           const draggable = !!p.onDragAge;
           return (
             <g key={i} className={draggable ? 'cursor-ew-resize' : undefined}
               onPointerDown={draggable ? pinPointerDown(i) : undefined}>
-              <title>{t('dash.startDrawingDrag')}</title>
+              {draggable && <title>{t('dash.startDrawingDrag')}</title>}
               <line x1={px} y1={AXIS} x2={px} y2={above ? ly + 4 : AXIS + 30} stroke={HAIRLINE} strokeWidth="1" />
               {/* a wider invisible grab strip over the rule so the drag is
                   easy to catch (the 1px line alone is a sub-pixel target) */}
@@ -503,15 +554,14 @@ export function ProjectionTimeline({
         {/* ── Spend strip (interactive when handlers arrive) ─────────────── */}
         {showStrips && (
           <g>
-            <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="9" fill={FAINT}>{t('dash.spend')}</text>
+            <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="11" fill={FAINT}>{t('dash.spend')}</text>
             <rect x={LL} y={SPEND_TOP} width={LR - LL} height={STRIP_H} fill="none" stroke={HAIRLINE} strokeWidth="1" />
             {spend && spend.points.length > 0 && (
               <>
                 {/* zero/max reference labels */}
-                <text x={LL - 4} y={SPEND_AXIS + 3} textAnchor="end" fontSize="8" fill={FAINT}>{fmtAxis(0)}</text>
-                <text x={LL - 4} y={SPEND_TOP + 10} textAnchor="end" fontSize="8" fill={FAINT} />
+                <text x={LL - 4} y={SPEND_AXIS + 3} textAnchor="end" fontSize="10" fill={FAINT}>{fmtAxis(0)}</text>
                 <path d={smoothLinePath(spend.points.map(p => ({ x: x(p.age), y: ySp(p.value) })))}
-                  fill="none" stroke="#059669" strokeWidth="1.5" />
+                  fill="none" stroke={SPEND_LINE} strokeWidth="1.5" />
                 {/* base-spending handle at the draw age (draggable). The age
                     comes from the marker, the draggable pin, or the left edge
                     — never from sniffing a label string. */}
@@ -519,7 +569,7 @@ export function ProjectionTimeline({
                   <circle
                     cx={x(marker?.age ?? pins.find(p => p.onDragAge)?.age ?? minAge)}
                     cy={ySp(spend.baseSpend)}
-                    r="5" fill="#059669" stroke="#fff" strokeWidth="1.5" className="cursor-ns-resize"
+                    r="5" fill={SPEND_LINE} stroke={PAPER} strokeWidth="1.5" className="cursor-ns-resize"
                     onPointerDown={(e) => {
                       e.preventDefault(); e.stopPropagation();
                       const el = e.currentTarget as Element;
@@ -527,7 +577,7 @@ export function ProjectionTimeline({
                       const move = (ev: PointerEvent) => {
                         const rect = svgRef.current?.getBoundingClientRect();
                         if (!rect) return;
-                        const py = ((ev.clientY - rect.top) / rect.height) * TOTAL_H;
+                        const py = svgY(ev.clientY, rect, TOTAL_H);
                         onSpendChange(Math.round(spendAtY(py) / 500) * 500);
                       };
                       const up = () => {
@@ -547,7 +597,7 @@ export function ProjectionTimeline({
                     key={ev.id}
                     x={x(ev.age) - 4.5} y={ySp(Math.min(maxSpend, ev.amount)) - 4.5} width="9" height="9"
                     transform={`rotate(45 ${x(ev.age)} ${ySp(Math.min(maxSpend, ev.amount))})`}
-                    fill={ev.direction === 'in' ? '#0ea5e9' : RED_DOT} stroke="#fff" strokeWidth="1.5"
+                    fill={ev.direction === 'in' ? EVENT_IN : RED_DOT} stroke={PAPER} strokeWidth="1.5"
                     className="cursor-move"
                     onPointerDown={onStripPointerDown('event', ev.id)}
                   >
@@ -562,12 +612,12 @@ export function ProjectionTimeline({
         {/* ── Market strip (interactive when onAnchorsChange arrives) ────── */}
         {showStrips && (
           <g>
-            <text x={LL - 4} y={MKT_TOP + 10} textAnchor="end" fontSize="9" fill={FAINT}>{t('dash.market')}</text>
+            <text x={LL - 4} y={MKT_TOP + 10} textAnchor="end" fontSize="11" fill={FAINT}>{t('dash.market')}</text>
             <rect x={LL} y={MKT_TOP} width={LR - LL} height={STRIP_H} fill="none" stroke={HAIRLINE} strokeWidth="1"
               className={onAnchorsChange ? 'cursor-crosshair' : undefined} />
             {/* zero-return reference */}
             <line x1={LL} x2={LR} y1={yRet(0)} y2={yRet(0)} stroke={HAIRLINE} strokeWidth="1" />
-            <text x={LL - 4} y={yRet(0) + 3} textAnchor="end" fontSize="8" fill="#7c3aed">0%</text>
+            <text x={LL - 4} y={yRet(0) + 12} textAnchor="end" fontSize="10" fill={RETURN_LINE}>0%</text>
 
             {/* volatility curve + anchors (amber dashed, squares) */}
             {(() => {
@@ -583,7 +633,7 @@ export function ProjectionTimeline({
                     <g key={`v-${a.id}`}>
                       <rect
                         x={x(a.age) - 4} y={yVol(a.volatility!) - 4} width="8" height="8"
-                        fill={selectedMkt === a.id ? '#b45309' : AMBER_DOT} stroke="#fff" strokeWidth="1.5"
+                        fill={selectedMkt === a.id ? VOL_SELECTED : AMBER_DOT} stroke={PAPER} strokeWidth="1.5"
                         className="cursor-move" opacity={drag?.kind === 'mkt' && drag.id === a.id ? 1 : 0.9}
                         onPointerDown={onStripPointerDown('mkt', a.id, 'volatility')}
                         onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
@@ -591,7 +641,7 @@ export function ProjectionTimeline({
                         <title>{t('dash.volTitle', { age: a.age, pct: (a.volatility! * 100).toFixed(0) })}</title>
                       </rect>
                       {/* the value, readable without hovering */}
-                      <text x={x(a.age) + 7} y={yVol(a.volatility!) + 3} fontSize="8" fill="#b45309"
+                      <text x={x(a.age) + 7} y={yVol(a.volatility!) + 3} fontSize="10" fill={VOL_SELECTED}
                         fontFamily="inherit" className="pointer-events-none select-none">
                         {Math.round(a.volatility! * 100)}%
                       </text>
@@ -605,13 +655,13 @@ export function ProjectionTimeline({
             {anchors.length > 0 && (
               <path
                 d={smoothLinePath(anchors.map(a => ({ x: x(a.age), y: yRet(a.return) })))}
-                fill="none" stroke="#7c3aed" strokeWidth="2" />
+                fill="none" stroke={RETURN_LINE} strokeWidth="2" />
             )}
             {anchors.map(a => (
               <g key={`r-${a.id}`}>
                 <circle
                   cx={x(a.age)} cy={yRet(a.return)} r={selectedMkt === a.id ? 5.5 : 4.5}
-                  fill={selectedMkt === a.id ? '#5b21b6' : '#7c3aed'} stroke="#fff" strokeWidth="1.5"
+                  fill={selectedMkt === a.id ? RETURN_SELECTED : RETURN_LINE} stroke={PAPER} strokeWidth="1.5"
                   className="cursor-move" opacity={drag?.kind === 'mkt' && drag.id === a.id ? 1 : 0.9}
                   onPointerDown={onStripPointerDown('mkt', a.id, 'return')}
                   onClick={(e) => { e.stopPropagation(); setSelectedMkt(a.id); }}
@@ -619,7 +669,7 @@ export function ProjectionTimeline({
                   <title>{t('dash.retTitle', { age: a.age, pct: (a.return * 100).toFixed(1) })}</title>
                 </circle>
                 {/* the value, readable without hovering */}
-                <text x={x(a.age) + 8} y={yRet(a.return) - 5} fontSize="8" fill="#5b21b6"
+                <text x={x(a.age) + 8} y={yRet(a.return) - 5} fontSize="10" fill={RETURN_SELECTED}
                   fontFamily="inherit" className="pointer-events-none select-none">
                   {(a.return * 100).toFixed(1)}%
                 </text>
@@ -638,7 +688,7 @@ export function ProjectionTimeline({
                     setSelectedMkt(null);
                   }}>
                   <rect x={x(a.age) + 8} y={yRet(a.return) - 20} width="15" height="15" fill={RED_DOT} />
-                  <text x={x(a.age) + 15.5} y={yRet(a.return) - 8.5} textAnchor="middle" fontSize="10" fill="#fff" className="pointer-events-none">×</text>
+                  <text x={x(a.age) + 15.5} y={yRet(a.return) - 8.5} textAnchor="middle" fontSize="10" fill={PAPER} className="pointer-events-none">×</text>
                   <title>{t('dash.deleteAnchor')}</title>
                 </g>
               );

@@ -9,7 +9,7 @@ import { LOCALES } from './locale';
 
 import enCommon from '../locales/en-CA/common.json';
 import enNav from '../locales/en-CA/nav.json';
-import enLanding from '../locales/en-CA/landing.json';
+import enStart from '../locales/en-CA/start.json';
 import enHelp from '../locales/en-CA/help.json';
 import enPages from '../locales/en-CA/pages.json';
 import enPrint from '../locales/en-CA/print.json';
@@ -20,7 +20,7 @@ import enMath from '../locales/en-CA/math.json';
 
 import frCommon from '../locales/fr-CA/common.json';
 import frNav from '../locales/fr-CA/nav.json';
-import frLanding from '../locales/fr-CA/landing.json';
+import frStart from '../locales/fr-CA/start.json';
 import frHelp from '../locales/fr-CA/help.json';
 import frPages from '../locales/fr-CA/pages.json';
 import frPrint from '../locales/fr-CA/print.json';
@@ -30,17 +30,17 @@ import frPrompts from '../locales/fr-CA/prompts.json';
 import frMath from '../locales/fr-CA/math.json';
 
 export const I18N_NAMESPACES = [
-  'common', 'nav', 'landing', 'help', 'pages', 'print', 'settings', 'details', 'prompts', 'math',
+  'common', 'nav', 'start', 'help', 'pages', 'print', 'settings', 'details', 'prompts', 'math',
 ] as const;
 
 const resources = {
   'en-CA': {
-    common: enCommon, nav: enNav, landing: enLanding, help: enHelp,
+    common: enCommon, nav: enNav, start: enStart, help: enHelp,
     pages: enPages, print: enPrint, settings: enSettings, details: enDetails,
     prompts: enPrompts, math: enMath,
   },
   'fr-CA': {
-    common: frCommon, nav: frNav, landing: frLanding, help: frHelp,
+    common: frCommon, nav: frNav, start: frStart, help: frHelp,
     pages: frPages, print: frPrint, settings: frSettings, details: frDetails,
     prompts: frPrompts, math: frMath,
   },

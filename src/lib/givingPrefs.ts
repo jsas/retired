@@ -22,9 +22,12 @@ export interface GivingPrefs {
   defaultBasis: 'gross' | 'net';
 }
 
+// The default pledge is the one people actually state out loud — "10% of my
+// after-tax income" — so a new stream starts there rather than at a half-size
+// gross guess. Both stay editable in Settings → Giving.
 export const DEFAULT_GIVING_PREFS: GivingPrefs = {
-  defaultPct: 5,
-  defaultBasis: 'gross',
+  defaultPct: 10,
+  defaultBasis: 'net',
 };
 
 export function getGivingPrefs(): GivingPrefs {

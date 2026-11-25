@@ -114,6 +114,24 @@ describe('The Tools menu pages each feature the projection timeline', () => {
     expect(html).toContain('Worst Window');
   });
 
+  it('Test Against History labels a couple plan primary-only (H-02)', () => {
+    // runBacktest strips the spouse; for a couple the panel must say the
+    // windows replay the primary's solo plan, and stay quiet when solo.
+    const backtest = runBacktest(inputs, config, calculateHousehold);
+    const couple = renderToStaticMarkup(
+      createElement(BacktestPage, {
+        chip, timeline, backtestProps: { result: backtest, primaryOnly: true },
+      }),
+    );
+    expect(couple).toContain('Primary plan only');
+    const solo = renderToStaticMarkup(
+      createElement(BacktestPage, {
+        chip, timeline, backtestProps: { result: backtest, primaryOnly: false },
+      }),
+    );
+    expect(solo).not.toContain('Primary plan only');
+  });
+
   it('Safe Spending: the spending solve under the timeline', () => {
     const html = renderToStaticMarkup(
       createElement(SolverPage, {

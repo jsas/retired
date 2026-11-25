@@ -59,9 +59,34 @@ describe('AppStore', () => {
       expect(errorSpy).toHaveBeenCalledTimes(1);
       expect(String(errorSpy.mock.calls[0][0])).toMatch(/failed validation and was reset/);
       expect(String(errorSpy.mock.calls[0].join(' '))).toContain('completely'); // raw keys surfaced
-      // …and a user-facing warning string for the UI to banner.
-      expect(state.configLoadWarning).toMatch(/reset to defaults/);
-              expect(state.configLoadWarning).toMatch(/custom tax tables/);
+      // …and a code for the UI to banner as translated copy (it used to be an
+      // English sentence baked into the data layer, so French users read English).
+      expect(state.configLoadWarning).toBe('config-reset');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('skips a stored row it cannot decode instead of losing the whole store (B11)', async () => {
+    // One truncated `inputs` blob used to throw out of AppStore.open(): the app
+    // then kept running in memory — saving nothing, saying nothing beyond a
+    // console.warn. Now the unreadable row is skipped, the good rows load, and the
+    // count reaches the UI so the shorter plan list is explained.
+    const db = await AppDatabase.open();
+    db.saveScenarios([{ id: 'good', name: 'Readable plan', inputs: baseInputs() }]);
+    db.run(
+      `INSERT INTO scenarios (id, name, inputs, updated_at)
+       VALUES ('broken', 'Truncated plan', '{"desiredSpending": 50000,}', '2026-01-01T00:00:00Z')`,
+    );
+    db.save();
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { state } = await AppStore.open(customDefaults);
+      expect(state.scenarios.map(s => s.id)).toEqual(['good']);
+      expect(state.activeScenarioId).toBe('good');
+      expect(state.unreadableRows).toBe(1);
+      expect(String(errorSpy.mock.calls[0]?.[0] ?? '')).toMatch(/Truncated plan/);
     } finally {
       errorSpy.mockRestore();
     }
@@ -77,7 +102,7 @@ describe('AppStore', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const { state } = await AppStore.open(customDefaults);
-      expect(state.config?.general.promptToSaveOnSwitch).toBe(true);
+      expect(state.config?.general).toEqual(DEFAULT_APP_CONFIG.general);
       expect(state.configLoadWarning).toBeUndefined();
       expect(errorSpy).not.toHaveBeenCalled();
     } finally {
@@ -153,13 +178,13 @@ describe('AppStore', () => {
   it('migrates pre-#20 localStorage preference keys into the store kv on open', async () => {
     // The one-time path for users from older builds: their pref blobs sit in
     // raw localStorage (the pre-#20 layout); opening the store folds them in.
-    storage.set('wealthconsole_panel_state', '{"welcome_dismissed":true}');
+    storage.set('wealthconsole_panel_state', '{"setup_card_dismissed":true}');
     storage.set('wealthconsole_eq', '{"bandsFrac":{"retirementAge":{"lo":0.2,"hi":0.8}}}');
 
     await AppStore.open(customDefaults);
     const { AppDatabase } = await import('./db');
     const db = await AppDatabase.open(); // reopens the mirrored bytes
-    expect(db.getKv('wealthconsole_panel_state')).toBe('{"welcome_dismissed":true}');
+    expect(db.getKv('wealthconsole_panel_state')).toBe('{"setup_card_dismissed":true}');
     expect(db.getKv('wealthconsole_eq')).toBe('{"bandsFrac":{"retirementAge":{"lo":0.2,"hi":0.8}}}');
     db.close();
   });

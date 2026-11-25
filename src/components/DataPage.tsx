@@ -17,6 +17,7 @@ import { buildTemplateCsv, parseTemplateCsv, TEMPLATE_FILENAME } from '../lib/im
 import { AI_CHATS_STORAGE_KEY } from '../lib/ai/chatStore';
 import { AI_SETTINGS_STORAGE_KEY } from '../lib/aiSettings';
 import { PREF_KEYS } from '../lib/prefKv';
+import { cls } from '../design/tokens';
 
 /** Read every UI-preference kv row (issue #20) out of a backup, parsed —
  *  undefined when the row is absent or unparseable. */
@@ -265,7 +266,7 @@ function ProjectionExportSection({
             </button>
           </div>
           {contentsOpen && (
-            <pre className="num max-h-[28rem] overflow-auto border border-slate-200 bg-slate-50 p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre">{payload.content}</pre>
+            <pre className={`num max-h-[28rem] overflow-auto p-3 text-[10px] leading-relaxed text-slate-700 font-mono whitespace-pre ${cls.panelTinted}`}>{payload.content}</pre>
           )}
         </div>
 
@@ -276,20 +277,20 @@ function ProjectionExportSection({
             id="export-filename"
             value={fileBase}
             onChange={(e) => { setBaseName(e.target.value); setNameTouched(true); }}
-            className="w-72 max-w-full border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none"
+            className={`w-72 max-w-full ${cls.inputSm}`}
           />
           <span className="text-xs text-slate-400">.{payload.extension}</span>
           <div className="flex-1" />
           <button
             onClick={copy}
-            className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900"
+            className={`flex items-center gap-1.5 font-semibold ${cls.hairlineBtn}`}
           >
             {copied ? <Check size={13} /> : <ClipboardCopy size={13} />} {tc('copy')}
           </button>
           <button
             onClick={download}
             disabled={!canExport}
-            className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50 ${cls.primaryBtnSm}`}
             title={canExport ? t('dataUi.downloadTitle', { file: `${fileBase}.${payload.extension}` }) : t('dataUi.pickColumns')}
           >
             <Download size={13} /> {tc('save')}
@@ -351,7 +352,7 @@ function FullBackupSection({ scenarios, activeScenarioId, onExportFull }: DataPa
       <button
         onClick={() => onExportFull([...checked], includeConfig, { chats: includeChats, settings: includeAiSettings })}
         disabled={checked.size === 0 && !includeConfig && !includeChats && !includeAiSettings}
-        className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className={`flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50 ${cls.primaryBtnSm}`}
       >
         <Download size={13} /> {t('dataUi.saveBackup')}
       </button>
@@ -651,7 +652,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1.5 border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-900 hover:text-slate-900"
+          className={`flex items-center gap-1.5 font-semibold ${cls.hairlineBtn}`}
         >
           <Upload size={13} /> {t('dataUi.chooseFile')}
         </button>
@@ -669,7 +670,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
 
       {/* Backup preview + chooser */}
       {parsed?.kind === 'backup' && (
-        <div className="max-w-3xl border border-slate-200 bg-white p-3">
+        <div className={`max-w-3xl p-3 ${cls.panel}`}>
           <div className="text-xs font-semibold text-slate-800 mb-2">
             {t('dataUi.fullBackup', { count: parsed.db.scenarios.length })}
             {parsed.db.exportedAt ? t('dataUi.exported', { date: parsed.db.exportedAt.split('T')[0] }) : ''}
@@ -716,7 +717,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
             <button
               onClick={confirmBackup}
               disabled={checked.size === 0 && !includeConfig}
-              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50 ${cls.primaryBtnSm}`}
             >
               <Check size={13} /> {t('dataUi.applyImport')}
             </button>
@@ -727,7 +728,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
 
       {/* Partial backup — no scenarios survived, settings/AI data did */}
       {parsed?.kind === 'partial' && (
-        <div className="max-w-3xl border border-slate-200 bg-white p-3">
+        <div className={`max-w-3xl p-3 ${cls.panel}`}>
           <div className="text-xs font-semibold text-slate-800 mb-2">{t('dataUi.partialTitle')}</div>
           <p className="text-[11px] text-slate-500 leading-snug mb-3">
             {t('dataUi.partialLead')}
@@ -759,7 +760,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
             <button
               onClick={confirmPartial}
               disabled={(!includeConfig || parsed.config === undefined) && !applyChats && !applyAiSettings}
-              className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50 ${cls.primaryBtnSm}`}
             >
               <Check size={13} /> {t('dataUi.applyImport')}
             </button>
@@ -770,7 +771,7 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
 
       {/* Projection preview + name */}
       {parsed?.kind === 'projection' && (
-        <div className="max-w-3xl border border-slate-200 bg-white p-3">
+        <div className={`max-w-3xl p-3 ${cls.panel}`}>
           <div className="text-xs font-semibold text-slate-800 mb-1">{t('dataUi.projTitle')}</div>
           <p className="text-[11px] text-slate-500 mb-3">
             {t('dataUi.projMeta', {
@@ -787,11 +788,11 @@ function ImportSection({ onImportFull, onImportProjection }: DataPageProps) {
               value={projName}
               onChange={e => setProjName(e.target.value)}
               placeholder={t('dataUi.projName')}
-              className="min-w-0 flex-1 border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:border-slate-900 focus:outline-none"
+              className={`min-w-0 flex-1 ${cls.inputSm}`}
             />
             <button
               onClick={confirmProjection}
-              className="flex items-center gap-1.5 shrink-0 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              className={`flex items-center gap-1.5 shrink-0 ${cls.primaryBtnSm}`}
             >
               <Check size={13} /> {t('dataUi.importScenario')}
             </button>

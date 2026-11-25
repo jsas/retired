@@ -1,8 +1,8 @@
 // UI-preference storage facade (issue #20).
 //
-// The user's UI choices — collapsed panels, print/export options, welcome
-// dismissal, EQ steering crops — are plan-adjacent state that used to live in
-// raw localStorage keys (issue D-03): invisible to the .sqlite backup, so a
+// The user's UI choices — collapsed panels, print/export options, the set-up
+// card dismissal, EQ steering crops — are plan-adjacent state that used to live
+// in raw localStorage keys (issue D-03): invisible to the .sqlite backup, so a
 // restored backup lost them. This module gives every pref blob ONE home and
 // ONE backup path, mirroring how the AI chats/settings payloads travel:
 //
@@ -12,7 +12,7 @@
 //   mirror          localStorage under the SAME key names — the store opens
 //                   asynchronously (the wasm binary must load first) while
 //                   prefs are read synchronously at first paint
-//                   (isWelcomeDismissed() in App's initial state, panel
+//                   (the set-up-card dismissal in App's initial state, panel
 //                   initializers on mount), so the mirror is what first paint
 //                   reads before the store's authoritative copy arrives
 //
@@ -32,7 +32,7 @@ import type { AppDatabase } from '../data/db';
  *  backup's kv row uses the same key the payload occupied in localStorage, so
  *  old backups and old code stay interoperable. */
 export const PREF_KEYS = [
-  'wealthconsole_panel_state', // collapsed panels + print options + export options + welcome dismissal
+  'wealthconsole_panel_state', // collapsed panels + print options + export options + setup-card dismissal
   'wealthconsole_eq',          // EQ steering crops (axis-fraction scalars)
   'wealthconsole_schedule_cols', // year-by-year table: user-visible column ids
   'wealthconsole_ranges',      // lever slider min/max prefs (spending/savings/return/volatility)

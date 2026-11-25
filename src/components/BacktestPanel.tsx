@@ -14,11 +14,14 @@ function formatCurrency(value: number, locale: string): string {
 
 interface BacktestPanelProps {
   result: BacktestResult;
+  // Couple plans: runBacktest strips the spouse, so every window replays the
+  // PRIMARY's solo plan. When true, the panel says so (issue H-02).
+  primaryOnly?: boolean;
   onMounted?: () => void;
 }
 
 // GCP-console style page: header row, KPI chips, a bar per rolling window.
-export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
+export function BacktestPanel({ result, primaryOnly, onMounted }: BacktestPanelProps) {
   const { t } = useTranslation('pages');
   const { locale } = useAppLocale();
   // Let the parent scroll this panel into view once it's actually in the DOM.
@@ -43,6 +46,9 @@ export function BacktestPanel({ result, onMounted }: BacktestPanelProps) {
         <span className="text-[11px] text-slate-500">
           {t('backtestUi.windows', { count: result.windowCount, years: result.windowYears, from: startYear, to: endYear })}
         </span>
+        {primaryOnly && (
+          <div className="mt-1 text-[11px] text-amber-700">{t('backtestUi.primaryOnly')}</div>
+        )}
       </div>
 
       <div>
