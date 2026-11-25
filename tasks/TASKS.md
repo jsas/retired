@@ -308,6 +308,15 @@ needs a product decision (not started).
       nothing there — which is why `Modal` stays exercised only by `StyleGuide`
       and `AppHeader` only by its own test. The dead `common:apply` the finding
       named is already gone; the live `optimizer:apply` stays.
+- [x] `C4` **Scenario ids were minted two ways.** `App.tsx:568`/`:588` mint
+      `scenario-${Date.now().toString(36)}`, while `App.tsx:634` (the minted
+      partner plan) and `ScenarioManager.tsx:60`/`:71` (New plan, Duplicate)
+      minted `scenario-${Date.now()}` — decimal, a dozen-odd characters, against
+      the base-36 ids everything else in the app uses (`rev-`, `conn-`, `chat-`,
+      `mem-`, `cp-`). Nothing parses the format, so this was drift, not a bug —
+      but the id is a stored key: the scenarios table, the exported `.sqlite`, the
+      backup document and the revision rows all carry it.
+      Fixed: the three stragglers take `.toString(36)`; one format everywhere.
 
 ## 4. Recommended updates (not started — needs sign-off)
 

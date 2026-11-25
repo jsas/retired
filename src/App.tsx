@@ -634,7 +634,7 @@ function App() {
   // Mint a blank partner plan from the host's ages/spending and link it.
   // Used by Details / Sidebar when the user has no other plan to link yet.
   const handleCreateSpousePlan = (name?: string, partnerInputs?: RetirementInputs) => {
-    const id = `scenario-${Date.now()}`;
+    const id = `scenario-${Date.now().toString(36)}`;
     const planName = (name ?? '').trim() || `${activeScenario.name} — Partner`;
     const minted = partnerInputs ?? personPlanFromSpouse(baselineSpouse(inputs), inputs);
     minted.spouse = undefined;
