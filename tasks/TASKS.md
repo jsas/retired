@@ -315,12 +315,17 @@ needs a product decision (not started).
       assistant is docked beside this page" — a page that is a pointer at
       chrome. Fold it: `agent` → open the dock on the Dashboard.
       Fixed: `agent` carries the catalog's `foldedInto` (like `#/welcome` and
-      `#/steering`), so the route parses, the Dashboard renders, and PageChrome's
-      hash check opens the dock; the page's copy (`agentPage.*`) is gone in both
+      `#/steering`), so the route parses, the Dashboard renders, and the dock
+      opens on the route; the page's copy (`agentPage.*`) is gone in both
       locales, the folded view leaves `searchablePages()` and `sitemap.json`, and
-      the page subtree is keyed for `agent` so typing `#/assistant` while already
-      on the Dashboard still opens the dock (verified in the browser from a
-      closed dock, both from the Dashboard and from `#/print`).
+      the chrome opens the rail from a route signal (`PageRouteContext`, provided
+      by `App`). What that replaces: the page subtree was keyed on `view ===
+      'agent'`, so typing `#/assistant` while already on the Dashboard reopened
+      the rail by *remounting the page* — scroll, open cards and half-typed
+      inputs gone. Now the same mount opens it. Verified in the browser from a
+      closed dock both from the Dashboard (where `<main>` keeps its node identity
+      across the navigation, and the pref stays `0` so a close still sticks) and
+      from `#/print`; `PageChromeDock.test.tsx` pins the live open.
 - [x] `R2` `nav.json`'s `home` label now reads "Home — the Dashboard" (fr:
       "Accueil — le tableau de bord").
 - [x] `R3` The verdict chip was computed twice: `App.tsx` and `Dashboard.tsx`

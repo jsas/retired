@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { StyleGuide } from './design/StyleGuide';
-import { PlanUndoContext } from './components/console/PageChrome';
+import { PlanUndoContext, PageRouteContext } from './components/console/PageChrome';
 import type { VerdictChip } from './components/console/PageChrome';
 import { QuickStart, quickStartPlan, setupCardVisible, type SetupAnswers } from './components/console/QuickStart';
 import {
@@ -553,6 +553,9 @@ function App() {
   const canUndo = hasUnsavedChanges
     || (store?.allRevisions() ?? []).filter(r => r.scenarioId === activeScenarioId).length >= 2;
   const undoState = { canUndo, onUndo: handleUndoSave };
+  // What the chrome shows: the assistant's own route opens the dock (see
+  // PageRouteContext). `agent` has no page of its own — it redraws this one.
+  const routeValue = { assistantRoute: view === 'agent' };
 
   // Agent scenario tools (list_scenarios action open / save_as). Both mirror the
   // sidebar paths: open saves the current plan first (nothing the user typed
@@ -948,8 +951,8 @@ function App() {
         return <HelpPage chip={chip} assistant={assistantDock} />;
       // The assistant's #/assistant route ends up here: `agent` is a folded
       // catalog view, so there is no page of its own to draw — the Dashboard
-      // renders and PageChrome opens the dock from the legacy hash. Mounting a
-      // second AgentPage here would fork the one conversation.
+      // renders and the route signal opens the dock (PageRouteContext).
+      // Mounting a second AgentPage here would fork the one conversation.
       case 'dashboard':
       default:
         return (
@@ -1031,13 +1034,14 @@ function App() {
             <strong>{tPages('app.saveFailedTitle')}</strong> {tPages('app.saveFailed')}
           </WarningBanner>
         )}
-        {/* Keyed for one case only: the folded #/assistant route renders this very
-            subtree (the Dashboard), and the mount is what opens the dock —
-            PageChrome reads the legacy hash once, at mount, as an explicit open.
-            Without the key, going to #/assistant while already on the Dashboard
-            would normalize the URL and leave the dock shut. */}
-        <PlanUndoContext.Provider key={view === 'agent' ? 'assistant' : 'page'} value={undoState}>
-          {page}
+        {/* The dock opens from this signal, not from a remount: the folded
+            #/assistant route redraws this very subtree (the Dashboard), so
+            reopening the rail used to throw the page away — scroll, open cards,
+            half-typed inputs — to let PageChrome read the hash once more. */}
+        <PlanUndoContext.Provider value={undoState}>
+          <PageRouteContext.Provider value={routeValue}>
+            {page}
+          </PageRouteContext.Provider>
         </PlanUndoContext.Provider>
       </div>
     </LocaleContext.Provider>

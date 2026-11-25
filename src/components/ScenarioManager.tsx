@@ -57,7 +57,7 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
   // the current plan is what Duplicate is for.
   const handleCreateNew = () => {
     onCreateScenario({
-      id: `scenario-${Date.now()}`,
+      id: `scenario-${Date.now().toString(36)}`,
       name: t('plansUi.newName', { n: scenarios.length + 1 }),
       inputs: { ...baselineInputs(), provinceCode: defaultProvinceCode(locale) },
       isFresh: true,
@@ -68,7 +68,7 @@ export function ScenarioManager({ scenarios, activeScenarioId, onScenariosChange
     const scenario = scenarios.find(s => s.id === id);
     if (!scenario) return;
     onCreateScenario({
-      id: `scenario-${Date.now()}`,
+      id: `scenario-${Date.now().toString(36)}`,
       name: t('plansUi.copyName', { name: scenario.name }),
       inputs: JSON.parse(JSON.stringify(scenario.inputs)),
       isFresh: false,

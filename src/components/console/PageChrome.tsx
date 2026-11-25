@@ -8,7 +8,7 @@
 // The dock (f7's star): a min-340px right rail on desktop (user-draggable
 // wider, remembered), a full-screen sheet on phones. The app works without
 // it — the robot button toggles it and it never traps you.
-import { createContext, Fragment, useCallback, useContext, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { createContext, Fragment, useCallback, useContext, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from './nav';
 import type { View } from '../../lib/viewRoutes';
@@ -23,6 +23,13 @@ import { useAppLocale } from '../../lib/localeContext';
 // the dark (open) button, black on the white (closed) one.
 const ASSISTANT_TOGGLE_ICON = 'h-4 w-4';
 import { prefKV } from '../../lib/prefKv';
+
+/** What the app is showing, as far as the chrome cares: `assistantRoute` is
+ *  true on the assistant's own (#/assistant) route. The dock opens when it
+ *  turns true while this chrome is already mounted — the folded assistant
+ *  route redraws the very page already on screen, so a hash read at mount
+ *  alone left the rail shut and App had to remount the page to open it. */
+export const PageRouteContext = createContext<{ assistantRoute: boolean }>({ assistantRoute: false });
 
 /** The plan's undo surface for the header (issue #165): edits autosave, and
  *  the undo icon steps back through the saved revisions (the rollback
@@ -169,8 +176,16 @@ export function PageChrome({ title, hint, chip, actions, assistant, children }: 
   // assistant's own route (#/assistant) starts open, but the robot button
   // always toggles — even there, one click hides the dock (#192: no mode
   // may take over the page or trap the user).
-  const openRoute = isAssistantRoute();
-  const [dockOpen, setDockOpenState] = useState<boolean>(() => readDockOpen(openRoute));
+  const route = useContext(PageRouteContext);
+  const [dockOpen, setDockOpenState] = useState<boolean>(() =>
+    readDockOpen(isAssistantRoute() || route.assistantRoute),
+  );
+  // Turning to the assistant route while this chrome stays mounted (the folded
+  // route redraws the page already on screen) opens the dock then. No pref
+  // write: closing it again still sticks, same as the mount-time open.
+  useEffect(() => {
+    if (route.assistantRoute) setDockOpenState(true);
+  }, [route.assistantRoute]);
   const [dockWidth, setDockWidth] = useState<number>(() => readDockWidth());
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const setDockOpen = (open: boolean) => {

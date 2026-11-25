@@ -3,12 +3,13 @@
 // markup tests prove it renders; this jsdom suite proves the CLICK contract —
 // one click hides, the next shows, and even on #/assistant (where the dock
 // starts open) the button can hide it again. Nothing may take over the page
-// with no way back.
+// with no way back. It also proves the route signal opens the dock on a chrome
+// that stays mounted, so navigating to the assistant costs the page nothing.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { createElement } from 'react';
-import { PageChrome, type VerdictChip } from './PageChrome';
+import { PageChrome, PageRouteContext, type VerdictChip } from './PageChrome';
 
 // React 19 needs this to recognize act() outside @testing-library/react.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,18 +28,31 @@ vi.stubGlobal('localStorage', {
 let host: HTMLElement;
 let root: Root;
 
-function renderChrome() {
+const chrome = (route: { assistantRoute: boolean }) =>
+  createElement(
+    PageRouteContext,
+    { value: route },
+    createElement(PageChrome, {
+      chip,
+      assistant: createElement('div', null, 'chat-body'),
+      children: createElement('div', { id: 'page-body' }, 'page-body'),
+    }),
+  );
+
+function renderChrome(route: { assistantRoute: boolean } = { assistantRoute: false }) {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
   act(() => {
-    root.render(
-      createElement(PageChrome, {
-        chip,
-        assistant: createElement('div', null, 'chat-body'),
-        children: createElement('div', null, 'page-body'),
-      }),
-    );
+    root.render(chrome(route));
+  });
+}
+
+// Same root, same tree position: React keeps the mounted chrome (and its page)
+// unless the element type or key changes.
+function rerenderChrome(route: { assistantRoute: boolean }) {
+  act(() => {
+    root.render(chrome(route));
   });
 }
 
@@ -89,5 +103,25 @@ describe('assistant dock toggle (#192)', () => {
     expect(dockVisible()).toBe(false);
     // the close persists — a reload on the route reopens, but the pref is '0'
     expect(store.get('wealthconsole_dock_open')).toBe('0');
+  });
+
+  it('the route signal opens the dock without remounting the page', () => {
+    // The folded #/assistant route redraws the very page already on screen.
+    // Opening the rail used to require remounting that subtree so the hash
+    // could be read again — which cost the page its scroll, cards and drafts.
+    store.set('wealthconsole_dock_open', '0');
+    renderChrome();
+    expect(dockVisible()).toBe(false);
+    const pageNode = host.querySelector('#page-body');
+    expect(pageNode).not.toBeNull();
+
+    rerenderChrome({ assistantRoute: true });
+    expect(dockVisible()).toBe(true);
+    // The proof it is a live open, not a fresh mount: same page node.
+    expect(host.querySelector('#page-body')).toBe(pageNode);
+    // And no pref write, so closing it on the route still sticks.
+    expect(store.get('wealthconsole_dock_open')).toBe('0');
+    act(() => { toggle().click(); });
+    expect(dockVisible()).toBe(false);
   });
 });
