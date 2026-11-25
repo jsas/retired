@@ -197,7 +197,7 @@ export function Num({ label, value, onChange, onClear, step = 1000, min, suffix,
       <span className="mt-0.5 flex items-baseline gap-1">
         <input
           type="number"
-          className={`${NUM_CLASS} w-full border border-slate-300 bg-white px-2 py-1.5 text-[13px] text-slate-900 focus:border-slate-900 focus:outline-none`}
+          className={`${NUM_CLASS} w-full ${cls.inputSm}`}
           value={draft ?? (Number.isFinite(value) ? String(value) : '')}
           step={step} min={min}
           onChange={(e) => {
@@ -466,7 +466,7 @@ export function Dropdown({ label, children, wide = false }: {
       </button>
       {open && (
         <div
-          className={`absolute left-0 top-[calc(100%+4px)] z-50 max-w-[calc(100vw-2rem)] border border-slate-200 bg-white p-2 ${wide ? 'min-w-[300px]' : 'min-w-[230px]'}`}
+          className={`absolute left-0 top-[calc(100%+4px)] z-50 max-w-[calc(100vw-2rem)] p-2 ${cls.panel} ${wide ? 'min-w-[300px]' : 'min-w-[230px]'}`}
           onClick={() => setOpen(false)}
         >
           {children}
@@ -537,7 +537,7 @@ export function Modal({ open, onClose, title, children, wide = false }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <button type="button" aria-label="Close" onClick={onClose}
         className="absolute inset-0 cursor-default bg-slate-900/30" />
-      <div className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-sm'} border border-slate-200 bg-white`}>
+      <div className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-sm'} ${cls.panel}`}>
         {title != null && (
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <h2 className="text-[13px] font-semibold text-slate-900">{title}</h2>
@@ -558,7 +558,7 @@ export function AppHeader({ children }: { children: ReactNode }) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
       <div className="mx-auto flex h-12 max-w-5xl items-center gap-2 px-4">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center bg-slate-900 text-[10px] font-bold text-white">
+        <span className={cls.mark}>
           RE:
         </span>
         {children}
