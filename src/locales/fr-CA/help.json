@@ -398,7 +398,7 @@
         "ancres de rendement",
         "instable"
       ],
-      "body": "Le cadran Marchés suppose un rendement moyen unique chaque année. Pour modéliser un **krach, un boom ou une période instable**, façonnez une courbe avec des **ancres de rendement** — rendements prévus par âge entre lesquels le moteur interpolera, en revenant à l'hypothèse plate un an avant la première ancre et un an après la dernière, de sorte qu'une hypothèse qui ne couvre qu'une partie de l'horizon (disons un krach à 68–70 ans) laisse le reste intact.\n\nLa projection suit la courbe de rendement — la ligne de solde plonge dans un krach puis se rétablit — tandis qu'une courbe de volatilité ne façonne que Monte Carlo, élargissant ou rétrécissant l'éventail aléatoire âge par âge. Effacez toutes les ancres pour revenir aux constantes plates.\n\nSur la frise de vie du tableau de bord, vous pouvez façonner la courbe directement : **double-cliquez la bande marché** (sous la ligne de solde) pour déposer une ancre à cet âge, **glissez-la** haut/bas pour la valeur et latéralement pour l'âge, et cliquez-la pour le × qui la supprime. Les cercles violets tiennent les rendements; les carrés ambre tiennent la volatilité échantillonnée par Monte Carlo."
+      "body": "Le cadran Marchés suppose un rendement moyen unique chaque année. Pour modéliser un **krach, un boom ou une période instable**, façonnez une courbe avec des **ancres de rendement** — rendements prévus par âge entre lesquels le moteur interpolera, en revenant à l'hypothèse plate un an avant la première ancre et un an après la dernière, de sorte qu'une hypothèse qui ne couvre qu'une partie de l'horizon (disons un krach à 68–70 ans) laisse le reste intact.\n\nLa projection suit la courbe de rendement — la ligne de solde plonge dans un krach puis se rétablit — tandis qu'une courbe de volatilité ne façonne que Monte Carlo, élargissant ou rétrécissant l'éventail aléatoire âge par âge. Effacez toutes les ancres pour revenir aux constantes plates.\n\nSur la frise de projection du tableau de bord, vous pouvez façonner la courbe directement : **double-cliquez la bande marché** (sous la ligne de solde) pour déposer une ancre à cet âge, **glissez-la** haut/bas pour la valeur et latéralement pour l'âge, et cliquez-la pour le × qui la supprime. Les cercles violets tiennent les rendements; les carrés ambre tiennent la volatilité échantillonnée par Monte Carlo."
     },
     "lever-ranges": {
       "title": "Plages des leviers (préférence Paramètres)",
@@ -413,7 +413,7 @@
       "body": "Les curseurs de dépenses, d'épargne, de rendement prévu et de volatilité ne couvrent qu'une plage — élargissez-en une si votre plan vit au-delà du bord par défaut. Réglage dans Paramètres → Plages des leviers; ce sont des préférences (pas des réglages du moteur), enregistrées dès que vous les changez. L'âge de retraite, l'âge planifié, les âges de début RPC et SV gardent des plages fixes; une plage fixe fait partie de leur sens."
     },
     "verdict": {
-      "title": "Le verdict EN VOIE / DÉFICIT",
+      "title": "Le verdict « Sur la bonne voie » / « Manque »",
       "section": "Reading the answer",
       "keywords": [
         "en bonne voie",
@@ -424,7 +424,7 @@
         "on track",
         "shortfall"
       ],
-      "body": "Le chiffre du tableau de bord est le solde restant : **L'argent dure jusqu'à** n'est votre âge max que s'il reste un solde à l'horizon. Si les comptes investissables tombent à 0 $ plus tôt — l'épingle de la frise de vie — c'est cet âge que nous imprimons, même si une hypothèque inversée peut encore emprunter sur la maison.\n\nLe drapeau EN BONNE VOIE / DÉFICIT du moteur est plus strict sur les dépenses non financées (il reste en bonne voie tant qu'une hypothèque inversée a de la marge). Les reçus, la pastille et l'épingle du graphique utilisent tous le même solde restant pour ne pas se contredire.\n\nPour un couple, le verdict moteur du ménage est les comptes combinés; le tableau de bord suit encore le reste sur la ligne de vie combinée."
+      "body": "Le chiffre du tableau de bord est le solde restant : **L'argent dure jusqu'à** n'est votre âge max que s'il reste un solde à l'horizon. Si les comptes investissables tombent à 0 $ plus tôt — l'épingle de la frise de projection — c'est cet âge que nous imprimons, même si une hypothèque inversée peut encore emprunter sur la maison.\n\nLe drapeau du moteur (Sur la bonne voie / Manque) est plus strict sur les dépenses non financées (il reste en bonne voie tant qu'une hypothèque inversée a de la marge). La ligne de justificatifs, la pastille et l'épingle du graphique utilisent tous le même solde restant pour ne pas se contredire.\n\nPour un couple, le verdict moteur du ménage est les comptes combinés; le tableau de bord suit encore le reste sur la frise de projection combinée."
     },
     "rescore": {
       "title": "Le Re:score",
@@ -461,7 +461,7 @@
       "body": "Relance tout votre plan à un rendement pessimiste unique (1,2 %) pour montrer comment il tient si les marchés déçoivent. Bleu signifie qu'il survit même alors; rose nomme l'âge où il s'épuise. C'est le résumé à un seul chiffre; la simulation Monte-Carlo complète se trouve sous Outils → Probabilité de succès."
     },
     "life-timeline": {
-      "title": "La ligne de vie",
+      "title": "La frise de projection",
       "section": "Reading the answer",
       "keywords": [
         "frise",
@@ -507,7 +507,7 @@
       "body": "Lance la projection complète 500 fois, chacune avec une séquence randomisée de rendements annuels (mouvement brownien géométrique autour de votre rendement prévu, avec des chocs Student-t pour que les krachs soient plus fréquents qu'une normale ne le prévoit).\n\n- La bande foncée est le milieu 50 % des issues (p25–p75); la bande claire est p10–p90. La ligne bleue est la médiane.\n- **Taux de réussite** — la part des essais restés financés jusqu'à l'âge max. 90 %+ est conventionnellement confortable; sous 75 % le plan est fragile.\n- La largeur de l'éventail est menée par la Volatilité. Un krach tôt à la retraite fait beaucoup plus mal qu'un krach tardif."
     },
     "backtest": {
-      "title": "Tester sur l'histoire (rétrosimulation)",
+      "title": "Test historique (rétrosimulation)",
       "section": "Analysis",
       "keywords": [
         "historique",
@@ -530,7 +530,7 @@
         "cultures",
         "pilotage"
       ],
-      "body": "Les leviers de pilotage se trouvent sur le Tableau de bord, sous « Ajuster le plan » : six curseurs — rendement prévu, épargne annuelle, planification jusqu’à, volatilité du rendement, âges de début RPC et SV — pendant que l’état, l’argent-dure-jusqu’à, le taux de réussite et le reste-à-la-fin se mettent à jour en direct sous eux. Les dépenses et l’âge de retraite se pilotent via la carte de contour plus haut sur le Tableau de bord : glissez son point ou utilisez ses deux curseurs. La ligne de vie se redessine à chaque glissement — un seul visuel, toujours visible."
+      "body": "Les leviers de pilotage se trouvent sur le Tableau de bord, sous « Ajuster le plan » : six curseurs — rendement prévu, épargne annuelle, planification jusqu’à, volatilité du rendement, âges de début RPC et SV — pendant que l’état, l’argent-dure-jusqu’à, le taux de réussite et le reste-à-la-fin se mettent à jour en direct sous eux. Les dépenses et l’âge de retraite se pilotent via la carte de contour plus haut sur le Tableau de bord : glissez son point ou utilisez ses deux curseurs. La frise de projection se redessine à chaque glissement — un seul visuel, toujours visible."
     },
     "strategy-explorer": {
       "title": "Alternatives au plan (explorateur de stratégies)",
@@ -842,7 +842,7 @@
         "format",
         "données structurées"
       ],
-      "body": "Un format texte pour des données structurées. Certains exports l'utilisent parce qu'il préserve un détail qu'un tableur ne peut pas. Vous n'avez pas besoin de le lire — sachez seulement que c'est l'un des nôtres et qu'il s'importe en retour."
+      "body": "Un format texte pour des données structurées. Certains exports l'utilisent parce qu'il préserve un détail qu'un tableur ne peut pas. Vous n'avez pas besoin de le lire; il se réimporte dans l'application."
     },
     "glossary-one-tab": {
       "title": "Un onglet à la fois",
@@ -861,7 +861,7 @@
         "wasm",
         "moteur de base de données"
       ],
-      "body": "La technologie qui permet à un vrai moteur de base de données de tourner dans votre onglet de navigateur. C'est sur votre machine que le travail se fait; rien n'est envoyé nulle part."
+      "body": "La technologie qui permet à un vrai moteur de base de données de tourner dans votre onglet de navigateur. Les calculs se font sur votre machine, sur la copie du plan que contient cet onglet — voir la note de confidentialité de l'assistant pour ce qui quitte l'appareil quand un modèle en nuage est utilisé."
     },
     "glossary-tokens": {
       "title": "Jetons et fenêtre de contexte",

@@ -376,7 +376,7 @@
         "return anchors",
         "choppy"
       ],
-      "body": "The Markets dial assumes one average return every year. To model a **crash, a boom, or a choppy stretch**, shape a curve with **return anchors** — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.\n\nThe projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.\n\nOn the dashboard's life timeline you can shape the curve directly: **double-click the market strip** (below the balance line) to drop an anchor at that age, **drag** it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples."
+      "body": "The Markets dial assumes one average return every year. To model a **crash, a boom, or a choppy stretch**, shape a curve with **return anchors** — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.\n\nThe projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.\n\nOn the dashboard's projection timeline you can shape the curve directly: **double-click the market strip** (below the balance line) to drop an anchor at that age, **drag** it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples."
     },
     "lever-ranges": {
       "title": "Lever ranges (Settings pref)",
@@ -391,7 +391,7 @@
       "body": "The sliders for spending, savings, expected return and volatility only span a range — widen one if your plan lives past the default edge. Set under Settings → Lever Ranges; they're preferences (not engine settings), saved the moment you change them. Retirement age, plan-to age, CPP and OAS start ages keep fixed spans; a fixed span is part of their meaning."
     },
     "verdict": {
-      "title": "The ON TRACK / SHORTFALL verdict",
+      "title": "The On track / Shortfall verdict",
       "section": "Reading the answer",
       "keywords": [
         "on track",
@@ -400,7 +400,7 @@
         "answer",
         "will it last"
       ],
-      "body": "The number on the dashboard is the leftover balance: **Money lasts to** is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the life-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.\n\nThe engine's ON TRACK / SHORTFALL flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The receipts, chip, and chart pin all use the same leftover balance so they cannot disagree.\n\nFor a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined life line."
+      "body": "The number on the dashboard is the leftover balance: **Money lasts to** is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the projection-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.\n\nThe engine's On track / Shortfall flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The evidence row, chip and chart pin all use the same leftover balance so they cannot disagree.\n\nFor a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined projection line."
     },
     "rescore": {
       "title": "The Re:score",
@@ -437,7 +437,7 @@
       "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It is the single-number summary; the full Monte Carlo run lives on Success Odds under Tools."
     },
     "life-timeline": {
-      "title": "The life timeline",
+      "title": "The projection timeline",
       "section": "Reading the answer",
       "keywords": [
         "timeline",
@@ -506,7 +506,7 @@
         "crops",
         "steering"
       ],
-      "body": "The steering levers live on the Dashboard under “Adjust the plan”: six sliders — expected return, annual savings, plan-to age, return volatility, CPP and OAS start ages — while status, money-lasts-to, success rate and left-at-end update live beneath them. Spending and retirement age are steered by the contour map further up the Dashboard: drag its dot, or its two faders. The life timeline redraws with every drag — one visual, always in view."
+      "body": "The steering levers live on the Dashboard under “Adjust the plan”: six sliders — expected return, annual savings, plan-to age, return volatility, CPP and OAS start ages — while status, money-lasts-to, success rate and left-at-end update live beneath them. Spending and retirement age are steered by the contour map further up the Dashboard: drag its dot, or its two faders. The projection timeline redraws with every drag — one visual, always in view."
     },
     "strategy-explorer": {
       "title": "Plan alternatives (strategy explorer)",
@@ -523,7 +523,7 @@
       "body": "Plan Alternatives re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.\n\nBy default the table only lists variants that **add money** versus the current plan (higher sustainable spending). Untick that to see the ones that cost. The current plan always stays as the first row."
     },
     "optimize-spending": {
-      "title": "Safe spending (sustainable spending solver)",
+      "title": "Sustainable Spending (spending solver)",
       "section": "Analysis",
       "keywords": [
         "how much can i spend",
@@ -814,7 +814,7 @@
         "format",
         "structured data"
       ],
-      "body": "A text format for structured data. Some exports use it because it preserves detail a spreadsheet can't. You don't need to read it — just know it's one of ours and imports back."
+      "body": "A text format for structured data. Some exports use it because it preserves detail a spreadsheet can't. You don't need to read it; it imports back into the app."
     },
     "glossary-one-tab": {
       "title": "One tab at a time",
@@ -833,7 +833,7 @@
         "wasm",
         "database engine"
       ],
-      "body": "The technology that lets a real database engine run inside your browser tab. It's on your machine doing the work; nothing is sent anywhere."
+      "body": "The technology that lets a real database engine run inside your browser tab. The calculations happen on your machine, on this tab's copy of your plan — see the assistant's privacy note for what leaves the device when a cloud model is used."
     },
     "glossary-tokens": {
       "title": "Tokens & context window",
