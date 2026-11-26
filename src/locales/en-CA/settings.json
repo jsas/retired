@@ -23,7 +23,7 @@
   },
   "helpHeading": "Help",
   "helpBody1": "RE: tired projects a Canadian retirement drawdown year by year: growth while you contribute, then withdrawals across TFSA / taxable / RRSP-RRIF with federal and provincial tax, CPP, OAS (clawback + GIS) and RRIF minimums. Every input in the sidebar is documented on the Help page (top-right ? button), and the sections below let you edit the tax tables and engine assumptions themselves.",
-  "helpBody2": "All profiles and settings are stored only in this browser's local storage — nothing is sent to a server. Use the sidebar's Export to back them up.",
+  "helpBody2": "All profiles and settings live only in this browser's local storage — they are never synced or uploaded. Use the sidebar's Export to back them up.",
   "setupCard": "Set-up card",
   "setupCardShow": "Show the set-up card when the site loads",
   "setupCardHint": "The four-number setup stays at the top of the Dashboard on every visit — even after you dismiss it, or once your own plan has numbers in it.",

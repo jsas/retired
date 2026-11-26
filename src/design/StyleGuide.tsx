@@ -292,7 +292,7 @@ export function StyleGuide() {
         <Panel label="Type scale">
           <div className="space-y-3">
             <p className="num text-[28px] font-semibold text-slate-900">Your money runs out at 89. <span className="text-slate-400 text-[13px] font-normal">verdict · 28</span></p>
-            <p className={T.cls.sectionLabel}>The ground your plan stands on <span className="normal-case tracking-normal text-slate-300">section · 11</span></p>
+            <p className={T.cls.sectionLabel}>The assumptions behind the plan <span className="normal-case tracking-normal text-slate-300">section · 11</span></p>
             <p className="text-[13.5px] text-slate-600">The boundary is the spending where the plan stops holding. <span className="text-slate-400 text-[11px]">body · 13.5</span></p>
             <p className="text-[11px] text-slate-400">Drag the dot, or use the faders. <span>caption · 11</span></p>
           </div>

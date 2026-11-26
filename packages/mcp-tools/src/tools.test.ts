@@ -1412,10 +1412,10 @@ describe('find_page / propose_navigate', () => {
 
   it('find_page routes a tool name straight to its own page (issue #162)', () => {
     // The Tools menu unfurled the surfaces that used to fold into Insights —
-    // "monte carlo" now resolves to the Your Odds page itself (#186 title).
+    // "monte carlo" now resolves to the Success Odds page itself (#186 title).
     const out = executeToolCall(ctx(), { id: '1', name: 'find_page', args: { query: 'monte carlo' } });
     if (out.kind !== 'result') throw new Error('expected result');
-    expect(out.content).toContain('Your Odds');
+    expect(out.content).toContain('Success Odds');
     expect(out.content).toContain('#/monte-carlo');
     expect(out.content).not.toContain('Steering');
   });
@@ -1482,7 +1482,7 @@ describe('find_page / propose_navigate', () => {
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
     expect(out.navigate).toBe('montecarlo');
-    expect(out.preview).toMatchObject({ Page: 'Your Odds' });
+    expect(out.preview).toMatchObject({ Page: 'Success Odds' });
   });
 
   it('propose_navigate still redirects a merged legacy view to its host page', () => {
@@ -1500,7 +1500,7 @@ describe('find_page / propose_navigate', () => {
     });
     if (out.kind !== 'mutation') throw new Error('expected mutation');
     expect(out.navigate).toBe('compare');
-    expect(out.preview).toMatchObject({ Page: 'Compare plans', Route: '#/compare' });
+    expect(out.preview).toMatchObject({ Page: 'Compare Plans', Route: '#/compare' });
   });
 
   it('propose_navigate without a UI returns the shareable hash instead', () => {

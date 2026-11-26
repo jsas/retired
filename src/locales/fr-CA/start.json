@@ -5,16 +5,16 @@
   "ageNow": "Votre âge actuel",
   "retireAt": "Commencer les retraits à",
   "saved": "Économies actuelles",
-  "savedHint": "REER, CELI, placements — le tout. Réparti 60/40 REER/CELI; la page Plans modifie chaque compte.",
+  "savedHint": "REER, CELI et placements. Chaque compte peut être modifié plus tard sur la page Plans.",
   "spend": "Dépenses par année, après impôt",
   "go": "Voir jusqu’où va mon argent",
   "dismiss": "Pas maintenant",
   "details": "Ajouter les détails dans Plans",
   "planName": "Mon plan",
   "error": {
-    "age": "Votre âge est un nombre entre 30 et 100.",
+    "age": "Entrez un âge entre 30 et 100.",
     "retireAge": "L’âge des retraits ne peut pas précéder votre âge actuel.",
-    "savings": "Les économies ne peuvent pas être négatives — 0 est une bonne réponse.",
+    "savings": "Les économies ne peuvent pas être négatives. Entrez 0 si vous n’avez rien épargné.",
     "spending": "Au moins 5 000 $ par année."
   }
 }

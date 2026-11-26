@@ -10,7 +10,7 @@
     "unreadableRows_other": "{{count}} saved items could not be read and were skipped — the plans listed here may be incomplete."
   },
   "projection": "Projection",
-  "yearMath": "One Year, Step by Step",
+  "yearMath": "One Year in Detail",
   "optimizer": {
     "tabStrategies": "Strategy Explorer",
     "tabSolver": "Solver",
@@ -39,17 +39,17 @@
     "oneStepHigher": " · one step higher only {{pct}}%",
     "currentSpends": " · current plan spends {{amount}}/yr",
     "headroom": " ({{amount}} headroom)",
-    "over": " ({{amount}} over — you're above the sustainable level)",
+    "over": " ({{amount}} over the sustainable level)",
     "atLevel": " (right at the sustainable level)",
     "applyYr": "Apply {{amount}}/yr",
     "writesDesired": "writes to Desired Spending (unsaved until you Save)",
     "approx": "Approximate: the answer is exact for the 500 futures tested, but a fresh batch of futures lands within a point or two. Higher targets → lower sustainable spending.",
     "lead": "Invert the verdict: pick a confidence level and the solver finds the <strong>most you can spend per year</strong> while your Monte Carlo still succeeds that often. It binary-searches spending against 500 randomized market futures ({{vol}}% volatility), then you can apply the result to your plan."
   },
-  "optimizePage": "Improve the Plan",
-  "monteCarlo": "Your Odds",
-  "backtest": "Test Against History",
-  "solver": "Safe Spending",
+  "optimizePage": "Plan Alternatives",
+  "monteCarlo": "Success Odds",
+  "backtest": "History Backtest",
+  "solver": "Sustainable Spending",
   "data": "Data",
   "plans": "Plans",
   "settings": "Settings",
@@ -128,7 +128,7 @@
     "getKey": "Get a key here ↗",
     "apiKey": "API key (stored locally only)",
     "defaultModelOpt": "Default model (optional)",
-    "fallback": "The list above fills itself once the key works. This is just the fallback.",
+    "fallback": "The list above fills itself once the key works. This list is the fallback.",
     "baseUrl": "Base URL",
     "ctxWindow": "Context window (tokens, optional)",
     "ctxHint": "Drives the usage meter + auto-compaction. Default is small for local models.",
@@ -143,7 +143,7 @@
       "gemini": {
         "name": "Google Gemini",
         "howTo": "Open Google AI Studio, sign in with a Google account, click \"Get API key\" → \"Create API key\", and paste it here.",
-        "cost": "Free tier available with daily limits — the cheapest way to try cloud AI."
+        "cost": "Free tier available with daily limits."
       },
       "openrouter": {
         "name": "OpenRouter",
@@ -162,7 +162,7 @@
       },
       "ollama": {
         "name": "Ollama (your own server)",
-        "howTo": "Install Ollama on your computer, run \"ollama pull <model>\" then \"ollama serve\". No key — just the local address (default http://localhost:11434/v1).",
+        "howTo": "Install Ollama on your computer, run \"ollama pull <model>\" then \"ollama serve\". No key needed; only the local address (default http://localhost:11434/v1).",
         "cost": "Free; runs on your hardware."
       },
       "openai-compatible": {
@@ -183,7 +183,7 @@
   "backtestComputing": "The historical run is computing…",
   "howMuchSpend": "How much can you safely spend",
   "thisPlan": "This plan",
-  "comparePlans": "Compare plans",
+  "comparePlans": "Compare Plans",
   "plansUi": {
     "lead": "Click a plan to load it. Duplicate branches a what-if; each save keeps a revision (last {{n}} per plan) you can roll back to.",
     "newPlan": "New plan",
@@ -226,22 +226,22 @@
     "verdictShort": "Your money runs out at {{runsTo}} — {{short}} years short of {{age}}.",
     "verdictLastsTo": "Your money lasts to {{runsTo}}.",
     "subHolds": "Spending {{spend}} a year from {{age}}.",
-    "subShort": "Cut spending or work longer below. Currently: {{spend}} a year from {{age}}.",
-    "ground": "The ground your plan stands on",
+    "subShort": "Set spending or retirement age below. Currently: {{spend}} a year from {{age}}.",
+    "ground": "The assumptions behind the plan",
     "dragDot": "drag the dot, or use the faders",
     "startDrawing": "Start Drawing",
     "afterTaxSpending": "After Tax Spending",
     "adjust": "Adjust the plan",
-    "lifeLine": "Your life on one line — this exact plan",
-    "receipts": "The receipts",
+    "lifeLine": "Projection timeline — this plan",
+    "receipts": "The evidence",
     "accountSharesNote": "Shares of <n>{{amount}}</n> at that age. The mix shifts as the plan moves.",
-    "footnote": "Everything here is live — drag the dot or move a fader and the verdict, the bands, the life line, the accounts and the down-market check recompute together. The year-by-year schedule is Projection; to work a single year step by step, open One Year, Step by Step under Tools, along with the odds, the history test, safe spending and the plan improver.",
+    "footnote": "Everything here is live — drag the dot or move a fader and the verdict, the bands, the projection line, the accounts and the down-market check recompute together. The year-by-year schedule is Projection; to work a single year in detail, open One Year in Detail under Tools, along with Success Odds, History Backtest, Sustainable Spending and Plan Alternatives.",
     "markets": "Markets",
-    "marketsHint": "down ↔ up — the average yearly return the plan assumes",
+    "marketsHint": "The average yearly return the plan assumes (down ↔ up)",
     "downCheck": "Down-market check",
     "downWarn": "Down-market warning",
     "downHolds": "Even at a <b>{{pct}}%</b> return this plan holds to <b>{{age}}</b>.",
-    "downFails": "At a <b>{{pct}}%</b> return the money runs out at <b>{{runsTo}}</b>. The map uses your <b>{{dial}}%</b> dial — move it and the bands change.",
+    "downFails": "At a <b>{{pct}}%</b> return the money runs out at <b>{{runsTo}}</b>. The map uses the <b>{{dial}}%</b> expected return; change it and the bands update.",
     "emptyTimeline": "Nothing to draw — the plan has no savings yet. Add balances on the Plans page.",
     "spend": "spend",
     "market": "market",
@@ -288,7 +288,7 @@
     "ageAxis": "the age you start drawing →",
     "spendAxis": "what you spend each year →",
     "youAreHere": "you are here · {{age}}, {{spend}}",
-    "legendBoundary": "the boundary — the curve where the plan stops holding",
+    "legendBoundary": "the boundary where the plan stops holding",
     "legendBelow": "below it, the money lasts past {{age}}",
     "legendAbove": "above it, it runs out early"
   },
@@ -352,7 +352,7 @@
     }
   },
   "eq": {
-    "lead": "Push the sliders to explore your plan — the readouts update live.",
+    "lead": "Adjust the sliders; the readouts update live.",
     "axes": {
       "desiredSpending": "Annual spending",
       "retirementAge": "Retirement age",
@@ -419,7 +419,7 @@
     "barTitleDepleted": "{{from}}–{{to}}: depleted at {{age}}"
   },
   "compare": {
-    "empty": "Save a couple of scenarios first, then compare them here.",
+    "empty": "Save at least two scenarios, then compare them here.",
     "toggleHint": "toggle lines in the legend · numbers below",
     "allOff": "All lines are off — toggle one back on in the legend above.",
     "scenario": "Scenario",
@@ -464,7 +464,7 @@
     "defaultName": "Shared plan"
   },
   "donate": {
-    "p1": "RE: tired is a free, open-source project that runs entirely in your browser, with no servers, accounts, or data harvesting. Your privacy is a core design constraint.",
+    "p1": "RE: tired is a free, open-source project that runs in your browser — no servers, accounts, or data harvesting. Only if you point the assistant at a cloud model does anything leave the device.",
     "p2": "It is largely built with the help of an AI pair-programmer, which has real costs.",
     "p3": "Any donation revenue left over after covering those costs goes into the same kind of accounts this app was built to help plan.",
     "p4": "If RE: tired helps you get a clearer picture of where you're headed and what you might need to do to get there, you can sponsor the project.",

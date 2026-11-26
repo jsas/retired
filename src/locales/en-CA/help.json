@@ -376,7 +376,7 @@
         "return anchors",
         "choppy"
       ],
-      "body": "The Markets dial assumes one average return every year. To model a **crash, a boom, or a choppy stretch**, shape a curve with **return anchors** — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.\n\nThe projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.\n\nOn the dashboard's life timeline you can shape the curve directly: **double-click the market strip** (below the balance line) to drop an anchor at that age, **drag** it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples."
+      "body": "The Markets dial assumes one average return every year. To model a **crash, a boom, or a choppy stretch**, shape a curve with **return anchors** — per-age expected returns the engine interpolates between, ramping back to the flat assumption one year before the first anchor and one year after the last, so a hypothesis that covers only part of the horizon (say, a crash at 68–70) leaves the rest untouched.\n\nThe projection follows the return curve — the balance line dips through a crash and recovers — while a volatility curve shapes only Monte Carlo, widening or narrowing the random fan age by age. Clear every anchor to return to the flat constants.\n\nOn the dashboard's projection timeline you can shape the curve directly: **double-click the market strip** (below the balance line) to drop an anchor at that age, **drag** it up/down for the value and sideways for the age, and click it for the × that deletes it. Violet circles hold returns; amber squares hold the volatility Monte Carlo samples."
     },
     "lever-ranges": {
       "title": "Lever ranges (Settings pref)",
@@ -391,7 +391,7 @@
       "body": "The sliders for spending, savings, expected return and volatility only span a range — widen one if your plan lives past the default edge. Set under Settings → Lever Ranges; they're preferences (not engine settings), saved the moment you change them. Retirement age, plan-to age, CPP and OAS start ages keep fixed spans; a fixed span is part of their meaning."
     },
     "verdict": {
-      "title": "The ON TRACK / SHORTFALL verdict",
+      "title": "The On track / Shortfall verdict",
       "section": "Reading the answer",
       "keywords": [
         "on track",
@@ -400,7 +400,7 @@
         "answer",
         "will it last"
       ],
-      "body": "The number on the dashboard is the leftover balance: **Money lasts to** is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the life-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.\n\nThe engine's ON TRACK / SHORTFALL flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The receipts, chip, and chart pin all use the same leftover balance so they cannot disagree.\n\nFor a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined life line."
+      "body": "The number on the dashboard is the leftover balance: **Money lasts to** is your max age only when there is still a balance at the horizon. If the investable accounts hit $0 earlier — the projection-timeline pin — that age is what we print, even if a reverse mortgage can still borrow against the house.\n\nThe engine's On track / Shortfall flag is stricter about unfunded spending (it stays on track while a reverse mortgage has headroom). The evidence row, chip and chart pin all use the same leftover balance so they cannot disagree.\n\nFor a couple, the household engine verdict is the combined accounts; the dashboard still follows leftover on the combined projection line."
     },
     "rescore": {
       "title": "The Re:score",
@@ -434,10 +434,10 @@
         "low return",
         "bear market"
       ],
-      "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It is the single-number summary; the full Monte Carlo run lives on Your Odds under Tools."
+      "body": "Re-runs your whole plan at a single pessimistic return (1.2%) to show how it holds up if markets disappoint. Blue means it survives even then; rose names the age it runs out. It is the single-number summary; the full Monte Carlo run lives on Success Odds under Tools."
     },
     "life-timeline": {
-      "title": "The life timeline",
+      "title": "The projection timeline",
       "section": "Reading the answer",
       "keywords": [
         "timeline",
@@ -468,10 +468,10 @@
         "what could go wrong",
         "sensitivity"
       ],
-      "body": "The verdict uses your expected return every year. To see how robust the plan really is:\n\n- **Lower the expected return** (the Markets dial) for a pessimistic case.\n- **Run Your Odds** (Monte Carlo) — it randomizes returns around your assumption and reports the share of runs that never deplete; that success rate is the most honest single number.\n- **Run Test Against History** — replays your plan through actual historical market sequences."
+      "body": "The verdict uses your expected return every year. To see how robust the plan really is:\n\n- **Lower the expected return** (the Markets dial) for a pessimistic case.\n- **Run Success Odds** (Monte Carlo) — it randomizes returns around your assumption and reports the share of runs that never deplete; that success rate is the most honest single number.\n- **Run History Backtest** — replays your plan through actual historical market sequences."
     },
     "monte-carlo": {
-      "title": "Your odds (Monte Carlo)",
+      "title": "Success odds (Monte Carlo)",
       "section": "Analysis",
       "keywords": [
         "simulation",
@@ -483,7 +483,7 @@
       "body": "Runs the full projection 500 times, each with a randomized sequence of annual returns (geometric Brownian motion around your expected return, with Student-t shocks so crashes are more common than a normal distribution predicts).\n\n- The dark band is the middle 50% of outcomes (p25–p75); the light band is p10–p90. The blue line is the median.\n- **Success rate** — the share of runs that stayed funded through max age. 90%+ is conventionally comfortable; below 75% the plan is fragile.\n- The width of the fan is driven by Volatility. A crash early in retirement hurts far more than one late."
     },
     "backtest": {
-      "title": "Test against history (backtest)",
+      "title": "History backtest",
       "section": "Analysis",
       "keywords": [
         "historical",
@@ -506,10 +506,10 @@
         "crops",
         "steering"
       ],
-      "body": "The steering levers live on the Dashboard under “Adjust the plan”: six sliders — expected return, annual savings, plan-to age, return volatility, CPP and OAS start ages — while status, money-lasts-to, success rate and left-at-end update live beneath them. Spending and retirement age are steered by the contour map further up the Dashboard: drag its dot, or its two faders. The life timeline redraws with every drag — one visual, always in view."
+      "body": "The steering levers live on the Dashboard under “Adjust the plan”: six sliders — expected return, annual savings, plan-to age, return volatility, CPP and OAS start ages — while status, money-lasts-to, success rate and left-at-end update live beneath them. Spending and retirement age are steered by the contour map further up the Dashboard: drag its dot, or its two faders. The projection timeline redraws with every drag — one visual, always in view."
     },
     "strategy-explorer": {
-      "title": "Improve the plan (strategy explorer)",
+      "title": "Plan alternatives (strategy explorer)",
       "section": "Analysis",
       "keywords": [
         "optimize",
@@ -520,10 +520,10 @@
         "add money",
         "improvements"
       ],
-      "body": "Improve the Plan re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.\n\nBy default the table only lists variants that **add money** versus the current plan (higher sustainable spending). Untick that to see the ones that cost. The current plan always stays as the first row."
+      "body": "Plan Alternatives re-runs your plan under a menu of named alternatives — CPP/OAS timing, pension start ages, withdrawal orders, reverse-mortgage timing, part-time work — each scored on the sustainable after-tax spending it supports, with a one-click Apply. It's deterministic: same plan in, same answer out.\n\nBy default the table only lists variants that **add money** versus the current plan (higher sustainable spending). Untick that to see the ones that cost. The current plan always stays as the first row."
     },
     "optimize-spending": {
-      "title": "Safe spending (sustainable spending solver)",
+      "title": "Sustainable Spending (spending solver)",
       "section": "Analysis",
       "keywords": [
         "how much can i spend",
@@ -532,7 +532,7 @@
         "maximum spending",
         "safe withdrawal"
       ],
-      "body": "Safe Spending answers \"how much could I spend?\" instead of \"will my spending last?\" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures."
+      "body": "Sustainable Spending answers \"how much could I spend?\" instead of \"will my spending last?\" — binary-searches the after-tax spending that keeps the plan funded through max age, at the success target you pick, using Monte Carlo futures."
     },
     "schedule-columns": {
       "title": "The Projection page columns",
@@ -548,7 +548,7 @@
       "body": "The Projection page's year-by-year table walks every year from now to max age: starting balance, contributions, market gains, withdrawals, tax, CPP/OAS/GIS/pension, and ending balance, plus per-account balances. The **Columns** button picks which are shown — the starter set keeps the money-flow story on screen and everything else is one \"show all\" away; your choice is remembered. RDSP / FHSA / Home Equity / Debts columns appear automatically only when those features produce data. Tap a year to expand its full detail."
     },
     "year-math": {
-      "title": "The One Year, Step by Step worksheet",
+      "title": "The One Year in Detail worksheet",
       "section": "Schedule",
       "keywords": [
         "year math",
@@ -560,7 +560,7 @@
         "per person",
         "how the year works"
       ],
-      "body": "One Year, Step by Step is the worksheet for one calendar year of the household — not the Projection schedule. Pick a year, then You / Spouse / Side by side, and walk from the spending target down through withdrawals, tax, benefits, and the ending balance. Every number is the same calc the engine already ran for that year; this page just shows the working."
+      "body": "One Year in Detail is the worksheet for one calendar year of the household — not the Projection schedule. Pick a year, then You / Spouse / Side by side, and walk from the spending target down through withdrawals, tax, benefits, and the ending balance. Every number is the same calc the engine already ran for that year; this page just shows the working."
     },
     "setup-card": {
       "title": "The set-up card",
@@ -590,7 +590,7 @@
         "profile",
         "details"
       ],
-      "body": "A plan is one complete set of numbers (internally a \"scenario\" — same idea). The profile icon in the header (top right, next to the verdict chip) opens **Plans** (#/plan) — the list of saved plans, then the numbers behind the current one (what used to be Details). Create, rename, duplicate, delete, or roll a plan back through its history. Edits save themselves a moment after you apply them; the undo icon next to the profile icon steps back one save at a time. Make several — \"retire at 60\" vs \"65\" — and flip between them, or open **Compare plans** in Tools to line them up."
+      "body": "A plan is one complete set of numbers (internally a \"scenario\" — same idea). The profile icon in the header (top right, next to the verdict chip) opens **Plans** (#/plan) — the list of saved plans, then the numbers behind the current one (what used to be Details). Create, rename, duplicate, delete, or roll a plan back through its history. Edits save themselves a moment after you apply them; the undo icon next to the profile icon steps back one save at a time. Make several — \"retire at 60\" vs \"65\" — and flip between them, or open **Compare Plans** in Tools to line them up."
     },
     "autosave-undo": {
       "title": "Autosave and undo",
@@ -620,7 +620,7 @@
         "spouse",
         "tools"
       ],
-      "body": "**Compare plans** lives in the Tools menu (#/compare). It puts your saved plans side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version holds up best. A plan with a partner shows as a **household** (named after the linked plan when there is one). Hide the spouse for that compare only — the saved plan is not patched; show spouse brings the household back.\n\nClick a name in the legend to hide its line (and its row in the table); click the faded name again to bring it back. The legend always keeps every plan, so there is always a way to restore a line."
+      "body": "**Compare Plans** lives in the Tools menu (#/compare). It puts your saved plans side by side — verdict, money-lasts-to, spending, tax and ending wealth — so you can see which version holds up best. A plan with a partner shows as a **household** (named after the linked plan when there is one). Hide the spouse for that compare only — the saved plan is not patched; show spouse brings the household back.\n\nClick a name in the legend to hide its line (and its row in the table); click the faded name again to bring it back. The legend always keeps every plan, so there is always a way to restore a line."
     },
     "assistant": {
       "title": "The assistant",
@@ -814,7 +814,7 @@
         "format",
         "structured data"
       ],
-      "body": "A text format for structured data. Some exports use it because it preserves detail a spreadsheet can't. You don't need to read it — just know it's one of ours and imports back."
+      "body": "A text format for structured data. Some exports use it because it preserves detail a spreadsheet can't. You don't need to read it; it imports back into the app."
     },
     "glossary-one-tab": {
       "title": "One tab at a time",
@@ -833,7 +833,7 @@
         "wasm",
         "database engine"
       ],
-      "body": "The technology that lets a real database engine run inside your browser tab. It's on your machine doing the work; nothing is sent anywhere."
+      "body": "The technology that lets a real database engine run inside your browser tab. The calculations happen on your machine, on this tab's copy of your plan — see the assistant's privacy note for what leaves the device when a cloud model is used."
     },
     "glossary-tokens": {
       "title": "Tokens & context window",

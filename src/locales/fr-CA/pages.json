@@ -10,7 +10,7 @@
     "unreadableRows_other": "{{count}} éléments enregistrés n’ont pas pu être lus et ont été ignorés — la liste des plans à l’écran est peut-être incomplète."
   },
   "projection": "Projection",
-  "yearMath": "Une année, étape par étape",
+  "yearMath": "Une année en détail",
   "optimizer": {
     "tabStrategies": "Explorateur de stratégies",
     "tabSolver": "Solveur",
@@ -39,17 +39,17 @@
     "oneStepHigher": " · un cran plus haut seulement {{pct}} %",
     "currentSpends": " · le plan actuel dépense {{amount}}/an",
     "headroom": " ({{amount}} de marge)",
-    "over": " ({{amount}} de trop — vous êtes au-dessus du niveau soutenable)",
+    "over": " ({{amount}} de trop par rapport au niveau soutenable)",
     "atLevel": " (pile au niveau soutenable)",
     "applyYr": "Appliquer {{amount}}/an",
     "writesDesired": "écrit dans Dépenses souhaitées (non enregistré tant que vous n’enregistrez pas)",
     "approx": "Approximatif : la réponse est exacte pour les 500 futurs testés, mais un nouveau lot atterrit à un ou deux points près. Cibles plus élevées → dépenses soutenables plus basses.",
     "lead": "Inversez le verdict : choisissez un niveau de confiance et le solveur trouve le <strong>maximum que vous pouvez dépenser par an</strong> tout en réussissant encore aussi souvent en Monte-Carlo. Il cherche par dichotomie contre 500 futurs de marché aléatoires (volatilité de {{vol}} %), puis vous pouvez appliquer le résultat."
   },
-  "optimizePage": "Améliorer le plan",
-  "monteCarlo": "Vos chances",
-  "backtest": "Tester sur l’histoire",
-  "solver": "Dépenses sûres",
+  "optimizePage": "Alternatives au plan",
+  "monteCarlo": "Probabilité de succès",
+  "backtest": "Test historique",
+  "solver": "Dépenses durables",
   "plans": "Plans",
   "data": "Données",
   "settings": "Paramètres",
@@ -128,7 +128,7 @@
     "getKey": "Obtenir une clé ici ↗",
     "apiKey": "Clé API (stockée localement seulement)",
     "defaultModelOpt": "Modèle par défaut (facultatif)",
-    "fallback": "La liste ci-dessus se remplit une fois la clé valide. Ceci n’est que le repli.",
+    "fallback": "La liste ci-dessus se remplit une fois la clé valide. Cette liste est le repli.",
     "baseUrl": "URL de base",
     "ctxWindow": "Fenêtre de contexte (jetons, facultatif)",
     "ctxHint": "Alimente le compteur d’usage et le compactage auto. Le défaut est petit pour les modèles locaux.",
@@ -143,7 +143,7 @@
       "gemini": {
         "name": "Google Gemini",
         "howTo": "Ouvrez Google AI Studio, connectez-vous avec un compte Google, cliquez « Get API key » → « Create API key », et collez-la ici.",
-        "cost": "Niveau gratuit avec limites quotidiennes — le moyen le moins cher d’essayer l’IA infonuagique."
+        "cost": "Niveau gratuit avec limites quotidiennes."
       },
       "openrouter": {
         "name": "OpenRouter",
@@ -162,7 +162,7 @@
       },
       "ollama": {
         "name": "Ollama (votre propre serveur)",
-        "howTo": "Installez Ollama sur votre ordinateur, lancez « ollama pull <modèle> » puis « ollama serve ». Pas de clé — seulement l’adresse locale (défaut http://localhost:11434/v1).",
+        "howTo": "Installez Ollama sur votre ordinateur, lancez « ollama pull <modèle> » puis « ollama serve ». Pas de clé requise; seulement l’adresse locale (défaut http://localhost:11434/v1).",
         "cost": "Gratuit; s’exécute sur votre matériel."
       },
       "openai-compatible": {
@@ -179,7 +179,7 @@
   "namedVariants": "Variantes nommées, notées",
   "acrossFutures": "Sur de nombreux futurs de marché",
   "monteCarloNeedsVol": "Monte-Carlo a besoin d’une hypothèse de volatilité — mettez-en une au-dessus de 0 % sous Marchés sur la page Plans et l’éventail apparaît.",
-  "againstHistory": "Contre l’histoire",
+  "againstHistory": "Contre l’historique",
   "backtestComputing": "La simulation historique est en cours…",
   "howMuchSpend": "Combien pouvez-vous dépenser en toute sécurité",
   "thisPlan": "Ce plan",
@@ -226,18 +226,18 @@
     "verdictShort": "Votre argent s’épuise à {{runsTo}} ans — {{short}} ans trop tôt par rapport à {{age}}.",
     "verdictLastsTo": "Votre argent dure jusqu’à {{runsTo}} ans.",
     "subHolds": "Dépenses de {{spend}} par an à partir de {{age}} ans.",
-    "subShort": "Réduisez les dépenses ou travaillez plus longtemps ci-dessous. Actuellement : {{spend}} par an à partir de {{age}} ans.",
-    "ground": "Le terrain sur lequel votre plan repose",
+    "subShort": "Ajustez les dépenses ou l’âge de retraite ci-dessous. Actuellement : {{spend}} par an à partir de {{age}} ans.",
+    "ground": "Les hypothèses du plan",
     "dragDot": "glissez le point, ou utilisez les curseurs",
     "startDrawing": "Début des retraits",
     "afterTaxSpending": "Dépenses après impôt",
     "adjust": "Ajuster le plan",
-    "lifeLine": "Votre vie sur une ligne — ce plan exact",
-    "receipts": "Les reçus",
+    "lifeLine": "Projection de ce plan",
+    "receipts": "Les justificatifs",
     "accountSharesNote": "Parts sur <n>{{amount}}</n> à cet âge. La répartition évolue avec le plan.",
-    "footnote": "Tout ici est en direct — glissez le point ou un curseur et le verdict, les bandes, la ligne de vie, les comptes et le test de marché baissier se recalculent ensemble. Le tableau année par année est Projection; pour détailler une année étape par étape, ouvrez « Une année, étape par étape » sous Outils, avec les chances, le test historique, les dépenses sûres et l’améliorateur de plan.",
+    "footnote": "Tout ici est en direct — glissez le point ou un curseur et le verdict, les bandes, la ligne de projection, les comptes et le test de marché baissier se recalculent ensemble. Le tableau année par année est Projection; pour détailler une année, ouvrez « Une année en détail » sous Outils, avec Probabilité de succès, Test historique, Dépenses durables et Alternatives au plan.",
     "markets": "Marchés",
-    "marketsHint": "à la baisse ↔ à la hausse — le rendement annuel moyen que le plan suppose",
+    "marketsHint": "Le rendement annuel moyen que le plan suppose (à la baisse ↔ à la hausse)",
     "downCheck": "Test de marché baissier",
     "downWarn": "Avertissement de marché baissier",
     "downHolds": "Même à un rendement de <b>{{pct}} %</b>, ce plan tient jusqu’à <b>{{age}}</b> ans.",
@@ -288,7 +288,7 @@
     "ageAxis": "l’âge où vous commencez à retirer →",
     "spendAxis": "ce que vous dépensez chaque année →",
     "youAreHere": "vous êtes ici · {{age}}, {{spend}}",
-    "legendBoundary": "la frontière — la courbe où le plan cesse de tenir",
+    "legendBoundary": "la frontière où le plan cesse de tenir",
     "legendBelow": "en dessous, l’argent dure au-delà de {{age}} ans",
     "legendAbove": "au-dessus, il s’épuise trop tôt"
   },
@@ -352,7 +352,7 @@
     }
   },
   "eq": {
-    "lead": "Poussez les curseurs pour explorer votre plan — les indicateurs se mettent à jour en direct.",
+    "lead": "Ajustez les curseurs; les indicateurs se mettent à jour en direct.",
     "axes": {
       "desiredSpending": "Dépenses annuelles",
       "retirementAge": "Âge de retraite",
@@ -413,13 +413,13 @@
     "eachWindow": "chaque fenêtre de {{years}} ans · couverture {{from}}–{{to}}",
     "start": "début {{year}}",
     "lastEnds": "la dernière fenêtre se termine en {{year}}",
-    "truncated": "L’horizon de votre plan est plus long que le historique de {{years}} ans, donc chaque fenêtre a été plafonnée à {{window}} ans — la rétrosimulation n’atteint pas tout l’horizon. Un âge de retraite très tôt en est souvent la cause.",
+    "truncated": "L’horizon de votre plan est plus long que l’historique de {{years}} ans, donc chaque fenêtre a été plafonnée à {{window}} ans — la rétrosimulation n’atteint pas tout l’horizon. Un âge de retraite très tôt en est souvent la cause.",
     "foot": "Chaque barre rejoue le plan contre une séquence historique de {{years}} ans de rendements réels (après inflation), les dépenses étant tenues en dollars d’aujourd’hui. Les barres sont à l’année de début de chaque fenêtre; la dernière se termine en {{end}}, donc les {{record}} années de données sont utilisées. Les barres roses ont manqué d’argent avant l’âge maximal. 60 % rendement total S&P/TSX + 40 % obligation longue du Canada, déflaté par l’IPC.",
     "barTitleOk": "{{from}}–{{to}} : {{amount}}",
     "barTitleDepleted": "{{from}}–{{to}} : épuisé à {{age}}"
   },
   "compare": {
-    "empty": "Enregistrez d’abord quelques scénarios, puis comparez-les ici.",
+    "empty": "Enregistrez au moins deux scénarios, puis comparez-les ici.",
     "toggleHint": "basculez les lignes dans la légende · chiffres ci-dessous",
     "allOff": "Toutes les lignes sont éteintes — rallumez-en une dans la légende ci-dessus.",
     "scenario": "Scénario",
@@ -464,7 +464,7 @@
     "defaultName": "Plan partagé"
   },
   "donate": {
-    "p1": "RE: tired est un projet gratuit et ouvert qui s’exécute entièrement dans votre navigateur, sans serveurs, comptes ni collecte de données. Votre vie privée est une contrainte de conception fondamentale.",
+    "p1": "RE: tired est un projet gratuit et ouvert qui s’exécute dans votre navigateur — sans serveurs, comptes ni collecte de données. Rien ne quitte l’appareil tant que vous ne pointez pas l’assistant vers un modèle en nuage.",
     "p2": "Il est en grande partie construit avec l’aide d’un programmeur-IA, ce qui a des coûts réels.",
     "p3": "Tout revenu de don restant après ces coûts va dans le même type de comptes que cette application aide à planifier.",
     "p4": "Si RE: tired vous aide à voir plus clairement où vous allez et ce qu’il faudrait faire pour y arriver, vous pouvez commanditer le projet.",
