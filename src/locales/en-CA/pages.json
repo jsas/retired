@@ -39,7 +39,7 @@
     "oneStepHigher": " · one step higher only {{pct}}%",
     "currentSpends": " · current plan spends {{amount}}/yr",
     "headroom": " ({{amount}} headroom)",
-    "over": " ({{amount}} over — you're above the sustainable level)",
+    "over": " ({{amount}} over the sustainable level)",
     "atLevel": " (right at the sustainable level)",
     "applyYr": "Apply {{amount}}/yr",
     "writesDesired": "writes to Desired Spending (unsaved until you Save)",
@@ -128,7 +128,7 @@
     "getKey": "Get a key here ↗",
     "apiKey": "API key (stored locally only)",
     "defaultModelOpt": "Default model (optional)",
-    "fallback": "The list above fills itself once the key works. This is just the fallback.",
+    "fallback": "The list above fills itself once the key works. This list is the fallback.",
     "baseUrl": "Base URL",
     "ctxWindow": "Context window (tokens, optional)",
     "ctxHint": "Drives the usage meter + auto-compaction. Default is small for local models.",
@@ -143,7 +143,7 @@
       "gemini": {
         "name": "Google Gemini",
         "howTo": "Open Google AI Studio, sign in with a Google account, click \"Get API key\" → \"Create API key\", and paste it here.",
-        "cost": "Free tier available with daily limits — the cheapest way to try cloud AI."
+        "cost": "Free tier available with daily limits."
       },
       "openrouter": {
         "name": "OpenRouter",
@@ -162,7 +162,7 @@
       },
       "ollama": {
         "name": "Ollama (your own server)",
-        "howTo": "Install Ollama on your computer, run \"ollama pull <model>\" then \"ollama serve\". No key — just the local address (default http://localhost:11434/v1).",
+        "howTo": "Install Ollama on your computer, run \"ollama pull <model>\" then \"ollama serve\". No key needed; only the local address (default http://localhost:11434/v1).",
         "cost": "Free; runs on your hardware."
       },
       "openai-compatible": {
@@ -288,7 +288,7 @@
     "ageAxis": "the age you start drawing →",
     "spendAxis": "what you spend each year →",
     "youAreHere": "you are here · {{age}}, {{spend}}",
-    "legendBoundary": "the boundary — the curve where the plan stops holding",
+    "legendBoundary": "the boundary where the plan stops holding",
     "legendBelow": "below it, the money lasts past {{age}}",
     "legendAbove": "above it, it runs out early"
   },
@@ -352,7 +352,7 @@
     }
   },
   "eq": {
-    "lead": "Push the sliders to explore your plan — the readouts update live.",
+    "lead": "Adjust the sliders; the readouts update live.",
     "axes": {
       "desiredSpending": "Annual spending",
       "retirementAge": "Retirement age",
@@ -419,7 +419,7 @@
     "barTitleDepleted": "{{from}}–{{to}}: depleted at {{age}}"
   },
   "compare": {
-    "empty": "Save a couple of scenarios first, then compare them here.",
+    "empty": "Save at least two scenarios, then compare them here.",
     "toggleHint": "toggle lines in the legend · numbers below",
     "allOff": "All lines are off — toggle one back on in the legend above.",
     "scenario": "Scenario",
@@ -464,7 +464,7 @@
     "defaultName": "Shared plan"
   },
   "donate": {
-    "p1": "RE: tired is a free, open-source project that runs entirely in your browser, with no servers, accounts, or data harvesting. Your privacy is a core design constraint.",
+    "p1": "RE: tired is a free, open-source project that runs in your browser — no servers, accounts, or data harvesting. Only if you point the assistant at a cloud model does anything leave the device.",
     "p2": "It is largely built with the help of an AI pair-programmer, which has real costs.",
     "p3": "Any donation revenue left over after covering those costs goes into the same kind of accounts this app was built to help plan.",
     "p4": "If RE: tired helps you get a clearer picture of where you're headed and what you might need to do to get there, you can sponsor the project.",

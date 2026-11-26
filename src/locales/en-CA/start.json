@@ -5,16 +5,16 @@
   "ageNow": "Your age now",
   "retireAt": "Start drawing at",
   "saved": "Saved so far",
-  "savedHint": "RRSP, TFSA, investments — all of it. Split 60/40 RRSP/TFSA; the Plans page edits each account.",
+  "savedHint": "RRSP, TFSA and investments. Each account can be edited later on the Plans page.",
   "spend": "Spend a year, after tax",
   "go": "See how long my money lasts",
   "dismiss": "Not now",
   "details": "Add the details on Plans",
   "planName": "My plan",
   "error": {
-    "age": "Your age is a number between 30 and 100.",
+    "age": "Enter an age between 30 and 100.",
     "retireAge": "The drawing age can’t be earlier than your age today.",
-    "savings": "Savings can’t be negative — 0 is a fine answer.",
+    "savings": "Savings can’t be negative. Enter 0 if you haven’t saved yet.",
     "spending": "At least $5,000 a year."
   }
 }

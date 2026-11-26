@@ -39,7 +39,7 @@ describe('CompareCard', () => {
     const html = renderToStaticMarkup(
       createElement(CompareCard, { scenarios: [], activeScenarioId: '', config }),
     );
-    expect(html).toContain('Save a couple of scenarios first');
+    expect(html).toContain('Save at least two scenarios, then compare them here.');
   });
 
   it('keeps every scenario in the legend (hiding a line must leave a click target to restore it)', () => {

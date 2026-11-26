@@ -23,7 +23,7 @@
   },
   "helpHeading": "Aide",
   "helpBody1": "RE: tired projette un décaissement de retraite canadien année par année : croissance pendant que vous cotisez, puis retraits CELI / imposable / REER-FERR avec impôt fédéral et provincial, RPC, SV (récupération + SRG) et minimums FERR. Chaque champ de la barre latérale est documenté sur la page Aide (bouton ? en haut à droite), et les sections ci-dessous vous laissent modifier les tables fiscales et les hypothèses du moteur.",
-  "helpBody2": "Tous les profils et paramètres sont stockés uniquement dans le stockage local de ce navigateur — rien n’est envoyé à un serveur. Utilisez Exporter dans la barre latérale pour en faire une copie.",
+  "helpBody2": "Tous les profils et paramètres vivent uniquement dans le stockage local de ce navigateur — ils ne sont jamais synchronisés ni téléversés. Utilisez Exporter dans la barre latérale pour en faire une copie.",
   "setupCard": "Carte de configuration",
   "setupCardShow": "Afficher la carte de configuration au chargement du site",
   "setupCardHint": "La configuration en quatre chiffres reste en haut du tableau de bord à chaque visite — même après l’avoir fermée, ou une fois votre propre plan rempli.",
