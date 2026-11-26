@@ -28,7 +28,11 @@ export function EvidenceRow({ inputs, results, breakdown }: {
   const rowAt = (a: number): YearlyBreakdown | undefined =>
     breakdown.find(r => r.age === a) ?? [...breakdown].reverse().find(r => r.age <= a);
 
-  const acc = rowAt(age);
+  // The plan's age window moves under the slider (retire later, max age raised),
+  // so the stored pick is clamped rather than trusted: a stale age would leave
+  // the thumb off the track and the bars reading a year that is no longer planned.
+  const at = Math.min(Math.max(age, currentAge), maxAge);
+  const acc = rowAt(at);
   const accounts = acc ? [
     { label: td('rrsp'), value: acc.rrspBalance + (acc.rrifBalance ?? 0) },
     { label: td('tfsa'), value: acc.tfsaBalance, active: true },
@@ -59,18 +63,26 @@ export function EvidenceRow({ inputs, results, breakdown }: {
     <div className="grid gap-8 md:grid-cols-[1fr_1fr]">
       {/* per-account balances at a chosen age */}
       <div>
-        <div className="mb-3 flex items-baseline gap-2">
-          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('dash.whereItSits')}</h3>
-          <select
-            className="num cursor-pointer appearance-none border-b border-transparent bg-transparent text-[12px] text-slate-600 hover:border-slate-300"
-            value={age}
+        <div className="mb-3">
+          <div className="mb-1 flex items-baseline justify-between gap-3">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('dash.whereItSits')}</h3>
+            <span className="num text-[12px] text-slate-600">{t('dash.atAge', { age: at })}</span>
+          </div>
+          <input
+            type="range"
+            className="fader block w-full"
+            style={{ height: 24 }}
+            min={currentAge}
+            max={maxAge}
+            step={1}
+            value={at}
             onChange={(e) => setAge(Number(e.target.value))}
             aria-label={t('dash.balanceAtAge')}
-          >
-            {Array.from({ length: maxAge - currentAge + 1 }, (_, i) => currentAge + i).map(a => (
-              <option key={a} value={a}>{t('dash.atAge', { age: a })}</option>
-            ))}
-          </select>
+          />
+          <div className="num flex justify-between text-[10px] text-slate-400">
+            <span>{currentAge}</span>
+            <span>{maxAge}</span>
+          </div>
         </div>
         <AccountBars
           rows={accounts}
