@@ -105,7 +105,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'math',
     route: 'year-math',
-    title: 'One Year, Step by Step',
+    title: 'One Year in Detail',
     description: 'The year-math worksheet: one calendar year of the household, worked step by step — you, spouse, or side by side — from the spending target down to the ending balance.',
     keywords: ['year math', 'year-math', 'worksheet', 'breakdown', 'step by step', 'calculation', 'household year', 'per person', 'how the year works'],
     section: 'plan',
@@ -121,7 +121,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'optimize',
     route: 'optimize',
-    title: 'Improve the Plan',
+    title: 'Plan Alternatives',
     description: 'The strategy explorer: named plan variants (CPP/OAS timing, pension start, withdrawal order, reverse mortgage, part-time work) each replayed and scored on sustainable spending, lifetime tax and GIS — with one-click apply.',
     keywords: ['optimize', 'optimiser', 'optimizer', 'strategies', 'variants', 'best option', 'best lever', 'compare timing', 'apply', 'sustainable spending'],
     section: 'explore',
@@ -129,7 +129,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'montecarlo',
     route: 'monte-carlo',
-    title: 'Your Odds',
+    title: 'Success Odds',
     description: 'The Monte Carlo run: 500 randomized market futures over your plan — the success-rate fan, the odds of lasting, and a depletion histogram.',
     keywords: ['monte carlo', 'simulation', 'odds', 'success rate', 'probabilities', 'market futures', 'probabilistic', 'fan chart', 'risk'],
     section: 'explore',
@@ -137,7 +137,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'backtest',
     route: 'backtest',
-    title: 'Test Against History',
+    title: 'History Backtest',
     description: 'Run the plan against every historical market stretch on record — real returns, not invented ones — and see how often it would have survived.',
     keywords: ['backtest', 'historical', '1926', '1970', 'stress test', 'past markets', 'sequence risk', 'crash'],
     section: 'explore',
@@ -145,7 +145,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'solver',
     route: 'solver',
-    title: 'Safe Spending',
+    title: 'Sustainable Spending',
     description: 'Invert the verdict: pick a confidence level and the solver binary-searches the most you can spend per year while the Monte Carlo still succeeds that often — then apply it in one click.',
     keywords: ['solver', 'solve', 'how much can i spend', 'maximum spending', 'safe withdrawal', 'sustainable', 'target success rate', 'spend freely'],
     section: 'explore',
@@ -153,7 +153,7 @@ export const NAV_CATALOG: ReadonlyArray<NavEntry> = [
   {
     viewId: 'compare',
     route: 'compare',
-    title: 'Compare plans',
+    title: 'Compare Plans',
     description: 'Side-by-side outcomes across all saved plans — each scored as a household when it has a spouse, with a compare-only toggle to hide the spouse on this page.',
     keywords: ['compare', 'side-by-side', 'which plan', 'vs', 'household', 'spouse', 'partner', 'compare plans'],
     section: 'explore',

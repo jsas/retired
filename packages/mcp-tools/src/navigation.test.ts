@@ -138,12 +138,12 @@ describe('canonicalView / pageTitleLine', () => {
     expect(pageTitleLine('projection')).toBe('Projection');
     expect(pageTitleLine('details')).toBe('Plans');
     expect(pageTitleLine('eq')).toBe('Dashboard');
-    expect(pageTitleLine('math')).toBe('One Year, Step by Step');
-    expect(pageTitleLine('optimize')).toBe('Improve the Plan');
-    expect(pageTitleLine('montecarlo')).toBe('Your Odds');
-    expect(pageTitleLine('backtest')).toBe('Test Against History');
-    expect(pageTitleLine('solver')).toBe('Safe Spending');
-    expect(pageTitleLine('compare')).toBe('Compare plans');
+    expect(pageTitleLine('math')).toBe('One Year in Detail');
+    expect(pageTitleLine('optimize')).toBe('Plan Alternatives');
+    expect(pageTitleLine('montecarlo')).toBe('Success Odds');
+    expect(pageTitleLine('backtest')).toBe('History Backtest');
+    expect(pageTitleLine('solver')).toBe('Sustainable Spending');
+    expect(pageTitleLine('compare')).toBe('Compare Plans');
     expect(pageTitleLine('scenarios')).toBe('Plans');
     expect(pageTitleLine('data')).toBe('Data');
     // A folded legacy view's line is the page the user actually sees.

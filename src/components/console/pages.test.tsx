@@ -47,7 +47,7 @@ describe('The Projection page (was Schedule — issue #162)', () => {
   });
 });
 
-describe('The One Year, Step by Step page', () => {
+describe('The One Year in Detail page', () => {
   it('wraps the household worksheet, not the projection schedule', () => {
     const html = renderToStaticMarkup(
       createElement(MathPage, {
@@ -57,7 +57,7 @@ describe('The One Year, Step by Step page', () => {
         spouseAgeOffset: 0,
       }),
     );
-    expect(html).toContain('One Year, Step by Step');
+    expect(html).toContain('One Year in Detail');
     expect(html).not.toContain(TIMELINE_MARK);
     // Hairline worksheet: ink step index + tabular figures, not the old-skin
     // blue chips / boxed card / mono figures. (Don't grep the chrome's
@@ -70,30 +70,30 @@ describe('The One Year, Step by Step page', () => {
 });
 
 describe('The Tools menu pages each feature the projection timeline', () => {
-  it('Improve the Plan: the strategy explorer under the timeline', () => {
+  it('Plan Alternatives: the strategy explorer under the timeline', () => {
     const html = renderToStaticMarkup(
       createElement(OptimizerPage, {
         chip, timeline, optimizeProps: { inputs, config, onApply: () => {} },
       }),
     );
-    expect(html).toContain('Improve the Plan');
+    expect(html).toContain('Plan Alternatives');
     expect(html).toContain(TIMELINE_MARK);
     expect(html).toContain('Suggested course of action');
     expect(html).toContain('Only show things that add money');
   });
 
-  it('Your Odds: the fan under the timeline (needs a request)', () => {
+  it('Success Odds: the fan under the timeline (needs a request)', () => {
     const html = renderToStaticMarkup(
       createElement(MonteCarloPage, {
         chip, timeline,
         mcProps: { request: { inputs, config, runs: 5, volatility: 0.15 }, retirementAge: results.retirementAge },
       }),
     );
-    expect(html).toContain('Your Odds');
+    expect(html).toContain('Success Odds');
     expect(html).toContain(TIMELINE_MARK);
   });
 
-  it('Your Odds with no request still shows the timeline + a nudge', () => {
+  it('Success Odds with no request still shows the timeline + a nudge', () => {
     const html = renderToStaticMarkup(
       createElement(MonteCarloPage, { chip, timeline, mcProps: null }),
     );
@@ -101,7 +101,7 @@ describe('The Tools menu pages each feature the projection timeline', () => {
     expect(html).toContain('volatility');
   });
 
-  it('Test Against History: the history bars under the timeline', () => {
+  it('History Backtest: the history bars under the timeline', () => {
     // The real runner is synchronous — feed the page its actual output.
     const backtest = runBacktest(inputs, config, calculateHousehold);
     const html = renderToStaticMarkup(
@@ -109,12 +109,12 @@ describe('The Tools menu pages each feature the projection timeline', () => {
         chip, timeline, backtestProps: { result: backtest },
       }),
     );
-    expect(html).toContain('Test Against History');
+    expect(html).toContain('History Backtest');
     expect(html).toContain(TIMELINE_MARK);
     expect(html).toContain('Worst Window');
   });
 
-  it('Test Against History labels a couple plan primary-only (H-02)', () => {
+  it('History Backtest labels a couple plan primary-only (H-02)', () => {
     // runBacktest strips the spouse; for a couple the panel must say the
     // windows replay the primary's solo plan, and stay quiet when solo.
     const backtest = runBacktest(inputs, config, calculateHousehold);
@@ -132,13 +132,13 @@ describe('The Tools menu pages each feature the projection timeline', () => {
     expect(solo).not.toContain('Primary plan only');
   });
 
-  it('Safe Spending: the spending solve under the timeline', () => {
+  it('Sustainable Spending: the spending solve under the timeline', () => {
     const html = renderToStaticMarkup(
       createElement(SolverPage, {
         chip, timeline, solverProps: { inputs, config, onApply: () => {} },
       }),
     );
-    expect(html).toContain('Safe Spending');
+    expect(html).toContain('Sustainable Spending');
     expect(html).toContain(TIMELINE_MARK);
     expect(html).toContain('Target success rate');
   });
@@ -159,7 +159,7 @@ describe('PlansPage — list plus this plan\'s numbers', () => {
     );
     expect(html).toContain('Plans');
     expect(html).toContain('This plan');
-    expect(html).not.toContain('Compare plans');
+    expect(html).not.toContain('Compare Plans');
     expect(html).toContain('details-profile');
     expect(html).toContain('Test plan');
     expect(html).not.toContain('>Details<');
@@ -175,7 +175,7 @@ describe('ComparePage — every saved plan on one chart', () => {
         compareProps: { scenarios, activeScenarioId: 's1', config },
       }),
     );
-    expect(html).toContain('Compare plans');
+    expect(html).toContain('Compare Plans');
     expect(html).toContain('Test plan');
     expect(html).not.toContain('This plan');
   });

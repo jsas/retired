@@ -8,10 +8,14 @@ execution plans.
 
 ## In flight
 
-Nothing in flight. The holistic site pass closed 2026-11-25 with `C3` (the
-hand-typed button, field, panel and badge recipes routed through `cls`); its
-burn-down is the last record below. The next initiative opens its own file here.
+| Initiative | Plan | State |
+| --- | --- | --- |
+| Plain-register copy sweep + help truth (#203) | `tasks/PLAN-copy-register-help-sweep.md` | Every heading/tagline/empty state rewritten to plain register, and every `HelpModal` section checked against the code. Two iterations required. |
 | ML fine-tune bake-off (#112, #135) | `training/SPIKE.md` §5 | Corpus/gate/bake-off machinery on main, and the `training/driver/cdp.mjs` `callFn` blocker (`Runtime.callFunctionOn` needs `executionContextId`) is fixed. Next: bake-off → full-SFT winner → MLC compile (own issue/PR). GPU-bound stages annotated in the issue. |
+
+The holistic site pass closed 2026-11-25 with `C3` (the hand-typed button,
+field, panel and badge recipes routed through `cls`); its burn-down is the last
+record below.
 
 ## Queued (from tasks/REVIEW.md "Still open")
 

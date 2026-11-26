@@ -69,7 +69,7 @@ describe('PageChrome assistant dock', () => {
     // static markup proves the trigger; the item list is proven against
     // the exported source of truth.)
     expect(TOOLS_MENU_ITEMS.map(t => t.view)).toEqual(['projection', 'math', 'optimize', 'montecarlo', 'backtest', 'solver', 'compare']);
-    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Projection', 'One Year, Step by Step', 'Improve the Plan', 'Your Odds', 'Test Against History', 'Safe Spending', 'Compare plans']);
+    expect(TOOLS_MENU_ITEMS.map(t => t.label)).toEqual(['Projection', 'One Year in Detail', 'Plan Alternatives', 'Success Odds', 'History Backtest', 'Sustainable Spending', 'Compare Plans']);
     expect(TOOLS_MENU_ITEMS.map(t => t.section)).toEqual(['plan', 'plan', 'explore', 'explore', 'explore', 'explore', 'explore']);
     const html = renderToStaticMarkup(
       createElement(PageChrome, { chip, assistant: createElement('div'), children: createElement('div') }),
@@ -81,9 +81,9 @@ describe('PageChrome assistant dock', () => {
     const html = renderToStaticMarkup(
       createElement(PageChrome, { chip, children: createElement('div') }),
     );
-    expect(html).toContain('aria-label="Your plan — the Plans page"');
+    expect(html).toContain('aria-label="Plans"');
     expect(html).toContain('href="#/plan"');
-    expect(html).toContain('aria-label="Undo — step back to the previous saved plan"');
+    expect(html).toContain('aria-label="Undo — return to the previous saved plan"');
     // Undo is inert until App wires a history through PlanUndoContext.
     expect(html).toContain('disabled');
   });
@@ -99,7 +99,7 @@ describe('PageChrome assistant dock', () => {
     // Issue #186: the menu reads in section order — Your plan, Explore,
     // Share & print, Settings & help.
     const labels = MOBILE_MENU_ITEMS.map(i => i.label);
-    expect(labels).toEqual(['Dashboard', 'Projection', 'One Year, Step by Step', 'Plans', 'Improve the Plan', 'Your Odds', 'Test Against History', 'Safe Spending', 'Compare plans', 'Data', 'Print & export', 'Settings', 'Assistant connection', 'Help']);
+    expect(labels).toEqual(['Dashboard', 'Projection', 'One Year in Detail', 'Plans', 'Plan Alternatives', 'Success Odds', 'History Backtest', 'Sustainable Spending', 'Compare Plans', 'Data', 'Print & export', 'Settings', 'Assistant connection', 'Help']);
     expect(MOBILE_MENU_ITEMS.map(i => i.section)).toEqual(['plan', 'plan', 'plan', 'plan', 'explore', 'explore', 'explore', 'explore', 'explore', 'share', 'share', 'setup', 'setup', 'setup']);
     expect(labels).not.toContain('Details');
     expect(labels).not.toContain('Profiles');
